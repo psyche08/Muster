@@ -122,3 +122,25 @@ answer-continuation acceptance await normal unlock or explicit selection of a
 new dedicated conversation. Physical iPhone installation and UI acceptance
 remain unverified. GitHub Actions stayed disabled, and no Xcode Cloud or
 external TestFlight build was started.
+
+### Native send follow-up on the installed release
+
+After the owner unlocked Mac-A and authorized a new dedicated Codex conversation
+on Mac-C, Mac-B sent one receipt test to each target through the installed
+Muster native controller. Both operation ledger entries reached `applied`.
+Claude's provider transcript contains the exact test message and a new
+AskUserQuestion; Codex's provider transcript contains the test message and its
+requested receipt, and the Codex turn completed. Initial creation of the Codex
+conversation used the desktop task API; the measured follow-up send used Muster.
+
+The first Claude answer attempt was refused during native session selection,
+before a response ledger entry or answer submission. Input-generation changes
+were observed while another conversation was visible. This is an input guard
+refusal, not a reproduction of the earlier question-panel lookup timeout.
+The dedicated card remains unanswered pending an owner-confirmed quiet input
+window. No chat message was replayed, and no business question was touched.
+
+These observations establish native message delivery on both tested paths, but
+do not yet establish answer continuation for this release or fix the historical
+composer ambiguity/lookup timeout. No executable code or release artifacts
+changed during this follow-up; GitHub Actions remain disabled.
