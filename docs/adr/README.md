@@ -55,6 +55,10 @@ records a specific decision and does not revive code on its delete list.
 
 | [0027](0027-native-send-scan-reuse.md) | Accepted | Reuse native send scans and batch control metadata |
 
+| [0028](0028-codex-async-card-completion.md) | Accepted | Preserve live asynchronous Codex cards after turn completion |
+
+| [0029](0029-bounded-conversation-projection.md) | Accepted | Bound initial conversation layout with Rust-owned history paging |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

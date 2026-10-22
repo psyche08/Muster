@@ -455,7 +455,13 @@ struct ChatView: View {
                 }
                 #endif
                 .onChange(of: chat.contentRevision) { _, _ in
-                    if atLatest && !jumpToStart { proxy.scrollTo("conversation-bottom", anchor: .bottom) }
+                    // Cached earlier pages arrive without a loading transition.
+                    if jumpToStart && !chat.loading {
+                        jumpToStart = false
+                        withAnimation { proxy.scrollTo("conversation-start", anchor: .top) }
+                    } else if atLatest && !jumpToStart {
+                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    }
                 }
                 #if os(iOS)
                 .overlay(alignment: .bottom) {

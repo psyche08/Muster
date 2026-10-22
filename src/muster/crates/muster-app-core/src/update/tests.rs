@@ -443,6 +443,7 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
             }),
             ..Default::default()
         }],
+        history_start: None,
         interactions: Vec::new(),
         has_earlier: false,
         sending: false,
@@ -1453,4 +1454,94 @@ async fn code_preview_rejects_edits_and_recovered_runs_keep_device_consent_and_u
         code_runs::views(&state, "mac", "original")[0].delivery,
         "sending"
     );
+}
+
+#[test]
+fn history_window_retains_stream_anchor_and_pages_cached_data_offline() {
+    let mut chat = Chat {
+        messages: (0..500).map(|i| message(&i.to_string(), "user")).collect(),
+        ..Default::default()
+    };
+    chat.reconcile_history_start();
+    assert_eq!(chat.history_start.as_deref(), Some("420"));
+    chat.messages.push(message("500", "assistant"));
+    chat.reconcile_history_start();
+    assert_eq!(chat.visible_messages().first().unwrap().id, "420");
+    assert_eq!(chat.visible_messages().len(), 81);
+    chat.messages[499].text = "streamed update".into();
+    chat.reconcile_history_start();
+    assert_eq!(chat.history_start.as_deref(), Some("420"));
+    assert!(chat.reveal_history(false));
+    assert_eq!(chat.history_start.as_deref(), Some("340"));
+    assert!(
+        !chat.has_earlier,
+        "all messages are cached; no remote fetch needed"
+    );
+    assert!(chat.reveal_history(true));
+    assert_eq!(chat.visible_messages().len(), 501);
+    assert!(!chat.reveal_history(false));
+}
+
+#[test]
+fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
+    let mut state = State::new(true, Some("phone".into()));
+    state.chat = Some(Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            ..Default::default()
+        },
+        messages: (0..300).map(|i| message(&i.to_string(), "user")).collect(),
+        ..Default::default()
+    });
+    state.chat.as_mut().unwrap().reconcile_history_start();
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    agents::msg_chat(
+        &mut state,
+        cancelled,
+        "mac".into(),
+        "s".into(),
+        false,
+        true,
+        Ok((vec![], false)),
+    );
+    assert_eq!(
+        state.chat.as_ref().unwrap().history_start.as_deref(),
+        Some("220")
+    );
+    let changed: Vec<_> = (1000..1200)
+        .map(|i| message(&i.to_string(), "user"))
+        .collect();
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        false,
+        true,
+        Ok((changed, true)),
+    );
+    assert_eq!(
+        state.chat.as_ref().unwrap().history_start.as_deref(),
+        Some("1120")
+    );
+    let earlier: Vec<_> = (920..1000)
+        .map(|i| message(&i.to_string(), "user"))
+        .collect();
+    state.chat.as_mut().unwrap().reveal_history(true);
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        true,
+        false,
+        Ok((earlier, true)),
+    );
+    assert_eq!(
+        state.chat.as_ref().unwrap().history_start.as_deref(),
+        Some("920")
+    );
+    assert_eq!(state.chat.as_ref().unwrap().messages.len(), 280);
 }
