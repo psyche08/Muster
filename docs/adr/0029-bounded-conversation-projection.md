@@ -2,7 +2,7 @@
 
 - Date: 2026-10-22
 - Status: Accepted
-- Related: ARCHITECTURE.md §3.7; ADR 0026
+- Related: ARCHITECTURE.md §3.7; ADR 0026; ADR 0030 supersedes iOS eager layout only
 
 ## Context
 

@@ -16,8 +16,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "1.0.85"
-    CURRENT_PROJECT_VERSION: "76"
+    MARKETING_VERSION: "1.0.86"
+    CURRENT_PROJECT_VERSION: "77"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
 targets:
   MusterMac:
@@ -190,6 +190,13 @@ targets:
         OTHER_LDFLAGS: "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/debug/libmuster_ffi.a"
 
 schemes:
+  MusterMobileTests:
+    build:
+      targets:
+        MusteriOS: all
+        MusterMobileTests: [test]
+    test:
+      targets: [MusterMobileTests]
   MusteriOS:
     build:
       targets:
