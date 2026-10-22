@@ -114,7 +114,10 @@ fn metadata_label(label: &str) -> bool {
     {
         return true;
     }
-    let Some(count) = label.strip_prefix("Open · ") else {
+    let Some(count) = label
+        .strip_prefix("Open · ")
+        .or_else(|| label.strip_prefix("Merged · "))
+    else {
         return false;
     };
     let Some((number, noun)) = count.split_once(' ') else {
@@ -246,6 +249,95 @@ mod tests {
             "",
             labels.as_deref()
         ));
+    }
+
+    #[test]
+    fn merged_pr_row_retains_exact_identity_after_provider_status_changes() {
+        for badge in ["Merged · 1 pull request", "Merged · 5 pull requests"] {
+            let row = Node(
+                "AXButton",
+                None,
+                true,
+                vec![Node(
+                    "AXGroup",
+                    None,
+                    true,
+                    vec![
+                        Node("AXStaticText", Some(TITLE), false, vec![]),
+                        Node("AXStaticText", Some("Awaiting input"), false, vec![]),
+                        Node("AXStaticText", Some(badge), false, vec![]),
+                    ],
+                )],
+            );
+            let (labels, _, _, stop) = read_label(&row);
+            assert_eq!(stop, "complete");
+            let name = format!("{TITLE} {badge}");
+            assert!(title_matches(
+                true,
+                TITLE,
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                TITLE,
+                false,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                false,
+                TITLE,
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                "示例应用",
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                TITLE,
+                true,
+                "Unrelated row",
+                "",
+                labels.as_deref()
+            ));
+        }
+        for badge in [
+            "Merged · 0 pull requests",
+            "Merged · 01 pull request",
+            "Merged · +1 pull request",
+            "Merged · 1 pull requests",
+            "Merged · 2 pull request",
+            "Merged · -1 pull request",
+            "Merged · 4294967296 pull requests",
+            "Merged · 1 pull request extra",
+            "Merged · 1 pull request\n",
+            "Unrecognized · 5 pull requests",
+        ] {
+            let name = format!("{TITLE} {badge}");
+            assert!(
+                !title_matches(
+                    true,
+                    TITLE,
+                    true,
+                    &name,
+                    "",
+                    Some(&[badge.into(), "Awaiting input".into(), TITLE.into()])
+                ),
+                "{badge}"
+            );
+        }
     }
 
     #[test]
