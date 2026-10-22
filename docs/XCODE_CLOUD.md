@@ -1,4 +1,4 @@
-# Muster Xcode Cloud and public TestFlight
+# Muster Xcode Cloud and opt-in public TestFlight
 
 > Privacy note: operational identities in this record are anonymized examples; see [public content policy](PUBLIC_CONTENT.md). Technical outcomes and acceptance limits are unchanged.
 
@@ -14,7 +14,9 @@ team `89LGY6BD53`.
   are also committed in the project workspace.
 - Generate project configuration with `MusterApp/scripts/generate-project.sh`
   using XcodeGen 2.46.0. Review and commit the generated project and plists.
-- Intended trigger: changes on `main`; external distribution to `Public Beta`.
+- Intended trigger: changes on `main`; archive `MusteriOS` without automatic
+  TestFlight external testing or distribution. External beta distribution is
+  opt-in for an explicitly selected build; see [ADR 0024](adr/0024-cloud-external-testing-opt-in.md).
   Do not run automatic distribution for pull requests or archive `MusterMac`.
 - Initial Cloud version: 1.0.44, starting at Cloud build 1. Previous manual
   uploads are in the 1.0.43 train. Always inspect existing builds before upload.
@@ -24,7 +26,25 @@ the project publisher, configure the archive and trigger, and connect only psych
 After onboarding, workflows and build runs can be read and managed through the
 App Store Connect API. No local signing credentials belong in Cloud variables.
 
-## Public beta metadata
+## Default distribution policy
+
+In the hosted workflow's Post-Actions settings, remove `TestFlight External
+Testing - iOS` from the default workflow. Keep the archive action, signing and
+main trigger unchanged. Do not automatically substitute an internal-testing
+post-action. A request to build authorizes an archive, not external beta
+submission or distribution.
+
+After saving, read back the workflow and inspect the next explicitly requested
+build's actions to confirm external testing is absent. Changing this document
+or removing TestFlight metadata files does not apply the hosted setting. Old
+RUNNING records require separate cancellation; changing future post-actions does
+not cancel them. Keep GitHub Actions disabled independently.
+
+Application status (2026-10-22): this policy is accepted, but the hosted change
+and old-run cancellations remain pending App Store Connect browser login.
+No new Cloud build has verified this default yet.
+
+## Public beta metadata (explicit opt-in)
 
 The public privacy and support pages are maintained in `deploy/public/` and
 published as `${MUSTER_RELEASE_ROOT}/{privacy,support}.html` through
