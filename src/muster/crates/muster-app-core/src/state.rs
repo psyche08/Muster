@@ -33,6 +33,8 @@ pub struct Chat {
     pub cache_key: String,
     pub session: v1::AgentSession,
     pub messages: Vec<v1::AgentMessage>,
+    /// First visible transcript ID; full history stays cached for offline paging.
+    pub history_start: Option<String>,
     pub interactions: Vec<v1::PendingInteraction>,
     pub has_earlier: bool,
     pub sending: bool,
@@ -56,6 +58,45 @@ pub struct Chat {
     pub completing: bool,
     pub completion: Option<(u64, String)>,
     pub completion_error: String,
+}
+
+/// Presentation paging is shared across shells; transport history is unchanged.
+pub(crate) const CHAT_HISTORY_PAGE: usize = 80;
+
+impl Chat {
+    pub(crate) fn history_start_index(&self) -> usize {
+        self.history_start
+            .as_ref()
+            .and_then(|id| self.messages.iter().position(|m| &m.id == id))
+            .unwrap_or_else(|| self.messages.len().saturating_sub(CHAT_HISTORY_PAGE))
+    }
+
+    pub(crate) fn visible_messages(&self) -> &[v1::AgentMessage] {
+        &self.messages[self.history_start_index()..]
+    }
+
+    pub(crate) fn reconcile_history_start(&mut self) {
+        self.history_start = self
+            .messages
+            .get(self.history_start_index())
+            .map(|m| m.id.clone());
+    }
+
+    /// Reveal already cached history without an RPC, including while offline.
+    pub(crate) fn reveal_history(&mut self, all: bool) -> bool {
+        let start = self.history_start_index();
+        if start == 0 {
+            return false;
+        }
+        let next = if all {
+            0
+        } else {
+            start.saturating_sub(CHAT_HISTORY_PAGE)
+        };
+        self.history_start = Some(self.messages[next].id.clone());
+        self.content_revision = next_content_revision();
+        true
+    }
 }
 
 pub enum TerminalKind {

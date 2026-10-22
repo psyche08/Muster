@@ -53,6 +53,10 @@ records a specific decision and does not revive code on its delete list.
 
 | [0026](0026-cloud-trust-and-native-diagnostics.md) | Accepted | Platform Cloud trust and bounded native diagnostics |
 
+| [0027](0027-bounded-conversation-projection.md) | Accepted | Bound initial conversation layout with Rust-owned history paging |
+
+| [0028](0028-codex-async-card-completion.md) | Accepted | Preserve live asynchronous Codex cards after turn completion |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

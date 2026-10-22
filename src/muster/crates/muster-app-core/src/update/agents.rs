@@ -211,6 +211,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         device: device.clone(),
         session,
         messages: cached.messages,
+        history_start: None,
         interactions: Vec::new(),
         has_earlier: cached.has_more,
         sending: false,
@@ -232,6 +233,11 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         completion: None,
         completion_error: String::new(),
     });
+    state
+        .chat
+        .as_mut()
+        .expect("opened chat")
+        .reconcile_history_start();
     state.files = None;
     state.file = None;
     state.git = None;
@@ -670,7 +676,13 @@ pub(super) fn intent_agent_interrupt(state: &mut State, ctx: &Ctx) {
 
 pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app::AgentLoadEarlier) {
     let Some(chat) = &mut state.chat else { return };
-    if chat.loading || !chat.has_earlier {
+    if chat.loading {
+        return;
+    }
+    if chat.reveal_history(load.all) && (!load.all || !chat.has_earlier) {
+        return;
+    }
+    if !chat.has_earlier {
         return;
     }
     let Some(first) = chat.messages.first() else {
@@ -701,7 +713,7 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                         &client,
                         Req::AgentMessages(v1::AgentMessagesRequest {
                             session: session.clone(),
-                            tail: 500,
+                            tail: crate::state::CHAT_HISTORY_PAGE as u32,
                             before_id: cursor.clone(),
                             ..Default::default()
                         }),
@@ -839,6 +851,7 @@ pub(super) fn msg_chat(
                         .filter(|m| !messages_ids.contains(&m.id)),
                 );
                 chat.messages = merged;
+                chat.history_start = chat.messages.first().map(|m| m.id.clone());
                 chat.has_earlier = has_more;
             } else {
                 // Earlier pages may finish while catch-up is in flight.
@@ -857,6 +870,10 @@ pub(super) fn msg_chat(
                     chat.has_earlier = has_more;
                 }
             }
+            if reset {
+                chat.history_start = None;
+            }
+            chat.reconcile_history_start();
         }
         Err(error) => {
             chat.load_error = if earlier {
@@ -899,6 +916,7 @@ pub(super) fn msg_agent_event(
                 messages_changed = true;
             }
             if messages_changed {
+                chat.reconcile_history_start();
                 chat.content_revision = crate::state::next_content_revision();
             }
         }
