@@ -53,6 +53,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0026](0026-cloud-trust-and-native-diagnostics.md) | Accepted | Platform Cloud trust and bounded native diagnostics |
 
+| [0027](0027-native-send-scan-reuse.md) | Accepted | Reuse native send scans and batch control metadata |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
