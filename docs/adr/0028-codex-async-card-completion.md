@@ -53,3 +53,23 @@ the 17-crate architecture gate passed. The async completion regression failed
 against the old rule and passed after the change. Prepare paired Apple 1.0.85
 (76); build, signing, publication, installation and physical-device acceptance
 are not implied by these source checks.
+
+### Installed native acceptance
+
+On Mac-C running the notarized 1.0.85 (76) build documented in ADR 0029, the
+same dedicated asynchronous card that was absent from 1.0.84's event stream
+reappeared without replaying its question request. Mac-A submitted its offered
+receipt option once. The operation ledger reached `applied`, the provider
+rollout recorded the exact question item and selected answer, and a new provider
+turn returned the requested final receipt.
+
+A separate fresh native receipt message from the updated Mac-B to that same
+idle Mac-C conversation also reached `applied` and produced the exact provider
+reply. Native preparation took 239 ms for the answer and 224 ms for the new
+send in these individual observations, with queue waits of 8 ms and 14 ms.
+These are phase timings for a short dedicated session, not a controlled
+before/after benchmark or phone end-to-end latency.
+
+The earlier Mac-A Claude card remains outside this run; no business answer or
+unknown send was retried. Historical ambiguous-composer and missing-sidebar
+failures are not claimed fixed by these successful dedicated tests.

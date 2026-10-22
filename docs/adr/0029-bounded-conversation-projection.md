@@ -67,3 +67,33 @@ are not implied by these source checks.
 
 Synthetic 500-message projection measurement: `history snapshot: recent=446109 bytes full=2781491 bytes`.
 This compares encoded ViewModels on the build host, not phone frame time.
+
+### Paired release and installed checks
+
+After merging the concurrent native scan optimization (ADR 0027), app-core
+passed 87 tests (one existing ignored), agent passed 225 (four existing ignored)
+and platform passed 36. Strict Clippy passed on the combined source.
+
+Apple 1.0.85 (76) was built locally from
+`bfc2873cf9cc2d9b4370768eb814a6a4825a1c65`, including the merged scan optimization.
+macOS Release and iOS archive succeeded. Developer ID signing, Apple notarization
+`e1f170a6-4a48-4e04-8b1c-bae397ee4489` (Accepted), staple validation and Gatekeeper
+assessment passed. Both existing public download paths were fetched and verified:
+
+- macOS ZIP SHA-256: `f4f74f5e53181dcccc6cc5f51266b9e1bf49af007964cf0c402caba8635162cd`.
+- iOS IPA SHA-256: `ea0367f1bcbedda892de131077814391aad16e2afd0afc13c1f247dcf6265e00`.
+- Daemon SHA-256: `1cb783d5d4c874eb3bb7b76584af1ef3cf8b24cc84f4ecea4af218bd7b68f13c`.
+
+All three Macs installed the same verified artifact through the existing update
+lease. Device identity and Accessibility permission persisted; relay and Vnet
+became ready. Six directed RPC paths, six virtual-address ping paths and all
+three installed signature/staple/Gatekeeper checks passed. One remote dispatch
+lost SSH before creating its installation directory; after checking that no
+installation had begun, that device alone was dispatched successfully.
+
+The physical iPhone has not yet confirmed installing this release or improved
+scroll/navigation latency. The published IPA and synthetic snapshot reduction
+are separate evidence. No historical OTA files were deleted; GitHub Actions
+remained disabled and no Cloud build was started. Native answer/send acceptance
+is recorded in ADR 0028; it is not a measurement of long mobile conversation
+layout or a claim that every historical native failure has been repaired.
