@@ -87,3 +87,38 @@ Prepare paired Apple 1.0.84 (75) artifacts to install the Cloud repair and
 native diagnostics. Existing native ambiguity and question timeout observations
 remain unresolved until the new diagnostic evidence explains them; no global
 timeout increase or ambiguous-control fallback is included.
+
+### Published build and installed-device evidence
+
+Paired Apple 1.0.84 (75) was built locally from
+`c5b9885c3f5f774f533f6dcd76ad11cd5f51eb4a` and published to the existing desktop
+and iOS OTA locations. The macOS notarization request
+`d91a9e7d-8d83-4fe5-8d48-f37f214b1873` was accepted; stapling, Developer ID
+signature verification and Gatekeeper assessment passed. Public downloads were
+fetched and checked against the produced artifacts:
+
+- macOS ZIP SHA-256: `76b3b4a8abb7d1be464f4c758382f4d7bee9c19f70e29488abeae6cb22c4feae`.
+- iOS IPA SHA-256: `baabbc3a040d950742911f98d89b64f3fdf091ebef441a3da29833e6c99cc3e8`.
+- Installed daemon SHA-256 on all three Macs: `f4b2494472bbb0d5a66ebf097fdf1c5991238eb2462f122d1bdea2bf1e3f0915`.
+
+All three Macs report 1.0.84, registered relay, active Vnet and granted
+Accessibility access. All six directed inter-Mac RPC checks and all six
+virtual-address ping checks passed. Every installed bundle passed strict
+signature, staple and Gatekeeper checks. This verifies installed connectivity;
+it does not establish native provider receipt or fault-recovery acceptance.
+
+During the subsequent observation window, one Mac reported a generic Cloud
+transport failure followed by automatic recovery 61 seconds later. A bounded
+four-request connection-reuse probe completed TLS each time (HTTP 401 as
+expected without credentials). This does not establish the transient failure's
+cause or mean all Cloud transport errors are repaired.
+
+The two-composer refusal and question-panel lookup timeout remain unresolved.
+Read-only native inspection did not reproduce them; already answered business
+questions were not submitted again. No new test chat was sent in this round:
+the dedicated Claude target was locked, and the previously authorized Codex
+business session had an unanswered business question. Fresh native send and
+answer-continuation acceptance await normal unlock or explicit selection of a
+new dedicated conversation. Physical iPhone installation and UI acceptance
+remain unverified. GitHub Actions stayed disabled, and no Xcode Cloud or
+external TestFlight build was started.
