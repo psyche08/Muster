@@ -82,7 +82,10 @@ fn access_for(req: &Req) -> Access {
         | Req::DeviceRequestAutomation(_)
         | Req::DeviceDebug(_)
         | Req::NetworkRefresh(_)
-        | Req::DesktopUpdateLease(_) => Access::LocalOnly,
+        | Req::DesktopUpdateLease(_)
+        // A forward makes this machine reach into a member's loopback, so it
+        // is the local owner's to ask for; the member decides its own side.
+        | Req::ForwardOpen(_) => Access::LocalOnly,
         Req::DeviceSetCover(_) => Access::Need(Permission::LockedControl),
         Req::LockedUsePrepare(_)
         | Req::LockedUseExecute(_)
@@ -1245,12 +1248,71 @@ async fn dispatch(
             daemon.restart_node(relay).await?;
             Resp::DeviceInfo(daemon.device_info())
         }
+        // A loopback port here standing for one on a member. Every connection
+        // is its own forward stream, which the member decides on its own side
+        // (ARCHITECTURE §3.5); this side only carries bytes.
+        Req::ForwardOpen(r) => {
+            let peer = muster_core::DeviceId::from_hex(&r.device)
+                .map_err(|error| Error::Invalid(format!("device id: {error}")))?;
+            let port = u16::try_from(r.port)
+                .ok()
+                .filter(|port| *port != 0)
+                .ok_or_else(|| Error::Invalid("port is not a port".into()))?;
+            let local = u16::try_from(r.local_port)
+                .map_err(|_| Error::Invalid("local port is not a port".into()))?;
+            let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from((
+                std::net::Ipv4Addr::LOCALHOST,
+                local,
+            )))
+            .await
+            .map_err(|error| Error::Unavailable(format!("forward port: {error}")))?;
+            let bound = listener
+                .local_addr()
+                .map_err(|error| Error::Unavailable(error.to_string()))?
+                .port();
+            log::info!(
+                "forward 127.0.0.1:{bound} stands for {}:{port}",
+                peer.short()
+            );
+            events
+                .send(v1::event::Ev::ForwardOpened(v1::ForwardOpened {
+                    local_port: u32::from(bound),
+                }))
+                .await?;
+            let node = daemon.node();
+            let mut open = tokio::task::JoinSet::new();
+            loop {
+                tokio::select! {
+                    _ = events.cancelled().cancelled() => break,
+                    accepted = listener.accept() => {
+                        let Ok((mut tcp, _)) = accepted else { break };
+                        let node = node.clone();
+                        open.spawn(async move {
+                            match node.forward(peer, port).await {
+                                Ok((send, recv)) => {
+                                    let mut stream = tokio::io::join(recv, send);
+                                    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+                                }
+                                Err(error) => {
+                                    log::info!("forward to {}:{port}: {error}", peer.short());
+                                }
+                            }
+                        });
+                    }
+                    Some(_) = open.join_next(), if !open.is_empty() => {}
+                }
+            }
+            Resp::Ack(v1::Ack {})
+        }
         Req::PolicyGet(_) => Resp::Policy(daemon.policy_view()),
         Req::PolicySet(r) => {
             let Some(policy) = r.policy else {
                 return Err(Error::Invalid("policy is required".into()));
             };
             daemon.set_policy(&policy)?;
+            // A window that cannot be opened is reported to whoever asked for
+            // it, but the policy it was asked for stands.
+            daemon.sync_web_window().await?;
             Resp::Policy(daemon.policy_view())
         }
 

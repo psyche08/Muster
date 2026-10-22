@@ -219,6 +219,10 @@ pub struct Daemon {
     tmux: Arc<Terminal>,
     platform: Arc<dyn Platform>,
     vnet: Mutex<Option<Arc<Vnet>>>,
+    /// The web window the policy asks for, if any (ADR 0026). Dropping it
+    /// closes the port, so moving the window is: take it, then open the new
+    /// one.
+    web: tokio::sync::Mutex<Option<muster_web::Window>>,
     #[cfg(target_os = "macos")]
     vnet_helper: Mutex<Option<muster_platform::macos::nethelper::NetHelper>>,
     /// Fires whenever roster, peers-of-interest or pending joins change.
@@ -345,6 +349,7 @@ impl Daemon {
             tmux,
             platform,
             vnet: Mutex::new(None),
+            web: tokio::sync::Mutex::new(None),
             #[cfg(target_os = "macos")]
             vnet_helper: Mutex::new(None),
             changed,
@@ -385,6 +390,11 @@ impl Daemon {
         }
         if daemon.config.vnet {
             daemon.maybe_start_vnet().await;
+        }
+        // A window the owner opened earlier is open again after a restart; a
+        // port it can no longer bind is logged, not fatal.
+        if let Err(error) = daemon.sync_web_window().await {
+            log::warn!("web window: {error}");
         }
         if let Some(path) = daemon.config.authorized_keys.clone() {
             let task = tokio::spawn(authorized_keys::run(Arc::downgrade(&daemon), path));

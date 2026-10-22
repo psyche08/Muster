@@ -2248,6 +2248,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "muster-web"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "reqwest",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "musterd"
 version = "0.1.0"
 dependencies = [
@@ -2270,6 +2280,7 @@ dependencies = [
  "muster-rpc",
  "muster-store",
  "muster-terminal",
+ "muster-web",
  "quinn",
  "reqwest",
  "serde",

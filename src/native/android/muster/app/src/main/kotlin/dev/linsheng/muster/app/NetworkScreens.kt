@@ -67,7 +67,7 @@ import muster.app.AccessView
 import muster.app.ViewModel
 import muster.v1.MemberView
 import muster.v1.PendingJoin
-import muster.v1.policy
+import muster.v1.copy
 
 // Onboarding, home, invite, join, device and settings: the network side.
 
@@ -463,9 +463,12 @@ fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel) {
         }
         item {
             Button(onClick = {
-                core.setPolicy(policy {
+                // Built from the policy this device holds, so saving these
+                // three switches leaves what this screen does not edit — the
+                // task runtime, the web window — as it was.
+                core.setPolicy(vm.policy.copy {
                     this.offerAgent = offerAgent; this.offerTerminal = offerTerminal; allowLockedControl = lockedControl
-                    openPorts.addAll(ports); axAllowlist.addAll(vm.policy.axAllowlistList)
+                    openPorts.clear(); openPorts.addAll(ports)
                 })
             }, Modifier.padding(16.dp)) { Text("Save policy") }
         }

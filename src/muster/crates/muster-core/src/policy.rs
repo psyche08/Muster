@@ -156,6 +156,22 @@ pub struct LocalPolicy {
     /// the owner makes rather than a default they inherit.
     #[serde(default)]
     pub offer_tasks: bool,
+    /// The web window (ADR 0026): the one foreign origin this machine serves
+    /// on a loopback port, for members with no route to it. `None` is off,
+    /// which is how a machine starts — it carries somebody else's site, so
+    /// the owner says which one, if any.
+    #[serde(default)]
+    pub web_window: Option<WebWindow>,
+}
+
+/// One origin served on one of this machine's loopback ports. Opening the
+/// window and letting a member reach it stay two decisions: the port is
+/// reachable only once it is open and the member holds `net:tcp/<port>`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebWindow {
+    /// Scheme, host and port, no path: "https://example.test".
+    pub origin: String,
+    pub port: u16,
 }
 
 impl Default for LocalPolicy {
@@ -174,6 +190,7 @@ impl Default for LocalPolicy {
             offer_agent: true,
             offer_terminal: true,
             offer_tasks: false,
+            web_window: None,
         }
     }
 }
@@ -290,6 +307,20 @@ mod tests {
         assert!(policy.offer_terminal);
     }
 
+    /// Opening a window onto an origin is not the same as letting members in:
+    /// the port it listens on is reachable only once the owner opens it, like
+    /// any other port on this machine.
+    #[test]
+    fn a_web_window_does_not_open_the_port_it_listens_on() {
+        let mut policy = LocalPolicy::default();
+        assert!(policy.web_window.is_none());
+        policy.web_window = Some(WebWindow {
+            origin: "https://example.test".into(),
+            port: 8810,
+        });
+        assert!(!policy.port_open(Proto::Tcp, 8810));
+    }
+
     /// A stored policy written before the field existed must read as off, not
     /// as missing-and-therefore-whatever.
     #[test]
@@ -303,6 +334,7 @@ mod tests {
         });
         let policy: LocalPolicy = serde_json::from_value(stored).expect("older policy still loads");
         assert!(!policy.offer_tasks);
+        assert!(policy.web_window.is_none());
     }
 
     use crate::roster::{Author, DeviceKind, DeviceRecord, Roster};

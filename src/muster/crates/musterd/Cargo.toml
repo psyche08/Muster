@@ -21,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 muster-browser = { path = "../muster-browser" }
+muster-web = { path = "../muster-web" }
 muster-core = { path = "../muster-core" }
 muster-net = { path = "../muster-net" }
 muster-proto = { path = "../muster-proto" }
