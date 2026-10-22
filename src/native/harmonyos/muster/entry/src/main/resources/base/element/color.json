@@ -1,0 +1,15 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#2A2825" },
+    { "name": "accent", "value": "#A0644B" },
+    { "name": "accent_soft", "value": "#26A0644B" },
+    { "name": "accent_faint", "value": "#17A0644B" },
+    { "name": "action", "value": "#3D63ED" },
+    { "name": "link", "value": "#2563EB" },
+    { "name": "user_surface", "value": "#EDF2FF" },
+    { "name": "user_text", "value": "#3456C5" },
+    { "name": "composer", "value": "#FAFAFA" },
+    { "name": "code", "value": "#F7F7F7" },
+    { "name": "border", "value": "#E5E5E5" }
+  ]
+}

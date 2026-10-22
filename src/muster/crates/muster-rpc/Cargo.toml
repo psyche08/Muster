@@ -1,0 +1,19 @@
+[package]
+name = "muster-rpc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "muster-rpc client and server over any byte stream: the Unix socket locally, a service stream between devices"
+
+[dependencies]
+muster-proto = { path = "../muster-proto" }
+muster-core = { path = "../muster-core" }
+tokio.workspace = true
+tokio-util = { version = "0.7", features = ["io", "rt"] }
+log.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

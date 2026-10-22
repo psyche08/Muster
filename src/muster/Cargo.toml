@@ -1,0 +1,67 @@
+# The Rust core (docs/ARCHITECTURE.md §3.9).
+[workspace]
+resolver = "3"
+members = [
+    "crates/muster-core",
+    "crates/muster-net",
+    "crates/muster-relay",
+    "crates/muster-apns",
+    "crates/muster-proto",
+    "crates/muster-store",
+    "crates/muster-rpc",
+    "crates/muster-terminal",
+    "crates/muster-agent",
+    "crates/muster-acp",
+    "crates/muster-browser",
+    "crates/musterd",
+    "crates/muster-cli",
+    "crates/muster-app-core",
+    "crates/muster-ffi",
+    "crates/muster-platform",
+    "crates/muster-paths",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+notify = "8"
+data-encoding = "2"
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+rand = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util", "fs", "process"] }
+bytes = "1"
+futures-util = "0.3"
+log = "0.4"
+env_logger = "0.11"
+clap = { version = "4", features = ["derive"] }
+prost = "0.14"
+prost-build = "0.14"
+protoc-bin-vendored = "3"
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring", "log"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.13", default-features = false, features = ["ring"] }
+x509-parser = "0.16"
+rusqlite = { version = "0.40", features = ["bundled"] }
+libc = "0.2"
+if-addrs = "0.13"
+tokio-tungstenite = "0.30"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "http2"] }
+hickory-proto = { version = "0.25", default-features = false, features = ["std"] }
+tun = { version = "0.7", features = ["async"] }
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.release]
+debug = 1

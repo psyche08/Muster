@@ -1,0 +1,888 @@
+AXApplication title="Claude"
+  AXWindow/AXStandardWindow title="Claude"
+    AXGroup title="Claude"
+      AXGroup
+        AXGroup
+          AXGroup
+            AXGroup
+              AXGroup
+                AXWebArea url="file:///Applications/Claude.app/Contents/Resources/app.asar/.vite/renderer/main_…"
+                  AXGroup/AXEmptyGroup id="root"
+              AXGroup
+                AXGroup
+                  AXWebArea title="text-1" url="https://claude.ai/epitaxy/id0000000000000000000000000000000000000002"
+                    AXGroup
+                      AXGroup id="root"
+                        AXGroup
+                          AXGroup
+                            AXGroup/AXLandmarkComplementary desc="text-2"
+                              AXButton desc="text-3" id="_r_0_"
+                              AXButton desc="Back" id="_r_3_"
+                              AXButton desc="text-4" id="_r_6_"
+                              AXRadioGroup desc="Mode"
+                                AXRadioButton desc="Claude" id="base-ui-_r_d_"
+                                AXRadioButton desc="Code" id="base-ui-_r_j_"
+                              AXGroup id="frame-peek-popover"
+                                AXButton title="text-5"
+                                AXButton title="New"
+                                AXGroup
+                                  AXGroup
+                                    AXButton title="text-6"
+                                    AXGroup
+                                      AXPopUpButton desc="text-7" id="_r_d2_"
+                                  AXButton title="text-8"
+                                  AXButton title="text-9"
+                                    AXStaticText value="value-1"
+                                    AXStaticText value="value-2"
+                                  AXButton title="text-10"
+                                  AXPopUpButton desc="text-11" id="base-ui-_r_o_"
+                                  AXButton title="text-12"
+                                  AXPopUpButton desc="text-13" id="_r_10_"
+                                  AXGroup id="id0000000000003"
+                                    AXGroup
+                                      AXButton title="text-14"
+                                        AXGroup/AXApplicationStatus desc="text-15" id="_r_jgh_"
+                                        AXGroup id="_r_30j_"
+                                          AXStaticText value="value-3"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-16"
+                                  AXGroup id="id000000000004"
+                                    AXGroup
+                                      AXButton title="text-17"
+                                        AXGroup/AXApplicationStatus desc="text-18" id="_r_dfl_"
+                                        AXGroup id="_r_1o_"
+                                          AXStaticText value="value-4"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-19"
+                                  AXGroup id="id000000000005"
+                                    AXGroup
+                                      AXButton title="text-20"
+                                        AXImage desc="text-21" id="_r_hne_"
+                                        AXGroup id="_r_2a_"
+                                          AXStaticText value="value-5"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-22"
+                                  AXGroup id="id000000000006"
+                                    AXGroup
+                                      AXButton title="text-23"
+                                        AXImage desc="Idle" id="_r_2q_"
+                                        AXGroup id="_r_2s_"
+                                          AXStaticText value="value-6"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-24" id="id0000000000007"
+                                  AXGroup id="id000000000008"
+                                    AXGroup
+                                      AXButton title="text-25"
+                                        AXImage desc="Idle" id="_r_33_"
+                                        AXGroup id="_r_35_"
+                                          AXStaticText value="value-7"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-26"
+                                  AXGroup id="id000000000009"
+                                    AXGroup
+                                      AXButton title="text-27"
+                                        AXImage desc="Idle" id="_r_3c_"
+                                        AXGroup id="_r_3e_"
+                                          AXStaticText value="value-8"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-28"
+                                  AXGroup id="id000000000010"
+                                    AXGroup
+                                      AXButton title="text-29"
+                                        AXImage desc="Idle" id="_r_3u_"
+                                        AXGroup id="_r_40_"
+                                          AXStaticText value="value-9"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-30" id="base-ui-_r_ith_"
+                                  AXGroup id="id000000000011"
+                                    AXGroup
+                                      AXButton title="text-31"
+                                        AXImage desc="Idle" id="_r_47_"
+                                        AXGroup id="_r_49_"
+                                          AXStaticText value="value-10"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-32"
+                                  AXGroup id="id000000000012"
+                                    AXGroup
+                                      AXButton title="text-33"
+                                        AXImage desc="Idle" id="_r_4g_"
+                                        AXGroup id="_r_4i_"
+                                          AXStaticText value="value-11"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-34"
+                                  AXGroup id="id000000000013"
+                                    AXGroup
+                                      AXButton title="text-35"
+                                        AXImage desc="Idle" id="_r_4p_"
+                                        AXGroup id="_r_4r_"
+                                          AXStaticText value="value-12"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-36"
+                                  AXGroup id="id000000000014"
+                                    AXGroup
+                                      AXButton title="text-37"
+                                        AXImage desc="Idle" id="_r_52_"
+                                        AXGroup id="_r_54_"
+                                          AXStaticText value="value-13"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-38"
+                                  AXGroup id="id000000000015"
+                                    AXGroup
+                                      AXButton title="text-39"
+                                        AXImage desc="Idle" id="_r_5b_"
+                                        AXGroup id="_r_5d_"
+                                          AXStaticText value="value-14"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-40"
+                                  AXGroup id="id000000000016"
+                                    AXGroup
+                                      AXButton title="text-41"
+                                        AXImage desc="Idle" id="_r_5k_"
+                                        AXGroup id="_r_5m_"
+                                          AXStaticText value="value-15"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-42"
+                                  AXGroup id="id000000000017"
+                                    AXGroup
+                                      AXButton title="text-43"
+                                        AXImage desc="Idle" id="_r_5t_"
+                                        AXGroup id="_r_5v_"
+                                          AXStaticText value="value-16"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-44"
+                                  AXGroup id="id000000000018"
+                                    AXGroup
+                                      AXButton title="text-45"
+                                        AXImage desc="Idle" id="_r_66_"
+                                        AXGroup id="_r_68_"
+                                          AXStaticText value="value-17"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-46"
+                                  AXGroup id="id000000000019"
+                                    AXGroup
+                                      AXButton title="text-47"
+                                        AXImage desc="Idle" id="_r_6f_"
+                                        AXGroup id="_r_6h_"
+                                          AXStaticText value="value-18"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-48"
+                                  AXGroup id="id000000000020"
+                                    AXGroup
+                                      AXButton title="text-49"
+                                        AXImage desc="Idle" id="_r_6o_"
+                                        AXGroup id="_r_6q_"
+                                          AXStaticText value="value-19"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-50"
+                                  AXGroup id="base-ui-_r_fvd_"
+                                    AXGroup
+                                      AXButton title="text-51"
+                                        AXImage desc="Idle" id="_r_fve_"
+                                        AXGroup id="_r_fvg_"
+                                          AXStaticText value="value-20"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-52"
+                                  AXGroup id="id0000000000021"
+                                    AXGroup
+                                      AXButton title="text-53"
+                                        AXImage desc="Idle" id="_r_g9r_"
+                                        AXGroup id="_r_g9t_"
+                                          AXStaticText value="value-21"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-54"
+                                  AXGroup id="base-ui-_r_gmg_"
+                                    AXGroup
+                                      AXButton title="text-55"
+                                        AXImage desc="Idle" id="_r_gmh_"
+                                        AXGroup id="_r_gmj_"
+                                          AXStaticText value="value-22"
+                                      AXGroup
+                                        AXPopUpButton desc="More options for text-56"
+                                  AXButton desc="text-57" id="_r_7g_"
+                                  AXGroup/AXApplicationStatus
+                                AXGroup
+                                  AXGroup
+                                    AXPopUpButton title="text-58" id="id000000000022"
+                                      AXImage desc="text-59"
+                                      AXStaticText value="value-23"
+                                      AXStaticText value="value-24"
+                                    AXGroup id="_r_j5_"
+                                      AXButton desc="text-60" id="_r_j8_"
+                              AXSplitter desc="text-61" id="_r_1a_"
+                            AXGroup/AXLandmarkMain
+                              AXGroup
+                                AXGroup/AXLandmarkRegion desc="text-62"
+                                  AXGroup
+                                    AXGroup/AXEmptyGroup
+                                    AXGroup
+                                      AXGroup
+                                        AXGroup
+                                          AXGroup
+                                            AXGroup
+                                              AXGroup
+                                                AXGroup
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXPopUpButton desc="text-63" id="_r_iul_"
+                                                          AXButton desc="text-64" id="_r_iuq_"
+                                                          AXPopUpButton desc="More options for text-16" id="_r_ic3_"
+                                                          AXPopUpButton title="text-65" id="_r_icb_"
+                                                        AXButton desc="text-66" id="_r_iut_"
+                                                        AXGroup
+                                                          AXCheckBox/AXToggleButton desc="text-67" id="_r_icg_"
+                                                          AXCheckBox/AXToggleButton desc="text-68" id="_r_icm_"
+                                                          AXCheckBox/AXToggleButton desc="text-69" id="_r_ics_"
+                                                          AXCheckBox/AXToggleButton desc="text-70" id="_r_iv0_"
+                                                          AXPopUpButton desc="text-71" id="_r_id6_"
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup/AXApplicationStatus
+                                                            AXStaticText value="value-25"
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup
+                                                            AXGroup/AXLandmarkNavigation desc="text-72"
+                                                          AXGroup
+                                                            AXGroup/AXApplicationGroup desc="text-73"
+                                                              AXGroup id="_r_iv7_"
+                                                                AXStaticText value="value-26"
+                                                              AXGroup
+                                                                AXGroup/AXEmptyGroup
+                                                                AXButton title="text-74"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-27"
+                                                                      AXLink desc="text-75" url="https://link-1.invalid/" id="base-ui-_r_jbi_"
+                                                                        AXStaticText value="value-28"
+                                                                      AXStaticText value="value-29"
+                                                                    AXGroup
+                                                                      AXGroup/AXStrongStyleGroup
+                                                                        AXStaticText value="value-30"
+                                                                    AXList/AXContentList
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXStaticText value="value-32"
+                                                                        AXGroup/AXCodeStyleGroup
+                                                                          AXStaticText value="value-33"
+                                                                        AXStaticText value="value-34"
+                                                                        AXGroup/AXCodeStyleGroup
+                                                                          AXStaticText value="value-35"
+                                                                        AXStaticText value="value-36"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXStaticText value="value-37"
+                                                                        AXButton title="text-76"
+                                                                          AXGroup
+                                                                            AXStaticText value="value-38"
+                                                                        AXStaticText value="value-39"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXStaticText value="value-40"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXStaticText value="value-41"
+                                                                    AXGroup
+                                                                      AXGroup/AXStrongStyleGroup
+                                                                        AXStaticText value="value-42"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-43"
+                                                                    AXList/AXContentList
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-44"
+                                                                        AXStaticText value="value-45"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-46"
+                                                                        AXStaticText value="value-47"
+                                                                        AXGroup/AXCodeStyleGroup
+                                                                          AXStaticText value="value-48"
+                                                                        AXStaticText value="value-49"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-50"
+                                                                        AXStaticText value="value-51"
+                                                                    AXGroup
+                                                                      AXGroup/AXStrongStyleGroup
+                                                                        AXStaticText value="value-52"
+                                                                      AXStaticText value="value-53"
+                                                                    AXList/AXContentList
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-46"
+                                                                        AXStaticText value="value-54"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-31"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-44"
+                                                                        AXStaticText value="value-55"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-56"
+                                                                    AXGroup
+                                                                      AXGroup/AXStrongStyleGroup
+                                                                        AXStaticText value="value-57"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-58"
+                                                                    AXToolbar desc="text-77"
+                                                                      AXButton desc="text-78" id="_r_jbs_"
+                                                                      AXGroup/AXApplicationStatus
+                                                                      AXButton desc="text-79" id="_r_jbv_"
+                                                                      AXCheckBox/AXToggleButton desc="text-80" id="_r_jc5_"
+                                                                      AXButton desc="text-81" id="_r_jc8_"
+                                                                      AXGroup/AXTimeGroup id="_r_jcb_"
+                                                                        AXStaticText value="value-59"
+                                                                AXGroup
+                                                                  AXGroup/AXDocumentArticle desc="text-82"
+                                                                    AXHeading title="You said:text-83"
+                                                                      AXStaticText value="value-60"
+                                                                    AXGroup
+                                                                      AXGroup id="_r_jch_"
+                                                                        AXGroup
+                                                                          AXGroup
+                                                                            AXStaticText value="value-61"
+                                                                    AXButton desc="text-84"
+                                                                AXGroup
+                                                                  AXGroup/AXDocumentArticle desc="text-85"
+                                                                    AXGroup
+                                                                      AXHeading title="Claude responded:text-86"
+                                                                        AXStaticText value="value-62"
+                                                                      AXGroup
+                                                                        AXGroup id="id0000000023"
+                                                                          AXGroup id="id00000000024"
+                                                                            AXGroup
+                                                                              AXStaticText value="value-63"
+                                                                        AXButton title="text-87"
+                                                                      AXGroup/AXApplicationStatus
+                                                                        AXStaticText value="value-63"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-64"
+                                                                      AXGroup/AXCodeStyleGroup
+                                                                        AXStaticText value="value-65"
+                                                                      AXStaticText value="value-66"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXGroup id="id0000000025"
+                                                                        AXGroup id="id00000000026"
+                                                                          AXGroup
+                                                                            AXStaticText value="value-67"
+                                                                      AXButton title="text-88"
+                                                                    AXGroup/AXApplicationStatus
+                                                                      AXStaticText value="value-67"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-68"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup desc="text-89"
+                                                                      AXGroup id="_r_jdi_-text"
+                                                                        AXGroup id="_r_jdi_-label"
+                                                                          AXStaticText value="value-69"
+                                                                      AXButton title="text-89"
+                                                                    AXGroup/AXApplicationStatus
+                                                                      AXStaticText value="value-69"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-70"
+                                                                      AXGroup/AXCodeStyleGroup
+                                                                        AXStaticText value="value-71"
+                                                                      AXStaticText value="value-72"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-73"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-74"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-75"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-76"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-77"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXGroup id="_r_jfo_-text"
+                                                                        AXGroup id="_r_jfo_-label"
+                                                                          AXGroup
+                                                                            AXStaticText value="value-78"
+                                                                      AXButton title="text-90"
+                                                                    AXGroup/AXApplicationStatus
+                                                                      AXStaticText value="value-78"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-79"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-80"
+                                                                    AXList/AXContentList
+                                                                      AXGroup
+                                                                        AXListMarker value="value-81"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-46"
+                                                                        AXStaticText value="value-82"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-83"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="Codex"
+                                                                        AXStaticText value="value-84"
+                                                                        AXGroup/AXCodeStyleGroup
+                                                                          AXStaticText value="value-71"
+                                                                        AXStaticText value="value-85"
+                                                                      AXGroup
+                                                                        AXListMarker value="value-86"
+                                                                        AXGroup/AXStrongStyleGroup
+                                                                          AXStaticText value="value-87"
+                                                                        AXStaticText value="value-88"
+                                                                    AXGroup
+                                                                      AXGroup/AXStrongStyleGroup
+                                                                        AXStaticText value="value-89"
+                                                                      AXStaticText value="value-90"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-91"
+                                                                    AXGroup
+                                                                      AXStaticText value="value-92"
+                                                                    AXToolbar desc="text-77"
+                                                                      AXButton desc="text-78"
+                                                                      AXGroup/AXApplicationStatus
+                                                                      AXButton desc="text-79" id="_r_jgb_"
+                                                                      AXCheckBox/AXToggleButton desc="text-80"
+                                                                      AXButton desc="text-81"
+                                                                      AXGroup/AXTimeGroup
+                                                                        AXStaticText value="value-93"
+                                                                AXGroup
+                                                                  AXGroup/AXDocumentArticle desc="text-91"
+                                                                    AXHeading title="You said:text-92"
+                                                                      AXStaticText value="value-94"
+                                                                    AXGroup
+                                                                      AXGroup id="_r_jgk_"
+                                                                        AXGroup
+                                                                          AXGroup
+                                                                            AXStaticText value="value-95"
+                                                                    AXButton desc="text-93"
+                                                                AXGroup
+                                                                  AXGroup/AXDocumentArticle desc="text-94"
+                                                                    AXGroup
+                                                                      AXGroup
+                                                                        AXGroup id="_r_jgv_-text"
+                                                                          AXGroup id="_r_jgv_-label"
+                                                                            AXGroup
+                                                                              AXStaticText value="value-96"
+                                                                              AXStaticText value="value-97"
+                                                                        AXButton title="text-95"
+                                                                      AXGroup/AXApplicationStatus
+                                                                        AXStaticText value="value-98"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXHeading title="text-96" id="id000000000000000000000000000000000000027"
+                                                                      AXStaticText value="value-99"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXGroup id="_r_jhb_-text"
+                                                                        AXGroup id="_r_jhb_-label"
+                                                                          AXGroup
+                                                                            AXStaticText value="value-96"
+                                                                            AXStaticText value="value-100"
+                                                                            AXStaticText value="value-101"
+                                                                      AXButton title="text-97"
+                                                                    AXGroup/AXApplicationStatus
+                                                                      AXStaticText value="value-102"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup
+                                                                      AXStaticText value="value-103"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXGroup desc="text-98"
+                                                                      AXGroup id="_r_jhk_-text"
+                                                                        AXGroup id="_r_jhk_-label"
+                                                                          AXStaticText value="value-104"
+                                                                      AXGroup id="_r_jhk_-busy"
+                                                                        AXStaticText value="running"
+                                                                      AXButton title="text-99"
+                                                                    AXGroup/AXApplicationStatus
+                                                                      AXStaticText value="value-104"
+                                                                AXGroup/AXEmptyGroup
+                                                                  AXGroup/AXEmptyGroup
+                                                          AXGroup/AXApplicationStatus
+                                                        AXGroup/AXEmptyGroup
+                                                          AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup/AXLandmarkNavigation desc="text-100"
+                                                            AXImage desc="text-101" id="_r_j2i_"
+                                                            AXLink desc="text-102" url="https://link-2.invalid/" id="id0000000000028"
+                                                              AXStaticText value="value-105"
+                                                            AXPopUpButton title="text-65" id="_r_j2r_"
+                                                            AXPopUpButton desc="text-103" id="_r_j33_"
+                                                            AXStaticText value="value-106"
+                                                            AXButton desc="Dismiss"
+                                                            AXImage desc="text-101" id="_r_jal_"
+                                                            AXLink desc="text-104" url="https://link-3.invalid/" id="base-ui-_r_jaq_"
+                                                              AXStaticText value="value-107"
+                                                            AXPopUpButton title="text-65" id="_r_jau_"
+                                                            AXPopUpButton desc="text-105" id="_r_jb6_"
+                                                            AXStaticText value="value-106"
+                                                            AXButton desc="Dismiss"
+                                                            AXButton title="text-106"
+                                                          AXGroup/AXEmptyGroup
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup/AXApplicationStatus
+                                                            AXStaticText value="value-108"
+                                                          AXGroup/AXApplicationStatus
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXGroup
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXTextArea desc="Prompt" value="⏎"
+                                                                      AXGroup/AXEmptyGroup
+                                                                    AXGroup/AXApplicationStatus id="skill-arg-hint-sr-kmjgqt"
+                                                              AXGroup
+                                                                AXGroup id="_r_jgl_"
+                                                                  AXButton desc="Stop" id="_r_jgo_"
+                                                          AXGroup
+                                                            AXPopUpButton desc="text-107" id="_r_gb2_"
+                                                            AXGroup/AXApplicationGroup desc="text-108"
+                                                              AXCheckBox/AXToggleButton desc="text-108" id="_r_gb7_"
+                                                              AXPopUpButton desc="text-109" id="base-ui-_r_gbd_"
+                                                            AXPopUpButton title="text-110" id="_r_gbj_"
+                                                            AXPopUpButton desc="text-111" id="base-ui-_r_gbu_"
+                                                            AXPopUpButton desc="text-112" id="_r_gc1_"
+                                                            AXPopUpButton desc="text-113" id="_r_gc6_"
+                                                            AXGroup/AXApplicationStatus
+                                                              AXStaticText value="value-109"
+                                                            AXGroup/AXApplicationStatus
+                                            AXSplitter desc="text-114" id="_r_iuc_"
+                                            AXGroup
+                                              AXGroup
+                                                AXGroup
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXStaticText value="value-110"
+                                                      AXButton desc="text-66" id="_r_j39_"
+                                                      AXGroup
+                                                        AXPopUpButton desc="text-115" id="_r_j3c_"
+                                                        AXButton desc="Close" id="_r_j3i_"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationStatus
+                                                      AXGroup
+                                                        AXHeading title="text-116"
+                                                          AXButton title="text-116"
+                                                            AXStaticText value="value-111"
+                                                            AXStaticText value="value-112"
+                                                        AXButton desc="text-117" id="_r_j3o_"
+                                              AXSplitter desc="text-118" id="_r_iuf_"
+                                              AXGroup
+                                                AXGroup
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXCheckBox/AXToggleButton desc="text-119" id="_r_j3t_"
+                                                        AXPopUpButton desc="text-120" id="_r_j46_"
+                                                          AXStaticText value="value-113"
+                                                          AXImage desc="text-121"
+                                                          AXStaticText value="value-114"
+                                                      AXButton desc="text-66" id="_r_j4b_"
+                                                      AXGroup
+                                                        AXPopUpButton desc="text-122" id="_r_j4p_"
+                                                        AXPopUpButton desc="text-115" id="_r_j4u_"
+                                                        AXButton desc="Close" id="_r_j54_"
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXSplitter desc="text-123" id="_r_j58_"
+                                                      AXGroup
+                                                        AXStaticText value="value-115"
+                                        AXGroup id="_r_df_-reorder-hint"
+                                          AXStaticText value="value-116"
+                                        AXGroup/AXApplicationStatus
+                                      AXGroup/AXApplicationStatus
+                                AXGroup/AXEmptyGroup
+                      AXGroup/AXEmptyGroup id="portal-root"
+                      AXGroup/AXApplicationStatus
+                      AXGroup id="_r_1e_"
+                        AXGroup
+                          AXGroup
+                            AXGroup/AXApplicationStatus
+                            AXGroup/AXLandmarkRegion desc="text-124"
+                      AXGroup/AXEmptyGroup
+    AXButton/AXCloseButton
+    AXButton/AXFullScreenButton
+      AXGroup
+    AXButton/AXMinimizeButton
+  AXMenuBar
+    AXMenuBarItem title="text-125"
+      AXMenu
+        AXMenuItem title="text-126" id="_aboutThisMacRequested:"
+        AXMenuItem title="text-127" id="_systemInformationRequested:"
+        AXMenuItem
+        AXMenuItem title="text-128" id="_systemSettingsRequested:"
+        AXMenuItem title="text-129" id="_appStoreRequested:"
+        AXMenuItem
+        AXMenuItem title="text-130" id="_recentsRequested:"
+          AXMenu
+            AXMenuItem title="text-131"
+            AXMenuItem title="ChatGPT" id="_recentItemRequested:"
+            AXMenuItem title="text-132" id="_recentItemRequested:"
+            AXMenuItem title="Claude" id="_recentItemRequested:"
+            AXMenuItem title="text-133" id="_recentItemRequested:"
+            AXMenuItem title="text-134" id="_recentItemRequested:"
+            AXMenuItem title="text-135" id="_recentItemRequested:"
+            AXMenuItem title="text-136" id="_recentItemRequested:"
+            AXMenuItem title="text-137" id="_recentItemRequested:"
+            AXMenuItem title="text-138" id="_recentItemRequested:"
+            AXMenuItem title="text-139" id="_recentItemRequested:"
+            AXMenuItem title="text-65" id="_recentItemRequested:"
+            AXMenuItem title="text-140" id="_recentItemRequested:"
+            AXMenuItem title="text-141" id="_recentItemRequested:"
+            AXMenuItem title="text-142" id="_recentItemRequested:"
+            AXMenuItem title="text-143" id="_recentItemRequested:"
+            AXMenuItem title="text-144" id="_recentItemRequested:"
+            AXMenuItem title="text-145" id="_recentItemRequested:"
+            AXMenuItem title="text-146" id="_recentItemRequested:"
+            AXMenuItem title="text-147" id="_recentItemRequested:"
+            AXMenuItem title="text-148" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-149"
+            AXMenuItem title="catdesk" id="_recentItemRequested:"
+            AXMenuItem title="text-150" id="_recentItemRequested:"
+            AXMenuItem title="text-151" id="_recentItemRequested:"
+            AXMenuItem title="text-152" id="_recentItemRequested:"
+            AXMenuItem title="text-153" id="_recentItemRequested:"
+            AXMenuItem title="text-154" id="_recentItemRequested:"
+            AXMenuItem title="text-155" id="_recentItemRequested:"
+            AXMenuItem title="text-156" id="_recentItemRequested:"
+            AXMenuItem title="text-157" id="_recentItemRequested:"
+            AXMenuItem title="text-158" id="_recentItemRequested:"
+            AXMenuItem title="text-157" id="_recentItemRequested:"
+            AXMenuItem title="text-158" id="_recentItemRequested:"
+            AXMenuItem title="text-159" id="_recentItemRequested:"
+            AXMenuItem title="text-160" id="_recentItemRequested:"
+            AXMenuItem title="text-161" id="_recentItemRequested:"
+            AXMenuItem title="text-162" id="_recentItemRequested:"
+            AXMenuItem title="text-163" id="_recentItemRequested:"
+            AXMenuItem title="text-164" id="_recentItemRequested:"
+            AXMenuItem title="text-165" id="_recentItemRequested:"
+            AXMenuItem title="text-166" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-167"
+            AXMenuItem title="text-168" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-169" id="_clearRecentItemsRequested:"
+        AXMenuItem
+        AXMenuItem title="text-170" id="_forceQuitPanelRequested:"
+        AXMenuItem title="text-171" id="_forceQuitRequested:"
+        AXMenuItem
+        AXMenuItem title="text-172" id="_sleepRequested:"
+        AXMenuItem title="text-173" id="_restartRequested:"
+        AXMenuItem title="text-174" id="_restartNowRequested:"
+        AXMenuItem title="text-175" id="_shutDownRequested:"
+        AXMenuItem title="text-176" id="_shutDownNowRequested:"
+        AXMenuItem
+        AXMenuItem title="text-177" id="_lockScreenRequested:"
+        AXMenuItem title="text-178" id="_logOutRequested:"
+        AXMenuItem title="text-179" id="_logOutNowRequested:"
+        AXMenuItem
+    AXMenuBarItem title="Claude"
+      AXMenu
+        AXMenuItem title="text-180" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-181" id="itemSelected:"
+        AXMenuItem title="text-182" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-183"
+          AXMenu
+            AXMenuItem title="text-184" id="_processRequest:"
+            AXMenuItem title="text-185" id="_processRequest:"
+            AXMenuItem title="text-186" id="_processRequest:"
+            AXMenuItem title="text-187" id="_processRequest:"
+            AXMenuItem title="text-188" id="_processRequest:"
+            AXMenuItem title="text-189" id="_processRequest:"
+            AXMenuItem title="text-190" id="_processRequest:"
+            AXMenuItem title="text-191" id="_processRequest:"
+            AXMenuItem title="text-192" id="_processRequest:"
+            AXMenuItem title="text-193" id="_processRequest:"
+            AXMenuItem title="text-194" id="_processRequest:"
+            AXMenuItem title="text-195" id="_configureServicesMenu:"
+        AXMenuItem
+        AXMenuItem title="text-196" id="hide:"
+        AXMenuItem title="text-197" id="hideOtherApplications:"
+        AXMenuItem title="text-198" id="unhideAllApplications:"
+        AXMenuItem
+        AXMenuItem title="text-199" id="itemSelected:"
+    AXMenuBarItem title="File"
+      AXMenu
+        AXMenuItem title="text-200" id="itemSelected:"
+        AXMenuItem title="text-201" id="itemSelected:"
+        AXMenuItem title="text-202" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-203" id="itemSelected:"
+        AXMenuItem title="text-204" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-205" id="itemSelected:"
+        AXMenuItem title="text-206" id="performClose:"
+        AXMenuItem title="text-207" id="closeAll:"
+        AXMenuItem title="text-208" id="itemSelected:"
+    AXMenuBarItem title="text-209"
+      AXMenu
+        AXMenuItem title="text-210" id="itemSelected:"
+        AXMenuItem title="text-211" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-212" id="cut:"
+        AXMenuItem title="text-78" id="copy:"
+        AXMenuItem title="text-213" id="paste:"
+        AXMenuItem title="text-214" id="pasteAndMatchStyle:"
+        AXMenuItem title="Delete" id="delete:"
+        AXMenuItem title="text-215" id="selectAll:"
+        AXMenuItem
+        AXMenuItem title="text-216"
+          AXMenu
+            AXMenuItem title="text-217" id="itemSelected:"
+            AXMenuItem title="text-218" id="itemSelected:"
+            AXMenuItem title="text-219" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-220" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-221" id="_NSMenuItemAutoFillIdentifier"
+          AXMenu
+            AXMenuItem title="text-222" id="_handleInsertFromContactsCommand:"
+            AXMenuItem title="text-223" id="_handleInsertFromPasswordsCommand:"
+            AXMenuItem title="text-224" id="_handleInsertFromCreditCardsCommand:"
+        AXMenuItem title="text-225" id="startDictation:"
+        AXMenuItem title="text-226" id="orderFrontCharacterPalette:"
+    AXMenuBarItem title="text-227"
+      AXMenu
+        AXMenuItem title="text-228" id="itemSelected:"
+        AXMenuItem title="text-229" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-230" id="itemSelected:"
+        AXMenuItem title="text-231" id="itemSelected:"
+        AXMenuItem title="text-232" id="itemSelected:"
+        AXMenuItem title="text-233" id="itemSelected:"
+        AXMenuItem title="text-234" id="itemSelected:"
+        AXMenuItem title="text-235" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-236"
+          AXMenu
+            AXMenuItem title="text-237" id="itemSelected:"
+            AXMenuItem title="text-238" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-239" id="itemSelected:"
+            AXMenuItem title="text-240" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-241" id="itemSelected:"
+            AXMenuItem title="text-242" id="itemSelected:"
+            AXMenuItem title="text-243" id="itemSelected:"
+            AXMenuItem title="text-244" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-245" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-246" id="itemSelected:"
+        AXMenuItem title="text-247" id="itemSelected:"
+        AXMenuItem title="text-248" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-249" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-250" id="itemSelected:"
+    AXMenuBarItem title="Go"
+      AXMenu
+        AXMenuItem title="Back" id="itemSelected:"
+        AXMenuItem title="text-4" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="Claude" id="itemSelected:"
+        AXMenuItem title="Code" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-251" id="itemSelected:"
+        AXMenuItem title="text-252" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-253" id="itemSelected:"
+    AXMenuBarItem title="text-254"
+      AXMenu
+        AXMenuItem title="text-255" id="performMiniaturize:"
+        AXMenuItem title="text-256" id="miniaturizeAll:"
+        AXMenuItem title="text-257" id="performZoom:"
+        AXMenuItem title="text-258" id="zoomAll:"
+        AXMenuItem title="text-259" id="_zoomFill:"
+        AXMenuItem title="text-260" id="_zoomCenter:"
+        AXMenuItem
+        AXMenuItem title="text-261"
+          AXMenu
+            AXMenuItem title="text-262"
+            AXMenuItem title="text-263" id="_zoomLeft:"
+            AXMenuItem title="text-264" id="_zoomRight:"
+            AXMenuItem title="text-265" id="_zoomTop:"
+            AXMenuItem title="text-266" id="_zoomBottom:"
+            AXMenuItem
+            AXMenuItem title="text-267"
+            AXMenuItem title="text-268" id="_zoomTopLeft:"
+            AXMenuItem title="text-269" id="_zoomTopRight:"
+            AXMenuItem title="text-270" id="_zoomBottomLeft:"
+            AXMenuItem title="text-271" id="_zoomBottomRight:"
+            AXMenuItem
+            AXMenuItem title="text-272"
+            AXMenuItem title="text-273" id="_zoomLeftAndRight:"
+            AXMenuItem title="text-274" id="_zoomLeftThreeUp:"
+            AXMenuItem title="text-275" id="_zoomRightAndLeft:"
+            AXMenuItem title="text-276" id="_zoomRightThreeUp:"
+            AXMenuItem title="text-277" id="_zoomTopAndBottom:"
+            AXMenuItem title="text-278" id="_zoomTopThreeUp:"
+            AXMenuItem title="text-279" id="_zoomBottomAndTop:"
+            AXMenuItem title="text-280" id="_zoomBottomThreeUp:"
+            AXMenuItem title="text-267" id="_zoomQuarters:"
+            AXMenuItem
+            AXMenuItem title="text-281" id="_zoomUntile:"
+        AXMenuItem title="text-282"
+        AXMenuItem
+        AXMenuItem title="text-283" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-284" id="arrangeInFront:"
+        AXMenuItem title="text-285" id="alternateArrangeInFront:"
+        AXMenuItem title="text-286" id="_removeWindowFromStageManagerSet:"
+        AXMenuItem
+        AXMenuItem title="Claude" id="makeKeyAndOrderFront:"
+    AXMenuBarItem title="text-287"
+      AXMenu
+        AXMenuItem title="text-288" id="itemSelected:"
+        AXMenuItem title="text-289" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-290"
+          AXMenu
+            AXMenuItem title="text-291" id="itemSelected:"
+            AXMenuItem title="text-292" id="itemSelected:"
+            AXMenuItem title="text-293" id="itemSelected:"
+            AXMenuItem title="text-294" id="itemSelected:"
+            AXMenuItem title="text-295" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-296" id="itemSelected:"
+            AXMenuItem title="text-297" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-298" id="itemSelected:"
+            AXMenuItem title="text-299" id="itemSelected:"
+            AXMenuItem title="text-300" id="itemSelected:"
+            AXMenuItem title="text-301" id="itemSelected:"
+            AXMenuItem title="text-302" id="itemSelected:"
+            AXMenuItem
+            AXMenuItem title="text-303" id="itemSelected:"
+            AXMenuItem title="text-304" id="itemSelected:"
+            AXMenuItem title="text-305" id="itemSelected:"
+            AXMenuItem title="text-306" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-307" id="itemSelected:"
+

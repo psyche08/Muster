@@ -1,0 +1,255 @@
+# Codex in the ChatGPT desktop app (bundle com.openai.codex), and the app's
+# ChatGPT (Chat) mode. Schema: docs/APP_PROFILES.md. Compiled by build.rs
+# into `muster_agent::profile::{CODEX, CHATGPT_CHAT, CODEX_APP}`.
+
+[app]
+provider = "codex"
+doc = "Codex in the ChatGPT desktop app: one thread per window, named like the rollout's `thread_name`."
+executable = "ChatGPT.app/Contents/MacOS/ChatGPT"
+gui = "executable"
+# The web area's title names the thread; it resolves only when exactly one
+# session carries that title (recency is no evidence).
+session_key = "title"
+# One append-only JSONL rollout per session under ~/.codex/sessions.
+source = "jsonl"
+lock = "ChatGPT"
+
+[capabilities]
+send = true
+respond = true
+interrupt = true
+files = true
+model_options = true
+
+# ------------------------------------------------- the rollout record grammar
+# One JSONL rollout per thread under $CODEX_HOME/sessions (archived ones
+# under archived_sessions), read by the engine in muster-agent/src/jsonl.rs.
+# Titles come from session_index.jsonl and the first prompt (codex.rs).
+
+[source]
+home = { env = "CODEX_HOME", dir = ".codex" }
+timestamp = "timestamp"
+cwd = ["cwd", "payload.cwd"]
+# Everything before the first turn_context is Codex's own bootstrap
+# (instructions, environment), never shown.
+bootstrap_until = { type = "turn_context" }
+
+# A message is a response_item carrying a message payload; its role and
+# content live in the payload. Text blocks are numbered among themselves:
+# tool calls and results are records of their own.
+[source.message]
+when = { type = "response_item", "payload.type" = "message" }
+envelope = "payload"
+role = "role"
+other_roles = "skip"
+content = "content"
+text_blocks = ["input_text", "output_text", "text"]
+media_blocks = ["input_image"]
+block_ids = "text"
+phase = "phase"
+
+[source.tool_call]
+record = { type = "response_item", "payload.type" = ["function_call", "custom_tool_call"] }
+name = "name"
+id = "call_id"
+arguments = ["arguments", "input"]
+
+[source.tool_result]
+record = { type = "response_item", "payload.type" = ["function_call_output", "custom_tool_call_output"] }
+id = "call_id"
+output = "output"
+
+# Codex reports its turns as events; a message in the final_answer phase
+# also means the turn ended.
+[source.turn]
+started = { type = "event_msg", "payload.type" = "task_started" }
+ended = { type = "event_msg", "payload.type" = ["task_complete", "turn_aborted"] }
+final_phase = "final_answer"
+
+[controls]
+# Exclude sidebar and workspace review controls from permission decisions.
+approval_scope = "main-conversation"
+# Replace the entire composer value; require the exact echo before submitting.
+draft = "value"
+# An empty composer reports its placeholder as its value.
+placeholders = [
+    "Do anything", "Ask anything", "Work with Codex",
+    "随心输入", "輸入任何任務", "想做什麼都可以",
+    "与 Codex 协作", "與 Codex 協作",
+]
+
+# The composer's placeholder is also its label. In 26.1002.52244,
+# existing threads say Work with Codex; Do anything is the home composer.
+# Include the bundle's zh-CN / zh-HK / zh-TW labels (see APP_PROFILES.md).
+[controls.composer]
+roles = ["AXTextArea"]
+attrs = ["title", "description", "placeholder"]
+labels = [
+    "Do anything", "Ask anything", "Work with Codex",
+    "随心输入", "輸入任何任務", "想做什麼都可以",
+    "与 Codex 协作", "與 Codex 協作",
+]
+
+# The submit control exists only once the composer holds text, and changes
+# its action while a turn is working (Queue, Steer). Stop is never submit.
+[controls.send]
+roles = ["AXButton"]
+attrs = ["title", "description"]
+labels = ["Send", "Send message", "Send prompt", "Submit", "Queue", "Steer"]
+
+[controls.stop]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$stop"
+
+[controls.approve]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$codex_approve"
+
+# Sidebar rows without landmark lists; a row's name is its title.
+[controls.sessions]
+kind = "sidebar"
+landmarks = false
+standalone_title = false
+
+# Prompts sent while a turn runs are queued; a queued row carries its own
+# delete control, so a submit control beside it belongs to the row.
+[controls.queue]
+
+[controls.queue.row]
+roles = ["AXButton"]
+attrs = ["title", "description"]
+labels = [
+    "Delete queued message",
+    "删除排队消息",
+    "删除待发消息",
+    "Queued message actions",
+]
+
+[controls.queue.send_now]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = ["Steer", "Send now", "Send Now", "Retry", "立即发送", "立即提交", "重试"]
+
+[controls.queue.delete]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = ["Delete queued message", "删除排队消息", "删除待发消息"]
+
+# Question cards (request_user_input): all questions on one card; optional
+# single-select suggestion cards answer on press.
+[controls.questions]
+open = "$answer_question"
+submit = "$submit"
+next = "$next"
+back = "$back"
+other = "$other"
+paged = false
+refresh_renderer = false
+button_choices = false
+immediate_suggestions = true
+
+# ---------------------------------------------------------------- Chat mode
+
+[chat]
+provider = "chatgpt"
+doc = "The ChatGPT app's Chat mode."
+# The web area with a main landmark, else the only web area.
+area = "main"
+
+[chat.send]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$chat_send"
+
+[chat.stop]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$stop"
+
+[chat.new_chat]
+roles = ["AXButton", "AXLink"]
+attrs = ["name"]
+labels = "$new_chat"
+
+[chat.close_dialog]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$close_dialog"
+
+# The settings page covers the conversation until "Back to app".
+[chat.leave_settings]
+roles = ["AXButton", "AXLink"]
+attrs = ["name"]
+labels = ["Back to app"]
+
+# New app shells omit Back to app while retaining a Settings navigation
+# landmark and the global Home button. Rust requires both in the same web
+# area, excludes controls inside settings/dialogs, and rejects ambiguity.
+[chat.settings_navigation]
+roles = ["AXGroup"]
+attrs = ["name"]
+labels = ["Settings"]
+
+[chat.settings_home]
+roles = ["AXButton", "AXLink"]
+attrs = ["name"]
+labels = ["Home"]
+
+# Conversation ids follow /c/ and are not UUIDs; there is no fixed new
+# page; the sidebar link marked current or the page title can name a
+# conversation too.
+[chat.url]
+segment = "/c/"
+uuid = false
+only = false
+
+# A pop-up button titled with the current mode opens a menu whose entries
+# start with a mode's name.
+[chat.modes]
+chat = ["ChatGPT", "Chat"]
+other = ["Codex"]
+
+[chat.modes.switch]
+kind = "menu"
+prefix = "Switch mode, current mode: "
+
+# Conversations are buttons in the navigation landmark's lists; a row
+# carries one of the markers; actions are a row's own commands, never its
+# title; a row with a project action is a project.
+[chat.history]
+kind = "lists"
+actions = [
+    "Pin chat",
+    "Unpin chat",
+    "Archive chat",
+    "Delete chat",
+    "Rename chat",
+    "Share chat",
+    "New chat",
+    "Quick chat",
+]
+markers = ["Chat actions", "Pin chat", "Unpin chat", "Archive chat"]
+project = "Project actions"
+
+# ------------------------------------------------------------ cloud sessions
+# Codex cloud tasks (chatgpt.com/codex): the account's tasks, listed and
+# read through the ChatGPT backend the `codex cloud` command uses, with the
+# ChatGPT token and account id from the CLI's auth.json. A task shows its
+# prompt, the assistant's replies and the diff of its latest turn; the API
+# the CLI speaks creates tasks but takes no follow-up, so nothing is sent.
+
+[cloud]
+api = "codex-tasks"
+base_url = "https://chatgpt.com/backend-api"
+label = "Codex Cloud"
+poll_secs = 20
+
+[cloud.credentials]
+file = "auth.json"
+token = "tokens.access_token"
+account = "tokens.account_id"
+
+[cloud.capabilities]
+send = false

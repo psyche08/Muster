@@ -1,0 +1,62 @@
+# CatDesk (bundle com.catpaw.cowork). Schema: docs/APP_PROFILES.md.
+# Compiled by build.rs into `muster_agent::profile::{CATDESK, CATDESK_APP}`.
+# Labels are the app's own zh-CN and en strings (CatDesk 2026.917, its UI
+# SDK chat input); a label that matches none of them is never guessed at.
+
+[app]
+provider = "catdesk"
+doc = "CatDesk: sessions in its main window, the one the app reports as current, or popped out into their own windows."
+executable = "CatDesk.app/Contents/MacOS/CatDesk"
+# Helper processes run the same binary as Node; only the process the app's
+# owner-only command socket reports shows windows.
+gui = "command-socket"
+# A popout names its session in its URL; the main window shows the session
+# the running app reports as current.
+session_key = "runtime"
+# The app's own SQLite store (catpaw-memory.db), read only.
+source = "sqlite"
+lock = "CatDesk"
+
+[capabilities]
+send = true
+respond = true
+interrupt = true
+files = true
+
+[controls]
+# The Lexical editor reverts DOM edits it did not make: the draft is
+# written by selecting the whole text and replacing the selection.
+draft = "selection"
+placeholders = []
+
+# The chat input (`aria-label` of the UI SDK editor).
+[controls.composer]
+roles = ["AXTextArea"]
+attrs = ["description"]
+labels = ["聊天输入框", "Chat input"]
+
+# One slot: "发送" once the input holds text, its disabled hint before;
+# Stop replaces it while a turn runs. There is no queued send.
+[controls.send]
+roles = ["AXButton"]
+attrs = ["description", "title"]
+labels = ["发送", "Send", "请输入内容后再发送", "Enter a message before sending"]
+
+[controls.stop]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = ["停止", "Stop"]
+
+[controls.approve]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$approve"
+
+# Pressable rows of the main window's page, which has no landmark, found
+# from the text reading the title.
+[controls.sessions]
+kind = "page-rows"
+
+# No [controls.queue]: CatDesk has no queued send.
+# No [controls.questions]: its store holds no question cards Muster reads.
+# No [chat]: CatDesk has no separate Chat mode.

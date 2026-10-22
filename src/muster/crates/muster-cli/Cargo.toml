@@ -1,0 +1,27 @@
+[package]
+name = "muster-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Command line for musterd over its Unix socket"
+
+[[bin]]
+name = "muster"
+path = "src/main.rs"
+
+[dependencies]
+muster-proto = { path = "../muster-proto" }
+muster-rpc = { path = "../muster-rpc" }
+muster-paths = { path = "../muster-paths" }
+muster-browser = { path = "../muster-browser" }
+muster-acp = { path = "../muster-acp" }
+serde_json.workspace = true
+url = "2"
+anyhow.workspace = true
+tokio.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

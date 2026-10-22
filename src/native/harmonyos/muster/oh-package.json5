@@ -1,0 +1,10 @@
+{
+  "modelVersion": "6.1.1",
+  "name": "muster-harmonyos",
+  "version": "0.1.0",
+  "description": "Muster HarmonyOS shell: ArkUI around the Rust core",
+  "main": "",
+  "author": "linsheng",
+  "license": "MIT",
+  "dependencies": {}
+}

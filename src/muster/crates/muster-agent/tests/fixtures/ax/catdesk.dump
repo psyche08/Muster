@@ -1,0 +1,347 @@
+AXApplication title="text-1"
+  AXWindow/AXStandardWindow title="text-1"
+    AXGroup title="text-1"
+      AXGroup
+        AXGroup
+          AXGroup
+            AXGroup
+              AXGroup
+              AXGroup
+  AXWindow/AXStandardWindow title="text-1"
+    AXGroup title="text-1"
+      AXGroup
+        AXGroup
+          AXGroup
+            AXGroup
+              AXGroup
+                AXWebArea title="text-1" url="file:///Applications/CatDesk.app/Contents/Resources/app.asar/dist/index.html"
+                  AXGroup
+                    AXGroup id="root"
+                      AXGroup
+                        AXGroup
+                          AXGroup
+                            AXButton
+                          AXGroup
+                            AXButton
+                          AXGroup
+                            AXButton
+                          AXRadioGroup desc="text-2"
+                            AXGroup
+                              AXRadioButton desc="text-3"
+                            AXGroup
+                              AXRadioButton desc="text-4"
+                          AXButton title="text-5"
+                          AXButton title="text-6"
+                          AXButton title="text-7"
+                          AXButton title="text-8"
+                          AXGroup
+                            AXButton title="text-9"
+                            AXGroup
+                              AXButton
+                            AXGroup
+                              AXPopUpButton id="id0000000001"
+                            AXGroup
+                              AXButton
+                            AXButton title="text-10"
+                              AXGroup
+                                AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXStaticText value="value-1"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXButton desc="text-11"
+                                    AXPopUpButton id="id0000000002"
+                              AXGroup
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-2"
+                                  AXPopUpButton id="id0000000003"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-3"
+                                  AXPopUpButton id="id0000000004"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-4"
+                                  AXPopUpButton id="id0000000005"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-5"
+                                  AXButton desc="text-12"
+                                  AXPopUpButton id="id0000000006"
+                            AXButton title="text-13"
+                              AXGroup
+                                AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXStaticText value="value-6"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXButton desc="text-14"
+                                    AXPopUpButton id="id0000000007"
+                              AXGroup
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-7"
+                                  AXPopUpButton id="id0000000008"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-8"
+                                  AXPopUpButton id="id0000000009"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-9"
+                                  AXButton desc="text-12"
+                                  AXPopUpButton id="id0000000010"
+                            AXButton title="text-15"
+                              AXGroup
+                                AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXStaticText value="value-10"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXButton desc="text-16"
+                                    AXPopUpButton id="id0000000011"
+                            AXButton title="text-17"
+                              AXGroup
+                                AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXStaticText value="value-11"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXButton desc="text-18"
+                                    AXPopUpButton id="id0000000012"
+                              AXGroup
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-12"
+                                  AXPopUpButton id="id0000000013"
+                                AXGroup
+                                  AXButton
+                                  AXStaticText value="value-13"
+                                  AXPopUpButton id="id0000000014"
+                            AXGroup/AXApplicationStatus id="id0000000000015"
+                          AXGroup/AXLandmarkRegion desc="text-19"
+                            AXGroup
+                              AXStaticText value="value-14"
+                            AXButton title="text-20"
+                          AXGroup
+                            AXGroup id="id0000000016"
+                              AXGroup
+                                AXStaticText value="value-15"
+                            AXGroup
+                              AXButton desc="text-21"
+                          AXGroup
+                        AXGroup
+                          AXGroup
+                            AXGroup
+                              AXGroup
+                                AXGroup
+                                  AXButton desc="text-22"
+                                    AXImage desc="text-23" url="file:///Applications/CatDesk.app/Contents/Resources/app.asar/dist/apps/finder.pn…"
+                                AXPopUpButton desc="text-24" id="radix-_r_l_"
+                              AXGroup
+                                AXButton
+                              AXGroup
+                                AXButton
+                          AXGroup
+                            AXGroup
+                              AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXImage desc="text-25" url="file:///Applications/CatDesk.app/Contents/Resources/app.asar/dist/assets/logo-5_…"
+                                    AXStaticText value="value-16"
+                                    AXGroup
+                                      AXButton title="text-26"
+                                    AXButton title="text-27"
+                                    AXButton title="text-28"
+                                    AXButton title="text-29"
+                                    AXButton title="text-30"
+                                    AXGroup
+                                      AXGroup
+                                        AXGroup
+                                          AXGroup
+                                            AXGroup
+                                              AXTextArea desc="聊天输入框" value="⏎"
+                                                AXGroup
+                                              AXGroup
+                                                AXStaticText value="value-17"
+                                          AXGroup
+                                            AXPopUpButton desc="text-31" id="id0000000017"
+                                          AXPopUpButton desc="text-32" id="id0000000018"
+                                          AXButton title="text-33"
+                                          AXPopUpButton title="text-34" id="id0000000019"
+                                          AXGroup
+                                            AXCheckBox/AXToggleButton desc="text-35"
+                                          AXButton desc="Enter a message before sending"
+                                            AXImage
+                    AXList desc="text-36"
+              AXGroup
+    AXButton/AXCloseButton
+    AXButton/AXFullScreenButton
+      AXGroup
+        AXGroup
+    AXButton/AXMinimizeButton
+  AXMenuBar
+    AXMenuBarItem title="text-37"
+      AXMenu
+        AXMenuItem title="text-38" id="_aboutThisMacRequested:"
+        AXMenuItem title="text-39" id="_systemInformationRequested:"
+        AXMenuItem
+        AXMenuItem title="text-40" id="_systemSettingsRequested:"
+        AXMenuItem title="text-41" id="_appStoreRequested:"
+        AXMenuItem
+        AXMenuItem title="text-42" id="_recentsRequested:"
+          AXMenu
+            AXMenuItem title="text-43"
+            AXMenuItem title="text-44" id="_recentItemRequested:"
+            AXMenuItem title="text-45" id="_recentItemRequested:"
+            AXMenuItem title="ChatGPT" id="_recentItemRequested:"
+            AXMenuItem title="text-46" id="_recentItemRequested:"
+            AXMenuItem title="Claude" id="_recentItemRequested:"
+            AXMenuItem title="text-47" id="_recentItemRequested:"
+            AXMenuItem title="text-48" id="_recentItemRequested:"
+            AXMenuItem title="text-49" id="_recentItemRequested:"
+            AXMenuItem title="text-50" id="_recentItemRequested:"
+            AXMenuItem title="text-51" id="_recentItemRequested:"
+            AXMenuItem title="text-52" id="_recentItemRequested:"
+            AXMenuItem title="text-53" id="_recentItemRequested:"
+            AXMenuItem title="text-54" id="_recentItemRequested:"
+            AXMenuItem title="text-55" id="_recentItemRequested:"
+            AXMenuItem title="text-56" id="_recentItemRequested:"
+            AXMenuItem title="text-57" id="_recentItemRequested:"
+            AXMenuItem title="text-58" id="_recentItemRequested:"
+            AXMenuItem title="text-59" id="_recentItemRequested:"
+            AXMenuItem title="text-60" id="_recentItemRequested:"
+            AXMenuItem title="text-61" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-62"
+            AXMenuItem title="text-63" id="_recentItemRequested:"
+            AXMenuItem title="text-64" id="_recentItemRequested:"
+            AXMenuItem title="text-65" id="_recentItemRequested:"
+            AXMenuItem title="text-66" id="_recentItemRequested:"
+            AXMenuItem title="text-67" id="_recentItemRequested:"
+            AXMenuItem title="text-68" id="_recentItemRequested:"
+            AXMenuItem title="text-69" id="_recentItemRequested:"
+            AXMenuItem title="text-70" id="_recentItemRequested:"
+            AXMenuItem title="text-26" id="_recentItemRequested:"
+            AXMenuItem title="text-71" id="_recentItemRequested:"
+            AXMenuItem title="text-72" id="_recentItemRequested:"
+            AXMenuItem title="text-73" id="_recentItemRequested:"
+            AXMenuItem title="text-74" id="_recentItemRequested:"
+            AXMenuItem title="text-75" id="_recentItemRequested:"
+            AXMenuItem title="text-76" id="_recentItemRequested:"
+            AXMenuItem title="text-77" id="_recentItemRequested:"
+            AXMenuItem title="text-78" id="_recentItemRequested:"
+            AXMenuItem title="text-79" id="_recentItemRequested:"
+            AXMenuItem title="text-80" id="_recentItemRequested:"
+            AXMenuItem title="text-81" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-82"
+            AXMenuItem
+            AXMenuItem title="text-83" id="_clearRecentItemsRequested:"
+        AXMenuItem
+        AXMenuItem title="text-84" id="_forceQuitPanelRequested:"
+        AXMenuItem title="text-85" id="_forceQuitRequested:"
+        AXMenuItem
+        AXMenuItem title="text-86" id="_sleepRequested:"
+        AXMenuItem title="text-87" id="_restartRequested:"
+        AXMenuItem title="text-88" id="_restartNowRequested:"
+        AXMenuItem title="text-89" id="_shutDownRequested:"
+        AXMenuItem title="text-90" id="_shutDownNowRequested:"
+        AXMenuItem
+        AXMenuItem title="text-91" id="_lockScreenRequested:"
+        AXMenuItem title="text-92" id="_logOutRequested:"
+        AXMenuItem title="text-93" id="_logOutNowRequested:"
+        AXMenuItem
+    AXMenuBarItem title="text-1"
+      AXMenu
+        AXMenuItem title="text-94" id="itemSelected:"
+        AXMenuItem title="text-95" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-96"
+          AXMenu
+            AXMenuItem title="text-97" id="_processRequest:"
+            AXMenuItem title="text-98" id="_processRequest:"
+            AXMenuItem title="text-99" id="_processRequest:"
+            AXMenuItem title="text-100" id="_processRequest:"
+            AXMenuItem title="text-101" id="_processRequest:"
+            AXMenuItem title="text-102" id="_processRequest:"
+            AXMenuItem title="text-103" id="_processRequest:"
+            AXMenuItem title="text-104" id="_processRequest:"
+            AXMenuItem title="text-105" id="_processRequest:"
+            AXMenuItem title="text-106" id="_processRequest:"
+            AXMenuItem title="text-107" id="_processRequest:"
+            AXMenuItem title="text-108" id="_configureServicesMenu:"
+        AXMenuItem
+        AXMenuItem title="text-109" id="hide:"
+        AXMenuItem title="text-110" id="hideOtherApplications:"
+        AXMenuItem title="text-111" id="unhideAllApplications:"
+        AXMenuItem
+        AXMenuItem title="text-112" id="terminate:"
+        AXMenuItem title="text-113" id="NSAlternateQuitMenuItem"
+    AXMenuBarItem title="File"
+      AXMenu
+        AXMenuItem title="text-114" id="itemSelected:"
+    AXMenuBarItem title="text-115"
+      AXMenu
+        AXMenuItem title="text-116" id="undo:"
+        AXMenuItem title="text-117" id="redo:"
+        AXMenuItem
+        AXMenuItem title="text-118" id="cut:"
+        AXMenuItem title="text-119" id="copy:"
+        AXMenuItem title="text-120" id="paste:"
+        AXMenuItem title="text-121" id="pasteAndMatchStyle:"
+        AXMenuItem title="Delete" id="delete:"
+        AXMenuItem title="text-122" id="selectAll:"
+        AXMenuItem
+        AXMenuItem title="text-123"
+          AXMenu
+            AXMenuItem title="text-124" id="startSpeaking:"
+            AXMenuItem title="text-125" id="stopSpeaking:"
+        AXMenuItem
+        AXMenuItem title="text-126" id="_NSMenuItemAutoFillIdentifier"
+          AXMenu
+            AXMenuItem title="text-127" id="_handleInsertFromContactsCommand:"
+            AXMenuItem title="text-128" id="_handleInsertFromPasswordsCommand:"
+            AXMenuItem title="text-129" id="_handleInsertFromCreditCardsCommand:"
+        AXMenuItem title="text-130" id="startDictation:"
+        AXMenuItem title="text-131" id="orderFrontCharacterPalette:"
+    AXMenuBarItem title="text-132"
+      AXMenu
+        AXMenuItem title="text-133" id="itemSelected:"
+        AXMenuItem title="text-134" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-135" id="itemSelected:"
+        AXMenuItem title="text-136" id="itemSelected:"
+        AXMenuItem title="text-137" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-138" id="toggleFullScreenMode:"
+    AXMenuBarItem title="text-139"
+      AXMenu
+        AXMenuItem title="text-140" id="performMiniaturize:"
+        AXMenuItem title="text-141" id="performZoom:"
+        AXMenuItem
+        AXMenuItem title="text-142" id="arrangeInFront:"
+    AXMenuBarItem title="text-143"
+      AXMenu
+        AXMenuItem title="text-144" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-145" id="itemSelected:"
+        AXMenuItem title="text-33" id="itemSelected:"
+        AXMenuItem title="text-146" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-147" id="itemSelected:"
+        AXMenuItem title="text-148" id="itemSelected:"
+        AXMenuItem
+        AXMenuItem title="text-149" id="itemSelected:"
+        AXMenuItem title="text-150" id="itemSelected:"
+        AXMenuItem title="text-151" id="itemSelected:"
+

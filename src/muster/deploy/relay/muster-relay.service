@@ -1,0 +1,50 @@
+# Public relay certificate only; no device/Presence keys are held here.
+# Both TCP/TLS and UDP/QUIC bind 9443 directly, using one fullchain/key pair.
+# Certbot's deploy hook validates and atomically switches the certificate
+# directory, then restarts this service. There is no plaintext public face.
+[Unit]
+Description=muster relay (rendezvous, forwarding, mailbox, reflection)
+Documentation=https://github.com/psyche08/muster
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=muster-relay
+Group=muster-relay
+EnvironmentFile=/etc/muster/relay.env
+Environment=RUST_LOG=info
+ExecStart=/opt/muster/bin/muster-relay \
+    --listen ${RELAY_LISTEN} \
+    --cert ${RELAY_CERT} \
+    --key ${RELAY_KEY} \
+    --max-clients ${RELAY_MAX_CLIENTS} \
+    --client-pps ${RELAY_CLIENT_PPS} \
+    --client-bps ${RELAY_CLIENT_BPS} \
+    --source-pps ${RELAY_SOURCE_PPS} \
+    --mailbox-items ${RELAY_MAILBOX_ITEMS} \
+    --mailbox-keys ${RELAY_MAILBOX_KEYS} \
+    --idle-secs ${RELAY_IDLE_SECS} \
+    $RELAY_PUSH_ARGS
+Restart=always
+RestartSec=2
+LimitNOFILE=65536
+
+# Hardening: nothing to write, nothing to escalate to.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

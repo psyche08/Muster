@@ -1,0 +1,695 @@
+//! Remote operations that need a presence proof or Locked Use.
+
+use super::*;
+
+/// Desktop loading needs the same signed Locked Use continuation as send,
+/// but returns a typed catalog/session/options response after confirmed relock.
+pub(super) async fn protected_chat_call(
+    tx: tokio::sync::mpsc::UnboundedSender<Loop>,
+    epoch: u64,
+    device: String,
+    provider: String,
+    request: Req,
+) -> Result<Resp, Error> {
+    let (reply, result) = tokio::sync::oneshot::channel();
+    tx.send(loop_message(Msg::ChatControl {
+        epoch,
+        device,
+        provider,
+        request,
+        reply,
+    }))
+    .map_err(|_| Error::Unavailable("Chat loading stopped".into()))?;
+    tokio::time::timeout(Duration::from_secs(120), result)
+        .await
+        .map_err(|_| Error::Unavailable("Chat loading timed out".into()))?
+        .map_err(|_| Error::Unavailable("Chat loading cancelled".into()))?
+}
+
+fn fail_chat_call(state: &mut State, origin: &Option<(String, String)>, why: &str) {
+    if let Some((_, id)) = origin
+        && let Some(reply) = state.chat_calls.remove(id)
+    {
+        let _ = reply.send(Err(Error::Unavailable(why.into())));
+    }
+}
+
+/// An op_id mutation on `device`; the result comes back as OpDone.
+pub(super) fn op_request(
+    state: &mut State,
+    ctx: &Ctx,
+    what: &'static str,
+    device: String,
+    req: Req,
+) {
+    let origin = state
+        .chat
+        .as_ref()
+        .filter(|c| c.device == device)
+        .and_then(|c| match what {
+            "respond" => Some((c.session.id.clone(), c.responding_interaction.clone())),
+            "send" => Some((c.session.id.clone(), c.pending_draft_id.clone())),
+            _ => None,
+        });
+    op_request_from(state, ctx, what, device, req, origin);
+}
+
+pub(super) fn op_request_from(
+    state: &mut State,
+    ctx: &Ctx,
+    what: &'static str,
+    device: String,
+    req: Req,
+    response_origin: Option<(String, String)>,
+) {
+    let self_id = state.self_id.clone();
+    let network_id = state.network.as_ref().map(|n| n.network_id.clone());
+    let backend = ctx.backend.clone();
+    let provider = if what == "terminal_result" {
+        super::code_runs::provider(state, &device, &response_origin)
+    } else if what == "chat" {
+        response_origin
+            .as_ref()
+            .map(|(provider, _)| provider.clone())
+            .unwrap_or_default()
+    } else {
+        state
+            .chat
+            .as_ref()
+            .filter(|c| c.device == device)
+            .map(|c| c.session.provider.clone())
+            .unwrap_or_default()
+    };
+    let route = if what == "chat" {
+        chat_route(state, &device)
+    } else {
+        self_id.clone()
+    };
+    let remote_native_send = device != route
+        && matches!(&req, Req::AgentSend(r) if !muster_agent::cloud::is_cloud(&r.session) && !muster_agent::orca::is_orca(&r.session));
+    spawn(ctx, async move {
+        let locked_nonce = if let Req::LockedUseExecute(r) = &req {
+            muster_core::locked_use::Challenge::decode(&r.challenge)
+                .ok()
+                .map(|c| c.nonce().to_vec())
+        } else {
+            None
+        };
+        let result = async {
+            let client = backend.client_for(&device, &route).await?;
+            if (what == "chat" || remote_native_send) && !matches!(&req, Req::LockedUseExecute(_)) {
+                let Resp::DeviceInfo(info) =
+                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                else {
+                    return Err(unexpected());
+                };
+                if !info.services.iter().any(|s| s == "agent.chat.locked.v1") {
+                    return Err(Error::Unavailable(
+                        "Update Muster on the target Mac to load or send Chat through Locked Use"
+                            .into(),
+                    ));
+                }
+            }
+            if let Req::AgentSend(send) = &req
+                && !send.attachments.is_empty()
+            {
+                let Resp::DeviceInfo(info) =
+                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                else {
+                    return Err(unexpected());
+                };
+                if !info.services.iter().any(|s| s == "agent.attachments") {
+                    return Err(Error::Invalid(
+                        "Update Muster on the target Mac before sending attachments".into(),
+                    ));
+                }
+            }
+            if matches!(&req, Req::AgentRespond(r) if !r.answers.is_empty()) {
+                let Resp::DeviceInfo(info) =
+                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                else {
+                    return Err(unexpected());
+                };
+                if !info.services.iter().any(|s| s == "agent.questions.v1") {
+                    return Err(Error::Invalid(
+                        "Update Muster on the target Mac to answer question cards".into(),
+                    ));
+                }
+            }
+            let mut response = client.call(req.clone()).await;
+            if matches!(
+                &response,
+                Err(muster_rpc::Error::Remote {
+                    code: v1::error::Code::LockedUseRequired,
+                    ..
+                })
+            ) {
+                // A terminal's input outside its terminal session: the Mac
+                // locked again (the terminal reopens one).
+                let mut operation = muster_proto::locked_use::operation(&req).ok_or_else(|| {
+                    Error::Unavailable("The Mac is locked: open the terminal again".into())
+                })?;
+                if muster_core::apps::app(&provider).is_none() {
+                    return Err(Error::Invalid(
+                        "Cannot determine this operation's provider for Locked Use".into(),
+                    ));
+                }
+                operation.provider_queue = provider;
+                match client
+                    .call(Req::LockedUsePrepare(v1::LockedUsePrepareRequest {
+                        operation: Some(operation.clone()),
+                    }))
+                    .await
+                {
+                    Err(muster_rpc::Error::Remote {
+                        code: v1::error::Code::Conflict,
+                        ..
+                    }) => {
+                        // Another request from this device may have issued the
+                        // queue challenge after our initial locked response.
+                        // That initial response proves this op never started.
+                        response = client.call(req.clone()).await;
+                    }
+                    Ok(Resp::LockedUseChallenge(reply)) => {
+                        let c = muster_core::locked_use::Challenge::decode(&reply.challenge)
+                            .map_err(|e| Error::Invalid(e.to_string()))?;
+                        let network: [u8; 32] = hex::decode(network_id.ok_or_else(unexpected)?)
+                            .map_err(|_| unexpected())?
+                            .try_into()
+                            .map_err(|_| unexpected())?;
+                        let target =
+                            muster_core::DeviceId::from_hex(&device).map_err(|_| unexpected())?;
+                        let requester =
+                            muster_core::DeviceId::from_hex(&self_id).map_err(|_| unexpected())?;
+                        let message = c
+                            .signing_message_for(
+                                &network,
+                                target,
+                                requester,
+                                muster_proto::locked_use::turn(&operation)
+                                    .ok_or_else(unexpected)?,
+                                &muster_proto::locked_use::digest(&operation),
+                            )
+                            .map_err(|e| Error::Invalid(e.to_string()))?;
+                        return Ok(Msg::PresenceNeeded {
+                            response_origin: response_origin.clone(),
+                            what,
+                            device: device.clone(),
+                            call_id: client.next_id(),
+                            request: Box::new(Req::LockedUseExecute(v1::LockedUseExecuteRequest {
+                                challenge: reply.challenge,
+                                signature: Vec::new(),
+                            })),
+                            message,
+                        });
+                    }
+                    Ok(_) => return Err(unexpected()),
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            if what == "chat" {
+                let id = response_origin.as_ref().ok_or_else(unexpected)?.1.clone();
+                let result = match response {
+                    Ok(Resp::OpResult(r)) => Err(Error::Unavailable(if r.message.is_empty() {
+                        "Chat operation did not complete".into()
+                    } else {
+                        r.message
+                    })),
+                    Ok(response) => Ok(response),
+                    Err(error) => Err(error.into()),
+                };
+                return Ok(Msg::ChatControlReply {
+                    device: device.clone(),
+                    id,
+                    nonce: locked_nonce.clone(),
+                    result,
+                });
+            }
+            let result = match response {
+                Ok(Resp::OpResult(r)) => r,
+                Ok(Resp::Ack(_)) => v1::OpResult::default(),
+                Ok(_) => return Err(unexpected()),
+                // Once dispatched, a lost reply is not proof of rejection.
+                // Keep the card blocked until provider completion is observed.
+                // Explicit server rejection is definitive. RPC cancellation
+                // timeouts can occur after delivery and remain ambiguous.
+                Err(error @ muster_rpc::Error::Remote { code, .. })
+                    if code != v1::error::Code::Timeout =>
+                {
+                    return Err(error.into());
+                }
+                Err(error) if matches!(what, "respond" | "send" | "terminal_result") => {
+                    v1::OpResult {
+                        status: v1::op_result::Status::Unknown as i32,
+                        message: format!("Submission acknowledgement unavailable: {error}"),
+                        ..Default::default()
+                    }
+                }
+                Err(error) => return Err(error.into()),
+            };
+            Ok(Msg::OpDone {
+                what,
+                device: device.clone(),
+                locked_nonce: locked_nonce.clone(),
+                response_origin: response_origin.clone(),
+                result: Ok(result),
+            })
+        }
+        .await;
+        result.unwrap_or_else(|error| {
+            if what == "chat" {
+                Msg::ChatControlReply {
+                    device,
+                    id: response_origin.map(|(_, id)| id).unwrap_or_default(),
+                    nonce: locked_nonce,
+                    result: Err(error),
+                }
+            } else {
+                Msg::OpDone {
+                    what,
+                    device,
+                    locked_nonce,
+                    response_origin,
+                    result: Err(error),
+                }
+            }
+        })
+    });
+}
+
+/// A send was applied: clear the draft, and follow a new desktop chat to
+/// the conversation its first message became.
+pub(super) fn sent(state: &mut State, ctx: &Ctx, device: &str, landed: &str) {
+    use muster_agent::desktop_chat as dc;
+    let Some(chat) = &mut state.chat else { return };
+    if chat.device != device {
+        return;
+    }
+    if chat.session.id == landed {
+        chat.sent_draft_id = std::mem::take(&mut chat.pending_draft_id);
+        if let Some(app) = dc::app_of(landed).filter(|_| dc::is_new_session(landed)) {
+            let text = format!(
+                "Sent. The conversation appears in the chat list once {} names it",
+                app.name()
+            );
+            state.toast(text, false);
+        }
+        return;
+    }
+    if dc::is_new_session(&chat.session.id)
+        && dc::app_of(landed).is_some()
+        && dc::app_of(landed) == dc::app_of(&chat.session.id)
+    {
+        let mut session = chat.session.clone();
+        session.id = landed.to_string();
+        session.title.clear();
+        let device = device.to_string();
+        show_chat(state, ctx, device, session);
+    }
+}
+
+pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) {
+    state.chat_call_epoch += 1;
+    for (_, reply) in state.chat_calls.drain() {
+        let _ = reply.send(Err(Error::Unavailable(format!(
+            "Chat loading cancelled: {}",
+            reason.as_str()
+        ))));
+    }
+    let Some((device, nonce)) = state.locked.take() else {
+        return;
+    };
+    state.manual_busy.remove(&device);
+    super::code_runs::cancelled(state, &device);
+    if let Some(p) = state.presence.take() {
+        state.effects.remove(&p.effect_id);
+    }
+    if let Some(chat) = state.chat.as_mut() {
+        chat.sending = false;
+        chat.responding_interaction.clear();
+        chat.response_error = "Authentication or Locked Use cancelled; your answer was kept".into();
+    }
+    cancel_challenge(state, ctx, device, nonce, reason);
+}
+
+pub(super) fn cancel_challenge(
+    state: &State,
+    ctx: &Ctx,
+    device: String,
+    nonce: Vec<u8>,
+    reason: CancelReason,
+) {
+    log::info!(
+        "Locked Use: withdrawing the challenge ({})",
+        reason.as_str()
+    );
+    let backend = ctx.backend.clone();
+    let self_id = state.self_id.clone();
+    spawn(ctx, async move {
+        let result = async {
+            let client = backend.client_for(&device, &self_id).await?;
+            unary(
+                &client,
+                Req::LockedUseCancel(v1::LockedUseCancelRequest {
+                    nonce: nonce.clone(),
+                    reason: reason.as_str().into(),
+                }),
+            )
+            .await?;
+            Ok(v1::OpResult {
+                status: v1::op_result::Status::Rejected as i32,
+                message: "Locked Use cancelled".into(),
+                ..Default::default()
+            })
+        }
+        .await;
+        Msg::OpDone {
+            what: "locked",
+            device,
+            locked_nonce: Some(nonce),
+            response_origin: None,
+            result,
+        }
+    });
+}
+
+pub(super) fn msg_op_done(
+    state: &mut State,
+    ctx: &Ctx,
+    what: &'static str,
+    device: String,
+    locked_nonce: Option<Vec<u8>>,
+    response_origin: Option<(String, String)>,
+    result: Result<v1::OpResult, Error>,
+) {
+    // A late success clears only the exact submitted revision, even
+    // after navigation. Failure/unknown and subsequent edits survive.
+    if what == "send"
+        && let Some((_, tag)) = &response_origin
+        && let Some(submitted) = state.pending_drafts.remove(tag)
+        && let Ok(result) = &result
+    {
+        match crate::drafts::clear_sent(&ctx.cache, &submitted, result.status) {
+            Ok(Some(cleared)) => {
+                if let Some(chat) = state.chat.as_mut().filter(|c| c.draft.key == cleared.key) {
+                    chat.draft = cleared;
+                }
+            }
+            Ok(None) => {}
+            Err(error) => state.toast(format!("消息已发送，草稿清理暂未写入磁盘：{error}"), true),
+        }
+    }
+    let locked_finished =
+        locked_nonce.is_none() || state.finish_locked(&device, locked_nonce.as_deref());
+    if what == "terminal_result" {
+        super::code_runs::delivery(state, &device, response_origin, result);
+        return;
+    }
+    if !locked_finished {
+        return;
+    }
+    if what == "manual" {
+        state.manual_busy.remove(&device);
+        match result {
+            Ok(r) if r.status == v1::op_result::Status::Applied as i32 => {}
+            Ok(r) => state.toast(format!("Locked Use: {}", r.message), true),
+            Err(e) => state.toast(format!("Locked Use: {e}"), true),
+        }
+        return;
+    }
+    let same_origin = state.chat.as_ref().is_some_and(|c| {
+        c.device == device
+            && response_origin.as_ref().is_some_and(|(session, tag)| {
+                &c.session.id == session && (what != "send" || &c.pending_draft_id == tag)
+            })
+    });
+    // A send refused behind an unconfirmed earlier one: the conversation
+    // offers its release instead of a toast.
+    let unconfirmed = match &result {
+        Ok(r) if what == "send" && same_origin && !r.unconfirmed.is_empty() => {
+            Some(app::UnconfirmedSend {
+                token: r.unconfirmed.clone(),
+                message: r.message.clone(),
+            })
+        }
+        _ => None,
+    };
+    if let Some(chat) = &mut state.chat {
+        if what == "send" && same_origin {
+            chat.sending = false;
+            chat.unconfirmed = unconfirmed.clone();
+        }
+        if what == "respond"
+            && let Some((session, interaction)) = &response_origin
+            && chat.device == device
+            && &chat.session.id == session
+            && &chat.responding_interaction == interaction
+        {
+            chat.responding_interaction.clear();
+            match &result {
+                Ok(r)
+                    if matches!(
+                        v1::op_result::Status::try_from(r.status),
+                        Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)
+                    ) =>
+                {
+                    chat.interactions.retain(|i| &i.id != interaction);
+                    chat.response_error.clear();
+                    chat.response_unknown = false;
+                }
+                Ok(r) => {
+                    chat.response_unknown = r.status == v1::op_result::Status::Unknown as i32;
+                    chat.response_error = r.message.clone();
+                }
+                Err(error) => {
+                    chat.response_error = error.to_string();
+                }
+            }
+        }
+    }
+    // Answer errors belong to their card. A provider acknowledgement can
+    // arrive before or after this RPC: never leave a global error toast
+    // behind, or resurrect an error after InteractionResolved cleared it.
+    if what == "respond" && response_origin.is_some() {
+        if let Ok(r) = &result
+            && matches!(
+                v1::op_result::Status::try_from(r.status),
+                Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)
+            )
+            && !r.message.is_empty()
+        {
+            state.toast(r.message.clone(), false);
+        }
+        return;
+    }
+    match result {
+        Ok(r) => {
+            let status =
+                v1::op_result::Status::try_from(r.status).unwrap_or(v1::op_result::Status::Unknown);
+            match status {
+                v1::op_result::Status::Applied | v1::op_result::Status::Duplicate => {
+                    if what == "send" && same_origin {
+                        sent(state, ctx, &device, &r.result_id);
+                    }
+                }
+                v1::op_result::Status::Rejected if unconfirmed.is_none() => {
+                    state.toast(format!("{what}: {}", r.message), true)
+                }
+                v1::op_result::Status::Rejected => {}
+                v1::op_result::Status::Unknown => state.toast(
+                    if r.message.is_empty() {
+                        format!("{what}: outcome unknown, check before retrying")
+                    } else {
+                        format!("{what}: {}", r.message)
+                    },
+                    true,
+                ),
+            }
+        }
+        Err(Error::Busy(why))
+            if what == "send"
+                && same_origin
+                && state
+                    .chat
+                    .as_ref()
+                    .is_some_and(|c| c.device == device && c.session.mode == "chat") =>
+        {
+            // Another Mac shows the same conversation: continue there.
+            let session = state.chat.as_ref().expect("checked").session.clone();
+            state.toast(format!("{why}; picking another Mac"), false);
+            repick_chat_host(
+                state,
+                ctx,
+                &device,
+                ChatRetry::Move {
+                    session: Box::new(session),
+                    from: device.clone(),
+                },
+            );
+        }
+        Err(error) => state.toast(format!("{what}: {error}"), true),
+    }
+}
+
+pub(super) fn msg_locked_expired(state: &mut State, ctx: &Ctx, nonce: Vec<u8>) {
+    if state.locked.as_ref().is_some_and(|(_, n)| *n == nonce) {
+        cancel_locked(state, ctx, CancelReason::Expired);
+    }
+}
+
+// The arguments are Msg::PresenceNeeded's fields.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn msg_presence_needed(
+    state: &mut State,
+    ctx: &Ctx,
+    response_origin: Option<(String, String)>,
+    what: &'static str,
+    device: String,
+    call_id: u64,
+    request: Box<Req>,
+    message: Vec<u8>,
+) {
+    if what == "chat"
+        && response_origin.as_ref().is_none_or(|(_, id)| {
+            state
+                .chat_calls
+                .get(id)
+                .is_none_or(|reply| reply.is_closed())
+        })
+    {
+        if let Req::LockedUseExecute(r) = &*request
+            && let Ok(c) = muster_core::locked_use::Challenge::decode(&r.challenge)
+        {
+            cancel_challenge(state, ctx, device, c.nonce().to_vec(), CancelReason::User);
+        }
+        fail_chat_call(state, &response_origin, "Chat loading cancelled");
+        return;
+    }
+    if what == "browser" && (state.presence.is_some() || !state.foreground) {
+        state.browser.busy = false;
+        state.browser.result = "Authentication request cancelled".into();
+        return;
+    }
+    let locked = if let Req::LockedUseExecute(r) = &*request {
+        match muster_core::locked_use::Challenge::decode(&r.challenge) {
+            Ok(c) => Some((device.clone(), c.nonce().to_vec())),
+            Err(e) => {
+                if what == "manual" {
+                    state.manual_busy.remove(&device);
+                }
+                if what == "chat" {
+                    fail_chat_call(state, &response_origin, "Invalid Locked Use challenge");
+                }
+                if what == "terminal_result" {
+                    super::code_runs::cancelled(state, &device);
+                }
+                state.toast(e.to_string(), true);
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    if let Some((_, nonce)) = &locked {
+        if state.locked.is_some() || state.presence.is_some() || !state.foreground {
+            if what == "manual" {
+                state.manual_busy.remove(&device);
+            }
+            let reason = if state.foreground {
+                CancelReason::Busy
+            } else {
+                CancelReason::Background
+            };
+            if what == "chat" {
+                fail_chat_call(
+                    state,
+                    &response_origin,
+                    "Another authorization is active or the app is in the background",
+                );
+            }
+            if what == "terminal_result" {
+                super::code_runs::cancelled(state, &device);
+            }
+            cancel_challenge(state, ctx, device, nonce.clone(), reason);
+            return;
+        }
+        let nonce = nonce.clone();
+        spawn(ctx, async move {
+            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+            Msg::LockedExpired(nonce)
+        });
+        state.locked = locked;
+    }
+    // Rust already validated the challenge against the selected target,
+    // network and complete pending operation. Only foreground phones
+    // use their paired hardware identity; admin/browser requests retain
+    // the Authenticate effect and presence key.
+    if state.embedded
+        && state
+            .self_info
+            .as_ref()
+            .is_some_and(|info| info.kind == "phone")
+        && let Req::LockedUseExecute(mut request) = *request.clone()
+    {
+        let signature = ctx
+            .backend
+            .signer()
+            .ok_or_else(|| Error::Unavailable("device signing key unavailable".into()))
+            .and_then(|key| {
+                key.sign(&message)
+                    .map_err(|e| Error::Unauthorized(e.to_string()))
+            });
+        match signature {
+            Ok(signature) => {
+                request.signature = signature;
+                op_request_from(
+                    state,
+                    ctx,
+                    what,
+                    device,
+                    Req::LockedUseExecute(request),
+                    response_origin,
+                );
+            }
+            Err(error) => {
+                cancel_locked(state, ctx, CancelReason::Authentication);
+                state.toast(error.to_string(), true);
+            }
+        }
+        return;
+    }
+    let action_id = format!("{what}-{call_id}");
+    let reason = if what == "manual" {
+        "Keep this Mac available under a privacy cover until you end Locked Use from this device, then lock it"
+    } else if state.locked.is_some() {
+        "Temporarily unlock the Mac under a privacy cover for this provider's queued operations from this device, then lock it when the queue finishes"
+    } else {
+        match what {
+            "browser" => {
+                "Authorize this browser operation on the selected device. Its screen stays locked."
+            }
+            "policy" => "Change the device's policy",
+            "remove" => "Remove a device",
+            "scopes" => "Change a device's permissions",
+            "decide" => "Approve a device",
+            _ => "Administer the network",
+        }
+    };
+    let effect_id = effect(
+        state,
+        ctx,
+        EffectKind::Authenticate,
+        app::effect::Ef::Authenticate(app::Authenticate {
+            reason: reason.into(),
+            message,
+        }),
+    );
+    state.presence = Some(PendingPresence {
+        response_origin,
+        action_id,
+        call_id,
+        device,
+        request: *request,
+        effect_id,
+    });
+}

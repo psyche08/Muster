@@ -1,0 +1,14 @@
+{
+  "modelVersion": "6.1.1",
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "Muster entry module",
+  "main": "",
+  "author": "linsheng",
+  "license": "MIT",
+  "dependencies": {
+    "libmuster.so": "file:./src/main/cpp/types/libmuster",
+    "@ohos/protobufjs": "^2.0.0",
+    "long": "^5.2.1"
+  }
+}

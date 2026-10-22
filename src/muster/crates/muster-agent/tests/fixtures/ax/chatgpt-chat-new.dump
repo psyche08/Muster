@@ -1,0 +1,912 @@
+AXApplication title="ChatGPT"
+  AXWindow/AXStandardWindow title="ChatGPT"
+    AXGroup title="ChatGPT"
+      AXGroup
+        AXGroup
+          AXGroup
+            AXGroup
+              AXGroup
+                AXScrollArea
+                  AXWebArea title="ChatGPT" url="app://-/index.html"
+                    AXGroup
+                      AXGroup id="root"
+                        AXGroup
+                          AXGroup
+                            AXGroup
+                              AXLink title="text-1" desc="text-1" url="app://-/index.html#_r_dr9_"
+                                AXStaticText value="value-1"
+                          AXGroup
+                            AXGroup/AXLandmarkComplementary
+                              AXGroup
+                                AXGroup id="app-shell-sidebar"
+                                  AXGroup/AXLandmarkNavigation title="text-2" desc="text-2"
+                                    AXButton title="text-3"
+                                    AXButton title="text-4"
+                                    AXButton title="text-5"
+                                    AXButton title="text-6"
+                                    AXPopUpButton title="text-7"
+                                    AXGroup
+                                      AXGroup
+                                        AXButton title="text-8" desc="text-8"
+                                      AXPopUpButton title="text-9" desc="text-9" id="id00000000001"
+                                  AXGroup
+                                    AXGroup/AXLandmarkNavigation title="text-3" desc="text-3"
+                                      AXGroup
+                                        AXPopUpButton title="Switch mode, current mode: ChatGPT" desc="Switch mode, current mode: ChatGPT" id="radix-_r_das_"
+                                        AXGroup
+                                          AXCheckBox/AXToggleButton title="text-10" desc="text-10"
+                                            AXGroup/AXEmptyGroup
+                                            AXGroup/AXEmptyGroup
+                                        AXGroup
+                                          AXButton title="text-11" desc="text-11"
+                                        AXButton title="New chat"
+                                        AXButton title="text-12"
+                                      AXGroup
+                                        AXGroup
+                                          AXButton title="text-13"
+                                          AXGroup
+                                            AXList/AXContentList
+                                              AXGroup
+                                                AXButton title="text-14"
+                                                  AXGroup id="_r_dbc_"
+                                                    AXStaticText value="value-2"
+                                                  AXGroup
+                                                    AXPopUpButton title="Project actionstext-15" desc="Project actionstext-15" id="radix-_r_dbe_"
+                                                  AXButton title="New chattext-16" desc="New chattext-16"
+                                              AXGroup
+                                                AXButton title="text-17"
+                                                  AXGroup id="_r_dbi_"
+                                                    AXStaticText value="value-3"
+                                                  AXGroup
+                                                    AXPopUpButton title="Project actionstext-18" desc="Project actionstext-18" id="radix-_r_dbk_"
+                                                  AXButton title="New chattext-19" desc="New chattext-19"
+                                              AXGroup
+                                                AXButton title="text-20"
+                                                  AXImage
+                                                  AXGroup id="_r_dbo_"
+                                                    AXStaticText value="value-4"
+                                                  AXGroup
+                                                    AXPopUpButton title="Project actionstext-21" desc="Project actionstext-21" id="radix-_r_dbp_"
+                                                  AXButton title="New chattext-22" desc="New chattext-22"
+                                        AXGroup
+                                          AXButton title="text-23"
+                                          AXGroup
+                                            AXPopUpButton title="text-24" desc="text-24" id="radix-_r_dbt_"
+                                            AXButton title="text-25" desc="text-25"
+                                          AXGroup
+                                            AXList/AXContentList
+                                              AXGroup
+                                                AXGroup title="text-26" desc="text-26"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-26"
+                                                      AXGroup id="_r_dc5_"
+                                                        AXStaticText value="value-5"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-27" desc="Project actionstext-27" id="id00000000002"
+                                                      AXButton title="Start new chattext-28" desc="Start new chattext-28"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-29" desc="text-29"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-30" desc="text-30"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dce_"
+                                                              AXStaticText value="value-6"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dcg_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-31" desc="text-31"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dcl_"
+                                                              AXStaticText value="value-7"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dcn_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-32" desc="text-32"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dcs_"
+                                                              AXStaticText value="value-8"
+                                                            AXGroup/AXEmptyGroup
+                                                              AXImage
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dcu_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-33" desc="text-33"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-33"
+                                                      AXGroup id="_r_dd4_"
+                                                        AXStaticText value="value-9"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-34" desc="Project actionstext-34" id="id00000000003"
+                                                      AXButton title="Start new chattext-35" desc="Start new chattext-35"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-36" desc="text-36"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-37" desc="text-37"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_ddd_"
+                                                              AXStaticText value="value-10"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_ddf_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-38" desc="text-38"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-38"
+                                                      AXGroup id="_r_ddl_"
+                                                        AXStaticText value="value-11"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-39" desc="Project actionstext-39" id="radix-_r_ddn_"
+                                                      AXButton title="Start new chattext-40" desc="Start new chattext-40"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-41" desc="text-41"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-42" desc="text-42"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_ddu_"
+                                                              AXStaticText value="value-12"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000004"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-43" desc="text-43"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-43"
+                                                      AXGroup id="_r_de6_"
+                                                        AXStaticText value="value-13"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-44" desc="Project actionstext-44" id="id00000000005"
+                                                      AXButton title="Start new chattext-45" desc="Start new chattext-45"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-46" desc="text-46"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-47" desc="text-47"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_def_"
+                                                              AXStaticText value="value-14"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_deh_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-48" desc="text-48"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dem_"
+                                                              AXStaticText value="value-15"
+                                                            AXGroup/AXEmptyGroup
+                                                              AXImage
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_deo_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-49" desc="text-49"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_det_"
+                                                              AXStaticText value="value-16"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dev_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-50" desc="text-50"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_df4_"
+                                                              AXStaticText value="value-17"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000006"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-51" desc="text-51"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dfb_"
+                                                              AXStaticText value="value-18"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dfd_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-52" desc="text-52"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dkg_"
+                                                              AXStaticText value="value-19"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dki_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-53" desc="text-53"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-53"
+                                                      AXGroup id="_r_dfj_"
+                                                        AXStaticText value="value-20"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-54" desc="Project actionstext-54" id="radix-_r_dfl_"
+                                                      AXButton title="Start new chattext-55" desc="Start new chattext-55"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-56" desc="text-56"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-57" desc="text-57"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dfs_"
+                                                              AXStaticText value="value-21"
+                                                            AXGroup/AXEmptyGroup
+                                                              AXImage
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dfu_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-58" desc="text-58"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dg3_"
+                                                              AXStaticText value="value-22"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000007"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-59" desc="text-59"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-59"
+                                                      AXGroup id="_r_dgb_"
+                                                        AXStaticText value="value-23"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-60" desc="Project actionstext-60" id="radix-_r_dgd_"
+                                                      AXButton title="Start new chattext-61" desc="Start new chattext-61"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-62" desc="text-62"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-63" desc="text-63"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dgk_"
+                                                              AXStaticText value="value-24"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dgm_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-64" desc="text-64"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dgr_"
+                                                              AXStaticText value="value-25"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dgt_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-65" desc="text-65"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dh2_"
+                                                              AXStaticText value="value-26"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000008"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup title="text-66" desc="text-66"
+                                                  AXGroup/AXEmptyGroup
+                                                  AXGroup
+                                                    AXButton title="text-66"
+                                                      AXGroup id="_r_dha_"
+                                                        AXStaticText value="value-27"
+                                                      AXGroup
+                                                        AXPopUpButton title="Project actionstext-67" desc="Project actionstext-67" id="radix-_r_dhc_"
+                                                      AXButton title="Start new chattext-68" desc="Start new chattext-68"
+                                                  AXGroup
+                                                    AXList/AXContentList title="text-69" desc="text-69"
+                                                      AXGroup
+                                                        AXGroup/AXApplicationGroup
+                                                          AXButton title="text-70" desc="text-70"
+                                                            AXGroup/AXEmptyGroup
+                                                            AXGroup/AXApplicationGroup id="_r_dhj_"
+                                                              AXStaticText value="value-28"
+                                                            AXGroup
+                                                              AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dhl_"
+                                                                AXGroup/AXEmptyGroup
+                                                              AXGroup
+                                                                AXButton title="Pin chat" desc="Pin chat"
+                                        AXGroup
+                                          AXButton title="text-71"
+                                          AXGroup
+                                            AXPopUpButton title="text-72" desc="text-72" id="radix-_r_dhq_"
+                                            AXCheckBox/AXToggleButton title="text-73" desc="text-73" id="radix-_r_dht_"
+                                              AXImage
+                                            AXButton title="New chat" desc="New chat"
+                                          AXGroup
+                                            AXList/AXContentList
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-74" desc="text-74"
+                                                    AXGroup/AXApplicationGroup id="_r_di3_"
+                                                      AXStaticText value="value-29"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationStatus title="text-75" desc="text-75"
+                                                        AXImage
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000009"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-76" desc="text-76"
+                                                  AXGroup/AXApplicationGroup id="_r_dl5_"
+                                                    AXStaticText value="value-30"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000010"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-77" desc="text-77"
+                                                  AXGroup/AXApplicationGroup id="_r_dlc_"
+                                                    AXStaticText value="value-31"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dle_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-78" desc="text-78"
+                                                    AXGroup/AXApplicationGroup id="_r_dia_"
+                                                      AXStaticText value="value-32"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dic_"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-30" desc="text-30"
+                                                    AXGroup/AXApplicationGroup id="_r_dih_"
+                                                      AXStaticText value="value-6"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dij_"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-31" desc="text-31"
+                                                    AXGroup/AXApplicationGroup id="_r_dio_"
+                                                      AXStaticText value="value-7"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_diq_"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-79" desc="text-79"
+                                                  AXGroup/AXApplicationGroup id="_r_dkn_"
+                                                    AXStaticText value="value-33"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dkp_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-80" desc="text-80"
+                                                  AXGroup/AXApplicationGroup id="_r_dku_"
+                                                    AXStaticText value="value-34"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000011"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-32" desc="text-32"
+                                                    AXGroup/AXApplicationGroup id="_r_div_"
+                                                      AXStaticText value="value-8"
+                                                    AXGroup/AXEmptyGroup
+                                                      AXImage
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000012"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-81" desc="text-81"
+                                                  AXGroup/AXApplicationGroup id="_r_dlj_"
+                                                    AXStaticText value="value-35"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dll_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-82" desc="text-82"
+                                                    AXGroup/AXApplicationGroup id="_r_dlq_"
+                                                      AXStaticText value="value-36"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dls_"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-83" desc="text-83"
+                                                  AXGroup/AXApplicationGroup id="_r_dm1_"
+                                                    AXStaticText value="value-37"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000013"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-84" desc="text-84"
+                                                  AXGroup/AXApplicationGroup id="_r_dm8_"
+                                                    AXStaticText value="value-38"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dma_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-85" desc="text-85"
+                                                  AXGroup/AXApplicationGroup id="_r_dmf_"
+                                                    AXStaticText value="value-39"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dmh_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-86" desc="text-86"
+                                                  AXGroup/AXApplicationGroup id="_r_dmm_"
+                                                    AXStaticText value="value-40"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dmo_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-87" desc="text-87"
+                                                  AXGroup/AXApplicationGroup id="_r_dmt_"
+                                                    AXStaticText value="value-41"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dmv_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-37" desc="text-37"
+                                                    AXGroup/AXApplicationGroup id="_r_dn4_"
+                                                      AXStaticText value="value-10"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000014"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXGroup/AXApplicationGroup
+                                                  AXButton title="text-88" desc="text-88"
+                                                    AXGroup/AXApplicationGroup id="_r_dnb_"
+                                                      AXStaticText value="value-42"
+                                                    AXGroup
+                                                      AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dnd_"
+                                                        AXGroup/AXEmptyGroup
+                                                      AXGroup
+                                                        AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-89" desc="text-89"
+                                                  AXGroup/AXApplicationGroup id="_r_dni_"
+                                                    AXStaticText value="value-43"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dnk_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup
+                                                AXButton title="text-90" desc="text-90"
+                                                  AXGroup/AXApplicationGroup id="_r_dnp_"
+                                                    AXStaticText value="value-44"
+                                                  AXGroup
+                                                    AXPopUpButton title="Chat actions" desc="Chat actions" id="radix-_r_dnr_"
+                                                      AXGroup/AXEmptyGroup
+                                                    AXGroup
+                                                      AXButton title="Pin chat" desc="Pin chat"
+                                              AXGroup/AXEmptyGroup
+                                                AXImage
+                                    AXGroup/AXEmptyGroup
+                                      AXGroup/AXEmptyGroup
+                              AXGroup
+                                AXSplitter
+                            AXGroup/AXApplicationStatus
+                            AXGroup/AXLandmarkBanner
+                              AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXButton title="Back" desc="Back"
+                                  AXGroup
+                                    AXButton title="text-91" desc="text-91"
+                                  AXGroup
+                                    AXButton title="text-92" desc="text-92"
+                              AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXToolbar title="text-93" desc="text-93"
+                                      AXGroup/AXEmptyGroup
+                                      AXGroup/AXEmptyGroup
+                              AXGroup/AXEmptyGroup
+                                AXGroup/AXEmptyGroup
+                                  AXGroup/AXEmptyGroup
+                              AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXPopUpButton title="text-94" desc="text-94" id="id00000000015"
+                            AXGroup/AXLandmarkMain id="_r_dr9_"
+                              AXGroup/AXEmptyGroup
+                              AXGroup
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXGroup id="_r_drv_-chat-panel"
+                                        AXGroup
+                                          AXGroup
+                                            AXGroup/AXApplicationGroup title="Composer mode" desc="Composer mode"
+                                              AXCheckBox/AXToggleButton title="Chat"
+                                              AXCheckBox/AXToggleButton title="text-17"
+                                            AXGroup
+                                              AXGroup
+                                                AXButton title="text-95" desc="text-95"
+                                          AXGroup
+                                            AXGroup
+                                              AXGroup/AXLandmarkMain
+                                                AXGroup
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXHeading title="text-96"
+                                                                AXGroup id="_r_ds3_"
+                                                                  AXStaticText value="value-45"
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXButton title="text-97"
+                                                              AXGroup
+                                                                AXStaticText value="value-46"
+                                                                AXLink title="text-98" desc="text-98" url="https://link-1.invalid/"
+                                                                  AXStaticText value="value-47"
+                                                                AXStaticText value="value-48"
+                                                            AXButton title="text-99" desc="text-99"
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXButton title="text-100"
+                                                              AXGroup
+                                                                AXStaticText value="value-46"
+                                                                AXLink title="text-101" desc="text-101" url="https://link-2.invalid/"
+                                                                  AXStaticText value="value-49"
+                                                                AXStaticText value="value-50"
+                                                            AXButton title="text-99" desc="text-99"
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXButton title="text-102"
+                                                              AXGroup
+                                                                AXStaticText value="value-46"
+                                                                AXLink title="text-103" desc="text-103" url="https://link-3.invalid/"
+                                                                  AXStaticText value="value-51"
+                                                                AXStaticText value="value-52"
+                                                                AXLink title="text-104" desc="text-104" url="https://link-4.invalid/"
+                                                                  AXStaticText value="value-53"
+                                                                AXStaticText value="value-54"
+                                                            AXButton title="text-99" desc="text-99"
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXGroup
+                                                                AXButton title="text-105" desc="text-105"
+                                                              AXTextArea title="text-106" desc="text-106" value="value-55"
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXStaticText value="value-56"
+                                                              AXGroup
+                                                                AXPopUpButton title="Select ChatGPT model" desc="Select ChatGPT model" id="id00000000016"
+                                                              AXGroup
+                                                                AXButton title="text-107" desc="text-107"
+                                                              AXGroup
+                                                                AXButton title="text-108" desc="text-108"
+                                            AXGroup/AXEmptyGroup
+                            AXGroup/AXApplicationStatus id="id00000000000017"
+                      AXGroup/AXEmptyGroup
+                        AXGroup/AXEmptyGroup
+                      AXGroup/AXApplicationStatus id="id00000000000018"
+                      AXGroup/AXApplicationStatus
+                      AXGroup/AXApplicationStatus
+                      AXGroup/AXApplicationStatus id="id00000000000019"
+                      AXGroup/AXEmptyGroup
+                        AXGroup/AXEmptyGroup
+    AXButton/AXCloseButton
+    AXButton/AXFullScreenButton
+      AXGroup
+        AXGroup
+    AXButton/AXMinimizeButton
+  AXMenuBar
+    AXMenuBarItem title="text-109"
+      AXMenu
+        AXMenuItem title="text-110" id="_aboutThisMacRequested:"
+        AXMenuItem title="text-111" id="_systemInformationRequested:"
+        AXMenuItem
+        AXMenuItem title="text-112" id="_systemSettingsRequested:"
+        AXMenuItem title="text-113" id="_appStoreRequested:"
+        AXMenuItem
+        AXMenuItem title="text-114" id="_recentsRequested:"
+          AXMenu
+            AXMenuItem title="text-115"
+            AXMenuItem title="ChatGPT" id="_recentItemRequested:"
+            AXMenuItem title="text-116" id="_recentItemRequested:"
+            AXMenuItem title="Claude" id="_recentItemRequested:"
+            AXMenuItem title="text-117" id="_recentItemRequested:"
+            AXMenuItem title="text-118" id="_recentItemRequested:"
+            AXMenuItem title="text-119" id="_recentItemRequested:"
+            AXMenuItem title="text-120" id="_recentItemRequested:"
+            AXMenuItem title="text-121" id="_recentItemRequested:"
+            AXMenuItem title="text-122" id="_recentItemRequested:"
+            AXMenuItem title="text-123" id="_recentItemRequested:"
+            AXMenuItem title="text-26" id="_recentItemRequested:"
+            AXMenuItem title="text-124" id="_recentItemRequested:"
+            AXMenuItem title="text-125" id="_recentItemRequested:"
+            AXMenuItem title="text-126" id="_recentItemRequested:"
+            AXMenuItem title="text-127" id="_recentItemRequested:"
+            AXMenuItem title="text-128" id="_recentItemRequested:"
+            AXMenuItem title="text-129" id="_recentItemRequested:"
+            AXMenuItem title="text-130" id="_recentItemRequested:"
+            AXMenuItem title="text-131" id="_recentItemRequested:"
+            AXMenuItem title="text-132" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-133"
+            AXMenuItem title="catdesk" id="_recentItemRequested:"
+            AXMenuItem title="text-134" id="_recentItemRequested:"
+            AXMenuItem title="text-135" id="_recentItemRequested:"
+            AXMenuItem title="text-136" id="_recentItemRequested:"
+            AXMenuItem title="text-137" id="_recentItemRequested:"
+            AXMenuItem title="text-138" id="_recentItemRequested:"
+            AXMenuItem title="text-139" id="_recentItemRequested:"
+            AXMenuItem title="text-140" id="_recentItemRequested:"
+            AXMenuItem title="text-141" id="_recentItemRequested:"
+            AXMenuItem title="text-142" id="_recentItemRequested:"
+            AXMenuItem title="text-141" id="_recentItemRequested:"
+            AXMenuItem title="text-142" id="_recentItemRequested:"
+            AXMenuItem title="text-143" id="_recentItemRequested:"
+            AXMenuItem title="text-144" id="_recentItemRequested:"
+            AXMenuItem title="text-145" id="_recentItemRequested:"
+            AXMenuItem title="text-146" id="_recentItemRequested:"
+            AXMenuItem title="text-147" id="_recentItemRequested:"
+            AXMenuItem title="text-148" id="_recentItemRequested:"
+            AXMenuItem title="text-149" id="_recentItemRequested:"
+            AXMenuItem title="text-150" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-151"
+            AXMenuItem title="text-152" id="_recentItemRequested:"
+            AXMenuItem
+            AXMenuItem title="text-153" id="_clearRecentItemsRequested:"
+        AXMenuItem
+        AXMenuItem title="text-154" id="_forceQuitPanelRequested:"
+        AXMenuItem title="text-155" id="_forceQuitRequested:"
+        AXMenuItem
+        AXMenuItem title="text-156" id="_sleepRequested:"
+        AXMenuItem title="text-157" id="_restartRequested:"
+        AXMenuItem title="text-158" id="_restartNowRequested:"
+        AXMenuItem title="text-159" id="_shutDownRequested:"
+        AXMenuItem title="text-160" id="_shutDownNowRequested:"
+        AXMenuItem
+        AXMenuItem title="text-161" id="_lockScreenRequested:"
+        AXMenuItem title="text-162" id="_logOutRequested:"
+        AXMenuItem title="text-163" id="_logOutNowRequested:"
+        AXMenuItem
+    AXMenuBarItem title="ChatGPT"
+      AXMenu
+        AXMenuItem title="text-164" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-165" id="handleMenuItemAction:"
+        AXMenuItem title="text-166" id="handleMenuItemAction:"
+        AXMenuItem title="text-167" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-168"
+          AXMenu
+            AXMenuItem title="text-169" id="_processRequest:"
+            AXMenuItem title="text-170" id="_processRequest:"
+            AXMenuItem title="text-171" id="_processRequest:"
+            AXMenuItem title="text-172" id="_processRequest:"
+            AXMenuItem title="text-173" id="_processRequest:"
+            AXMenuItem title="text-174" id="_processRequest:"
+            AXMenuItem title="text-175" id="_processRequest:"
+            AXMenuItem title="text-176" id="_processRequest:"
+            AXMenuItem title="text-177" id="_processRequest:"
+            AXMenuItem title="text-178" id="_processRequest:"
+            AXMenuItem title="text-179" id="_processRequest:"
+            AXMenuItem title="text-180" id="_configureServicesMenu:"
+        AXMenuItem
+        AXMenuItem title="text-181" id="hide:"
+        AXMenuItem title="text-182" id="hideOtherApplications:"
+        AXMenuItem title="text-183" id="unhideAllApplications:"
+        AXMenuItem
+        AXMenuItem title="text-184" id="terminate:"
+    AXMenuBarItem title="File"
+      AXMenu
+        AXMenuItem title="text-185" id="handleMenuItemAction:"
+        AXMenuItem title="New Chat" id="handleMenuItemAction:"
+        AXMenuItem title="text-186" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-187" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="Close" id="handleMenuItemAction:"
+    AXMenuBarItem title="text-188"
+      AXMenu
+        AXMenuItem title="text-189" id="undo:"
+        AXMenuItem title="text-190" id="redo:"
+        AXMenuItem
+        AXMenuItem title="text-191" id="cut:"
+        AXMenuItem title="text-192" id="copy:"
+        AXMenuItem title="text-193" id="paste:"
+        AXMenuItem title="text-194" id="pasteAndMatchStyle:"
+        AXMenuItem title="Delete" id="delete:"
+        AXMenuItem
+        AXMenuItem title="text-195" id="selectAll:"
+        AXMenuItem
+        AXMenuItem title="text-196"
+          AXMenu
+            AXMenuItem title="text-197" id="orderFrontSubstitutionsPanel:"
+            AXMenuItem
+            AXMenuItem title="text-198" id="toggleAutomaticQuoteSubstitution:"
+            AXMenuItem title="text-199" id="toggleAutomaticDashSubstitution:"
+            AXMenuItem title="text-200" id="toggleAutomaticTextReplacement:"
+        AXMenuItem title="text-201"
+          AXMenu
+            AXMenuItem title="text-202" id="startSpeaking:"
+            AXMenuItem title="text-203" id="stopSpeaking:"
+        AXMenuItem
+        AXMenuItem title="text-204" id="_NSMenuItemAutoFillIdentifier"
+          AXMenu
+            AXMenuItem title="text-205" id="_handleInsertFromContactsCommand:"
+            AXMenuItem title="text-206" id="_handleInsertFromPasswordsCommand:"
+            AXMenuItem title="text-207" id="_handleInsertFromCreditCardsCommand:"
+        AXMenuItem title="text-208" id="startDictation:"
+        AXMenuItem title="text-209" id="orderFrontCharacterPalette:"
+    AXMenuBarItem title="text-210"
+      AXMenu
+        AXMenuItem title="text-211" id="handleMenuItemAction:"
+        AXMenuItem title="text-212" id="handleMenuItemAction:"
+        AXMenuItem title="text-213" id="handleMenuItemAction:"
+        AXMenuItem title="text-214" id="handleMenuItemAction:"
+        AXMenuItem title="text-215" id="handleMenuItemAction:"
+        AXMenuItem title="text-216" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-217"
+          AXMenu
+            AXMenuItem title="text-218" id="handleMenuItemAction:"
+            AXMenuItem title="text-219" id="handleMenuItemAction:"
+            AXMenuItem title="text-220" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-221" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-222" id="handleMenuItemAction:"
+        AXMenuItem title="text-223" id="handleMenuItemAction:"
+        AXMenuItem title="Back" id="handleMenuItemAction:"
+        AXMenuItem title="text-91" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-224" id="handleMenuItemAction:"
+        AXMenuItem title="text-225" id="handleMenuItemAction:"
+        AXMenuItem title="text-226" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-227" id="toggleFullScreen:"
+    AXMenuBarItem title="text-228"
+      AXMenu
+        AXMenuItem title="text-229" id="performMiniaturize:"
+        AXMenuItem title="text-230" id="miniaturizeAll:"
+        AXMenuItem title="text-231" id="performZoom:"
+        AXMenuItem title="text-232" id="zoomAll:"
+        AXMenuItem title="text-233" id="_zoomFill:"
+        AXMenuItem title="text-234" id="_zoomCenter:"
+        AXMenuItem
+        AXMenuItem title="text-235"
+          AXMenu
+            AXMenuItem title="text-236"
+            AXMenuItem title="text-237" id="_zoomLeft:"
+            AXMenuItem title="text-238" id="_zoomRight:"
+            AXMenuItem title="text-239" id="_zoomTop:"
+            AXMenuItem title="text-240" id="_zoomBottom:"
+            AXMenuItem
+            AXMenuItem title="text-241"
+            AXMenuItem title="text-242" id="_zoomTopLeft:"
+            AXMenuItem title="text-243" id="_zoomTopRight:"
+            AXMenuItem title="text-244" id="_zoomBottomLeft:"
+            AXMenuItem title="text-245" id="_zoomBottomRight:"
+            AXMenuItem
+            AXMenuItem title="text-246"
+            AXMenuItem title="text-247" id="_zoomLeftAndRight:"
+            AXMenuItem title="text-248" id="_zoomLeftThreeUp:"
+            AXMenuItem title="text-249" id="_zoomRightAndLeft:"
+            AXMenuItem title="text-250" id="_zoomRightThreeUp:"
+            AXMenuItem title="text-251" id="_zoomTopAndBottom:"
+            AXMenuItem title="text-252" id="_zoomTopThreeUp:"
+            AXMenuItem title="text-253" id="_zoomBottomAndTop:"
+            AXMenuItem title="text-254" id="_zoomBottomThreeUp:"
+            AXMenuItem title="text-241" id="_zoomQuarters:"
+            AXMenuItem
+            AXMenuItem title="text-255" id="_zoomUntile:"
+        AXMenuItem title="text-256"
+        AXMenuItem
+        AXMenuItem title="text-257" id="arrangeInFront:"
+        AXMenuItem title="text-258" id="alternateArrangeInFront:"
+        AXMenuItem title="text-259" id="_removeWindowFromStageManagerSet:"
+        AXMenuItem
+        AXMenuItem title="ChatGPT" id="makeKeyAndOrderFront:"
+    AXMenuBarItem title="text-260"
+      AXMenu
+        AXMenuItem title="text-261" id="handleMenuItemAction:"
+        AXMenuItem title="text-262" id="handleMenuItemAction:"
+        AXMenuItem title="text-263" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-264" id="handleMenuItemAction:"
+        AXMenuItem title="text-265" id="handleMenuItemAction:"
+        AXMenuItem title="text-266" id="handleMenuItemAction:"
+        AXMenuItem
+        AXMenuItem title="text-267" id="handleMenuItemAction:"
+        AXMenuItem title="text-268" id="handleMenuItemAction:"
+  AXMenuBar
+    AXMenuBarItem/AXMenuExtra desc="ChatGPT"
+      AXMenu
+        AXMenuItem title="text-269"
+          AXMenu
+            AXMenuItem title="text-270"
+        AXMenuItem
+        AXMenuItem title="text-271"
+        AXMenuItem title="text-74" id="handleAction:"
+        AXMenuItem
+        AXMenuItem title="text-184" id="handleAction:"

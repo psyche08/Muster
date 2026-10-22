@@ -1,0 +1,6 @@
+{
+  "name": "libmuster.so",
+  "types": "./index.d.ts",
+  "version": "0.1.0",
+  "description": "The Rust core's C ABI for the HarmonyOS shell"
+}

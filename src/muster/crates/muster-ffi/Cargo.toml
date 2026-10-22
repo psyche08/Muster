@@ -1,0 +1,27 @@
+[package]
+name = "muster-ffi"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The C ABI every app shell links (§3.7): a handful of functions around muster-app-core"
+
+[lib]
+name = "muster_ffi"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+muster-app-core = { path = "../muster-app-core" }
+muster-terminal = { path = "../muster-terminal" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[dev-dependencies]
+muster-proto = { path = "../muster-proto" }
+tempfile = "3"
+
+[lints]
+workspace = true

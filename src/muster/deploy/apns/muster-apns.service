@@ -1,0 +1,42 @@
+# The APNs provider behind the relay's push hook. It alone reads the provider
+# key (/etc/muster/apns/key.pem, owner muster-apns, 0400). The relay reaches
+# it through /run/muster-apns/push.sock, group muster-push, and never holds
+# the key. Outbound only: HTTP/2 to api[.sandbox].push.apple.com:2197.
+[Unit]
+Description=muster APNs provider (silent wake-ups for the relay)
+Documentation=https://github.com/psyche08/muster
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=muster-apns
+Group=muster-push
+Environment=RUST_LOG=info
+RuntimeDirectory=muster-apns
+RuntimeDirectoryMode=0750
+ExecStart=/opt/muster/bin/muster-apns serve \
+    --cert /etc/muster/apns/cert.pem \
+    --key /etc/muster/apns/key.pem \
+    --socket /run/muster-apns/push.sock
+Restart=always
+RestartSec=2
+
+# Hardening: nothing to write but its socket, nothing to escalate to.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

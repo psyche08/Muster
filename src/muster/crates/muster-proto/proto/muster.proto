@@ -1,0 +1,949 @@
+// muster-rpc (ARCHITECTURE §3.6.1): the same schema over the local Unix
+// socket and over a "muster" service stream between devices. One Envelope per
+// length-prefixed message. A Request opens a call with an id; the Response
+// with that id ends it, and streaming calls emit Events with the id in
+// between. Cancel ends a streaming call early.
+//
+// ViewModel/Intent/Effect for the app shells live in the same file so a
+// single generated module serves every language.
+syntax = "proto3";
+
+package muster.v1;
+
+// One class per message for Kotlin and Java shells.
+option java_multiple_files = true;
+
+message Envelope {
+  uint64 id = 1;
+  oneof msg {
+    Request request = 2;
+    Response response = 3;
+    Event event = 4;
+    Cancel cancel = 5;
+  }
+  // Presence proof for high-risk scopes (§3.4): the caller's presence key
+  // signs "MUSTER-PRESENCE-V1" || id (8 bytes BE) || Request bytes, after
+  // local authentication. Empty when the call needs none.
+  bytes presence = 6;
+  // When set on a request to a device's own daemon, that daemon forwards
+  // the envelope to this member (device id, hex) over the link and relays
+  // the events and response back under the same id. Local callers only.
+  string target = 7;
+  // Admin-signed public enrollment plus accepted roster evidence; no private key.
+  bytes presence_enrollment = 8;
+}
+
+message Cancel {}
+
+message Error {
+  enum Code {
+    UNKNOWN = 0;
+    UNAUTHORIZED = 1;
+    NOT_FOUND = 2;
+    INVALID = 3;
+    UNAVAILABLE = 4;
+    CONFLICT = 5;
+    TIMEOUT = 6;
+    LOCKED_USE_REQUIRED = 7; // rejected before mutation; prepare a signed capability
+    BUSY = 8; // a desktop app is held by another operation; nothing was done
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+message Ack {}
+
+// Idempotent mutations carry an op_id; the target answers from its ledger.
+message OpResult {
+  enum Status {
+    APPLIED = 0;
+    DUPLICATE = 1;  // same op_id, same body: earlier result returned
+    REJECTED = 2;   // same op_id, different body, or refused
+    UNKNOWN = 3;    // a crash left the outcome undecidable; never retried automatically
+  }
+  Status status = 1;
+  string message = 2;
+  string result_id = 3;  // e.g. the message or interaction the op produced
+  // REJECTED because an earlier write to the same session has no provider
+  // receipt: its token. The user may check the desktop app and release it
+  // with AgentSendRequest.release_unconfirmed.
+  string unconfirmed = 4;
+}
+
+// ----------------------------------------------------------------- requests
+
+message Request {
+  reserved 46; // Removed provider CLI session creation.
+  reserved "agent_create";
+  oneof req {
+    DeviceInfoRequest device_info = 10;
+    DeviceWatchRequest device_watch = 11;
+    DeviceSetRelayRequest device_set_relay = 12;
+    DeviceRequestAccessibilityRequest device_request_accessibility = 13;
+    DeviceDebugRequest device_debug = 14;
+    DeviceSetCoverRequest device_set_cover = 15;
+    LockedUsePrepareRequest locked_use_prepare = 16;
+    LockedUseExecuteRequest locked_use_execute = 17;
+    LockedUseCancelRequest locked_use_cancel = 18;
+    DeviceRequestAutomationRequest device_request_automation = 19;
+
+    NetworkStatusRequest network_status = 20;
+    NetworkCreateRequest network_create = 21;
+    NetworkInviteRequest network_invite = 22;
+    NetworkJoinRequest network_join = 23;
+    NetworkPendingRequest network_pending = 24;
+    NetworkDecideRequest network_decide = 25;
+    NetworkRemoveRequest network_remove = 26;
+    NetworkSetScopesRequest network_set_scopes = 27;
+    PolicyGetRequest policy_get = 28;
+    PolicySetRequest policy_set = 29;
+
+    TerminalSessionsRequest terminal_sessions = 30;
+    TerminalAttachRequest terminal_attach = 31;
+    TerminalInputRequest terminal_input = 32;
+    TerminalCreateRequest terminal_create = 33;
+    TerminalResizeRequest terminal_resize = 34;
+    TerminalCloseRequest terminal_close = 35;
+    TerminalHistoryRequest terminal_history = 36;
+    AgentTerminalRequest agent_terminal = 37;
+    TerminalRunRequest terminal_run = 38;
+    TerminalRunsRequest terminal_runs = 39;
+
+    AgentListRequest agent_list = 40;
+    AgentWatchRequest agent_watch = 41;
+    AgentMessagesRequest agent_messages = 42;
+    AgentSendRequest agent_send = 43;
+    AgentRespondRequest agent_respond = 44;
+    AgentInterruptRequest agent_interrupt = 45;
+    AgentFilesRequest agent_files = 47;
+    AgentFileRequest agent_file = 48;
+    AgentGitRequest agent_git = 49;
+    BrowserCallRequest browser_call = 50;
+    BrowserSetupRequest browser_setup = 51;
+    AgentChatsRequest agent_chats = 52;
+    AgentChatOpenRequest agent_chat_open = 53;
+    AgentChatOptionsRequest agent_chat_options = 54;
+    AgentChatSetOptionsRequest agent_chat_set_options = 55;
+    NetworkReaddressRequest network_readdress = 56;
+    DesktopUpdateLeaseRequest desktop_update_lease = 57;
+    AgentInspectRequest agent_inspect = 58;
+    DiagnosticsUploadRequest diagnostics_upload = 59;
+    LockedUseRenewRequest locked_use_renew = 60;
+    LockedUseExtendRequest locked_use_extend = 61;
+    NetworkRefreshRequest network_refresh = 62;
+    OrcaCreateRequest orca_create = 63;
+    AgentCompleteRequest agent_complete = 64;
+    DevicePresenceRequest device_presence = 65;
+    NetworkPresenceRequest network_presence = 66;
+    DeviceInstallPresenceRequest device_install_presence = 67;
+  }
+}
+
+// An independent bundled CLI adapter; this never creates a desktop AX session.
+message OrcaCreateRequest {
+  string op_id = 1;
+  string directory = 2;
+  string agent = 3; // codex | claude
+  // Environment for this session's provider child, supplied by whoever opens
+  // the session — an external scheduler's per-task credential, for example,
+  // so the agent can use that scheduler's CLI as itself. Session-scoped and
+  // held in memory only: it is never written to the journal, and a session
+  // resumed after a daemon restart starts without it rather than with a stale
+  // credential. Names must match [A-Za-z_][A-Za-z0-9_]*; dynamic-linker names
+  // are refused because they subvert every binary the child starts.
+  map<string, string> env = 4;
+}
+
+message Response {
+  oneof resp {
+    Error error = 1;
+    Ack ack = 2;
+    OpResult op_result = 3;
+
+    DeviceInfo device_info = 10;
+    DebugText debug_text = 14;
+    LockedUseChallenge locked_use_challenge = 16;
+    NetworkStatus network_status = 20;
+    InviteText invite_text = 22;
+    PendingJoins pending_joins = 24;
+    Policy policy = 28;
+    TerminalSessionList terminal_sessions = 30;
+    TerminalSession terminal_session = 33;
+    TerminalLines terminal_lines = 36;
+    TerminalRunList terminal_runs = 38;
+    AgentSessionPage agent_sessions = 40;
+    AgentMessagePage agent_messages = 42;
+    AgentSession agent_session = 46;
+    FileList file_list = 47;
+    FileContent file_content = 48;
+    GitLog git_log = 49;
+    BrowserStatus browser_status = 51;
+    AgentChatCatalog agent_chats = 52;
+    AgentChatOptions agent_chat_options = 54;
+    DiagnosticsSaved diagnostics_saved = 55;
+    AgentCompletion agent_completion = 56;
+    PresenceInfo presence_info = 65;
+  }
+}
+
+message Event {
+  oneof ev {
+    DeviceState device_state = 10;
+    NetworkStatus network_status = 20;
+    Policy policy = 28;
+    JoinProgress join_progress = 23;
+    TerminalSessionList terminal_sessions = 30;
+    TerminalFrame terminal_frame = 31;
+    AgentEvent agent_event = 41;
+    Ack desktop_update_ready = 57; // local streaming lease; held until cancellation/disconnect
+  }
+}
+
+// ------------------------------------------------------------------ device
+
+message DeviceInfoRequest {}
+// Local only: wait for console operations to drain, then hold the update fence.
+message DesktopUpdateLeaseRequest {}
+// All members must support this signed roster operation before migration.
+// A changed live vnet stops; restart desktop daemons to apply the new route.
+// The local user refreshed: members found offline or unreachable get one
+// more round of bounded connection attempts (muster_net::presence). Local
+// only; answers NetworkStatus.
+message NetworkRefreshRequest {}
+
+message NetworkReaddressRequest {
+  string vnet_cidr = 1;
+  map<string, string> addresses = 2; // complete desktop/server device id -> IPv4
+}
+message DeviceWatchRequest {}
+
+message DeviceInfo {
+  string device_id = 1;
+  string fingerprint = 2;
+  string name = 3;
+  string kind = 4;  // desktop | phone | server
+  string version = 5;
+  string platform = 6;
+  DeviceState state = 7;
+  repeated string services = 8;  // agent, terminal, forward, vnet
+  string relay = 9;  // the configured relay (host:port), "" when none
+  // Backend of the signer for device_id, reported by its daemon. Display only;
+  // not a remote hardware attestation or an authorization input. Empty = unknown.
+  string key_backend = 10;  // sep | soft | platform (OS signing callback)
+  string key_label = 12;    // key_backend as shown: "Secure Enclave", …
+  // The source commit this build was compiled from (`git rev-parse --short
+  // HEAD`), "unknown" when built outside a checkout. `version` is the release
+  // version (the installed package's, else the crate's). Display only.
+  string commit = 11;
+}
+
+// The desktop's own user asks the OS to let the daemon drive other apps
+// (macOS Accessibility; local socket only). The prompt is the OS's; the
+// answer comes back as DeviceState.accessibility.
+message DeviceRequestAccessibilityRequest {}
+message DeviceRequestAutomationRequest {}
+
+// A platform diagnostic for the desktop's own user (local socket only),
+// e.g. what = "ax-dump", arg = "Claude": the answer is DebugText.
+message DeviceDebugRequest {
+  string what = 1;
+  string arg = 2;
+}
+message DebugText {
+  string text = 1;
+}
+
+// The desktop's own user points the daemon at a relay (local socket only);
+// the link re-registers at once and the setting is remembered.
+message DeviceSetRelayRequest {
+  string relay = 1;
+}
+
+message DeviceState {
+  bool locked = 1;
+  bool on_console = 2;
+  string vip = 3;
+  bool vnet_up = 4;
+  string relay = 5;  // unconfigured | connecting | registered
+  uint64 uptime_secs = 6;
+  // "" where the OS has no such permission; "granted" | "missing" on macOS
+  // (Accessibility: what lets the daemon drive the Claude desktop app).
+  string accessibility = 7;
+  // The privacy cover is up: the screen is black and stays so until the
+  // user authenticates locally; the session is not locked, so the desktop
+  // apps keep working for remote control.
+  bool covered = 8;
+  // Display-only installation observation; never an authorization input.
+  string iterm2_automation = 10; // granted | missing | not_running | not_installed | unavailable
+  bool iterm2_api_available = 11; // socket observation, not an authorization result
+  string locked_use_setup = 9; // checking | ready | needs_installation | unavailable
+  string terminal_source = 12; // iterm2 | ghostty | pty | "" (none offered)
+  // Display-only, like iterm2_automation: may the daemon control Ghostty.
+  // Display only. Cancellation still checks the authenticated owner.
+  string manual_locked_use_owner = 14;
+  bytes manual_locked_use_nonce = 15;
+  bool manual_locked_use_active = 16;
+  string ghostty_automation = 13; // granted | missing | not_running | not_installed | unavailable
+}
+
+// Raise or drop the privacy cover. Local, or a member holding
+// locked.control (a presence proof, like anything high-risk).
+message DeviceSetCoverRequest {
+  bool on = 1;
+}
+
+// One initial native Agent operation, optionally granting a provider queue scope.
+message LockedUseOperation {
+  oneof operation {
+    AgentSendRequest send = 1;
+    AgentRespondRequest respond = 2;
+    AgentInterruptRequest interrupt = 3;
+    AgentInspectRequest inspect = 5;
+    TerminalLeaseRequest terminal = 6;
+    AgentChatsRequest chat_load = 7;
+    AgentChatOpenRequest chat_open = 8;
+    AgentChatOptionsRequest chat_options = 9;
+    AgentChatSetOptionsRequest chat_set_options = 10;
+    DeviceLeaseRequest device = 11;
+    AgentCompleteRequest complete = 12;
+  }
+  // Empty: one operation. Otherwise presence also authorizes this requester's
+  // subsequent native operations for this provider during the same lease.
+  // Included in the signed operation digest; never inferred from an unlocked OS.
+  string provider_queue = 4;
+}
+// Read-only AX inspection, bound to one session and a fresh operation id.
+message AgentInspectRequest { string session = 1; string op_id = 2; }
+// Protected native Tab input; never submits a message.
+message AgentCompleteRequest { string session = 1; string op_id = 2; }
+message AgentCompletion { string session = 1; string text = 2; }
+
+// Content-free diagnostics a member sends for inspection, e.g. a phone's
+// performance log. The receiving daemon saves them under
+// /tmp/muster-reports and names the file itself.
+message DiagnosticsUploadRequest {
+  string kind = 1;  // "performance"
+  bytes data = 2;   // at most MAX_DIAGNOSTICS bytes
+}
+message DiagnosticsSaved { string path = 1; }
+
+// Keep a locked Mac unlocked under the cover while the requester uses one
+// terminal whose screen only an unlocked console shows (Ghostty). The first
+// window unlocks it like any operation; each next window is a renewal the
+// requester signs (LockedUseRenew, then LockedUseExtend), at most 15 s each.
+// It ends when renewals stop, on cancel, local input, or ten minutes without
+// terminal input.
+message TerminalLeaseRequest {
+  string op_id = 1;
+  string session = 2; // the terminal, e.g. a Ghostty terminal id
+}
+// Explicitly authorizes host-maintained cover until cancel, local takeover,
+// revocation or watchdog loss. Every operation still needs its own grants.
+message DeviceLeaseRequest { string op_id = 1; }
+message LockedUsePrepareRequest { LockedUseOperation operation = 1; }
+message LockedUseChallenge { bytes challenge = 1; }
+message LockedUseExecuteRequest {
+  bytes challenge = 1;
+  bytes signature = 2;
+}
+// The next window of the caller's terminal session: answers a
+// LockedUseChallenge to sign, for LockedUseExtend.
+message LockedUseRenewRequest {
+  bytes nonce = 1; // the session's first challenge nonce
+}
+message LockedUseExtendRequest {
+  bytes challenge = 1;
+  bytes signature = 2;
+}
+message LockedUseCancelRequest {
+  bytes nonce = 1;
+  // Why the requester withdrew (muster_core::locked_use::CancelReason). The
+  // target only logs it; it never grants, denies or shortens anything.
+  string reason = 2;
+}
+
+// ----------------------------------------------------------------- network
+
+message NetworkStatusRequest {}
+
+message NetworkStatus {
+  bool has_network = 1;
+  string network_id = 2;
+  string name = 3;
+  string vnet_cidr = 4;
+  string self_id = 5;
+  repeated MemberView members = 6;
+  string relay = 7;
+  string reflected_addr = 8;
+  uint32 pending_joins = 9;
+}
+
+message MemberView {
+  string device_id = 1;
+  string fingerprint = 2;
+  string name = 3;
+  string kind = 4;
+  string role = 5;  // admin | member
+  string vip = 6;
+  repeated string scopes = 7;
+  bool is_self = 8;
+  bool connected = 9;
+  string path = 10;  // direct | relay | ""
+  uint32 rtt_ms = 11;
+  string connection_status = 12; // connecting | failed | connected | not connected
+  // What the member last reported in the link heartbeat (this device: its
+  // own build). "" until a heartbeat arrives; a peer's claim, display only.
+  string version = 13;
+  string commit = 14;
+  // The link as shown: "direct · 12 ms", "relay", "connecting", "not
+  // connected"; "" for this device. Display only.
+  string link = 15;
+  // Whether it is online, from evidence (muster_net::presence), which is
+  // what `connected` now follows: online | reconnecting (a lost link inside
+  // its two retries, still online) | connecting (not known yet) | offline
+  // (the relay says it is not registered) | unreachable (its retries
+  // failed) | local_offline (this device has no relay) | "" (this device).
+  // Offline and unreachable members are not polled; their sessions are
+  // hidden.
+  string presence = 16;
+}
+
+message NetworkCreateRequest {
+  string name = 1;
+  string vnet_cidr = 2;  // "192.168.14.0/24"; empty = default
+}
+
+message NetworkInviteRequest {
+  uint32 ttl_secs = 1;  // 0 = 10 minutes
+}
+
+message InviteText {
+  string text = 1;  // "muster1:…", what the QR carries
+  uint64 expires_unix = 2;
+}
+
+message NetworkJoinRequest {
+  string invite_text = 1;
+  string device_name = 2;
+  string device_kind = 3;  // desktop | phone | server
+}
+
+// Streamed while a join runs.
+message JoinProgress {
+  enum Phase {
+    CONNECTING = 0;
+    WAITING_APPROVAL = 1;
+    JOINED = 2;
+    FAILED = 3;
+  }
+  Phase phase = 1;
+  string message = 2;
+}
+
+message NetworkPendingRequest {}
+
+message PendingJoins {
+  repeated PendingJoin joins = 1;
+}
+
+message PendingJoin {
+  string invite_id = 1;
+  string device_id = 2;
+  string fingerprint = 3;
+  string name = 4;
+  string kind = 5;
+}
+
+message NetworkDecideRequest {
+  string device_id = 1;
+  bool approve = 2;
+  repeated string scopes = 3;  // on approve; empty keeps the request's
+  string reason = 4;           // on reject
+}
+
+message NetworkRemoveRequest {
+  string device_id = 1;
+}
+
+message NetworkSetScopesRequest {
+  string device_id = 1;
+  repeated string scopes = 2;
+  string role = 3;  // "" keeps
+}
+
+message PolicyGetRequest {}
+
+message Policy {
+  repeated string open_ports = 1;  // "tcp/22", "udp/*"
+  bool allow_locked_control = 2;
+  repeated string ax_allowlist = 3;
+  bool offer_agent = 4;
+  bool offer_terminal = 5;
+  // Whether this machine offers itself as an external task scheduler's
+  // runtime (`muster acp`, ADR 0009). Off until the owner turns it on: it
+  // lets work this machine's owner did not start run here, so it is a
+  // decision to take, not a default to inherit.
+  bool offer_tasks = 6;
+}
+
+message PolicySetRequest {
+  Policy policy = 1;
+}
+
+// ---------------------------------------------------------------- terminal
+
+message TerminalSessionsRequest {
+  bool watch = 1;  // stream changes after the first list
+}
+
+message TerminalSession {
+  string id = 1;
+  string title = 2;
+  uint32 cols = 3;
+  uint32 rows = 4;
+  string window_id = 5;
+  string tab_id = 6;
+  string source = 7;  // iterm2 | ssh
+  string device_id = 8; // populated by the aggregating app core
+  string device_name = 9;
+}
+
+message TerminalSessionList {
+  repeated TerminalSession sessions = 1;
+}
+
+message TerminalAttachRequest {
+  string session = 1;
+  uint64 since_rev = 2;  // 0 = full snapshot
+}
+
+message TerminalLine {
+  uint32 index = 1;
+  string text = 2;
+  bytes styles = 3;  // per-cell style runs, encoding owned by muster-terminal
+}
+
+// A full snapshot (all rows) or the rows that changed since the last frame.
+message TerminalFrame {
+  string session = 1;
+  uint64 rev = 2;
+  bool full = 3;
+  uint32 cols = 4;
+  uint32 rows = 5;
+  repeated TerminalLine lines = 6;
+  uint32 cursor_x = 7;
+  uint32 cursor_y = 8;
+  bool ended = 9;
+}
+
+message TerminalInputRequest {
+  string op_id = 1;
+  string session = 2;
+  bytes bytes = 3;  // already translated key bytes
+}
+
+message TerminalCreateRequest {
+  string profile = 1;
+  bool background = 2;
+}
+
+message TerminalResizeRequest {
+  string session = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message TerminalCloseRequest {
+  string session = 1;
+}
+
+message TerminalHistoryRequest {
+  string session = 1;
+  uint32 lines = 2;
+}
+
+message TerminalLines {
+  repeated TerminalLine lines = 1;
+}
+
+// ------------------------------------------------------------------- agent
+
+message AgentSession {
+  string id = 1;
+  string provider = 2;  // codex | claude
+  string title = 3;
+  string cwd = 4;
+  string state = 5;      // turn activity: idle | running | waiting_approval | ended | unknown
+  uint64 updated_unix = 6;
+  uint32 message_count = 7;
+  string controller = 8;  // native_app | none
+  bool archived = 9;
+  string device_id = 10;
+  string device_name = 11;
+  string process_state = 12; // running | ended | unknown; verified session-bound process
+  // code: a provider transcript on disk (Claude Code / Codex).
+  // chat: a desktop app's Chat-mode conversation, read and driven only
+  // through Accessibility; it has no working directory.
+  string mode = 13;
+  // Provider-recorded relationship; subagents remain outside the main catalog.
+  string parent_session_id = 14;
+  repeated AgentSession subagents = 15; // direct children only; never recursive
+  bool read_only = 16; // subagent transcripts cannot be controlled independently
+  string transcript_notice = 17; // Rust-owned explanation when local transcript content is unavailable
+  // Codex: the next message the provider suggests after the newest completed
+  // turn, shown as the composer placeholder; empty when there is none.
+  string composer_suggestion = 18;
+  // Display-only activity of provider-declared descendants: running |
+  // waiting_approval | empty (no verified active descendant). Never input authority.
+  string descendant_activity = 19;
+  string relationship = 20; // subagent | subsession | fork; provider-declared
+  repeated AgentSession subsessions = 21; // direct independently controlled desktop sessions
+
+}
+
+message AgentListRequest {
+  uint32 limit = 1;
+  string provider = 2;
+}
+
+message AgentSessionPage {
+  repeated AgentSession sessions = 1;
+}
+
+message AgentWatchRequest {
+  string session = 1;  // "" = list changes for all sessions
+}
+
+message AgentMessage {
+  string id = 1;
+  string role = 2;  // user | assistant | tool | system
+  string text = 3;
+  uint64 ts_unix = 4;
+  string kind = 5;  // text | tool_call | tool_result | interaction | turn_summary | turn_status
+  TurnUsage usage = 6;
+  string phase = 7; // commentary | final_answer | reasoning, when the provider records it
+  string tool_name = 8;
+  string tool_call_id = 9; // provider identity for correlating a call and its output
+  string tool_status = 10; // provider-recorded running | completed | failed | interrupted; empty if unknown
+}
+
+// Rust computes turn totals and costs; shells only format numbers and local time.
+message TurnUsage {
+  string model = 1;
+  uint64 input_tokens = 2; // includes cache reads and writes
+  uint64 output_tokens = 3;
+  uint64 cache_read_tokens = 4;
+  uint64 cache_write_tokens = 5;
+  bool tokens_known = 6;
+  double cache_hit_percent = 7;
+  bool cost_known = 8;
+  double cost_usd = 9;
+  string cost_source = 10; // recorded | estimated | unavailable
+  string pricing_date = 11;
+  repeated TurnFileChange changes = 12;
+  bool changes_incomplete = 13;
+  bool cache_hit_known = 14; // complete usage and a nonzero input denominator
+  uint64 request_count = 15;
+  bool first_request_cache_hit_known = 16;
+  double first_request_cache_hit_percent = 17;
+  CacheExpiry cache_expiry = 18;
+}
+
+// An estimate at this turn, not live server cache state. Later reuse can refresh
+// prefixes. A zero upper bound means no known expiry upper bound.
+message CacheExpiry {
+  uint64 from_unix = 1;
+  uint64 until_unix = 2;
+  string label = 3;
+  string detail = 4;
+  uint64 observed_gap_seconds = 5; // first request vs previous observed request
+}
+
+// Only changes confirmed by provider events or successful edit tool results.
+message TurnFileChange {
+  string path = 1;
+  string previous_path = 2;
+  string kind = 3; // add | update | delete | rename
+  string diff = 4;
+  uint32 additions = 5;
+  uint32 deletions = 6;
+  bool counts_known = 7;
+  bool truncated = 8;
+  string open_path = 9; // confined relative path, empty when not previewable
+}
+
+message AgentMessagesRequest {
+  string session = 1;
+  uint32 tail = 2;       // last N; 0 = 50
+  string before_id = 3;  // paging backwards
+  string after_id = 4;   // cached tail, inclusive so a streaming message can change
+  string first_id = 5;   // first cached message
+  bytes prefix_hash = 6; // hash of cached range excluding after_id
+}
+
+message AgentMessagePage {
+  string session = 1;
+  repeated AgentMessage messages = 2;
+  bool has_more = 3;
+  bool reset = 4;       // cached range no longer matches; replace it
+  bool has_newer = 5;   // continue incremental catch-up
+}
+
+message PendingInteraction {
+  string id = 1;
+  string session = 2;
+  string kind = 3;  // approval | question | queued_message
+  string prompt = 4;
+  repeated string options = 5;  // exactly what the provider offers
+  repeated InteractionQuestion questions = 6;
+  bool optional = 7; // Nonblocking provider question; collapsed by default.
+}
+
+message InteractionQuestion {
+  string id = 1;
+  string header = 2;
+  string prompt = 3;
+  repeated QuestionOption options = 4;
+  bool multi_select = 5;
+  bool allow_text = 6;
+}
+message QuestionOption {
+  string id = 1;
+  string label = 2;
+  string description = 3;
+}
+message QuestionAnswer {
+  string question_id = 1;
+  repeated string option_ids = 2;
+  string text = 3;
+}
+
+message AgentEvent {
+  oneof ev {
+    AgentSessionPage list_changed = 1;
+    AgentMessage message = 2;
+    AgentSession state = 3;
+    PendingInteraction interaction = 4;
+    string interaction_resolved = 5;
+  }
+}
+
+message AgentSendRequest {
+  string op_id = 1;
+  string session = 2;
+  string text = 3;
+  repeated AgentAttachment attachments = 4;
+  // An OpResult.unconfirmed token: the user checked the desktop app and that
+  // earlier write was not delivered. It stops blocking, then this sends.
+  string release_unconfirmed = 5;
+}
+
+// Bytes are transferred inside the authenticated, end-to-end encrypted RPC.
+// The receiver chooses storage paths; caller-supplied paths are never accepted.
+message AgentAttachment {
+  string name = 1;
+  string media_type = 2;
+  bytes data = 3;
+}
+
+message AgentRespondRequest {
+  string op_id = 1;
+  string interaction = 2;
+  string option = 3;
+  string answer = 4;
+  string session = 5; // required for Locked Use; binds the approval to its session
+  repeated QuestionAnswer answers = 6;
+}
+
+message AgentInterruptRequest {
+  string op_id = 1;
+  string session = 2;
+}
+
+message AgentFilesRequest {
+  string session = 1;
+  string path = 2;  // relative to the session cwd
+}
+
+message FileEntry {
+  string name = 1;
+  bool dir = 2;
+  uint64 size = 3;
+  uint64 modified_unix = 4;
+}
+
+message FileList {
+  string path = 1;
+  repeated FileEntry entries = 2;
+}
+
+message AgentFileRequest {
+  string session = 1;
+  string path = 2;
+  uint64 max_bytes = 3;
+}
+
+message FileContent {
+  string path = 1;
+  bytes content = 2;
+  bool truncated = 3;
+}
+
+message AgentGitRequest {
+  string session = 1;
+  uint32 limit = 2;
+  string diff_commit = 3;  // when set, returns that commit's diff instead of the log
+}
+
+message GitCommit {
+  string hash = 1;
+  string author = 2;
+  uint64 ts_unix = 3;
+  string subject = 4;
+}
+
+message GitLog {
+  repeated GitCommit commits = 1;
+  string diff = 2;
+}
+
+// Desktop Chat mode: the ordinary conversations of the Claude app ("Claude"
+// mode) and the ChatGPT app (ChatGPT mode). They have no transcript on disk;
+// The daemon reads the typed local ChatGPT catalog or cached Claude AX history;
+// messages and controls still use Accessibility.
+// provider: claude | codex (the ChatGPT app, bundle com.openai.codex).
+message AgentChatsRequest {
+  string provider = 1;
+  bool full_history = 2; // request cached full history; AX rebuilds when due, requires agent.control
+  string op_id = 3; // binds desktop loading/control to Locked Use
+}
+
+// What the desktop app's sidebar lists. Read-only: never switches modes.
+message AgentChatCatalog {
+  string provider = 1;
+  bool app_running = 2;
+  bool chat_mode = 3;           // the app currently shows its Chat mode
+  repeated AgentChat chats = 4; // sidebar order
+  string current = 5;           // session id of the conversation on screen, if any
+  string new_session = 6;       // session id that starts a new conversation on first send
+  // "agent" or "chat" while another operation holds the app on this Mac (a
+  // chat operation fails at once against an agent; pick another Mac).
+  string busy = 7;
+  bool history_complete = 9;
+  string history_warning = 10;
+  bool agent_working = 8;       // one of the app's agent sessions is running
+}
+
+message AgentChat {
+  string id = 1;                // an agent session id (AgentSession.mode = chat)
+  string title = 2;
+  bool current = 3;
+}
+
+// Switches the app to its Chat mode and shows one conversation: `chat` is a
+// session id from the catalog; empty opens a new conversation. Needs an
+// unlocked console. The answer is the opened AgentSession.
+message AgentChatOpenRequest {
+  string provider = 1;
+  string chat = 2;
+  string op_id = 3; // binds desktop loading/control to Locked Use
+}
+
+// The model and reasoning-effort choices next to a desktop chat's prompt,
+// read from the app's own menus. Names select; details are display only.
+message AgentChatOption {
+  string name = 1;    // "Opus 5.5", "GPT-5.6 Sol", "High"
+  string detail = 2;  // the app's description, e.g. "For complex work and everyday tasks"
+  bool selected = 3;
+}
+
+message AgentChatOptions {
+  string session = 1;
+  repeated AgentChatOption models = 2;
+  repeated AgentChatOption efforts = 3; // empty when the effort cannot be set through Accessibility
+  string effort = 4;                    // the current effort as the app states it
+  string note = 5;                      // why efforts cannot be set, when so
+}
+
+// Shows the conversation, opens the pickers next to its prompt and closes
+// them without a new choice. Needs an unlocked console.
+message AgentChatOptionsRequest {
+  string session = 1;
+  string op_id = 2; // binds desktop loading/control to Locked Use
+}
+
+// Chooses a model and/or an effort by name exactly as offered; empty keeps
+// it. Needs an unlocked console. The answer is the options afterwards.
+message AgentChatSetOptionsRequest {
+  string session = 1;
+  string model = 2;
+  string effort = 3;
+  string op_id = 4; // binds desktop loading/control to Locked Use
+}
+
+// Agent Halo browser: JSON must validate against the closed Rust Request enum.
+message BrowserCallRequest { string op_id = 1; string json = 2; }
+message BrowserSetupRequest { bool install = 1; }
+message BrowserStatus {
+  bool installed = 1;
+  bool connected = 2;
+  string extension_path = 3;
+  string message = 4;
+}
+
+// Operates only the dedicated tmux session associated with this agent. The
+// daemon resolves cwd from its catalog; clients cannot supply a shell command.
+message AgentTerminalRequest {
+  string session = 1;
+  string op_id = 2;
+  enum Action { START = 0; END = 1; RESTART = 2; }
+  Action action = 3;
+}
+
+// A user-selected shell block, bound to the provider session's server-side cwd.
+message TerminalRunRequest {
+  string session = 1;
+  string op_id = 2;
+  string code = 3;
+  string language = 4;
+  string source_message = 5;
+  string cwd = 6; // exact directory confirmed by the user; server rejects changes
+  bool auto_return = 7;
+}
+message TerminalRunsRequest { string session = 1; }
+message TerminalRunList { repeated TerminalRun runs = 1; }
+message TerminalRun {
+  string id = 1;
+  string session = 2;
+  string code = 3;
+  string language = 4;
+  string source_message = 5;
+  string cwd = 6;
+  string state = 7; // running | completed | unavailable
+  string output = 8;
+  bool truncated = 9;
+  bool exit_known = 10;
+  sint32 exit_code = 11;
+  uint64 started_unix = 12;
+  string return_state = 13; // applied | pending | unknown | rejected | empty (not recorded)
+  string return_owner = 14; // authenticated initiating device; empty for manual return
+  bool return_ready = 15; // fresh provider idle evidence; send still enforces its own guards
+}
+
+// Candidate registration is same-user/local only; an empty request reads it.
+message DevicePresenceRequest { bytes public_key = 1; }
+message NetworkPresenceRequest {
+  string device_id = 1;
+  bool grant_locked_control = 2;
+  bool revoke = 3;
+}
+message PresenceEnrollment {
+  bytes binding = 1;
+  repeated bytes roster_entries = 2;
+}
+message DeviceInstallPresenceRequest { PresenceEnrollment enrollment = 1; }
+message PresenceInfo {
+  bytes public_key = 1;
+  PresenceEnrollment enrollment = 2;
+  bool enrolled = 3; // Rust-verified candidate matches the active enrolled key.
+}

@@ -1,0 +1,760 @@
+// The app shells' contract (ARCHITECTURE §3.7): the shell sends Intents,
+// performs Effects, and renders whatever ViewModel it is given. Nothing
+// here carries trust: the core decides, the shell displays.
+syntax = "proto3";
+
+package muster.app;
+
+// One class per message for Kotlin and Java shells.
+option java_multiple_files = true;
+
+import "muster.proto";
+
+// --------------------------------------------------------------- intents
+
+message Intent {
+  reserved 35; // Removed provider CLI session creation.
+  reserved "agent_create";
+  // Never sent by a shell: start-up loads through Refresh, a presence
+  // answer arrives as the Authenticate effect's result, and drafts are
+  // captured by ComposerAction.
+  reserved 1, 18, 83;
+  reserved "init", "presence_granted", "chat_draft";
+  oneof it {
+    Refresh refresh = 2;
+    Navigate navigate = 3;
+    Dismiss dismiss = 4;
+
+    CreateNetwork create_network = 10;
+    ShowInvite show_invite = 11;
+    JoinNetwork join_network = 12;
+    DecideJoin decide_join = 13;
+    RemoveDevice remove_device = 14;
+    SetScopes set_scopes = 15;
+    SetPolicy set_policy = 16;
+    SelectDevice select_device = 17;
+    SetRelay set_relay = 19;
+    RequestAccessibility request_accessibility = 20;
+    OpenBrowser open_browser = 80;
+    BrowserSetup browser_setup = 81;
+    BrowserRun browser_run = 82;
+    SetCover set_cover = 21;
+    CancelLockedUse cancel_locked_use = 22;
+    SetDeviceLockedUse set_device_locked_use = 86;
+    DesktopSetupAction desktop_setup_action = 23;
+    DesktopUpdateAction desktop_update_action = 24;
+
+    OpenAgents open_agents = 30;
+    OrcaCreate orca_create = 87;
+    OpenAgent open_agent = 31;
+    AgentSend agent_send = 32;
+    AgentRespond agent_respond = 33;
+    AgentInterrupt agent_interrupt = 34;
+    AgentLoadEarlier agent_load_earlier = 36;
+    OpenDesktopChats open_desktop_chats = 37;
+    DesktopChatOpen desktop_chat_open = 38;
+    ChatOptionsLoad chat_options_load = 39;
+    ChatSetOptions chat_set_options = 29;
+    ComposerAction composer_action = 84;
+    UploadDiagnostics upload_diagnostics = 85;
+    ComposerComplete composer_complete = 88;
+
+    OpenTerminals open_terminals = 40;
+    OpenTerminal open_terminal = 41;
+    TerminalKey terminal_key = 42;
+    TerminalText terminal_text = 43;
+    TerminalCreate terminal_create = 44;
+    TerminalResize terminal_resize = 45;
+    OpenSsh open_ssh = 46;
+    CloseTerminal close_terminal = 47;
+    TerminalPaste terminal_paste = 48;
+    SessionTerminalAction session_terminal_action = 49;
+    CodeAction code_action = 132;
+
+    OpenFiles open_files = 50;
+    OpenFile open_file = 51;
+    OpenGit open_git = 52;
+    OpenChange open_change = 53;
+    OpenFileLink open_file_link = 54;
+
+    SetPushToken set_push_token = 60;
+  }
+}
+
+message DesktopUpdateAction {
+  enum Action { CHECK = 0; DOWNLOAD = 1; INSTALL = 2; }
+  Action action = 1;
+}
+message DesktopUpdateView {
+  bool supported = 1;
+  string status = 2;
+  string version = 3;
+  string error = 4;
+  bool can_check = 5;
+  bool can_download = 6;
+  bool can_install = 7;
+}
+message DesktopSetupAction {
+  enum Action { SHOW = 0; DISMISS = 1; INSTALL = 2; ITERM = 3; CHECK = 4; RESTART = 5; }
+  Action action = 1;
+}
+message SetDeviceLockedUse { string device_id = 1; bool on = 2; }
+message DeviceLockedUseView {
+  string device_id = 1;
+  bool on = 2;
+  bool enabled = 3;
+  bool busy = 4;
+  string status = 5;
+}
+message CancelLockedUse {}
+message Refresh {}
+// Back, or straight to a screen.
+message Navigate {
+  Screen screen = 1;
+  bool back = 2;
+  // Native navigation can pop several pages. Rust validates the complete
+  // displayed path before applying it; zero keeps the legacy one-page Back.
+  uint32 back_count = 3;
+  repeated Screen expected_path = 4;
+}
+message Dismiss {
+  string toast_id = 1;
+}
+
+message CreateNetwork {
+  string name = 1;
+  string vnet_cidr = 2;
+}
+message ShowInvite {
+  uint32 ttl_secs = 1;
+}
+message JoinNetwork {
+  string invite_text = 1;  // from the QR
+  string device_name = 2;
+  string device_kind = 3;
+}
+message DecideJoin {
+  string device_id = 1;
+  bool approve = 2;
+  repeated string scopes = 3;
+  string reason = 4;
+}
+message RemoveDevice {
+  string device_id = 1;
+}
+message SetScopes {
+  string device_id = 1;
+  repeated string scopes = 2;
+  string role = 3;
+}
+// The relay this device registers with (host:port: QUIC + TLS, or plain UDP
+// to a loopback test relay). A desktop's daemon remembers it; a phone learns
+// it from the invite and may change it here.
+message SetRelay {
+  string relay = 1;
+}
+// Ask the OS for the permission that lets this device's daemon drive
+// other apps (macOS Accessibility); a desktop only.
+message RequestAccessibility {}
+// The privacy cover on this desktop (device_id empty) or on a member's
+// (device_id set; needs locked.control and a presence proof). Dropping
+// the cover locally asks for local authentication first.
+message SetCover {
+  bool on = 1;
+  string device_id = 2;
+}
+message SetPolicy {
+  muster.v1.Policy policy = 1;
+}
+// Which remote device the agent/terminal screens act on.
+message SelectDevice {
+  string device_id = 1;
+}
+
+message OrcaCreate { string device_id = 1; string directory = 2; string agent = 3; }
+message OpenAgents { string device_id = 1; } // "*" = all devices; empty = current target
+message OpenAgent {
+  string session = 1;
+  string device_id = 2;
+}
+message AgentSend {
+  string text = 1;
+  repeated muster.v1.AgentAttachment attachments = 2;
+  string draft_id = 3;
+  // ChatView.unconfirmed.token: the user checked the Mac and the earlier
+  // send never arrived. Releases it, then sends this.
+  string release_unconfirmed = 4;
+}
+// Rust issues the opaque key; a shell only reports edits to that composer.
+message ChatDraft {
+  string key = 1;
+  string text = 2;
+  string revision = 3;
+}
+// Snapshot the platform's input buffer together with a user action. Rust
+// validates its opaque key and decides whether the action saves the draft.
+// No message is sent for individual keystrokes. Nested wrappers are invalid.
+message ComposerAction {
+  ChatDraft draft = 1;
+  Intent action = 2;
+}
+message AgentRespond {
+  string interaction = 1;
+  string option = 2;
+  string answer = 3;
+  repeated muster.v1.QuestionAnswer answers = 4;
+}
+message AgentInterrupt {}
+message AgentLoadEarlier { bool all = 1; }
+// Desktop Chat mode on one device: `provider` claude | codex. Lists the
+// conversations the desktop app's sidebar shows (read-only).
+// The Chat tab: `provider`'s conversations (empty = the last one shown,
+// else Claude). Every Mac signed in to the account lists the same chats, so
+// the core picks one that can show them now: the app running, no agent
+// operation holding it, preferring one already in Chat mode.
+message OpenDesktopChats {
+  reserved 1; // device_id: there is no device choice
+  string provider = 2;
+}
+// The open native agent/chat session's model and effort choices: read from the app's
+// menus on the Mac through Locked Use, or chosen by name as offered.
+message ChatOptionsLoad {}
+message ComposerComplete {}
+message ChatSetOptions {
+  string model = 1;
+  string effort = 2;
+}
+// Open one listed conversation (`chat` = its session id) on the desktop,
+// then show it. Empty `chat` starts a new conversation: shown here at once
+// and on the desktop by its first send (which works through Locked Use),
+// or on the desktop right away with `desktop` (this also switches the app
+// to its Chat mode; the Mac must be unlocked).
+message DesktopChatOpen {
+  string chat = 1;
+  bool desktop = 2;
+}
+
+message OpenTerminals { string device_id = 1; }
+message OpenTerminal {
+  string session = 1;
+  string device_id = 2;
+}
+message TerminalKey {
+  string key = 1;  // enter, tab, up, ctrl-c…; the core maps it to bytes
+}
+message TerminalText {
+  string text = 1;
+}
+message TerminalCreate {
+  string profile = 1;
+}
+// Text the user pasted into the terminal (from the clipboard). Rust makes
+// it input: line breaks become Enter, control characters are dropped, and it
+// is bracketed when the program asked for bracketed paste.
+// Sends this device's diagnostics (e.g. the iOS performance log the shell
+// read) to a member's daemon, which saves them under /tmp/muster-reports.
+message UploadDiagnostics {
+  string device_id = 1;
+  string kind = 2;
+  bytes data = 3;
+}
+message TerminalPaste {
+  string text = 1;
+}
+message TerminalResize {
+  uint32 cols = 1;
+  uint32 rows = 2;
+}
+// An in-app SSH session over a forward stream (phones).
+message OpenSsh {
+  uint32 port = 1;  // 0 = 22
+  string user = 2;
+  uint32 cols = 3;
+  uint32 rows = 4;
+}
+message CloseTerminal {}
+
+// The open chat session's working tree: a directory listing, one file,
+// the git log or one commit's diff. All relative to the session cwd.
+message OpenFiles {
+  string path = 1;
+}
+message OpenFile {
+  string path = 1;
+}
+message OpenFileLink {
+  string url = 1;
+}
+message OpenChange {
+  string summary_id = 1;
+  string path = 2;
+}
+message OpenGit {
+  string diff_commit = 1;  // empty = the log
+}
+
+// The platform's push token (phones): kind 1 APNs, 2 FCM, 3 HarmonyOS.
+// The relay wakes this device with it; an empty token clears it.
+message SetPushToken {
+  uint32 kind = 1;
+  bytes token = 2;
+}
+
+// --------------------------------------------------------------- effects
+
+// The shell performs one and answers with EffectResult under the same id.
+message Effect {
+  // Never emitted by the core.
+  reserved 4, 5, 6;
+  reserved "log", "keep_awake", "haptic";
+  oneof ef {
+    ScanQr scan_qr = 1;
+    Authenticate authenticate = 2;
+    Notify notify = 3;
+    OpenUrl open_url = 7;
+    Cover cover = 8;
+    LocalAuth local_auth = 9;
+    AuthorizeDesktopHelper authorize_desktop_helper = 10;
+    RestartDesktop restart_desktop = 11;
+    PrepareDesktopUpdate prepare_desktop_update = 12;
+    FinishDesktopUpdate finish_desktop_update = 13;
+    ActivateNetwork activate_network = 14;
+  }
+}
+
+// Black out every display (on) or clear it (off); macOS desktops only.
+message Cover {
+  bool on = 1;
+}
+// Ask the OS to authenticate the user (Touch ID / password); ok or not.
+message LocalAuth {
+  string reason = 1;
+}
+
+message PrepareDesktopUpdate {}
+// Ask the OS to activate a usable path; this carries no application payload.
+// A successful OS hint never substitutes for Rust's authenticated connection.
+message ActivateNetwork { string address = 1; uint32 port = 2; uint32 timeout_ms = 3; }
+message FinishDesktopUpdate { bool exit = 1; }
+message RestartDesktop {}
+message AuthorizeDesktopHelper {}
+message ScanQr {}
+// Local authentication (biometrics / passcode); the platform then signs
+// `message` with the presence key and returns the DER signature as data.
+message Authenticate {
+  string reason = 1;
+  bytes message = 2;
+}
+message Notify {
+  string title = 1;
+  string body = 2;
+  string session = 3;
+}
+message OpenUrl {
+  string url = 1;
+}
+
+message EffectResult {
+  bool ok = 1;
+  string error = 2;
+  bytes data = 3;
+  string text = 4;
+}
+
+// Lifecycle events the shell reports.
+enum Lifecycle {
+  FOREGROUND = 0;
+  BACKGROUND = 1;
+  NETWORK_CHANGED = 2;
+  TERMINATING = 3;
+}
+
+// -------------------------------------------------------------- viewmodel
+
+enum Screen {
+  ONBOARDING = 0;
+  HOME = 1;
+  INVITE = 2;
+  JOIN = 3;
+  DEVICE = 4;
+  AGENTS = 5;
+  CHAT = 6;
+  TERMINALS = 7;
+  TERMINAL = 8;
+  SETTINGS = 9;
+  FILES = 10;
+  FILE = 11;
+  GIT = 12;
+  BROWSER = 13;
+  DESKTOP_CHATS = 14;
+}
+
+message ViewModel {
+  reserved 14; // The presence handshake: Authenticate effects carry it.
+  reserved "presence";
+  Screen screen = 1;
+  repeated Toast toasts = 2;
+  bool busy = 3;
+  muster.v1.DeviceInfo self = 4;
+  muster.v1.NetworkStatus network = 5;
+  repeated muster.v1.PendingJoin pending = 6;
+  string selected_device = 7;
+  InviteView invite = 8;
+  JoinView join = 9;
+  AgentsView agents = 10;
+  ChatView chat = 11;
+  TerminalsView terminals = 12;
+  TerminalView terminal = 13;
+  muster.v1.Policy policy = 15;
+  bool embedded = 16;  // the core runs its own link (phone) rather than a daemon's
+  FilesView files = 17;
+  FileView file = 18;
+  GitView git = 19;
+  // Rust-selected desktop/server targets; the network roster remains complete.
+  repeated muster.v1.MemberView service_devices = 20;
+  bool selected_device_has_services = 21;
+  bool local_device_has_services = 22;
+  BrowserView browser = 23;
+  bool can_go_back = 24; // Core-owned navigation availability for buttons/gestures.
+  DesktopSetupView desktop_setup = 25;
+  DesktopUpdateView desktop_update = 26;
+  DesktopChatsView desktop_chats = 27;
+  // The tab the screen belongs to (DESKTOP_CHATS, AGENTS, TERMINALS or HOME):
+  // the switcher's selection, and the list beside a Mac's split view.
+  Screen workspace = 28;
+  bool can_invite = 29; // Rust-owned local admin capability; shells only render it.
+  AccessView device_access = 30;
+  AccessView join_access = 31;
+  repeated DeviceLockedUseView device_locked_use = 33;
+  DeviceActions device_actions = 32; // for selected_device on the DEVICE screen
+  repeated Screen navigation_path = 34; // visible root through current screen
+}
+
+// What the selected device's page offers, decided by Shared Rust from the
+// roster, this device's role and the core's mode. Remote calls are still
+// authorized by the target; these only decide what is shown.
+message DeviceActions {
+  bool can_cover = 1;        // another member that is a desktop
+  bool can_ssh = 2;          // in-app SSH from a phone core to another member
+  bool show_access = 3;      // the access summary has something to show
+  bool can_edit_access = 4;  // this device is an admin and the member is another
+  bool can_remove = 5;
+}
+
+message DesktopChatsView {
+  string device_id = 1;   // the Mac the core picked; empty while picking
+  string device_name = 2;
+  string provider = 3;
+  muster.v1.AgentChatCatalog catalog = 4;
+  bool loading = 5;
+  string error = 6;
+  string opening = 7; // the chat being opened ("new" for a new one)
+  reserved 8;
+  reserved "providers";
+  repeated ChatProvider choices = 9; // ordered by Shared Rust
+}
+
+message ChatProvider {
+  string id = 1;     // the provider: claude | codex
+  string label = 2;  // the app the user knows it as: Claude | ChatGPT
+}
+
+// A member's grants as an admin edits them: Chats, Agents and Terminals, each
+// behind a device-level switch, then everything else. The shell starts from
+// the items marked granted, greys an item whose `requires_toggle` section
+// switch is off, and sends every scope still on back with SetScopes or
+// DecideJoin. Every scope the member holds appears exactly once, so saving
+// never drops one silently.
+message AccessView {
+  repeated AccessSection sections = 1;
+}
+
+message AccessSection {
+  string id = 1;        // chats | agents | terminals | other | earlier
+  string title = 2;
+  string footer = 3;
+  string summary = 4;   // one line for read-only display, e.g. "Codex, Claude Code"
+  AccessItem toggle = 5; // the device-level switch; unset for other / earlier
+  repeated AccessItem items = 6;
+}
+
+message AccessItem {
+  string scope = 1;
+  string label = 2;
+  bool granted = 3;
+  bool requires_toggle = 4; // counts only while the section's toggle is on
+}
+
+message DesktopSetupView {
+  bool visible = 1;
+  bool accessibility_ready = 2;
+  bool plugin_ready = 3;
+  bool checking = 4;
+  bool can_install = 5;
+  string plugin_message = 6;
+  bool iterm_ready = 7;
+  string iterm_message = 8;
+  string error = 9;
+  bool restart_required = 10;
+  bool can_restart = 11;
+  bool show_iterm = 12;
+  bool ready = 13; // every required permission and installation is in place
+  // The terminal app the iterm_* fields describe: "iTerm2" or "Ghostty".
+  string terminal_app = 14;
+}
+
+message Toast {
+  string id = 1;
+  string text = 2;
+  bool error = 3;
+}
+
+message InviteView {
+  string text = 1;
+  uint64 expires_unix = 2;
+}
+
+message JoinView {
+  string phase = 1;  // idle | connecting | waiting_approval | joined | failed
+  string message = 2; // what to show for the phase
+}
+
+message AgentsView {
+  repeated muster.v1.MemberView create_hosts = 5;
+  repeated string create_agents = 6;
+  bool creating = 7;
+  repeated string errors = 4;
+  string device_id = 1;
+  repeated muster.v1.AgentSession sessions = 2;
+  bool loading = 3;
+}
+
+message ChatView {
+  // The messages arrive once, in `timeline`; a flat copy doubled every view.
+  reserved 3;
+  reserved "messages";
+  string device_id = 1;
+  muster.v1.AgentSession session = 2;
+  repeated muster.v1.PendingInteraction interactions = 4;
+  bool has_earlier = 5;
+  bool sending = 6;
+  string locked_use_status = 7;
+  bool can_cancel_locked_use = 8;
+  repeated ChatBlock timeline = 9;
+  string sent_draft_id = 10; // only after an Applied/Duplicate send receipt
+  uint64 attachment_bytes_limit = 11;
+  uint32 attachment_count_limit = 12;
+  bool loading = 13;
+  string load_error = 14;
+  string responding_interaction = 15;
+  string response_error = 16;
+  bool response_unknown = 17;
+  muster.v1.AgentChatOptions chat_options = 18; // desktop chats, once loaded
+  bool chat_options_busy = 19;
+  string chat_options_error = 20;
+  ChatDraft draft = 21;
+  // Queued messages: in `queue` only, never among `interactions`.
+  QueuedMessagesView queue = 22;
+  bool can_interrupt = 23;     // a turn is running
+  bool can_choose_model = 24;  // a desktop chat: model and effort options
+  bool can_browse_files = 25;  // an agent session: its files and git history
+  string provider_label = 26;  // Claude | Codex | ChatGPT (a ChatGPT-app chat)
+  uint32 message_count = 27;   // transcript messages loaded, empty ones included
+  // The last send was refused: an earlier one has no provider receipt yet.
+  UnconfirmedSend unconfirmed = 28;
+  uint64 content_revision = 29; // changes even when an existing message grows
+  // Empty-composer hint, never user input.
+  string composer_placeholder = 30;
+  // Explicit suggestion the user may choose to copy into their editable draft.
+  string composer_suggestion = 31;
+  bool can_complete = 32;
+  bool completing = 33;
+  string completion_error = 34;
+  repeated TraceSpan trace = 35; // loaded transcript execution evidence, Rust projected
+  SessionTerminalView terminal = 36;
+  CodePreview code_preview = 37;
+  repeated CodeRunView code_runs = 38;
+  string code_error = 39;
+}
+
+// The shell offers to release the earlier send once the user has checked the
+// conversation on the Mac (AgentSend.release_unconfirmed).
+message UnconfirmedSend {
+  string token = 1;
+  string message = 2; // the Mac's refusal, naming the earlier send
+}
+
+message QueuedMessagesView {
+  repeated muster.v1.PendingInteraction messages = 1;
+  bool submitting = 2;
+  string error = 3;
+  bool outcome_unknown = 4;
+}
+
+message ChatBlock {
+  string id = 1;
+  string kind = 2; // message | working | activity | summary | compact_context | reasoning | diff | notice
+  muster.v1.AgentMessage message = 3;
+  repeated muster.v1.AgentMessage activity = 4;
+  bool completed = 5;
+  repeated ChatActivityRow activity_rows = 6;
+  repeated ChatBlock children = 7; // ordered prose and consecutive tool groups within Working
+  string title = 8;
+  bool default_expanded = 9;
+  repeated ChatDiffFile diffs = 10; // parsed and bounded by Shared Rust
+  repeated MessagePart parts = 11;
+}
+
+// Read-only transcript presentation, prepared by Shared Rust. These labels do
+// not attest tool success or expose a new operation/controller capability.
+message ChatActivityRow {
+  string id = 1;
+  string title = 2;
+  string detail = 3;
+  string category = 4; // shell | read | search | tool
+  string tool_name = 5;
+  bool is_result = 6;
+  string output = 7; // paired output only when provider tool_call_id matches
+  string status = 8; // running | completed | failed | interrupted | unknown; source evidence only
+}
+
+// Display-only unified patches. Zero line number means unknown/not applicable.
+message ChatDiffFile {
+  string id = 1;
+  string path = 2;
+  uint32 added = 3;
+  uint32 removed = 4;
+  repeated ChatDiffLine lines = 5;
+  string patch = 6; // complete supplied patch for this file, for Copy
+  bool truncated = 7;
+}
+message ChatDiffLine {
+  string kind = 1; // add | delete | context | meta
+  string text = 2;
+  uint32 old_line = 3;
+  uint32 new_line = 4;
+}
+
+message TerminalsView {
+  string device_id = 1;
+  repeated muster.v1.TerminalSession sessions = 2;
+  bool ssh_available = 3;
+  bool loading = 4;
+  repeated string errors = 5;
+  bool can_create = 6; // a new window on one device (not the all-devices list)
+}
+
+// A rendered grid: the shell draws rows and the cursor, nothing else.
+message TerminalView {
+  string device_id = 1;
+  string session = 2;
+  string source = 3;  // iterm2 | pty | ssh
+  uint32 cols = 4;
+  uint32 rows = 5;
+  repeated muster.v1.TerminalLine lines = 6;
+  uint32 cursor_x = 7;
+  uint32 cursor_y = 8;
+  bool ended = 9;
+  string status = 10;
+  // true: this grid is ours (an SSH or PTY session), the shell reports its
+  // size with TerminalResize; false: someone's live window (iTerm2), the
+  // shell fits cols × rows as given and never resizes it.
+  bool resizable = 11;
+  // The shell offers Paste (edit menu, key bar, the platform shortcut).
+  bool can_paste = 12;
+}
+
+message FilesView {
+  string device_id = 1;
+  string session = 2;
+  string path = 3;
+  repeated muster.v1.FileEntry entries = 4;
+  bool loading = 5;
+}
+
+message FileView {
+  string device_id = 1;
+  string session = 2;
+  string path = 3;
+  bytes content = 4;
+  bool truncated = 5;
+  bool loading = 6;
+  bool is_diff = 7;
+  string current_path = 8;
+  string error = 9;
+  reserved 10, 11, 12;
+}
+
+message GitView {
+  string device_id = 1;
+  string session = 2;
+  repeated muster.v1.GitCommit commits = 3;
+  string diff_commit = 4;  // set when `diff` is one commit's diff
+  string diff = 5;
+  bool loading = 6;
+}
+
+message OpenBrowser { string device = 1; string draft = 2; }
+message BrowserSetup { bool install = 1; }
+message BrowserRun { string json = 1; }
+message BrowserView {
+  string device = 1;
+  bool local = 2;
+  string draft = 3;
+  string result = 4;
+  muster.v1.BrowserStatus status = 5;
+  bool busy = 6;
+}
+
+// Bounded display-only execution trace. Missing timestamps/status stay unknown.
+message TraceSpan {
+  string id = 1;
+  string kind = 2; // tool | turn | reasoning | status
+  string title = 3;
+  string detail = 4;
+  string status = 5;
+  uint64 started_unix = 6;
+  uint64 ended_unix = 7;
+  bool duration_known = 8;
+  uint64 duration_seconds = 9; // approximate: source timestamps have second precision
+}
+
+message SessionTerminalAction {
+  enum Action { START = 0; END = 1; RESTART = 2; DETACH = 3; }
+  Action action = 1;
+}
+message SessionTerminalView {
+  bool available = 1;
+  string cwd = 2;
+  bool busy = 3;
+  string error = 4;
+  bool attached = 5;
+  bool can_end = 6;
+  bool can_restart = 7;
+}
+
+message MessagePart {
+  string kind = 1; // markdown | code
+  string text = 2;
+  string language = 3;
+  string command_id = 4; // nonempty only for complete, executable shell fences
+}
+message CodeAction {
+  enum Action { PREVIEW = 0; RUN = 1; DISMISS = 2; RETURN = 3; REFRESH = 4; }
+  Action action = 1;
+  string id = 2;
+  bool auto_return = 3;
+}
+message CodePreview {
+  string id = 1;
+  string code = 2;
+  string language = 3;
+  string cwd = 4;
+  string device_name = 5;
+}
+message CodeRunView {
+  muster.v1.TerminalRun run = 1;
+  string delivery = 2; // ready | sending | sent | unknown | rejected
+  string error = 3;
+  bool can_return = 4;
+}

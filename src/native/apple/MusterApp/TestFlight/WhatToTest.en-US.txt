@@ -1,0 +1,5 @@
+Please test pairing with your own Mac, device connectivity, loading and sending agent messages, conversation switching and back navigation, and foreground/background recovery.
+
+Remote features require an Apple-silicon Mac with Muster and the corresponding host application running. For failed or uncertain sends, inspect the original host conversation before retrying to avoid duplicates.
+
+Report the version/build, device, time and reproduction steps. Setup and support: https://www.linsheng.dev/muster/support.html

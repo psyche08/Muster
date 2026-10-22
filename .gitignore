@@ -1,0 +1,55 @@
+# Finder and editor state
+.vscode/
+.idea/
+.DS_Store
+**/.DS_Store
+*.xcuserstate
+xcuserdata/
+
+# Generated build and dependency state
+**/.build/
+**/build/
+**/DerivedData/
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/.hvigor/
+**/.appanalyzer/
+**/oh_modules/
+**/.swiftpm/
+**/target/
+**/node_modules/
+**/__pycache__/
+*.py[cod]
+local.properties
+
+# Runtime output
+*.log
+*.sock
+
+# Local signing, identity, and enrollment material
+*.blob
+*.key
+*.crt
+*.token
+*.sepblob
+*.p12
+*.pfx
+*.mobileprovision
+*.xcent
+*.xcent.der
+
+/keys
+
+# An external task scheduler's personal access token, kept beside the checkout
+# for `muster acp` (ADR 0009). The CLI's own home is ~/.multica; this rule is
+# here because a token in the working tree is one `git add -A` from being
+# published, and the pattern covers both a file and a directory.
+/.multica
+
+# Local environment and signing API secrets (tracked examples remain tracked)
+.env
+.env.*
+!.env.example
+!.env.sample
+*.p8

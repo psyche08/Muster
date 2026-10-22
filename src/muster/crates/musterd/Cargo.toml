@@ -1,0 +1,54 @@
+[package]
+name = "musterd"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The device daemon: identity, roster, link, and the Device/Network/Terminal/Agent services over muster-rpc"
+
+[features]
+# The Secure Enclave device key on macOS (muster-platform's SepSign build);
+# build.rs adds the Swift runtime's rpath to the binary.
+sep = ["muster-platform/sep"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "musterd"
+path = "src/main.rs"
+
+[dependencies]
+muster-browser = { path = "../muster-browser" }
+muster-core = { path = "../muster-core" }
+muster-net = { path = "../muster-net" }
+muster-proto = { path = "../muster-proto" }
+muster-store = { path = "../muster-store" }
+muster-rpc = { path = "../muster-rpc" }
+muster-terminal = { path = "../muster-terminal" }
+muster-agent = { path = "../muster-agent" }
+muster-platform = { path = "../muster-platform" }
+muster-paths = { path = "../muster-paths" }
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+clap.workspace = true
+log.workspace = true
+env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+quinn.workspace = true
+libc.workspace = true
+reqwest.workspace = true
+async-trait = "0.1"
+
+[dev-dependencies]
+futures-util.workspace = true
+muster-relay = { path = "../muster-relay" }
+tempfile = "3"
+
+[lints]
+workspace = true

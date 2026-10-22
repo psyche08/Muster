@@ -1,0 +1,30 @@
+[package]
+name = "muster-relay"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The dumb relay: authenticated registration, forwarding by device id, mailbox, reflection"
+
+[dependencies]
+muster-core = { path = "../muster-core" }
+muster-net = { path = "../muster-net", default-features = false }
+anyhow.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+hex.workspace = true
+log.workspace = true
+rand.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+
+[dev-dependencies]
+rcgen.workspace = true
+env_logger.workspace = true
+
+[lints]
+workspace = true

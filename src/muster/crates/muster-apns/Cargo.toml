@@ -1,0 +1,22 @@
+[package]
+name = "muster-apns"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "muster-apns"
+description = "APNs provider behind the relay's push hook: silent wake-ups over HTTP/2"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+hex.workspace = true
+log.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

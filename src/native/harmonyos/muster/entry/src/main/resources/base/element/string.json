@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Muster" },
+    { "name": "entry_desc", "value": "Muster" },
+    { "name": "camera_reason", "value": "Muster scans the invite QR code shown on the admin's device." },
+    { "name": "biometric_reason", "value": "Muster signs presence proofs for sensitive actions." }
+  ]
+}

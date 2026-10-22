@@ -1,0 +1,13 @@
+[package]
+name = "muster-paths"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Where a user's daemon keeps its files on each platform (state directory, socket, log); shared by musterd and the command line"
+
+[dependencies]
+
+[lints]
+workspace = true

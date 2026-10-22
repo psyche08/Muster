@@ -1,0 +1,43 @@
+[package]
+name = "muster-net"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "One QUIC link per peer: pinned hardware-signed TLS, direct-or-relay paths, service streams, roster gossip, forward streams and the vnet"
+
+[features]
+default = ["vnet"]
+vnet = ["dep:tun"]
+
+[dependencies]
+muster-core = { path = "../muster-core" }
+anyhow.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+log.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+rustls-pemfile = "2"
+webpki-roots = "1"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rcgen.workspace = true
+x509-parser.workspace = true
+sha2.workspace = true
+rand.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+hickory-proto.workspace = true
+if-addrs.workspace = true
+libc.workspace = true
+tun = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = "1"
+env_logger.workspace = true
+muster-relay = { path = "../muster-relay" }
+
+[lints]
+workspace = true

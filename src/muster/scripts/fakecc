@@ -1,0 +1,24 @@
+#!/bin/sh
+# See check-apple.sh: a C "compiler" for cargo check on Apple targets.
+target="arm64-apple-darwin"
+out=""
+prev=""
+for a in "$@"; do
+  case "$prev" in
+    -o) out="$a" ;;
+    -target|--target) target="$a" ;;
+  esac
+  case "$a" in
+    --target=*) target="${a#--target=}" ;;
+    -E) exec clang -E -x c -nostdinc -isystem "$(clang -print-resource-dir)/include" "$@" ;;
+    --version|-dumpversion|-v) exec clang "$a" ;;
+    # cc-rs probes `-?`: a compiler that accepts it is treated as MSVC-like
+    # and then gets `-Fo` instead of `-o`. Refuse it, as clang does.
+    "-?") exit 1 ;;
+  esac
+  prev="$a"
+done
+if [ -n "$out" ]; then
+  exec clang --target="$target" -c -x c /dev/null -o "$out"
+fi
+exit 0

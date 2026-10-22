@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentHalo · Candidate Devices Page Design</title>
+<style>
+:root{color-scheme:dark;--bg:#141519;--surface:#1d1f25;--line:#353841;--text:#f0f1f4;--muted:#b0b5c2;--accent:#ffc2ab;--green:#a8dbc2;--warning:#f2cf92}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,select{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 13px;cursor:pointer}button:hover{background:#2b2e36}button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}button[aria-pressed=true]{background:#38302f;border-color:var(--accent)}button:disabled{cursor:default;color:var(--muted)}.review{max-width:1280px;margin:auto;padding:24px 28px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px}h1{font-size:26px;margin:4px 0}h2{font-size:20px;margin:0}h3{font-size:14px;margin:0 0 12px}p{margin:6px 0}.muted{color:var(--muted)}.controls{display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin:20px 0}.field{display:flex;flex-direction:column;gap:6px}.platforms{display:flex;flex-wrap:wrap;gap:6px}.shell{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface);max-width:1180px;margin:auto}.shell.mobile{max-width:430px}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 26px;border-bottom:1px solid var(--line)}.network{padding:22px 26px}.network .title{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.tag{display:inline-block;border-radius:5px;padding:2px 7px;background:#263831;color:var(--green);font-size:12px}.warn{color:var(--warning)}.attention{margin:0 26px 20px;padding:12px 16px;border-left:3px solid var(--warning);background:#292722}.columns{display:grid;grid-template-columns:330px minmax(0,1fr);border-top:1px solid var(--line)}.directory{border-right:1px solid var(--line);padding:20px 16px}.section-label{font-size:12px;color:var(--muted);margin:0 10px 10px;letter-spacing:1px}.device{display:block;text-align:left;width:100%;border:1px solid transparent;background:transparent;padding:13px 12px;margin-bottom:6px}.device strong{font-weight:600;display:block;overflow-wrap:anywhere}.device span{font-size:13px;color:var(--muted);display:block;margin-top:3px}.device .tag{display:inline;font-weight:400;margin-left:6px;color:var(--green)}.device.selected{background:#2d3039;border-color:#535968}.local{padding:0 12px 18px;margin-bottom:18px;border-bottom:1px solid var(--line)}.detail{padding:26px 30px;min-width:0;overflow-wrap:anywhere}.detail section{padding:20px 0;border-bottom:1px solid var(--line)}.detail .intro{padding-top:0}.capability{display:flex;justify-content:space-between;gap:20px;padding:8px 0}.capability span:last-child{text-align:right;color:var(--muted)}.capability .ok{color:var(--green)!important}.scope{background:#272a32;border-radius:10px;padding:14px 16px}.scope p{font-size:13px}.info{font-size:13px;color:var(--muted)}details{padding:14px 0}summary{cursor:pointer}.back{margin-bottom:16px}.foot{font-size:12px;color:var(--muted);padding:16px 26px;border-top:1px solid var(--line)}[hidden]{display:none!important}.mobile .columns{grid-template-columns:1fr}.mobile .directory{border-right:0}.mobile .detail{padding:22px}.mobile .network,.mobile .bar{padding:20px}.mobile .attention{margin:0 20px 20px}.mobile .capability{flex-wrap:wrap;gap:5px 12px}.mobile .capability span:last-child{text-align:left}.mobile .bar h2{font-size:22px}.mobile .scope{padding:12px}.ref{display:flex;gap:18px;flex-wrap:wrap;margin-top:20px;font-size:13px}a{color:var(--accent)}@media(max-width:960px){.columns{grid-template-columns:1fr}.directory{border-right:0}.detail{border-top:1px solid var(--line)}}@media(max-width:500px){.review{padding:16px 10px}.bar,.network,.detail{padding:18px}.attention{margin:0 18px 18px}.capability{flex-wrap:wrap}.controls{gap:12px}.field,select{max-width:100%}.bar{flex-wrap:wrap}.shell{border-radius:12px}}
+</style>
+</head>
+<body>
+<main class="review">
+<div class="eyebrow">AGENTHALO / DESIGN REVIEW</div><h1>Devices: From Network to Capabilities</h1>
+<p class="muted">Candidate design · Fixed sample data · No real device connections</p>
+<div class="controls">
+<div class="field"><span>Platform</span><div class="platforms" aria-label="Platform preview">
+<button data-platform="macOS" aria-pressed="true">macOS</button><button data-platform="Windows" aria-pressed="false">Windows</button><button data-platform="iOS" aria-pressed="false">iOS</button><button data-platform="Android" aria-pressed="false">Android</button><button data-platform="HarmonyOS" aria-pressed="false">HarmonyOS</button>
+</div></div>
+<label class="field">Enrollment role<select id="role"><option value="creator">Creator (enrollment authorization only)</option><option value="member">Network member</option><option value="none">Not enrolled</option></select></label>
+<label class="field">Network scenario<select id="scenario"><option value="normal">Online members access one another</option><option value="offline">Creator offline; other members remain accessible</option><option value="peer-offline">Ordinary member offline; others remain accessible</option><option value="pending">Member services pending preparation</option><option value="expired">Authorization expired for one target</option></select></label>
+</div>
+<div class="shell" id="shell">
+<header class="bar"><h2>Devices</h2><span class="info" id="platform-note">macOS · Desktop layout</span></header>
+<div class="network"><div class="title"><strong id="network-title">My device network</strong><span class="tag" id="network-state">Joined</span></div><p class="muted" id="role-line">This device joined · Last sync 17:20 (example)</p><p id="entry" class="info"></p></div>
+<div class="attention" id="attention" role="status"></div>
+<div id="empty" class="detail" hidden><h2>Connect your devices</h2><p class="muted" id="join-text"></p><p class="info">Creating or joining requires identity verification and system authentication. This preview shows entry design only.</p></div>
+<div class="columns" id="content">
+<aside class="directory" id="directory" aria-label="Device list"><div class="section-label">This device</div><div class="local"><strong id="local-name">mac-a</strong><div class="info" id="local-description">Network member · Local service status shown separately</div></div><div class="section-label">Network devices · 3</div>
+<button class="device selected" data-device="mini" aria-pressed="true"><strong>mac-c <span class="tag">Member</span></strong><span>Available: view sessions, send messages</span></button>
+<button class="device" data-device="pro" aria-pressed="false"><strong>mac-b <span class="tag">Member</span></strong><span>Available: view sessions, send messages</span></button>
+<button class="device" data-device="phone" aria-pressed="false"><strong>Another phone <span class="tag">Member</span></strong><span>Accesses devices; offers no remote services</span></button>
+<details><summary class="info">History and compatibility</summary><p class="info">Old pairings identify their source separately and do not count as network members.</p></details>
+<details><summary class="info">Network diagnostics</summary><p class="info">Inspect distribution, links, and compatibility sources here. Current blockers remain visible in the main content.</p></details></aside>
+<article class="detail" id="detail" aria-live="polite"><button class="back" id="back" hidden>Back to device list</button><section class="intro"><h2 id="device-name">mac-c</h2><p class="muted" id="device-type">Computer · Network member</p></section>
+<section><h3>Services this device can use on the selected device</h3><div id="capabilities"></div></section>
+<section><h3>Selected device access to other devices</h3><div class="scope"><strong>View sessions · Send messages · Respond to approvals</strong><p class="muted">Scope: targets in this network that pass membership verification, including future members; not restricted to one computer.</p><p class="muted">Existing network permissions (v2 example)</p></div><p class="info" id="permission-note"></p></section>
+<section><h3>Connection and services</h3><div id="service"></div></section>
+<details><summary>Technical details</summary><p class="info">Production pages show redacted identity, version, and link diagnostics from Shared here. This preview contains no real identifiers, credentials, or connection data.</p></details>
+</article></div>
+<footer class="foot">Illustrative preview · Platform switching demonstrates layout differences, not native-client implementation.</footer>
+</div>
+<div class="ref"><a href="../architecture/agenthalo-device-page.md">Cross-platform architecture and state contract</a><a href="agenthalo-desktop-devices.md">Desktop specification</a><a href="agenthalo-mobile-style.md">Mobile specification</a></div>
+</main>
+<script>
+const byId=id=>document.getElementById(id);
+let platform='macOS', selected='mini', detailOpen=false;
+const data={mini:{name:'mac-c',kind:'Computer'},pro:{name:'mac-b',kind:'Computer'},phone:{name:'Another phone',kind:'Phone'}};
+// Fixed design fixtures only. Production usability must come from Shared Rust.
+function fixture(scene,key){
+ const offline=(scene==='offline'&&key==='mini')||(scene==='peer-offline'&&key==='pro');
+ const invalid=scene==='expired'&&key==='mini',pending=scene==='pending'&&key==='pro';
+ const phone=key==='phone';
+ return {offline,invalid,pending,phone,summary:offline?'Temporarily unreachable':invalid?'Authorization for this target has expired':pending?'Joined; not ready to offer services':phone?'Accesses devices; offers no remote services':'Available: view sessions, send messages'};
+}
+function row(label,value,ok=false){const r=document.createElement('div');r.className='capability';const a=document.createElement('span'),b=document.createElement('span');a.textContent=label;b.textContent=value;if(ok)b.className='ok';r.append(a,b);return r;}
+function render(){
+ const mobile=!['macOS','Windows'].includes(platform),compact=mobile||window.matchMedia('(max-width: 960px)').matches,role=byId('role').value,scene=byId('scenario').value,empty=role==='none';
+ byId('shell').classList.toggle('mobile',mobile);byId('platform-note').textContent=platform+' · '+(mobile?'Phone layout':'Desktop layout');
+ byId('network-title').textContent=empty?'Not yet in a device network':'My device network';byId('network-state').hidden=empty;byId('network-state').textContent='Joined';
+ byId('role-line').textContent=empty?'One identity, one network':'This device joined · Members access one another through Muster';
+ byId('entry').textContent=empty?(mobile?'Primary action: scan to join network':'Primary action: create / join network'):(role==='creator'?'Enrollment: add device → computer / phone':'Primary action: network details; new devices follow the enrollment authorization flow');
+ // Offline peers do not create a network-wide blocker or require creator renewal.
+ byId('attention').hidden=empty||!['pending','expired'].includes(scene);byId('attention').textContent=scene==='expired'?'Authorization for mac-c has expired · View reason; access to other devices is unaffected.':'Needs attention · mac-b joined but is not ready to offer services.';
+ byId('empty').hidden=!empty;byId('content').hidden=empty;byId('join-text').textContent=mobile?'Scan to join an existing network, compare verification codes, and authenticate.':'Create a network for other devices, or join an existing one through discovery and verification codes.';
+ byId('local-name').textContent=mobile?'My phone':'This computer';byId('local-description').textContent=mobile?'Network member · No remote services offered':'Network member · Local service status shown separately';
+ byId('directory').hidden=compact&&detailOpen;byId('detail').hidden=compact&&!detailOpen;byId('back').hidden=!compact;
+ const d=data[selected],f=fixture(scene,selected);byId('device-name').textContent=d.name;byId('device-type').textContent=d.kind+' · Network member'+(selected==='mini'&&role==='member'?' · Enrollment authorization role: creator':'');
+ const cap=byId('capabilities');cap.replaceChildren();for(const title of ['View sessions','Send messages','Respond to approvals','Connect terminal']){let value='Available';if(f.invalid)value='Authorization for this target has expired';else if(f.offline)value='This device is temporarily unreachable';else if(f.phone)value='Not offered by this device';else if(title==='Connect terminal')value='Not wired in this version';else if(f.pending)value='Service not ready';cap.append(row(title,value,value==='Available'));}
+ byId('permission-note').textContent='Members independently verify established permissions · Creator role is only for device enrollment authorization';
+ const service=byId('service');service.replaceChildren(row('Membership','Joined'),row('Authorization for this target',f.invalid?'Expired':'Valid'),row('Target service',f.offline?'Confirm after device recovery':f.phone?'No remote services offered':f.pending?'Service preparation incomplete':'Service ready'),row('Connection observation',f.offline?'Temporarily unreachable':f.invalid?'Operations on this target stopped':f.phone?'Unconfirmed':'Direct · 3 ms (example)'));
+ document.querySelectorAll('[data-device]').forEach(b=>{b.classList.toggle('selected',b.dataset.device===selected);b.setAttribute('aria-pressed',String(b.dataset.device===selected));b.querySelector(':scope > span').textContent=fixture(scene,b.dataset.device).summary;});
+ byId('role').querySelector('[value=creator]').disabled=mobile;byId('scenario').querySelector('[value=offline]').disabled=role==='creator';
+}
+document.querySelectorAll('[data-platform]').forEach(b=>b.addEventListener('click',()=>{platform=b.dataset.platform;detailOpen=false;if(!['macOS','Windows'].includes(platform)&&byId('role').value==='creator')byId('role').value='member';document.querySelectorAll('[data-platform]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();}));
+document.querySelectorAll('[data-device]').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.device;detailOpen=true;render();if(!byId('back').hidden)byId('back').focus();}));
+byId('back').addEventListener('click',()=>{detailOpen=false;render();document.querySelector('[data-device="'+selected+'"]').focus();});
+byId('role').addEventListener('change',()=>{if(byId('role').value==='creator'&&byId('scenario').value==='offline')byId('scenario').value='normal';render();});byId('scenario').addEventListener('change',render);window.addEventListener('resize',render);render();
+</script>
+</body></html>

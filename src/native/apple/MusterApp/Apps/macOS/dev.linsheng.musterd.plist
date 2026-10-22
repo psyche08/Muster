@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Registered by Muster.app through SMAppService; the program is the
+         daemon inside the bundle. Files: ~/Library/Application Support/Muster
+         (store, socket) and ~/Library/Logs/Muster/musterd.log (via --log). -->
+    <key>Label</key>
+    <string>dev.linsheng.musterd</string>
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/musterd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>Contents/MacOS/musterd</string>
+        <string>--log</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>dev.linsheng.muster</string>
+    </array>
+</dict>
+</plist>

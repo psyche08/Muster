@@ -1,0 +1,4 @@
+# Native high-CPU sampling walks frame chains across Swift/C/Rust. Apply to all
+# Apple crates, including optimized dependencies, not just muster-ffi.
+[target.'cfg(target_vendor = "apple")']
+rustflags = ["-C", "force-frame-pointers=yes"]

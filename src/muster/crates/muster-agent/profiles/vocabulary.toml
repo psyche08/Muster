@@ -1,0 +1,68 @@
+# Label lists several desktop app profiles share (ARCHITECTURE §3.6.4).
+# A profile refers to one as "$name" wherever it takes labels. Labels are
+# matched exactly, so each list carries every spelling an app uses, in every
+# UI language Muster was recorded with (en, zh-CN). `build.rs` compiles this
+# file into `muster_agent::profile::vocabulary`.
+
+[labels]
+# What the Claude and ChatGPT apps call the control that stops a turn.
+stop = [
+    "Stop",
+    "Stop response",
+    "Stop generating",
+    "Stop streaming",
+    "Stop responding",
+    "Interrupt",
+]
+
+# The options of a permission prompt; each is offered by its name.
+approve = [
+    "Allow",
+    "Allow once",
+    "Allow always",
+    "Deny",
+    "Yes",
+    "No",
+    "Approve",
+    "Reject",
+]
+
+# Codex approvalRequestCard labels observed in the installed desktop bundle.
+# Keep exact names and preserve the scope of persistent approvals in the UI.
+codex_approve = [
+    "Allow", "Allow once", "Allow always", "Deny", "Yes", "No", "Approve", "Reject",
+    "Always allow", "Allow this conversation",
+]
+
+# The labels a question card's commands and free-text option carry.
+answer_question = ["Answer question", "回答问题", "回答問題"]
+submit = [
+    "Submit",
+    "Submit answers",
+    "Submit answer",
+    "Send answers",
+    "Send answer",
+    "Send",
+    "发送",
+    "提交",
+    "提交回答",
+]
+next = ["Next", "Next question", "Continue", "下一步", "下一题"]
+back = ["Back", "返回", "上一题"]
+other = [
+    "Other",
+    "Other…",
+    "Other (please specify)",
+    "Something else",
+    "其他",
+    "自定义回答",
+]
+
+# A Chat-mode conversation's send button.
+chat_send = ["Send", "Send message", "Send prompt", "Submit", "Send Message"]
+
+# What opens the empty new-conversation page of a Chat mode.
+new_chat = ["New chat", "New Chat", "Start new chat"]
+
+# What dismisses a dialog without choosing anything.
+close_dialog = ["Close", "Dismiss"]

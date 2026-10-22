@@ -1,0 +1,25 @@
+# Exact strings a release daemon must contain: <string> | <what it proves>.
+# Each stands for a fix that a release once shipped; verify-release.sh
+# refuses a build without it. Keep a line when its message is reworded.
+Cannot start Locked Use owner | owner runs on its own runtime (80b9aad5, desktop 1.0.17)
+Locked Use OS observation delayed | owner observation timing diagnostics (80b9aad5)
+Locked Use owner: pulse delayed | owner heartbeat gap diagnostics (3ca6525e)
+native operation worker failed | native AX operations run on a blocking worker (3ca6525e)
+reveal route=loginwindow | targeted lock UI reveal for Mac-C (3ca6525e)
+AX diagnostic trace= | bounded AX operation diagnostics (762faa3c)
+Cannot uniquely locate the queued message | Codex queued message Send now (b361a3f7, desktop 1.0.16)
+Desktop update: console operations drained | updates drain Locked Use first (2e48ef91, desktop 1.0.18)
+operation interrupted before any provider submission | stopped operations are not left pending
+draft unconfirmed after | unconfirmed draft diagnostics
+kept the controller an operation attached | no duplicate native controller replaces an operation's
+requester withdrew the challenge | Locked Use cancel reasons are logged
+peer absent | members the relay reports absent are closed and not redialed (e7670585, desktop 1.0.51)
+local UDP receive pump failed two loopback probes | local receive-stall recovery independent of peer health (771564bd, desktop 1.0.74)
+Vnet datagram binding retained | transport replacements preserve the Node and Vnet channel (771564bd, desktop 1.0.74)
+vnet helper open pending after 3s | timed-out helper open is reused rather than duplicated (771564bd, desktop 1.0.74)
+Presence enrollment installed: device= | administrator-approved desktop Presence binding (1.0.75)
+forward ended without a response after dispatch | preserve unknown mutation outcomes (1.0.75)
+
+# 1.0.80: Claude question submit requires the verified current button and focus.
+Question Submit changed; no key sent
+Approval control changed or left the conversation; no press sent

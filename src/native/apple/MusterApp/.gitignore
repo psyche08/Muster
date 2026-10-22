@@ -1,0 +1,6 @@
+# Keep the generated project and shared schemes for Xcode Cloud discovery.
+# Regenerate with scripts/generate-project.sh after editing project.yml.
+Muster.xcodeproj/xcuserdata/
+Muster.xcodeproj/project.xcworkspace/xcuserdata/
+Muster.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+build/

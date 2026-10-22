@@ -1,0 +1,116 @@
+# The rebuilt Rust core (src/muster): format, lint, test on Linux, and a
+# type-check of the macOS-only code without an Apple SDK.
+name: muster
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["src/muster/**", "src/native/apple/MusterApp/**", ".github/workflows/muster.yml"]
+  pull_request:
+    paths: ["src/muster/**", "src/native/apple/MusterApp/**", ".github/workflows/muster.yml"]
+  # Run it on demand, against any ref. The path filters above mean a commit
+  # that touches nothing under them never reports a check, and a repository
+  # whose Actions were switched off reports none at all; both read as "no CI"
+  # to anything waiting on checks, so there has to be a way to ask directly.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  linux:
+    name: fmt, clippy, test (Linux)
+    runs-on: ubuntu-latest
+    # Keep the full suite and netns acceptance within the hosted runner disk.
+    # These are disposable CI binaries, not release artifacts.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    defaults:
+      run:
+        working-directory: src/muster
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/muster
+      - run: cargo fmt --all --check
+      - run: scripts/check-layers.py
+      - run: cargo clippy --workspace --tests
+      - run: cargo test --workspace --no-fail-fast
+      - name: vnet in network namespaces
+        run: |
+          sudo apt-get install -y -qq socat
+          sudo -E env PATH="$PATH" scripts/vnet-netns-test.sh
+
+  apple-check:
+    name: type-check macOS code (no SDK)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/muster
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/muster
+          key: apple
+      - run: sudo apt-get install -y -qq clang llvm
+      - run: scripts/check-apple.sh
+
+  macos:
+    name: build and test (macOS)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: src/muster
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/muster
+      # The Secure Enclave library is linked only in the packaged app
+      # (muster-platform's `sep` feature, checked by the job above); here the
+      # daemon builds with a software key and every test runs on macOS.
+      - run: cargo build --workspace
+      - run: cargo test --workspace --no-fail-fast
+
+  swift:
+    name: Apple shell core on Linux (Swift)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/muster
+          key: swift
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+      - run: sudo apt-get install -y -qq protobuf-compiler
+      # The Rust core the Swift wrapper links.
+      - run: cargo build -p muster-ffi
+        working-directory: src/muster
+      # Generated protobuf code must match the schema: rebuild the generator
+      # at the resolved SwiftProtobuf version and diff.
+      - name: check generated protobuf code
+        working-directory: src/native/apple/MusterApp
+        run: |
+          swift package resolve
+          swift build -c release --product protoc-gen-swift --package-path .build/checkouts/swift-protobuf
+          PATH="$PWD/.build/checkouts/swift-protobuf/.build/release:$PATH" scripts/gen-protos.sh
+          git diff --exit-code -- Sources/MusterCore/Generated
+      - name: build and test MusterCore against libmuster_ffi
+        working-directory: src/native/apple/MusterApp
+        run: MUSTER_FFI_LIB="$GITHUB_WORKSPACE/src/muster/target/debug/libmuster_ffi.a" swift test
+

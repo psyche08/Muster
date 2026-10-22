@@ -1,0 +1,8 @@
+.hvigor/
+.cxx/
+oh_modules/
+entry/.hvigor/
+entry/.cxx/
+entry/oh_modules/
+# DevEco writes local certificate paths and encrypted signing passwords here.
+/build-profile.json5

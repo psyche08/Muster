@@ -1,0 +1,17 @@
+{
+  "modelVersion": "6.1.1",
+  "dependencies": {},
+  "properties": {
+    "hvigor.dependency.useNpm": true
+  },
+  "execution": {
+    "analyze": "normal",
+    "daemon": false,
+    "incremental": true,
+    "parallel": true,
+    "typeCheck": true
+  },
+  "logging": {
+    "level": "info"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "app": "Muster Agents",
+  "apple_id": "6817180898",
+  "version": "1.0.44",
+  "locale": "en-US",
+  "prepared_at": "2026-10-08",
+  "capture_test": "MusterMobileTests/AppStoreScreenshots/testCaptureStoreScreenshots",
+  "capture_source": "src/native/apple/MusterApp/Tests/MusterMobileTests/AppStoreScreenshots.swift",
+  "content": "Synthetic fixtures rendered with production SwiftUI views. No personal conversations or device data. UI rendering validation only; not physical-device or networking E2E acceptance.",
+  "test_result": "Passed on iPhone 18 Pro simulator, with explicit iPhone and iPad rendering canvases.",
+  "screenshots": [
+    {
+      "file": "screenshots/ipad-01-sessions.png",
+      "width": 2064,
+      "height": 2752,
+      "sha256": "140ff466958466cc077161ae76ca3498b8399041d737deb6372107fe2aab6494"
+    },
+    {
+      "file": "screenshots/ipad-02-conversation.png",
+      "width": 2064,
+      "height": 2752,
+      "sha256": "ea14716ea6f4e610bd7dbfe458de500a9d13e6b8c292fe47a38482d7406dd58d"
+    },
+    {
+      "file": "screenshots/ipad-03-dark.png",
+      "width": 2064,
+      "height": 2752,
+      "sha256": "66a26db51fac8b7218c432fdf0e775e821d5313eb494fa6d6a48d958bf289862"
+    },
+    {
+      "file": "screenshots/iphone-01-sessions.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "6c16fbe52baa2f858e9bbcef79ff8e62bd17e7c3ea6d8c80305fd7e722ec34f0"
+    },
+    {
+      "file": "screenshots/iphone-02-conversation.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "7fcdaba9561b72bce25d58e705e5dad479bc3cbc6b9f9acb00d420262d18af35"
+    },
+    {
+      "file": "screenshots/iphone-03-dark.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "6d76ffb9f199892466c761f29ad1102bedb209eebd6953ae8d3e9fcdf4592b7e"
+    }
+  ],
+  "header": {
+    "file": "header.png",
+    "width": 3840,
+    "height": 1646,
+    "sha256": "b75fb0177630706787ae84926ab405450e56fe6f2d60417d5d7120d436b3bac8",
+    "design": "Existing MusterMark vector and app palette rendered with SwiftUI."
+  }
+}

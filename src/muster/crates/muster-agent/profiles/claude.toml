@@ -1,0 +1,230 @@
+# Claude Code in the Claude desktop app, and the app's Claude (Chat) mode.
+# Schema: docs/APP_PROFILES.md. Compiled by build.rs into
+# `muster_agent::profile::{CLAUDE, CLAUDE_CHAT, CLAUDE_APP}`.
+
+[app]
+provider = "claude"
+doc = "Claude Code in the Claude desktop app."
+# The main executable's path suffix (libproc).
+executable = "Claude.app/Contents/MacOS/Claude"
+# Every process running the main executable shows windows.
+gui = "executable"
+# The page URL names the desktop session (`/epitaxy/<desktop id>`), which
+# the engine maps to the CLI session the transcripts know.
+session_key = "url"
+# One append-only JSONL transcript per session under ~/.claude/projects.
+source = "jsonl"
+# The cross-process desktop lock every daemon of this user shares is keyed
+# by this name; it must not change between releases.
+lock = "Claude"
+
+[capabilities]
+send = true
+respond = true
+interrupt = true
+files = true
+# Chat mode offers model and effort choices.
+model_options = true
+
+# ---------------------------------------------- the transcript record grammar
+# One JSONL transcript per session under $CLAUDE_CONFIG_DIR/projects, read
+# by the engine in muster-agent/src/jsonl.rs. Title records (custom-title,
+# ai-title, summary), pasted-content unwrapping and the prompt queue are
+# the hooks in claude.rs.
+
+[source]
+home = { env = "CLAUDE_CONFIG_DIR", dir = ".claude" }
+timestamp = "timestamp"
+cwd = ["cwd"]
+# Sidechains (subagents) and meta records are not the conversation.
+skip = [{ isSidechain = true }, { isMeta = true }]
+# A new prompt may close an interrupted previous turn: its summary stays
+# before the prompt in the transcript.
+summary_before = { type = "user" }
+
+# A message is a user or assistant record; role and content live in
+# `message`, the role falling back to the record type. Every content block
+# counts in message ids, tool calls and results included.
+[source.message]
+when = { type = ["user", "assistant"] }
+envelope = "message"
+role = "role"
+role_fallback = "type"
+other_roles = "assistant"
+content = "content"
+text_blocks = ["text"]
+media_blocks = ["image"]
+block_ids = "all"
+
+[source.tool_call]
+block = "tool_use"
+name = "name"
+id = "id"
+arguments = ["input"]
+
+# A tool result's content is text parts; AskUserQuestion's result is the
+# agent asking the person.
+[source.tool_result]
+block = "tool_result"
+id = "tool_use_id"
+output = "content"
+error = "is_error"
+interaction_tools = ["AskUserQuestion"]
+
+# Claude Code has no turn events: a user prompt starts a turn, an assistant
+# reply that stops ends it, and its text is the final answer.
+[source.turn]
+ended = { type = "assistant", "message.stop_reason" = ["end_turn", "stop_sequence"] }
+# Provider-declared SubagentHandback completion; tool names alone are not proof.
+ended_also = [{ type = "user", toolEndsTurn = true }]
+user_text_starts = true
+mark_final = true
+activity_on_messages = true
+
+[controls]
+# ProseMirror re-reads its DOM: the prompt is set as the composer's value.
+draft = "value"
+# An empty composer reports an empty value.
+placeholders = []
+
+[controls.composer]
+roles = ["AXTextArea"]
+attrs = ["description"]
+labels = ["Prompt"]
+
+[controls.send]
+roles = ["AXButton"]
+attrs = ["description", "title"]
+labels = ["Send"]
+
+# Stop carries only a description (an empty AXTitle), hence `name`.
+[controls.stop]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$stop"
+
+[controls.approve]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$approve"
+
+# Sessions are rows in the app shell's sidebar; navigation and complementary
+# landmarks list them too; a row's name can carry its status ("Idle"), so
+# its exact standalone title may have status and delegation metadata siblings.
+[controls.sessions]
+kind = "sidebar"
+landmarks = true
+standalone_title = true
+
+# Recents hide older sessions behind "Show <count> more in Recents".
+[controls.sessions.more]
+prefix = "Show "
+suffix = " more in Recents"
+
+# Question cards (AskUserQuestion): one page per question with Back and
+# Next; attributes may be Chromium's stale cache, so the renderer is asked
+# for a fresh read; a single-select card of plain buttons answers on press.
+[controls.questions]
+# AXPress focuses Submit but does not activate current Claude forms (ADR 0017).
+submit_via_focused_space = true
+submit = "$submit"
+next = "$next"
+back = "$back"
+other = "$other"
+paged = true
+refresh_renderer = true
+button_choices = true
+# wrap_up next-step actions post immediately; AskUserQuestion is not optional.
+immediate_suggestions = true
+
+# ---------------------------------------------------------------- Chat mode
+
+[chat]
+provider = "claude"
+doc = "The Claude app's Chat mode (claude.ai). Its settings pages are left through its mode switch."
+# The one web area whose URL starts with this: the app wraps the claude.ai
+# page in its own shell page.
+area = { url = "https://claude.ai" }
+
+[chat.send]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$chat_send"
+
+[chat.stop]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$stop"
+
+[chat.new_chat]
+roles = ["AXButton", "AXLink"]
+attrs = ["name"]
+labels = "$new_chat"
+
+[chat.close_dialog]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = "$close_dialog"
+
+# A plain "New" control counts only in the sidebar.
+[chat.sidebar_new]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = ["New"]
+
+# Conversation ids are UUIDs after /chat/; /new is the empty page; only the
+# URL names a conversation.
+[chat.url]
+segment = "/chat/"
+uuid = true
+new = "/new"
+only = true
+
+# A "Mode" radio group with one radio per mode (a status may follow the
+# name after a comma) and the same commands in the Go menu. The page URL
+# says the mode: /epitaxy is Code, /settings neither.
+[chat.modes]
+chat = ["Claude", "Chat"]
+other = ["Code"]
+
+[chat.modes.switch]
+kind = "radio"
+group = "Mode"
+menu = "Go"
+other_path = "/epitaxy"
+settings = "/settings"
+
+# Recents are title buttons, each beside its own "More options for <title>"
+# menu; the full history is a page.
+[chat.history]
+kind = "title-buttons"
+options = "More options for "
+pages = ["/chats", "/recents"]
+
+# ------------------------------------------------------------ cloud sessions
+# Claude Code on the web (claude.ai/code): the sessions the same account
+# runs in Anthropic's cloud. The engine (muster-agent/src/cloud.rs) lists
+# them, reads their events through the record grammar above and posts
+# prompts, with the OAuth token the local `claude` keeps: the plaintext
+# credentials file when it exists, else (macOS) the Keychain item the CLI
+# stores it in, read with the system's consent prompt. Tokens are never
+# refreshed here: an expired one means "sign in with `claude` on this Mac".
+# Sessions bridged from this machine (`environment_kind = bridge`) are the
+# local sessions above and are not listed twice.
+
+[cloud]
+api = "claude-code"
+base_url = "https://api.anthropic.com"
+label = "Claude Cloud"
+poll_secs = 15
+
+[cloud.credentials]
+file = ".credentials.json"
+token = "claudeAiOauth.accessToken"
+expires_at = "claudeAiOauth.expiresAt"
+keychain = "Claude Code-credentials"
+
+# A prompt posts into the session's event stream; approvals, interrupts and
+# files stay with the web app.
+[cloud.capabilities]
+send = true

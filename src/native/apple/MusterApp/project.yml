@@ -1,0 +1,200 @@
+# XcodeGen spec for the bundled apps (`xcodegen generate` → Muster.xcodeproj).
+# Both targets build Muster.app under the one bundle id dev.linsheng.muster
+# (the same id on macOS and iOS, as Apple expects for one product on both).
+# They are thin: they host MusterUI from the local package and link the Rust
+# core built by scripts/build-ffi.sh.
+name: Muster
+options:
+  bundleIdPrefix: dev.linsheng
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+packages:
+  MusterApp:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.0.82"
+    CURRENT_PROJECT_VERSION: "73"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+targets:
+  MusterMac:
+    type: application
+    platform: macOS
+    sources: [Apps/macOS]
+    dependencies:
+      - package: MusterApp
+        product: MusterUI
+    settings:
+      base:
+        PRODUCT_NAME: Muster
+        PRODUCT_BUNDLE_IDENTIFIER: dev.linsheng.muster
+        # The bundling script reads the cargo build tree.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # The archive by path: cargo also leaves a dylib next to it.
+        OTHER_LDFLAGS: "$(SRCROOT)/../../../muster/target/aarch64-apple-darwin/release/libmuster_ffi.a"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        PROVISIONING_PROFILE_SPECIFIER: "$(MUSTER_MAC_PROFILE)"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: Apps/macOS/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.linsheng.muster.browser
+            CFBundleURLSchemes: [muster]
+        CFBundleDisplayName: Muster
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "14.0"
+        NSFaceIDUsageDescription: Muster signs presence proofs for sensitive actions with Touch ID.
+        NSAppleEventsUsageDescription: Muster uses automation to connect to iTerm2 and show your terminal sessions.
+        NSLocalNetworkUsageDescription: Muster reaches your other devices directly on the local network.
+    entitlements:
+      path: Apps/macOS/Muster.entitlements
+      properties:
+        com.apple.application-identifier: "$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)"
+        com.apple.developer.team-identifier: "$(DEVELOPMENT_TEAM)"
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)"]
+        com.apple.security.automation.apple-events: true
+        com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+    postBuildScripts:
+      # The daemon and its LaunchAgent plist live in the bundle (SMAppService):
+      # build it with `cargo build --release -p musterd --features sep` first.
+      - name: Bundle musterd and muster
+        script: |
+          set -e
+          # Every Muster process on a Mac comes from this bundle: the daemon
+          # (launchd) and the command line, both from src/muster/target/release.
+          BIN="$SRCROOT/../../../muster/target/release"
+          if [ ! -x "$BIN/musterd" ]; then echo "warning: $BIN/musterd missing; build it with cargo (see README)"; exit 0; fi
+          install -m 0755 "$BIN/musterd" "$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd"
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
+          install -m 0644 "$SRCROOT/Apps/macOS/dev.linsheng.musterd.plist" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents/"
+          # Same identity as the app: launchd's requirement for a bundled
+          # LaunchAgent program is derived from the app's signature.
+          codesign --force --options runtime --entitlements "$SRCROOT/Apps/macOS/musterd.entitlements" --identifier dev.linsheng.musterd --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd"
+          # The command line goes under Contents/Helpers: next to the app
+          # executable, `muster` and `Muster` are one file on a
+          # case-insensitive volume.
+          [ -x "$BIN/muster" ] || { echo "error: $BIN/muster missing; cargo build --release -p muster-cli"; exit 1; }
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          install -m 0755 "$BIN/muster" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster"
+          codesign --force --options runtime --identifier dev.linsheng.muster.cli --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster"
+          [ -x "$BIN/muster-browser-host" ] || { echo "error: build muster-browser first"; exit 1; }
+          install -m 0755 "$BIN/muster-browser-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
+          codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty"
+          install -m 0644 "$SRCROOT/../../../../docs/third-party/orca-MIT.txt" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Orca-LICENSE.txt"
+          EXT="$SRCROOT/../../../browser/agenthalo-extension"
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser"
+          install -m 0644 "$EXT/manifest.json" "$EXT/sw.js" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser/"
+          HELPER="$SRCROOT/../NetHelper"
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons"
+          xcrun swiftc -O -o "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper" "$HELPER/main.swift" "$HELPER/LockedUseInstall.swift"
+          codesign --force --options runtime --timestamp --identifier dev.linsheng.muster.helper --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper"
+          install -m 0644 "$SRCROOT/Apps/macOS/dev.linsheng.muster.helper.plist" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons/"
+          # Locked Use is a standard part of every desktop distribution.
+          # musterd requests installation from the SMAppService root helper.
+          PLUGIN="$SRCROOT/../MusterLockedUse"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}" "$PLUGIN/build.sh" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/PlugIns/MusterLockedUse.bundle"
+          install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse"
+          install -m 0644 "$PLUGIN/install.py" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse/install.py"
+        inputFiles:
+          - $(SRCROOT)/../../../../docs/third-party/orca-MIT.txt
+          - $(SRCROOT)/../../../muster/target/release/musterd
+          - $(SRCROOT)/../../../muster/target/release/muster
+          - $(SRCROOT)/../../../muster/target/release/muster-browser-host
+          - $(SRCROOT)/../../../browser/agenthalo-extension/manifest.json
+          - $(SRCROOT)/../../../browser/agenthalo-extension/sw.js
+          - $(SRCROOT)/Apps/macOS/musterd.entitlements
+          - $(SRCROOT)/Apps/macOS/dev.linsheng.musterd.plist
+          - $(SRCROOT)/../NetHelper/main.swift
+          - $(SRCROOT)/../NetHelper/LockedUseInstall.swift
+          - $(SRCROOT)/Apps/macOS/dev.linsheng.muster.helper.plist
+          - $(SRCROOT)/../MusterLockedUse/build.sh
+          - $(SRCROOT)/../MusterLockedUse/Plugin.m
+          - $(SRCROOT)/../MusterLockedUse/install.py
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/ThirdParty/Orca-LICENSE.txt
+          - $(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/musterd
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/muster
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/muster-browser-host
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/AgentHaloBrowser/manifest.json
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/AgentHaloBrowser/sw.js
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchServices/muster-helper
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/dev.linsheng.muster.helper.plist
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/PlugIns/MusterLockedUse.bundle/Contents/MacOS/MusterLockedUse
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/LockedUse/install.py
+  MusteriOS:
+    type: application
+    platform: iOS
+    sources: [Apps/iOS]
+    dependencies:
+      - package: MusterApp
+        product: MusterUI
+    settings:
+      base:
+        PRODUCT_NAME: Muster
+        PRODUCT_BUNDLE_IDENTIFIER: dev.linsheng.muster
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_TEAM: 89LGY6BD53
+        CODE_SIGN_STYLE: Automatic
+        # The icon's clay as the app-wide tint (Assets.xcassets/AccentColor):
+        # #A0644B in light mode, 4.75:1 with white either way; the icon's own
+        # #B5775D in dark.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        "OTHER_LDFLAGS[sdk=iphoneos*]": "$(SRCROOT)/../../../muster/target/aarch64-apple-ios/release/libmuster_ffi.a"
+        "OTHER_LDFLAGS[sdk=iphonesimulator*]": "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/release/libmuster_ffi.a"
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Muster
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # iPad multitasking requires all four; App Store Connect rejects the upload otherwise.
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSCameraUsageDescription: Muster scans the invite QR code shown on the admin's device.
+        NSFaceIDUsageDescription: Muster signs presence proofs for sensitive actions with Face ID.
+        NSLocalNetworkUsageDescription: Muster reaches your other devices directly on the local network.
+        UIBackgroundModes: [remote-notification]
+        # Standard algorithms only (rustls/ring TLS and QUIC), not distributed
+        # in France: App Store Connect's export questions for build 4 (2026-09-29)
+        # found no encryption requiring documentation. Revisit if that changes.
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Apps/iOS/Muster.entitlements
+      properties:
+        aps-environment: development
+  MusterMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests/MusterMobileTests, Tests/MusterCoreTests/HighCPUStackTests.swift]
+    dependencies:
+      - target: MusteriOS
+      - package: MusterApp
+        product: MusterUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Muster.app/Muster"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        SUPPORTED_PLATFORMS: iphonesimulator
+        OTHER_LDFLAGS: "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/debug/libmuster_ffi.a"
+
+schemes:
+  MusteriOS:
+    build:
+      targets:
+        MusteriOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release

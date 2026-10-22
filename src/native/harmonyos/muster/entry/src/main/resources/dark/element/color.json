@@ -1,0 +1,14 @@
+{
+  "color": [
+    { "name": "accent", "value": "#B5775D" },
+    { "name": "accent_soft", "value": "#26B5775D" },
+    { "name": "accent_faint", "value": "#17B5775D" },
+    { "name": "action", "value": "#6285FF" },
+    { "name": "link", "value": "#8AB4F8" },
+    { "name": "user_surface", "value": "#253454" },
+    { "name": "user_text", "value": "#B7CAFF" },
+    { "name": "composer", "value": "#303030" },
+    { "name": "code", "value": "#171717" },
+    { "name": "border", "value": "#424242" }
+  ]
+}

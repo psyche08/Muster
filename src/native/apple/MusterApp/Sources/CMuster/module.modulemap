@@ -1,0 +1,4 @@
+module CMuster {
+    header "include/muster.h"
+    export *
+}

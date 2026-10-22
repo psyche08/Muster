@@ -1,0 +1,49 @@
+{
+  "colors": {
+    "background": "#0D1117",
+    "surface": "#161B22",
+    "raised": "#202732",
+    "border": "#303B4A",
+    "text": "#E9EDF4",
+    "secondary": "#A8B2C0",
+    "muted": "#8793A4",
+    "accent": "#8DAFFF",
+    "primaryFill": "#31517F",
+    "onPrimary": "#FFFFFF",
+    "success": "#79D89D",
+    "warning": "#F1B66B",
+    "warningSurface": "#332719",
+    "danger": "#FF9A8E",
+    "dangerSurface": "#351D22",
+    "userBubble": "#263451"
+  },
+  "spacing": [4, 8, 12, 16, 24, 32],
+  "pageGutter": 16,
+  "expandedPageGutter": 24,
+  "cardRadius": 16,
+  "inputRadius": 12,
+  "minimumTouchTarget": { "ios": 44, "harmonyos": 48, "android": 48 },
+  "conversationViewport": {
+    "headerMaxFraction": 0.30,
+    "composerMaxFraction": 0.45,
+    "messageReservedFraction": 0.25
+  },
+  "shell": {
+    "destinations": ["sessions", "terminal", "devices", "settings"],
+    "labels": {
+      "sessions": "会话",
+      "terminal": "终端",
+      "devices": "设备",
+      "settings": "设置"
+    }
+  },
+  "layout": {
+    "expandedMinWidth": 600,
+    "flexMinHeight": 600,
+    "flexMinTranscript": 220,
+    "flexMinComposer": 220,
+    "flexMinTopFraction": 0.40,
+    "flexMaxTopFraction": 0.62,
+    "flexDefaultTopFraction": 0.50
+  }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "muster-store"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "musterd's durable state: identity, roster entries, policy, the operation ledger"
+
+[dependencies]
+muster-core = { path = "../muster-core" }
+rusqlite.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
