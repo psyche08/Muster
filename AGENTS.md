@@ -46,6 +46,8 @@ capabilities to code on the delete list. Superseded documents live in
 - Publish an iOS build whenever publishing a macOS update, unless the user explicitly requests otherwise. Keep both release results visible in the delivery report.
 - Publish both platforms using the operator-provided private SSH destination, port and release root (`MUSTER_RELEASE_HOST`, `MUSTER_RELEASE_SSH_PORT`, `MUSTER_RELEASE_ROOT`), preserving the desktop and iOS directories documented in `docs/DESKTOP_UPDATES.md`. Do not commit private deployment access details; see `docs/PUBLIC_CONTENT.md`.
 
+- Default Xcode Cloud builds must not automatically submit or distribute to TestFlight external testers. External testing is opt-in for an explicitly selected build; preserve this default when creating or changing workflows. See `docs/adr/0024-cloud-external-testing-opt-in.md`.
+
 ## Public content
 
 - Use synthetic identities, tasks and device records in examples and fixtures. Follow `docs/PUBLIC_CONTENT.md` and run `python3 scripts/check-public-content.py` for source/documentation changes.

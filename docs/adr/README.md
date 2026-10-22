@@ -49,6 +49,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0023](0023-bootstrap-sanitized-repository.md) | Accepted | Bootstrap a sanitized repository with one commit |
 
+| [0024](0024-cloud-external-testing-opt-in.md) | Accepted; hosted configuration pending | Make Cloud external testing opt-in |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
