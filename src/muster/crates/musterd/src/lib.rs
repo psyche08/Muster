@@ -14,6 +14,7 @@ pub mod ghostty;
 pub mod handler;
 pub mod locked_use;
 pub mod network;
+pub mod web;
 mod presence;
 
 mod diagnostics;

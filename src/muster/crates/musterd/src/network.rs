@@ -611,7 +611,10 @@ impl Daemon {
         }
         // The old window holds the port until it is dropped.
         held.take();
-        let window = muster_web::Window::open(origin, wanted.port)
+        // The browser fetches, not the daemon: the session for the site is
+        // the person's, held in Chrome (ADR 0026).
+        let upstream = crate::web::Browser::new(muster_browser::socket_in(&self.config.dir));
+        let window = muster_web::Window::open(origin, wanted.port, upstream)
             .await
             .map_err(|error| Error::Unavailable(format!("web window: {error}")))?;
         *held = Some(window);

@@ -153,6 +153,42 @@ async function press(tabId, key, ref) {
   await dispatchKey(tabId, key);
 }
 
+// One request for the web window (ADR 0026), made by this browser as itself.
+// Bounded here so a large reply cannot outgrow the frame the Rust host reads.
+const MAX_FETCH_BODY = 5 * 1024 * 1024;
+function toBase64(bytes) {
+  let text = '';
+  for (let at = 0; at < bytes.length; at += 0x8000) {
+    text += String.fromCharCode.apply(null, bytes.subarray(at, at + 0x8000));
+  }
+  return btoa(text);
+}
+async function fetchAsBrowser({ url, method, headers, body }) {
+  // Site access is the person's decision, taken in Chrome: this extension
+  // asks for none when installed, and the window works only where it was
+  // given some.
+  const { origin } = new URL(url);
+  if (!await chrome.permissions.contains({ origins: [`${origin}/*`] })) {
+    throw new Error(`${origin} is not in this extension's site access; add it in chrome://extensions`);
+  }
+  const init = {
+    method: method || 'GET',
+    headers: Object.fromEntries(headers ?? []),
+    // The browser's own session is the whole point. The caller sends no
+    // cookie and gets none back: fetch never exposes Set-Cookie.
+    credentials: 'include',
+    // Followed here, so a sign-in hop ends where this browser is already
+    // signed in. A hop to a site without access fails rather than proceeds.
+    redirect: 'follow',
+    cache: 'no-store',
+  };
+  if (body) init.body = Uint8Array.from(atob(body), c => c.charCodeAt(0));
+  const reply = await globalThis.fetch(url, init);
+  const bytes = new Uint8Array(await reply.arrayBuffer());
+  if (bytes.length > MAX_FETCH_BODY) throw new Error('reply too large for the window');
+  return { status: reply.status, url: reply.url, headers: [...reply.headers], body: toBase64(bytes) };
+}
+
 const OPS = {
   ping: () => ({ capability: 'agenthalo.browser', version: chrome.runtime.getManifest().version, userAgent: navigator.userAgent }),
   tabs: async () => (await chrome.tabs.query({})).map(({ id, windowId, active, title, url }) => ({ id, windowId, active, title, url })),
@@ -171,6 +207,7 @@ const OPS = {
   click: args => writeNode(args, id => click(id, args.ref)),
   type: args => writeNode(args, id => type(id, args.ref, args.text, args.clear)),
   press: args => writeNode(args, id => press(id, args.key, args.ref)),
+  fetch: fetchAsBrowser,
 };
 chrome.runtime.onStartup.addListener(() => {});
 connect();

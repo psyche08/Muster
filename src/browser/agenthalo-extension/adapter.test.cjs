@@ -5,9 +5,11 @@ const vm = require('node:vm');
 
 function fixture() {
   const event = () => ({ listeners: [], addListener(fn) { this.listeners.push(fn); } });
-  const sent = [], commands = [], timers = [], detached = [], ports = [];
+  const sent = [], commands = [], timers = [], detached = [], ports = [], fetched = [];
   let document = 50, attachCount = 0;
+  let granted = [], answer = { status: 200, url: 'https://example.test/', body: 'page', headers: [['content-type', 'text/html'], ['strict-transport-security', 'max-age=1']] };
   const chrome = {
+    permissions: { contains: async ({ origins }) => origins.every(o => granted.includes(o)) },
     runtime: {
       connectNative(name) {
         assert.equal(name, 'dev.linsheng.muster.browser');
@@ -30,11 +32,25 @@ function fixture() {
       },
     },
   };
-  const context = vm.createContext({ chrome, console: { warn() {} }, navigator: { platform: 'Linux', userAgent: 'test' }, TextEncoder, setTimeout: fn => timers.push(fn) });
+  const fetch = async (url, init) => {
+    fetched.push({ url, init });
+    return {
+      status: answer.status,
+      url: answer.url,
+      headers: answer.headers,
+      arrayBuffer: async () => Buffer.from(answer.body, 'utf8'),
+    };
+  };
+  const context = vm.createContext({
+    chrome, console: { warn() {} }, navigator: { platform: 'Linux', userAgent: 'test' },
+    TextEncoder, setTimeout: fn => timers.push(fn), fetch, URL, btoa, atob,
+  });
   vm.runInContext(fs.readFileSync(__dirname + '/sw.js', 'utf8'), context);
   return {
-    chrome, sent, commands, detached, ports, timers, context,
+    chrome, sent, commands, detached, ports, timers, context, fetched,
     navigate: () => { document++; },
+    grant: origin => granted.push(origin),
+    answers: next => { answer = { ...answer, ...next }; },
     attachCount: () => attachCount,
     request: async request => { await context.onRequest({ reqId: 1, ...request }, ports.at(-1)); return sent.at(-1); },
   };
@@ -96,6 +112,36 @@ test('native disconnect during async focus cannot continue into text input after
   assert.ok(!f.commands.some(c => c.method === 'Input.insertText'));
 });
 
+test('a window request is refused until the person grants that site, and then goes as the browser', async () => {
+  const f = fixture();
+  const refused = await f.request({ op: 'fetch', url: 'https://example.test/issues' });
+  assert.match(refused.error, /site access/);
+  assert.equal(f.fetched.length, 0, 'nothing is fetched without site access');
+
+  f.grant('https://example.test/*');
+  const reply = await f.request({
+    op: 'fetch', url: 'https://example.test/issues', method: 'GET',
+    headers: [['accept', 'text/html']],
+  });
+  assert.equal(reply.result.status, 200);
+  assert.equal(reply.result.url, 'https://example.test/');
+  assert.equal(Buffer.from(reply.result.body, 'base64').toString(), 'page');
+  const { init } = f.fetched[0];
+  assert.equal(init.credentials, 'include', "the browser's own session carries the request");
+  assert.equal(init.redirect, 'follow');
+  assert.equal(init.headers.accept, 'text/html');
+  assert.equal(Object.keys(init.headers).length, 1);
+  assert.equal(init.headers.cookie, undefined, 'no caller-supplied cookie');
+});
+
+test('a reply larger than the window carries is refused rather than truncated', async () => {
+  const f = fixture();
+  f.grant('https://example.test/*');
+  f.answers({ body: 'x'.repeat(5 * 1024 * 1024 + 1) });
+  const reply = await f.request({ op: 'fetch', url: 'https://example.test/big' });
+  assert.match(reply.error, /too large/);
+});
+
 test('preserved public manifest key matches the Rust native host origin', () => {
   const manifest = JSON.parse(fs.readFileSync(__dirname + '/manifest.json', 'utf8'));
   const hash = require('node:crypto').createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0,32);
@@ -104,4 +150,8 @@ test('preserved public manifest key matches the Rust native host origin', () => 
   assert.deepEqual(manifest.permissions, ['debugger', 'nativeMessaging', 'tabs']);
   assert.equal(manifest.externally_connectable, undefined);
   assert.equal(manifest.content_scripts, undefined);
+  // Site access is asked for at install time by nobody: the window works
+  // only where the person granted it afterwards.
+  assert.equal(manifest.host_permissions, undefined);
+  assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
 });

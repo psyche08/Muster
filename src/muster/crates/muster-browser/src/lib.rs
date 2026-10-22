@@ -12,6 +12,12 @@ pub const ORIGIN: &str = "chrome-extension://ngfbfehgemldmajkjhjahbechooakidc/";
 pub const MAX_REQUEST: usize = 256 * 1024;
 pub const MAX_RESPONSE: usize = 8 * 1024 * 1024;
 pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+/// A `fetch` carries a request body, so its frame is larger than an operation
+/// that only names a node. Chrome caps one message to the extension at 1 MB.
+pub const MAX_FETCH_REQUEST: usize = 768 * 1024;
+/// Reaching a site is network-bound, not a local call, so it waits longer
+/// than the operations that only read or drive a tab already on screen.
+pub const FETCH_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase", deny_unknown_fields)]
@@ -69,6 +75,23 @@ pub enum Request {
         node: u64,
         key: String,
     },
+    /// One request to `url`, made by the browser as itself — with the session
+    /// the person is already signed in with (ADR 0026). It opens no tab and
+    /// touches nothing on screen. The browser keeps the credentials: the
+    /// caller supplies no cookie and receives none.
+    Fetch {
+        url: String,
+        /// Uppercase HTTP method; empty means GET.
+        #[serde(default)]
+        method: String,
+        /// Lowercase header names, as the caller sends them. The browser adds
+        /// its own, and refuses the ones only it may set.
+        #[serde(default)]
+        headers: Vec<(String, String)>,
+        /// Base64 request body; empty for none.
+        #[serde(default)]
+        body: String,
+    },
 }
 impl Request {
     pub fn validate(&self) -> Result<()> {
@@ -109,6 +132,48 @@ impl Request {
                     .contains(&key.as_str()),
                 "unsupported key"
             ),
+            Self::Fetch {
+                url,
+                method,
+                headers,
+                ..
+            } => {
+                let url = url::Url::parse(url)?;
+                ensure!(
+                    matches!(url.scheme(), "http" | "https") && url.host_str().is_some(),
+                    "only HTTP(S) URLs are supported"
+                );
+                ensure!(
+                    url.username().is_empty() && url.password().is_none(),
+                    "URL credentials are not supported"
+                );
+                ensure!(
+                    method.is_empty()
+                        || (method.bytes().all(|b| b.is_ascii_uppercase())
+                            && !["CONNECT", "TRACE"].contains(&method.as_str())),
+                    "unsupported method"
+                );
+                for (name, value) in headers {
+                    ensure!(
+                        !name.is_empty()
+                            && name
+                                .bytes()
+                                .all(|b| b.is_ascii_lowercase() || b"!#$%&'*+-.^_`|~0123456789".contains(&b)),
+                        "invalid header name"
+                    );
+                    // The browser decides who the request is: a caller does not
+                    // get to name the host or hand over a cookie of its own.
+                    ensure!(
+                        !["cookie", "host", "content-length", "connection"]
+                            .contains(&name.as_str()),
+                        "{name} is the browser's to set"
+                    );
+                    ensure!(
+                        !value.contains(['\r', '\n']),
+                        "a header value spans one line"
+                    );
+                }
+            }
             _ => {}
         }
         let value = serde_json::to_value(self)?;
@@ -121,20 +186,40 @@ impl Request {
             }
         }
         ensure!(
-            serde_json::to_vec(self)?.len() <= MAX_REQUEST,
+            serde_json::to_vec(self)?.len() <= self.max_request(),
             "request too large"
         );
         Ok(())
     }
     pub fn is_mutation(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Self::Open { .. }
-                | Self::Close { .. }
-                | Self::Click { .. }
-                | Self::Type { .. }
-                | Self::Press { .. }
-        )
+            | Self::Close { .. }
+            | Self::Click { .. }
+            | Self::Type { .. }
+            | Self::Press { .. } => true,
+            // Reading a page is not; anything else may have changed something
+            // at the site, so a failure's outcome is unknown.
+            Self::Fetch { method, .. } => !matches!(method.as_str(), "" | "GET" | "HEAD"),
+            _ => false,
+        }
+    }
+
+    /// How long this operation may take. Driving a tab that is already on
+    /// screen is local; reaching a site is not.
+    pub fn deadline(&self) -> std::time::Duration {
+        match self {
+            Self::Fetch { .. } => FETCH_DEADLINE,
+            _ => DEADLINE,
+        }
+    }
+
+    /// The largest frame this operation may be sent in.
+    pub fn max_request(&self) -> usize {
+        match self {
+            Self::Fetch { .. } => MAX_FETCH_REQUEST,
+            _ => MAX_REQUEST,
+        }
     }
 }
 
@@ -178,6 +263,7 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(
 #[cfg(unix)]
 pub async fn call(path: &Path, request: &Request) -> Result<Value> {
     request.validate()?;
+    let deadline = request.deadline();
     let mut stream =
         tokio::time::timeout(DEADLINE, tokio::net::UnixStream::connect(path)).await??;
     // Never retry after any bytes have been sent: a mutation may have executed.
@@ -186,7 +272,12 @@ pub async fn call(path: &Path, request: &Request) -> Result<Value> {
         // the client must still be waiting when the host is ready to accept it.
         let ready = read_frame(&mut stream, 128).await?;
         ensure!(ready == json!({"ready": true}), "invalid browser handshake");
-        write_frame(&mut stream, &serde_json::to_value(request)?, MAX_REQUEST).await?;
+        write_frame(
+            &mut stream,
+            &serde_json::to_value(request)?,
+            request.max_request(),
+        )
+        .await?;
         let reply = read_frame(&mut stream, MAX_RESPONSE).await?;
         if let Some(error) = reply.get("error") {
             bail!("{error}");
@@ -196,7 +287,7 @@ pub async fn call(path: &Path, request: &Request) -> Result<Value> {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("missing result"))
     };
-    tokio::time::timeout(DEADLINE + std::time::Duration::from_secs(1), exchange)
+    tokio::time::timeout(deadline + std::time::Duration::from_secs(1), exchange)
         .await
         .map_err(|_| {
             anyhow::anyhow!(

@@ -1,7 +1,8 @@
 # Web window across two machines — 2026-10-22
 
 What ran: the web window (ADR 0026) on one Mac, reached from another over a
-forward stream, against the scheduler's real internal web origin. That host is
+forward stream, and the bridge operation that hands a request to the person's
+own browser. The scheduler's real internal web origin is
 withheld here (docs/PUBLIC_CONTENT.md) and written below as
 `https://scheduler.example`; every command was run against the real one. This
 is a runtime record for that path only; it is not a release, signing or
@@ -21,7 +22,7 @@ installation record.
   same result).
 - The member was approved with exactly one scope: `net:tcp/8810`.
 
-## What was verified
+## Round one: the forward path and both halves of its gate
 
 - **The window serves the origin.** On the holder,
   `muster policy --web-origin https://scheduler.example --web-port 8810
@@ -48,6 +49,36 @@ installation record.
     `forward 127.0.0.1:8810 denied for f67f6954: scope not granted`.
   - Each restored, and the page came back.
 
+**What this round no longer evidences.** The page above was fetched by an HTTP
+client inside the daemon. That upstream is gone: the window now hands every
+request to the person's browser. So those 436 600 bytes stand as evidence for
+the forward path, the gate and the window's refusals — all unchanged — and not
+for how a page is fetched. Round two is that part.
+
+## Round two: the browser as the upstream
+
+- This branch's native host was registered in place of the installed one (the
+  previous manifest kept) and the old host process stopped, so the person's
+  own Chrome respawned this branch's host. `{"op":"ping"}` through it answered
+  `agenthalo.browser` 0.2.0, Chrome 155: the new host serves the real browser,
+  with the per-operation deadlines and the wider frame.
+- A `fetch` operation, sent through a development daemon sharing that bridge,
+  reached the extension in that Chrome and came back
+  `Error: "unsupported operation"` — the service worker's own refusal. The
+  whole chain carries it: CLI → daemon → bridge socket → native host →
+  Chrome → the extension. Only the last hop is old code.
+- Compatibility in the other direction was seen too: while the installed host
+  was still registered, it refused the operation by name
+  (`unknown variant 'fetch'`) rather than mishandling it.
+
+**Pending, and it is the person's to do.** The extension that answered is the
+installed 0.2.0 from the app bundle; this branch's `fetch` lives in
+`src/browser/agenthalo-extension`. Loading it, and granting that one site, is
+done in Chrome's own interface — and the session the window exists to reuse is
+the person's. Two steps: load this branch's extension unpacked in place of the
+installed one, then give it site access for the scheduler's origin. The live
+round then repeats round one's chain with the browser as the upstream.
+
 ## Found while verifying
 
 The page's own HTML references **87 URLs on a separate corporate CDN origin**
@@ -66,11 +97,17 @@ in front of a phone.
 - No WebSocket: upgrades are refused by design (501), so the site's live
   updates were not exercised.
 - No signed build, no installation, no production daemon involvement.
-- Cookie and HSTS rewriting was exercised by tests against a stub origin, not
-  live: the pages fetched here set no cookie and sent no HSTS header.
+- Cookie and header handling was exercised by tests, not live: the window
+  drops `Set-Cookie` and passes on no reader's `cookie`, and the extension
+  refuses a caller-supplied one.
 
 ## Cleanup
 
-Both development daemons were stopped and their state directories removed;
-the `wwtest` network exists nowhere else. Production state on both machines
-was untouched throughout.
+Round one's two development daemons were stopped and their state directories
+removed; the `wwtest` network exists nowhere else. Round two's development
+daemon reaches the real bridge socket through a symlink under `/private/tmp`,
+and the native-host manifest still points at this branch's host so the pending
+live round can run; the installed one is restored with
+`/Applications/Muster.app/Contents/Helpers/muster-browser-host install
+"$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"`.
+Production state on both machines was untouched throughout.

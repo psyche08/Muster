@@ -1,22 +1,31 @@
 //! The web window (ADR 0026): one loopback port on this machine that stands
-//! for exactly one remote origin, so a member with no route to that origin can
-//! read it through this machine.
+//! for exactly one remote origin, so a member with no route to that origin —
+//! and no account on it — can read it through this machine.
 //!
-//! A member reaches the window the way phones reach SSH — a forward stream to
+//! A member reaches the window the way phones reach SSH: a forward stream to
 //! one of this machine's own loopback ports (ARCHITECTURE §3.5), decided by
-//! the same `net:` scope and open-port policy. The window itself is what keeps
-//! that from becoming the open relay forward streams exist to avoid: it is
-//! built for one origin and dials no other. The request's own text cannot
-//! redirect it (an absolute request target is refused, `CONNECT` is refused),
-//! and the client follows no redirects, so a reply cannot either.
+//! the same `net:` scope and open-port policy. The window is what keeps that
+//! from becoming the open relay forward streams exist to avoid — it is built
+//! for one origin and asks for no other. An absolute request target is
+//! refused, `CONNECT` is refused, and a reply that came from anywhere else is
+//! refused rather than served.
+//!
+//! The window fetches nothing itself. Every request is handed to an
+//! [`Upstream`] — in Muster, the person's own browser through the Agent Halo
+//! extension, which already holds the session for the site. So the reader
+//! needs no account and is given no credential: cookies stay in the browser,
+//! and `Set-Cookie` never reaches the reader.
 //!
 //! This is not a web client for Muster, which ARCHITECTURE keeps out of
 //! scope. Muster serves none of these bytes; it carries somebody else's site
 //! to a device that cannot reach it.
 
 use std::fmt;
+use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -24,9 +33,9 @@ use tokio::task::{JoinHandle, JoinSet};
 
 /// The whole request head, including the blank line.
 const MAX_HEAD: usize = 32 * 1024;
-/// A request body is held in memory before it is sent on, so it is bounded.
-/// Replies are streamed and have no such limit.
-const MAX_BODY: usize = 32 * 1024 * 1024;
+/// A request body travels to the upstream in one message, so it is bounded
+/// well below what that carrier allows.
+const MAX_BODY: usize = 512 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -34,8 +43,33 @@ pub enum Error {
     Origin(String),
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    #[error("http client: {0}")]
-    Client(String),
+}
+
+/// One request for the upstream to make.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fetch {
+    pub method: String,
+    /// The absolute URL on the window's own origin.
+    pub url: String,
+    /// Lowercase header names, hop-by-hop and credential headers removed.
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+/// What the upstream came back with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reply {
+    pub status: u16,
+    /// Where the request ended, after any redirect the upstream followed.
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+/// Whoever actually reaches the site. The window knows nothing of how: in
+/// Muster this is the browser the person is signed in with.
+pub trait Upstream: Send + Sync + 'static {
+    fn fetch(&self, request: Fetch) -> Pin<Box<dyn Future<Output = Result<Reply, String>> + Send + '_>>;
 }
 
 /// The one origin a window serves: scheme, host and port, nothing else. A
@@ -52,17 +86,17 @@ impl Origin {
         &self.host
     }
 
-    /// Whether `text` names this same origin, for the one rewrite that needs
-    /// to know: a `Location` back to where the page already is.
-    fn covers(&self, text: &str) -> bool {
-        let Some(rest) = text
+    /// Whether `text` is a URL on this same origin. Two things turn on it:
+    /// a `Location` back to where the page already is, and whether a reply
+    /// came from the origin this window serves at all.
+    pub fn covers(&self, text: &str) -> bool {
+        let Some((secure, rest)) = text
             .strip_prefix("https://")
             .map(|rest| (true, rest))
             .or_else(|| text.strip_prefix("http://").map(|rest| (false, rest)))
         else {
             return false;
         };
-        let (secure, rest) = rest;
         let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
         secure == self.secure && authority.eq_ignore_ascii_case(&self.authority())
     }
@@ -128,17 +162,15 @@ pub struct Window {
 
 impl Window {
     /// Opens `port` on loopback for `origin`. Port 0 asks the OS for one.
-    pub async fn open(origin: Origin, port: u16) -> Result<Self, Error> {
+    pub async fn open(
+        origin: Origin,
+        port: u16,
+        upstream: Arc<dyn Upstream>,
+    ) -> Result<Self, Error> {
         let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
         let local = listener.local_addr()?;
-        // No redirect is ever followed: that, and refusing absolute request
-        // targets, is what holds the window to its one origin.
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|error| Error::Client(error.to_string()))?;
         log::info!("web window {local} serves {origin}");
-        let accept = tokio::spawn(accept(listener, origin.clone(), client));
+        let accept = tokio::spawn(accept(listener, origin.clone(), upstream));
         Ok(Self {
             local,
             origin,
@@ -161,16 +193,16 @@ impl Drop for Window {
     }
 }
 
-async fn accept(listener: TcpListener, origin: Origin, client: reqwest::Client) {
+async fn accept(listener: TcpListener, origin: Origin, upstream: Arc<dyn Upstream>) {
     let mut open = JoinSet::new();
     loop {
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, _)) => {
-                    open.spawn(connection(stream, origin.clone(), client.clone()));
+                    open.spawn(connection(stream, origin.clone(), upstream.clone()));
                 }
                 Err(error) => {
-                    log::warn!("web window {} stopped accepting: {error}", origin);
+                    log::warn!("web window {origin} stopped accepting: {error}");
                     return;
                 }
             },
@@ -198,7 +230,7 @@ impl Refusal {
     }
 }
 
-async fn connection(stream: TcpStream, origin: Origin, client: reqwest::Client) {
+async fn connection(stream: TcpStream, origin: Origin, upstream: Arc<dyn Upstream>) {
     let (read, mut write) = stream.into_split();
     let mut reader = BufReader::new(read);
     loop {
@@ -211,9 +243,9 @@ async fn connection(stream: TcpStream, origin: Origin, client: reqwest::Client) 
             }
         };
         let keep = head.keep_alive();
-        match carry(&mut reader, &mut write, &origin, &client, head).await {
-            Ok(true) if keep => continue,
-            Ok(_) => return,
+        match carry(&mut reader, &mut write, &origin, upstream.as_ref(), head).await {
+            Ok(()) if keep => continue,
+            Ok(()) => return,
             Err(refusal) => {
                 let _ = refuse(&mut write, refusal).await;
                 return;
@@ -238,7 +270,10 @@ impl Head {
     }
 
     fn keep_alive(&self) -> bool {
-        let connection = self.get("connection").unwrap_or_default().to_ascii_lowercase();
+        let connection = self
+            .get("connection")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
         if connection.split(',').any(|token| token.trim() == "close") {
             return false;
         }
@@ -301,7 +336,11 @@ where
             return Err(Refusal::new(400, "Bad Request", "a header has no colon"));
         };
         if name.is_empty() || !name.bytes().all(is_token) {
-            return Err(Refusal::new(400, "Bad Request", "a header name is not a name"));
+            return Err(Refusal::new(
+                400,
+                "Bad Request",
+                "a header name is not a name",
+            ));
         }
         headers.push((name.to_ascii_lowercase(), value.trim().to_string()));
     }
@@ -327,8 +366,12 @@ fn target_of(head: &Head) -> Result<&str, Refusal> {
             "this is a window onto one site, not a proxy: CONNECT is refused",
         ));
     }
-    if head.method.is_empty() || !head.method.bytes().all(is_token) {
-        return Err(Refusal::new(400, "Bad Request", "the method is not a method"));
+    if head.method.is_empty() || !head.method.bytes().all(|b| b.is_ascii_uppercase()) {
+        return Err(Refusal::new(
+            400,
+            "Bad Request",
+            "the method is not a method",
+        ));
     }
     if !head.target.starts_with('/') {
         return Err(Refusal::new(
@@ -366,169 +409,177 @@ fn hop_by_hop(name: &str) -> bool {
     )
 }
 
+/// A request header the window passes on; `None` drops it.
+fn forward(name: &str) -> bool {
+    // Host belongs to the origin, not to whoever reached the window, and the
+    // session is the upstream browser's: a reader neither sends a cookie nor
+    // needs one.
+    !hop_by_hop(name)
+        && !matches!(
+            name,
+            "host" | "content-length" | "cookie" | "authorization" | "accept-encoding"
+        )
+}
+
 /// One reply header as the window passes it on; `None` drops it.
 ///
-/// Three kinds are rewritten, because the page now lives on a loopback port
-/// and no longer on the origin it came from.
+/// The page is served from a loopback port now, and the credentials that
+/// fetched it are the browser's, not the reader's.
 fn rewrite(origin: &Origin, name: &str, value: &str) -> Option<String> {
     match name {
         _ if hop_by_hop(name) => None,
-        // The window frames the reply itself.
-        "content-length" => Some(value.to_string()),
+        // The window frames and encodes the reply itself.
+        "content-length" | "content-encoding" => None,
+        // The session stays in the browser that holds it. Handing a reader
+        // this site's cookie would hand over the account.
+        "set-cookie" => None,
         // A loopback port must never be pinned to HTTPS: the pin is kept per
         // host, so one site's header would break every other local port.
         "strict-transport-security" => None,
         // These name the origin the page no longer has, so they would forbid
         // the page its own scripts and styles.
         "content-security-policy" | "content-security-policy-report-only" => None,
-        // `Domain` names the origin's host, which the browser will not accept
-        // from a loopback page, and `Secure` would withhold the cookie from a
-        // loopback port that has no TLS.
-        "set-cookie" => Some(
-            value
-                .split(';')
-                .map(str::trim)
-                .filter(|part| {
-                    let part = part.to_ascii_lowercase();
-                    !part.starts_with("domain=") && part != "secure"
-                })
-                .collect::<Vec<_>>()
-                .join("; "),
-        ),
         // Back to where the page already is: keep it inside the window. A
         // `Location` anywhere else is passed on untouched — the window will
-        // not fetch it, and the browser leaving is visible, not a silent relay.
-        "location" if origin.covers(value) => {
-            let rest = value
-                .split_once("//")
-                .map(|(_, rest)| rest)
-                .unwrap_or(value);
-            let path = rest.find('/').map(|at| &rest[at..]).unwrap_or("/");
-            Some(path.to_string())
-        }
+        // not fetch it, and the browser leaving is visible, not a quiet relay.
+        "location" if origin.covers(value) => Some(path_of(value)),
         _ => Some(value.to_string()),
     }
 }
 
-/// Carries one request to the origin and the reply back. `Ok(true)` leaves the
-/// connection usable for another request.
+/// The path and query of an absolute URL, as a request target.
+fn path_of(url: &str) -> String {
+    let rest = url.split_once("//").map(|(_, rest)| rest).unwrap_or(url);
+    match rest.find('/') {
+        Some(at) => rest[at..].split('#').next().unwrap_or("/").to_string(),
+        None => "/".to_string(),
+    }
+}
+
+/// Carries one request to the origin and the reply back.
 async fn carry<R, W>(
     reader: &mut BufReader<R>,
     write: &mut W,
     origin: &Origin,
-    client: &reqwest::Client,
+    upstream: &dyn Upstream,
     head: Head,
-) -> Result<bool, Refusal>
+) -> Result<(), Refusal>
 where
     R: tokio::io::AsyncRead + Unpin,
     W: tokio::io::AsyncWrite + Unpin,
 {
     let target = target_of(&head)?.to_string();
-    let body = read_body(reader, &head).await?;
-    let method = reqwest::Method::from_bytes(head.method.as_bytes())
-        .map_err(|_| Refusal::new(400, "Bad Request", "the method is not a method"))?;
-    let bodyless_request = method == reqwest::Method::HEAD;
+    let body = read_body(reader, &head).await?.unwrap_or_default();
+    let request = Fetch {
+        method: head.method.clone(),
+        url: format!("{origin}{target}"),
+        headers: head
+            .headers
+            .iter()
+            .filter(|(name, _)| forward(name))
+            .cloned()
+            .collect(),
+        body,
+    };
+    let reply = upstream
+        .fetch(request)
+        .await
+        .map_err(|error| Refusal::new(502, "Bad Gateway", error))?;
 
-    let mut request = client.request(method, format!("{origin}{target}"));
-    for (name, value) in &head.headers {
-        // Host comes from the origin, not from whoever reached the window.
-        if hop_by_hop(name) || name == "host" || name == "content-length" {
-            continue;
-        }
-        request = request.header(name, value);
-    }
-    if let Some(body) = body {
-        request = request.body(body);
-    }
-    let mut response = request.send().await.map_err(|error| {
-        Refusal::new(
+    // Where the request ended decides what the reader is told. The upstream
+    // follows redirects as the browser would, so the window checks the
+    // destination afterwards instead of trusting the route.
+    if !origin.covers(&reply.url) {
+        return Err(Refusal::new(
             502,
             "Bad Gateway",
-            format!("{origin} did not answer: {error}"),
-        )
-    })?;
+            format!("the request ended off {origin}; this window serves one origin"),
+        ));
+    }
+    let landed = path_of(&reply.url);
+    if landed != target {
+        // Send the reader to where it actually ended, so its address and its
+        // relative links are the ones the page was written for. A request that
+        // was not a GET sees 303: the next one is a GET, as a browser does.
+        let status = if matches!(head.method.as_str(), "GET" | "HEAD") {
+            "302 Found"
+        } else {
+            "303 See Other"
+        };
+        let out = format!(
+            "HTTP/1.1 {status}\r\nlocation: {landed}\r\ncontent-length: 0\r\n{}\r\n",
+            connection_header(&head)
+        );
+        write
+            .write_all(out.as_bytes())
+            .await
+            .map_err(|error| Refusal::new(0, "", format!("write: {error}")))?;
+        let _ = write.flush().await;
+        return Ok(());
+    }
 
-    let status = response.status();
-    let bodyless = bodyless_request || status.as_u16() == 204 || status.as_u16() == 304;
-    let length = response
-        .headers()
-        .get("content-length")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
-
-    let mut out = format!(
-        "HTTP/1.1 {} {}\r\n",
-        status.as_u16(),
-        status.canonical_reason().unwrap_or("")
-    );
-    for (name, value) in response.headers() {
-        let Ok(value) = value.to_str() else { continue };
-        let name = name.as_str();
-        if !bodyless && name == "content-length" && length.is_none() {
-            continue;
-        }
-        if let Some(value) = rewrite(origin, name, value) {
+    let bodyless = head.method == "HEAD" || matches!(reply.status, 204 | 304);
+    let mut out = format!("HTTP/1.1 {} {}\r\n", reply.status, reason(reply.status));
+    for (name, value) in &reply.headers {
+        let name = name.to_ascii_lowercase();
+        if let Some(value) = rewrite(origin, &name, value) {
             out.push_str(&format!("{name}: {value}\r\n"));
         }
     }
-    let chunked = !bodyless && length.is_none();
-    if chunked {
-        out.push_str("transfer-encoding: chunked\r\n");
+    if !bodyless {
+        out.push_str(&format!("content-length: {}\r\n", reply.body.len()));
     }
-    out.push_str(if head.keep_alive() {
-        "connection: keep-alive\r\n\r\n"
-    } else {
-        "connection: close\r\n\r\n"
-    });
+    out.push_str(&connection_header(&head));
+    out.push_str("\r\n");
     write
         .write_all(out.as_bytes())
         .await
         .map_err(|error| Refusal::new(0, "", format!("write: {error}")))?;
-
-    if bodyless {
-        return Ok(true);
-    }
-    let mut written = 0u64;
-    loop {
-        let chunk = match response.chunk().await {
-            Ok(Some(chunk)) => chunk,
-            Ok(None) => break,
-            // The head is already out, so the only honest end is to close:
-            // a short body under a Content-Length would otherwise be read as
-            // the start of the next reply.
-            Err(error) => {
-                log::info!("web window: {origin}{target} broke off: {error}");
-                return Ok(false);
-            }
-        };
-        if chunk.is_empty() {
-            continue;
-        }
-        written += chunk.len() as u64;
-        let wrote = if chunked {
-            write
-                .write_all(format!("{:x}\r\n", chunk.len()).as_bytes())
-                .await
-                .and(write.write_all(&chunk).await)
-                .and(write.write_all(b"\r\n").await)
-        } else {
-            write.write_all(&chunk).await
-        };
-        if let Err(error) = wrote {
-            log::debug!("web window: the reader of {origin}{target} left: {error}");
-            return Ok(false);
-        }
-    }
-    if chunked {
-        let _ = write.write_all(b"0\r\n\r\n").await;
-    } else if length != Some(written) {
-        // Promised one length and sent another: this connection can no longer
-        // be told apart from the next reply on it.
-        log::info!("web window: {origin}{target} sent {written} of {length:?} bytes");
-        return Ok(false);
+    if !bodyless {
+        write
+            .write_all(&reply.body)
+            .await
+            .map_err(|error| Refusal::new(0, "", format!("write: {error}")))?;
     }
     let _ = write.flush().await;
-    Ok(true)
+    Ok(())
+}
+
+fn connection_header(head: &Head) -> String {
+    if head.keep_alive() {
+        "connection: keep-alive\r\n".into()
+    } else {
+        "connection: close\r\n".into()
+    }
+}
+
+/// Enough of the registry to name the statuses a site actually answers with;
+/// the number is what matters to the reader's browser.
+fn reason(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        301 => "Moved Permanently",
+        302 => "Found",
+        303 => "See Other",
+        304 => "Not Modified",
+        307 => "Temporary Redirect",
+        308 => "Permanent Redirect",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        409 => "Conflict",
+        410 => "Gone",
+        429 => "Too Many Requests",
+        500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
+        _ => "",
+    }
 }
 
 async fn read_body<R>(reader: &mut BufReader<R>, head: &Head) -> Result<Option<Vec<u8>>, Refusal>
@@ -641,8 +692,14 @@ mod tests {
 
     #[test]
     fn an_origin_is_a_scheme_a_host_and_a_port() {
-        assert_eq!(origin("https://example.test").to_string(), "https://example.test");
-        assert_eq!(origin("https://example.test/").to_string(), "https://example.test");
+        assert_eq!(
+            origin("https://example.test").to_string(),
+            "https://example.test"
+        );
+        assert_eq!(
+            origin("https://example.test/").to_string(),
+            "https://example.test"
+        );
         assert_eq!(
             origin("http://Example.Test:8080").to_string(),
             "http://example.test:8080"
@@ -673,23 +730,31 @@ mod tests {
         assert!(!origin.covers("/a/b"));
     }
 
-    /// A page served from a loopback port is no longer on the origin it came
-    /// from, so three headers would work against it and one would reach
-    /// beyond this window.
+    #[test]
+    fn a_url_becomes_the_request_target_it_names() {
+        assert_eq!(path_of("https://example.test/issues?page=2"), "/issues?page=2");
+        assert_eq!(path_of("https://example.test"), "/");
+        assert_eq!(path_of("https://example.test/a#b"), "/a");
+    }
+
+    /// The page arrives on a loopback port, fetched with somebody else's
+    /// session. Four headers would work against it, and one would hand the
+    /// reader the account.
     #[test]
     fn a_reply_is_rewritten_for_the_port_it_now_arrives_on() {
         let origin = origin("https://example.test");
         let rewrite = |name: &str, value: &str| rewrite(&origin, name, value);
 
-        assert_eq!(rewrite("strict-transport-security", "max-age=63072000"), None);
+        assert_eq!(
+            rewrite("strict-transport-security", "max-age=63072000"),
+            None
+        );
         assert_eq!(rewrite("content-security-policy", "default-src 'self'"), None);
         assert_eq!(rewrite("connection", "keep-alive"), None);
         assert_eq!(rewrite("transfer-encoding", "chunked"), None);
+        // The browser holds the session; the reader is given none of it.
+        assert_eq!(rewrite("set-cookie", "s=1; Path=/; HttpOnly"), None);
 
-        assert_eq!(
-            rewrite("set-cookie", "s=1; Domain=example.test; Path=/; Secure; HttpOnly"),
-            Some("s=1; Path=/; HttpOnly".into())
-        );
         assert_eq!(
             rewrite("location", "https://example.test/issues?page=2"),
             Some("/issues?page=2".into())
@@ -700,7 +765,20 @@ mod tests {
             rewrite("location", "https://sso.example.test/login"),
             Some("https://sso.example.test/login".into())
         );
-        assert_eq!(rewrite("content-type", "text/html"), Some("text/html".into()));
+        assert_eq!(
+            rewrite("content-type", "text/html"),
+            Some("text/html".into())
+        );
+    }
+
+    /// What a reader sends upstream, and what it cannot.
+    #[test]
+    fn a_reader_cannot_name_the_host_or_hand_over_a_cookie() {
+        assert!(forward("accept"));
+        assert!(forward("content-type"));
+        for refused in ["host", "cookie", "authorization", "connection", "content-length"] {
+            assert!(!forward(refused), "{refused} must not be passed on");
+        }
     }
 
     fn head(text: &str) -> Head {
@@ -717,8 +795,8 @@ mod tests {
         }
     }
 
-    /// The window has one origin by construction. These are the two ways a
-    /// request could ask it for another, and both are refused rather than
+    /// The window has one origin by construction. These are the ways a
+    /// request could ask it for another, and each is refused rather than
     /// quietly rewritten.
     #[test]
     fn a_request_cannot_name_another_origin() {

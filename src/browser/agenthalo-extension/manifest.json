@@ -9,6 +9,10 @@
     "nativeMessaging",
     "tabs"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "sw.js"
   },

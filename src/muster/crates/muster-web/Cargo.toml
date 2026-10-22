@@ -9,7 +9,6 @@ description = "The web window: one loopback port standing for exactly one remote
 
 [dependencies]
 tokio.workspace = true
-reqwest.workspace = true
 log.workspace = true
 thiserror.workspace = true
 

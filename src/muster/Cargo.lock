@@ -2252,7 +2252,6 @@ name = "muster-web"
 version = "0.1.0"
 dependencies = [
  "log",
- "reqwest",
  "thiserror 2.0.21",
  "tokio",
 ]
@@ -2264,6 +2263,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
+ "data-encoding",
  "env_logger",
  "futures-util",
  "hex",
