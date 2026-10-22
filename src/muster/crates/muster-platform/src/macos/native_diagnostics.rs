@@ -9,14 +9,17 @@ pub(super) struct Trace {
     id: u64,
     started: Instant,
     stage: &'static str,
+    stage_started: Instant,
     complete: bool,
 }
 
 impl Trace {
     pub(super) fn new(operation: &str, provider: &str, session: &str) -> Self {
+        let started = Instant::now();
         let trace = Self {
             id: NEXT_TRACE.fetch_add(1, Ordering::Relaxed),
-            started: Instant::now(),
+            started,
+            stage_started: started,
             stage: "identity",
             complete: false,
         };
@@ -37,7 +40,12 @@ impl Trace {
     }
 
     pub(super) fn stage(&mut self, stage: &'static str) {
+        self.record(format_args!(
+            "stage_elapsed_ms={}",
+            self.stage_started.elapsed().as_millis()
+        ));
         self.stage = stage;
+        self.stage_started = Instant::now();
         self.record(format_args!("entered"));
     }
 
@@ -49,9 +57,10 @@ impl Trace {
 impl Drop for Trace {
     fn drop(&mut self) {
         self.record(format_args!(
-            "end completed={} elapsed_ms={}",
+            "end completed={} elapsed_ms={} stage_elapsed_ms={}",
             self.complete,
-            self.started.elapsed().as_millis()
+            self.started.elapsed().as_millis(),
+            self.stage_started.elapsed().as_millis()
         ));
     }
 }
