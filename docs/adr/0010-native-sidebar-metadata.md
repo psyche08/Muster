@@ -145,3 +145,47 @@ tests passed. The full agent library suite passed 224 tests (four pre-existing
 ignored). Public-content and whitespace checks passed. Release preparation bumps
 both Apple platforms to 1.0.83 (74); signed builds, publication, installation
 and native-send acceptance are still pending at this source commit.
+
+### Published and installed 1.0.83 (2026-10-22)
+
+- Clean source `e5ec0e85afc3ce4d6f20b26d23e5c55a70dfdc1c` from PR #3
+  built locally for macOS arm64 and iOS arm64, version 1.0.83 (74).
+  The source replay and 224 passing agent tests above establish the parser
+  correction; they do not establish a new native provider receipt.
+- Apple notarization `b12050f1-7df7-4e35-b30e-46cc1cc05835` was Accepted.
+  Strict signatures, staple validation and Gatekeeper passed. An initial
+  signing attempt failed because a timestamp was unavailable; a bounded retry
+  succeeded without removing the timestamp requirement.
+- Both platforms were published. Independent public downloads, including the
+  installation page's content-addressed iOS asset, verified 1.0.83 (74).
+  macOS ZIP SHA-256:
+  `780d2ee23b69700597709084f4b1666e1573fca9280188e7319f29eea9a6ee22`;
+  iOS IPA SHA-256:
+  `fa284b3132aa234eb860c7fa4a7adc393370a1e35359d0e5a79d576dfedc3df3`.
+- All three test Macs acquired the Rust update lease and installed the release.
+  Device identities remained unchanged. Each reports 1.0.83, Accessibility
+  granted, relay registered and Vnet up. Installed daemon SHA-256 is
+  `f66585b86efad2266ffd1b25f70d645e09764899ad4a9d663b6d9677cbdb8603`
+  on all three devices; strict signature, staple and Gatekeeper checks pass.
+- One installation initially left no daemon socket: Launch Services reused an
+  existing GUI process invoked with a lowercase executable spelling and a CLI
+  argument. Starting a new GUI instance with normal `open -n` restored the
+  ServiceManagement job and Vnet. The existing process and terminal session
+  were not terminated. Preserve the initial failed installation result and
+  subsequent recovery evidence separately. This is operational recovery, not
+  a new source fix or acceptance of the startup-retry fault scenario.
+- After installation, all six directed Mac RPC paths and all six directed
+  virtual-IP ping paths passed. SSH reached the two remote test Macs over
+  their virtual addresses. The other Mac's port 22 refused connections both
+  locally and over Vnet during this inspection; its SSH service was not changed.
+- Other log findings remain open: two pre-ledger Codex multi-composer refusals,
+  transient Claude question-panel lookup timeouts, and intermittent Codex Cloud
+  request errors, including an error after this rollout. Already-answered
+  question rejections retain their protection. These observations do not yet
+  establish a source defect or justify replaying a provider operation.
+- No chat was replayed for this inspection. Installed native-send acceptance,
+  physical iPhone installation, phone log inspection, and reproduction of the
+  original kernel/network fault remain unverified. iOS OTA publication is
+  independently verified. GitHub Actions remained disabled; no Xcode Cloud or
+  external TestFlight testing build was started. No historical OTA files were
+  deleted.
