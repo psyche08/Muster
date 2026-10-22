@@ -72,3 +72,15 @@ These checks ran against the current sanitized main branch, preserving its
 renderer refresh, focused draft write and final submit-candidate revalidation.
 No release build, signing/notarization, publication, installation or live send
 was performed. Hosted CI was not enabled or dispatched.
+
+### Paired release plan: 1.0.85 (76)
+
+Publish this optimization in matching macOS and registered-device iOS builds.
+Build from a clean committed source tree, verify the desktop source lineage
+and Presence provisioning, sign with Developer ID, notarize and staple the
+portable Mac bundle. Validate the signed iOS archive and OTA package, then
+verify public page, manifest and package bytes. Install the verified desktop
+artifact on Mac-A, Mac-B and Mac-C under the existing Rust update lease;
+check signatures, device identity, Accessibility, relay and Vnet recovery.
+Record completion evidence separately. Physical iPhone acceptance and native
+send timing remain separate from release and installation verification.
