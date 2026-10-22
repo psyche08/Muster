@@ -307,6 +307,8 @@ func relative(_ unix: UInt64) -> String {
 struct ChatView: View {
     #if os(iOS)
     @StateObject private var keyboardDock = KeyboardDock()
+    @State private var latestRequest = 0
+    @State private var earlierRequest = 0
     #endif
     @Environment(\.workspaceLayout) private var layout
     let core: MusterCore
@@ -354,6 +356,28 @@ struct ChatView: View {
             .accessibilityIdentifier("session-content-tabs")
             #endif
             if contentTab == "Conversation" {
+            Group {
+            #if os(iOS)
+            RecycledConversation(chat: chat,
+                header: AnyView(conversationHeader(core: core)),
+                interactions: AnyView(VStack(alignment: .leading, spacing: 14) { interactionCards(core: core) }),
+                showsInteractions: !layout.flex,
+                blockContent: { block in AnyView(ConversationBlock(block: block) { message, path in
+                    core.openChange(summary: message, path: path)
+                }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest)
+                .overlay(alignment: .bottom) {
+                    if !atLatest {
+                        Button { latestRequest += 1 } label: {
+                            Image(systemName: "arrow.down").font(.system(size: 19, weight: .medium))
+                                .frame(width: 38, height: 38)
+                                .background(.regularMaterial, in: Circle())
+                                .overlay(Circle().stroke(palette.border, lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain).accessibilityLabel("Jump to latest")
+                        .padding(.bottom, 8)
+                    }
+                }
+            #else
             ScrollViewReader { proxy in
                 ScrollView {
                     // Markdown block margins settle after the first layout pass.
@@ -484,6 +508,8 @@ struct ChatView: View {
                     if atLatest && !jumpToStart && !layout.flex, let last = chat.interactions.last(where: { !$0.optional }) { withAnimation { proxy.scrollTo("interaction-\(last.id)", anchor: .bottom) } }
                 }
             }
+            #endif
+            }
             .id("\(chat.deviceID):\(chat.session.id)")
             .frame(maxHeight: layout.flex ? layout.readingHeight : .infinity)
             if layout.flex { Color.clear.frame(height: layout.hingeHeight) }
@@ -590,6 +616,29 @@ struct ChatView: View {
                 }
             }
             #endif
+        }
+    }
+
+    @ViewBuilder
+    private func conversationHeader(core: MusterCore) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if chat.loading && chat.messageCount == 0 { ProgressView("Loading conversation…") }
+            if !chat.loadError.isEmpty {
+                Label(chat.loadError, systemImage: "wifi.exclamationmark").font(.callout).foregroundStyle(.secondary)
+            }
+            if !chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty {
+                Text(chat.session.transcriptNotice.isEmpty ? "No messages yet" : chat.session.transcriptNotice)
+                    .foregroundStyle(.secondary)
+            }
+            if chat.hasEarlier_p {
+                Button("Load earlier") {
+                    #if os(iOS)
+                    earlierRequest += 1
+                    #endif
+                    core.agentLoadEarlier()
+                }.frame(maxWidth: .infinity)
+                    .disabled(chat.loading)
+            }
         }
     }
 

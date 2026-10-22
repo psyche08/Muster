@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		22EAF42D02D2747FB2A4FC76 /* MusterUI in Frameworks */ = {isa = PBXBuildFile; productRef = 284F9F8C26B7C27BC39D31FF /* MusterUI */; };
+		27462998DA661BFDF9CCCF6C /* RecycledConversationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E4A92BC655F184AC4D6A1 /* RecycledConversationTests.swift */; };
 		2DD5FB32895647DFC7C73E66 /* dev.linsheng.muster.helper.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9F015E5858DD89F76CC3E5A1 /* dev.linsheng.muster.helper.plist */; };
 		4965825F46E6B14020C9D1B4 /* KeyboardAndLiveChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBF261554FA10A43769CFC9 /* KeyboardAndLiveChatTests.swift */; };
 		4A533773A6FD434006FDCB77 /* MusterUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4B5CC7C2F75569B28D1E74A0 /* MusterUI */; };
@@ -37,6 +38,7 @@
 /* Begin PBXFileReference section */
 		0A6CA8DF8425E0E92DADA433 /* MusteriOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusteriOSApp.swift; sourceTree = "<group>"; };
 		20531C5D460892A8464EEB04 /* MusterApp */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MusterApp; path = .; sourceTree = SOURCE_ROOT; };
+		2F2E4A92BC655F184AC4D6A1 /* RecycledConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecycledConversationTests.swift; sourceTree = "<group>"; };
 		37F0A01E1DE59F63234EF0F8 /* dev.linsheng.musterd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = dev.linsheng.musterd.plist; sourceTree = "<group>"; };
 		4E1E791662D01B0FCF162B3D /* MusterMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusterMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		74C033B195290B06FD89A48F /* ConversationLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLayoutTests.swift; sourceTree = "<group>"; };
@@ -141,6 +143,7 @@
 				74C033B195290B06FD89A48F /* ConversationLayoutTests.swift */,
 				DBBF261554FA10A43769CFC9 /* KeyboardAndLiveChatTests.swift */,
 				F7E67A77960C41C832D193C2 /* NativeNavigationTests.swift */,
+				2F2E4A92BC655F184AC4D6A1 /* RecycledConversationTests.swift */,
 			);
 			name = MusterMobileTests;
 			path = Tests/MusterMobileTests;
@@ -345,6 +348,7 @@
 				F7A870EF0A1CA0CDD9F6D010 /* HighCPUStackTests.swift in Sources */,
 				4965825F46E6B14020C9D1B4 /* KeyboardAndLiveChatTests.swift in Sources */,
 				50A964F184B785A43BD7DCF5 /* NativeNavigationTests.swift in Sources */,
+				27462998DA661BFDF9CCCF6C /* RecycledConversationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -432,7 +436,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 76;
+				CURRENT_PROJECT_VERSION = 77;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -446,7 +450,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.85;
+				MARKETING_VERSION = 1.0.86;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -490,7 +494,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 76;
+				CURRENT_PROJECT_VERSION = 77;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -510,7 +514,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.85;
+				MARKETING_VERSION = 1.0.86;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
