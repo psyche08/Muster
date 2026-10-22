@@ -264,6 +264,29 @@ impl Element {
     /// Several attributes in one round trip to the app. A missing attribute
     /// is `None` (the framework reports it as an error value in place).
     pub fn attributes(&self, names: &[&str]) -> Vec<Option<CFType>> {
+        let Ok(values) = self.attribute_values(names) else {
+            return vec![None; names.len()];
+        };
+        (0..names.len())
+            // Preserve the existing best-effort projection for snapshot readers.
+            .map(|i| values.get(i as isize).map(|v| v.clone()))
+            .collect()
+    }
+
+    /// Like `attributes`, but preserve a failed IPC so a control scan cannot
+    /// treat an unreadable subtree as an empty, successfully visited node.
+    pub fn try_attributes(&self, names: &[&str]) -> Result<Vec<Option<CFType>>, AXError> {
+        let values = self.attribute_values(names)?;
+        if values.len() as usize != names.len() {
+            return Err(-25200);
+        }
+        values
+            .iter()
+            .map(|value| checked_attribute(value.clone()))
+            .collect()
+    }
+
+    fn attribute_values(&self, names: &[&str]) -> Result<CFArray<CFType>, AXError> {
         let keys: Vec<CFString> = names.iter().map(|n| CFString::new(n)).collect();
         let keys = CFArray::from_CFTypes(&keys);
         let mut raw: CFArrayRef = std::ptr::null();
@@ -276,15 +299,18 @@ impl Element {
                 &mut raw,
             )
         };
-        if status != 0 || raw.is_null() {
-            return vec![None; names.len()];
+        if status != 0 {
+            if !raw.is_null() {
+                // SAFETY: release any +1 array returned with the failed call.
+                drop(unsafe { CFArray::<CFType>::wrap_under_create_rule(raw) });
+            }
+            return Err(status);
+        }
+        if raw.is_null() {
+            return Err(-25200);
         }
         // SAFETY: a +1 CFArray of CFTypes.
-        let values: CFArray<CFType> = unsafe { CFArray::wrap_under_create_rule(raw) };
-        (0..names.len())
-            // Error placeholders are AXValueRefs; callers downcast.
-            .map(|i| values.get(i as isize).map(|v| v.clone()))
-            .collect()
+        Ok(unsafe { CFArray::wrap_under_create_rule(raw) })
     }
 
     /// An `AXChildren` value as elements.
@@ -603,6 +629,23 @@ impl Element {
     }
 }
 
+/// A batch can succeed while individual attributes report errors. Missing
+/// optional attributes are normal; a stale element/IPC failure is not an
+/// empty subtree and must invalidate the scan.
+fn checked_attribute(value: CFType) -> Result<Option<CFType>, AXError> {
+    // SAFETY: valid CF object; GetValue checks the requested AX error type.
+    if value.type_of() == unsafe { AXValueGetTypeID() } {
+        let mut code: AXError = 0;
+        if unsafe { AXValueGetValue(value.as_CFTypeRef(), 5, (&mut code as *mut AXError).cast()) } {
+            return match code {
+                -25205 | -25212 => Ok(None), // unsupported attribute / no value
+                _ => Err(code),
+            };
+        }
+    }
+    Ok(Some(value))
+}
+
 /// A CFRange wrapped as an AXValue.
 fn cf_range(location: usize, length: usize) -> Result<CFType, AXError> {
     #[repr(C)]
@@ -687,6 +730,24 @@ fn intersection_center(a: [f64; 4], b: [f64; 4]) -> Option<[f32; 2]> {
 #[cfg(test)]
 mod renderer_query_tests {
     use super::*;
+    #[test]
+    fn batch_attribute_errors_do_not_hide_an_unreadable_subtree() {
+        let error = |code: AXError| {
+            // SAFETY: AXValueCreate copies the error code; we own the +1 CF object.
+            let raw = unsafe { AXValueCreate(5, (&code as *const AXError).cast()) };
+            assert!(!raw.is_null());
+            unsafe { CFType::wrap_under_create_rule(raw) }
+        };
+        for code in [-25205, -25212] {
+            assert!(checked_attribute(error(code)).unwrap().is_none());
+        }
+        for code in [-25202, -25204, -25211] {
+            assert_eq!(checked_attribute(error(code)).unwrap_err(), code);
+        }
+        let name = CFString::new("Send").as_CFType();
+        assert_eq!(checked_attribute(name.clone()).unwrap(), Some(name));
+    }
+
     #[test]
     fn clips_long_web_documents_to_their_window_without_rejecting_negative_screen_origins() {
         assert_eq!(

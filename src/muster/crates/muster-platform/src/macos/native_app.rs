@@ -812,7 +812,17 @@ fn desktop_session_file(desktop_id: &str) -> Option<std::path::PathBuf> {
 struct Surface {
     web_area: Element,
     composer: Option<Element>,
-    send: Option<Element>,
+    sends: Vec<Element>,
+    // Content-free metadata from this scan; diagnostics must not walk again.
+    control_diagnostics: Vec<String>,
+}
+
+impl Surface {
+    fn record_controls(&self, trace: &Trace) {
+        for detail in &self.control_diagnostics {
+            trace.record(format_args!("{detail}"));
+        }
+    }
 }
 
 fn find_surface(
@@ -878,7 +888,22 @@ fn find_surface_traced(
     }
     let web_area = web_area
         .ok_or_else(|| Error::NotFound(format!("session {session} is not open in the app")))?;
-    let (composer, send) = find_controls_traced(profile, &web_area, trace);
+    let Controls {
+        composer,
+        send,
+        diagnostics,
+        complete,
+    } = find_controls(profile, &web_area);
+    if let Some(trace) = trace {
+        for detail in &diagnostics {
+            trace.record(format_args!("{detail}"));
+        }
+    }
+    if !complete {
+        return Err(Error::Unavailable(
+            "The native control scan was incomplete; not sent".into(),
+        ));
+    }
     if composer.len() > 1 {
         return Err(Error::Unavailable(format!(
             "expected one prompt, found {}",
@@ -888,22 +913,59 @@ fn find_surface_traced(
     Ok(Surface {
         web_area,
         composer: composer.into_iter().next(),
-        send: (send.len() == 1).then(|| send[0].clone()),
+        sends: send,
+        control_diagnostics: diagnostics,
     })
 }
 
-fn find_controls_traced(
-    profile: &AppProfile,
-    web_area: &Element,
-    trace: Option<&Trace>,
-) -> (Vec<Element>, Vec<Element>) {
+const CONTROL_ATTRIBUTES: [&str; 7] = [
+    "AXRole",
+    "AXTitle",
+    "AXDescription",
+    "AXPlaceholderValue",
+    "AXChildren",
+    "AXEnabled",
+    "AXFocused",
+];
+
+fn control_metadata(
+    values: &[Option<core_foundation::base::CFType>],
+) -> Option<muster_agent::desktop_chat::AxNode> {
+    let text = |i: usize| {
+        values
+            .get(i)
+            .and_then(Option::as_ref)
+            .and_then(ax::value_string)
+            .unwrap_or_default()
+    };
+    let role = text(0);
+    if role.is_empty() {
+        return None;
+    }
+    Some(muster_agent::desktop_chat::AxNode {
+        role,
+        title: text(1),
+        description: text(2),
+        placeholder: text(3),
+        ..Default::default()
+    })
+}
+
+struct Controls {
+    composer: Vec<Element>,
+    send: Vec<Element>,
+    diagnostics: Vec<String>,
+    complete: bool,
+}
+
+fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     use muster_agent::native_send::{ControlNode, composer_submits};
     let (mut composer, mut send) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
     let mut elements = Vec::new();
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
-    let mut logged = 0;
+    let mut diagnostics = Vec::new();
     let started = std::time::Instant::now();
     let mut complete = true;
     while let Some((node, parent)) = todo.pop_front() {
@@ -915,28 +977,25 @@ fn find_controls_traced(
             continue;
         }
         let index = elements.len();
-        let is_composer = profile.controls.composer.matches(&node);
-        let is_send = !is_composer && profile.controls.send.matches(&node);
-        let is_button = node.role() == "AXButton";
-        let title = if is_button {
-            text(&node, "AXTitle")
-        } else {
-            String::new()
+        // One IPC per node for both selector matching and traversal. Never
+        // fetch transcript values: only control metadata is needed here.
+        let Ok(values) = node.try_attributes(&CONTROL_ATTRIBUTES) else {
+            complete = false;
+            break;
         };
-        let description = if is_button {
-            text(&node, "AXDescription")
-        } else {
-            String::new()
+        let Some(field) = control_metadata(&values) else {
+            complete = false;
+            break;
         };
+        let is_composer = profile.controls.composer.matches(&field);
+        let is_send = !is_composer && profile.controls.send.matches(&field);
+        let is_button = field.role == "AXButton";
         let queued_delete = is_button
-            && profile.controls.queue.as_ref().is_some_and(|queue| {
-                queue.row.matches(&muster_agent::desktop_chat::AxNode {
-                    role: "AXButton".into(),
-                    title: title.clone(),
-                    description: description.clone(),
-                    ..Default::default()
-                })
-            });
+            && profile
+                .controls
+                .queue
+                .as_ref()
+                .is_some_and(|queue| queue.row.matches(&field));
         nodes.push(ControlNode {
             parent,
             composer: is_composer,
@@ -947,36 +1006,38 @@ fn find_controls_traced(
             composer.push(node.clone());
             // Generic toolbar samples are often exhausted before the editor.
             // Preserve a separate bounded sample; never read the draft value.
-            if let Some(trace) = trace.filter(|_| composer.len() <= 4) {
-                trace.record(format_args!(
+            if log::log_enabled!(log::Level::Info) && composer.len() <= 4 {
+                diagnostics.push(format!(
                     "composer index={index} parent={parent:?} title={:?} description={:?} placeholder={:?} enabled={:?} focused={:?}",
-                    control_label(&text(&node, "AXTitle")),
-                    control_label(&text(&node, "AXDescription")),
-                    control_label(&text(&node, "AXPlaceholderValue")),
-                    node.bool("AXEnabled"), node.bool("AXFocused")
+                    control_label(&field.title),
+                    control_label(&field.description),
+                    control_label(&field.placeholder),
+                    values[5].as_ref().and_then(ax::value_bool),
+                    values[6].as_ref().and_then(ax::value_bool)
                 ));
             }
         }
         buttons += usize::from(is_button);
-        if let Some(trace) = trace {
+        if log::log_enabled!(log::Level::Info) {
             // Always report semantic submit/Stop controls, even after unrelated
             // toolbar buttons have exhausted the small generic sample budget.
             if is_send
-                || (is_button && profile.controls.stop.matches(&node))
+                || (is_button && profile.controls.stop.matches(&field))
                 || ((is_composer || is_button)
-                    && logged < 16
+                    && diagnostics.len() < 16
                     && started.elapsed() < Duration::from_millis(150))
             {
-                trace.record(format_args!("control role={} title={:?} description={:?} composer_match={is_composer} send_match={is_send} enabled={:?}",
-                    node.role(), control_label(&title), control_label(&description), node.bool("AXEnabled")));
-                logged += 1;
+                diagnostics.push(format!("control role={} title={:?} description={:?} composer_match={is_composer} send_match={is_send} enabled={:?}",
+                    field.role, control_label(&field.title), control_label(&field.description), values[5].as_ref().and_then(ax::value_bool)));
             }
         }
-        todo.extend(
-            node.children()
-                .into_iter()
-                .map(|child| (child, Some(index))),
-        );
+        if let Some(children) = &values[4] {
+            todo.extend(
+                Element::elements_of(children)
+                    .into_iter()
+                    .map(|child| (child, Some(index))),
+            );
+        }
         elements.push(node);
     }
     if complete {
@@ -1001,10 +1062,13 @@ fn find_controls_traced(
         .into_iter()
         .map(|index| send[index].clone())
         .collect();
-    if let Some(trace) = trace {
-        trace.record(format_args!("controls composers={} send_buttons={} all_buttons={buttons} logged_controls={logged} walk=({}, complete={complete}, {} ms)", composer.len(), send.len(), nodes.len(), started.elapsed().as_millis()));
+    diagnostics.push(format!("controls composers={} send_buttons={} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms)", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis()));
+    Controls {
+        composer,
+        send,
+        diagnostics,
+        complete,
     }
-    (composer, send)
 }
 
 struct Shared {
@@ -1135,15 +1199,9 @@ impl NativeAppController {
                 &self.session[..8.min(self.session.len())]
             );
         }
-        // The send button comes and goes (Stop while running); it is
-        // looked up again when needed.
-        if surface
-            .send
-            .as_ref()
-            .is_some_and(|send| !surface.web_area.contains(send))
-        {
-            surface.send = None;
-        }
+        // Send candidates are consumed only from a fresh surface scan, never
+        // from this cache. Validating unused cached buttons would walk the
+        // whole conversation again without making the next press safer.
         Ok(())
     }
 
@@ -1168,8 +1226,7 @@ impl NativeAppController {
         muster_agent::control_guard::check()?;
         self.check_identity()?;
         let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
-        let (composers, sends) = find_controls_traced(self.profile, &fresh.web_area, None);
-        let composer = composers.first().map(|c| {
+        let composer = fresh.composer.as_ref().map(|c| {
             serde_json::json!({
                 "role": c.role(),
                 "subrole": c.string("AXSubrole"),
@@ -1197,9 +1254,9 @@ impl NativeAppController {
             "provider": self.profile.app.provider,
             "read_only": true,
             "web_area_url_present": fresh.web_area.string("AXURL").is_some(),
-            "composers": composers.len(),
+            "composers": usize::from(fresh.composer.is_some()),
             "composer": composer,
-            "send_buttons": sends.iter().map(|b| serde_json::json!({
+            "send_buttons": fresh.sends.iter().map(|b| serde_json::json!({
                 "label": control_label(&button_label(b)),
                 "enabled": b.bool("AXEnabled"),
             })).collect::<Vec<_>>(),
@@ -1602,11 +1659,15 @@ impl NativeAppController {
                     ));
                 }
             }
-            let (_, buttons) = find_controls_traced(self.profile, &fresh.web_area, None);
+            // The surface scan already resolved all submit candidates in this
+            // exact composer branch. Keep their count (including ambiguity)
+            // and re-read enabled state without a second tree traversal.
+            let buttons = &fresh.sends;
             let enabled = buttons.len() == 1 && buttons[0].bool("AXEnabled").unwrap_or(false);
             *self.surface.lock().unwrap() = fresh.clone();
             let state = readiness.observe(started.elapsed(), echoed, buttons.len(), enabled);
             if state != Readiness::Wait {
+                fresh.record_controls(&trace);
                 trace.record(format_args!("readiness={state:?} echoed={echoed} send_buttons={} enabled={enabled} elapsed_ms={}", buttons.len(), started.elapsed().as_millis()));
             }
             match state {
@@ -1614,8 +1675,7 @@ impl NativeAppController {
                     let current = current.ok_or_else(|| {
                         Error::Unavailable("The native prompt is not visible; not sent".into())
                     })?;
-                    find_controls_traced(self.profile, &fresh.web_area, Some(&trace));
-                    break (fresh.web_area, current, buttons[0].clone());
+                    break (fresh.web_area.clone(), current, buttons[0].clone());
                 }
                 Readiness::Focus => {
                     let current = current.ok_or_else(|| {
@@ -1635,7 +1695,6 @@ impl NativeAppController {
                 }
                 Readiness::Wait => {}
                 failure => {
-                    find_controls_traced(self.profile, &fresh.web_area, Some(&trace));
                     let message = match failure {
                         Readiness::EchoTimeout => {
                             log::warn!(
@@ -1673,7 +1732,7 @@ impl NativeAppController {
                 );
                 Error::Conflict("session view changed; draft preserved, not sent".into())
             })?;
-        let (_, current_buttons) = find_controls_traced(self.profile, &web_area, None);
+        let current_buttons = find_controls(self.profile, &web_area).send;
         if current_buttons.as_slice() != std::slice::from_ref(send)
             || send.bool("AXEnabled") != Some(true)
             || !web_area.contains(send)
@@ -1841,8 +1900,13 @@ impl Controller for NativeAppController {
         };
         let composer = locate()?;
         let original = composer.string("AXValue");
-        let (_, buttons) =
-            find_controls_traced(self.profile, &self.surface.lock().unwrap().web_area, None);
+        let controls = find_controls(self.profile, &self.surface.lock().unwrap().web_area);
+        if !controls.complete {
+            return Err(Error::Unavailable(
+                "The native control scan was incomplete; no Tab sent".into(),
+            ));
+        }
+        let buttons = controls.send;
         let may_submit = buttons
             .iter()
             .any(|button| button.bool("AXEnabled") != Some(false));
@@ -2058,6 +2122,42 @@ mod question_forms;
 #[cfg(test)]
 mod send_tests {
     use super::*;
+
+    #[test]
+    fn batched_control_names_preserve_empty_title_fallback_and_composer_selectors() {
+        use core_foundation::{base::TCFType, string::CFString};
+        let metadata = |role: &str, title: &str, description: &str, placeholder: &str| {
+            control_metadata(
+                &[role, title, description, placeholder]
+                    .map(|v| Some(CFString::new(v).as_CFType())),
+            )
+            .unwrap()
+        };
+        for profile in [&CODEX_APP, &CLAUDE_APP] {
+            let send = metadata("AXButton", "", "Send", "");
+            assert!(profile.controls.send.matches(&send));
+            let stop = metadata("AXButton", "", "Stop", "");
+            assert!(!profile.controls.send.matches(&stop));
+            assert!(profile.controls.stop.matches(&stop));
+        }
+        let catdesk = metadata("AXTextArea", "", "聊天输入框", "");
+        assert!(CATDESK_APP.controls.composer.matches(&catdesk));
+        // A missing optional label must not erase a present description.
+        let values = [
+            Some(CFString::new("AXButton").as_CFType()),
+            None,
+            Some(CFString::new("Send").as_CFType()),
+            None,
+        ];
+        assert!(
+            CODEX_APP
+                .controls
+                .send
+                .matches(&control_metadata(&values).unwrap())
+        );
+        assert!(control_metadata(&[]).is_none());
+        assert!(control_metadata(&[None]).is_none());
+    }
 
     #[test]
     fn explicit_send_reuses_matching_drafts_and_replaces_different_drafts() {

@@ -1,4 +1,4 @@
-# ADR 0027: Page the conversation projection before native layout
+# ADR 0029: Page the conversation projection before native layout
 
 - Date: 2026-10-22
 - Status: Accepted
