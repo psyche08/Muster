@@ -945,6 +945,17 @@ fn find_controls_traced(
         });
         if is_composer {
             composer.push(node.clone());
+            // Generic toolbar samples are often exhausted before the editor.
+            // Preserve a separate bounded sample; never read the draft value.
+            if let Some(trace) = trace.filter(|_| composer.len() <= 4) {
+                trace.record(format_args!(
+                    "composer index={index} parent={parent:?} title={:?} description={:?} placeholder={:?} enabled={:?} focused={:?}",
+                    control_label(&text(&node, "AXTitle")),
+                    control_label(&text(&node, "AXDescription")),
+                    control_label(&text(&node, "AXPlaceholderValue")),
+                    node.bool("AXEnabled"), node.bool("AXFocused")
+                ));
+            }
         }
         buttons += usize::from(is_button);
         if let Some(trace) = trace {

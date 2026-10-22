@@ -735,7 +735,9 @@ impl NativeAppController {
         pending: &PendingInteraction,
         generation: u64,
     ) -> Result<Tree, Error> {
+        let started = Instant::now();
         self.question_guard(pending, generation)?;
+        let guard_ms = started.elapsed().as_millis();
         // A valid composer/session identity does not imply that the retained
         // web-area proxy contains the current paginated form. Re-resolve from
         // a new application proxy, just as a new diagnostic inspection does.
@@ -743,8 +745,19 @@ impl NativeAppController {
         // or another press of the answer control.
         let app = Element::application(self.pid);
         let fresh = find_surface(self.profile, &app, &self.session, &self.resolver)?;
+        let surface_ms = started.elapsed().as_millis();
         self.question_guard(pending, generation)?;
+        let recheck_ms = started.elapsed().as_millis();
         let tree = Tree::read(&fresh.web_area, self.profile)?;
+        log::info!(
+            "AX question tree: session={} nodes={} guard_ms={guard_ms} surface_ms={} recheck_ms={} read_ms={} total_ms={}",
+            self.session,
+            tree.nodes.len(),
+            surface_ms - guard_ms,
+            recheck_ms - surface_ms,
+            started.elapsed().as_millis() - recheck_ms,
+            started.elapsed().as_millis()
+        );
         *self.surface.lock().unwrap() = fresh;
         Ok(tree)
     }
@@ -780,7 +793,20 @@ impl NativeAppController {
             step.check()?;
             let tree = self.fresh_question_tree(pending, generation)?;
             step.check()?;
-            if let Some(form) = tree.ready_form(pending, question, self.profile, require_submit) {
+            let matched_at = Instant::now();
+            let form = tree.ready_form(pending, question, self.profile, require_submit);
+            log::info!(
+                "AX question match: session={} question={} submit={} matched={} nodes={} match_ms={} step_ms={}",
+                self.session,
+                question.id,
+                require_submit,
+                form.is_some(),
+                tree.nodes.len(),
+                matched_at.elapsed().as_millis(),
+                step.elapsed().as_millis()
+            );
+            step.check()?;
+            if let Some(form) = form {
                 log::info!(
                     "AX question controls ready: session={} question={} submit={} elapsed_ms={}",
                     self.session,

@@ -66,9 +66,27 @@ pub(super) fn label(value: &str) -> String {
 /// Only known control labels are emitted verbatim; other names are redacted.
 pub(super) fn control_label(value: &str) -> String {
     match value {
-        "" | "Send" | "Send message" | "Send prompt" | "Submit" | "Queue" | "Steer" | "Stop"
-        | "Stop generating" | "Stop streaming" | "Stop response" | "Interrupt" | "Prompt"
-        | "Do anything" | "Ask anything" => value.to_owned(),
+        ""
+        | "Send"
+        | "Send message"
+        | "Send prompt"
+        | "Submit"
+        | "Queue"
+        | "Steer"
+        | "Stop"
+        | "Stop generating"
+        | "Stop streaming"
+        | "Stop response"
+        | "Interrupt"
+        | "Prompt"
+        | "Do anything"
+        | "Ask anything"
+        | "Work with Codex"
+        | "与 Codex 协作"
+        | "與 Codex 協作"
+        | "随心输入"
+        | "輸入任何任務"
+        | "想做什麼都可以" => value.to_owned(),
         // CatDesk's own control names (zh-CN / en).
         "聊天输入框"
         | "Chat input"
@@ -100,6 +118,8 @@ mod tests {
         assert_eq!(control_label("Send"), "Send");
         assert_eq!(control_label("Stop generating"), "Stop generating");
         assert_eq!(control_label("聊天输入框"), "聊天输入框");
+        assert_eq!(control_label("Work with Codex"), "Work with Codex");
+        assert!(control_label("Work with Codex on a private task").starts_with("<redacted:"));
     }
 
     #[test]
