@@ -118,3 +118,30 @@ no source fix in this release. Record completed and blocked gates after rollout.
 - Local evidence: `build/releases/Apple-1.0.79-70/` contains build, notary,
   public-download, installation and network-matrix results. These ignored
   artifacts are not part of the source commit.
+
+### Merged pull-request metadata follow-up (2026-10-22)
+
+A later device log from the installed release shows the exact catalog title as
+one passive child, alongside `Awaiting input` and `Merged · 5 pull requests`.
+The complete row name is the title followed by that merged badge; it is rejected
+because the grammar recognizes only the `Open` prefix. This is a deterministic
+selection failure before ledger admission, not proof of a failed submission.
+
+Continue the same bounded-metadata decision by accepting the observed `Merged`
+PR state with the existing positive canonical count and singular/plural checks.
+Keep exact composite-name reconstruction, catalog uniqueness, passive child
+boundaries, and opened-session identity verification. Do not infer support for
+other unobserved states or relax unknown metadata. Use synthetic fixture titles.
+
+Verification plan: replay the captured label shape through the production label
+reader and matcher, demonstrate failure before the change, and cover malformed
+merged counts, unrelated composite names and non-unique titles. Run the Rust
+sidebar suite, relevant agent tests, public-content check and ADR gate. Packaging,
+notarization, OTA publication, installed versions and native send acceptance must
+be recorded separately; no user message is replayed by the regression test.
+
+Source replay failed before the grammar change, then all ten production sidebar
+tests passed. The full agent library suite passed 224 tests (four pre-existing
+ignored). Public-content and whitespace checks passed. Release preparation bumps
+both Apple platforms to 1.0.83 (74); signed builds, publication, installation
+and native-send acceptance are still pending at this source commit.
