@@ -98,3 +98,23 @@ the marker, and the remote transcript contained no new marker. This verifies the
 no-send boundary, not successful locked delivery. The other remote Mac remained
 unreachable and Device Hub still reported the physical phone unavailable. The
 successful locked-send and phone end-to-end acceptance items therefore remain open.
+
+### App Proxy route repair follow-up (2026-10-23)
+
+The proxy's interface-preservation repair was built and notarized by Xcode Cloud
+(MihomoBox build 49, source `f258bdf`). The original signed app was installed and
+macOS activated extension 1.0.0/49. Default private-network bypasses were restored,
+and the temporary bridge adapter and seven workaround rules were removed through
+the proxy's authenticated profile-import path.
+
+With App Proxy enabled, both physical-bridge SSH and Muster virtual-network SSH
+passed five independent 256 KiB integrity checks. Connected and unconnected UDP
+echo also passed. Native connection logs confirmed the bridge and virtual
+interfaces were retained instead of selecting the default Ethernet interface.
+Public HTTPS remained reachable. The remote Muster status RPC and absent-receipt
+query passed again, and the target stayed locked. This supersedes the configuration
+workaround above with a tested extension implementation fix.
+
+Device Hub still reported the physical iPhone unavailable, the third Mac remained
+offline, and successful locked delivery still needed user Presence authentication.
+Those outstanding acceptance items are not claimed as passed.
