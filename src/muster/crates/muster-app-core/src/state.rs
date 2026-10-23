@@ -158,6 +158,8 @@ pub struct Terminal {
     pub ended: bool,
     pub status: String,
     pub rev: u64,
+    pub desktop_attach_command: String,
+    pub iterm2_attach_command: String,
 }
 
 /// An intent that waits for local authentication.

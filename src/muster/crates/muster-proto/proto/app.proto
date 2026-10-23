@@ -662,6 +662,9 @@ message TerminalView {
   bool resizable = 11;
   // The shell offers Paste (edit menu, key bar, the platform shortcut).
   bool can_paste = 12;
+  // Display/copy only. Rust supplies exact managed-session bindings.
+  string desktop_attach_command = 13;
+  string iterm2_attach_command = 14;
 }
 
 message FilesView {

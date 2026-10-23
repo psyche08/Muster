@@ -1015,6 +1015,7 @@ private struct RelatedSessionView: View {
 private struct SessionTerminalPane: View {
     let core: MusterCore
     let workspace: Muster_App_SessionTerminalView
+    @State private var desktopAttach = false
     let terminal: Muster_App_TerminalView
     #if os(iOS)
     @ObservedObject private var keyboardPrefs = KeyboardPrefs.shared
@@ -1031,6 +1032,11 @@ private struct SessionTerminalPane: View {
                 if workspace.busy { ProgressView().controlSize(.small) }
                 else if !workspace.attached { Button("Connect") { core.sessionTerminal(.start) }.buttonStyle(.bordered).disabled(!workspace.available) }
                 Menu {
+                    if !terminal.desktopAttachCommand.isEmpty && !terminal.ended {
+                        Button("Connect from iTerm2 / Ghostty…") { desktopAttach = true }
+                        Divider()
+                    }
+                    Button("Disconnect") { core.sessionTerminal(.detach) }.disabled(!workspace.attached)
                     Button("Restart terminal") { core.sessionTerminal(.restart) }.disabled(!workspace.canRestart)
                     Button("End terminal", role: .destructive) { core.sessionTerminal(.end) }.disabled(!workspace.canEnd)
                 } label: { Image(systemName: "ellipsis.circle").frame(width: 36, height: 36) }
@@ -1042,8 +1048,9 @@ private struct SessionTerminalPane: View {
                 KeyBar(core: core, canPaste: terminal.canPaste, showsKeys: keyboardPrefs.terminalSystemKeyboard)
                 #endif
                 Text(terminal.status).font(.caption).padding(4)
-            } else { Spacer(); Text(workspace.busy ? "Starting terminal…" : "Terminal stopped").foregroundStyle(.secondary); Spacer() }
+            } else { Spacer(); Text(workspace.busy ? "Starting terminal…" : "Not connected").foregroundStyle(.secondary); Spacer() }
         }.accessibilityIdentifier("session-terminal")
+        .sheet(isPresented: $desktopAttach) { DesktopTerminalAttachSheet(terminal: terminal) }
     }
 }
 

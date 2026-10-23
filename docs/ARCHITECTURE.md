@@ -642,6 +642,19 @@ Accessibility shows no windows while the console is locked, so on a locked Mac a
 - `muster-terminal`'s VT state machine parses SSH bytes into the same row grid, reusing iTerm2 terminal ViewModels and the custom grid. To users, iTerm2 and SSH sessions are simply two sources in the terminal list.
 - This replaces unused swift-nio-ssh and SwiftTerm in `ios/Deps/MusterDeps`; Rust implements SSH once for all four platforms.
 
+**Managed conversation terminals** (2026-10-23, [ADR 0033](adr/0033-managed-terminal-compatibility.md)):
+
+The existing conversation workspace's dedicated tmux backend complements both
+native adapters. Rust persists a generation-specific handle in the tmux session
+and lazily reconstructs its PTY bridge after musterd restarts. Stale handles fail
+instead of recreating or retargeting a shell. A view detaches; explicit End or
+Restart destroys the session. Full frames carry shell-quoted commands for a
+Ghostty/iTerm2 terminal or iTerm2 control mode on the host. Native windows are not
+automatically merged by title/cwd. Desktop commands use `ignore-size`, retaining
+Muster's viewport sizing in this phase; desktop-first ownership and native pane
+mapping are not implemented by this slice. PTY output coalesces over 8 ms and
+subscriber snapshots preserve other subscribers' pending updates.
+
 **Other terminals**:
 
 - **PTY**: Later-phase fallback only for Linux / Windows (ConPTY) and environments without iTerm2.

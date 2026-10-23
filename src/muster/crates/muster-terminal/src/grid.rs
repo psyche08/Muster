@@ -121,6 +121,7 @@ pub struct Grid {
     dirty: Vec<bool>,
     all_dirty: bool,
     rev: u64,
+    published_cursor: (u16, u16),
     scrollback: VecDeque<Vec<Cell>>,
     scrollback_limit: usize,
     autowrap: bool,
@@ -148,6 +149,7 @@ impl Grid {
             dirty: vec![true; rows as usize],
             all_dirty: true,
             rev: 0,
+            published_cursor: (0, 0),
             scrollback: VecDeque::new(),
             scrollback_limit: 2000,
             autowrap: true,
@@ -206,7 +208,7 @@ impl Grid {
         let changed: Vec<u16> = (0..self.rows)
             .filter(|r| full || self.dirty[*r as usize])
             .collect();
-        if changed.is_empty() {
+        if changed.is_empty() && self.published_cursor == self.screen().cursor {
             return None;
         }
         self.rev += 1;
@@ -221,6 +223,7 @@ impl Grid {
         self.dirty.fill(false);
         self.all_dirty = false;
         let (cx, cy) = self.screen().cursor;
+        self.published_cursor = (cx, cy);
         Some(TerminalFrame {
             session: session.to_string(),
             rev: self.rev,
@@ -231,7 +234,34 @@ impl Grid {
             cursor_x: cx as u32,
             cursor_y: cy as u32,
             ended: false,
+            ..Default::default()
         })
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.rev
+    }
+
+    /// A subscriber snapshot must not consume changes pending for other viewers.
+    pub fn snapshot(&self, session: &str) -> TerminalFrame {
+        let (cx, cy) = self.screen().cursor;
+        TerminalFrame {
+            session: session.into(),
+            rev: self.rev,
+            full: true,
+            cols: self.cols as u32,
+            rows: self.rows as u32,
+            cursor_x: cx as u32,
+            cursor_y: cy as u32,
+            lines: (0..self.rows)
+                .map(|r| TerminalLine {
+                    index: r as u32,
+                    text: self.row_text(r),
+                    styles: encode_styles(&self.screen().rows[r as usize]),
+                })
+                .collect(),
+            ..Default::default()
+        }
     }
 
     /// Everything, regardless of what changed.
@@ -769,6 +799,24 @@ mod tests {
 
     fn text(grid: &Grid) -> Vec<String> {
         (0..grid.rows()).map(|r| grid.row_text(r)).collect()
+    }
+
+    #[test]
+    fn subscriber_snapshot_preserves_pending_rows_and_cursor_only_updates() {
+        let mut grid = Grid::new(20, 4);
+        let initial = grid.full_frame("s");
+        grid.feed(b"hello");
+        let snapshot = grid.snapshot("s");
+        assert_eq!(snapshot.rev, initial.rev);
+        assert_eq!(snapshot.lines[0].text, "hello");
+        let delta = grid.frame("s").unwrap();
+        assert_eq!(delta.rev, initial.rev + 1);
+        assert_eq!(delta.lines[0].text, "hello");
+        grid.feed(b"\x1b[3;8H");
+        let cursor = grid.frame("s").unwrap();
+        assert_eq!((cursor.cursor_x, cursor.cursor_y), (7, 2));
+        assert!(cursor.lines.is_empty());
+        assert!(grid.frame("s").is_none());
     }
 
     #[test]

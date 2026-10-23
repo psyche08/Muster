@@ -2787,6 +2787,11 @@ public nonisolated struct Muster_App_TerminalView: Sendable {
   /// The shell offers Paste (edit menu, key bar, the platform shortcut).
   public var canPaste: Bool = false
 
+  /// Display/copy only. Rust supplies exact managed-session bindings.
+  public var desktopAttachCommand: String = String()
+
+  public var iterm2AttachCommand: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -8101,7 +8106,7 @@ nonisolated extension Muster_App_TerminalsView: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Muster_App_TerminalView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{1}source\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0\u{1}status\0\u{1}resizable\0\u{3}can_paste\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{1}source\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0\u{1}status\0\u{1}resizable\0\u{3}can_paste\0\u{3}desktop_attach_command\0\u{3}iterm2_attach_command\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8121,6 +8126,8 @@ nonisolated extension Muster_App_TerminalView: SwiftProtobuf.Message, SwiftProto
       case 10: try { try decoder.decodeSingularStringField(value: &self.status) }()
       case 11: try { try decoder.decodeSingularBoolField(value: &self.resizable) }()
       case 12: try { try decoder.decodeSingularBoolField(value: &self.canPaste) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.desktopAttachCommand) }()
+      case 14: try { try decoder.decodeSingularStringField(value: &self.iterm2AttachCommand) }()
       default: break
       }
     }
@@ -8163,6 +8170,12 @@ nonisolated extension Muster_App_TerminalView: SwiftProtobuf.Message, SwiftProto
     if self.canPaste != false {
       try visitor.visitSingularBoolField(value: self.canPaste, fieldNumber: 12)
     }
+    if !self.desktopAttachCommand.isEmpty {
+      try visitor.visitSingularStringField(value: self.desktopAttachCommand, fieldNumber: 13)
+    }
+    if !self.iterm2AttachCommand.isEmpty {
+      try visitor.visitSingularStringField(value: self.iterm2AttachCommand, fieldNumber: 14)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8179,6 +8192,8 @@ nonisolated extension Muster_App_TerminalView: SwiftProtobuf.Message, SwiftProto
     if lhs.status != rhs.status {return false}
     if lhs.resizable != rhs.resizable {return false}
     if lhs.canPaste != rhs.canPaste {return false}
+    if lhs.desktopAttachCommand != rhs.desktopAttachCommand {return false}
+    if lhs.iterm2AttachCommand != rhs.iterm2AttachCommand {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

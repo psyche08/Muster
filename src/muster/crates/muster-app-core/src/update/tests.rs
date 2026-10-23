@@ -583,6 +583,8 @@ async fn pasted_text_reaches_ssh_bracketed_when_asked_and_oversized_pastes_do_no
         ended: false,
         status: String::new(),
         rev: 0,
+        desktop_attach_command: String::new(),
+        iterm2_attach_command: String::new(),
     });
     let paste = |text: &str| app::TerminalPaste { text: text.into() };
     let written =
@@ -681,6 +683,8 @@ fn remote_terminal() -> Terminal {
         ended: false,
         status: String::new(),
         rev: 0,
+        desktop_attach_command: String::new(),
+        iterm2_attach_command: String::new(),
     }
 }
 
@@ -1236,6 +1240,8 @@ async fn session_terminal_rejects_late_results_and_detaches_without_closing_shel
         ended: false,
         status: "attached".into(),
         rev: 0,
+        desktop_attach_command: String::new(),
+        iterm2_attach_command: String::new(),
     });
     state.session_terminal.active = true;
     let vm = crate::render::view_model(&state);

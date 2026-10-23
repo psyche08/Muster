@@ -523,6 +523,7 @@ impl Iterm2 {
             cursor_x: cursor.0,
             cursor_y: cursor.1,
             ended: false,
+            ..Default::default()
         };
         let mut previous: Vec<String> = lines;
         if frames.send(full).await.is_err() {
@@ -550,6 +551,7 @@ impl Iterm2 {
                         cursor_x: 0,
                         cursor_y: 0,
                         ended: true,
+                        ..Default::default()
                     })
                     .await;
                 break;
@@ -600,6 +602,7 @@ impl Iterm2 {
                 cursor_x: cursor.0,
                 cursor_y: cursor.1,
                 ended: false,
+                ..Default::default()
             };
             if frames.send(frame).await.is_err() {
                 break;

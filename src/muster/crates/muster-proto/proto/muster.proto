@@ -534,6 +534,9 @@ message TerminalFrame {
   uint32 cursor_x = 7;
   uint32 cursor_y = 8;
   bool ended = 9;
+  // Managed-session metadata on full snapshots; execute only on the host.
+  string desktop_attach_command = 10;
+  string iterm2_attach_command = 11;
 }
 
 message TerminalInputRequest {
