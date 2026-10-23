@@ -106,3 +106,10 @@ source commit. GitHub Actions remains disabled.
 - Physical iPhone installation and UI acceptance were not performed. GitHub
   Actions stayed disabled; no hosted CI result or Xcode Cloud build is claimed.
   No historical OTA artifacts were deleted.
+
+### Owner feedback after release
+
+The owner rejected the pending installed wheel acceptance: earlier history loads,
+but the viewport moves into the additional content rather than keeping the
+current reading position. This is an unresolved 1.0.90 pagination regression,
+not successful acceptance. ADR 0042 tracks response-during-scroll anchoring.
