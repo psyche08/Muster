@@ -258,6 +258,23 @@ async fn late_native_receipt_updates_original_rpc_ledger_without_resending() {
             .as_deref(),
         Some("pending")
     );
+    let query = || {
+        let Req::AgentSend(r) = request() else {
+            unreachable!()
+        };
+        Req::AgentSendStatus(r)
+    };
+    let Resp::OpResult(pending) = client.call(query()).await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(pending.status, v1::op_result::Status::Unknown as i32);
+    drop(client);
+    // Reconnect over a new RPC stream; recovery never calls AgentSend again.
+    let client = muster_rpc::Client::new(
+        tokio::net::UnixStream::connect(daemon.socket_path())
+            .await
+            .unwrap(),
+    );
     writeln!(
         transcript,
         "{}",
@@ -275,6 +292,14 @@ async fn late_native_receipt_updates_original_rpc_ledger_without_resending() {
             .as_deref(),
         Some("applied")
     );
+    for _ in 0..3 {
+        let Resp::OpResult(result) = client.call(query()).await.unwrap() else {
+            panic!()
+        };
+        assert_eq!(result.status, v1::op_result::Status::Applied as i32);
+        assert_eq!(result.result_id, controller.session_id());
+        assert_eq!(controller.sends.load(Ordering::SeqCst), 1);
+    }
     let Resp::OpResult(result) = client.call(request()).await.unwrap() else {
         panic!()
     };

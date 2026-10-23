@@ -770,3 +770,10 @@ message CodeRunView {
   string error = 3;
   bool can_return = 4;
 }
+
+// Local Rust recovery record, never authority or delivery evidence.
+message PendingAgentSend {
+  muster.v1.AgentSendRequest request = 1;
+  ChatDraft draft = 2;
+  string draft_id = 3;
+}

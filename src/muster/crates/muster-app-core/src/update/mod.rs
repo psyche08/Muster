@@ -34,6 +34,7 @@ pub(crate) mod manual_locked_use;
 mod network;
 mod operations;
 mod orca;
+mod send_recovery;
 mod shell;
 mod terminals;
 #[cfg(test)]
@@ -85,6 +86,12 @@ pub enum Msg {
         network: Option<String>,
         device: String,
         result: Result<v1::AgentSession, Error>,
+    },
+    SendRecovered {
+        device: String,
+        key: String,
+        pending: app::PendingAgentSend,
+        result: Result<v1::OpResult, Error>,
     },
     OpDone {
         what: &'static str,
@@ -477,6 +484,12 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             }
         }
         Msg::Done { what, result } => network::msg_done(state, ctx, what, result),
+        Msg::SendRecovered {
+            device,
+            key,
+            pending,
+            result,
+        } => send_recovery::recovered(state, ctx, device, key, pending, result),
         Msg::OpDone {
             what,
             device,

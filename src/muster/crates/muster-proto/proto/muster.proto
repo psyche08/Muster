@@ -136,6 +136,8 @@ message Request {
     DevicePresenceRequest device_presence = 65;
     NetworkPresenceRequest network_presence = 66;
     DeviceInstallPresenceRequest device_install_presence = 67;
+    // Read-only lookup of the exact original send; never executes or unlocks.
+    AgentSendRequest agent_send_status = 68;
   }
 }
 

@@ -252,6 +252,15 @@ pub enum Begin {
     Unknown,
 }
 
+/// Read-only outcome of an exactly bound request. Absence never authorizes replay.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Unknown,
+    Conflict,
+    Applied(Vec<u8>),
+    Rejected(Vec<u8>),
+}
+
 /// Exactly-once mutations (ARCHITECTURE §3.6.1): a pending row is written
 /// before any side effect; the same op_id returns the recorded result; a
 /// changed body is a conflict; a crash leaves "unknown", never a retry.
@@ -345,6 +354,33 @@ impl Ledger<'_> {
         ).optional()?.flatten())
     }
 
+    pub fn outcome(&self, op_id: &str, kind: &str, body: &[u8]) -> Result<Outcome> {
+        let conn = self.store.conn.lock().unwrap();
+        type StoredOutcome = (String, Vec<u8>, String, Option<Vec<u8>>);
+        let row: Option<StoredOutcome> = conn
+            .query_row(
+                "SELECT kind, body_hash, status, result FROM ops WHERE op_id = ?1",
+                params![op_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        Ok(match row {
+            None => Outcome::Unknown,
+            Some((stored_kind, hash, _, _))
+                if stored_kind != kind || hash != Self::body_hash(body) =>
+            {
+                Outcome::Conflict
+            }
+            Some((_, _, status, result)) if status == "applied" => {
+                Outcome::Applied(result.unwrap_or_default())
+            }
+            Some((_, _, status, result)) if status == "rejected" => {
+                Outcome::Rejected(result.unwrap_or_default())
+            }
+            _ => Outcome::Unknown,
+        })
+    }
+
     pub fn status(&self, op_id: &str) -> Result<Option<String>> {
         let conn = self.store.conn.lock().unwrap();
         Ok(conn
@@ -383,6 +419,59 @@ mod tests {
     use muster_core::roster::{Author, DeviceKind, DeviceRecord};
     use muster_core::{HwSigner, SoftSigner};
     use std::net::Ipv4Addr;
+
+    #[test]
+    fn outcome_lookup_never_creates_or_changes_rows_and_survives_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("store.db");
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.ledger().outcome("op", "agent.send", b"body").unwrap(),
+            Outcome::Unknown
+        );
+        assert_eq!(store.ledger().status("op").unwrap(), None);
+        store.ledger().begin("op", "agent.send", b"body").unwrap();
+        assert_eq!(
+            store
+                .ledger()
+                .outcome("op", "agent.respond", b"body")
+                .unwrap(),
+            Outcome::Conflict
+        );
+        assert_eq!(
+            store
+                .ledger()
+                .outcome("op", "agent.send", b"changed")
+                .unwrap(),
+            Outcome::Conflict
+        );
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.ledger().outcome("op", "agent.send", b"body").unwrap(),
+            Outcome::Unknown
+        );
+        store
+            .ledger()
+            .confirm("op", "agent.send", &Ledger::body_hash(b"body"), b"session")
+            .unwrap();
+        assert_eq!(
+            store.ledger().outcome("op", "agent.send", b"body").unwrap(),
+            Outcome::Applied(b"session".to_vec())
+        );
+        store
+            .ledger()
+            .begin("rejected", "agent.send", b"body")
+            .unwrap();
+        store.ledger().reject("rejected", b"not sent").unwrap();
+        assert_eq!(
+            store
+                .ledger()
+                .outcome("rejected", "agent.send", b"body")
+                .unwrap(),
+            Outcome::Rejected(b"not sent".to_vec())
+        );
+    }
 
     #[test]
     fn provider_confirmation_is_bound_idempotent_and_can_resolve_unknown() {

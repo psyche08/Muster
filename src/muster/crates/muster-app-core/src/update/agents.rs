@@ -243,6 +243,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
     state.git = None;
     state.go(Screen::Chat);
     watch_agent(state, ctx, device, session_id);
+    super::send_recovery::restore(state, ctx);
 }
 
 /// A fresh tail repairs holes in stream delivery without discarding older
@@ -606,26 +607,27 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
         diagnostic.rejection("stale_release");
         return;
     }
-    chat.sending = true;
-    chat.pending_draft_id = s.draft_id.clone();
-    if !s.draft_id.is_empty() && chat.draft.text == s.text {
-        state.pending_drafts.insert(s.draft_id, chat.draft.clone());
-    }
     let (device, session) = (chat.device.clone(), chat.session.id.clone());
+    let tag = format!("{}:{}", op_id, s.draft_id);
+    let request = v1::AgentSendRequest {
+        attachments: s.attachments,
+        op_id,
+        session,
+        text: s.text,
+        release_unconfirmed: s.release_unconfirmed,
+    };
+    if let Err(error) = super::send_recovery::prepare(state, ctx, &device, &request, &tag) {
+        state.toast(error.to_string(), true);
+        return;
+    }
+    let chat = state.chat.as_mut().expect("checked");
+    chat.sending = true;
+    chat.pending_draft_id = tag.clone();
+    if chat.draft.text == request.text {
+        state.pending_drafts.insert(tag, chat.draft.clone());
+    }
     diagnostic.event("validated");
-    op_request(
-        state,
-        ctx,
-        "send",
-        device,
-        Req::AgentSend(v1::AgentSendRequest {
-            attachments: s.attachments,
-            op_id,
-            session,
-            text: s.text,
-            release_unconfirmed: s.release_unconfirmed,
-        }),
-    );
+    op_request(state, ctx, "send", device, Req::AgentSend(request));
 }
 
 pub(super) fn intent_agent_respond(state: &mut State, ctx: &Ctx, r: app::AgentRespond) {
