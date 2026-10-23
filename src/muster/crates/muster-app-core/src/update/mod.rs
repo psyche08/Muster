@@ -172,7 +172,7 @@ pub enum Msg {
     Terminals {
         epoch: u64,
         device: String,
-        result: Result<Vec<v1::TerminalSession>, Error>,
+        result: Result<v1::TerminalSessionList, Error>,
     },
     CodeTick,
     CodeStarted {

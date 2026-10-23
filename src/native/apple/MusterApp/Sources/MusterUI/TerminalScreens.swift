@@ -82,7 +82,12 @@ struct TerminalsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if vm.terminals.canCreate {
-                    Button { core.terminalCreate() } label: { Label("New window", systemImage: "plus.rectangle") }
+                    Menu {
+                        ForEach(vm.terminals.sources, id: \.source) { source in
+                            Button("Open in \(source.label)") { core.terminalCreate(source: source.source) }
+                        }
+                    } label: { Label("New window", systemImage: "plus.rectangle") }
+                    .disabled(vm.busy)
                 }
                 if vm.terminals.sshAvailable {
                     Button { ssh = true } label: { Label("SSH", systemImage: "lock.shield") }

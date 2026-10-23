@@ -354,17 +354,21 @@ impl Handler for MusterHandler {
 /// The Ghostty terminal a request reads or writes. Listing works without
 /// a session: Ghostty's scripting answers on a locked Mac.
 fn ghostty_session<'a>(daemon: &Daemon, request: &'a Req) -> Option<&'a str> {
-    if tmux_request(request) || !daemon.terminal().is_some_and(|t| t.source() == "ghostty") {
+    if tmux_request(request) {
         return None;
     }
-    Some(match request {
+    let id = match request {
         Req::TerminalAttach(r) => &r.session,
         Req::TerminalInput(r) => &r.session,
         Req::TerminalHistory(r) => &r.session,
         Req::TerminalResize(r) => &r.session,
         Req::TerminalClose(r) => &r.session,
         _ => return None,
-    })
+    };
+    crate::native_terminals::resolve(daemon, id)
+        .ok()
+        .filter(|(terminal, _)| terminal.source() == "ghostty")
+        .map(|_| id.as_str())
 }
 
 /// A request of the open terminal session's requester. It holds the
@@ -847,12 +851,6 @@ fn agent_of(daemon: &Daemon) -> Result<&Arc<muster_agent::AgentService>, Error> 
         .ok_or_else(|| Error::Unavailable("the agent service is off on this device".into()))
 }
 
-fn terminal_of(daemon: &Daemon) -> Result<&Arc<muster_terminal::Terminal>, Error> {
-    daemon
-        .terminal()
-        .ok_or_else(|| Error::Unavailable("the terminal service is off on this device".into()))
-}
-
 fn tmux_agent(request: &Req) -> Option<&str> {
     match request {
         Req::AgentTerminal(r) => Some(&r.session),
@@ -874,19 +872,19 @@ fn tmux_request(request: &Req) -> bool {
 }
 fn terminal_for<'a>(
     daemon: &'a Daemon,
-    session: &str,
-) -> Result<&'a Arc<muster_terminal::Terminal>, Error> {
+    session: &'a str,
+) -> Result<(&'a Arc<muster_terminal::Terminal>, &'a str), Error> {
     if session.starts_with("tmux-") {
         #[cfg(unix)]
         {
-            return Ok(&daemon.tmux);
+            return Ok((&daemon.tmux, session));
         }
         #[cfg(not(unix))]
         {
             return Err(Error::Unavailable("tmux requires a Unix host".into()));
         }
     }
-    terminal_of(daemon)
+    crate::native_terminals::resolve(daemon, session)
 }
 
 async fn dispatch(
@@ -1188,44 +1186,29 @@ async fn dispatch(
         }
         Req::DeviceRequestAutomation(_) => {
             #[cfg(target_os = "macos")]
-            if daemon.terminal().is_some_and(|t| t.source() == "ghostty") {
-                // The local user's explicit setup action: the one place that
-                // may show the consent dialog.
-                let permission = tokio::task::spawn_blocking(|| {
-                    muster_platform::macos::ghostty::permission(true)
-                })
-                .await
-                .map_err(|e| Error::Unavailable(e.to_string()))?;
-                return match permission {
-                    "granted" | "not_installed" => Ok(Resp::DeviceInfo(daemon.device_info())),
-                    "not_running" => Err(Error::Unavailable(
-                        "请先启动 Ghostty，再点击授权。".into(),
-                    )),
-                    _ => Err(Error::Unavailable(
-                        "请在系统设置 → 隐私与安全性 → 自动化中允许 Muster / musterd 控制 Ghostty。"
-                            .into(),
-                    )),
-                };
-            }
-            #[cfg(target_os = "macos")]
             {
-                let permission = tokio::task::spawn_blocking(|| {
-                    muster_platform::macos::automation::iterm_permission(true)
-                })
-                .await
-                .map_err(|e| Error::Unavailable(e.to_string()))?;
-                if permission == "not_installed" {
-                    return Ok(Resp::DeviceInfo(daemon.device_info()));
+                let mut errors = Vec::new();
+                for terminal in daemon.terminals() {
+                    let source = terminal.source();
+                    let permission = tokio::task::spawn_blocking(move || match source {
+                        "ghostty" => muster_platform::macos::ghostty::permission(true),
+                        "iterm2" => muster_platform::macos::automation::iterm_permission(true),
+                        _ => "granted",
+                    })
+                    .await
+                    .map_err(|e| Error::Unavailable(e.to_string()))?;
+                    if permission != "granted" {
+                        errors.push(format!("{source}: {permission}. Open the app and allow Automation in System Settings."));
+                    } else if source == "iterm2" {
+                        match tokio::time::timeout(Duration::from_secs(20), terminal.sessions()).await {
+                            Ok(Ok(_)) => {},
+                            _ => errors.push("iTerm2: enable Python API in Settings > General > Magic and approve the connection".into()),
+                        }
+                    }
                 }
-                if permission != "granted" {
-                    return Err(Error::Unavailable("请启动 iTerm2，并在系统设置 → 隐私与安全性 → 自动化中允许 Muster / musterd 控制 iTerm2。".into()));
+                if !errors.is_empty() {
+                    return Err(Error::Unavailable(errors.join("\n")));
                 }
-                let terminal = daemon
-                    .terminal()
-                    .ok_or_else(|| Error::Unavailable("iTerm2 adapter is disabled".into()))?;
-                tokio::time::timeout(Duration::from_secs(20), terminal.sessions()).await
-                    .map_err(|_| Error::Unavailable("iTerm2 授权或 API 连接超时，请检查 iTerm2 内的确认提示。".into()))?
-                    .map_err(|_| Error::Unavailable("请在 iTerm2 Settings → General → Magic 中启用 Python API，并允许 Muster 连接。".into()))?;
             }
             #[cfg(not(target_os = "macos"))]
             return Err(Error::Unavailable("Requires macOS".into()));
@@ -1256,40 +1239,44 @@ async fn dispatch(
 
         // ---------------------------------------------------------- terminal
         Req::TerminalSessions(r) => {
-            let terminal = terminal_of(daemon)?.clone();
             if !r.watch {
-                return Ok(Resp::TerminalSessions(v1::TerminalSessionList {
-                    sessions: terminal.sessions().await?,
-                }));
+                return Ok(Resp::TerminalSessions(
+                    crate::native_terminals::list(daemon).await,
+                ));
             }
             let (tx, mut rx) = tokio::sync::mpsc::channel(16);
-            let watcher = tokio::spawn(async move { terminal.watch_sessions(tx).await });
+            let watch = crate::native_terminals::watch(daemon, tx);
+            tokio::pin!(watch);
+            let mut finished = false;
             loop {
                 tokio::select! {
                     _ = events.cancelled().cancelled() => break,
+                    _ = &mut watch, if !finished => finished = true,
                     next = rx.recv() => match next {
-                        Some(sessions) => events.send(v1::event::Ev::TerminalSessions(v1::TerminalSessionList { sessions })).await?,
+                        Some(list) => events.send(v1::event::Ev::TerminalSessions(list)).await?,
                         None => break,
-                    }
+                    },
                 }
-            }
-            drop(rx);
-            if let Ok(Err(error)) = watcher.await {
-                return Err(error.into());
             }
             Resp::Ack(v1::Ack {})
         }
         Req::TerminalAttach(r) => {
-            let terminal = terminal_for(daemon, &r.session)?.clone();
+            let (terminal, raw) = terminal_for(daemon, &r.session)?;
+            let terminal = terminal.clone();
+            let session = raw.to_owned();
             let (tx, mut rx) = tokio::sync::mpsc::channel(64);
-            let session = r.session.clone();
             let attach =
                 tokio::spawn(async move { terminal.attach(&session, r.since_rev, tx).await });
             loop {
                 tokio::select! {
                     _ = events.cancelled().cancelled() => break,
                     next = rx.recv() => match next {
-                        Some(frame) => {
+                        Some(mut frame) => {
+                            frame.session = r.session.clone();
+                            if frame.full && !frame.desktop_attach_command.is_empty() {
+                                frame.native_sources = crate::native_terminals::sources(daemon).into_iter()
+                                    .filter(|s| matches!(s.source.as_str(), "iterm2" | "ghostty")).collect();
+                            }
                             let ended = frame.ended;
                             events.send(v1::event::Ev::TerminalFrame(frame)).await?;
                             if ended { break; }
@@ -1305,7 +1292,9 @@ async fn dispatch(
             Resp::Ack(v1::Ack {})
         }
         Req::TerminalInput(r) => {
-            let terminal = terminal_for(daemon, &r.session)?.clone();
+            let (terminal, raw) = terminal_for(daemon, &r.session)?;
+            let terminal = terminal.clone();
+            let raw = raw.to_owned();
             let mut body = r.session.as_bytes().to_vec();
             body.push(0);
             body.extend_from_slice(&r.bytes);
@@ -1318,7 +1307,7 @@ async fn dispatch(
                 false,
                 &body,
                 async move {
-                    terminal.input(&r.session, &r.bytes).await?;
+                    terminal.input(&raw, &r.bytes).await?;
                     Ok(String::new())
                 },
             )
@@ -1446,29 +1435,84 @@ async fn dispatch(
             }
         }
         Req::TerminalCreate(r) => {
-            let terminal = terminal_of(daemon)?;
-            let profile = if r.profile.is_empty() {
+            use muster_proto::Message as _;
+            let terminal = crate::native_terminals::source(daemon, &r.source)?;
+            let profile = (!r.profile.is_empty()).then_some(r.profile.as_str());
+            let command = if r.managed_session.is_empty() {
                 None
             } else {
-                Some(r.profile.as_str())
+                #[cfg(unix)]
+                {
+                    let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
+                        unreachable!()
+                    };
+                    Some(service.native_command(&r.managed_session).await?)
+                }
+                #[cfg(not(unix))]
+                {
+                    return Err(Error::Unavailable("tmux requires Unix".into()));
+                }
             };
-            Resp::TerminalSession(terminal.create(profile, r.background).await?)
+            // New clients supply operation IDs. Preserve legacy creation, but
+            // managed launches always require a ledger to prevent replay.
+            if r.op_id.is_empty() && (!r.source.is_empty() || command.is_some()) {
+                return Err(Error::Invalid(
+                    "Native terminal creation requires an operation ID".into(),
+                ));
+            }
+            let create = async {
+                crate::native_terminals::prepare(terminal).await?;
+                let session = match &command {
+                    Some(command) => terminal.create_command(profile, r.background, command).await,
+                    None => terminal.create(profile, r.background).await,
+                }.map_err(|error| Error::UnknownOutcome(format!("Native creation may have reached the application; inspect its windows before creating again: {error}")))?;
+                if session.id.is_empty() {
+                    return Err(Error::UnknownOutcome("Native application returned no session ID; inspect its windows before creating again".into()));
+                }
+                Ok::<_, Error>(crate::native_terminals::qualify(session, terminal.source()))
+            };
+            if r.op_id.is_empty() {
+                Resp::TerminalSession(create.await?)
+            } else {
+                let body = r.encode_to_vec();
+                let result = ledgered(
+                    daemon,
+                    &r.op_id,
+                    "terminal.create",
+                    terminal.source(),
+                    false,
+                    &body,
+                    async { Ok(create.await?.id) },
+                )
+                .await?;
+                match result {
+                    Resp::OpResult(result) if matches!(result.status, 0 | 1) => {
+                        Resp::TerminalSession(v1::TerminalSession {
+                            id: result.result_id,
+                            source: terminal.source().into(),
+                            ..Default::default()
+                        })
+                    }
+                    other => other,
+                }
+            }
         }
         Req::TerminalResize(r) => {
-            terminal_for(daemon, &r.session)?
-                .resize(&r.session, r.cols, r.rows)
-                .await?;
+            let (terminal, raw) = terminal_for(daemon, &r.session)?;
+            terminal.resize(raw, r.cols, r.rows).await?;
             Resp::Ack(v1::Ack {})
         }
         Req::TerminalClose(r) => {
-            terminal_for(daemon, &r.session)?.close(&r.session).await?;
+            let (terminal, raw) = terminal_for(daemon, &r.session)?;
+            terminal.close(raw).await?;
             Resp::Ack(v1::Ack {})
         }
-        Req::TerminalHistory(r) => Resp::TerminalLines(v1::TerminalLines {
-            lines: terminal_for(daemon, &r.session)?
-                .history(&r.session, r.lines)
-                .await?,
-        }),
+        Req::TerminalHistory(r) => {
+            let (terminal, raw) = terminal_for(daemon, &r.session)?;
+            Resp::TerminalLines(v1::TerminalLines {
+                lines: terminal.history(raw, r.lines).await?,
+            })
+        }
 
         // ------------------------------------------------------------- agent
         Req::OrcaCreate(r) => {
@@ -2342,6 +2386,76 @@ pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result
 #[cfg(test)]
 mod setup_permission_tests {
     use super::*;
+    #[tokio::test]
+    async fn secondary_ghostty_ids_still_require_the_console_lease() {
+        struct Fixture;
+        impl muster_terminal::ghostty::GhosttyOs for Fixture {
+            fn running(&self) -> bool {
+                false
+            }
+            fn terminals(
+                &self,
+            ) -> Result<Vec<muster_terminal::ghostty::Listed>, muster_terminal::Error> {
+                unreachable!()
+            }
+            fn perform(&self, _: &str, _: &str) -> Result<(), muster_terminal::Error> {
+                unreachable!()
+            }
+            fn open(
+                &self,
+                _: &str,
+            ) -> Result<Box<dyn muster_terminal::ghostty::Surface>, muster_terminal::Error>
+            {
+                unreachable!()
+            }
+            fn create(&self) -> Result<String, muster_terminal::Error> {
+                unreachable!()
+            }
+            fn close(&self, _: &str) -> Result<(), muster_terminal::Error> {
+                unreachable!()
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::DaemonConfig::new(dir.path());
+        config.listen = false;
+        config.agent = None;
+        config.cloud = false;
+        config.bind = "127.0.0.1:0".parse().unwrap();
+        config.terminal = Some(muster_terminal::TerminalKind::Iterm2(
+            muster_terminal::TerminalConfig::default(),
+        ));
+        config.additional_terminals = vec![muster_terminal::TerminalKind::Ghostty(
+            muster_terminal::GhosttyPlatform(Arc::new(Fixture)),
+        )];
+        let daemon = Daemon::start_with(config, Arc::new(crate::DefaultPlatform), None)
+            .await
+            .unwrap();
+        let request = Req::TerminalAttach(v1::TerminalAttachRequest {
+            session: "ghostty:opaque:one".into(),
+            since_rev: 0,
+        });
+        assert_eq!(
+            ghostty_session(&daemon, &request),
+            Some("ghostty:opaque:one")
+        );
+        for id in ["iterm2:opaque:one", "legacy:iterm-id", "tmux-owned"] {
+            let request = Req::TerminalAttach(v1::TerminalAttachRequest {
+                session: id.into(),
+                since_rev: 0,
+            });
+            assert_eq!(ghostty_session(&daemon, &request), None);
+        }
+        let (host, raw) = terminal_for(&daemon, "legacy:iterm-id").unwrap();
+        assert_eq!(host.source(), "iterm2");
+        assert_eq!(raw, "legacy:iterm-id");
+        assert_eq!(
+            terminal_for(&daemon, "ghostty:opaque:one").unwrap().1,
+            "opaque:one"
+        );
+        assert!(terminal_for(&daemon, "ghostty:").is_err());
+        daemon.shutdown().await;
+    }
+
     #[test]
     fn automation_prompt_is_local_only() {
         assert!(matches!(

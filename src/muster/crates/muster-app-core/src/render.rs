@@ -297,6 +297,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             can_paste: !terminal.ended,
             desktop_attach_command: terminal.desktop_attach_command.clone(),
             iterm2_attach_command: terminal.iterm2_attach_command.clone(),
+            native_sources: terminal.native_sources.clone(),
         });
     }
     vm
@@ -622,6 +623,7 @@ mod tests {
             rev: 0,
             desktop_attach_command: String::new(),
             iterm2_attach_command: String::new(),
+            native_sources: Vec::new(),
         });
         state.screen = app::Screen::Agents;
         assert!(project(&state, false).terminal.is_none());
@@ -1102,7 +1104,15 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
     let checking = device.locked_use_setup == "checking";
     // The terminal source's app: Ghostty needs Automation only (it has no
     // API to enable); iTerm2 also needs its Python API.
-    let ghostty = device.terminal_source == "ghostty";
+    let ghostty_pending = !device.ghostty_automation.is_empty()
+        && !matches!(
+            device.ghostty_automation.as_str(),
+            "granted" | "not_installed"
+        );
+    let iterm_ready_now = device.iterm2_automation == "not_installed"
+        || (device.iterm2_automation == "granted" && device.iterm2_api_available);
+    // Show the next outstanding source; one explicit setup action checks both.
+    let ghostty = device.terminal_source == "ghostty" || (iterm_ready_now && ghostty_pending);
     let show_iterm = if ghostty {
         device.ghostty_automation != "not_installed"
     } else {

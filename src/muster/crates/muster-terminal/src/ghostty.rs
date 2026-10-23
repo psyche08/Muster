@@ -50,6 +50,11 @@ pub trait GhosttyOs: Send + Sync {
     fn open(&self, id: &str) -> Result<Box<dyn Surface>, Error>;
     /// A new window; its terminal's id.
     fn create(&self) -> Result<String, Error>;
+    fn create_command(&self, _command: &str) -> Result<String, Error> {
+        Err(Error::Unavailable(
+            "This Ghostty adapter does not support initial commands".into(),
+        ))
+    }
     fn close(&self, id: &str) -> Result<(), Error>;
 }
 
@@ -157,16 +162,28 @@ impl GhosttyService {
 
     pub async fn create(&self) -> Result<TerminalSession, Error> {
         let id = self.blocking(|os| os.create()).await?;
-        self.sessions()
-            .await?
-            .into_iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| Error::NotFound(format!("new Ghostty terminal {id}")))
+        Ok(TerminalSession {
+            id,
+            source: "ghostty".into(),
+            ..Default::default()
+        })
     }
 
     pub async fn close(&self, id: &str) -> Result<(), Error> {
         let id = id.to_owned();
         self.blocking(move |os| os.close(&id)).await
+    }
+
+    pub async fn create_command(&self, command: &str) -> Result<TerminalSession, Error> {
+        let command = command.to_owned();
+        let id = self.blocking(move |os| os.create_command(&command)).await?;
+        // Creation already succeeded. Do not risk retrying it if a subsequent
+        // inventory fails or the short-lived command has already exited.
+        Ok(TerminalSession {
+            id,
+            source: "ghostty".into(),
+            ..Default::default()
+        })
     }
 
     pub async fn history(&self, id: &str, lines: u32) -> Result<Vec<TerminalLine>, Error> {

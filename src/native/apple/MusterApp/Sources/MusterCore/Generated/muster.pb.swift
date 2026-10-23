@@ -2191,12 +2191,30 @@ public nonisolated struct Muster_V1_TerminalSession: Sendable {
   public init() {}
 }
 
+public nonisolated struct Muster_V1_TerminalSource: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var source: String = String()
+
+  public var label: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Muster_V1_TerminalSessionList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var sessions: [Muster_V1_TerminalSession] = []
+
+  public var sources: [Muster_V1_TerminalSource] = []
+
+  public var errors: [String] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2264,6 +2282,8 @@ public nonisolated struct Muster_V1_TerminalFrame: Sendable {
 
   public var iterm2AttachCommand: String = String()
 
+  public var nativeSources: [Muster_V1_TerminalSource] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2294,6 +2314,14 @@ public nonisolated struct Muster_V1_TerminalCreateRequest: Sendable {
   public var profile: String = String()
 
   public var background: Bool = false
+
+  /// empty selects the legacy primary adapter
+  public var source: String = String()
+
+  /// optional exact managed handle; never a shell command
+  public var managedSession: String = String()
+
+  public var opID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -7564,9 +7592,44 @@ nonisolated extension Muster_V1_TerminalSession: SwiftProtobuf.Message, SwiftPro
   }
 }
 
+nonisolated extension Muster_V1_TerminalSource: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TerminalSource"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}source\0\u{1}label\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.source) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.source.isEmpty {
+      try visitor.visitSingularStringField(value: self.source, fieldNumber: 1)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_TerminalSource, rhs: Muster_V1_TerminalSource) -> Bool {
+    if lhs.source != rhs.source {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_V1_TerminalSessionList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalSessionList"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0\u{1}sources\0\u{1}errors\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7575,6 +7638,8 @@ nonisolated extension Muster_V1_TerminalSessionList: SwiftProtobuf.Message, Swif
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sessions) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.errors) }()
       default: break
       }
     }
@@ -7584,11 +7649,19 @@ nonisolated extension Muster_V1_TerminalSessionList: SwiftProtobuf.Message, Swif
     if !self.sessions.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.sessions, fieldNumber: 1)
     }
+    if !self.sources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 2)
+    }
+    if !self.errors.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.errors, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_TerminalSessionList, rhs: Muster_V1_TerminalSessionList) -> Bool {
     if lhs.sessions != rhs.sessions {return false}
+    if lhs.sources != rhs.sources {return false}
+    if lhs.errors != rhs.errors {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7671,7 +7744,7 @@ nonisolated extension Muster_V1_TerminalLine: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalFrame"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}rev\0\u{1}full\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0\u{3}desktop_attach_command\0\u{3}iterm2_attach_command\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}rev\0\u{1}full\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0\u{3}desktop_attach_command\0\u{3}iterm2_attach_command\0\u{3}native_sources\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7690,6 +7763,7 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
       case 9: try { try decoder.decodeSingularBoolField(value: &self.ended) }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.desktopAttachCommand) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.iterm2AttachCommand) }()
+      case 12: try { try decoder.decodeRepeatedMessageField(value: &self.nativeSources) }()
       default: break
       }
     }
@@ -7729,6 +7803,9 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
     if !self.iterm2AttachCommand.isEmpty {
       try visitor.visitSingularStringField(value: self.iterm2AttachCommand, fieldNumber: 11)
     }
+    if !self.nativeSources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.nativeSources, fieldNumber: 12)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7744,6 +7821,7 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
     if lhs.ended != rhs.ended {return false}
     if lhs.desktopAttachCommand != rhs.desktopAttachCommand {return false}
     if lhs.iterm2AttachCommand != rhs.iterm2AttachCommand {return false}
+    if lhs.nativeSources != rhs.nativeSources {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7791,7 +7869,7 @@ nonisolated extension Muster_V1_TerminalInputRequest: SwiftProtobuf.Message, Swi
 
 nonisolated extension Muster_V1_TerminalCreateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalCreateRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0\u{1}background\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0\u{1}background\0\u{1}source\0\u{3}managed_session\0\u{3}op_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7801,6 +7879,9 @@ nonisolated extension Muster_V1_TerminalCreateRequest: SwiftProtobuf.Message, Sw
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.profile) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.background) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.source) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.managedSession) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.opID) }()
       default: break
       }
     }
@@ -7813,12 +7894,24 @@ nonisolated extension Muster_V1_TerminalCreateRequest: SwiftProtobuf.Message, Sw
     if self.background != false {
       try visitor.visitSingularBoolField(value: self.background, fieldNumber: 2)
     }
+    if !self.source.isEmpty {
+      try visitor.visitSingularStringField(value: self.source, fieldNumber: 3)
+    }
+    if !self.managedSession.isEmpty {
+      try visitor.visitSingularStringField(value: self.managedSession, fieldNumber: 4)
+    }
+    if !self.opID.isEmpty {
+      try visitor.visitSingularStringField(value: self.opID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_TerminalCreateRequest, rhs: Muster_V1_TerminalCreateRequest) -> Bool {
     if lhs.profile != rhs.profile {return false}
     if lhs.background != rhs.background {return false}
+    if lhs.source != rhs.source {return false}
+    if lhs.managedSession != rhs.managedSession {return false}
+    if lhs.opID != rhs.opID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

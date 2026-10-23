@@ -39,6 +39,7 @@ use muster_net::{Build, SharedPolicy, SharedRoster};
 use muster_rpc::Principal;
 use muster_store::Store;
 use muster_terminal::{Terminal, TerminalKind};
+mod native_terminals;
 use quinn::{RecvStream, SendStream};
 use tokio::sync::{broadcast, oneshot};
 use tokio::task::JoinHandle;
@@ -103,6 +104,7 @@ pub struct DaemonConfig {
     /// (`muster_agent::cloud`) with the credentials their CLIs keep here.
     pub cloud: bool,
     pub terminal: Option<TerminalKind>,
+    pub additional_terminals: Vec<TerminalKind>,
     pub vnet: bool,
     /// Serve the Unix socket (off when the app core embeds the daemon).
     pub listen: bool,
@@ -152,6 +154,7 @@ impl DaemonConfig {
             agent: Some(AgentConfig::default()),
             cloud: true,
             terminal: None,
+            additional_terminals: Vec::new(),
             vnet: false,
             listen: true,
             presence_key: None,
@@ -215,6 +218,7 @@ pub struct Daemon {
     invite: Mutex<Option<Invite>>,
     agent: Option<Arc<AgentService>>,
     terminal: Option<Arc<Terminal>>,
+    additional_terminals: Vec<Arc<Terminal>>,
     #[cfg(unix)]
     tmux: Arc<Terminal>,
     platform: Arc<dyn Platform>,
@@ -309,6 +313,12 @@ impl Daemon {
             AgentService::start(agent)
         });
         let terminal = config.terminal.clone().map(Terminal::new);
+        let additional_terminals = config
+            .additional_terminals
+            .iter()
+            .cloned()
+            .map(Terminal::new)
+            .collect();
         #[cfg(unix)]
         let tmux = Arc::new(Terminal::Tmux(muster_terminal::tmux::TmuxService::new(
             config.dir.join("tmux.sock"),
@@ -341,6 +351,7 @@ impl Daemon {
             invite: Mutex::new(None),
             agent,
             terminal,
+            additional_terminals,
             #[cfg(unix)]
             tmux,
             platform,
@@ -766,6 +777,9 @@ impl Daemon {
     }
     pub fn terminal(&self) -> Option<&Arc<Terminal>> {
         self.terminal.as_ref()
+    }
+    pub(crate) fn terminals(&self) -> impl Iterator<Item = &Arc<Terminal>> {
+        self.terminal.iter().chain(self.additional_terminals.iter())
     }
     pub fn platform(&self) -> &Arc<dyn Platform> {
         &self.platform

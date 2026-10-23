@@ -160,6 +160,7 @@ pub struct Terminal {
     pub rev: u64,
     pub desktop_attach_command: String,
     pub iterm2_attach_command: String,
+    pub native_sources: Vec<v1::TerminalSource>,
 }
 
 /// An intent that waits for local authentication.

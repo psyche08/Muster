@@ -192,7 +192,9 @@ impl Owner {
             }),
             Some(v1::locked_use_operation::Operation::Terminal(lease)) => {
                 // Only a terminal whose screen needs an unlocked console.
-                if !daemon.terminal().is_some_and(|t| t.source() == "ghostty") {
+                if !crate::native_terminals::resolve(&daemon, &lease.session)
+                    .is_ok_and(|(t, _)| t.source() == "ghostty")
+                {
                     return Err(Error::Invalid(
                         "this Mac's terminals need no Locked Use session".into(),
                     ));

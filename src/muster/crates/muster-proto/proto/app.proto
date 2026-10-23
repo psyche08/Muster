@@ -247,6 +247,8 @@ message TerminalText {
 }
 message TerminalCreate {
   string profile = 1;
+  string source = 2;
+  bool attach_managed = 3; // current conversation's managed terminal
 }
 // Text the user pasted into the terminal (from the clipboard). Rust makes
 // it input: line breaks become Enter, control characters are dropped, and it
@@ -642,6 +644,7 @@ message TerminalsView {
   bool loading = 4;
   repeated string errors = 5;
   bool can_create = 6; // a new window on one device (not the all-devices list)
+  repeated muster.v1.TerminalSource sources = 7;
 }
 
 // A rendered grid: the shell draws rows and the cursor, nothing else.
@@ -665,6 +668,7 @@ message TerminalView {
   // Display/copy only. Rust supplies exact managed-session bindings.
   string desktop_attach_command = 13;
   string iterm2_attach_command = 14;
+  repeated muster.v1.TerminalSource native_sources = 15;
 }
 
 message FilesView {

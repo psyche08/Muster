@@ -25,7 +25,8 @@ pub(super) fn open_terminals(state: &mut State, ctx: &Ctx) {
         ssh_available: filter != "*" && state.embedded && !state.is_self(&filter),
         loading: !devices.is_empty(),
         errors: Vec::new(),
-        can_create: filter != "*",
+        can_create: false,
+        sources: Vec::new(),
     };
     for member in devices {
         let device = member.device_id;
@@ -50,7 +51,7 @@ pub(super) fn open_terminals(state: &mut State, ctx: &Ctx) {
                             session.device_id = device.clone();
                             session.device_name = name.clone();
                         }
-                        Ok(list.sessions)
+                        Ok(list)
                     }
                     _ => Err(unexpected()),
                 }
@@ -99,6 +100,7 @@ pub(super) fn open_terminal(state: &mut State, ctx: &Ctx, session: String) {
         rev: 0,
         desktop_attach_command: String::new(),
         iterm2_attach_command: String::new(),
+        native_sources: Vec::new(),
     });
     state.go(Screen::Terminal);
     attach(state, ctx, device, session, token);
@@ -500,6 +502,7 @@ pub(super) fn open_ssh(state: &mut State, ctx: &Ctx, o: app::OpenSsh) {
         rev: 0,
         desktop_attach_command: String::new(),
         iterm2_attach_command: String::new(),
+        native_sources: Vec::new(),
     });
     state.go(Screen::Terminal);
     let backend = ctx.backend.clone();
@@ -567,6 +570,7 @@ pub(super) fn apply_frame(terminal: &mut Terminal, frame: v1::TerminalFrame) {
     if frame.full {
         terminal.desktop_attach_command = frame.desktop_attach_command;
         terminal.iterm2_attach_command = frame.iterm2_attach_command;
+        terminal.native_sources = frame.native_sources;
         terminal.lines = frame.lines;
         terminal.lines.sort_by_key(|l| l.index);
     } else {
@@ -667,13 +671,33 @@ pub(super) fn intent_terminal_key(state: &mut State, ctx: &Ctx, k: app::Terminal
 }
 
 pub(super) fn intent_terminal_create(state: &mut State, ctx: &Ctx, c: app::TerminalCreate) {
-    if state.terminals.device_id == "*" {
-        state.toast("Select a device before creating a terminal", true);
-        return;
-    }
-    let device = state.target();
+    // Native attachment stays with the current terminal's device, even if
+    // the global selected device changed while its conversation remained open.
+    let (device, managed_session) = if c.attach_managed {
+        let Some(terminal) = state
+            .terminal
+            .as_ref()
+            .filter(|t| t.source == "tmux" && !t.ended)
+        else {
+            return;
+        };
+        if !terminal.native_sources.iter().any(|s| s.source == c.source) {
+            return;
+        }
+        (terminal.device.clone(), terminal.session.clone())
+    } else {
+        if state.terminals.device_id == "*" {
+            state.toast("Select a device before creating a terminal", true);
+            return;
+        }
+        if !c.source.is_empty() && !state.terminals.sources.iter().any(|s| s.source == c.source) {
+            return;
+        }
+        (state.terminals.device_id.clone(), String::new())
+    };
     let self_id = state.self_id.clone();
     let backend = ctx.backend.clone();
+    let op_id = state.op_id();
     state.busy += 1;
     spawn(ctx, async move {
         let result = async {
@@ -683,16 +707,30 @@ pub(super) fn intent_terminal_create(state: &mut State, ctx: &Ctx, c: app::Termi
                 Req::TerminalCreate(v1::TerminalCreateRequest {
                     profile: c.profile,
                     background: false,
+                    source: c.source,
+                    managed_session,
+                    op_id,
                 }),
             )
             .await?
             {
-                Resp::TerminalSession(s) => Ok(s),
+                Resp::TerminalSession(mut s) => {
+                    s.device_id = device.clone();
+                    Ok(s)
+                }
+                Resp::OpResult(r) => Err(Error::Unavailable(r.message)),
                 _ => Err(unexpected()),
             }
         }
         .await;
-        Msg::TerminalCreated { device, result }
+        if c.attach_managed {
+            Msg::Done {
+                what: "native terminal",
+                result: result.map(|_| None),
+            }
+        } else {
+            Msg::TerminalCreated { device, result }
+        }
     });
 }
 
@@ -758,7 +796,7 @@ pub(super) fn msg_terminals(
     state: &mut State,
     epoch: u64,
     device: String,
-    result: Result<Vec<v1::TerminalSession>, Error>,
+    result: Result<v1::TerminalSessionList, Error>,
 ) {
     if state.terminals_epoch != epoch
         || (state.terminals.device_id != "*" && state.terminals.device_id != device)
@@ -772,9 +810,14 @@ pub(super) fn msg_terminals(
         return;
     }
     match result {
-        Ok(sessions) => {
+        Ok(list) => {
+            if state.terminals.device_id != "*" {
+                state.terminals.can_create = !list.sources.is_empty();
+                state.terminals.sources = list.sources;
+            }
+            state.terminals.errors.extend(list.errors);
             state.terminals.sessions.retain(|s| s.device_id != device);
-            state.terminals.sessions.extend(sessions);
+            state.terminals.sessions.extend(list.sessions);
             state.terminals.sessions.sort_by(|a, b| {
                 (&a.device_name, &a.title, &a.id).cmp(&(&b.device_name, &b.title, &b.id))
             });
@@ -963,6 +1006,7 @@ pub(super) fn session_terminal_ready(
                 rev: 0,
                 desktop_attach_command: String::new(),
                 iterm2_attach_command: String::new(),
+                native_sources: Vec::new(),
             });
             state.session_terminal.active = true;
             attach(state, ctx, device, session, token);
