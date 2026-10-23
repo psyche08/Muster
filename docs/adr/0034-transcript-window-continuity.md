@@ -76,3 +76,23 @@ answer and teardown assertions. Keeping the conversation pane mounted across
 tabs passed both; that intermediate implementation was discarded. Public-content
 and 17-crate architecture checks passed. No new release or corrected physical
 installation is claimed by these source results.
+
+### Complete UI and local device-build evidence
+
+The full iOS 27 simulator suite passed 26 tests, and xcodebuild completed
+successfully. These UI tests linked the existing simulator FFI; the changed Rust
+window logic was covered separately by the complete app-core suite above.
+
+A local iOS Release archive was built from clean source
+`b8131bf50719f7b12bacdf5ce00d2275b3b9abc5`, labelled 1.0.87 (78.1) to distinguish
+it from published build 78. The executable contains the exact clean source marker;
+its SHA-256 is `4f76c1f2834a58b7801560410cbebee736c6e253f6a41a3d6aaee8b0384c3edd`.
+Strict codesign verification passed with the system trust service available.
+The restricted shell's initial trust lookup failed; it was not treated as a
+signing pass or used to bypass verification.
+
+The physical installation attempt failed with CoreDevice 4016 after the device
+became unavailable. No corrected-device installation or acceptance is claimed.
+The operator was asked to reconnect and normally unlock the phone. The public
+OTA and all installed Macs remain unchanged by this test build. GitHub Actions
+remained disabled; no Cloud build, notarization or OTA publication was performed.
