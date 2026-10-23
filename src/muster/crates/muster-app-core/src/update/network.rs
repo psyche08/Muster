@@ -1001,6 +1001,9 @@ pub(super) fn msg_done(
             }
         }
         Ok(None) => {
+            if what == "native terminal" {
+                state.toast("Native window opened on the session’s device", false);
+            }
             if what == "relay" || what == "accessibility" {
                 load_basics(state, ctx);
             }

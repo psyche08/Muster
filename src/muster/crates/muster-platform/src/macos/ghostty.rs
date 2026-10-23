@@ -160,6 +160,13 @@ pub fn create() -> Result<String, String> {
     )
 }
 
+pub fn create_command(command: &str) -> Result<String, String> {
+    script(
+        "set cfg to new surface configuration\nset command of cfg to item 1 of argv\nset w to new window with configuration cfg\nreturn id of focused terminal of selected tab of w",
+        &[command],
+    )
+}
+
 pub fn close(id: &str) -> Result<(), String> {
     script("close terminal id (item 1 of argv)", &[id]).map(drop)
 }

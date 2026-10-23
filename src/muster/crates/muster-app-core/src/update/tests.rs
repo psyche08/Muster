@@ -585,6 +585,7 @@ async fn pasted_text_reaches_ssh_bracketed_when_asked_and_oversized_pastes_do_no
         rev: 0,
         desktop_attach_command: String::new(),
         iterm2_attach_command: String::new(),
+        native_sources: Vec::new(),
     });
     let paste = |text: &str| app::TerminalPaste { text: text.into() };
     let written =
@@ -685,6 +686,7 @@ fn remote_terminal() -> Terminal {
         rev: 0,
         desktop_attach_command: String::new(),
         iterm2_attach_command: String::new(),
+        native_sources: Vec::new(),
     }
 }
 
@@ -1242,6 +1244,7 @@ async fn session_terminal_rejects_late_results_and_detaches_without_closing_shel
         rev: 0,
         desktop_attach_command: String::new(),
         iterm2_attach_command: String::new(),
+        native_sources: Vec::new(),
     });
     state.session_terminal.active = true;
     let vm = crate::render::view_model(&state);
@@ -1550,4 +1553,33 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
         Some("920")
     );
     assert_eq!(state.chat.as_ref().unwrap().messages.len(), 280);
+}
+
+#[test]
+fn native_inventory_preserves_partial_failures_and_rejects_late_source_choices() {
+    let mut state = State::new(false, Some("local".into()));
+    state.terminals.device_id = "local".into();
+    state.terminals_epoch = 4;
+    state.terminals_pending = 1;
+    let list = v1::TerminalSessionList {
+        sessions: vec![v1::TerminalSession {
+            id: "ghostty:fixture".into(),
+            source: "ghostty".into(),
+            device_id: "local".into(),
+            ..Default::default()
+        }],
+        sources: vec![v1::TerminalSource {
+            source: "ghostty".into(),
+            label: "Ghostty".into(),
+        }],
+        errors: vec!["iTerm2 API disabled".into()],
+    };
+    terminals::msg_terminals(&mut state, 3, "local".into(), Ok(list.clone()));
+    assert!(state.terminals.sources.is_empty());
+    terminals::msg_terminals(&mut state, 4, "local".into(), Ok(list));
+    assert!(state.terminals.can_create);
+    assert_eq!(state.terminals.sources[0].label, "Ghostty");
+    assert_eq!(state.terminals.sessions[0].id, "ghostty:fixture");
+    assert_eq!(state.terminals.errors, ["iTerm2 API disabled"]);
+    assert!(!state.terminals.loading);
 }

@@ -508,8 +508,14 @@ message TerminalSession {
   string device_name = 9;
 }
 
+message TerminalSource {
+  string source = 1;
+  string label = 2;
+}
 message TerminalSessionList {
   repeated TerminalSession sessions = 1;
+  repeated TerminalSource sources = 2;
+  repeated string errors = 3;
 }
 
 message TerminalAttachRequest {
@@ -537,6 +543,7 @@ message TerminalFrame {
   // Managed-session metadata on full snapshots; execute only on the host.
   string desktop_attach_command = 10;
   string iterm2_attach_command = 11;
+  repeated TerminalSource native_sources = 12;
 }
 
 message TerminalInputRequest {
@@ -548,6 +555,9 @@ message TerminalInputRequest {
 message TerminalCreateRequest {
   string profile = 1;
   bool background = 2;
+  string source = 3; // empty selects the legacy primary adapter
+  string managed_session = 4; // optional exact managed handle; never a shell command
+  string op_id = 5;
 }
 
 message TerminalResizeRequest {

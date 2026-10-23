@@ -655,6 +655,17 @@ Muster's viewport sizing in this phase; desktop-first ownership and native pane
 mapping are not implemented by this slice. PTY output coalesces over 8 ms and
 subscriber snapshots preserve other subscribers' pending updates.
 
+Native host selection ([ADR 0035](adr/0035-native-terminal-dev.md)) exposes both
+installed adapters in automatic mode. Rust namespaces native IDs, reports partial
+inventory failures and chooses the exact requested source for new windows.
+Managed frames advertise native hosts; opening one starts the generation-checked
+attach command as a new window's initial process. Existing native sessions are
+not converted or merged heuristically. A live iTerm2 connection is reused without
+an extra list request before each input. Local testing uses the separate
+`MusterDev.app` bundle and a fresh private daemon directory; see
+[terminal development](TERMINAL_DEV.md).
+
+
 **Other terminals**:
 
 - **PTY**: Later-phase fallback only for Linux / Windows (ConPTY) and environments without iTerm2.

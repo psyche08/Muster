@@ -78,7 +78,7 @@ impl TerminalService {
     async fn connection(&self) -> Result<Arc<iterm2::Iterm2>, Error> {
         let mut slot = self.connection.lock().await;
         if let Some(existing) = slot.as_ref()
-            && existing.sessions().await.is_ok()
+            && !existing.is_closed()
         {
             return Ok(existing.clone());
         }
@@ -125,7 +125,12 @@ impl TerminalService {
             return Ok(());
         }
         loop {
-            match notifications.recv().await {
+            let next = tokio::select! {
+                _ = out.closed() => return Ok(()),
+                _ = connection.closed() => return Err(Error::Unavailable("iTerm2 connection closed".into())),
+                next = notifications.recv() => next,
+            };
+            match next {
                 Ok(n) => {
                     if n.new_session_notification.is_some()
                         || n.terminate_session_notification.is_some()
@@ -166,6 +171,18 @@ impl TerminalService {
         self.connection()
             .await?
             .create_tab(profile, background)
+            .await
+    }
+
+    pub async fn create_command(
+        &self,
+        profile: Option<&str>,
+        background: bool,
+        command: &str,
+    ) -> Result<TerminalSession, Error> {
+        self.connection()
+            .await?
+            .create_window(profile, background, Some(command))
             .await
     }
 
@@ -355,6 +372,21 @@ impl Terminal {
             Terminal::Pty(t) => t.create(profile, background).await,
             #[cfg(unix)]
             Terminal::Tmux(_) => Err(Error::Protocol("Open tmux from an agent session".into())),
+        }
+    }
+
+    pub async fn create_command(
+        &self,
+        profile: Option<&str>,
+        background: bool,
+        command: &str,
+    ) -> Result<TerminalSession, Error> {
+        match self {
+            Terminal::Iterm2(t) => t.create_command(profile, background, command).await,
+            Terminal::Ghostty(t) => t.create_command(command).await,
+            _ => Err(Error::Unavailable(
+                "This source cannot open a native managed view".into(),
+            )),
         }
     }
 

@@ -280,7 +280,14 @@ impl TmuxService {
         self.connect(&mut sessions, handle, &target).await
     }
 
-    /// Commands are display-only and bound to the server-side generation. The
+    /// A native app starts this as a fresh process. Handle validation happens
+    /// both here and atomically in tmux immediately before attaching.
+    pub async fn native_command(&self, handle: &str) -> Result<String, Error> {
+        let (command, _) = self.desktop_commands(handle).await?;
+        Ok(format!("/bin/sh -c {}", shell_quote(&command)))
+    }
+
+    /// Commands are bound to the server-side generation. The
     /// conditional and attach execute on the same tmux command queue.
     async fn desktop_commands(&self, handle: &str) -> Result<(String, String), Error> {
         let target = self.target(handle).await?;
@@ -499,7 +506,12 @@ mod tests {
         assert!(!first.iterm2_attach_command.is_empty());
         let desktop = PtyService::new(PtyConfig::default());
         let mut clients = Vec::new();
-        for command in [&first.desktop_attach_command, &first.iterm2_attach_command] {
+        let native_command = service.native_command(&handle).await.unwrap();
+        for command in [
+            &first.desktop_attach_command,
+            &first.iterm2_attach_command,
+            &native_command,
+        ] {
             // Execute exactly the command the UI offers, including shell quoting.
             let client = desktop
                 .create_command(
@@ -523,7 +535,7 @@ mod tests {
                 .lines()
                 .filter(|line| line.contains("ignore-size"))
                 .count()
-                == 2
+                == 3
             {
                 attached = true;
                 break;
@@ -532,7 +544,7 @@ mod tests {
         }
         assert!(
             attached,
-            "both normal and iTerm2 control-mode commands must attach"
+            "normal, control-mode and native initial commands must attach"
         );
         service
             .input(&handle, b"printf '%s%s\\n' DESKTOP -SHARED\r")

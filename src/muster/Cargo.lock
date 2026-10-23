@@ -2300,6 +2300,7 @@ dependencies = [
  "rand 0.8.8",
  "russh",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite",

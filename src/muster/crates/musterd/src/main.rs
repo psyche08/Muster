@@ -44,8 +44,7 @@ struct Args {
     /// providers' cloud sessions with the credentials their CLIs keep here.
     #[arg(long)]
     no_cloud: bool,
-    /// Offer terminals: "auto" (on macOS iTerm2, or Ghostty when only it is
-    /// installed; a PTY shell elsewhere), "iterm2", "ghostty", "pty" or "off"
+    /// Offer terminals: "auto" (on macOS all installed iTerm2/Ghostty sources; a PTY shell elsewhere), "iterm2", "ghostty", "pty" or "off"
     #[arg(long, default_value = "auto")]
     terminal: String,
     /// Keep this file in step with the roster (sshd AuthorizedKeysFile)
@@ -117,7 +116,12 @@ async fn run() -> anyhow::Result<()> {
         #[cfg(target_os = "macos")]
         "ghostty" => Some(musterd::ghostty::ghostty()),
         #[cfg(target_os = "macos")]
-        "auto" => Some(musterd::ghostty::auto()),
+        "auto" => {
+            let mut hosts = musterd::ghostty::auto().into_iter();
+            let primary = hosts.next();
+            config.additional_terminals = hosts.collect();
+            primary
+        }
         #[cfg(not(target_os = "macos"))]
         "auto" => Some(muster_terminal::TerminalKind::Pty(
             muster_terminal::pty::PtyConfig::default(),

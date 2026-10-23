@@ -12,7 +12,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as _;
 use tokio::net::UnixStream;
-use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot, watch};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
@@ -70,11 +70,20 @@ impl Cookie {
             app.replace('"', ""),
             name.replace('"', "")
         );
-        let output = tokio::process::Command::new("/usr/bin/osascript")
-            .args(["-e", &script])
-            .output()
-            .await
-            .map_err(|e| Error::Unavailable(format!("osascript: {e}")))?;
+        let output = tokio::time::timeout(
+            REQUEST_TIMEOUT,
+            tokio::process::Command::new("/usr/bin/osascript")
+                .args(["-e", &script])
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await
+        .map_err(|_| {
+            Error::Unavailable(
+                "iTerm2 cookie request timed out; check local Automation setup".into(),
+            )
+        })?
+        .map_err(|e| Error::Unavailable(format!("osascript: {e}")))?;
         if !output.status.success() {
             return Err(Error::Unavailable(format!(
                 "iTerm2 cookie request failed: {}",
@@ -97,6 +106,7 @@ type Pending = Arc<Mutex<HashMap<i64, oneshot::Sender<ServerOriginatedMessage>>>
 /// One connection to iTerm2.
 pub struct Iterm2 {
     outbound: mpsc::Sender<Vec<u8>>,
+    closed: watch::Receiver<bool>,
     pending: Pending,
     next_id: AtomicI64,
     notifications: broadcast::Sender<Arc<Notification>>,
@@ -138,15 +148,21 @@ impl Iterm2 {
         let (outbound, mut outbound_rx) = mpsc::channel::<Vec<u8>>(64);
         let (notifications, _) = broadcast::channel(1024);
         let pending: Pending = Arc::default();
+        let (close_tx, closed) = watch::channel(false);
+        let writer_closed = close_tx.clone();
+        let writer_pending = pending.clone();
         tokio::spawn(async move {
             while let Some(bytes) = outbound_rx.recv().await {
                 if sink.send(Message::Binary(bytes.into())).await.is_err() {
                     break;
                 }
             }
+            let _ = writer_closed.send(true);
+            writer_pending.lock().await.clear();
             let _ = sink.close().await;
         });
         let reader_pending = pending.clone();
+        let reader_closed = close_tx;
         let notify = notifications.clone();
         tokio::spawn(async move {
             while let Some(frame) = source.next().await {
@@ -173,28 +189,45 @@ impl Iterm2 {
                     _ => {}
                 }
             }
+            let _ = reader_closed.send(true);
             reader_pending.lock().await.clear();
         });
         Ok(Arc::new(Self {
             outbound,
+            closed,
             pending,
             next_id: AtomicI64::new(1),
             notifications,
         }))
     }
 
+    pub fn is_closed(&self) -> bool {
+        *self.closed.borrow()
+    }
+
+    pub async fn closed(&self) {
+        let mut closed = self.closed.clone();
+        let _ = closed.wait_for(|closed| *closed).await;
+    }
+
     async fn request(&self, submessage: Req) -> Result<Resp, Error> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
-        self.pending.lock().await.insert(id, tx);
+        {
+            let mut pending = self.pending.lock().await;
+            if self.is_closed() {
+                return Err(Error::Unavailable("iTerm2 connection closed".into()));
+            }
+            pending.insert(id, tx);
+        }
         let message = ClientOriginatedMessage {
             id: Some(id),
             submessage: Some(submessage),
         };
-        self.outbound
-            .send(message.encode_to_vec())
-            .await
-            .map_err(|_| Error::Unavailable("iTerm2 connection closed".into()))?;
+        if self.outbound.send(message.encode_to_vec()).await.is_err() {
+            self.pending.lock().await.remove(&id);
+            return Err(Error::Unavailable("iTerm2 connection closed".into()));
+        }
         let reply = match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
             Ok(Ok(reply)) => reply,
             Ok(Err(_)) => return Err(Error::Unavailable("iTerm2 connection closed".into())),
@@ -418,12 +451,20 @@ impl Iterm2 {
         profile: Option<&str>,
         background: bool,
     ) -> Result<TerminalSession, Error> {
+        self.create_window(profile, background, None).await
+    }
+
+    /// The command is a new profile's initial process, never input to a shell.
+    pub async fn create_window(
+        &self,
+        profile: Option<&str>,
+        background: bool,
+        command: Option<&str>,
+    ) -> Result<TerminalSession, Error> {
         let reply = self
-            .request(Req::CreateTabRequest(crate::proto::CreateTabRequest {
-                profile_name: profile.map(str::to_string),
-                select_tab: Some(!background),
-                ..Default::default()
-            }))
+            .request(Req::CreateTabRequest(create_window_request(
+                profile, background, command,
+            )))
             .await?;
         let Resp::CreateTabResponse(reply) = reply else {
             return Err(Error::Protocol("unexpected CreateTab reply".into()));
@@ -530,7 +571,12 @@ impl Iterm2 {
             return Ok(());
         }
         loop {
-            let notification = match notifications.recv().await {
+            let next = tokio::select! {
+                _ = frames.closed() => return Ok(()),
+                _ = self.closed() => return Err(Error::Unavailable("iTerm2 connection closed".into())),
+                next = notifications.recv() => next,
+            };
+            let notification = match next {
                 Ok(n) => n,
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => break,
@@ -670,4 +716,244 @@ fn flatten(list: &ListSessionsResponse) -> Vec<TerminalSession> {
         }
     }
     out
+}
+
+fn create_window_request(
+    profile: Option<&str>,
+    background: bool,
+    command: Option<&str>,
+) -> crate::proto::CreateTabRequest {
+    crate::proto::CreateTabRequest {
+        profile_name: profile.map(str::to_owned),
+        select_tab: Some(!background),
+        custom_profile_properties: command
+            .map(|command| {
+                vec![
+                    crate::proto::ProfileProperty {
+                        key: Some("Custom Command".into()),
+                        json_value: Some("\"Yes\"".into()),
+                    },
+                    crate::proto::ProfileProperty {
+                        key: Some("Command".into()),
+                        json_value: Some(
+                            serde_json::to_string(command).expect("string serialization"),
+                        ),
+                    },
+                ]
+            })
+            .unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod creation_tests {
+    use super::*;
+    #[test]
+    fn command_is_initial_profile_data_and_window_target_is_unset() {
+        let command = "/bin/sh -c 'printf \"hello\\n\"'";
+        let request = create_window_request(Some("Fixture profile"), false, Some(command));
+        assert!(request.window_id.is_none());
+        assert_eq!(request.select_tab, Some(true));
+        assert_eq!(
+            request.custom_profile_properties[0].json_value.as_deref(),
+            Some("\"Yes\"")
+        );
+        let encoded = request.custom_profile_properties[1]
+            .json_value
+            .as_ref()
+            .unwrap();
+        assert_eq!(serde_json::from_str::<String>(encoded).unwrap(), command);
+        assert!(
+            create_window_request(None, true, None)
+                .custom_profile_properties
+                .is_empty()
+        );
+    }
+}
+
+#[cfg(test)]
+mod native_protocol_tests {
+    use super::*;
+    use crate::proto::*;
+
+    #[tokio::test]
+    #[allow(clippy::result_large_err)] // tungstenite fixes the handshake callback error type.
+    async fn existing_sessions_and_new_windows_share_connection_without_input_rescans() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("api.sock");
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let command = "/bin/sh -c 'printf fixture'";
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_hdr_async(stream, |_: &tokio_tungstenite::tungstenite::handshake::server::Request, mut response: tokio_tungstenite::tungstenite::handshake::server::Response| {
+                response.headers_mut().insert("Sec-WebSocket-Protocol", HeaderValue::from_static(SUBPROTOCOL));
+                Ok(response)
+            }).await.unwrap();
+            let mut lists = 0;
+            let mut inputs = 0;
+            for _ in 0..4 {
+                let Message::Binary(bytes) = ws.next().await.unwrap().unwrap() else {
+                    panic!("binary request expected")
+                };
+                let request = ClientOriginatedMessage::decode(&bytes[..]).unwrap();
+                let reply = match request.submessage.unwrap() {
+                    Req::ListSessionsRequest(_) => {
+                        lists += 1;
+                        Resp::ListSessionsResponse(ListSessionsResponse {
+                            windows: vec![list_sessions_response::Window {
+                                window_id: Some("window-a".into()),
+                                tabs: vec![list_sessions_response::Tab {
+                                    tab_id: Some("tab-a".into()),
+                                    root: Some(SplitTreeNode {
+                                        links: vec![split_tree_node::SplitTreeLink {
+                                            child: Some(Child::Session(SessionSummary {
+                                                unique_identifier: Some("existing:opaque".into()),
+                                                title: Some("fixture shell".into()),
+                                                ..Default::default()
+                                            })),
+                                        }],
+                                        ..Default::default()
+                                    }),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        })
+                    }
+                    Req::SendTextRequest(r) => {
+                        assert_eq!(r.session.as_deref(), Some("existing:opaque"));
+                        inputs += 1;
+                        Resp::SendTextResponse(SendTextResponse::default())
+                    }
+                    Req::CreateTabRequest(r) => {
+                        assert!(r.window_id.is_none());
+                        assert_eq!(
+                            serde_json::from_str::<String>(
+                                r.custom_profile_properties[1].json_value.as_ref().unwrap()
+                            )
+                            .unwrap(),
+                            command
+                        );
+                        Resp::CreateTabResponse(CreateTabResponse {
+                            session_id: Some("new-native-id".into()),
+                            window_id: Some("new-window".into()),
+                            ..Default::default()
+                        })
+                    }
+                    other => panic!("unexpected request {other:?}"),
+                };
+                ws.send(Message::Binary(
+                    ServerOriginatedMessage {
+                        id: request.id,
+                        submessage: Some(reply),
+                    }
+                    .encode_to_vec()
+                    .into(),
+                ))
+                .await
+                .unwrap();
+            }
+            assert_eq!((lists, inputs), (1, 2));
+            ws.close(None).await.unwrap();
+        });
+        let client = Iterm2::connect(
+            &path,
+            &Cookie {
+                cookie: "fixture".into(),
+                key: "fixture".into(),
+            },
+            "fixture",
+        )
+        .await
+        .unwrap();
+        let service = crate::TerminalService {
+            config: crate::TerminalConfig::default(),
+            connection: Mutex::new(Some(client.clone())),
+        };
+        assert_eq!(service.sessions().await.unwrap()[0].id, "existing:opaque");
+        service.input("existing:opaque", b"a").await.unwrap();
+        service.input("existing:opaque", b"b").await.unwrap();
+        assert_eq!(
+            service
+                .create_command(None, false, command)
+                .await
+                .unwrap()
+                .id,
+            "new-native-id"
+        );
+        server.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !client.is_closed() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(
+            client
+                .send_text("existing:opaque", "must not replay")
+                .await
+                .is_err()
+        );
+    }
+}
+
+#[cfg(test)]
+mod disconnect_tests {
+    use super::*;
+    #[tokio::test]
+    async fn idle_view_detaches_and_transport_loss_ends_the_stream() {
+        for disconnect in [false, true] {
+            let (outbound, mut requests) = mpsc::channel::<Vec<u8>>(8);
+            let (close, closed) = watch::channel(false);
+            let pending: Pending = Arc::default();
+            let replies = pending.clone();
+            let responder = tokio::spawn(async move {
+                while let Some(bytes) = requests.recv().await {
+                    let request = ClientOriginatedMessage::decode(&bytes[..]).unwrap();
+                    let reply = match request.submessage.unwrap() {
+                        Req::NotificationRequest(_) => {
+                            Resp::NotificationResponse(crate::proto::NotificationResponse::default())
+                        }
+                        Req::GetBufferRequest(_) => {
+                            Resp::GetBufferResponse(crate::proto::GetBufferResponse::default())
+                        }
+                        other => panic!("unexpected request {other:?}"),
+                    };
+                    if let Some(tx) = replies.lock().await.remove(&request.id.unwrap()) {
+                        let _ = tx.send(ServerOriginatedMessage {
+                            id: request.id,
+                            submessage: Some(reply),
+                        });
+                    }
+                }
+            });
+            let client = Arc::new(Iterm2 {
+                outbound,
+                closed,
+                pending,
+                next_id: AtomicI64::new(1),
+                notifications: broadcast::channel(8).0,
+            });
+            let (frames, mut rx) = mpsc::channel(1);
+            let attach = tokio::spawn(async move { client.attach("fixture", 0, frames).await });
+            assert!(rx.recv().await.unwrap().full);
+            if disconnect {
+                close.send(true).unwrap();
+            } else {
+                drop(rx);
+            }
+            let result = tokio::time::timeout(Duration::from_secs(1), attach)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(result.is_err(), disconnect);
+            tokio::time::timeout(Duration::from_secs(1), responder)
+                .await
+                .unwrap()
+                .unwrap();
+        }
+    }
 }

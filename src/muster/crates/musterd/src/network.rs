@@ -181,8 +181,8 @@ impl Daemon {
                 }
             },
             iterm2_api_available: self
-                .terminal()
-                .is_some_and(|t| t.source() == "iterm2" && t.available()),
+                .terminals()
+                .any(|t| t.source() == "iterm2" && t.available()),
             terminal_source: self
                 .terminal()
                 .map(|t| t.source().to_owned())
@@ -190,7 +190,7 @@ impl Daemon {
             ghostty_automation: {
                 #[cfg(target_os = "macos")]
                 {
-                    if self.terminal().is_some_and(|t| t.source() == "ghostty") {
+                    if self.terminals().any(|t| t.source() == "ghostty") {
                         muster_platform::macos::ghostty::permission(false).into()
                     } else {
                         String::new()

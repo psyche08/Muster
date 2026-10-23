@@ -1053,7 +1053,12 @@ private struct SessionTerminalPane: View {
                 else if !workspace.attached { Button("Connect") { core.sessionTerminal(.start) }.buttonStyle(.bordered).disabled(!workspace.available) }
                 Menu {
                     if !terminal.desktopAttachCommand.isEmpty && !terminal.ended {
-                        Button("Connect from iTerm2 / Ghostty…") { desktopAttach = true }
+                        ForEach(terminal.nativeSources, id: \.source) { source in
+                            Button("Open in \(source.label)") {
+                                core.terminalCreate(source: source.source, attachManaged: true)
+                            }
+                        }
+                        Button("Copy desktop connection command…") { desktopAttach = true }
                         Divider()
                     }
                     Button("Disconnect") { core.sessionTerminal(.detach) }.disabled(!workspace.attached)

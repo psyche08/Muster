@@ -44,19 +44,26 @@ impl GhosttyOs for Ghostty {
     fn create(&self) -> Result<String, Error> {
         os::create().map_err(unavailable)
     }
+    fn create_command(&self, command: &str) -> Result<String, Error> {
+        os::create_command(command).map_err(unavailable)
+    }
     fn close(&self, id: &str) -> Result<(), Error> {
         os::close(id).map_err(unavailable)
     }
 }
 
-/// `--terminal auto` on a Mac: iTerm2 when it is installed, else Ghostty when
-/// it is, else iTerm2 (whose setup then says it is missing).
-pub fn auto() -> muster_terminal::TerminalKind {
-    let iterm = muster_platform::macos::automation::installed("com.googlecode.iterm2");
-    if iterm != Some(true) && os::installed() {
-        return ghostty();
+/// Prefer iTerm2 for legacy IDs, while exposing every installed native host.
+pub fn auto() -> Vec<muster_terminal::TerminalKind> {
+    let mut hosts = Vec::new();
+    if muster_platform::macos::automation::installed("com.googlecode.iterm2") == Some(true) {
+        hosts.push(muster_terminal::TerminalKind::Iterm2(
+            muster_terminal::TerminalConfig::default(),
+        ));
     }
-    muster_terminal::TerminalKind::Iterm2(muster_terminal::TerminalConfig::default())
+    if os::installed() {
+        hosts.push(ghostty());
+    }
+    hosts
 }
 
 pub fn ghostty() -> muster_terminal::TerminalKind {

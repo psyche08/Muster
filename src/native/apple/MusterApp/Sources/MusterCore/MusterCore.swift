@@ -243,8 +243,10 @@ public final class MusterCore: MusterShell {
         send(.sessionTerminalAction(Muster_App_SessionTerminalAction.with { $0.action = action }))
     }
 
-    public func terminalCreate(profile: String = "") {
-        send(.terminalCreate(Muster_App_TerminalCreate.with { $0.profile = profile }))
+    public func terminalCreate(profile: String = "", source: String = "", attachManaged: Bool = false) {
+        send(.terminalCreate(Muster_App_TerminalCreate.with {
+            $0.profile = profile; $0.source = source; $0.attachManaged = attachManaged
+        }))
     }
 
     public func terminalResize(cols: UInt32, rows: UInt32) {
