@@ -213,3 +213,8 @@ names. Then run the agent suite, platform compile checks and repository gates.
 Build the corrected installed version and repeat navigation without sending.
 Record source, release and actual navigation results separately. If a macOS
 update is published, publish iOS with it under the existing release policy.
+
+Installed 1.0.89 acceptance selected the originally failing merge-conflict row
+and verified the exact opened session in 1,159 ms, without changing user frames
+or sending. See ADR 0040 for source tests, paired release and three-Mac runtime
+evidence, and for the separate still-unverified installed fallback path.
