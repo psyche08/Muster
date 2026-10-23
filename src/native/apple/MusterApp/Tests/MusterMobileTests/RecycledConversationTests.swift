@@ -181,11 +181,10 @@ final class RecycledConversationTests: XCTestCase {
             readAt(controller, index: index + 1)
             let path = IndexPath(item: index + 1, section: 0)
             let before = controller.collection.layoutAttributesForItem(at: path)!.frame.height
-            controller.disclosures.choice(["row-\(index)", control.0, control.1]).override = index != 4
+            controller.disclosures.choice(["row-\(index)", control.0, control.1]).override = true
             settle()
             let changed = controller.collection.layoutAttributesForItem(at: path)!.frame.height
-            if index == 4 { XCTAssertLessThan(changed, before - 10) }
-            else { XCTAssertGreaterThan(changed, before + 10, "Control must use the retained choice: \(control.0)") }
+            XCTAssertGreaterThan(changed, before + 10, "Control must use the retained choice: \(control.0)")
             readAt(controller, index: 130); readAt(controller, index: index + 1)
             XCTAssertEqual(controller.collection.layoutAttributesForItem(at: path)!.frame.height, changed, accuracy: 2)
         }

@@ -153,13 +153,7 @@ struct ChatInlineImageProvider: InlineImageProvider {
 
 struct TurnFooter: View {
     let message: Muster_V1_AgentMessage
-    @State private var cacheDetails: Bool
     private var usage: Muster_V1_TurnUsage { message.usage }
-
-    init(message: Muster_V1_AgentMessage, cacheDetails: Bool = false) {
-        self.message = message
-        _cacheDetails = State(initialValue: cacheDetails)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -172,42 +166,6 @@ struct TurnFooter: View {
                 Text(usage.model).lineLimit(1)
             }
             Text(tokens).lineLimit(1).minimumScaleFactor(0.8)
-            // One line for the cache; tapping it shows the details.
-            Button { withAnimation(.easeInOut(duration: 0.18)) { cacheDetails.toggle() } } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: cacheDetails ? "chevron.down" : "chevron.right")
-                        .font(.caption2.weight(.semibold)).frame(width: 10)
-                    Text(cache).lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 0)
-                }.contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(cacheDetails ? "Expanded" : "Collapsed")
-            .accessibilityHint("Shows cache details")
-            if cacheDetails {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(usage.requestCount) requests · " + (usage.tokensKnown
-                        ? "Read \(usage.cacheReadTokens.formatted()) · Write \(usage.cacheWriteTokens.formatted()) tokens"
-                        : "Token breakdown unavailable"))
-                    if usage.cacheExpiry.fromUnix > 0 {
-                        Text("Estimated expiry \(expiry(seconds: true))")
-                    }
-                    if usage.firstRequestCacheHitKnown {
-                        Text("First request hit \(usage.firstRequestCacheHitPercent, specifier: "%.1f")%")
-                    }
-                    if usage.cacheExpiry.observedGapSeconds > 0 {
-                        Text("Observed gap before first request: \(usage.cacheExpiry.observedGapSeconds.formatted()) seconds. Hits and misses do not prove a TTL.")
-                    }
-                    if !usage.hasCacheExpiry {
-                        Text("No expiry data received")
-                    } else if !usage.cacheExpiry.detail.isEmpty {
-                        Text(usage.cacheExpiry.detail)
-                    }
-                    Text("Turn hit rate = cached reads ÷ all input across this turn's requests. Input includes cache reads and writes.")
-                }
-                .padding(.leading, 15)
-                .fixedSize(horizontal: false, vertical: true)
-            }
             if usage.costKnown {
                 Text("\(usage.costSource == "recorded" ? "Recorded" : "Estimated") $\(usage.costUsd, specifier: "%.5f") USD")
                     .help("API-equivalent cost; not subscription billing. Pricing snapshot: \(usage.pricingDate)")
@@ -227,30 +185,6 @@ struct TurnFooter: View {
         }
         if usage.requestCount > 0 { return "Partial turn \(counts) · Cache hit unavailable" }
         return "Token usage unavailable"
-    }
-
-    /// The core's TTL estimate and, to the minute, when it lapses.
-    private var cache: String {
-        guard usage.hasCacheExpiry else { return "Cache TTL unavailable" }
-        let expiry = usage.cacheExpiry
-        return expiry.fromUnix > 0 ? "\(expiry.label) · until \(self.expiry(seconds: false))" : expiry.label
-    }
-
-    /// The estimated expiry (or range): the time alone on the turn's day,
-    /// with the date otherwise.
-    private func expiry(seconds: Bool) -> String {
-        let turn = Date(timeIntervalSince1970: TimeInterval(message.tsUnix))
-        func clock(_ unix: UInt64) -> String {
-            let date = Date(timeIntervalSince1970: TimeInterval(unix))
-            var style = Date.FormatStyle.dateTime.hour().minute()
-            if seconds { style = style.second() }
-            if !Calendar.current.isDate(date, inSameDayAs: turn) { style = style.month().day() }
-            return date.formatted(style)
-        }
-        let expiry = usage.cacheExpiry
-        var text = clock(expiry.fromUnix)
-        if expiry.untilUnix > expiry.fromUnix { text += "–" + clock(expiry.untilUnix) }
-        return text
     }
 }
 
@@ -900,7 +834,7 @@ struct ToolActivityRow: View {
 struct TurnChanges: View {
     let message: Muster_V1_AgentMessage
     var open: (String) -> Void = { _ in }
-    private var expanded = true
+    private var expanded = false
 
     private var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("changes", id: message.id, defaultValue: expanded) }
