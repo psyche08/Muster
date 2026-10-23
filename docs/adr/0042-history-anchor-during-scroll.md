@@ -64,3 +64,39 @@ Existing linker deployment-target warnings remain; these runs do not establish
 compatibility on the minimum supported OS. Release candidate 1.0.91 (82) keeps
 paired macOS/iOS versioning. Build, notarization, publication, installation and
 physical scrolling acceptance are pending at this source checkpoint.
+
+### Follow-up: partial boundary rows
+
+Installed 1.0.91 did not complete physical acceptance. A single Load earlier
+click in an existing long conversation exposed different older cards at the
+top, without continued wheel input. Keep that failed observation distinct from
+the passing synthetic stable-row tests.
+
+The next regression covers a partial boundary row being replaced while later
+visible rows retain their identities. Retain the visible rows and their offsets
+as ordered geometry anchors, and choose the first surviving content row when
+applying a snapshot. Never fall back to the permanent header if previously visible
+content was available: its identity survives every prepend but its location is
+not the reader's content. This is native geometry fallback, not reconstruction
+of provider group semantics. Verify the failure before the fix, repeated pages,
+and installed single-click and wheel behavior before declaring acceptance.
+
+The follow-up regression reproduced a lost primary anchor when a partial row is
+replaced: the surviving next row moved from 118 to 19950 points. The installed
+conversation's fetched history crossed tool-group prefixes; cached-window
+identity stability from ADR 0034 does not give a previously unknown network
+prefix the same first-message identity. Fallback uses only retained native row
+identities and coordinates, with no text matching or provider reconstruction.
+
+Paired 1.0.91 (82) was built from clean `abe0c066e4fb55ccf23d6c550dba2e3f7cef915e`,
+published and verified from public downloads. macOS notarization
+`69037ad7-4011-4229-8d74-82ab08e3f308` was Accepted; signatures, staple and Gatekeeper
+passed. All three Macs installed it with unchanged identities, Accessibility
+granted, relay registered and Vnet up. Six directed RPC checks, six virtual-IP
+pings and three installed integrity checks passed. These do not supersede the
+failed physical transcript acceptance above. iPhone installation is unverified.
+The boundary fallback prepares paired release 1.0.92 (83).
+
+The boundary fallback passed all 12 macOS conversation tests and the complete
+local Swift suite (76 tests). Publication and installed acceptance of the
+follow-up remain pending at this source checkpoint.
