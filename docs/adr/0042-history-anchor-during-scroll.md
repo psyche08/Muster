@@ -100,3 +100,25 @@ The boundary fallback prepares paired release 1.0.92 (83).
 The boundary fallback passed all 12 macOS conversation tests and the complete
 local Swift suite (76 tests). Publication and installed acceptance of the
 follow-up remain pending at this source checkpoint.
+
+### 1.0.92 candidate checkpoint
+
+Clean source `870f68a3fa94c5852e815170c7add67d5cea47ee` built macOS Release
+and an iOS archive, version 1.0.92 (83). Presence and strict nested signatures
+passed. Apple notarization `af8a36fe-b811-4200-a142-70142eafb102` was Accepted;
+stapling, ticket validation and Gatekeeper assessment passed. The final macOS ZIP
+SHA-256 is `70c3e1597238169029e526b84af30ccb07c6b01c62a10e4102242def6845785d`.
+The paired iOS OTA package was prepared but is not published at this checkpoint.
+
+Mac-A installed the candidate through the Rust update lease. Version/build and
+runtime matched, device identity was unchanged, Accessibility remained granted,
+relay registered and Vnet was up. Native acceptance navigation then stopped when
+computer control reported concurrent owner activity. The agent reread the window
+and requested a brief owner pause; it did not send chat input or override the
+interruption. The failed 1.0.91 single-click case still needs to be repeated on
+this installation. No 1.0.92 physical scrolling pass is claimed.
+
+Mac-B and Mac-C, and both public download entries, remain at 1.0.91 (82).
+Publication of the candidate and remote installation are held for native
+acceptance. iPhone installation remains unverified. No Actions or Cloud build was
+started, and no historical OTA artifact was removed.
