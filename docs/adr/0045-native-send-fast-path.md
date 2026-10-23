@@ -105,7 +105,12 @@ native prepare stage took 281 ms and send including receipt took 840 ms. The
 receipt arrived in 101 ms, so the slow-receipt handoff is covered by the owner
 integration test, not claimed as a naturally delayed physical sample.
 
-Desktop C installation and runtime checks passed. Its dedicated-conversation
-acceptance is still pending an uncontended UI window: unrelated foreground
-navigation continued during setup, so no test text was entered into business
-conversations. No unknown submission was retried.
+Desktop C installation, runtime and dedicated-conversation acceptance passed.
+After the operator paused competing UI activity, a new native Claude conversation
+was created without a project folder and acknowledged its isolated test rules.
+A Muster-originated marker then appeared exactly once as a user message and once
+as a provider reply. The visible-controller path took 108 ms to prepare and
+475 ms to send including a 101 ms receipt wait (583 ms combined). There is no
+same-session old-build baseline for this new conversation. Earlier attempts
+while unrelated foreground navigation continued entered no test text into
+business conversations. No unknown submission was retried.
