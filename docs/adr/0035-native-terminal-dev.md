@@ -50,8 +50,8 @@ No new network port, permission bypass or production release is introduced.
 
 Source and local verification:
 
-- The initial full terminal/daemon/app-core suite passed 206 tests. Subsequent
-  targeted runs passed 169 library tests and both native RPC integration tests,
+- The full terminal/daemon/app-core suite passed 211 tests after integrating
+  current main (five opt-in tests ignored by the default run),
   covering secondary Ghostty lease routing, partial inventory failure, final
   watcher errors, opaque IDs, deduplicated creation and idle stream cancellation.
 - Four opt-in real-tmux tests passed on private sockets. A simulated native host
@@ -62,7 +62,9 @@ Source and local verification:
 - The iTerm2 WebSocket/protobuf fixture observed one inventory request followed
   by two inputs and one creation request, with no input preflight scans.
 - Swift bindings were regenerated; MusterUI and the isolated MusterDev app built.
-  Strict Clippy, Rust formatting and layer checks passed before final integration.
+  The final integrated source passed strict Clippy, Rust formatting, layer,
+  public-content and ADR checks. The rebuilt dev bundle passed local signature
+  verification.
 
 Local runtime: the dev bundle started its own software-identity daemon on a
 private socket; read-only RPC observed both native sources and their setup
