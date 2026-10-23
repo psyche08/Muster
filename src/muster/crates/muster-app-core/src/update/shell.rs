@@ -278,6 +278,12 @@ pub(super) fn reconnect(state: &mut State, ctx: &Ctx) {
 /// its frames leave the view. Returning to a chat whose watch was stopped
 /// meanwhile (a background return on a child screen) watches it again.
 pub(super) fn release_hidden(state: &mut State, ctx: &Ctx) {
+    if !matches!(
+        state.screen,
+        Screen::Terminals | Screen::Terminal | Screen::Chat
+    ) {
+        state.terminal_creation = None;
+    }
     if !state.on_path(Screen::Chat) && state.chat.as_ref().is_some_and(|c| c.watch.is_some()) {
         flush_chat_cache(state, ctx);
         if let Some(chat) = &mut state.chat {

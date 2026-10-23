@@ -194,6 +194,8 @@ pub enum Msg {
     },
     TerminalCreated {
         device: String,
+        op_id: String,
+        attach_managed: bool,
         result: Result<v1::TerminalSession, Error>,
     },
     TerminalFrame {
@@ -625,9 +627,12 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             agent,
             result,
         } => terminals::session_terminal_ready(state, ctx, epoch, device, agent, result),
-        Msg::TerminalCreated { device, result } => {
-            terminals::msg_terminal_created(state, ctx, device, result)
-        }
+        Msg::TerminalCreated {
+            device,
+            op_id,
+            attach_managed,
+            result,
+        } => terminals::msg_terminal_created(state, ctx, device, op_id, attach_managed, result),
         Msg::TerminalFrame {
             device,
             session,

@@ -86,6 +86,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0043](0043-ordered-terminal-input.md) | Accepted | Serialize and bound remote terminal input in Shared Rust |
 
+| [0044](0044-ghostty-creation-under-locked-use.md) | Accepted | Bind Ghostty creation to a one-shot terminal-scoped unlock |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

@@ -44,10 +44,17 @@ before reopening. Multiple independent clients remain independent writers.
 
 ## Verification
 
-Planned: a controlled RPC fixture holds the first acknowledgement while mixed
-text, Unicode, paste and Return arrive; verify ordered batches, bounded input,
+Automated RPC tests hold the first acknowledgement while mixed text, Unicode,
+paste and Return arrive, and verify exact ordered batches, bounded input,
 failure/unknown handling, navigation/background discard and stale replies.
-Build and sign the physical-phone client, then test both native hosts through
-Device Hub, including locked target sessions. Record source/test, signing,
-installation and physical-device evidence separately; none is implied by this
-decision. No update-feed publication is part of this change.
+The signed local phone build was installed in place. Through Device Hub on a
+physical iPhone, rapid alphanumeric echo input and output passed in dedicated
+iTerm2 and Ghostty windows. iTerm2 existing/new sessions passed while the target
+remained locked. Existing Ghostty passed through its scoped lease, background
+relocked the target, foreground recovered output, and leaving relocked again.
+
+Device Hub's hardware typing omitted some punctuation; this does not establish
+physical punctuation or Unicode acceptance. Locked new Ghostty returned a blank
+window without a shell; ADR 0044 addresses that separate discovered issue.
+Original sessions were preserved and all owned test windows were closed.
+No update-feed publication or notarization was performed for this local build.

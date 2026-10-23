@@ -269,6 +269,7 @@ pub struct State {
     pub terminals_epoch: u64,
     pub terminals_pending: usize,
     pub terminal: Option<Terminal>,
+    pub terminal_creation: Option<(String, Watch)>,
     pub session_terminal: SessionTerminalState,
     pub code: crate::update::code_runs::Workbench,
     pub files: Option<app::FilesView>,
@@ -360,6 +361,7 @@ impl State {
             terminals_epoch: 0,
             terminals_pending: 0,
             terminal: None,
+            terminal_creation: None,
             session_terminal: SessionTerminalState::default(),
             code: Default::default(),
             files: None,
@@ -511,6 +513,7 @@ impl State {
     }
 
     pub fn detach_session_terminal(&mut self) {
+        self.terminal_creation = None;
         self.session_terminal.epoch += 1;
         self.session_terminal.busy = false;
         self.session_terminal.error.clear();
@@ -530,6 +533,7 @@ impl State {
             screen
         };
         if self.screen != screen {
+            self.terminal_creation = None;
             self.stack.push(self.screen);
             if self.stack.len() > 16 {
                 self.stack.remove(0);
@@ -652,6 +656,7 @@ impl State {
     pub fn cancel_all(&mut self) {
         self.detach_session_terminal();
         self.manual_watches.clear();
+        self.terminal_creation = None;
         self.device_watch = None;
         self.chat = None;
         self.terminal = None;

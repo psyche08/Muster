@@ -1729,7 +1729,10 @@ async fn native_creation_requires_an_advertised_host_and_a_live_managed_handle()
 #[tokio::test]
 async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_handle() {
     use std::sync::{Arc, Mutex};
-    struct Server(Mutex<Vec<v1::TerminalCreateRequest>>);
+    struct Server(
+        Mutex<Vec<v1::TerminalCreateRequest>>,
+        std::sync::atomic::AtomicBool,
+    );
     impl muster_rpc::Handler for Server {
         fn call(
             &self,
@@ -1741,6 +1744,11 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
                 match request {
                     Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
                         device_id: "local".into(),
+                        services: if self.1.load(std::sync::atomic::Ordering::SeqCst) {
+                            vec!["terminal.create.locked.v1".into()]
+                        } else {
+                            vec![]
+                        },
                         ..Default::default()
                     }),
                     Req::TerminalCreate(r) => {
@@ -1760,7 +1768,7 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("fixture.sock");
     let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-    let server = Arc::new(Server(Mutex::new(Vec::new())));
+    let server = Arc::new(Server(Mutex::new(Vec::new()), false.into()));
     let handler = server.clone();
     let accept = tokio::spawn(async move {
         while let Ok((stream, _)) = listener.accept().await {
@@ -1809,6 +1817,27 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
         native_sources: state.terminals.sources.clone(),
         ..remote_terminal()
     });
+    terminals::intent_terminal_create(
+        &mut state,
+        &ctx,
+        app::TerminalCreate {
+            source: "ghostty".into(),
+            ..Default::default()
+        },
+    );
+    let Some(Loop::Msg(message)) = rx.recv().await else {
+        panic!()
+    };
+    assert!(matches!(
+        *message,
+        Msg::TerminalCreated { result: Err(_), .. }
+    ));
+    msg(&mut state, &ctx, *message);
+    assert!(
+        server.0.lock().unwrap().is_empty(),
+        "old targets must not create a blank window"
+    );
+    server.1.store(true, std::sync::atomic::Ordering::SeqCst);
     for attach_managed in [false, true] {
         for source in ["iterm2", "ghostty"] {
             terminals::intent_terminal_create(
@@ -1831,9 +1860,10 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
             if attach_managed {
                 assert!(matches!(
                     *message,
-                    Msg::Done {
-                        what: "native terminal",
-                        result: Ok(_)
+                    Msg::TerminalCreated {
+                        attach_managed: true,
+                        result: Ok(_),
+                        ..
                     }
                 ));
                 msg(&mut state, &ctx, *message);
@@ -1844,7 +1874,7 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
                 );
             } else {
                 assert!(
-                    matches!(*message, Msg::TerminalCreated { ref device, result: Ok(ref session) } if device == "local" && session.source == source)
+                    matches!(*message, Msg::TerminalCreated { ref device, result: Ok(ref session), .. } if device == "local" && session.source == source)
                 );
             }
             let requests = server.0.lock().unwrap();
@@ -2102,4 +2132,47 @@ async fn terminal_input_failure_overflow_and_background_discard_queued_return() 
         },
     );
     assert!(state.terminal.is_none());
+}
+
+#[test]
+fn pending_terminal_creation_is_cancelled_on_navigation_or_background() {
+    for action in 0..4 {
+        let mut state = State::new(false, Some("local".into()));
+        state.screen = Screen::Terminals;
+        let (watch, token) = state.new_watch();
+        state.terminal_creation = Some(("create-1".into(), watch));
+        match action {
+            0 => state.go(Screen::Chat),
+            1 => state.back(),
+            2 => state.detach_session_terminal(),
+            _ => terminals::background_terminal(&mut state),
+        }
+        assert!(state.terminal_creation.is_none());
+        assert!(token.is_cancelled());
+    }
+}
+
+#[tokio::test]
+async fn late_creation_reply_cannot_open_a_window_after_navigation() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.screen = Screen::Terminals;
+    let (watch, token) = state.new_watch();
+    state.terminal_creation = Some(("old".into(), watch));
+    state.busy = 1;
+    state.go(Screen::Agents);
+    terminals::msg_terminal_created(
+        &mut state,
+        &ctx,
+        "mac".into(),
+        "old".into(),
+        false,
+        Ok(v1::TerminalSession {
+            id: "ghostty:new".into(),
+            ..Default::default()
+        }),
+    );
+    assert!(token.is_cancelled());
+    assert_eq!(state.screen, Screen::Agents);
+    assert!(state.terminal.is_none());
+    assert_eq!(state.busy, 0);
 }

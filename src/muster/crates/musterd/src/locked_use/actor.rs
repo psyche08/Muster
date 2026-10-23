@@ -236,7 +236,7 @@ pub(super) async fn run(
                     nonce,
                     reply,
                 } => {
-                    let result = if &nonce != challenge.nonce() {
+                    let result = if terminal.is_none() || &nonce != challenge.nonce() {
                         Err(Error::Conflict("not this terminal session".into()))
                     } else {
                         gate.renewal(p, Instant::now())
@@ -750,7 +750,6 @@ pub(super) fn start_action(
             && sample.console == observation.console
             && sample.input_generation == observation.input_generation
             && sample.screen == muster_core::locked_use::Screen::Unlocked
-            && crate::handler::require_native_operation(&checked_daemon, &checked_request).is_ok()
             && provider.as_ref().is_none_or(|p| {
                 crate::handler::native_provider(&checked_daemon, &checked_request)
                     .as_ref()
@@ -764,15 +763,12 @@ pub(super) fn start_action(
                 &checked_daemon.policy().read().unwrap(),
                 &muster_core::TargetState { locked: true },
             ) == muster_core::Decision::NeedsPresence
-            && crate::handler::require_native_operation(&checked_daemon, &checked_request)
-                .is_ok_and(|native_provider| {
+            && crate::handler::locked_operation_permission(&checked_daemon, &checked_request)
+                .is_ok_and(|permission| {
                     muster_core::authorize(
                         checked_daemon.roster().read().unwrap().state(),
                         &peer,
-                        &muster_core::Permission::Agent {
-                            provider: Some(native_provider),
-                            control: true,
-                        },
+                        &permission,
                         &checked_daemon.policy().read().unwrap(),
                         &muster_core::TargetState { locked: true },
                     ) == muster_core::Decision::Allow
@@ -789,6 +785,11 @@ pub(super) fn start_action(
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
                 muster_agent::control_guard::spawn_blocking_async(async move {
                     muster_agent::control_guard::check()?;
+                    // Creation may be inside an OS call when cancellation arrives.
+                    // Keep the work permit until it drains; the owner retains cover.
+                    if matches!(&req, Req::TerminalCreate(_)) {
+                        return crate::handler::locked_operation(&daemon, req).await;
+                    }
                     tokio::select! {
                         biased;
                         _ = cancelled => Err(Error::Unavailable("native operation cancelled".into())),

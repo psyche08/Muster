@@ -1561,6 +1561,14 @@ public nonisolated struct Muster_V1_LockedUseOperation: Sendable {
     set {operation = .complete(newValue)}
   }
 
+  public var terminalCreate: Muster_V1_TerminalCreateRequest {
+    get {
+      if case .terminalCreate(let v)? = operation {return v}
+      return Muster_V1_TerminalCreateRequest()
+    }
+    set {operation = .terminalCreate(newValue)}
+  }
+
   /// Empty: one operation. Otherwise presence also authorizes this requester's
   /// subsequent native operations for this provider during the same lease.
   /// Included in the signed operation digest; never inferred from an unlocked OS.
@@ -1580,6 +1588,7 @@ public nonisolated struct Muster_V1_LockedUseOperation: Sendable {
     case chatSetOptions(Muster_V1_AgentChatSetOptionsRequest)
     case device(Muster_V1_DeviceLeaseRequest)
     case complete(Muster_V1_AgentCompleteRequest)
+    case terminalCreate(Muster_V1_TerminalCreateRequest)
 
   }
 
@@ -6137,7 +6146,7 @@ nonisolated extension Muster_V1_DeviceSetCoverRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_LockedUseOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LockedUseOperation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}send\0\u{1}respond\0\u{1}interrupt\0\u{3}provider_queue\0\u{1}inspect\0\u{1}terminal\0\u{3}chat_load\0\u{3}chat_open\0\u{3}chat_options\0\u{3}chat_set_options\0\u{1}device\0\u{1}complete\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}send\0\u{1}respond\0\u{1}interrupt\0\u{3}provider_queue\0\u{1}inspect\0\u{1}terminal\0\u{3}chat_load\0\u{3}chat_open\0\u{3}chat_options\0\u{3}chat_set_options\0\u{1}device\0\u{1}complete\0\u{3}terminal_create\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6289,6 +6298,19 @@ nonisolated extension Muster_V1_LockedUseOperation: SwiftProtobuf.Message, Swift
           self.operation = .complete(v)
         }
       }()
+      case 13: try {
+        var v: Muster_V1_TerminalCreateRequest?
+        var hadOneofValue = false
+        if let current = self.operation {
+          hadOneofValue = true
+          if case .terminalCreate(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operation = .terminalCreate(v)
+        }
+      }()
       default: break
       }
     }
@@ -6349,6 +6371,10 @@ nonisolated extension Muster_V1_LockedUseOperation: SwiftProtobuf.Message, Swift
     case .complete?: try {
       guard case .complete(let v)? = self.operation else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    }()
+    case .terminalCreate?: try {
+      guard case .terminalCreate(let v)? = self.operation else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
     }()
     default: break
     }
