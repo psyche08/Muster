@@ -698,7 +698,7 @@ mod tests {
         assert_eq!(chat.message_count, 1000);
         assert_eq!(
             chat.timeline.len(),
-            80,
+            200,
             "each visible reply is its own block"
         );
         for i in 1..=100 {
@@ -1305,17 +1305,17 @@ mod history_projection_tests {
             .unwrap()
             .chat
             .unwrap();
-        assert_eq!(projected.timeline.len(), 80);
+        assert_eq!(projected.timeline.len(), 200);
         assert_eq!(
             projected.timeline[0].message.as_ref().unwrap().id,
-            "message-420"
+            "message-300"
         );
         assert_eq!(projected.message_count, 500);
         assert!(projected.has_earlier);
         assert_eq!(projected.interactions.len(), 1);
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(false));
-        assert_eq!(chat.visible_messages().len(), 160);
+        assert_eq!(chat.visible_messages().len(), 400);
         let middle = renderer
             .prepare(&state)
             .expect("local reveal invalidates renderer");
@@ -1326,7 +1326,7 @@ mod history_projection_tests {
                 .unwrap()
                 .timeline
                 .len(),
-            160
+            400
         );
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(true));
@@ -1339,7 +1339,7 @@ mod history_projection_tests {
                 .has_earlier
         );
         assert!(
-            small.len() * 5 < full.len(),
+            small.len() * 2 < full.len(),
             "recent snapshot should be substantially smaller"
         );
         assert_eq!(state.chat.as_ref().unwrap().messages.len(), 500);

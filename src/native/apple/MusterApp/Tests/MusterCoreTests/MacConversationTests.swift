@@ -1,0 +1,180 @@
+#if os(macOS)
+import AppKit
+import SwiftUI
+import XCTest
+import MusterCore
+@testable import MusterUI
+
+@MainActor
+final class MacConversationTests: XCTestCase {
+    func chat(_ range: Range<Int>) -> Muster_App_ChatView {
+        var chat = Muster_App_ChatView()
+        chat.timeline = range.map { i in
+            var b = Muster_App_ChatBlock(); b.id = "row-\(i)"; b.kind = "message"
+            b.message.id = b.id; b.message.kind = "text"; b.message.role = "assistant"
+            b.message.text = "Message \(i)\n\nSynthetic **Markdown** paragraph with `code`."
+            return b
+        }
+        chat.messageCount = UInt32(chat.timeline.count); return chat
+    }
+    func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.3)) }
+    func update(_ c: MacConversationController, _ chat: Muster_App_ChatView, jump: Int = 0, hold: Int = 0) {
+        c.update(chat: chat, showsInteractions: false, spacing: 14, columnWidth: 760,
+            appearance: "test", jump: jump, hold: hold, header: AnyView(Text("Earlier")),
+            interactions: AnyView(EmptyView()), content: { AnyView(ConversationBlock(block: $0)) })
+        settle()
+    }
+    func show(_ c: MacConversationController) -> NSWindow {
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 600), styleMask: [.borderless], backing: .buffered, defer: false)
+        w.isReleasedWhenClosed = false; w.contentViewController = c; w.setContentSize(NSSize(width: 600, height: 600)); w.orderFront(nil); settle(); return w
+    }
+    func testRecyclingPrependGrowthResizeAndRelease() throws {
+        var c: MacConversationController? = MacConversationController()
+        var value = chat(200..<700)
+        update(c!, value); let window = show(c!)
+        let view = c!.collection!
+        XCTAssertEqual(view.numberOfItems(inSection: 0), 501)
+        XCTAssertFalse(view.visibleItems().isEmpty)
+        XCTAssertLessThan(view.visibleItems().count, 35)
+        c!.collection.beginScrolling()
+        view.scrollToItems(at: [IndexPath(item: 250, section: 0)], scrollPosition: .top)
+        settle(); c!.collection.endScrolling(); settle()
+        let first = try XCTUnwrap(view.indexPathsForVisibleItems().sorted().first { $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.maxY ?? 0) > c!.scroll.contentView.bounds.minY })
+        func position(_ index: Int) -> CGFloat { view.layoutAttributesForItem(at: IndexPath(item: index, section: 0))!.frame.minY - c!.scroll.contentView.bounds.minY }
+        let before = position(first.item)
+        value = chat(0..<700); update(c!, value)
+        XCTAssertEqual(position(first.item + 200), before, accuracy: 4)
+        value.timeline[699].message.text = String(repeating: "Growing **Markdown** text.\n", count: 35)
+        update(c!, value)
+        XCTAssertEqual(position(first.item + 200), before, accuracy: 4)
+        update(c!, value, jump: 1)
+        XCTAssertLessThan(abs(view.collectionViewLayout!.collectionViewContentSize.height - c!.scroll.contentView.bounds.height - c!.scroll.contentView.bounds.minY), 5)
+        window.setContentSize(NSSize(width: 420, height: 500)); settle()
+        XCTAssertLessThanOrEqual(view.collectionViewLayout!.collectionViewContentSize.width, 421)
+        window.contentViewController = nil; window.close(); c = nil; settle()
+    }
+    func testDisclosuresResizeAndSurviveReuseAndHistory() throws {
+        let c = MacConversationController(); var value = chat(0..<150)
+        var work = Muster_App_ChatBlock(); work.id = "work"; work.kind = "working"
+        work.title = "Working"; work.defaultExpanded = true; work.children = [value.timeline[0]]
+        value.timeline[0] = work
+        update(c, value); let window = show(c); defer { window.close() }
+        func read(_ index: Int) {
+            c.collection.beginScrolling()
+            c.collection.scrollToItems(at: [IndexPath(item: index, section: 0)], scrollPosition: .top)
+            settle(); c.collection.endScrolling(); settle()
+        }
+        func height(_ index: Int) -> CGFloat { c.collection.layoutAttributesForItem(at: IndexPath(item: index, section: 0))!.frame.height }
+        read(1); let expanded = height(1)
+        c.disclosures.choice(["work", "working", "work"]).override = false
+        settle(); let collapsed = height(1)
+        XCTAssertGreaterThan(expanded, collapsed + 30)
+        read(130); XCTAssertFalse(c.collection.indexPathsForVisibleItems().contains(IndexPath(item: 1, section: 0)))
+        value.timeline[0].children[0].message.text += " Streaming update."
+        update(c, value); read(1)
+        XCTAssertEqual(height(1), collapsed, accuracy: 3)
+        value.timeline.insert(contentsOf: chat(200..<210).timeline, at: 0)
+        update(c, value); read(11)
+        XCTAssertEqual(height(11), collapsed, accuracy: 3)
+        c.disclosures.choice(["work", "working", "work"]).override = true
+        settle(); XCTAssertGreaterThan(height(11), collapsed + 30)
+        let row = c.collection.layoutAttributesForItem(at: IndexPath(item: 11, section: 0))!
+        let next = c.collection.layoutAttributesForItem(at: IndexPath(item: 12, section: 0))!
+        XCTAssertGreaterThanOrEqual(next.frame.minY, row.frame.maxY - 1)
+        read(140); read(11); XCTAssertGreaterThan(height(11), collapsed + 30)
+    }
+    func testTabsAndRecyclingRetainUnsentAnswer() throws {
+        let c = MacConversationController(); var value = chat(0..<150)
+        var question = Muster_V1_PendingInteraction(); question.id = "synthetic-question"
+        value.interactions = [question]
+        let host = NSHostingController(rootView: MacTabFixture(controller: c, chat: value))
+        let window = NSWindow(contentViewController: host)
+        window.isReleasedWhenClosed = false
+        window.setContentSize(NSSize(width: 600, height: 600)); window.orderFront(nil); settle()
+        defer { window.contentViewController = nil; window.close() }
+        func fields(_ view: NSView) -> [NSTextField] {
+            (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+        }
+        let field = try XCTUnwrap(fields(c.interactionHost).first)
+        field.stringValue = "Unsent synthetic answer"
+        field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
+        settle()
+        c.collection.beginScrolling()
+        c.collection.scrollToItems(at: [IndexPath(item: 1, section: 0)], scrollPosition: .top)
+        settle(); c.collection.endScrolling(); settle()
+        let offset = c.scroll.contentView.bounds.minY
+        for _ in 0..<3 {
+            host.rootView = MacTabFixture(controller: c, chat: value, visible: false); settle()
+            XCTAssertTrue(c.view.window === window, "Inactive tabs keep the native view mounted")
+            host.rootView = MacTabFixture(controller: c, chat: value); settle()
+            XCTAssertEqual(c.scroll.contentView.bounds.minY, offset, accuracy: 3)
+        }
+        c.collection.beginScrolling()
+        c.collection.scrollToItems(at: [IndexPath(item: 151, section: 0)], scrollPosition: .bottom)
+        settle(); c.collection.endScrolling(); settle()
+        XCTAssertEqual(fields(c.interactionHost).first?.stringValue, "Unsent synthetic answer")
+    }
+    func testControllerAndDisclosureStoreRelease() {
+        weak var controller: MacConversationController?
+        weak var disclosures: TranscriptDisclosures?
+        autoreleasepool {
+            let c = MacConversationController(); controller = c; disclosures = c.disclosures
+            update(c, chat(0..<10)); let window = show(c)
+            window.contentViewController = nil; window.contentView = nil; window.close()
+        }
+        settle(); XCTAssertNil(controller); XCTAssertNil(disclosures)
+    }
+    func testHistoryTriggerRequiresGestureAndStopsAfterOneRequest() {
+        var gate = HistoryScrollTrigger()
+        XCTAssertFalse(gate.request(offset: 0, hasEarlier: true, loading: false, failed: false))
+        gate.beginGesture()
+        XCTAssertFalse(gate.request(offset: 200, hasEarlier: true, loading: false, failed: false))
+        XCTAssertTrue(gate.request(offset: 100, hasEarlier: true, loading: false, failed: false))
+        XCTAssertFalse(gate.request(offset: 0, hasEarlier: true, loading: false, failed: false))
+        gate.beginGesture()
+        XCTAssertFalse(gate.request(offset: 0, hasEarlier: true, loading: true, failed: false))
+        XCTAssertFalse(gate.request(offset: 0, hasEarlier: true, loading: false, failed: true))
+        XCTAssertFalse(gate.request(offset: 0, hasEarlier: false, loading: false, failed: false))
+        XCTAssertTrue(gate.request(offset: 0, hasEarlier: true, loading: false, failed: false))
+    }
+    func testAutomaticEarlierDoesNotRunOnProjectionOrTabRestoration() {
+        let c = MacConversationController(); var value = chat(0..<5); value.hasEarlier_p = true
+        var requests = 0; c.onEarlier = { requests += 1 }
+        update(c, value); let window = show(c); defer { window.close() }
+        XCTAssertEqual(requests, 0)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: c.scroll)
+        c.scroll.contentView.scroll(to: .zero); NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: c.scroll)
+        XCTAssertEqual(requests, 1)
+        update(c, value); NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: c.scroll)
+        XCTAssertEqual(requests, 1)
+        value.loadError = "Synthetic offline error"; update(c, value)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: c.scroll); NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: c.scroll)
+        XCTAssertEqual(requests, 1)
+    }
+}
+private struct MacDraftFixture: View {
+    @State private var text = ""
+    var body: some View { TextField("Answer", text: $text).textFieldStyle(.roundedBorder).padding() }
+}
+private struct MacTabFixture: View {
+    let controller: MacConversationController
+    let chat: Muster_App_ChatView
+    var visible = true
+    var body: some View {
+        ZStack {
+            ConversationTabContent(active: visible) { MacCollectionFixture(controller: controller, chat: chat) }
+            if !visible { Text("Activity") }
+        }
+    }
+}
+private struct MacCollectionFixture: NSViewControllerRepresentable {
+    let controller: MacConversationController
+    let chat: Muster_App_ChatView
+    func makeNSViewController(context: Context) -> MacConversationController { controller }
+    func updateNSViewController(_ controller: MacConversationController, context: Context) {
+        controller.update(chat: chat, showsInteractions: true, spacing: 14, columnWidth: 760,
+            appearance: "test", jump: 0, header: AnyView(Text("Earlier")),
+            interactions: AnyView(MacDraftFixture()), content: { AnyView(ConversationBlock(block: $0)) })
+    }
+}
+#endif

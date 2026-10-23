@@ -241,9 +241,9 @@ func relative(_ unix: UInt64) -> String {
 struct ChatView: View {
     #if os(iOS)
     @StateObject private var keyboardDock = KeyboardDock()
+    #endif
     @State private var latestRequest = 0
     @State private var earlierRequest = 0
-    #endif
     @Environment(\.workspaceLayout) private var layout
     let core: MusterCore
     let terminal: Muster_App_TerminalView
@@ -251,11 +251,7 @@ struct ChatView: View {
     @State private var showChatOptions = false
     @State private var contentTab = "Conversation"
     @State private var activityTab = "Tracing"
-    @State private var jumpToStart = false
     @State private var atLatest = true
-    @State private var draggingTranscript = false
-    @State private var viewportHeight: CGFloat = 0
-    @State private var bottomPosition: CGFloat = 0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.conversationStyle) private var style
     @ScaledMetric(relativeTo: .body) private var bodySize = ChatStyle.bodySize
@@ -290,13 +286,10 @@ struct ChatView: View {
             .accessibilityIdentifier("session-content-tabs")
             #endif
             ZStack {
-                #if os(iOS)
                 ConversationTabContent(active: contentTab == "Conversation") {
                     conversationPane(core: core)
                 }
-                #else
-                if contentTab == "Conversation" { conversationPane(core: core) }
-                #endif
+
                 if contentTab != "Conversation" { alternatePane(core: core) }
             }
         }
@@ -321,7 +314,7 @@ struct ChatView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in jumpToStart = false; atLatest = true; contentTab = "Conversation" }
+        .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in atLatest = true; contentTab = "Conversation" }
         .onChange(of: contentTab) { old, new in
             if new == "Terminal" { core.sessionTerminal(.start) }
             else if old == "Terminal" { core.sessionTerminal(.detach) }
@@ -373,14 +366,14 @@ struct ChatView: View {
     private func conversationPane(core: MusterCore) -> some View {
         VStack(spacing: 0) {
             Group {
-            #if os(iOS)
             RecycledConversation(chat: chat,
                 header: AnyView(conversationHeader(core: core)),
                 interactions: AnyView(VStack(alignment: .leading, spacing: 14) { interactionCards(core: core) }),
                 showsInteractions: !layout.flex,
                 blockContent: { block in AnyView(ConversationBlock(block: block) { message, path in
                     core.openChange(summary: message, path: path)
-                }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest)
+                }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest,
+                loadEarlier: { earlierRequest += 1; core.agentLoadEarlier() })
                 .overlay(alignment: .bottom) {
                     if !atLatest {
                         Button { latestRequest += 1 } label: {
@@ -393,138 +386,6 @@ struct ChatView: View {
                         .padding(.bottom, 8)
                     }
                 }
-            #else
-            ScrollViewReader { proxy in
-                ScrollView {
-                    // Markdown block margins settle after the first layout pass.
-                    // Measure the loaded transcript together so a growing reply
-                    // cannot leave a cached lazy-row height under the next bubble.
-                    VStack(alignment: .leading, spacing: style == .claude ? 20 : 14) {
-                        Color.clear.frame(height: 1).id("conversation-start")
-                        if chat.loading && chat.messageCount == 0 { ProgressView("Loading conversation…") }
-                        if !chat.loadError.isEmpty {
-                            Label(chat.loadError, systemImage: "wifi.exclamationmark").font(.callout).foregroundStyle(.secondary)
-                        }
-                        if !chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty {
-                            Text(chat.session.transcriptNotice.isEmpty ? "No messages yet" : chat.session.transcriptNotice)
-                                .foregroundStyle(.secondary)
-                        }
-                        if chat.hasEarlier_p {
-                            Button("Load earlier") { atLatest = false; core.agentLoadEarlier() }.frame(maxWidth: .infinity)
-                        }
-                        ForEach(chat.timeline, id: \.id) { block in
-                            ConversationBlock(block: block) { message, path in
-                                core.openChange(summary: message, path: path)
-                            }.id(block.id)
-                        }
-                        // Top and bottom: the cards sit in the lower pane, with the composer.
-                        if !layout.flex { interactionCards(core: core) }
-                        Color.clear.frame(height: 1)
-                            .id("conversation-bottom")
-                            .background(GeometryReader { geometry in
-                                Color.clear.preference(key: ConversationBottomKey.self,
-                                    value: geometry.frame(in: .named("conversation-scroll")).maxY)
-                            })
-                    }
-                    .frame(maxWidth: style.columnWidth)
-                    .padding(.horizontal, ChatStyle.inset)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                }
-                // Initial async history must anchor after layout, not only in
-                // onAppear before the transcript has arrived.
-                .defaultScrollAnchor(.bottom)
-                .coordinateSpace(name: "conversation-scroll")
-                .background(GeometryReader { geometry in
-                    Color.clear.onAppear { updateViewport(geometry.size.height) }
-                        .onChange(of: geometry.size.height) { _, height in updateViewport(height) }
-                })
-                .onPreferenceChange(ConversationBottomKey.self) { bottom in
-                    bottomPosition = bottom
-                    #if os(iOS)
-                    if draggingTranscript {
-                        atLatest = bottom <= viewportHeight + 48
-                    } else if atLatest && !jumpToStart {
-                        // Content can grow under the same message ID. Keep
-                        // following after layout, not only when the count changes.
-                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
-                    } else if bottom <= viewportHeight + 48 {
-                        atLatest = true
-                    }
-                    #else
-                    atLatest = bottom <= viewportHeight + 48
-                    #endif
-                }
-                #if os(iOS)
-                .simultaneousGesture(DragGesture().onChanged { _ in
-                    draggingTranscript = true
-                    atLatest = false
-                }.onEnded { _ in
-                    draggingTranscript = false
-                    atLatest = bottomPosition <= viewportHeight + 48
-                })
-                #endif
-                .scrollDismissesKeyboard(.interactively)
-                .onAppear { proxy.scrollTo("conversation-bottom", anchor: .bottom) }
-                .onChange(of: chat.loading) { _, loading in
-                    if !loading && jumpToStart {
-                        jumpToStart = false
-                        withAnimation { proxy.scrollTo("conversation-start", anchor: .top) }
-                    }
-                }
-                #if os(macOS)
-                .overlay(alignment: .trailing) {
-                    VStack(spacing: 12) {
-                        Button {
-                            atLatest = false
-                            if chat.hasEarlier_p { jumpToStart = true; core.agentLoadEarlier(all: true) }
-                            else { withAnimation { proxy.scrollTo("conversation-start", anchor: .top) } }
-                        } label: { Image(systemName: "arrow.up.to.line").frame(width: 38, height: 38) }
-                        .accessibilityLabel("Jump to first message")
-                        .disabled(chat.loading)
-                        Button {
-                            jumpToStart = false; atLatest = true
-                            withAnimation { proxy.scrollTo("conversation-bottom", anchor: .bottom) }
-                        } label: { Image(systemName: "arrow.down.to.line").frame(width: 38, height: 38) }
-                        .accessibilityLabel("Jump to latest")
-                    }
-                    .buttonStyle(.plain)
-                    .background(.regularMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(.secondary.opacity(0.2)))
-                    .padding(.trailing, 8)
-                }
-                #endif
-                .onChange(of: chat.contentRevision) { _, _ in
-                    // Cached earlier pages arrive without a loading transition.
-                    if jumpToStart && !chat.loading {
-                        jumpToStart = false
-                        withAnimation { proxy.scrollTo("conversation-start", anchor: .top) }
-                    } else if atLatest && !jumpToStart {
-                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
-                    }
-                }
-                #if os(iOS)
-                .overlay(alignment: .bottom) {
-                    if !atLatest {
-                        Button {
-                            jumpToStart = false; atLatest = true
-                            withAnimation { proxy.scrollTo("conversation-bottom", anchor: .bottom) }
-                        } label: {
-                            Image(systemName: "arrow.down").font(.system(size: 19, weight: .medium))
-                                .frame(width: 38, height: 38)
-                                .background(.regularMaterial, in: Circle())
-                                .overlay(Circle().stroke(palette.border, lineWidth: 0.5))
-                        }
-                        .buttonStyle(.plain).accessibilityLabel("Jump to latest")
-                        .padding(.bottom, 8)
-                    }
-                }
-                #endif
-                .onChange(of: chat.interactions.count) { _, _ in
-                    if atLatest && !jumpToStart && !layout.flex, let last = chat.interactions.last(where: { !$0.optional }) { withAnimation { proxy.scrollTo("interaction-\(last.id)", anchor: .bottom) } }
-                }
-            }
-            #endif
             }
             .id("\(chat.deviceID):\(chat.session.id)")
             .frame(maxHeight: layout.flex ? layout.readingHeight : .infinity)
@@ -586,9 +447,7 @@ struct ChatView: View {
             }
             if chat.hasEarlier_p {
                 Button("Load earlier") {
-                    #if os(iOS)
                     earlierRequest += 1
-                    #endif
                     core.agentLoadEarlier()
                 }.frame(maxWidth: .infinity)
                     .disabled(chat.loading)
@@ -660,15 +519,6 @@ struct ChatView: View {
         }
     }
 
-    private func updateViewport(_ height: CGFloat) {
-        viewportHeight = height
-        #if os(iOS)
-        if draggingTranscript { atLatest = bottomPosition <= height + 48 }
-        #else
-        atLatest = bottomPosition <= height + 48
-        #endif
-    }
-
     private var composerInset: CGFloat {
         #if os(iOS)
         12
@@ -676,11 +526,6 @@ struct ChatView: View {
         ChatStyle.inset
         #endif
     }
-}
-
-private struct ConversationBottomKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // A timeline item owns one complete measured row, including summary footers.

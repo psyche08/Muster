@@ -61,7 +61,7 @@ pub struct Chat {
 }
 
 /// Presentation paging is shared across shells; transport history is unchanged.
-pub(crate) const CHAT_HISTORY_PAGE: usize = 80;
+pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
 
 impl Chat {
     pub(crate) fn history_start_index(&self) -> usize {
