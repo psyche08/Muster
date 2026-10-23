@@ -61,3 +61,32 @@ prepend test measures the actual visible reading anchor. The final complete run
 passed without changing viewport or Markdown layout behavior. Rust runtime and
 pagination sources are unchanged. Architecture and public-content checks passed;
 prepare Apple 1.0.87 (78), with release and device evidence recorded separately.
+
+### Paired release and installed runtime evidence
+
+Apple 1.0.87 (78) was built locally from
+`1e59d5985bced94ec1c41d18cff293e06c9a638f` after PR #15 merged. macOS Release
+and iOS archive passed, along with clean source ancestry and Presence signing
+checks. Apple notarization `218a88eb-c4fa-4df2-83d1-8e425edb9e92` was Accepted;
+staple validation and Gatekeeper assessment passed. The simulator command also
+finished successfully after its diagnostic collection, with 25 passing tests.
+
+Paired desktop and iOS OTA publication passed public readback of the current
+page and manifest, versions, cache headers, hashes and signatures:
+
+- macOS ZIP SHA-256: `16eb747417a9530430b5b6285c1b21e281e010c7ce1ed9d6ed2451768dd75c8f`.
+- iOS IPA SHA-256: `5c10406d13e66ad68daee233d796013b28114ec45340b8c08a910a07f1fdf33e`.
+- Installed daemon SHA-256: `50538b7a1beb27eda25869e8b654c8b079cf8530c9f659d1f9e0aa999bf354d3`.
+
+Mac-A, Mac-B and Mac-C installed through the Rust update lease, retained their
+identities and Accessibility permission, registered relay and brought Vnet up.
+Startup logs confirmed helper completion on all three hosts. All six directed
+RPC paths and six virtual-address ping paths passed. Each installed bundle passed
+strict codesign, notarization staple, Gatekeeper and expected daemon hash checks.
+Peer disconnects during sequential updates were followed by successful checks;
+they do not establish a persistent transport defect.
+
+No provider message was sent for this UI-only change. The physical iPhone was
+unavailable through the direct installation channel, so its installation and
+scrolling/touch acceptance remain unverified despite successful OTA publication.
+GitHub Actions stayed disabled; no Cloud build or old OTA deletion occurred.
