@@ -67,6 +67,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0033](0033-managed-terminal-compatibility.md) | Accepted | Recover managed terminals and attach existing desktop clients |
 
+| [0034](0034-transcript-window-continuity.md) | Accepted | Preserve transcript continuity across paging and tabs |
+
 | [0035](0035-native-terminal-dev.md) | Accepted | Select native terminal hosts and isolate local development |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a

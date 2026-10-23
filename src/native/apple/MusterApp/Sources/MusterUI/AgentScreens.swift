@@ -289,7 +289,89 @@ struct ChatView: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .accessibilityIdentifier("session-content-tabs")
             #endif
-            if contentTab == "Conversation" {
+            ZStack {
+                #if os(iOS)
+                ConversationTabContent(active: contentTab == "Conversation") {
+                    conversationPane(core: core)
+                }
+                #else
+                if contentTab == "Conversation" { conversationPane(core: core) }
+                #endif
+                if contentTab != "Conversation" { alternatePane(core: core) }
+            }
+        }
+        #if os(iOS)
+        .environment(\.keyboardDock, layout.flex ? keyboardDock : nil)
+        #endif
+        .environment(\.executeCode, { core.codeAction(.preview, id: $0) })
+        .sheet(isPresented: Binding(get: { chat.hasCodePreview }, set: { if !$0 { core.codeAction(.dismiss) } })) {
+            CodeExecutionPreview(preview: chat.codePreview, cancel: { core.codeAction(.dismiss) }, run: {
+                core.codeAction(.run, id: chat.codePreview.id); contentTab = "Terminal"
+            })
+        }
+        .font(.system(size: bodySize * style.bodyScale))
+        .foregroundStyle(palette.text)
+        .background(palette.canvas)
+        .environment(\.openURL, OpenURLAction { url in
+            if ["http", "https", "mailto"].contains(url.scheme ?? "") { return .systemAction }
+            core.openFileLink(url.absoluteString)
+            return .handled
+        })
+        .navigationTitle(chat.session.title.isEmpty ? "Chat" : chat.session.title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in jumpToStart = false; atLatest = true; contentTab = "Conversation" }
+        .onChange(of: contentTab) { old, new in
+            if new == "Terminal" { core.sessionTerminal(.start) }
+            else if old == "Terminal" { core.sessionTerminal(.detach) }
+        }
+        .onDisappear { if contentTab == "Terminal" { core.sessionTerminal(.detach) } }
+        .sheet(isPresented: $showChatOptions) {
+            ChatOptionsSheet(core: core, chat: chat) { showChatOptions = false }
+        }
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Text([chat.providerLabel, chat.session.deviceName].filter { !$0.isEmpty }.joined(separator: " · "))
+                    if chat.canChooseModel {
+                        Button { showChatOptions = true } label: { Label("Model and effort", systemImage: "cpu") }
+                    }
+                    subagentMenu
+                    if chat.canBrowseFiles {
+                        Button { core.openFiles() } label: { Label("Files", systemImage: "folder") }
+                        Button { core.openGit() } label: { Label("Git", systemImage: "arrow.triangle.branch") }
+                    }
+                    if chat.canInterrupt {
+                        Button { core.agentInterrupt() } label: { Label("Stop", systemImage: "stop.circle") }
+                    }
+                } label: { Image(systemName: "ellipsis").accessibilityLabel("Conversation actions") }
+            }
+            #else
+            ToolbarItemGroup(placement: .primaryAction) {
+                if chat.canInterrupt {
+                    Button { core.agentInterrupt() } label: { Label("Stop", systemImage: "stop.circle") }
+                }
+                if chat.canChooseModel {
+                    Button { showChatOptions = true } label: {
+                        Label(chat.chatOptions.models.first(where: \.selected)?.name ?? "Model", systemImage: "cpu")
+                    }
+                    .help("Model and effort in the desktop app")
+                }
+                subagentMenu
+                if chat.canBrowseFiles {
+                    Button { core.openFiles() } label: { Label("Files", systemImage: "folder") }
+                    Button { core.openGit() } label: { Label("Git", systemImage: "arrow.triangle.branch") }
+                }
+            }
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private func conversationPane(core: MusterCore) -> some View {
+        VStack(spacing: 0) {
             Group {
             #if os(iOS)
             RecycledConversation(chat: chat,
@@ -464,7 +546,12 @@ struct ChatView: View {
                     .accessibilityIdentifier("persistent-mac-keyboard")
                 #endif
             }
-            } else if contentTab == "Terminal" {
+        }
+    }
+
+    private func alternatePane(core: MusterCore) -> some View {
+        VStack(spacing: 0) {
+            if contentTab == "Terminal" {
                 CodeRunHistory(runs: chat.codeRuns, error: chat.codeError) { core.codeAction(.return, id: $0) }
                 SessionTerminalPane(core: core, workspace: chat.terminal, terminal: terminal)
             } else if contentTab == "Activity" {
@@ -483,73 +570,6 @@ struct ChatView: View {
                     sessions: contentTab == "Subagents" ? chat.session.subagents : chat.session.subsessions,
                     title: contentTab)
             }
-        }
-        #if os(iOS)
-        .environment(\.keyboardDock, layout.flex ? keyboardDock : nil)
-        #endif
-        .environment(\.executeCode, { core.codeAction(.preview, id: $0) })
-        .sheet(isPresented: Binding(get: { chat.hasCodePreview }, set: { if !$0 { core.codeAction(.dismiss) } })) {
-            CodeExecutionPreview(preview: chat.codePreview, cancel: { core.codeAction(.dismiss) }, run: {
-                core.codeAction(.run, id: chat.codePreview.id); contentTab = "Terminal"
-            })
-        }
-        .font(.system(size: bodySize * style.bodyScale))
-        .foregroundStyle(palette.text)
-        .background(palette.canvas)
-        .environment(\.openURL, OpenURLAction { url in
-            if ["http", "https", "mailto"].contains(url.scheme ?? "") { return .systemAction }
-            core.openFileLink(url.absoluteString)
-            return .handled
-        })
-        .navigationTitle(chat.session.title.isEmpty ? "Chat" : chat.session.title)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in jumpToStart = false; atLatest = true; contentTab = "Conversation" }
-        .onChange(of: contentTab) { old, new in
-            if new == "Terminal" { core.sessionTerminal(.start) }
-            else if old == "Terminal" { core.sessionTerminal(.detach) }
-        }
-        .onDisappear { if contentTab == "Terminal" { core.sessionTerminal(.detach) } }
-        .sheet(isPresented: $showChatOptions) {
-            ChatOptionsSheet(core: core, chat: chat) { showChatOptions = false }
-        }
-        .toolbar {
-            #if os(iOS)
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Text([chat.providerLabel, chat.session.deviceName].filter { !$0.isEmpty }.joined(separator: " · "))
-                    if chat.canChooseModel {
-                        Button { showChatOptions = true } label: { Label("Model and effort", systemImage: "cpu") }
-                    }
-                    subagentMenu
-                    if chat.canBrowseFiles {
-                        Button { core.openFiles() } label: { Label("Files", systemImage: "folder") }
-                        Button { core.openGit() } label: { Label("Git", systemImage: "arrow.triangle.branch") }
-                    }
-                    if chat.canInterrupt {
-                        Button { core.agentInterrupt() } label: { Label("Stop", systemImage: "stop.circle") }
-                    }
-                } label: { Image(systemName: "ellipsis").accessibilityLabel("Conversation actions") }
-            }
-            #else
-            ToolbarItemGroup(placement: .primaryAction) {
-                if chat.canInterrupt {
-                    Button { core.agentInterrupt() } label: { Label("Stop", systemImage: "stop.circle") }
-                }
-                if chat.canChooseModel {
-                    Button { showChatOptions = true } label: {
-                        Label(chat.chatOptions.models.first(where: \.selected)?.name ?? "Model", systemImage: "cpu")
-                    }
-                    .help("Model and effort in the desktop app")
-                }
-                subagentMenu
-                if chat.canBrowseFiles {
-                    Button { core.openFiles() } label: { Label("Files", systemImage: "folder") }
-                    Button { core.openGit() } label: { Label("Git", systemImage: "arrow.triangle.branch") }
-                }
-            }
-            #endif
         }
     }
 

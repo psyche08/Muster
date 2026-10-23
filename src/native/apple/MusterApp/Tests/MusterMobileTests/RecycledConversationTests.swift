@@ -202,9 +202,68 @@ final class RecycledConversationTests: XCTestCase {
         XCTAssertEqual(controller.collection.layoutAttributesForItem(at: IndexPath(item: 6, section: 0))!.frame.height, opened, accuracy: 2)
     }
 
+    func testContentTabsKeepViewportChoicesAndUnsentAnswer() throws {
+        weak var released: ConversationCollectionController?
+        var window: UIWindow?
+        try autoreleasepool {
+            let controller = ConversationCollectionController(); released = controller
+            var value = chat(0..<150)
+            var question = Muster_V1_PendingInteraction(); question.id = "question-fixture"
+            value.interactions = [question]
+            var work = value.timeline[0]; work.kind = "working"; work.title = "Worked"
+            work.defaultExpanded = false; work.children = [chat(200..<201).timeline[0]]
+            value.timeline[0] = work
+            let host = UIHostingController(rootView: TabFixture(controller: controller, chat: value))
+            window = try show(host)
+            let field = try XCTUnwrap(descendants(controller.interactionHost.view).compactMap { $0 as? UITextField }.first)
+            field.text = "unsent answer"; field.sendActions(for: .editingChanged); settle()
+            controller.disclosures.choice(["row-0", "working", "row-0"]).override = true
+            readAt(controller, index: 1)
+            let offset = controller.collection.contentOffset.y
+            let height = controller.collection.layoutAttributesForItem(at: IndexPath(item: 1, section: 0))!.frame.height
+            XCTAssertGreaterThan(height, 70)
+            for _ in 0..<3 {
+                host.rootView = TabFixture(controller: controller, chat: value, visible: false); settle()
+                XCTAssertNotNil(controller.parent, "Inactive tab retains hosted view state")
+                host.rootView = TabFixture(controller: controller, chat: value); settle()
+                XCTAssertNotNil(controller.parent)
+                XCTAssertEqual(controller.collection.contentOffset.y, offset, accuracy: 3)
+                XCTAssertEqual(controller.collection.layoutAttributesForItem(at: IndexPath(item: 1, section: 0))!.frame.height, height, accuracy: 3)
+                XCTAssertEqual(descendants(controller.interactionHost.view).compactMap { $0 as? UITextField }.first?.text, "unsent answer")
+            }
+            window?.isHidden = true; window?.rootViewController = nil; window = nil
+        }
+        settle(); XCTAssertNil(released)
+    }
+
     private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
 }
 private struct DraftFixture: View {
     @State private var text = ""
     var body: some View { TextField("Answer", text: $text).textFieldStyle(.roundedBorder).padding() }
+}
+
+private struct TabFixture: View {
+    let controller: ConversationCollectionController
+    let chat: Muster_App_ChatView
+    var visible = true
+    @State private var atLatest = true
+    var body: some View {
+        ZStack {
+            ConversationTabContent(active: visible) {
+                CollectionFixture(controller: controller, chat: chat)
+            }
+            if !visible { Text("Activity") }
+        }
+    }
+}
+private struct CollectionFixture: UIViewControllerRepresentable {
+    let controller: ConversationCollectionController
+    let chat: Muster_App_ChatView
+    func makeUIViewController(context: Context) -> ConversationCollectionController { controller }
+    func updateUIViewController(_ controller: ConversationCollectionController, context: Context) {
+        controller.update(chat: chat, showsInteractions: true, spacing: 14, columnWidth: 760,
+            appearance: "fixture", jump: 0, header: AnyView(Text("Earlier history")),
+            interactions: AnyView(DraftFixture()), content: { AnyView(ConversationBlock(block: $0)) })
+    }
 }

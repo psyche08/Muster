@@ -25,8 +25,9 @@ fn session_row(session: &muster_proto::v1::AgentSession) -> muster_proto::v1::Ag
 }
 
 fn session_timeline(chat: &crate::state::Chat) -> Vec<app::ChatBlock> {
-    let mut blocks = crate::timeline::for_session(
-        chat.visible_messages(),
+    let mut blocks = crate::timeline::window(
+        &chat.messages,
+        chat.history_start_index(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
         chat.session.mode == "orca",
     );
