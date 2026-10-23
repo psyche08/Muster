@@ -99,6 +99,21 @@ impl Chat {
     }
 }
 
+#[derive(Default)]
+pub struct TerminalInputQueue {
+    pub pending: Vec<u8>,
+    pub in_flight: Option<String>,
+    pub stopped: bool,
+}
+
+impl TerminalInputQueue {
+    pub fn stop(&mut self) {
+        self.pending.clear();
+        self.in_flight = None;
+        self.stopped = true;
+    }
+}
+
 pub enum TerminalKind {
     /// An iTerm2 or PTY session on another device, frames over muster-rpc.
     /// The watch ends the attach stream when the terminal is dropped.
@@ -110,6 +125,7 @@ pub enum TerminalKind {
         /// A session was asked for this terminal: a second refusal is shown,
         /// not retried.
         leased: bool,
+        input: TerminalInputQueue,
     },
     /// An in-app SSH session over a forward stream.
     Ssh {

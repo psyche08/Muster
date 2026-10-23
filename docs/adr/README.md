@@ -84,6 +84,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0042](0042-history-anchor-during-scroll.md) | Accepted | Preserve reading anchors while history arrives during scrolling |
 
+| [0043](0043-ordered-terminal-input.md) | Accepted | Serialize and bound remote terminal input in Shared Rust |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

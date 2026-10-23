@@ -613,6 +613,7 @@ mod tests {
                 _attach: None,
                 lease: None,
                 leased: false,
+                input: Default::default(),
             },
             source: "iterm2".into(),
             cols: 80,

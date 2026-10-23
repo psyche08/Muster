@@ -85,6 +85,7 @@ pub(super) fn open_terminal(state: &mut State, ctx: &Ctx, session: String) {
             _attach: Some(watch),
             lease: None,
             leased: false,
+            input: Default::default(),
         },
         source: meta
             .as_ref()
@@ -376,10 +377,10 @@ pub(super) fn msg_terminal_lease_ended(
 /// renewing it); the foreground opens the terminal again, and with it a new
 /// session.
 pub(super) fn background_terminal(state: &mut State) {
-    if state.session_terminal.active
-        && let Some(terminal) = state.terminal.as_mut()
-        && let TerminalKind::Remote { _attach, .. } = &mut terminal.kind
+    if let Some(terminal) = state.terminal.as_mut()
+        && let TerminalKind::Remote { input, _attach, .. } = &mut terminal.kind
     {
+        input.stop();
         *_attach = None;
         terminal.ended = true;
         terminal.status = "Terminal detached while Muster was in the background".into();
@@ -401,7 +402,6 @@ pub(super) fn foreground_terminal(state: &mut State, ctx: &Ctx) {
     }
     if state.screen == Screen::Terminal
         && let Some(terminal) = &state.terminal
-        && terminal.source == "ghostty"
         && terminal.ended
         && matches!(terminal.kind, TerminalKind::Remote { .. })
     {
@@ -412,38 +412,117 @@ pub(super) fn foreground_terminal(state: &mut State, ctx: &Ctx) {
 }
 
 pub(super) fn terminal_input(state: &mut State, ctx: &Ctx, bytes: Vec<u8>) {
-    if state.screen != Screen::Terminal
-        && !(state.screen == Screen::Chat
-            && state.session_terminal.active
-            && !state.session_terminal.busy)
+    if !state.foreground
+        || (state.screen != Screen::Terminal
+            && !(state.screen == Screen::Chat
+                && state.session_terminal.active
+                && !state.session_terminal.busy))
     {
         return;
     }
-    let Some(terminal) = &state.terminal else {
+    let Some(terminal) = &mut state.terminal else {
         return;
     };
     if terminal.ended || bytes.is_empty() {
         return;
     }
-    match &terminal.kind {
+    match &mut terminal.kind {
         TerminalKind::Ssh { input, .. } => {
             let _ = input.send(SshCommand::Write(bytes));
         }
-        TerminalKind::Remote { .. } => {
-            let (device, session) = (terminal.device.clone(), terminal.session.clone());
-            let op_id = state.op_id();
-            op_request(
-                state,
-                ctx,
-                "input",
-                device,
-                Req::TerminalInput(v1::TerminalInputRequest {
-                    op_id,
-                    session,
-                    bytes,
-                }),
-            );
+        TerminalKind::Remote { input, .. } => {
+            if input.stopped {
+                return;
+            }
+            if bytes.len() > muster_terminal::MAX_PASTE.saturating_sub(input.pending.len()) {
+                input.stop();
+                terminal.status =
+                    "Input stopped: buffer full. Reopen this terminal before typing".into();
+                state.toast(
+                    "Terminal input buffer full; unsent input discarded. Reopen the terminal",
+                    true,
+                );
+                return;
+            }
+            input.pending.extend(bytes);
+            dispatch_terminal_input(state, ctx);
         }
+    }
+}
+
+/// Called only by the reducer, before spawning I/O: intent order is byte order.
+fn dispatch_terminal_input(state: &mut State, ctx: &Ctx) {
+    let Some(terminal) = state.terminal.as_ref() else {
+        return;
+    };
+    let TerminalKind::Remote { input, .. } = &terminal.kind else {
+        return;
+    };
+    if terminal.ended || input.stopped || input.in_flight.is_some() || input.pending.is_empty() {
+        return;
+    }
+    let op_id = state.op_id();
+    let terminal = state.terminal.as_mut().unwrap();
+    let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+        return;
+    };
+    input.in_flight = Some(op_id.clone());
+    let request = v1::TerminalInputRequest {
+        op_id: op_id.clone(),
+        session: terminal.session.clone(),
+        bytes: std::mem::take(&mut input.pending),
+    };
+    let device = terminal.device.clone();
+    let origin = Some((terminal.session.clone(), op_id));
+    op_request_from(
+        state,
+        ctx,
+        "input",
+        device,
+        Req::TerminalInput(request),
+        origin,
+    );
+}
+
+pub(super) fn msg_terminal_input_done(
+    state: &mut State,
+    ctx: &Ctx,
+    device: String,
+    origin: Option<(String, String)>,
+    result: Result<v1::OpResult, Error>,
+) {
+    let Some((session, op_id)) = origin else {
+        return;
+    };
+    let Some(terminal) = state
+        .terminal
+        .as_mut()
+        .filter(|t| t.device == device && t.session == session)
+    else {
+        return;
+    };
+    let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+        return;
+    };
+    if input.in_flight.as_deref() != Some(&op_id) || input.stopped {
+        return;
+    }
+    input.in_flight = None;
+    if matches!(&result, Ok(r) if matches!(v1::op_result::Status::try_from(r.status),
+        Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)))
+    {
+        dispatch_terminal_input(state, ctx);
+    } else {
+        let why = match result {
+            Ok(r) => r.message,
+            Err(e) => e.to_string(),
+        };
+        input.stop();
+        terminal.status = format!("Input stopped: {why}. Reopen this terminal before typing");
+        state.toast(
+            "Terminal input was not confirmed; unsent input discarded. Reopen the terminal",
+            true,
+        );
     }
 }
 
@@ -995,6 +1074,7 @@ pub(super) fn session_terminal_ready(
                     _attach: Some(watch),
                     lease: None,
                     leased: false,
+                    input: Default::default(),
                 },
                 source: "tmux".into(),
                 cols: 80,
