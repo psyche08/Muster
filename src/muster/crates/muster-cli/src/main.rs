@@ -124,16 +124,13 @@ enum Command {
         /// Stop the Accessibility controller from driving this app (bundle id)
         #[arg(long = "ax-remove")]
         ax_remove: Vec<String>,
-        /// Serve this one origin on a loopback port of this machine, for
-        /// members that cannot reach it ("https://example.test"). Members
-        /// still need the port open and `net:tcp/<port>` granted.
+        /// Lend this machine's browser to members for this one origin
+        /// ("https://example.test"): they read through it with
+        /// `browser.view` and act with `browser.control`.
         #[arg(long)]
         web_origin: Option<String>,
-        /// The loopback port the web window listens on
-        #[arg(long)]
-        web_port: Option<u16>,
         /// Close the web window
-        #[arg(long, conflicts_with_all = ["web_origin", "web_port"])]
+        #[arg(long, conflicts_with = "web_origin")]
         close_web: bool,
     },
     /// A loopback port here standing for a port on a member's loopback. The
@@ -143,6 +140,18 @@ enum Command {
         device: String,
         /// The port on that member's loopback
         port: u16,
+        /// The port to listen on here; 0 asks the operating system for one
+        #[arg(long, default_value_t = 0)]
+        local_port: u16,
+    },
+    /// A loopback port here standing for a member's web window onto one
+    /// origin, read with that member's browser. Open it in a browser here;
+    /// the port stays open until this command ends.
+    Window {
+        /// Member: device id, fingerprint prefix or name
+        device: String,
+        /// The origin of the member's window ("https://example.test")
+        origin: String,
         /// The port to listen on here; 0 asks the operating system for one
         #[arg(long, default_value_t = 0)]
         local_port: u16,
@@ -277,6 +286,45 @@ fn op_id() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     format!("cli-{nanos}-{}", std::process::id())
+}
+
+/// Holds a loopback port here for a member's `port`, or for its web window
+/// onto `window` when that is set, until the call ends.
+async fn forward(
+    client: &Client,
+    device: &str,
+    local_port: u16,
+    port: u32,
+    window: String,
+) -> anyhow::Result<()> {
+    let device = resolve_device(client, device).await?;
+    let what = if window.is_empty() {
+        format!("127.0.0.1:{port}")
+    } else {
+        format!("its window onto {window}")
+    };
+    let mut call = client
+        .start(Req::ForwardOpen(v1::ForwardOpenRequest {
+            device: device.clone(),
+            port,
+            local_port: u32::from(local_port),
+            window,
+        }))
+        .await?;
+    while let Some(ev) = call.events.recv().await {
+        if let v1::event::Ev::ForwardOpened(opened) = ev {
+            println!(
+                "127.0.0.1:{} stands for {what} on {}",
+                opened.local_port,
+                &device[..12]
+            );
+            break;
+        }
+    }
+    // The port lives as long as this call: until the daemon stops or this
+    // command is interrupted. A member's refusal is per connection.
+    call.finish().await?;
+    Ok(())
 }
 
 async fn resolve_device(client: &Client, text: &str) -> anyhow::Result<String> {
@@ -834,7 +882,6 @@ async fn main() -> anyhow::Result<()> {
             ax_allow,
             ax_remove,
             web_origin,
-            web_port,
             close_web,
         } => {
             let Resp::Policy(mut policy) =
@@ -850,7 +897,6 @@ async fn main() -> anyhow::Result<()> {
                 || !ax_allow.is_empty()
                 || !ax_remove.is_empty()
                 || web_origin.is_some()
-                || web_port.is_some()
                 || close_web;
             if change {
                 for bundle in ax_allow {
@@ -876,16 +922,8 @@ async fn main() -> anyhow::Result<()> {
                 }
                 if close_web {
                     policy.web_window = None;
-                } else if web_origin.is_some() || web_port.is_some() {
-                    let held = policy.web_window.clone();
-                    let origin = web_origin
-                        .or_else(|| held.as_ref().map(|w| w.origin.clone()))
-                        .ok_or_else(|| anyhow::anyhow!("--web-port needs --web-origin"))?;
-                    let port = web_port
-                        .map(u32::from)
-                        .or_else(|| held.map(|w| w.port))
-                        .ok_or_else(|| anyhow::anyhow!("--web-origin needs --web-port"))?;
-                    policy.web_window = Some(v1::WebWindow { origin, port });
+                } else if let Some(origin) = web_origin {
+                    policy.web_window = Some(v1::WebWindow { origin });
                 }
                 if let Resp::Policy(p) = client
                     .call(Req::PolicySet(v1::PolicySetRequest {
@@ -906,19 +944,17 @@ async fn main() -> anyhow::Result<()> {
             match &policy.web_window {
                 None => println!("web window: off"),
                 Some(window) => {
+                    println!("web window: {} through this machine's browser", window.origin);
                     println!(
-                        "web window: {} on 127.0.0.1:{}",
-                        window.origin, window.port
+                        "  members read with browser.view and act with browser.control{}",
+                        if policy.allow_locked_control {
+                            ", also while the screen is locked"
+                        } else {
+                            "; not while the screen is locked"
+                        }
                     );
-                    if !policy
-                        .open_ports
-                        .iter()
-                        .any(|rule| rule == &format!("tcp/{}", window.port) || rule == "tcp/*")
-                    {
-                        println!(
-                            "  members cannot reach it yet: muster policy --open-port tcp/{}",
-                            window.port
-                        );
+                    if !policy.offer_agent {
+                        println!("  closed to members while offer agent is off");
                     }
                 }
             }
@@ -928,27 +964,14 @@ async fn main() -> anyhow::Result<()> {
             port,
             local_port,
         } => {
-            let device = resolve_device(&client, &device).await?;
-            let mut call = client
-                .start(Req::ForwardOpen(v1::ForwardOpenRequest {
-                    device: device.clone(),
-                    port: u32::from(port),
-                    local_port: u32::from(local_port),
-                }))
-                .await?;
-            while let Some(ev) = call.events.recv().await {
-                if let v1::event::Ev::ForwardOpened(opened) = ev {
-                    println!(
-                        "127.0.0.1:{} stands for 127.0.0.1:{port} on {}",
-                        opened.local_port,
-                        &device[..12]
-                    );
-                    break;
-                }
-            }
-            // The port lives as long as this call: until the member refuses,
-            // the daemon stops, or this command is interrupted.
-            call.finish().await?;
+            forward(&client, &device, local_port, u32::from(port), String::new()).await?;
+        }
+        Command::Window {
+            device,
+            origin,
+            local_port,
+        } => {
+            forward(&client, &device, local_port, 0, origin).await?;
         }
         Command::Browser {
             request,

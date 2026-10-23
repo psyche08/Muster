@@ -544,7 +544,6 @@ impl Daemon {
             offer_tasks: policy.offer_tasks,
             web_window: policy.web_window.as_ref().map(|window| v1::WebWindow {
                 origin: window.origin.clone(),
-                port: u32::from(window.port),
             }),
         }
     }
@@ -570,14 +569,8 @@ impl Daemon {
                     window.origin.parse::<muster_web::Origin>().map_err(|error| {
                         Error::Invalid(format!("web window: {error}"))
                     })?;
-                    let port = u16::try_from(window.port)
-                        .map_err(|_| Error::Invalid("web window: port out of range".into()))?;
-                    if port == 0 {
-                        return Err(Error::Invalid("web window: port 0 is not a port".into()));
-                    }
                     Ok(muster_core::policy::WebWindow {
                         origin: window.origin.clone(),
-                        port,
                     })
                 })
                 .transpose()?,
@@ -603,21 +596,18 @@ impl Daemon {
             .origin
             .parse::<muster_web::Origin>()
             .map_err(|error| Error::Invalid(error.to_string()))?;
-        if held
-            .as_ref()
-            .is_some_and(|open| open.origin() == &origin && open.local_addr().port() == wanted.port)
-        {
+        if held.as_ref().is_some_and(|open| open.origin() == &origin) {
             return Ok(());
         }
-        // The old window holds the port until it is dropped.
+        // The old window holds its socket until it is dropped.
         held.take();
         // The browser fetches, not the daemon: the session for the site is
         // the person's, held in Chrome (ADR 0026).
         let upstream = crate::web::Browser::new(muster_browser::socket_in(&self.config.dir));
-        let window = muster_web::Window::open(origin, wanted.port, upstream)
+        let window = muster_web::Window::open(origin, &crate::web::socket_in(&self.config.dir), upstream)
             .await
             .map_err(|error| Error::Unavailable(format!("web window: {error}")))?;
-        *held = Some(window);
+        *held = Some(Arc::new(window));
         Ok(())
     }
 }

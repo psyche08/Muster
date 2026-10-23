@@ -2,13 +2,17 @@
 //! for exactly one remote origin, so a member with no route to that origin —
 //! and no account on it — can read it through this machine.
 //!
-//! A member reaches the window the way phones reach SSH: a forward stream to
-//! one of this machine's own loopback ports (ARCHITECTURE §3.5), decided by
-//! the same `net:` scope and open-port policy. The window is what keeps that
-//! from becoming the open relay forward streams exist to avoid — it is built
-//! for one origin and asks for no other. An absolute request target is
-//! refused, `CONNECT` is refused, and a reply that came from anywhere else is
-//! refused rather than served.
+//! The window listens on no TCP port. A member reaches it through a service
+//! stream of its own, handed to [`Window::serve`] inside the daemon with a
+//! [`Gate`] that says, request by request, what that member may do; the owner
+//! of the machine reaches it on a Unix socket only their user can open. So no
+//! other process on the machine, and nothing on the network, can use it
+//! without passing one of those two doors.
+//!
+//! The window is what keeps a member's stream from becoming the open relay
+//! forward streams exist to avoid — it is built for one origin and asks for
+//! no other. An absolute request target is refused, `CONNECT` is refused, and
+//! a reply that came from anywhere else is refused rather than served.
 //!
 //! The window fetches nothing itself. Every request is handed to an
 //! [`Upstream`] — in Muster, the person's own browser through the Agent Halo
@@ -22,13 +26,13 @@
 
 use std::fmt;
 use std::future::Future;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::net::UnixListener;
 use tokio::task::{JoinHandle, JoinSet};
 
 /// The whole request head, including the blank line.
@@ -71,6 +75,21 @@ pub struct Reply {
 pub trait Upstream: Send + Sync + 'static {
     fn fetch(&self, request: Fetch) -> Pin<Box<dyn Future<Output = Result<Reply, String>> + Send + '_>>;
 }
+
+/// What one reader may do through the window. The window does not decide
+/// this; it asks the [`Gate`] it was handed, before every request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Grant {
+    /// Read the site: GET, HEAD, OPTIONS.
+    Read,
+    /// Act on it as the signed-in person, any method.
+    Act,
+}
+
+/// Asked before every request on a connection, so a revoked scope, a policy
+/// change or the screen locking takes effect on the next request rather than
+/// the next connection. `Err` carries the reason the reader is shown.
+pub type Gate = Arc<dyn Fn() -> Result<Grant, String> + Send + Sync>;
 
 /// The one origin a window serves: scheme, host and port, nothing else. A
 /// path is not part of an origin, and neither is a credential.
@@ -153,53 +172,100 @@ impl fmt::Display for Origin {
     }
 }
 
-/// A running window. Dropping it closes the port and every connection on it.
+/// A running window. Dropping it closes its socket and every connection the
+/// socket accepted; streams handed to [`Window::serve`] end with their caller.
 pub struct Window {
-    local: SocketAddr,
+    socket: PathBuf,
     origin: Origin,
+    upstream: Arc<dyn Upstream>,
     accept: JoinHandle<()>,
 }
 
 impl Window {
-    /// Opens `port` on loopback for `origin`. Port 0 asks the OS for one.
+    /// Opens the window for `origin` on a Unix socket at `socket`, in a
+    /// directory only this user can enter. A socket another process still
+    /// serves is refused rather than replaced.
     pub async fn open(
         origin: Origin,
-        port: u16,
+        socket: &Path,
         upstream: Arc<dyn Upstream>,
     ) -> Result<Self, Error> {
-        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
-        let local = listener.local_addr()?;
-        log::info!("web window {local} serves {origin}");
-        let accept = tokio::spawn(accept(listener, origin.clone(), upstream));
+        use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
+        let dir = socket
+            .parent()
+            .ok_or_else(|| Error::Origin("the window's socket has no directory".into()))?;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)?;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        if let Ok(meta) = std::fs::symlink_metadata(socket) {
+            if !meta.file_type().is_socket() {
+                return Err(Error::Origin(format!(
+                    "{} exists and is not a socket",
+                    socket.display()
+                )));
+            }
+            if std::os::unix::net::UnixStream::connect(socket).is_ok() {
+                return Err(Error::Origin(format!(
+                    "{} is already served",
+                    socket.display()
+                )));
+            }
+            std::fs::remove_file(socket)?;
+        }
+        let listener = UnixListener::bind(socket)?;
+        std::fs::set_permissions(socket, std::fs::Permissions::from_mode(0o600))?;
+        log::info!("web window {} serves {origin}", socket.display());
+        let accept = tokio::spawn(accept(listener, origin.clone(), upstream.clone()));
         Ok(Self {
-            local,
+            socket: socket.to_path_buf(),
             origin,
+            upstream,
             accept,
         })
     }
 
-    pub fn local_addr(&self) -> SocketAddr {
-        self.local
+    pub fn socket(&self) -> &Path {
+        &self.socket
     }
 
     pub fn origin(&self) -> &Origin {
         &self.origin
+    }
+
+    /// Carries one reader's stream — a member's service stream, in Muster —
+    /// until it ends. `gate` is asked before every request on it.
+    pub async fn serve<S>(&self, stream: S, gate: Gate)
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send,
+    {
+        connection(stream, &self.origin, self.upstream.as_ref(), gate).await;
     }
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
         self.accept.abort();
+        let _ = std::fs::remove_file(&self.socket);
     }
 }
 
-async fn accept(listener: TcpListener, origin: Origin, upstream: Arc<dyn Upstream>) {
+async fn accept(listener: UnixListener, origin: Origin, upstream: Arc<dyn Upstream>) {
+    // Whoever opened this socket is this user: the directory admits no one
+    // else. That is the machine's owner, who may do anything the browser may.
+    let owner: Gate = Arc::new(|| Ok(Grant::Act));
     let mut open = JoinSet::new();
     loop {
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, _)) => {
-                    open.spawn(connection(stream, origin.clone(), upstream.clone()));
+                    let origin = origin.clone();
+                    let upstream = upstream.clone();
+                    let owner = owner.clone();
+                    open.spawn(async move {
+                        connection(stream, &origin, upstream.as_ref(), owner).await;
+                    });
                 }
                 Err(error) => {
                     log::warn!("web window {origin} stopped accepting: {error}");
@@ -230,8 +296,11 @@ impl Refusal {
     }
 }
 
-async fn connection(stream: TcpStream, origin: Origin, upstream: Arc<dyn Upstream>) {
-    let (read, mut write) = stream.into_split();
+async fn connection<S>(stream: S, origin: &Origin, upstream: &dyn Upstream, gate: Gate)
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let (read, mut write) = tokio::io::split(stream);
     let mut reader = BufReader::new(read);
     loop {
         let head = match read_head(&mut reader).await {
@@ -243,7 +312,7 @@ async fn connection(stream: TcpStream, origin: Origin, upstream: Arc<dyn Upstrea
             }
         };
         let keep = head.keep_alive();
-        match carry(&mut reader, &mut write, &origin, upstream.as_ref(), head).await {
+        match carry(&mut reader, &mut write, origin, upstream, &gate, head).await {
             Ok(()) if keep => continue,
             Ok(()) => return,
             Err(refusal) => {
@@ -409,6 +478,11 @@ fn hop_by_hop(name: &str) -> bool {
     )
 }
 
+/// Methods that only read. Anything else may change the site, as the person.
+fn reads(method: &str) -> bool {
+    matches!(method, "GET" | "HEAD" | "OPTIONS")
+}
+
 /// A request header the window passes on; `None` drops it.
 fn forward(name: &str) -> bool {
     // Host belongs to the origin, not to whoever reached the window, and the
@@ -462,6 +536,7 @@ async fn carry<R, W>(
     write: &mut W,
     origin: &Origin,
     upstream: &dyn Upstream,
+    gate: &Gate,
     head: Head,
 ) -> Result<(), Refusal>
 where
@@ -469,6 +544,16 @@ where
     W: tokio::io::AsyncWrite + Unpin,
 {
     let target = target_of(&head)?.to_string();
+    // Asked now, not when the stream opened: a scope revoked or a screen
+    // locked since then counts from this request on.
+    let grant = gate().map_err(|why| Refusal::new(403, "Forbidden", why))?;
+    if grant == Grant::Read && !reads(&head.method) {
+        return Err(Refusal::new(
+            403,
+            "Forbidden",
+            "this reader may read the site through the window, not act on it",
+        ));
+    }
     let body = read_body(reader, &head).await?.unwrap_or_default();
     let request = Fetch {
         method: head.method.clone(),
@@ -741,7 +826,7 @@ mod tests {
     /// session. Four headers would work against it, and one would hand the
     /// reader the account.
     #[test]
-    fn a_reply_is_rewritten_for_the_port_it_now_arrives_on() {
+    fn a_reply_is_rewritten_for_where_it_now_arrives() {
         let origin = origin("https://example.test");
         let rewrite = |name: &str, value: &str| rewrite(&origin, name, value);
 

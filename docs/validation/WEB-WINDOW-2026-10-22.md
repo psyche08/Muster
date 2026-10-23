@@ -79,6 +79,49 @@ the person's. Two steps: load this branch's extension unpacked in place of the
 installed one, then give it site access for the scheduler's origin. The live
 round then repeats round one's chain with the browser as the upstream.
 
+## Round three (2026-10-23): no TCP port, the browser's scopes
+
+The window moved off loopback TCP onto a Unix socket, and members onto a `web`
+service stream decided by `browser.view` / `browser.control` (ADR 0026,
+revised). Same two Macs, roles reversed so the window sits with the signed-in
+Chrome: `wb-dev` (`HHEF-HYP`, admin) on M1 Max holds the window, sharing the
+real bridge socket through a symlink; `m4pro-reader` (`7E2F-PRM`) on M4 Pro
+reads. Development builds of this branch on both, own network `wbtest`
+(`3c2b5daeed2cbc55`), linked direct at 10–17 ms.
+
+- **No TCP listener.** `muster policy --web-origin https://scheduler.example`
+  prints `web window: https://scheduler.example through this machine's
+  browser` and `members read with browser.view and act with browser.control;
+  not while the screen is locked`. The window is
+  `drwx------ …/web` / `srw------- …/web/window.sock`, and
+  `lsof -iTCP:8810 -sTCP:LISTEN` finds nothing.
+- **The owner, through the socket.**
+  `curl --unix-socket …/web/window.sock http://window/` reaches the browser:
+  `502` with `the browser did not answer: "unsupported operation"` — the
+  installed extension's refusal, as in round two.
+- **A port scope is no way in.** With the reader holding only
+  `net:tcp/8810`, `muster window HHEF-HYP https://scheduler.example
+  --local-port 18810` opens its local port, and a request on it answers
+  `403` with `the browser is not lent to you: scope not granted`; the holder
+  logs `web window … refused f93457c5: the browser is not lent to you: scope
+  not granted`. (The first try showed the 403 but lost the reason to a reset:
+  the refusal closed the socket with the request unread. Fixed by reading the
+  request before answering, then shutting down cleanly.)
+- **`browser.view` reads and does not act.** Scopes set to `browser.view`
+  alone: a GET reaches the browser (`502`, `"unsupported operation"` — the
+  same last hop); a POST answers `403` with `this reader may read the site
+  through the window, not act on it`, refused before the browser is asked.
+- **Not exercised live:** the window while the holder's screen is locked
+  (covered by tests; locking a machine someone is working on is not a test
+  step), and `browser.control` acting through the window, which needs the new
+  extension too.
+
+The last hop is still the person's step: `ping` through the bridge reports
+`version 0.2.0`, while this branch's extension is 0.3.0 at
+`src/browser/agenthalo-extension` in this repository's checkout. Two older
+copies exist on that machine — the earlier repository's and the app bundle's —
+both 0.2.0 and without `fetch`.
+
 ## Found while verifying
 
 The page's own HTML references **87 URLs on a separate corporate CDN origin**
@@ -104,9 +147,10 @@ in front of a phone.
 ## Cleanup
 
 Round one's two development daemons were stopped and their state directories
-removed; the `wwtest` network exists nowhere else. Round two's development
-daemon reaches the real bridge socket through a symlink under `/private/tmp`,
-and the native-host manifest still points at this branch's host so the pending
+removed; the `wwtest` network exists nowhere else. Rounds two and three leave
+the `wbtest` daemons running (under `/private/tmp` on M1 Max, `~/ww` on
+M4 Pro), the M1 Max one reaching the real bridge socket through a symlink, and
+the native-host manifest still points at this branch's host so the pending
 live round can run; the installed one is restored with
 `/Applications/Muster.app/Contents/Helpers/muster-browser-host install
 "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"`.

@@ -892,6 +892,40 @@ fn terminal_for<'a>(
     terminal_of(daemon)
 }
 
+/// Where a forwarded connection goes on the member.
+#[derive(Clone, Debug)]
+enum Target {
+    Port(u16),
+    /// Its web window, by origin (ADR 0026).
+    Window(String),
+}
+
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Target::Port(port) => write!(f, "127.0.0.1:{port}"),
+            Target::Window(origin) => write!(f, "the window onto {origin}"),
+        }
+    }
+}
+
+/// The member's refusal, as the browser reading the window will show it.
+async fn refuse_reader(tcp: &mut tokio::net::TcpStream, why: &str) -> std::io::Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    // Take the request off the socket first: closing one with unread bytes
+    // resets it, and the reader would see a reset instead of the reason.
+    let mut request = [0u8; 8192];
+    let _ = tokio::time::timeout(Duration::from_millis(500), tcp.read(&mut request)).await;
+    let body = format!("{why}\n");
+    let head = format!(
+        "HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain; charset=utf-8\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        body.len()
+    );
+    tcp.write_all(head.as_bytes()).await?;
+    tcp.write_all(body.as_bytes()).await?;
+    tcp.shutdown().await
+}
+
 async fn dispatch(
     daemon: &Arc<Daemon>,
     ctx: &Context,
@@ -1248,16 +1282,33 @@ async fn dispatch(
             daemon.restart_node(relay).await?;
             Resp::DeviceInfo(daemon.device_info())
         }
-        // A loopback port here standing for one on a member. Every connection
-        // is its own forward stream, which the member decides on its own side
-        // (ARCHITECTURE §3.5); this side only carries bytes.
+        // A loopback port here standing for one on a member, or for that
+        // member's web window. Every connection is its own stream, which the
+        // member decides on its own side (ARCHITECTURE §3.5, ADR 0026); this
+        // side only carries bytes.
         Req::ForwardOpen(r) => {
             let peer = muster_core::DeviceId::from_hex(&r.device)
                 .map_err(|error| Error::Invalid(format!("device id: {error}")))?;
-            let port = u16::try_from(r.port)
-                .ok()
-                .filter(|port| *port != 0)
-                .ok_or_else(|| Error::Invalid("port is not a port".into()))?;
+            // Exactly one of the two: a port, or a window by its origin.
+            let to = if r.window.is_empty() {
+                Target::Port(
+                    u16::try_from(r.port)
+                        .ok()
+                        .filter(|port| *port != 0)
+                        .ok_or_else(|| Error::Invalid("port is not a port".into()))?,
+                )
+            } else if r.port != 0 {
+                return Err(Error::Invalid(
+                    "a forward is to a port or to a window, not both".into(),
+                ));
+            } else {
+                Target::Window(
+                    r.window
+                        .parse::<muster_web::Origin>()
+                        .map_err(|error| Error::Invalid(error.to_string()))?
+                        .to_string(),
+                )
+            };
             let local = u16::try_from(r.local_port)
                 .map_err(|_| Error::Invalid("local port is not a port".into()))?;
             let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from((
@@ -1270,10 +1321,7 @@ async fn dispatch(
                 .local_addr()
                 .map_err(|error| Error::Unavailable(error.to_string()))?
                 .port();
-            log::info!(
-                "forward 127.0.0.1:{bound} stands for {}:{port}",
-                peer.short()
-            );
+            log::info!("forward 127.0.0.1:{bound} stands for {to} on {}", peer.short());
             events
                 .send(v1::event::Ev::ForwardOpened(v1::ForwardOpened {
                     local_port: u32::from(bound),
@@ -1287,14 +1335,26 @@ async fn dispatch(
                     accepted = listener.accept() => {
                         let Ok((mut tcp, _)) = accepted else { break };
                         let node = node.clone();
+                        let to = to.clone();
                         open.spawn(async move {
-                            match node.forward(peer, port).await {
+                            let opened = match &to {
+                                Target::Port(port) => {
+                                    node.forward(peer, *port).await.map_err(|error| error.to_string())
+                                }
+                                Target::Window(origin) => crate::web::open(&node, peer, origin).await,
+                            };
+                            match opened {
                                 Ok((send, recv)) => {
                                     let mut stream = tokio::io::join(recv, send);
                                     let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
                                 }
                                 Err(error) => {
-                                    log::info!("forward to {}:{port}: {error}", peer.short());
+                                    log::info!("forward to {to} on {}: {error}", peer.short());
+                                    // A window's reader is a browser: tell it why
+                                    // in its own terms instead of resetting.
+                                    if matches!(to, Target::Window(_)) {
+                                        let _ = refuse_reader(&mut tcp, &error).await;
+                                    }
                                 }
                             }
                         });

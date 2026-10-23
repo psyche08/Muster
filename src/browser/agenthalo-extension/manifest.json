@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Agent Halo Browser",
-  "version": "0.2.0",
-  "description": "Muster Agent Halo browser accessibility via a local Rust native host.",
+  "version": "0.3.0",
+  "description": "Muster Agent Halo browser accessibility and the web window's fetch, via a local Rust native host.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2wlCRgH536t5aE79TeOdj/qaT81kxtD+U2fWowZA/Crlizq9HQspjvs2T7dp3TuAkMXSSxtZLeZrnsVa3TyjS+hfIn/GHrkLOvvQOCsaHq9nK6iQQo6HzeXHzkuEMUdhWXNJMdaAdhVyZKDA4OXXPgyGwIiO/wvQR3Gu5QR7sEJtIXz5eQtc01vK3uhyQct8wt0P7u9qW4dGeZJNZ5ueqgJy6N3Nb9qeTK++T48ZqsPs4hHBuV+uTjVip86WDlMNRAGz1O/kERSI5WLrmKBTdKWXYVVraxyDXe2YWKqvnroOhWSiRZWASHJQkrQgbpM9rGuCsI5oVw8fi7+DIUgu/QIDAQAB",
   "permissions": [
     "debugger",

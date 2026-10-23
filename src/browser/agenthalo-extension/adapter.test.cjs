@@ -16,7 +16,7 @@ function fixture() {
         const port = { onMessage: event(), onDisconnect: event(), postMessage: m => sent.push(m) };
         ports.push(port); return port;
       },
-      getManifest: () => ({ version: '0.2.0' }), onStartup: event(),
+      getManifest: () => ({ version: '0.3.0' }), onStartup: event(),
     },
     tabs: { get: async () => ({ url: 'https://example.test/' }), onRemoved: event(), query: async () => [] },
     debugger: {
@@ -154,4 +154,6 @@ test('preserved public manifest key matches the Rust native host origin', () => 
   // only where the person granted it afterwards.
   assert.equal(manifest.host_permissions, undefined);
   assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
+  // `ping` reports this, so which copy Chrome is running is answerable.
+  assert.equal(manifest.version, '0.3.0');
 });

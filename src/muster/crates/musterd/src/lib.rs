@@ -220,10 +220,10 @@ pub struct Daemon {
     tmux: Arc<Terminal>,
     platform: Arc<dyn Platform>,
     vnet: Mutex<Option<Arc<Vnet>>>,
-    /// The web window the policy asks for, if any (ADR 0026). Dropping it
-    /// closes the port, so moving the window is: take it, then open the new
-    /// one.
-    web: tokio::sync::Mutex<Option<muster_web::Window>>,
+    /// The web window the policy asks for, if any (ADR 0026). Members' streams
+    /// hold a reference while they are served; the last one to go closes its
+    /// socket, so moving the window is: take it, then open the new one.
+    pub(crate) web: tokio::sync::Mutex<Option<Arc<muster_web::Window>>>,
     #[cfg(target_os = "macos")]
     vnet_helper: Mutex<Option<muster_platform::macos::nethelper::NetHelper>>,
     /// Fires whenever roster, peers-of-interest or pending joins change.
@@ -866,6 +866,14 @@ impl ServiceHandler for RemoteService {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
         let daemon = self.daemon.clone();
         Box::pin(async move {
+            // The web window has a service of its own rather than a port: a
+            // member reaches it only through here, under the browser's scopes.
+            if hello.service == web::SERVICE && hello.version == web::VERSION {
+                if let Some(daemon) = daemon.upgrade() {
+                    web::serve(&daemon, peer, send, recv).await;
+                }
+                return;
+            }
             if hello.service != SERVICE || hello.version != SERVICE_VERSION {
                 log::info!(
                     "{} asked for unknown service {}/{}",

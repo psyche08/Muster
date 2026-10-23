@@ -2157,10 +2157,11 @@ public nonisolated struct Muster_V1_Policy: Sendable {
   fileprivate var _webWindow: Muster_V1_WebWindow? = nil
 }
 
-/// One origin this machine serves on one of its own loopback ports, for
-/// members that cannot reach that origin themselves. Reaching the port is a
-/// separate decision: the member still needs `net:tcp/<port>` and the port
-/// still has to be open.
+/// One origin this machine serves to members that cannot reach it, fetched by
+/// the person's own browser. It listens on no TCP port: members reach it over
+/// the "web" service, reading with `browser.view` and acting with
+/// `browser.control`, under `offer_agent`; while the screen is locked, only if
+/// `allow_locked_control` is on.
 public nonisolated struct Muster_V1_WebWindow: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2168,9 +2169,6 @@ public nonisolated struct Muster_V1_WebWindow: Sendable {
 
   /// "https://example.test", scheme host and port only
   public var origin: String = String()
-
-  /// the loopback port on this machine
-  public var port: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2199,10 +2197,11 @@ public nonisolated struct Muster_V1_PolicySetRequest: Sendable {
 }
 
 /// A loopback port on THIS machine standing for `port` on `device`'s loopback,
-/// carried over a forward stream (ARCHITECTURE §3.5). Local callers only; the
-/// member decides for its own side, by the same `net:` scope and open-port
-/// policy. The call stays open and answers ForwardOpened once the port is
-/// listening; cancelling it closes the port and every connection on it.
+/// carried over a forward stream (ARCHITECTURE §3.5) — or, with `window`, for
+/// that member's web window (ADR 0026), carried over its "web" service. Local
+/// callers only; the member decides for its own side. The call stays open and
+/// answers ForwardOpened once the port is listening; cancelling it closes the
+/// port and every connection on it.
 public nonisolated struct Muster_V1_ForwardOpenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2211,11 +2210,14 @@ public nonisolated struct Muster_V1_ForwardOpenRequest: Sendable {
   /// member device id, hex
   public var device: String = String()
 
-  /// the port on that member's loopback
+  /// the port on that member's loopback; 0 with `window`
   public var port: UInt32 = 0
 
   /// 0 asks the operating system for one
   public var localPort: UInt32 = 0
+
+  /// the origin of the member's web window, instead of a port
+  public var window: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -7556,7 +7558,7 @@ nonisolated extension Muster_V1_Policy: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension Muster_V1_WebWindow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WebWindow"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}origin\0\u{1}port\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}origin\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7565,7 +7567,6 @@ nonisolated extension Muster_V1_WebWindow: SwiftProtobuf.Message, SwiftProtobuf.
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.origin) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.port) }()
       default: break
       }
     }
@@ -7575,15 +7576,11 @@ nonisolated extension Muster_V1_WebWindow: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.origin.isEmpty {
       try visitor.visitSingularStringField(value: self.origin, fieldNumber: 1)
     }
-    if self.port != 0 {
-      try visitor.visitSingularUInt32Field(value: self.port, fieldNumber: 2)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_WebWindow, rhs: Muster_V1_WebWindow) -> Bool {
     if lhs.origin != rhs.origin {return false}
-    if lhs.port != rhs.port {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7625,7 +7622,7 @@ nonisolated extension Muster_V1_PolicySetRequest: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_ForwardOpenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ForwardOpenRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{1}port\0\u{3}local_port\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{1}port\0\u{3}local_port\0\u{1}window\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7636,6 +7633,7 @@ nonisolated extension Muster_V1_ForwardOpenRequest: SwiftProtobuf.Message, Swift
       case 1: try { try decoder.decodeSingularStringField(value: &self.device) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.port) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.localPort) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.window) }()
       default: break
       }
     }
@@ -7651,6 +7649,9 @@ nonisolated extension Muster_V1_ForwardOpenRequest: SwiftProtobuf.Message, Swift
     if self.localPort != 0 {
       try visitor.visitSingularUInt32Field(value: self.localPort, fieldNumber: 3)
     }
+    if !self.window.isEmpty {
+      try visitor.visitSingularStringField(value: self.window, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7658,6 +7659,7 @@ nonisolated extension Muster_V1_ForwardOpenRequest: SwiftProtobuf.Message, Swift
     if lhs.device != rhs.device {return false}
     if lhs.port != rhs.port {return false}
     if lhs.localPort != rhs.localPort {return false}
+    if lhs.window != rhs.window {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

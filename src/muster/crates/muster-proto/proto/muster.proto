@@ -490,13 +490,13 @@ message Policy {
   WebWindow web_window = 7;
 }
 
-// One origin this machine serves on one of its own loopback ports, for
-// members that cannot reach that origin themselves. Reaching the port is a
-// separate decision: the member still needs `net:tcp/<port>` and the port
-// still has to be open.
+// One origin this machine serves to members that cannot reach it, fetched by
+// the person's own browser. It listens on no TCP port: members reach it over
+// the "web" service, reading with `browser.view` and acting with
+// `browser.control`, under `offer_agent`; while the screen is locked, only if
+// `allow_locked_control` is on.
 message WebWindow {
   string origin = 1;  // "https://example.test", scheme host and port only
-  uint32 port = 2;    // the loopback port on this machine
 }
 
 message PolicySetRequest {
@@ -506,14 +506,16 @@ message PolicySetRequest {
 // ---------------------------------------------------------------- forward
 
 // A loopback port on THIS machine standing for `port` on `device`'s loopback,
-// carried over a forward stream (ARCHITECTURE §3.5). Local callers only; the
-// member decides for its own side, by the same `net:` scope and open-port
-// policy. The call stays open and answers ForwardOpened once the port is
-// listening; cancelling it closes the port and every connection on it.
+// carried over a forward stream (ARCHITECTURE §3.5) — or, with `window`, for
+// that member's web window (ADR 0026), carried over its "web" service. Local
+// callers only; the member decides for its own side. The call stays open and
+// answers ForwardOpened once the port is listening; cancelling it closes the
+// port and every connection on it.
 message ForwardOpenRequest {
   string device = 1;      // member device id, hex
-  uint32 port = 2;        // the port on that member's loopback
+  uint32 port = 2;        // the port on that member's loopback; 0 with `window`
   uint32 local_port = 3;  // 0 asks the operating system for one
+  string window = 4;      // the origin of the member's web window, instead of a port
 }
 
 message ForwardOpened {
