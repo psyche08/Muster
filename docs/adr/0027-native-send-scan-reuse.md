@@ -72,3 +72,64 @@ These checks ran against the current sanitized main branch, preserving its
 renderer refresh, focused draft write and final submit-candidate revalidation.
 No release build, signing/notarization, publication, installation or live send
 was performed. Hosted CI was not enabled or dispatched.
+
+### Paired release plan: 1.0.85 (76)
+
+Publish this optimization in matching macOS and registered-device iOS builds.
+Build from a clean committed source tree, verify the desktop source lineage
+and Presence provisioning, sign with Developer ID, notarize and staple the
+portable Mac bundle. Validate the signed iOS archive and OTA package, then
+verify public page, manifest and package bytes. Install the verified desktop
+artifact on Mac-A, Mac-B and Mac-C under the existing Rust update lease;
+check signatures, device identity, Accessibility, relay and Vnet recovery.
+Record completion evidence separately. Physical iPhone acceptance and native
+send timing remain separate from release and installation verification.
+
+### Earlier isolated release evidence: 1.0.85 (76)
+
+Release source `d928cf77d98a4962d90f0b9963815fdab40a83e2` built macOS
+and iOS 1.0.85 (76). Both Rust FFI targets, desktop binaries, the macOS build
+and iOS archive passed. Four OTA packaging tests passed. The Mac bundle was
+signed on the existing device holding the matching G2 identity after local
+Xcode signing exposed a profile/certificate mismatch; no private key was
+exported or Keychain unlocked. Presence provisioning and clean-source
+ancestry/fingerprint verification passed. Apple notarization
+`a3e04266-3d36-48f2-b258-756b57090469` was Accepted; stapling, strict/deep
+signature verification and Gatekeeper assessment passed.
+
+Both downloads were published through the operator-provided SSH destination.
+Independent public downloads verified the page, normal and retry manifests,
+fixed and content-addressed IPA, versions, no-store headers and matching hashes:
+
+- macOS ZIP: `849608295ead3316bd140cb27810d419e28aba508bff8a934451dcb6ff96e0aa`
+- daemon: `0d859ab899a90f36398d800839d24f74b39f3a855f1e84c689831a44101a6a99`
+- iOS IPA: `ac8c4f437f507af489007243352bc916ba7785690ae04b23ae97cd107ea347a2`
+
+The iOS registered-device profile covers three devices and expires 2027-09-30.
+OTA is <https://linsheng.dev:8443/muster/>. No signed update feed, TestFlight
+build or Xcode Cloud run was published; hosted Actions remains disabled.
+
+At the end of this isolated release run, Mac-A had installed
+this exact artifact under the Rust desktop-update lease. Its identity stayed
+unchanged; signature, staple, Gatekeeper, Accessibility, relay and Vnet checks
+passed, including remote device-info after restart. Mac-B and Mac-C deployment
+and the six-direction network matrix were still pending in this run.
+Physical iPhone installation, fresh native-send receipts and comparative stage
+timing remain unverified. Release logs and signed artifacts are retained locally
+under `build/releases/Apple-1.0.85-76/`; they are not committed.
+
+### Integrated handoff readback: 2026-10-23
+
+Before merging these supplemental records, the session fetched current main
+and found that PRs #10–#13 had already integrated this optimization with
+completed Codex cards, bounded Rust conversation projection and iOS recycled
+rows. Their 1.0.85 and 1.0.86 release records supersede the isolated artifact
+above. Preserve the current 1.0.86 (77) project settings and release ledger;
+this documentation merge does not republish or reinstall the older artifact.
+See ADRs 0028, 0029 and 0030 for the integrated source and acceptance evidence.
+
+Fresh readback confirmed all three Macs running 1.0.86 with unchanged identities,
+Accessibility granted, relay registered and Vnet ready. The public OTA manifest
+reports build 77. The remaining comparative stage timings and physical iPhone
+UI acceptance should use that integrated release. These live checks do not
+repeat or extend the other session's recorded native-send acceptance.
