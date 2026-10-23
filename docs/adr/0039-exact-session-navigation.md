@@ -1,7 +1,7 @@
 # ADR 0039: Recover absent Claude sidebar rows by exact session navigation
 
 - Date: 2026-10-23
-- Status: Accepted
+- Status: Superseded in navigation identity by ADR 0040
 - Related: ADR 0010; ADR 0027; ARCHITECTURE.md §3.6.2
 
 ## Context
@@ -115,3 +115,22 @@ installation on three Macs and runtime network checks are separate pending gates
 - GitHub Actions remain disabled. Source tests above are local, not CI.
   Private evidence is retained outside the repository; no raw device logs,
   session IDs, titles or private deployment details are included here.
+
+### Unlocked acceptance follow-up
+
+On installed 1.0.88, the user unlocked the affected console. The production
+selection path found zero matches and dispatched the exact-ID route once, but
+all fresh surface resolutions still identified the prior session through the
+three-second deadline. The operation rejected; no composer mutation or send
+occurred. URL dispatch is confirmed insufficient for this provider state; the
+reason the provider did not navigate is not established.
+
+The same trace exposes the target row with `Merge conflicts · 7 pull requests`,
+a previously unrecognized badge. See ADR 0010's merge-conflict follow-up for the
+confirmed grammar correction. This evidence supersedes the earlier pending
+unlock status, but does not claim successful exact-ID fallback acceptance.
+
+Provider logs subsequently identified the rejection as an invalid `session`
+parameter. The route needs a desktop `local_` ID, not the CLI UUID.
+[ADR 0040](0040-desktop-navigation-identity.md) corrects that decision while
+retaining the bounded navigation and final identity guards.

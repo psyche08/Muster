@@ -189,3 +189,27 @@ and native-send acceptance are still pending at this source commit.
   independently verified. GitHub Actions remained disabled; no Xcode Cloud or
   external TestFlight testing build was started. No historical OTA files were
   deleted.
+
+### Merge-conflict badge regression (2026-10-23)
+
+Unlocked acceptance on installed 1.0.88 exposes the actual target as an exact
+passive title plus `Merge conflicts · 7 pull requests`. Both application and
+sidebar traversals complete, but the metadata grammar rejects this new state.
+The exact-ID fallback added in ADR 0039 dispatches once but does not change the
+resolved surface; its verification correctly rejects before any draft or send.
+This establishes the current zero-match cause. It does not prove why the
+provider's URL route was ineffective or reconstruct the earlier renderer state.
+
+Continue the existing metadata decision: admit exactly the observed
+`Merge conflicts` prefix with the same canonical positive count, noun agreement,
+full composite-name reconstruction and unique catalog title checks. Do not
+accept arbitrary PR states or weaken exact-session verification. Preserve the
+safe failure of unavailable exact-ID navigation.
+
+Before implementation, add a synthetic capture regression using the production
+label reader and matcher and show it fails. Cover singular/plural counts,
+malformed numbers, injected suffixes, non-unique titles and unrelated composite
+names. Then run the agent suite, platform compile checks and repository gates.
+Build the corrected installed version and repeat navigation without sending.
+Record source, release and actual navigation results separately. If a macOS
+update is published, publish iOS with it under the existing release policy.

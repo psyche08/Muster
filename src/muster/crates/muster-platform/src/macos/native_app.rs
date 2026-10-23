@@ -605,9 +605,16 @@ pub async fn select_session(
             break;
         }
     }
+    let desktop_id =
+        (profile.app.provider == "claude" && scan.candidates.is_empty() && scan.complete)
+            .then(|| {
+                let root = muster_agent::claude::desktop_registry()?;
+                muster_agent::claude::desktop_navigation_id(&root, session)
+            })
+            .flatten();
     let route = muster_agent::native_sidebar::absent_session_route(
         profile.app.provider,
-        session,
+        desktop_id.as_deref().unwrap_or(""),
         scan.navigation,
         scan.complete,
         scan.candidates.len(),

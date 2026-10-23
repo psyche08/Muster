@@ -367,6 +367,69 @@ pub fn desktop_registry_knows(root: &Path, session: &str) -> bool {
     false
 }
 
+/// Inverse of the desktop-to-CLI surface identity. A complete registry scan
+/// must identify exactly one active desktop entry, never the first title match.
+pub fn desktop_navigation_id(root: &Path, session: &str) -> Option<String> {
+    if !is_uuid(session) {
+        return None;
+    }
+    let started = std::time::Instant::now();
+    let mut seen = 0usize;
+    let mut found = None;
+    for org in std::fs::read_dir(root).ok()? {
+        let org = org.ok()?;
+        if !org.file_type().ok()?.is_dir() {
+            continue;
+        }
+        for user in std::fs::read_dir(org.path()).ok()? {
+            let user = user.ok()?;
+            if !user.file_type().ok()?.is_dir() {
+                continue;
+            }
+            for file in std::fs::read_dir(user.path()).ok()? {
+                seen += 1;
+                if seen > MAX_FILES || started.elapsed() > std::time::Duration::from_millis(250) {
+                    return None;
+                }
+                let file = file.ok()?;
+                let path = file.path();
+                if path.extension().is_none_or(|e| e != "json") {
+                    continue;
+                }
+                let stem = path.file_stem()?.to_str()?;
+                let Some(uuid) = stem.strip_prefix("local_") else {
+                    continue;
+                };
+                if !is_uuid(uuid) {
+                    continue;
+                }
+                let meta = file.metadata().ok()?;
+                if !file.file_type().ok()?.is_file() || meta.len() > 4 << 20 {
+                    return None;
+                }
+                let v: Value = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
+                if v["isArchived"].as_bool().unwrap_or(false) {
+                    continue;
+                }
+                let id = v["cliSessionId"].as_str().filter(|id| is_uuid(id))?;
+                if !id.eq_ignore_ascii_case(session) {
+                    continue;
+                }
+                if v.get("sessionId")
+                    .is_some_and(|id| id.as_str() != Some(stem))
+                {
+                    return None;
+                }
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(stem.to_owned());
+            }
+        }
+    }
+    found
+}
+
 /// The desktop's current navigation title and its uniqueness, not the title
 /// retained by an older transcript. A complete registry read is required:
 /// partial evidence cannot establish that no other visible conversation has
@@ -808,5 +871,66 @@ mod tests {
         assert_eq!(polled.messages[0].text, "Analyze the failures.");
         assert!(polled.messages[1].phase.is_empty());
         assert_eq!(viewer.state(), SessionState::Running);
+    }
+}
+
+#[cfg(test)]
+mod navigation_identity_tests {
+    use super::*;
+    const CLI: &str = "11111111-1111-4111-8111-111111111111";
+    const DESKTOP: &str = "local_22222222-2222-4222-8222-222222222222";
+
+    #[test]
+    fn inverse_mapping_is_unique_live_and_distinct_from_cli_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = dir.path().join("org/user");
+        std::fs::create_dir_all(&user).unwrap();
+        let file = user.join(format!("{DESKTOP}.json"));
+        let write = |id: &str, archived: bool| {
+            std::fs::write(
+                &file,
+                serde_json::json!({"sessionId":DESKTOP,"cliSessionId":id,"isArchived":archived})
+                    .to_string(),
+            )
+            .unwrap()
+        };
+        write(CLI, false);
+        std::fs::write(user.join("scheduled-tasks.json"), "unrelated metadata").unwrap();
+        assert_eq!(
+            desktop_navigation_id(dir.path(), CLI).as_deref(),
+            Some(DESKTOP)
+        );
+        assert_eq!(desktop_navigation_id(dir.path(), DESKTOP), None);
+        assert_eq!(desktop_navigation_id(dir.path(), "last"), None);
+        write(CLI, true);
+        assert_eq!(desktop_navigation_id(dir.path(), CLI), None);
+        write("33333333-3333-4333-8333-333333333333", false);
+        assert_eq!(desktop_navigation_id(dir.path(), CLI), None);
+        write(CLI, false);
+        let other = dir.path().join("org/other-user");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::copy(&file, other.join(format!("{DESKTOP}.json"))).unwrap();
+        assert_eq!(desktop_navigation_id(dir.path(), CLI), None);
+    }
+
+    #[test]
+    fn incomplete_or_malformed_registry_cannot_authorize_navigation() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = dir.path().join("org/user");
+        std::fs::create_dir_all(&user).unwrap();
+        let file = user.join(format!("{DESKTOP}.json"));
+        for value in [
+            "{".into(),
+            "{}".into(),
+            serde_json::json!({"cliSessionId":CLI,"sessionId":"local_wrong"}).to_string(),
+            " ".repeat((4 << 20) + 1),
+        ] {
+            std::fs::write(&file, value).unwrap();
+            assert_eq!(desktop_navigation_id(dir.path(), CLI), None);
+        }
+        assert_eq!(
+            desktop_navigation_id(&dir.path().join("missing"), CLI),
+            None
+        );
     }
 }
