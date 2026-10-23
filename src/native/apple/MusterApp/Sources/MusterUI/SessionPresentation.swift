@@ -6,10 +6,13 @@ import MusterCore
 // lifecycle labels all arrive from Shared Rust, never from parsing UI text.
 struct ReasoningRow: View {
     let block: Muster_App_ChatBlock
-    @State var expanded = false
+    var expanded = false
+
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("reasoning", id: block.id, defaultValue: expanded) }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
+        DisclosureGroup(isExpanded: expansion) {
             ChatMarkdown(text: block.message.text)
                 .padding(.leading, 12).padding(.top, 8)
                 .overlay(alignment: .leading) {
@@ -26,10 +29,13 @@ struct ReasoningRow: View {
 
 struct SessionNotice: View {
     let block: Muster_App_ChatBlock
-    @State private var expanded = false
+    private var expanded = false
+
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("notice", id: block.id, defaultValue: expanded) }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
+        DisclosureGroup(isExpanded: expansion) {
             Text(block.message.text).font(.caption.monospaced())
                 .textSelection(.enabled).padding(.top, 6)
         } label: {
@@ -59,16 +65,19 @@ struct ToolStatus: View {
 
 struct SessionDiffCard: View {
     let file: Muster_App_ChatDiffFile
-    @State var expanded = false
+    var expanded = false
     @State private var copied = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.conversationStyle) private var style
     private var palette: ChatPalette { ChatPalette(scheme: scheme, style: style) }
 
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("diff", id: file.id, defaultValue: expanded) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 8) {
-                Button { expanded.toggle() } label: {
+                Button { expansion.wrappedValue.toggle() } label: {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "doc.text")
                         Text(file.path).font(.subheadline.monospaced()).lineLimit(2)
@@ -76,11 +85,11 @@ struct SessionDiffCard: View {
                         Spacer(minLength: 0)
                         Text("+\(file.added)").foregroundStyle(.green)
                         Text("−\(file.removed)").foregroundStyle(.red)
-                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        Image(systemName: expansion.wrappedValue ? "chevron.down" : "chevron.right")
                     }.contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
                 Button {
                     copyToPasteboard(file.patch)
                     copied = true
@@ -93,7 +102,7 @@ struct SessionDiffCard: View {
                 .onChange(of: file.patch) { _, _ in copied = false }
             }
             .font(.caption).padding(10)
-            if expanded {
+            if expansion.wrappedValue {
                 Divider()
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 0) {

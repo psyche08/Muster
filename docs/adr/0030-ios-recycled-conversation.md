@@ -37,6 +37,8 @@ layout control. List limits custom chat geometry. Rewriting Markdown at the same
 time would combine separate risks. Retaining a host for every message would
 negate recycling; only the interaction area receives a persistent host.
 
+The disclosure-reset limitation below is superseded by [ADR 0031](0031-transcript-disclosure-state.md).
+
 ## Consequences
 
 Visible cells and UIKit's reuse pool bound live transcript views, not cached

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import MusterCore
 
-/// UIKit owns only row layout and viewport state. Rust supplies the complete
+/// UIKit owns only row layout and transient presentation state. Rust supplies the complete
 /// presentation window and every load/send/answer decision.
 struct RecycledConversation: UIViewControllerRepresentable {
     let chat: Muster_App_ChatView
@@ -24,6 +24,8 @@ struct RecycledConversation: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: ConversationCollectionController, context: Context) {
+        var environment = self.environment
+        environment.transcriptDisclosures = controller.disclosures
         let binding = $atLatest
         controller.onLatest = { value in if binding.wrappedValue != value { binding.wrappedValue = value } }
         controller.update(chat: chat, showsInteractions: showsInteractions,
@@ -36,6 +38,7 @@ struct RecycledConversation: UIViewControllerRepresentable {
 }
 
 final class ConversationCollectionController: UIViewController, UICollectionViewDelegate {
+    let disclosures = TranscriptDisclosures()
     enum Row: Hashable { case header, block(String), interactions }
     struct Anchor { let row: Row; let offset: CGFloat }
     private(set) var collection: ConversationCollectionView!
@@ -99,8 +102,9 @@ final class ConversationCollectionController: UIViewController, UICollectionView
             case .interactions: return cell
             }
             let spacing = self.rowSpacing
+            let disclosures = self.disclosures
             cell.contentConfiguration = UIHostingConfiguration {
-                rendered.id(row).padding(.bottom, spacing)
+                rendered.id(row).environment(\.transcriptDisclosures, disclosures).padding(.bottom, spacing)
             }.margins(.all, 0).minSize(height: 1)
             return cell
         }
