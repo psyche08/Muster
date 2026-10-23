@@ -12,7 +12,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as _;
 use tokio::net::UnixStream;
-use tokio::sync::{Mutex, broadcast, mpsc, oneshot, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
@@ -32,6 +32,10 @@ pub const LIBRARY_VERSION: &str = "rust 0.1";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Screen updates within this window collapse into one fetch.
 const COALESCE: Duration = Duration::from_millis(16);
+
+#[cfg(test)]
+#[path = "iterm2_tests.rs"]
+mod simulation_tests;
 
 #[derive(Clone, Debug)]
 pub struct Cookie {
@@ -101,7 +105,20 @@ pub fn default_socket() -> PathBuf {
     home.join("Library/Application Support/iTerm2/private/socket")
 }
 
-type Pending = Arc<Mutex<HashMap<i64, oneshot::Sender<ServerOriginatedMessage>>>>;
+// No lock is held across an await. A synchronous guard also lets cancellation
+// remove its waiter immediately, including while the outbound queue is full.
+type Pending = Arc<std::sync::Mutex<HashMap<i64, oneshot::Sender<ServerOriginatedMessage>>>>;
+
+struct PendingRequest<'a> {
+    pending: &'a Pending,
+    id: i64,
+}
+
+impl Drop for PendingRequest<'_> {
+    fn drop(&mut self) {
+        self.pending.lock().unwrap().remove(&self.id);
+    }
+}
 
 /// One connection to iTerm2.
 pub struct Iterm2 {
@@ -158,7 +175,7 @@ impl Iterm2 {
                 }
             }
             let _ = writer_closed.send(true);
-            writer_pending.lock().await.clear();
+            writer_pending.lock().unwrap().clear();
             let _ = sink.close().await;
         });
         let reader_pending = pending.clone();
@@ -179,7 +196,7 @@ impl Iterm2 {
                         let _ = notify.send(Arc::new(notification));
                     }
                     (Some(id), submessage) => {
-                        if let Some(waiter) = reader_pending.lock().await.remove(&id) {
+                        if let Some(waiter) = reader_pending.lock().unwrap().remove(&id) {
                             let _ = waiter.send(ServerOriginatedMessage {
                                 id: Some(id),
                                 submessage,
@@ -190,7 +207,7 @@ impl Iterm2 {
                 }
             }
             let _ = reader_closed.send(true);
-            reader_pending.lock().await.clear();
+            reader_pending.lock().unwrap().clear();
         });
         Ok(Arc::new(Self {
             outbound,
@@ -214,27 +231,34 @@ impl Iterm2 {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         {
-            let mut pending = self.pending.lock().await;
+            let mut pending = self.pending.lock().unwrap();
             if self.is_closed() {
                 return Err(Error::Unavailable("iTerm2 connection closed".into()));
             }
             pending.insert(id, tx);
         }
+        let _pending = PendingRequest {
+            pending: &self.pending,
+            id,
+        };
         let message = ClientOriginatedMessage {
             id: Some(id),
             submessage: Some(submessage),
         };
-        if self.outbound.send(message.encode_to_vec()).await.is_err() {
-            self.pending.lock().await.remove(&id);
-            return Err(Error::Unavailable("iTerm2 connection closed".into()));
-        }
-        let reply = match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
-            Ok(Ok(reply)) => reply,
-            Ok(Err(_)) => return Err(Error::Unavailable("iTerm2 connection closed".into())),
-            Err(_) => {
-                self.pending.lock().await.remove(&id);
-                return Err(Error::Protocol(format!("iTerm2 request {id} timed out")));
-            }
+        let exchange = async {
+            self.outbound
+                .send(message.encode_to_vec())
+                .await
+                .map_err(|_| Error::Unavailable("iTerm2 connection closed".into()))?;
+            rx.await
+                .map_err(|_| Error::Unavailable("iTerm2 connection closed".into()))
+        };
+        let reply = tokio::select! {
+            // A receipt already delivered before disconnect remains valid.
+            biased;
+            result = tokio::time::timeout(REQUEST_TIMEOUT, exchange) =>
+                result.map_err(|_| Error::Protocol(format!("iTerm2 request {id} timed out")))??,
+            _ = self.closed() => return Err(Error::Unavailable("iTerm2 connection closed".into())),
         };
         match reply.submessage {
             Some(Resp::Error(text)) => Err(Error::Protocol(format!("iTerm2: {text}"))),
@@ -520,7 +544,15 @@ impl Iterm2 {
             }))
             .await?;
         match reply {
-            Resp::CloseResponse(_) => Ok(()),
+            Resp::CloseResponse(reply)
+                if reply.statuses == [crate::proto::close_response::Status::Ok as i32] =>
+            {
+                Ok(())
+            }
+            Resp::CloseResponse(reply) => Err(Error::Protocol(format!(
+                "close refused or unconfirmed: {:?}",
+                reply.statuses
+            ))),
             other => Err(Error::Protocol(format!("unexpected reply {other:?}"))),
         }
     }
@@ -534,11 +566,25 @@ impl Iterm2 {
         since_rev: u64,
         frames: mpsc::Sender<TerminalFrame>,
     ) -> Result<(), Error> {
+        tokio::select! {
+            _ = frames.closed() => Ok(()),
+            _ = self.closed() => Err(Error::Unavailable("iTerm2 connection closed".into())),
+            result = self.attach_frames(session, since_rev, &frames) => result,
+        }
+    }
+
+    async fn attach_frames(
+        &self,
+        session: &str,
+        since_rev: u64,
+        frames: &mpsc::Sender<TerminalFrame>,
+    ) -> Result<(), Error> {
+        // Subscribe locally first: updates may arrive with the server's ack.
+        let mut notifications = self.subscribe_notifications();
         self.subscribe(NotificationType::NotifyOnScreenUpdate, Some(session))
             .await?;
         self.subscribe(NotificationType::NotifyOnTerminateSession, None)
             .await?;
-        let mut notifications = self.subscribe_notifications();
         let mut rev = since_rev;
         let (lines, cursor) = self.buffer(session, None).await?;
         rev += 1;
@@ -567,6 +613,7 @@ impl Iterm2 {
             ..Default::default()
         };
         let mut previous: Vec<String> = lines;
+        let mut previous_cursor = cursor;
         if frames.send(full).await.is_err() {
             return Ok(());
         }
@@ -576,62 +623,60 @@ impl Iterm2 {
                 _ = self.closed() => return Err(Error::Unavailable("iTerm2 connection closed".into())),
                 next = notifications.recv() => next,
             };
-            let notification = match next {
-                Ok(n) => n,
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(_) => break,
+            let terminated = |n: &Notification| {
+                n.terminate_session_notification
+                    .as_ref()
+                    .is_some_and(|t| t.session_id() == session)
             };
-            if notification
-                .terminate_session_notification
-                .as_ref()
-                .is_some_and(|t| t.session_id() == session)
-            {
+            let mut ended = false;
+            match next {
+                Ok(n) if terminated(&n) => ended = true,
+                Ok(n)
+                    if n.screen_update_notification
+                        .as_ref()
+                        .is_some_and(|u| u.session() == session) => {}
+                Ok(_) => continue,
+                // A lost notification may be the last change; fetch a fresh
+                // snapshot even if the retained notifications are unrelated.
+                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(_) => break,
+            }
+            if !ended {
+                let deadline = tokio::time::sleep(COALESCE);
+                tokio::pin!(deadline);
+                loop {
+                    tokio::select! {
+                        _ = &mut deadline => break,
+                        more = notifications.recv() => match more {
+                            Ok(n) if terminated(&n) => { ended = true; break; },
+                            Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {},
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+            if ended {
                 let _ = frames
                     .send(TerminalFrame {
                         session: session.to_string(),
                         rev: rev + 1,
-                        full: false,
-                        cols: 0,
-                        rows: 0,
-                        lines: Vec::new(),
-                        cursor_x: 0,
-                        cursor_y: 0,
                         ended: true,
                         ..Default::default()
                     })
                     .await;
                 break;
             }
-            let Some(update) = &notification.screen_update_notification else {
-                continue;
-            };
-            if update.session() != session {
+            // Never silently leave an attached view displaying stale output.
+            let (lines, cursor) = self.buffer(session, None).await?;
+            let delta = crate::line_delta(&previous, &lines);
+            if delta.is_none() && previous_cursor == cursor {
                 continue;
             }
-            // Collapse the burst.
-            let deadline = tokio::time::sleep(COALESCE);
-            tokio::pin!(deadline);
-            loop {
-                tokio::select! {
-                    _ = &mut deadline => break,
-                    more = notifications.recv() => match more {
-                        Ok(n) if n.screen_update_notification.as_ref().is_some_and(|u| u.session() == session) => {}
-                        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
-                        Err(_) => break,
-                    }
-                }
-            }
-            let (lines, cursor) = match self.buffer(session, None).await {
-                Ok(v) => v,
-                Err(error) => {
-                    log::debug!("GetBuffer {session}: {error}");
-                    continue;
-                }
-            };
-            let Some(delta) = crate::line_delta(&previous, &lines) else {
-                previous = lines;
-                continue;
-            };
+            let delta = delta.unwrap_or(crate::LineDelta {
+                full: false,
+                lines: Vec::new(),
+            });
+            previous_cursor = cursor;
             previous = lines;
             rev += 1;
             let frame = TerminalFrame {
@@ -870,7 +915,7 @@ mod native_protocol_tests {
         .unwrap();
         let service = crate::TerminalService {
             config: crate::TerminalConfig::default(),
-            connection: Mutex::new(Some(client.clone())),
+            connection: tokio::sync::Mutex::new(Some(client.clone())),
         };
         assert_eq!(service.sessions().await.unwrap()[0].id, "existing:opaque");
         service.input("existing:opaque", b"a").await.unwrap();
@@ -922,7 +967,7 @@ mod disconnect_tests {
                         }
                         other => panic!("unexpected request {other:?}"),
                     };
-                    if let Some(tx) = replies.lock().await.remove(&request.id.unwrap()) {
+                    if let Some(tx) = replies.lock().unwrap().remove(&request.id.unwrap()) {
                         let _ = tx.send(ServerOriginatedMessage {
                             id: request.id,
                             submessage: Some(reply),

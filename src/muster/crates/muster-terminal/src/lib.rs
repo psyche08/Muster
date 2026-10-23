@@ -110,7 +110,22 @@ impl TerminalService {
         &self,
         out: mpsc::Sender<Vec<TerminalSession>>,
     ) -> Result<(), Error> {
-        let connection = self.connection().await?;
+        let connection = tokio::select! {
+            _ = out.closed() => return Ok(()),
+            connection = self.connection() => connection?,
+        };
+        tokio::select! {
+            _ = out.closed() => Ok(()),
+            _ = connection.closed() => Err(Error::Unavailable("iTerm2 connection closed".into())),
+            result = Self::watch_connection(&connection, &out) => result,
+        }
+    }
+
+    async fn watch_connection(
+        connection: &iterm2::Iterm2,
+        out: &mpsc::Sender<Vec<TerminalSession>>,
+    ) -> Result<(), Error> {
+        let mut notifications = connection.subscribe_notifications();
         connection
             .subscribe(proto::NotificationType::NotifyOnNewSession, None)
             .await?;
@@ -120,7 +135,6 @@ impl TerminalService {
         connection
             .subscribe(proto::NotificationType::NotifyOnLayoutChange, None)
             .await?;
-        let mut notifications = connection.subscribe_notifications();
         if out.send(connection.sessions().await?).await.is_err() {
             return Ok(());
         }
@@ -142,7 +156,11 @@ impl TerminalService {
                         }
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                    if out.send(connection.sessions().await?).await.is_err() {
+                        return Ok(());
+                    }
+                }
                 Err(_) => return Ok(()),
             }
         }
@@ -154,7 +172,10 @@ impl TerminalService {
         since_rev: u64,
         frames: mpsc::Sender<TerminalFrame>,
     ) -> Result<(), Error> {
-        let connection = self.connection().await?;
+        let connection = tokio::select! {
+            _ = frames.closed() => return Ok(()),
+            connection = self.connection() => connection?,
+        };
         connection.attach(session, since_rev, frames).await
     }
 
@@ -394,7 +415,9 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.resize(session, cols, rows).await,
             // A Ghostty window keeps the size it has on the Mac.
-            Terminal::Ghostty(_) => Ok(()),
+            Terminal::Ghostty(_) => Err(Error::Unavailable(
+                "Ghostty resizing is not supported; resize its native window on the Mac".into(),
+            )),
             #[cfg(unix)]
             Terminal::Pty(t) => t.resize(session, cols, rows).await,
             #[cfg(unix)]

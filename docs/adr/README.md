@@ -70,6 +70,7 @@ records a specific decision and does not revive code on its delete list.
 | [0034](0034-transcript-window-continuity.md) | Accepted | Preserve transcript continuity across paging and tabs |
 
 | [0035](0035-native-terminal-dev.md) | Accepted | Select native terminal hosts and isolate local development |
+| [0036](0036-terminal-simulation-coverage.md) | Accepted | Preserve native terminal events and bound cancelled requests |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
