@@ -7,7 +7,7 @@ import MusterCore
 
 final class CacheFooterTests: XCTestCase {
     @MainActor
-    func testCacheExpiryRoundTripAndPhoneWidthFooter() throws {
+    func testUsageRoundTripAndCompactFooter() throws {
         let summary = Muster_V1_AgentMessage.with {
             $0.tsUnix = 1790832600
             $0.usage = Muster_V1_TurnUsage.with {
@@ -27,9 +27,8 @@ final class CacheFooterTests: XCTestCase {
         }
         let decoded = try Muster_V1_AgentMessage(serializedBytes: summary.serializedData())
         XCTAssertEqual(decoded, summary)
-        for (name, value, details) in [("range", decoded, false), ("details", decoded, true),
-                                        ("unknown", Muster_V1_AgentMessage(), false)] {
-            let host = NSHostingView(rootView: TurnFooter(message: value, cacheDetails: details).padding(12).frame(width: 350)
+        for (name, value) in [("usage", decoded), ("unknown", Muster_V1_AgentMessage())] {
+            let host = NSHostingView(rootView: TurnFooter(message: value).padding(12).frame(width: 350)
                 .background(Color.white).environment(\.colorScheme, .light))
             host.frame = NSRect(origin: .zero, size: host.fittingSize)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)

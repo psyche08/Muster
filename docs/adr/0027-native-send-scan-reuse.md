@@ -133,3 +133,52 @@ Accessibility granted, relay registered and Vnet ready. The public OTA manifest
 reports build 77. The remaining comparative stage timings and physical iPhone
 UI acceptance should use that integrated release. These live checks do not
 repeat or extend the other session's recorded native-send acceptance.
+
+### Integrated send verification: 1.0.87 (78)
+
+The requested 1.0.86 baseline had already advanced to installed 1.0.87 before
+this acceptance. Source ancestry confirms PR #9 is included in release commit
+`1e59d5985bced94ec1c41d18cff293e06c9a638f`; its AX batching, native-send and
+stage-diagnostic sources are identical to integrated 1.0.86. Current main also
+contains PR #14's handoff. No downgrade or new release was performed for this run.
+
+A single fresh message was sent from Mac-B to the existing idle dedicated Codex
+acceptance conversation on Mac-C. The receiver's operation ledger recorded
+`agent.send` as `applied`. Its provider transcript contains the exact newly sent
+user message and requested assistant receipt; the sender independently read both
+back. These are receipt checks, not an inference from RPC success. The operation
+was dispatched once and was not retried.
+
+Observed durations for this one sample:
+
+| Stage | Milliseconds |
+|---|---:|
+| Native preparation, including selecting and attaching the session | 665 |
+| Send identity check | 25 |
+| Prepare draft | 169 |
+| Focus draft | 143 |
+| Write draft | 0 (below millisecond log resolution) |
+| Exact draft echo and readiness | 135 |
+| Final pre-send validation | 127 |
+| Prepare receipt | 5 |
+| Submit press | 0 (below millisecond log resolution) |
+| Await provider admission | 105 |
+| Complete native send trace | 713 |
+
+Preparation plus the send trace total approximately 1.38 seconds; this is not
+network round-trip latency or model response generation time. The final readiness
+scan visited 590 nodes in 31 ms, with one composer, one enabled submit and exact
+draft echo. The provider turn completed in approximately 4.1 seconds after it
+started. No matched pre-optimization timing baseline was collected, so no
+percentage speedup or tail-latency claim is made.
+
+On current integrated source, agent regressions passed 225 unit and 41 integration
+tests; platform regressions passed 36 tests (five existing ignored agent cases).
+Coverage includes failed AX attribute batches, ambiguous/disabled submits, exact
+echo mismatch, stale preparation, input changes and revoked authority, bounded
+readiness deadlines, and lost-receipt outcomes that must not replay. Source review
+also confirms fresh final control identity, enabled state, exact draft, live
+input/authority checks and the one-press boundary remain present. Negative device
+fault injection, Claude timing, locked-target timing and physical iPhone acceptance
+were not performed. This successful sample exposed no confirmed scan defect.
+Private session identifiers, raw logs and ledger data remain outside the repository.
