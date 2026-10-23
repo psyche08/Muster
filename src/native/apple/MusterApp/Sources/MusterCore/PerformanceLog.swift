@@ -1,6 +1,6 @@
 import Foundation
 
-/// Local OS telemetry storage. Confined to the monitor's utility queue.
+/// Bounded local diagnostic storage. Confined to the monitor's utility queue.
 final class PerformanceLog {
     let directory: URL
     let maximumFileBytes: Int
@@ -22,7 +22,14 @@ final class PerformanceLog {
     deinit { try? file?.close() }
 
     func append(_ record: [String: Any]) throws {
-        var data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+        let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+        try appendJSON(data)
+    }
+
+    /// Rust owns the record schema; the platform only checks framing and size.
+    func appendJSON(_ record: Data) throws {
+        guard !record.isEmpty, !record.contains(10), !record.contains(13) else { throw CocoaError(.fileWriteUnknown) }
+        var data = record
         data.append(10)
         guard data.count <= maximumFileBytes else { throw CocoaError(.fileWriteOutOfSpace) }
         if bytes + data.count > maximumFileBytes {
@@ -73,7 +80,7 @@ final class PerformanceLog {
     private func protect(_ url: URL) throws {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         #if os(iOS)
-        // Telemetry contains no conversation or identity data. Permit later paired-device
+        // Diagnostics contain no conversation content or raw device identity. Permit paired-device
         // extraction after the first unlock, subject to iOS's own access restrictions.
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: url.path)

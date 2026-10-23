@@ -554,15 +554,32 @@ pub(super) fn intent_open_agent(state: &mut State, ctx: &Ctx, o: app::OpenAgent)
 }
 
 pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend) {
+    let op_id = state.op_id();
+    let mut diagnostic = crate::send_diagnostics::Trace::new(
+        ctx.shell.clone(),
+        "send",
+        state
+            .chat
+            .as_ref()
+            .map(|c| c.device.as_str())
+            .unwrap_or_default(),
+        &Req::AgentSend(v1::AgentSendRequest {
+            op_id: op_id.clone(),
+            ..Default::default()
+        }),
+    );
+    diagnostic.stage("validation");
     if state.chat.as_ref().is_some_and(|c| c.session.read_only) {
         state.toast(
             "Subagent transcripts are read-only; use the parent session",
             true,
         );
+        diagnostic.rejection("read_only");
         return;
     }
     if let Err(error) = muster_proto::attachments::validate(&s.text, &s.attachments) {
         state.toast(error, true);
+        diagnostic.rejection("invalid_input");
         return;
     }
     if state
@@ -571,16 +588,22 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
         .is_some_and(|c| c.session.mode == "chat" && !s.attachments.is_empty())
     {
         state.toast("Desktop chats take text only", true);
+        diagnostic.rejection("attachments_unsupported");
         return;
     }
-    let Some(chat) = &mut state.chat else { return };
+    let Some(chat) = &mut state.chat else {
+        diagnostic.rejection("no_conversation");
+        return;
+    };
     if chat.sending {
+        diagnostic.rejection("already_sending");
         return;
     }
     // A release names the refusal this conversation shows, nothing else.
     if !s.release_unconfirmed.is_empty()
         && chat.unconfirmed.as_ref().map(|u| &u.token) != Some(&s.release_unconfirmed)
     {
+        diagnostic.rejection("stale_release");
         return;
     }
     chat.sending = true;
@@ -589,7 +612,7 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
         state.pending_drafts.insert(s.draft_id, chat.draft.clone());
     }
     let (device, session) = (chat.device.clone(), chat.session.id.clone());
-    let op_id = state.op_id();
+    diagnostic.event("validated");
     op_request(
         state,
         ctx,

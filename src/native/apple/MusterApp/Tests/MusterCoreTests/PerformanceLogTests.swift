@@ -50,6 +50,25 @@ final class PerformanceLogTests: XCTestCase {
         XCTAssertTrue(lines[1].contains("second"))
     }
 
+    func testOpaqueSendRecordsSurviveRelaunchAndShareWithPerformance() throws {
+        let dir = try directory()
+        let event = Data(#"{"record_type":"send_diagnostic","op_id":"app-fixture-1","phase":"dispatch","error_category":"remote","remote_error_code":6}"#.utf8)
+        do {
+            let log = try PerformanceLog(directory: dir, maximumFileBytes: 256)
+            try log.append(["cpu_percent": 1.2])
+            try log.appendJSON(event)
+        }
+        let reopened = try PerformanceLog(directory: dir, maximumFileBytes: 256)
+        let bytes = try Data(contentsOf: reopened.export())
+        XCTAssertTrue(String(decoding: bytes, as: UTF8.self).contains(String(decoding: event, as: UTF8.self)))
+        XCTAssertTrue(String(decoding: bytes, as: UTF8.self).contains("cpu_percent"))
+        XCTAssertThrowsError(try reopened.appendJSON(Data("{}\n{}".utf8)))
+        XCTAssertThrowsError(try reopened.appendJSON(Data(repeating: 65, count: 257)))
+        XCTAssertEqual(try Data(contentsOf: reopened.export()), bytes)
+        for _ in 0..<20 { try reopened.appendJSON(event) }
+        XCTAssertLessThanOrEqual(try Data(contentsOf: reopened.export()).count, 512)
+    }
+
     func testOversizedRecordDoesNotDiscardExistingHistory() throws {
         let log = try PerformanceLog(directory: directory(), maximumFileBytes: 128)
         try log.append(["valid": true])

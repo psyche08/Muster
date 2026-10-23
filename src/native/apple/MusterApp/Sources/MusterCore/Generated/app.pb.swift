@@ -1584,6 +1584,14 @@ public nonisolated struct Muster_App_Effect: Sendable {
     set {ef = .activateNetwork(newValue)}
   }
 
+  public var sendDiagnostic: Muster_App_SendDiagnostic {
+    get {
+      if case .sendDiagnostic(let v)? = ef {return v}
+      return Muster_App_SendDiagnostic()
+    }
+    set {ef = .sendDiagnostic(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Ef: Equatable, Sendable {
@@ -1598,8 +1606,23 @@ public nonisolated struct Muster_App_Effect: Sendable {
     case prepareDesktopUpdate(Muster_App_PrepareDesktopUpdate)
     case finishDesktopUpdate(Muster_App_FinishDesktopUpdate)
     case activateNetwork(Muster_App_ActivateNetwork)
+    case sendDiagnostic(Muster_App_SendDiagnostic)
 
   }
+
+  public init() {}
+}
+
+/// Fire-and-forget, id=0: append this bounded content-free JSON record locally.
+/// Never interpret it as product state or a delivery acknowledgement.
+public nonisolated struct Muster_App_SendDiagnostic: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var json: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
@@ -5878,7 +5901,7 @@ nonisolated extension Muster_App_SetPushToken: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_App_Effect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Effect"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}scan_qr\0\u{1}authenticate\0\u{1}notify\0\u{4}\u{4}open_url\0\u{1}cover\0\u{3}local_auth\0\u{3}authorize_desktop_helper\0\u{3}restart_desktop\0\u{3}prepare_desktop_update\0\u{3}finish_desktop_update\0\u{3}activate_network\0\u{b}log\0\u{b}keep_awake\0\u{b}haptic\0\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}scan_qr\0\u{1}authenticate\0\u{1}notify\0\u{4}\u{4}open_url\0\u{1}cover\0\u{3}local_auth\0\u{3}authorize_desktop_helper\0\u{3}restart_desktop\0\u{3}prepare_desktop_update\0\u{3}finish_desktop_update\0\u{3}activate_network\0\u{3}send_diagnostic\0\u{b}log\0\u{b}keep_awake\0\u{b}haptic\0\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6029,6 +6052,19 @@ nonisolated extension Muster_App_Effect: SwiftProtobuf.Message, SwiftProtobuf._M
           self.ef = .activateNetwork(v)
         }
       }()
+      case 15: try {
+        var v: Muster_App_SendDiagnostic?
+        var hadOneofValue = false
+        if let current = self.ef {
+          hadOneofValue = true
+          if case .sendDiagnostic(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.ef = .sendDiagnostic(v)
+        }
+      }()
       default: break
       }
     }
@@ -6084,6 +6120,10 @@ nonisolated extension Muster_App_Effect: SwiftProtobuf.Message, SwiftProtobuf._M
       guard case .activateNetwork(let v)? = self.ef else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
+    case .sendDiagnostic?: try {
+      guard case .sendDiagnostic(let v)? = self.ef else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -6091,6 +6131,36 @@ nonisolated extension Muster_App_Effect: SwiftProtobuf.Message, SwiftProtobuf._M
 
   public static func ==(lhs: Muster_App_Effect, rhs: Muster_App_Effect) -> Bool {
     if lhs.ef != rhs.ef {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_SendDiagnostic: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SendDiagnostic"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}json\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.json) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.json.isEmpty {
+      try visitor.visitSingularBytesField(value: self.json, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_SendDiagnostic, rhs: Muster_App_SendDiagnostic) -> Bool {
+    if lhs.json != rhs.json {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

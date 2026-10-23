@@ -28,6 +28,14 @@ final class Capture {
 }
 
 final class MusterCoreTests: XCTestCase {
+    func testSendDiagnosticEffectRoundTripsOpaqueRecord() throws {
+        let record = Data(#"{"record_type":"send_diagnostic","op_id":"app-fixture-1","remote_error_code":6}"#.utf8)
+        let effect = Muster_App_Effect.with { $0.sendDiagnostic.json = record }
+        let decoded = try Muster_App_Effect(serializedBytes: effect.serializedData())
+        guard case .sendDiagnostic(let diagnostic) = decoded.ef else { return XCTFail("Missing diagnostic ABI variant") }
+        XCTAssertEqual(diagnostic.json, record)
+    }
+
     func testCreatesANetworkThroughTheABI() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("muster-swift-\(UUID().uuidString)")

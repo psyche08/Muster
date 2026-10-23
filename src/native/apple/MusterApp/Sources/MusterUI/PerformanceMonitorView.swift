@@ -42,11 +42,11 @@ struct PerformanceMonitorView: View {
                     }
                 }.disabled(preparing)
                 if preparing { ProgressView() }
-                if let exportURL { ShareLink("分享性能日志", item: exportURL) }
+                if let exportURL { ShareLink("分享诊断日志", item: exportURL) }
                 if let error { Text(error).foregroundStyle(.red) }
                 if let message = status?.error { Text(message).foregroundStyle(.red) }
             } header: { Text("导出") } footer: {
-                Text("记录性能数值、页面类型、消息数量及高 CPU 线程栈地址，不包含聊天正文、设备身份或密钥。日志仅保存在本机，分享由你选择。滚动日志最多 4 MB，导出快照另占最多 4 MB。")
+                Text("记录性能数值、页面类型、消息数量、高 CPU 线程栈地址，以及发送阶段、操作 ID、耗时和错误码。发送记录即时写入，性能每 10 秒采样；不包含聊天正文、答案、附件内容或认证密钥。日志仅保存在本机，分享由你选择。滚动日志最多 4 MB，导出快照另占最多 4 MB。")
             }
             Section {
                 if devices.isEmpty {
@@ -63,7 +63,7 @@ struct PerformanceMonitorView: View {
                 Text("把同一份日志快照发送到所选设备，保存在该设备的 /tmp/muster-reports 目录（设备重启后清除）。结果以提示显示。")
             }
         }
-        .navigationTitle("性能监控")
+        .navigationTitle("性能与发送诊断")
         .task { await refresh() }
     }
 

@@ -21,6 +21,7 @@
 		A126AD2B87DBBB3F078C69B6 /* dev.linsheng.musterd.plist in Resources */ = {isa = PBXBuildFile; fileRef = 37F0A01E1DE59F63234EF0F8 /* dev.linsheng.musterd.plist */; };
 		A7BD4DB4A3908E578D8EC0B5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2AA4BED9527CD5F79165CAF /* PrivacyInfo.xcprivacy */; };
 		BB785A0107181721F92EE818 /* MusteriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6CA8DF8425E0E92DADA433 /* MusteriOSApp.swift */; };
+		C94746625703C02DC25458B4 /* SendDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244437BDB1B65F6E1587EC00 /* SendDiagnosticsTests.swift */; };
 		F7A870EF0A1CA0CDD9F6D010 /* HighCPUStackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99656EE579CA21332DA833CC /* HighCPUStackTests.swift */; };
 		F80DEA2DE12E660153E3DCA4 /* ConversationLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C033B195290B06FD89A48F /* ConversationLayoutTests.swift */; };
 /* End PBXBuildFile section */
@@ -38,6 +39,7 @@
 /* Begin PBXFileReference section */
 		0A6CA8DF8425E0E92DADA433 /* MusteriOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusteriOSApp.swift; sourceTree = "<group>"; };
 		20531C5D460892A8464EEB04 /* MusterApp */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MusterApp; path = .; sourceTree = SOURCE_ROOT; };
+		244437BDB1B65F6E1587EC00 /* SendDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendDiagnosticsTests.swift; sourceTree = "<group>"; };
 		2F2E4A92BC655F184AC4D6A1 /* RecycledConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecycledConversationTests.swift; sourceTree = "<group>"; };
 		37F0A01E1DE59F63234EF0F8 /* dev.linsheng.musterd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = dev.linsheng.musterd.plist; sourceTree = "<group>"; };
 		4E1E791662D01B0FCF162B3D /* MusterMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusterMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -144,6 +146,7 @@
 				DBBF261554FA10A43769CFC9 /* KeyboardAndLiveChatTests.swift */,
 				F7E67A77960C41C832D193C2 /* NativeNavigationTests.swift */,
 				2F2E4A92BC655F184AC4D6A1 /* RecycledConversationTests.swift */,
+				244437BDB1B65F6E1587EC00 /* SendDiagnosticsTests.swift */,
 			);
 			name = MusterMobileTests;
 			path = Tests/MusterMobileTests;
@@ -349,6 +352,7 @@
 				4965825F46E6B14020C9D1B4 /* KeyboardAndLiveChatTests.swift in Sources */,
 				50A964F184B785A43BD7DCF5 /* NativeNavigationTests.swift in Sources */,
 				27462998DA661BFDF9CCCF6C /* RecycledConversationTests.swift in Sources */,
+				C94746625703C02DC25458B4 /* SendDiagnosticsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

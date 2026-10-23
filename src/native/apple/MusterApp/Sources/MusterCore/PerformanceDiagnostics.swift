@@ -12,9 +12,12 @@ public struct PerformanceMonitorStatus: Sendable {
     public var error: String?
 }
 
-/// iOS OS telemetry, independent of Shared Rust product state. No content is recorded.
+/// OS telemetry and opaque Rust send diagnostics. No conversation content is recorded.
 public final class PerformanceDiagnostics: @unchecked Sendable {
     public static let shared = PerformanceDiagnostics()
+    private let storageDirectory: URL?
+    init(directory: URL? = nil) { storageDirectory = directory }
+
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "muster.performance-diagnostics", qos: .utility)
     private let runID = UUID().uuidString
@@ -22,6 +25,8 @@ public final class PerformanceDiagnostics: @unchecked Sendable {
     private var log: PerformanceLog?
     private var started = false
     private var active = false
+    private var pendingDiagnosticRows = 0
+    private var droppedDiagnosticRows = 0
     private var snapshots = 0
     private var bytes = 0
     private var decodeSeconds = 0.0
@@ -56,11 +61,7 @@ public final class PerformanceDiagnostics: @unchecked Sendable {
             guard foreground != status.recording else { return }
             if foreground {
                 do {
-                    if log == nil {
-                        let directory = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
-                            appropriateFor: nil, create: true).appendingPathComponent("MusterDiagnostics")
-                        log = try PerformanceLog(directory: directory)
-                    }
+                    try ensureLog()
                     stackPolicy.reset(threadCounters(threads()))
                     previousCPU = Self.cpuSeconds()
                     previousTime = ProcessInfo.processInfo.systemUptime
@@ -91,6 +92,32 @@ public final class PerformanceDiagnostics: @unchecked Sendable {
         snapshots += 1
         self.bytes += bytes
         self.decodeSeconds += decodeSeconds
+    }
+
+    /// Opaque Rust records; event-driven even when periodic OS sampling is paused.
+    public func recordSendDiagnostic(_ bytes: Data) {
+        guard !bytes.isEmpty, bytes.count <= 4096 else { return }
+        lock.lock()
+        guard pendingDiagnosticRows < 256 else {
+            droppedDiagnosticRows += 1; lock.unlock(); return
+        }
+        pendingDiagnosticRows += 1; lock.unlock()
+        queue.async { [self] in
+            defer { lock.lock(); pendingDiagnosticRows -= 1; lock.unlock() }
+            do {
+                try ensureLog()
+                lock.lock(); let dropped = droppedDiagnosticRows; droppedDiagnosticRows = 0; lock.unlock()
+                if dropped > 0 { try log?.append(["record_type": "diagnostic_storage", "dropped_records": dropped]) }
+                try log?.appendJSON(bytes)
+            } catch { status.error = "部分发送诊断未能写入本机日志。" }
+        }
+    }
+
+    private func ensureLog() throws {
+        guard log == nil else { return }
+        let directory = try storageDirectory ?? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true).appendingPathComponent("MusterDiagnostics")
+        log = try PerformanceLog(directory: directory)
     }
 
     public func currentStatus() async -> PerformanceMonitorStatus {

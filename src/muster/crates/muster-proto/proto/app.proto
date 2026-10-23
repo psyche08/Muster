@@ -321,8 +321,13 @@ message Effect {
     PrepareDesktopUpdate prepare_desktop_update = 12;
     FinishDesktopUpdate finish_desktop_update = 13;
     ActivateNetwork activate_network = 14;
+    SendDiagnostic send_diagnostic = 15;
   }
 }
+
+// Fire-and-forget, id=0: append this bounded content-free JSON record locally.
+// Never interpret it as product state or a delivery acknowledgement.
+message SendDiagnostic { bytes json = 1; }
 
 // Black out every display (on) or clear it (off); macOS desktops only.
 message Cover {

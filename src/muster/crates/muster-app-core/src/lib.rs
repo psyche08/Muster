@@ -14,6 +14,7 @@ pub mod desktop_startup;
 pub mod desktop_update;
 mod drafts;
 mod render;
+mod send_diagnostics;
 mod state;
 mod timeline;
 mod trace;
