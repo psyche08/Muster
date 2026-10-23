@@ -53,6 +53,81 @@ final class MacConversationTests: XCTestCase {
         XCTAssertLessThanOrEqual(view.collectionViewLayout!.collectionViewContentSize.width, 421)
         window.contentViewController = nil; window.close(); c = nil; settle()
     }
+    func testEarlierResponseDuringLiveScrollKeepsOriginalRowInPlace() throws {
+        let c = MacConversationController(); var value = chat(200..<260)
+        value.hasEarlier_p = true
+        var requests = 0; c.onEarlier = { requests += 1 }
+        update(c, value); let window = show(c); defer { window.close() }
+        let view = c.collection!
+        func position(_ index: Int) throws -> CGFloat {
+            try XCTUnwrap(view.layoutAttributesForItem(at: IndexPath(item: index, section: 0))).frame.minY
+                - c.scroll.contentView.bounds.minY
+        }
+        c.collection.beginScrolling()
+        view.scrollToItems(at: [IndexPath(item: 1, section: 0)], scrollPosition: .top)
+        settle()
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: c.scroll)
+        XCTAssertEqual(requests, 1)
+        let before = try position(1)
+        // A cached page may arrive before the wheel debounce or trackpad ends.
+        value = chat(0..<260); value.hasEarlier_p = true
+        update(c, value, hold: 1)
+        XCTAssertTrue(c.collection.scrolling)
+        XCTAssertEqual(try position(201), before, accuracy: 4,
+            "Loading history must preserve the old row while the gesture is active")
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: c.scroll)
+        c.collection.endScrolling(); settle()
+        XCTAssertEqual(try position(201), before, accuracy: 4,
+            "Gesture end must not adopt a newly inserted row as the reading anchor")
+        XCTAssertEqual(requests, 1)
+        // The correction must not freeze the reader: another gesture can move.
+        c.collection.beginScrolling()
+        view.scrollToItems(at: [IndexPath(item: 170, section: 0)], scrollPosition: .top)
+        settle()
+        let moved = try position(170)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: c.scroll)
+        c.collection.endScrolling(); settle()
+        XCTAssertEqual(try position(170), moved, accuracy: 4)
+        XCTAssertLessThan(abs(moved), 100)
+        XCTAssertGreaterThan(try position(201), before + 1000)
+    }
+    func testTrackpadHistoryResponsesPreserveAnchorAcrossPages() throws {
+        let c = MacConversationController(); var value = chat(400..<460)
+        value.hasEarlier_p = true
+        var requests = 0; c.onEarlier = { requests += 1 }
+        update(c, value); let window = show(c); defer { window.close() }
+        func wheel(_ phase: CGScrollPhase, delta: Int32) throws {
+            let cg = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+                wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0))
+            cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+            c.scroll.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: cg)))
+        }
+        func position(_ index: Int) throws -> CGFloat {
+            try XCTUnwrap(c.collection.layoutAttributesForItem(at: IndexPath(item: index, section: 0))).frame.minY
+                - c.scroll.contentView.bounds.minY
+        }
+        for page in 1...2 {
+            try wheel(.began, delta: 100_000); settle()
+            XCTAssertTrue(c.scroll.wheelActive)
+            XCTAssertEqual(requests, page)
+            let before = try position(1)
+            value = chat((400 - page * 200)..<460); value.hasEarlier_p = true
+            // Different heights require stable identity anchoring, not an offset
+            // based on an estimated height multiplied by the inserted row count.
+            for i in 0..<200 {
+                value.timeline[i].message.text += String(repeating: "\n\nWrapped **earlier** paragraph.", count: i % 7)
+            }
+            update(c, value, hold: page)
+            XCTAssertEqual(try position(201), before, accuracy: 4)
+            try wheel(.ended, delta: 0); settle()
+            XCTAssertEqual(try position(201), before, accuracy: 4)
+            XCTAssertEqual(requests, page)
+            // A subsequent real event must move rather than freeze at the anchor.
+            try wheel(.began, delta: -80); try wheel(.changed, delta: -800); settle()
+            try wheel(.ended, delta: 0); settle()
+            XCTAssertLessThan(try position(201), before - 20)
+        }
+    }
     func testDisclosuresResizeAndSurviveReuseAndHistory() throws {
         let c = MacConversationController(); var value = chat(0..<150)
         var work = Muster_App_ChatBlock(); work.id = "work"; work.kind = "working"

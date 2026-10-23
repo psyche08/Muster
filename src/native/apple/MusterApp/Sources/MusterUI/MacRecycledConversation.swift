@@ -57,6 +57,7 @@ final class MacConversationController: NSViewController {
     private var settling = false
     private var settlePass = 0
     private var updating = false
+    private var reconcilingProjection = false
     private var historyTrigger = HistoryScrollTrigger()
     private var scrollObservers: [NSObjectProtocol] = []
     var onLatest: ((Bool) -> Void)?
@@ -159,14 +160,18 @@ final class MacConversationController: NSViewController {
         if lastJump != jump { following = true; anchor = nil; lastJump = jump }
         updating = true
         if rows != previousRows || !changed.isEmpty {
+            reconcilingProjection = true
             var snapshot = NSDiffableDataSourceSnapshot<Int, Row>()
             snapshot.appendSections([0]); snapshot.appendItems(rows)
             let existing = Set(previousRows)
             snapshot.reloadItems(changed.filter { existing.contains($0) })
             source.apply(snapshot, animatingDifferences: false)
         }
-        if restyle { collection.collectionViewLayout?.invalidateLayout() }
+        if restyle { reconcilingProjection = true; collection.collectionViewLayout?.invalidateLayout() }
         updating = false
+        // Reconcile before another wheel callback can capture newly inserted
+        // rows at the old absolute offset. A gesture may outlive the RPC.
+        if reconcilingProjection { settleViewport(publishLatest: false) }
         scheduleSettle()
     }
 
@@ -189,14 +194,14 @@ final class MacConversationController: NSViewController {
             self.scheduled = false; self.settleViewport()
         }
     }
-    private func settleViewport() {
-        guard !updating, !collection.scrolling else { return }
+    private func settleViewport(publishLatest: Bool = true) {
+        guard !updating, !settling, !collection.scrolling || reconcilingProjection else { return }
         settling = true
         var changedGeometry = false
         defer {
             settling = false
             if changedGeometry && settlePass < 6 { settlePass += 1; scheduleSettle() }
-            else { settlePass = 0 }
+            else { settlePass = 0; reconcilingProjection = false }
         }
         collection.layoutSubtreeIfNeeded()
         let height = max(scroll.contentSize.height, collection.collectionViewLayout!.collectionViewContentSize.height)
@@ -215,7 +220,7 @@ final class MacConversationController: NSViewController {
             changedGeometry = true
             scroll.contentView.scroll(to: NSPoint(x: 0, y: target)); scroll.reflectScrolledClipView(scroll.contentView)
         }
-        onLatest?(following)
+        if publishLatest { onLatest?(following) }
     }
     private func userScrolled(began: Bool, ended: Bool) {
         guard !updating, !settling else { return }
