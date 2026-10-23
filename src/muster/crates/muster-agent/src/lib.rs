@@ -2226,6 +2226,15 @@ impl AgentService {
             })
     }
 
+    /// Clone before OS calls: never hold the catalog mutex across Accessibility IPC.
+    pub fn native_surface_ready(&self, id: &str) -> Result<bool, Error> {
+        let controller = self.inner.lock().unwrap().controllers.get(id).cloned();
+        match controller {
+            Some(c) if c.kind() == ControllerKind::NativeApp => c.native_surface_ready(),
+            _ => Ok(false),
+        }
+    }
+
     pub fn controller_events(&self) -> mpsc::Sender<(String, ControllerEvent)> {
         self.controller_events.clone()
     }

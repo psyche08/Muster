@@ -739,6 +739,10 @@ pub(super) fn start_action(
     muster_agent::control_guard::Delivery,
 ) {
     let delivery = muster_agent::control_guard::Delivery::default();
+    if matches!(&req, Req::AgentSend(r) if !r.op_id.is_empty() && muster_agent::desktop_chat::app_of(&r.session).is_none())
+    {
+        delivery.set_receipt_budget(Duration::from_millis(500));
+    }
     let scoped = delivery.clone();
     let checked_daemon = daemon.clone();
     let checked_request = req.clone();

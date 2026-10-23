@@ -936,6 +936,11 @@ fn find_surface_traced(
     if let Some(trace) = trace {
         trace.record(format_args!("web_areas={areas} target_found={} ambiguous={ambiguous} walk={walk:?} (nodes, stop, ms)", web_area.is_some()));
     }
+    if walk.1 != "complete" {
+        return Err(Error::Unavailable(
+            "The native session scan was incomplete; not sent".into(),
+        ));
+    }
     if ambiguous {
         return Err(Error::Unavailable(
             "more than one view shows this session".into(),
@@ -1839,7 +1844,8 @@ impl NativeAppController {
         let _press = send.press();
         trace.record(format_args!("press_result={_press:?}"));
         trace.stage("await_provider_receipt");
-        let step = Step::new("provider send receipt", Duration::from_secs(10));
+        let receipt_budget = muster_agent::control_guard::receipt_budget();
+        let step = Step::new("provider send receipt", receipt_budget);
         loop {
             // The background poll may have read the evidence first: either
             // way the write is confirmed only once the guard is clear.
@@ -1848,10 +1854,11 @@ impl NativeAppController {
             }
             if step.expired() {
                 log::warn!(
-                    "native_app send to {}: no provider receipt within 10 s; later writes to this session are refused until it appears",
-                    &self.session[..8.min(self.session.len())]
+                    "native_app send to {}: receipt pending after {} ms; later writes refused until evidence arrives",
+                    &self.session[..8.min(self.session.len())],
+                    receipt_budget.as_millis()
                 );
-                return Err(Error::UnknownOutcome("Timed out waiting for the provider's send receipt; delivery is unconfirmed, do not resend".into()));
+                return Err(Error::UnknownOutcome("Waiting for the provider's send receipt; delivery is unconfirmed, do not resend".into()));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -1877,6 +1884,31 @@ impl NativeAppController {
 
 #[async_trait]
 impl Controller for NativeAppController {
+    fn native_surface_ready(&self) -> Result<bool, Error> {
+        muster_agent::control_guard::check()?;
+        if !ax::trusted()
+            || screen_locked()
+            || codesign::process_start(self.pid) != Some(self.start)
+        {
+            return Ok(false);
+        }
+        let generation = user_input_generation();
+        let fresh = match find_surface(self.profile, &self.app, &self.session, &self.resolver) {
+            Ok(surface) if surface.composer.is_some() => surface,
+            Ok(_) | Err(Error::NotFound(_)) => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        muster_agent::control_guard::check()?;
+        if generation != user_input_generation()
+            || screen_locked()
+            || codesign::process_start(self.pid) != Some(self.start)
+        {
+            return Ok(false);
+        }
+        *self.surface.lock().unwrap() = fresh;
+        Ok(true)
+    }
+
     fn kind(&self) -> ControllerKind {
         ControllerKind::NativeApp
     }
