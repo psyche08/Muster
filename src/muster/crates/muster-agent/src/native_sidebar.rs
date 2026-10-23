@@ -14,8 +14,9 @@ pub fn absent_session_route(
     if provider != "claude" || navigation_areas == 0 || !scan_complete || candidates != 0 {
         return None;
     }
-    let canonical_uuid = session.len() == 36
-        && session.bytes().enumerate().all(|(i, b)| {
+    let uuid = session.strip_prefix("local_")?;
+    let canonical_uuid = uuid.len() == 36
+        && uuid.bytes().enumerate().all(|(i, b)| {
             if matches!(i, 8 | 13 | 18 | 23) {
                 b == b'-'
             } else {
@@ -141,6 +142,7 @@ fn metadata_label(label: &str) -> bool {
     let Some(count) = label
         .strip_prefix("Open · ")
         .or_else(|| label.strip_prefix("Merged · "))
+        .or_else(|| label.strip_prefix("Merge conflicts · "))
     else {
         return false;
     };
@@ -273,6 +275,91 @@ mod tests {
             "",
             labels.as_deref()
         ));
+    }
+
+    #[test]
+    fn merge_conflict_capture_retains_exact_identity() {
+        for badge in [
+            "Merge conflicts · 1 pull request",
+            "Merge conflicts · 7 pull requests",
+        ] {
+            let row = Node(
+                "AXButton",
+                None,
+                true,
+                vec![
+                    Node("AXStaticText", Some(TITLE), false, vec![]),
+                    Node("AXStaticText", Some(badge), false, vec![]),
+                ],
+            );
+            let (labels, _, _, stop) = read_label(&row);
+            assert_eq!(stop, "complete");
+            let name = format!("{TITLE} {badge}");
+            assert!(title_matches(
+                true,
+                TITLE,
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                TITLE,
+                false,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                false,
+                TITLE,
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                TITLE,
+                true,
+                "Unrelated row",
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                "示例应用",
+                true,
+                &name,
+                "",
+                labels.as_deref()
+            ));
+        }
+        for badge in [
+            "Merge conflicts · 0 pull requests",
+            "Merge conflicts · 01 pull request",
+            "Merge conflicts · +1 pull request",
+            "Merge conflicts · -1 pull request",
+            "Merge conflicts · 1 pull requests",
+            "Merge conflicts · 2 pull request",
+            "Merge conflicts · 4294967296 pull requests",
+            "Merge conflicts · 7 pull requests extra",
+            "Merge conflicts · 7 pull requests\n",
+            "Merge conflict · 7 pull requests",
+        ] {
+            assert!(
+                !title_matches(
+                    true,
+                    TITLE,
+                    true,
+                    &format!("{TITLE} {badge}"),
+                    "",
+                    Some(&[badge.into(), TITLE.into()])
+                ),
+                "{badge}"
+            );
+        }
     }
 
     #[test]
@@ -607,7 +694,7 @@ mod tests {
 #[cfg(test)]
 mod navigation_tests {
     use super::absent_session_route;
-    const SESSION: &str = "12345678-1234-4234-8234-123456789abc";
+    const SESSION: &str = "local_12345678-1234-4234-8234-123456789abc";
 
     #[test]
     fn absent_row_uses_exact_id_without_a_title_or_last_selector() {
@@ -634,6 +721,11 @@ mod navigation_tests {
     #[test]
     fn malformed_ids_and_navigation_injection_are_rejected() {
         for id in [
+            "12345678-1234-4234-8234-123456789abc",
+            "local_12345678-1234-4234-8234-123456789abc&prompt=send",
+            "local_12345678-1234-4234-8234-123456789abc#fragment",
+            "local_12345678-1234-4234-8234-123456789abC",
+            "local_12345678-1234-4234-8234-123456789abg",
             "",
             "last",
             "../session",

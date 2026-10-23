@@ -78,6 +78,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0039](0039-exact-session-navigation.md) | Accepted | Recover absent Claude sidebar rows by exact session navigation |
 
+| [0040](0040-desktop-navigation-identity.md) | Accepted | Map Claude navigation to its desktop identity |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
