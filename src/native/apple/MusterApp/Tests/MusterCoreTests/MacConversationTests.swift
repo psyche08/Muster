@@ -128,6 +128,24 @@ final class MacConversationTests: XCTestCase {
             XCTAssertLessThan(try position(201), before - 20)
         }
     }
+    func testReplacedBoundaryRowRetainsFollowingVisibleContent() throws {
+        let c = MacConversationController(); var value = chat(200..<260)
+        value.timeline[0].id = "partial-boundary"
+        update(c, value); let window = show(c); defer { window.close() }
+        c.collection.beginScrolling()
+        c.scroll.contentView.scroll(to: .zero)
+        c.collection.endScrolling(); settle()
+        func position(_ index: Int) throws -> CGFloat {
+            try XCTUnwrap(c.collection.layoutAttributesForItem(at: IndexPath(item: index, section: 0))).frame.minY
+                - c.scroll.contentView.bounds.minY
+        }
+        let before = try position(2)
+        value = chat(0..<260)
+        value.timeline[200].id = "complete-boundary"
+        update(c, value, hold: 1)
+        XCTAssertEqual(try position(202), before, accuracy: 4,
+            "A replaced boundary row must not discard surviving visible content anchors")
+    }
     func testDisclosuresResizeAndSurviveReuseAndHistory() throws {
         let c = MacConversationController(); var value = chat(0..<150)
         var work = Muster_App_ChatBlock(); work.id = "work"; work.kind = "working"

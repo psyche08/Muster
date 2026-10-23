@@ -52,7 +52,7 @@ final class MacConversationController: NSViewController {
     private var lastJump = 0
     private var lastHold = 0
     private var following = true
-    private var anchor: Anchor?
+    private var anchors: [Anchor] = []
     private var scheduled = false
     private var settling = false
     private var settlePass = 0
@@ -138,7 +138,7 @@ final class MacConversationController: NSViewController {
                 content: @escaping (Muster_App_ChatBlock) -> AnyView) {
         _ = view
         if hold != lastHold { following = false; lastHold = hold; captureAnchor() }
-        if !following && anchor == nil { captureAnchor() }
+        if !following && anchors.isEmpty { captureAnchor() }
         let restyle = self.appearance != appearance || self.columnWidth != columnWidth
         self.appearance = appearance; self.columnWidth = columnWidth; self.spacing = spacing
         self.header = header; self.content = content
@@ -157,7 +157,7 @@ final class MacConversationController: NSViewController {
             interactionHost.setContent(interactions)
         }
         previousChat = chat
-        if lastJump != jump { following = true; anchor = nil; lastJump = jump }
+        if lastJump != jump { following = true; anchors = []; lastJump = jump }
         updating = true
         if rows != previousRows || !changed.isEmpty {
             reconcilingProjection = true
@@ -180,10 +180,15 @@ final class MacConversationController: NSViewController {
         let visible = collection.indexPathsForVisibleItems().sorted().filter {
             (collection.layoutAttributesForItem(at: $0)?.frame.maxY ?? 0) > top
         }
-        let message = visible.first { if case .block = source.itemIdentifier(for: $0) { return true }; return false }
-        guard let path = message ?? visible.first, let row = source.itemIdentifier(for: path),
-              let frame = collection.layoutAttributesForItem(at: path)?.frame else { return }
-        anchor = Anchor(row: row, offset: frame.minY - top)
+        let messages = visible.filter { if case .block = source.itemIdentifier(for: $0) { return true }; return false }
+        // A partially known group can be replaced when an older network page
+        // supplies its prefix. Keep surviving visible rows as geometry fallbacks;
+        // the permanent header would incorrectly pin the top of the new page.
+        anchors = (messages.isEmpty ? visible : messages).compactMap { path in
+            guard let row = source.itemIdentifier(for: path),
+                  let frame = collection.layoutAttributesForItem(at: path)?.frame else { return nil }
+            return Anchor(row: row, offset: frame.minY - top)
+        }
     }
 
     private func scheduleSettle() {
@@ -213,8 +218,13 @@ final class MacConversationController: NSViewController {
         let maximum = max(0, collection.collectionViewLayout!.collectionViewContentSize.height - scroll.contentView.bounds.height)
         var target: CGFloat?
         if following { target = maximum }
-        else if let anchor, let path = source.indexPath(for: anchor.row), let frame = collection.layoutAttributesForItem(at: path)?.frame {
-            target = min(maximum, max(0, frame.minY - anchor.offset))
+        else {
+            for anchor in anchors {
+                guard let path = source.indexPath(for: anchor.row),
+                      let frame = collection.layoutAttributesForItem(at: path)?.frame else { continue }
+                target = min(maximum, max(0, frame.minY - anchor.offset))
+                break
+            }
         }
         if let target, abs(scroll.contentView.bounds.minY - target) > 0.5 {
             changedGeometry = true
@@ -224,7 +234,7 @@ final class MacConversationController: NSViewController {
     }
     private func userScrolled(began: Bool, ended: Bool) {
         guard !updating, !settling else { return }
-        if began { historyTrigger.beginGesture(); following = false; anchor = nil }
+        if began { historyTrigger.beginGesture(); following = false; anchors = [] }
         captureAnchor()
         if let chat = previousChat, historyTrigger.request(offset: scroll.contentView.bounds.minY,
             hasEarlier: chat.hasEarlier_p, loading: chat.loading, failed: !chat.loadError.isEmpty) {
