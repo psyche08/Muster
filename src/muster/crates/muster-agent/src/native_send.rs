@@ -418,3 +418,88 @@ mod tests {
         );
     }
 }
+
+/// A positive ancestry hint requires every parent to still list its child.
+/// Unknown, cyclic, replaced and over-budget paths are never positive evidence;
+/// the OS adapter may fall back to a fresh bounded descendant scan.
+pub fn reciprocal_ancestor<N: Clone + PartialEq>(
+    ancestor: &N,
+    descendant: &N,
+    mut parent: impl FnMut(&N) -> Option<N>,
+    mut lists_child: impl FnMut(&N, &N) -> bool,
+    mut within_budget: impl FnMut() -> bool,
+) -> bool {
+    let mut node = descendant.clone();
+    let mut seen = Vec::new();
+    for _ in 0..64 {
+        if !within_budget() || seen.contains(&node) {
+            return false;
+        }
+        if &node == ancestor {
+            return true;
+        }
+        seen.push(node.clone());
+        let Some(next) = parent(&node) else {
+            return false;
+        };
+        if !within_budget() || !lists_child(&next, &node) {
+            return false;
+        }
+        node = next;
+    }
+    false
+}
+
+#[cfg(test)]
+mod ancestry_tests {
+    use super::reciprocal_ancestor;
+
+    #[test]
+    fn ancestry_checks_edges_without_visiting_unrelated_descendants() {
+        let mut reads = 0;
+        assert!(reciprocal_ancestor(
+            &0u32,
+            &3u32,
+            |n| {
+                reads += 1;
+                n.checked_sub(1)
+            },
+            |parent, child| parent + 1 == *child,
+            || true
+        ));
+        assert_eq!(reads, 3);
+    }
+
+    #[test]
+    fn stale_edges_cycles_unknown_parents_and_budgets_are_not_proof() {
+        assert!(!reciprocal_ancestor(
+            &0,
+            &3,
+            |n| Some(n - 1),
+            |_, _| false,
+            || true
+        ));
+        assert!(!reciprocal_ancestor(
+            &0,
+            &3,
+            |_| Some(3),
+            |_, _| true,
+            || true
+        ));
+        assert!(!reciprocal_ancestor(&0, &3, |_| None, |_, _| true, || true));
+        assert!(!reciprocal_ancestor(
+            &0,
+            &3,
+            |n| Some(n - 1),
+            |_, _| true,
+            || false
+        ));
+        assert!(!reciprocal_ancestor(
+            &0,
+            &100,
+            |n| Some(n - 1),
+            |_, _| true,
+            || true
+        ));
+    }
+}

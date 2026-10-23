@@ -24,6 +24,7 @@ struct DeliveryState {
     /// The ledger operation this delivery belongs to, for diagnostics.
     operation: Option<String>,
     confirmation: Option<Confirmation>,
+    receipt_budget: Option<std::time::Duration>,
 }
 impl Delivery {
     /// True only when this operation provably submitted nothing.
@@ -41,6 +42,11 @@ impl Delivery {
     pub fn confirmation(&self) -> Option<Confirmation> {
         self.0.lock().unwrap().confirmation.clone()
     }
+    /// Bound only the immediate evidence wait inside a console lease. This
+    /// does not change submission authority, delivery evidence or lease duration.
+    pub fn set_receipt_budget(&self, budget: std::time::Duration) {
+        self.0.lock().unwrap().receipt_budget = Some(budget);
+    }
     /// Names the ledger operation; never affects what was or was not sent.
     pub fn set_operation(&self, operation: &str) {
         let mut state = self.0.lock().unwrap();
@@ -48,6 +54,12 @@ impl Delivery {
         state.confirmation = None;
     }
 }
+pub fn receipt_budget() -> std::time::Duration {
+    current_delivery()
+        .and_then(|delivery| delivery.0.lock().unwrap().receipt_budget)
+        .unwrap_or(std::time::Duration::from_secs(10))
+}
+
 /// The ledger operation of the current delivery scope, if it has one.
 pub fn current_operation() -> Option<String> {
     DELIVERY

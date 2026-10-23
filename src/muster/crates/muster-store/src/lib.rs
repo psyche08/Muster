@@ -329,6 +329,22 @@ impl Ledger<'_> {
         Ok(())
     }
 
+    /// Read-only receipt lookup. Never inserts, retries, or confirms a row;
+    /// callers must supply the exact original kind and request hash.
+    pub fn confirmed_result(
+        &self,
+        op_id: &str,
+        kind: &str,
+        hash: &[u8; 32],
+    ) -> Result<Option<Vec<u8>>> {
+        let conn = self.store.conn.lock().unwrap();
+        Ok(conn.query_row(
+            "SELECT result FROM ops WHERE op_id = ?1 AND kind = ?2 AND body_hash = ?3 AND status = 'applied'",
+            params![op_id, kind, hash.as_slice()],
+            |row| row.get(0),
+        ).optional()?.flatten())
+    }
+
     pub fn status(&self, op_id: &str) -> Result<Option<String>> {
         let conn = self.store.conn.lock().unwrap();
         Ok(conn
@@ -421,6 +437,54 @@ mod tests {
         assert_eq!(
             ledger.status("rejected").unwrap().as_deref(),
             Some("rejected")
+        );
+    }
+
+    #[test]
+    fn receipt_lookup_never_creates_or_accepts_other_bindings() {
+        let store = Store::open_memory().unwrap();
+        let ledger = store.ledger();
+        let hash = Ledger::body_hash(b"request");
+        assert!(
+            ledger
+                .confirmed_result("op", "agent.send", &hash)
+                .unwrap()
+                .is_none()
+        );
+        assert!(ledger.status("op").unwrap().is_none());
+        ledger.begin("op", "agent.send", b"request").unwrap();
+        assert!(
+            ledger
+                .confirmed_result("op", "agent.send", &hash)
+                .unwrap()
+                .is_none()
+        );
+        ledger
+            .confirm("op", "agent.send", &hash, b"session")
+            .unwrap();
+        assert_eq!(
+            ledger.confirmed_result("op", "agent.send", &hash).unwrap(),
+            Some(b"session".to_vec())
+        );
+        assert!(
+            ledger
+                .confirmed_result("op", "agent.respond", &hash)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            ledger
+                .confirmed_result("op", "agent.send", &[0; 32])
+                .unwrap()
+                .is_none()
+        );
+        ledger.begin("rejected", "agent.send", b"request").unwrap();
+        ledger.reject("rejected", b"no").unwrap();
+        assert!(
+            ledger
+                .confirmed_result("rejected", "agent.send", &hash)
+                .unwrap()
+                .is_none()
         );
     }
 

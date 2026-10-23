@@ -6,7 +6,7 @@ use muster_core::{Author, DeviceKind, DeviceRecord, HwSigner, Scope, SoftSigner}
 use muster_platform::locked_use::{ConsoleSample, GuardSample};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
-struct Os {
+pub(super) struct Os {
     creates: AtomicUsize,
     hold_create: AtomicBool,
     unlocked: AtomicBool,
@@ -256,7 +256,7 @@ async fn diagnostic_rechecks_input_after_waiting_for_the_lock_screen() {
     assert!(owner.writes.clone().try_read_owned().is_ok());
 }
 
-async fn start() -> (
+pub(super) async fn start() -> (
     tempfile::TempDir,
     Arc<Daemon>,
     Arc<Owner>,
@@ -436,6 +436,7 @@ async fn start_fixture(
     });
     let (tx, rx) = mpsc::channel(16);
     *owner.current.lock().unwrap() = Some(Current {
+        receipt: None,
         tx,
         scope: None,
         accepting: Arc::new(std::sync::atomic::AtomicBool::new(true)),
@@ -1884,4 +1885,89 @@ async fn locked_creation_is_one_shot_and_drains_before_releasing_cover() {
         assert_eq!(os.creates.load(Ordering::SeqCst), 1);
         daemon.shutdown().await;
     }
+}
+
+#[tokio::test]
+async fn late_agent_receipt_returns_after_relock_without_another_submission() {
+    use muster_proto::Message;
+    let (dir, daemon, owner, os, old, key, peer, old_job) = start().await;
+    owner.cancel(peer, old.nonce(), None).await.unwrap();
+    old_job.await.unwrap();
+    os.released.store(false, Ordering::SeqCst);
+    let session = "11111111-2222-7333-8444-555555555555";
+    let history = dir.path().join("codex/sessions");
+    std::fs::create_dir_all(&history).unwrap();
+    std::fs::write(
+        history.join("rollout-receipt.jsonl"),
+        format!("{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"{session}\"}}}}\n"),
+    )
+    .unwrap();
+    let agent = daemon.agent().unwrap();
+    agent.rescan().await;
+    let run = Arc::new(QueueRun {
+        entered: Default::default(),
+        changed: Default::default(),
+        permits: tokio::sync::Semaphore::new(1),
+    });
+    agent.attach_native(Arc::new(QueueController {
+        session: session.into(),
+        run: run.clone(),
+        tracked: true,
+    }));
+    let request = send_request(session, "lost", "late-receipt");
+    let Req::AgentSend(send) = &request else {
+        unreachable!()
+    };
+    let hash = muster_store::Ledger::body_hash(&send.encode_to_vec());
+    let Resp::LockedUseChallenge(prepared) = owner
+        .prepare(
+            daemon.clone(),
+            peer,
+            muster_proto::locked_use::operation(&request).unwrap(),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let c = Challenge::decode(&prepared.challenge).unwrap();
+    let reply = execute(owner.clone(), &c, &key, peer).await;
+    let nonce = consume(&owner).await;
+    let tx = owner.current.lock().unwrap().clone().unwrap();
+    tx.send(Command::Terminal {
+        nonce,
+        allowed: true,
+    })
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    os.unlocked.store(true, Ordering::SeqCst);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while owner.current.lock().unwrap().is_some() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(!os.unlocked.load(Ordering::SeqCst));
+    assert!(os.released.load(Ordering::SeqCst));
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+    assert!(
+        !reply.is_finished(),
+        "caller awaits receipt after the console has been released"
+    );
+    assert_eq!(run.entered.lock().unwrap().as_slice(), ["lost"]);
+    daemon
+        .store()
+        .ledger()
+        .confirm("late-receipt", "agent.send", &hash, session.as_bytes())
+        .unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(2), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(status(result), v1::op_result::Status::Applied);
+    assert_eq!(run.entered.lock().unwrap().as_slice(), ["lost"]);
+    daemon.shutdown().await;
 }

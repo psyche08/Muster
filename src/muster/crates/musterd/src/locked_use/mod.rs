@@ -18,6 +18,8 @@ use tokio::sync::{OwnedRwLockWriteGuard, RwLock, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 mod actor;
+mod receipt;
+use receipt::ReceiptWait;
 #[cfg(test)]
 mod tests;
 
@@ -26,6 +28,7 @@ use actor::*;
 type Reply = oneshot::Sender<Result<Resp, Error>>;
 #[derive(Clone)]
 struct Current {
+    receipt: Option<ReceiptWait>,
     tx: mpsc::Sender<Command>,
     scope: Option<(DeviceId, String)>,
     accepting: Arc<std::sync::atomic::AtomicBool>,
@@ -286,6 +289,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            receipt: ReceiptWait::new(&daemon, peer, &request),
             tx,
             scope: provider.clone().map(|p| (peer, p)),
             accepting: Arc::new(std::sync::atomic::AtomicBool::new(true)),
@@ -349,6 +353,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            receipt: None,
             tx,
             scope: manual.then(|| (peer, String::new())),
             accepting: Arc::new(std::sync::atomic::AtomicBool::new(true)),
@@ -559,11 +564,13 @@ impl Owner {
     /// Enqueue and the owner's empty-queue close share `current` as a barrier.
     pub async fn enqueue(
         &self,
-        daemon: &Daemon,
+        daemon: &Arc<Daemon>,
         peer: DeviceId,
         request: Req,
         cancel: CancellationToken,
     ) -> Option<Result<Resp, Error>> {
+        let receipt = ReceiptWait::new(daemon, peer, &request);
+        let receipt_cancel = cancel.clone();
         let closing_same_requester = self.current.lock().unwrap().as_ref().is_some_and(|active| {
             active
                 .scope
@@ -644,11 +651,15 @@ impl Owner {
             }
             result
         };
-        Some(result.await.unwrap_or_else(|_| {
+        let result = result.await.unwrap_or_else(|_| {
             Ok(unknown_result(
                 "Locked Use owner stopped before the request receipt; check before retrying".into(),
             ))
-        }))
+        });
+        Some(match receipt {
+            Some(receipt) => receipt.settle(result, receipt_cancel).await,
+            None => result,
+        })
     }
 
     pub async fn execute(
@@ -664,6 +675,11 @@ impl Owner {
             .unwrap()
             .clone()
             .ok_or_else(|| Error::Conflict("no outstanding Locked Use challenge".into()))?;
+        let receipt = tx
+            .receipt
+            .clone()
+            .filter(|receipt| receipt.peer_matches(peer));
+        let receipt_cancel = cancel.clone();
         let (reply, result) = oneshot::channel();
         tx.send(Command::Execute {
             peer,
@@ -674,11 +690,15 @@ impl Owner {
         })
         .await
         .map_err(|_| Error::Unavailable("console owner stopped".into()))?;
-        result.await.unwrap_or_else(|_| {
+        let result = result.await.unwrap_or_else(|_| {
             Ok(unknown_result(
                 "Locked Use owner stopped before the request receipt; check before retrying".into(),
             ))
-        })
+        });
+        match receipt {
+            Some(receipt) => receipt.settle(result, receipt_cancel).await,
+            None => result,
+        }
     }
 
     pub async fn cancel(

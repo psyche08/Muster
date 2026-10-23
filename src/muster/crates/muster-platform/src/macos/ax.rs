@@ -610,6 +610,18 @@ impl Element {
     /// Whether `descendant` is somewhere under this element (Electron
     /// replaces nodes, so a retained element is re-checked before use).
     pub fn contains(&self, descendant: &Element) -> bool {
+        let started = Instant::now();
+        if muster_agent::native_send::reciprocal_ancestor(
+            self,
+            descendant,
+            |node| node.element("AXParent"),
+            |parent, child| parent.children().contains(child),
+            || started.elapsed() < Duration::from_millis(100),
+        ) {
+            return true;
+        }
+        // Some native controls omit AXParent. Preserve the existing bounded
+        // fresh scan as fallback; a stale parent alone never establishes membership.
         let mut found = false;
         self.walk(|node| {
             if node == descendant {

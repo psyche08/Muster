@@ -462,13 +462,22 @@ pub(super) fn msg_op_done(
             Err(error) => state.toast(format!("消息已发送，草稿清理暂未写入磁盘：{error}"), true),
         }
     }
+    let same_origin = state.chat.as_ref().is_some_and(|c| {
+        c.device == device
+            && response_origin.as_ref().is_some_and(|(session, tag)| {
+                &c.session.id == session && (what != "send" || &c.pending_draft_id == tag)
+            })
+    });
     let locked_finished =
         locked_nonce.is_none() || state.finish_locked(&device, locked_nonce.as_deref());
     if what == "terminal_result" {
         super::code_runs::delivery(state, &device, response_origin, result);
         return;
     }
-    if !locked_finished {
+    // The lease can end before a read-only receipt arrives. An authenticated
+    // result for the exact pending draft remains relevant, but cannot close a
+    // newer lease or affect a different session/revision.
+    if !locked_finished && !(what == "send" && same_origin) {
         return;
     }
     if what == "manual" {
@@ -480,12 +489,6 @@ pub(super) fn msg_op_done(
         }
         return;
     }
-    let same_origin = state.chat.as_ref().is_some_and(|c| {
-        c.device == device
-            && response_origin.as_ref().is_some_and(|(session, tag)| {
-                &c.session.id == session && (what != "send" || &c.pending_draft_id == tag)
-            })
-    });
     // A send refused behind an unconfirmed earlier one: the conversation
     // offers its release instead of a toast.
     let unconfirmed = match &result {

@@ -30,8 +30,11 @@ pub(crate) async fn native_apps(agent: Arc<AgentService>, queues: ProviderQueues
         .iter()
         .map(|profile| resolver(profile, &agent))
         .collect();
+    let mut scan = tokio::time::interval(SCAN);
+    scan.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        tokio::time::sleep(SCAN).await;
+        // The first tick is immediate: warm visible sessions at daemon startup.
+        scan.tick().await;
         let files = muster_platform::macos::procs::codex_runtime_files().await;
         let observer = agent.clone();
         let _ = tokio::task::spawn_blocking(move || {
@@ -456,6 +459,14 @@ pub async fn ensure_native(
     }
     #[cfg(target_os = "macos")]
     let preparation_started = std::time::Instant::now();
+    #[cfg(target_os = "macos")]
+    if agent.native_surface_ready(session)? {
+        log::info!(
+            "native preparation target={session:?} path=visible_controller ready elapsed_ms={}",
+            preparation_started.elapsed().as_millis()
+        );
+        return Ok(());
+    }
     // An agent session lives in its app's Code (Codex) mode: leave Chat
     // mode, the settings or a dialog first.
     #[cfg(target_os = "macos")]

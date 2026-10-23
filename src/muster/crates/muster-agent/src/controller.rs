@@ -73,6 +73,11 @@ pub trait Controller: Send + Sync {
     fn reports_delivery(&self) -> bool {
         false
     }
+    /// Fresh read-only proof that this exact session is uniquely visible.
+    /// This skips navigation only; it never authorizes or skips a write check.
+    fn native_surface_ready(&self) -> Result<bool, Error> {
+        Ok(false)
+    }
     /// Read-only check of the native question controls. Never chooses/submits.
     fn question_diagnostic(&self) -> Result<String, Error> {
         Err(Error::Unavailable(

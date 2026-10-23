@@ -2176,3 +2176,77 @@ async fn late_creation_reply_cannot_open_a_window_after_navigation() {
     assert!(state.terminal.is_none());
     assert_eq!(state.busy, 0);
 }
+
+#[tokio::test]
+async fn late_send_receipt_updates_only_its_draft_without_finishing_a_new_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let shell = std::sync::Arc::new(QuietShell);
+    let config = crate::AppConfig {
+        dir: dir.path().into(),
+        mode: crate::Mode::Embedded {
+            relay: None,
+            name: "receipt-phone".into(),
+            kind: "phone".into(),
+            bind: "127.0.0.1:0".parse().unwrap(),
+            version: String::new(),
+        },
+        allow_loopback: true,
+    };
+    let backend = std::sync::Arc::new(
+        crate::backend::Backend::connect(&config, shell.clone())
+            .await
+            .unwrap(),
+    );
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell,
+        backend,
+        tx,
+        cache: std::sync::Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = State::new(true, Some("phone".into()));
+    state.chat = Some(Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "session".into(),
+            ..Default::default()
+        },
+        sending: true,
+        pending_draft_id: "draft-1".into(),
+        ..Default::default()
+    });
+    state.locked = Some(("mac".into(), vec![2; 32]));
+    operations::msg_op_done(
+        &mut state,
+        &ctx,
+        "send",
+        "mac".into(),
+        Some(vec![1; 32]),
+        Some(("session".into(), "draft-1".into())),
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Applied as i32,
+            result_id: "session".into(),
+            ..Default::default()
+        }),
+    );
+    assert!(!state.chat.as_ref().unwrap().sending);
+    assert_eq!(state.chat.as_ref().unwrap().sent_draft_id, "draft-1");
+    assert_eq!(state.locked.as_ref().unwrap().1, vec![2; 32]);
+    state.chat.as_mut().unwrap().pending_draft_id = "draft-2".into();
+    state.chat.as_mut().unwrap().sending = true;
+    operations::msg_op_done(
+        &mut state,
+        &ctx,
+        "send",
+        "mac".into(),
+        Some(vec![1; 32]),
+        Some(("session".into(), "draft-1".into())),
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Applied as i32,
+            result_id: "session".into(),
+            ..Default::default()
+        }),
+    );
+    assert!(state.chat.as_ref().unwrap().sending);
+    assert_eq!(state.chat.as_ref().unwrap().pending_draft_id, "draft-2");
+}
