@@ -71,3 +71,30 @@ the receipt capability. The other remote Mac was unreachable. Device Hub reporte
 the physical iPhone unavailable. Remote installation, phone-driven sends, locked
 native sends, client restart recovery and quiet-input contention on real hardware
 remain unverified for this change; automated coverage does not replace those cases.
+
+### Remote installation and lock boundary follow-up (2026-10-23)
+
+The second remote Mac's deployment connection was recovered through its physical
+bridge management address. Its old SSH alias used the virtual network instead.
+Local per-application proxy interception also affected the physical address:
+the extension's private-network forwarding selected the default Ethernet
+interface instead of the bridge. With the original configuration backed up,
+private-address DIRECT rules and a named direct adapter bound to the management
+bridge restored SSH while application proxying remained enabled in Rule mode.
+The extension-level CIDR forwarding was disabled in favor of these core rules;
+this configuration workaround does not claim to fix the extension implementation.
+
+The same signed source build `93529e00` was then installed on that Mac. Its
+daemon SHA-256 matched the local acceptance build, its identity and hardware key
+backend were preserved, and Accessibility, relay, virtual network and GUI
+readiness passed. The host advertised the new receipt capability. While locked,
+a remote read-only query for an absent operation returned Unknown and the host
+remained locked.
+
+A send from the actual Muster app to the dedicated remote acceptance conversation
+entered the normal Presence authentication flow. No user authentication completed
+before the challenge expired. The challenge returned to Idle, the composer kept
+the marker, and the remote transcript contained no new marker. This verifies the
+no-send boundary, not successful locked delivery. The other remote Mac remained
+unreachable and Device Hub still reported the physical phone unavailable. The
+successful locked-send and phone end-to-end acceptance items therefore remain open.
