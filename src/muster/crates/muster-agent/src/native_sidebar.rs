@@ -1,6 +1,30 @@
 //! Exact title matching for native Agent sidebar controls. A match only
 //! selects a candidate; the controller must still verify the opened session ID.
 
+/// A complete sidebar can omit a known older Claude Code session. This route
+/// only requests navigation: callers must guard the OS action and resolve the
+/// resulting surface to the exact catalog ID before any mutation.
+pub fn absent_session_route(
+    provider: &str,
+    session: &str,
+    navigation_areas: usize,
+    scan_complete: bool,
+    candidates: usize,
+) -> Option<String> {
+    if provider != "claude" || navigation_areas == 0 || !scan_complete || candidates != 0 {
+        return None;
+    }
+    let canonical_uuid = session.len() == 36
+        && session.bytes().enumerate().all(|(i, b)| {
+            if matches!(i, 8 | 13 | 18 | 23) {
+                b == b'-'
+            } else {
+                b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+            }
+        });
+    canonical_uuid.then(|| format!("claude://code/continue?session={session}"))
+}
+
 /// OS adapters expose only the attributes needed to read a button's label.
 /// AXPress is deliberately not a boundary: Electron exposes it on groups
 /// that merely wrap a static title. Nested controls remain boundaries by role.
@@ -576,6 +600,54 @@ mod tests {
                 TITLE,
                 None
             ));
+        }
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::absent_session_route;
+    const SESSION: &str = "12345678-1234-4234-8234-123456789abc";
+
+    #[test]
+    fn absent_row_uses_exact_id_without_a_title_or_last_selector() {
+        assert_eq!(
+            absent_session_route("claude", SESSION, 2, true, 0),
+            Some(format!("claude://code/continue?session={SESSION}"))
+        );
+    }
+
+    #[test]
+    fn visible_ambiguous_incomplete_and_other_provider_scans_cannot_fallback() {
+        for (provider, areas, complete, candidates) in [
+            ("claude", 2, true, 1),
+            ("claude", 2, true, 2),
+            ("claude", 0, true, 0),
+            ("claude", 2, false, 0),
+            ("codex", 2, true, 0),
+            ("catdesk", 2, true, 0),
+        ] {
+            assert!(absent_session_route(provider, SESSION, areas, complete, candidates).is_none());
+        }
+    }
+
+    #[test]
+    fn malformed_ids_and_navigation_injection_are_rejected() {
+        for id in [
+            "",
+            "last",
+            "../session",
+            "12345678-1234-4234-8234-123456789abC",
+            "123456781234-4234-8234-123456789abc",
+            "12345678-1234-4234-8234-123456789abg",
+            "12345678-1234-4234-8234-123456789abc&prompt=send",
+            "12345678-1234-4234-8234-123456789abc#fragment",
+            "12345678-1234-4234-8234-123456789abé",
+        ] {
+            assert!(
+                absent_session_route("claude", id, 2, true, 0).is_none(),
+                "{id}"
+            );
         }
     }
 }

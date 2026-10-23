@@ -197,3 +197,52 @@ pub fn claude_runtime_sessions() -> Vec<(
     }
     out
 }
+
+/// The bundle owning this live executable, not the default URL-scheme handler.
+pub fn process_bundle(pid: u32) -> Option<std::path::PathBuf> {
+    let mut path = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: writable buffer of the advertised length, initialized by libproc.
+    let len =
+        unsafe { libc::proc_pidpath(pid as i32, path.as_mut_ptr().cast(), path.len() as u32) };
+    if len <= 0 || len as usize >= path.len() {
+        return None;
+    }
+    let path = std::str::from_utf8(&path[..len as usize]).ok()?;
+    bundle_for_executable(Path::new(path)).map(Path::to_path_buf)
+}
+
+fn bundle_for_executable(path: &Path) -> Option<&Path> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let macos = path.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    (macos.file_name()? == "MacOS"
+        && contents.file_name()? == "Contents"
+        && bundle.extension()? == "app")
+        .then_some(bundle)
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::*;
+
+    #[test]
+    fn targets_only_the_observed_application_bundle() {
+        assert_eq!(
+            bundle_for_executable(Path::new(
+                "/Applications/Example App.app/Contents/MacOS/Example"
+            )),
+            Some(Path::new("/Applications/Example App.app"))
+        );
+        for path in [
+            "/usr/bin/true",
+            "Example.app/Contents/MacOS/Example",
+            "/Applications/Example.app/Contents/Helpers/worker",
+            "/tmp/Contents/MacOS/main",
+        ] {
+            assert!(bundle_for_executable(Path::new(path)).is_none());
+        }
+    }
+}

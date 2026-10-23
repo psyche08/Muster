@@ -323,6 +323,7 @@ struct SidebarScan {
     rows: usize,
     navigation: usize,
     more: Option<Element>,
+    complete: bool,
 }
 
 /// Read-only: finds the controls that name `session` in the app's session
@@ -379,6 +380,7 @@ fn scan_sidebar(
         }
         true
     });
+    let mut complete = app_walk.1 == "complete";
     let navigation_count = navigation.len();
     trace.record(format_args!(
         "navigation_areas={navigation_count} app_walk={app_walk:?} (nodes, stop, ms)"
@@ -463,6 +465,7 @@ fn scan_sidebar(
             }
             true
         });
+        complete &= area_walk.1 == "complete";
         trace.record(format_args!("area_walk={area_walk:?} (nodes, stop, ms)"));
     }
     trace.record(format_args!(
@@ -474,6 +477,7 @@ fn scan_sidebar(
         rows,
         navigation: navigation_count,
         more,
+        complete,
     }
 }
 
@@ -601,19 +605,63 @@ pub async fn select_session(
             break;
         }
     }
+    let route = muster_agent::native_sidebar::absent_session_route(
+        profile.app.provider,
+        session,
+        scan.navigation,
+        scan.complete,
+        scan.candidates.len(),
+    );
     let candidates = scan.candidates;
-    let navigation_count = scan.navigation;
-    if candidates.len() != 1 {
+    if candidates.len() == 1 {
+        check()?;
+        trace.stage("select_press");
+        candidates[0]
+            .press()
+            .map_err(|code| Error::Unavailable(format!("AX session selection failed ({code})")))?;
+    } else if let Some(route) = route {
+        let bundle = super::procs::process_bundle(pid)
+            .ok_or_else(|| Error::Unavailable("desktop bundle identity unavailable".into()))?;
+        check()?;
+        if !codesign::process_satisfies(pid, &profile.app.requirement()) {
+            return Err(Error::Unavailable(
+                "desktop signature changed before navigation".into(),
+            ));
+        }
+        check()?;
+        trace.stage("select_exact_id");
+        // No shell, default scheme handler, prompt, or title. Dispatch once to
+        // the observed signed bundle. Command success is NOT selection proof.
+        let dispatched = tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::process::Command::new("/usr/bin/open")
+                .arg("-a")
+                .arg(bundle)
+                .arg(route)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true)
+                .status(),
+        )
+        .await;
+        check()?;
+        if !matches!(dispatched, Ok(Ok(status)) if status.success()) {
+            return Err(Error::Unavailable(
+                "exact-session navigation dispatch failed or timed out; not retried".into(),
+            ));
+        }
+        trace.record(format_args!(
+            "exact_id_dispatched=true surface_verified=false"
+        ));
+    } else {
         return Err(Error::Unavailable(format!(
-            "cannot uniquely select the session in the desktop sidebar ({} matches, {navigation_count} navigation areas, unique title={title_is_unique}, {expansions} expansions)",
-            candidates.len()
+            "cannot uniquely select the session in the desktop sidebar ({} matches, {} navigation areas, unique title={title_is_unique}, {expansions} expansions, complete={})",
+            candidates.len(),
+            scan.navigation,
+            scan.complete
         )));
     }
-    check()?;
-    trace.stage("select_press");
-    candidates[0]
-        .press()
-        .map_err(|code| Error::Unavailable(format!("AX session selection failed ({code})")))?;
     let step = Step::new("selected session surface", Duration::from_secs(3));
     trace.stage("verify_selected_surface");
     let mut renderer_queries = 0u32;
@@ -666,8 +714,8 @@ pub async fn select_session(
             // press it again; a second press is not admitted here.
             trace.record(format_args!(
                 "pressed_row_present={} pressed_row_selected={:?} last_surface_error={:?}",
-                app.contains(&candidates[0]),
-                candidates[0].bool("AXSelected"),
+                candidates.first().is_some_and(|row| app.contains(row)),
+                candidates.first().and_then(|row| row.bool("AXSelected")),
                 find_surface_traced(profile, &app, session, resolver, Some(&trace)).err()
             ));
             return Err(Error::Unavailable(
