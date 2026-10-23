@@ -146,12 +146,15 @@ in front of a phone.
 
 ## Cleanup
 
-Round one's two development daemons were stopped and their state directories
-removed; the `wwtest` network exists nowhere else. Rounds two and three leave
-the `wbtest` daemons running (under `/private/tmp` on M1 Max, `~/ww` on
-M4 Pro), the M1 Max one reaching the real bridge socket through a symlink, and
-the native-host manifest still points at this branch's host so the pending
-live round can run; the installed one is restored with
-`/Applications/Muster.app/Contents/Helpers/muster-browser-host install
-"$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"`.
+All development daemons were stopped and their state directories removed on
+both machines; neither `wwtest` nor `wbtest` exists anywhere else. The
+native-host manifest was re-registered by the installed app's own helper and
+is byte-identical to the one kept before round two; Chrome respawned the
+installed host, and `ping` through it answers `agenthalo.browser` 0.2.0.
 Production state on both machines was untouched throughout.
+
+**The last hop waits for a release.** The person chose to verify the
+browser's own `fetch` against the real site once an installed Muster includes
+this change — extension, native host and daemon as one signed build — rather
+than with an unpacked copy. Installed today: Muster 1.0.87 (build 78), whose
+bundled extension is 0.2.0 without `fetch`.
