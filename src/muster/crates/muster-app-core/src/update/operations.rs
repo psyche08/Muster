@@ -87,6 +87,8 @@ pub(super) fn op_request_from(
     };
     let remote_native_send = device != route
         && matches!(&req, Req::AgentSend(r) if !muster_agent::cloud::is_cloud(&r.session) && !muster_agent::orca::is_orca(&r.session));
+    let mut diagnostic =
+        crate::send_diagnostics::Trace::new(ctx.shell.clone(), what, &device, &req);
     spawn(ctx, async move {
         let locked_nonce = if let Req::LockedUseExecute(r) = &req {
             muster_core::locked_use::Challenge::decode(&r.challenge)
@@ -96,10 +98,16 @@ pub(super) fn op_request_from(
             None
         };
         let result = async {
+            diagnostic.stage("connect");
             let client = backend.client_for(&device, &route).await?;
             if (what == "chat" || remote_native_send) && !matches!(&req, Req::LockedUseExecute(_)) {
-                let Resp::DeviceInfo(info) =
-                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                let Resp::DeviceInfo(info) = diagnostic
+                    .call(
+                        &client,
+                        Req::DeviceInfo(v1::DeviceInfoRequest {}),
+                        "capability_check",
+                    )
+                    .await?
                 else {
                     return Err(unexpected());
                 };
@@ -113,8 +121,13 @@ pub(super) fn op_request_from(
             if let Req::AgentSend(send) = &req
                 && !send.attachments.is_empty()
             {
-                let Resp::DeviceInfo(info) =
-                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                let Resp::DeviceInfo(info) = diagnostic
+                    .call(
+                        &client,
+                        Req::DeviceInfo(v1::DeviceInfoRequest {}),
+                        "capability_check",
+                    )
+                    .await?
                 else {
                     return Err(unexpected());
                 };
@@ -125,8 +138,13 @@ pub(super) fn op_request_from(
                 }
             }
             if matches!(&req, Req::AgentRespond(r) if !r.answers.is_empty()) {
-                let Resp::DeviceInfo(info) =
-                    unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+                let Resp::DeviceInfo(info) = diagnostic
+                    .call(
+                        &client,
+                        Req::DeviceInfo(v1::DeviceInfoRequest {}),
+                        "capability_check",
+                    )
+                    .await?
                 else {
                     return Err(unexpected());
                 };
@@ -136,7 +154,17 @@ pub(super) fn op_request_from(
                     ));
                 }
             }
-            let mut response = client.call(req.clone()).await;
+            let mut response = diagnostic
+                .call(
+                    &client,
+                    req.clone(),
+                    if locked_nonce.is_some() {
+                        "locked_execute"
+                    } else {
+                        "dispatch"
+                    },
+                )
+                .await;
             if matches!(
                 &response,
                 Err(muster_rpc::Error::Remote {
@@ -155,10 +183,14 @@ pub(super) fn op_request_from(
                     ));
                 }
                 operation.provider_queue = provider;
-                match client
-                    .call(Req::LockedUsePrepare(v1::LockedUsePrepareRequest {
-                        operation: Some(operation.clone()),
-                    }))
+                match diagnostic
+                    .call(
+                        &client,
+                        Req::LockedUsePrepare(v1::LockedUsePrepareRequest {
+                            operation: Some(operation.clone()),
+                        }),
+                        "locked_prepare",
+                    )
                     .await
                 {
                     Err(muster_rpc::Error::Remote {
@@ -168,7 +200,9 @@ pub(super) fn op_request_from(
                         // Another request from this device may have issued the
                         // queue challenge after our initial locked response.
                         // That initial response proves this op never started.
-                        response = client.call(req.clone()).await;
+                        response = diagnostic
+                            .call(&client, req.clone(), "locked_conflict_retry")
+                            .await;
                     }
                     Ok(Resp::LockedUseChallenge(reply)) => {
                         let c = muster_core::locked_use::Challenge::decode(&reply.challenge)
@@ -191,6 +225,7 @@ pub(super) fn op_request_from(
                                 &muster_proto::locked_use::digest(&operation),
                             )
                             .map_err(|e| Error::Invalid(e.to_string()))?;
+                        diagnostic.stage("authentication");
                         return Ok(Msg::PresenceNeeded {
                             response_origin: response_origin.clone(),
                             what,
@@ -256,6 +291,20 @@ pub(super) fn op_request_from(
             })
         }
         .await;
+        if let Err(error) = &result {
+            diagnostic.failure(error);
+        } else if let Ok(Msg::OpDone {
+            result: Ok(outcome),
+            ..
+        }) = &result
+        {
+            diagnostic.event(match v1::op_result::Status::try_from(outcome.status) {
+                Ok(v1::op_result::Status::Applied) => "completed_applied",
+                Ok(v1::op_result::Status::Duplicate) => "completed_duplicate",
+                Ok(v1::op_result::Status::Rejected) => "completed_rejected",
+                _ => "completed_unknown",
+            });
+        }
         result.unwrap_or_else(|error| {
             if what == "chat" {
                 Msg::ChatControlReply {
@@ -322,6 +371,16 @@ pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) 
     state.manual_busy.remove(&device);
     super::code_runs::cancelled(state, &device);
     if let Some(p) = state.presence.take() {
+        let what = match p.action_id.split('-').next() {
+            Some("send") => "send",
+            Some("respond") => "respond",
+            Some("terminal_result") => "terminal_result",
+            _ => "other",
+        };
+        let mut diagnostic =
+            crate::send_diagnostics::Trace::new(ctx.shell.clone(), what, &p.device, &p.request);
+        diagnostic.stage("authentication_cancel");
+        diagnostic.rejection(reason.as_str());
         state.effects.remove(&p.effect_id);
     }
     if let Some(chat) = state.chat.as_mut() {
@@ -549,6 +608,9 @@ pub(super) fn msg_presence_needed(
     request: Box<Req>,
     message: Vec<u8>,
 ) {
+    let mut auth_diagnostic =
+        crate::send_diagnostics::Trace::new(ctx.shell.clone(), what, &device, &request);
+    auth_diagnostic.stage("authentication");
     if what == "chat"
         && response_origin.as_ref().is_none_or(|(_, id)| {
             state
@@ -610,6 +672,11 @@ pub(super) fn msg_presence_needed(
             if what == "terminal_result" {
                 super::code_runs::cancelled(state, &device);
             }
+            auth_diagnostic.event(if state.foreground {
+                "authentication_busy"
+            } else {
+                "authentication_background"
+            });
             cancel_challenge(state, ctx, device, nonce.clone(), reason);
             return;
         }
@@ -631,6 +698,13 @@ pub(super) fn msg_presence_needed(
             .is_some_and(|info| info.kind == "phone")
         && let Req::LockedUseExecute(mut request) = *request.clone()
     {
+        let mut diagnostic = crate::send_diagnostics::Trace::new(
+            ctx.shell.clone(),
+            what,
+            &device,
+            &Req::LockedUseExecute(request.clone()),
+        );
+        diagnostic.stage("authentication_sign");
         let signature = ctx
             .backend
             .signer()
@@ -641,6 +715,7 @@ pub(super) fn msg_presence_needed(
             });
         match signature {
             Ok(signature) => {
+                diagnostic.event("authenticated");
                 request.signature = signature;
                 op_request_from(
                     state,
@@ -652,6 +727,7 @@ pub(super) fn msg_presence_needed(
                 );
             }
             Err(error) => {
+                diagnostic.failure(&error);
                 cancel_locked(state, ctx, CancelReason::Authentication);
                 state.toast(error.to_string(), true);
             }
@@ -692,4 +768,125 @@ pub(super) fn msg_presence_needed(
         request: *request,
         effect_id,
     });
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Reply {
+        response: Resp,
+        calls: AtomicUsize,
+    }
+    impl muster_rpc::Handler for Reply {
+        fn call(
+            &self,
+            _: muster_rpc::Context,
+            _: Req,
+            _: muster_rpc::EventSink,
+        ) -> muster_rpc::HandlerFuture<'_> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { self.response.clone() })
+        }
+    }
+    #[tokio::test]
+    async fn send_diagnostics_preserve_remote_codes_unknown_results_and_never_replay() {
+        for response in [
+            Resp::Error(v1::Error {
+                code: v1::error::Code::Conflict as i32,
+                message: "private draft".into(),
+            }),
+            Resp::Error(v1::Error {
+                code: v1::error::Code::Timeout as i32,
+                message: "private endpoint".into(),
+            }),
+            Resp::OpResult(v1::OpResult {
+                status: v1::op_result::Status::Unknown as i32,
+                message: "private receipt text".into(),
+                ..Default::default()
+            }),
+            Resp::OpResult(v1::OpResult {
+                status: v1::op_result::Status::Applied as i32,
+                result_id: "private-session".into(),
+                ..Default::default()
+            }),
+        ] {
+            let (a, b) = tokio::io::duplex(65536);
+            let handler = Arc::new(Reply {
+                response: response.clone(),
+                calls: AtomicUsize::new(0),
+            });
+            tokio::spawn(muster_rpc::serve(
+                b,
+                muster_rpc::Principal::Local,
+                handler.clone(),
+            ));
+            let sink = Arc::new(crate::send_diagnostics::tests::Capture::default());
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = Ctx {
+                shell: sink.clone(),
+                cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+                backend: Arc::new(crate::backend::Backend::Socket {
+                    path: dir.path().into(),
+                    local: muster_rpc::Client::new(a),
+                }),
+                tx,
+            };
+            let mut state = State::new(false, Some("self".into()));
+            op_request_from(
+                &mut state,
+                &ctx,
+                "send",
+                "self".into(),
+                Req::AgentSend(v1::AgentSendRequest {
+                    op_id: "app-fixture-1".into(),
+                    text: "private body".into(),
+                    ..Default::default()
+                }),
+                None,
+            );
+            let reply = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            let Loop::Msg(msg) = reply else {
+                panic!("expected result")
+            };
+            let Msg::OpDone { result, .. } = *msg else {
+                panic!("expected send result")
+            };
+            let rows = sink.0.lock().unwrap();
+            match response {
+                Resp::Error(ref e) => {
+                    assert!(
+                        rows.iter()
+                            .any(|r| r["phase"] == "dispatch" && r["remote_error_code"] == e.code)
+                    );
+                    if e.code == v1::error::Code::Timeout as i32 {
+                        assert_eq!(
+                            result.unwrap().status,
+                            v1::op_result::Status::Unknown as i32
+                        );
+                        assert!(rows.iter().any(|r| r["event"] == "completed_unknown"));
+                    } else {
+                        assert!(result.is_err());
+                    }
+                }
+                Resp::OpResult(ref r) => {
+                    assert_eq!(result.unwrap().status, r.status);
+                    assert!(
+                        rows.iter()
+                            .any(|r| r["event"] == "unknown" || r["event"] == "applied")
+                    );
+                }
+                _ => unreachable!(),
+            }
+            assert!(!serde_json::to_string(&*rows).unwrap().contains("private"));
+            assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
+        }
+    }
 }

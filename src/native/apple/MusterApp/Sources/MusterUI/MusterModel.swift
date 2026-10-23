@@ -130,6 +130,8 @@ public final class MusterModel: ObservableObject {
     private func perform(id: UInt64, effect: Effect) {
         guard let core else { return }
         switch effect.ef {
+        case .sendDiagnostic:
+            break // Stored by the core adapter before UI dispatch.
         case .activateNetwork(let request):
             #if os(iOS)
             NetworkActivation.start(address: request.address, port: request.port, timeoutMS: request.timeoutMs) { ok, error in

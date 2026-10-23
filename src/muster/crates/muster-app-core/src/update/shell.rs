@@ -65,6 +65,24 @@ pub fn effect_result(state: &mut State, ctx: &Ctx, id: u64, result: app::EffectR
                 state.presence = Some(pending);
                 return;
             }
+            let what = match pending.action_id.split('-').next() {
+                Some("send") => "send",
+                Some("respond") => "respond",
+                Some("terminal_result") => "terminal_result",
+                _ => "other",
+            };
+            let mut diagnostic = crate::send_diagnostics::Trace::new(
+                ctx.shell.clone(),
+                what,
+                &pending.device,
+                &pending.request,
+            );
+            diagnostic.stage("authentication_result");
+            diagnostic.event(if result.ok && !result.data.is_empty() {
+                "authenticated"
+            } else {
+                "authentication_cancelled"
+            });
             if !result.ok || result.data.is_empty() {
                 if matches!(pending.request, Req::BrowserCall(_)) {
                     state.browser.busy = false;

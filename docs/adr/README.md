@@ -74,6 +74,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0037](0037-apple-recycled-history.md) | Accepted | Recycle desktop transcripts and load larger history pages near the top |
 
+| [0038](0038-client-send-diagnostics.md) | Accepted | Export content-free client send phases and error codes |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

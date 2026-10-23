@@ -302,6 +302,12 @@ public final class MusterCore: MusterShell {
             answer(effect: id, ok: false, error: "undecodable effect")
             return
         }
+        if case .sendDiagnostic(let record) = effect.ef {
+            #if os(iOS)
+            PerformanceDiagnostics.shared.recordSendDiagnostic(record.json)
+            #endif
+            return // Fire-and-forget: never acknowledges an application operation.
+        }
         onEffect(id, effect)
     }
 
