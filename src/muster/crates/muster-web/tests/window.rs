@@ -64,8 +64,17 @@ fn origin() -> Origin {
     "https://example.test".parse().expect("an origin")
 }
 
-/// A socket path of its own per test, short enough for `sun_path`.
-fn socket() -> PathBuf {
+/// A directory of its own per test, removed when the test ends, with a socket
+/// path short enough for `sun_path`.
+struct Scratch(PathBuf);
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn scratch() -> Scratch {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
         "mw-{}-{}",
@@ -73,13 +82,30 @@ fn socket() -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&dir);
-    dir.join("w.sock")
+    Scratch(dir)
 }
 
-async fn open(stub: Arc<Stub>) -> Window {
-    Window::open(origin(), &socket(), stub)
+/// A window and the directory it lives in. The window drops first, so a test
+/// can still see what closing it leaves behind.
+struct Opened {
+    window: Window,
+    _dir: Scratch,
+}
+
+impl std::ops::Deref for Opened {
+    type Target = Window;
+
+    fn deref(&self) -> &Window {
+        &self.window
+    }
+}
+
+async fn open(stub: Arc<Stub>) -> Opened {
+    let dir = scratch();
+    let window = Window::open(origin(), &dir.0.join("w.sock"), stub)
         .await
-        .expect("a window")
+        .expect("a window");
+    Opened { window, _dir: dir }
 }
 
 /// One request through the owner's socket, raw, so a test can write a
@@ -160,7 +186,7 @@ async fn a_page_comes_through_under_the_origins_own_url() {
 async fn the_window_is_a_socket_only_its_user_can_open() {
     use std::os::unix::fs::PermissionsExt;
     let stub = Stub::new(page());
-    let window = open(stub.clone()).await;
+    let Opened { window, _dir } = open(stub.clone()).await;
 
     let mode = |path: &std::path::Path| {
         std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
