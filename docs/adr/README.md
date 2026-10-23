@@ -61,6 +61,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0030](0030-ios-recycled-conversation.md) | Accepted | Recycle iOS conversation rows while retaining Rust pagination |
 
+| [0031](0031-transcript-disclosure-state.md) | Accepted | Retain transcript disclosure choices across cell reuse |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

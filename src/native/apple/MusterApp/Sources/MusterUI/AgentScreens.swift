@@ -760,13 +760,15 @@ struct ConversationBlock: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        .environment(\.transcriptDisclosurePath, [block.id])
     }
 }
 
 struct WorkingGroup: View {
     let block: Muster_App_ChatBlock
-    @State private var expandedOverride: Bool?
-    private var expanded: Bool { expandedOverride ?? block.defaultExpanded }
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("working", id: block.id, defaultValue: block.defaultExpanded) }
+    private var expanded: Bool { expansion.wrappedValue }
 
     var body: some View {
         Group {
@@ -783,7 +785,7 @@ struct WorkingGroup: View {
 
     private var workGroup: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button { expandedOverride = !expanded } label: {
+            Button { expansion.wrappedValue.toggle() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: block.completed ? "checkmark.circle" : "circle.dotted")
                     Text(block.title)
@@ -811,22 +813,26 @@ struct WorkingGroup: View {
 struct ActivityGroup: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.block == rhs.block }
     let block: Muster_App_ChatBlock
-    @State var expanded = false
+    var expanded = false
+    @Environment(\.transcriptDisclosurePath) private var disclosurePath
+
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("activity", id: block.id, defaultValue: expanded) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button { withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() } } label: {
+            Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "terminal").frame(width: 20)
                     Text(block.title.isEmpty ? "Tool activity" : block.title).lineLimit(2)
                     Spacer(minLength: 0)
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption)
+                    Image(systemName: expansion.wrappedValue ? "chevron.down" : "chevron.right").font(.caption)
                 }.contentShape(Rectangle()).padding(.vertical, 4)
             }
             .buttonStyle(.plain).foregroundStyle(.secondary)
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-            if expanded {
-                ForEach(block.activityRows, id: \.id) { ToolActivityRow(row: $0) }
+            .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
+            if expansion.wrappedValue {
+                ForEach(block.activityRows, id: \.id) { ToolActivityRow(row: $0).environment(\.transcriptDisclosurePath, disclosurePath + [block.id]) }
             }
         }
         .font(.system(size: ChatStyle.bodySize))
@@ -836,7 +842,7 @@ struct ActivityGroup: View, Equatable {
 
 struct ToolActivityRow: View {
     let row: Muster_App_ChatActivityRow
-    @State var expanded = false
+    var expanded = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.conversationStyle) private var style
     private var palette: ChatPalette { ChatPalette(scheme: scheme, style: style) }
@@ -848,20 +854,23 @@ struct ToolActivityRow: View {
         }
     }
 
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("tool", id: row.id, defaultValue: expanded) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button { withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() } } label: {
+            Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
                 HStack(spacing: 8) {
                     Image(systemName: symbol).frame(width: 20)
                     Text(row.title).lineLimit(2).truncationMode(.tail)
                     ToolStatus(status: row.status)
                     Spacer(minLength: 0)
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption)
+                    Image(systemName: expansion.wrappedValue ? "chevron.down" : "chevron.right").font(.caption)
                 }.contentShape(Rectangle()).padding(.vertical, 3)
             }
             .buttonStyle(.plain).foregroundStyle(.secondary)
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-            if expanded {
+            .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
+            if expansion.wrappedValue {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(row.category == "shell" ? "Shell" : row.toolName)
                         .foregroundStyle(.secondary)
@@ -891,11 +900,14 @@ struct ToolActivityRow: View {
 struct TurnChanges: View {
     let message: Muster_V1_AgentMessage
     var open: (String) -> Void = { _ in }
-    @State private var expanded = true
+    private var expanded = true
+
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("changes", id: message.id, defaultValue: expanded) }
 
     var body: some View {
         if !message.usage.changes.isEmpty || message.usage.changesIncomplete {
-            DisclosureGroup(isExpanded: $expanded) {
+            DisclosureGroup(isExpanded: expansion) {
                 VStack(spacing: 0) {
                     if message.usage.changesIncomplete {
                         Text("Some recorded changes could not be displayed").font(.caption).foregroundStyle(.secondary)
@@ -942,10 +954,13 @@ struct TurnChanges: View {
 struct CompactContext: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.message == rhs.message }
     let message: Muster_V1_AgentMessage
-    @State private var expanded = false
+    private var expanded = false
+
+    private var disclosure = TranscriptDisclosure()
+    private var expansion: Binding<Bool> { disclosure.binding("context", id: message.id, defaultValue: expanded) }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
+        DisclosureGroup(isExpanded: expansion) {
             ChatMarkdown(text: message.text)
                 .padding(.top, 8)
         } label: {
