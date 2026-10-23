@@ -80,6 +80,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0040](0040-desktop-navigation-identity.md) | Accepted | Map Claude navigation to its desktop identity |
 
+| [0041](0041-macos-transcript-geometry.md) | Accepted | Fix desktop transcript measurement and wheel-driven history |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
