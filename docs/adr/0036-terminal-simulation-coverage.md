@@ -115,3 +115,51 @@ This follow-up published neither macOS nor iOS and did not submit notarization.
 The separate paired release evidence is attributed to ADR 0039. Generated
 artifacts and raw device/session data remain outside tracked source. Hosted
 Actions remain disabled; these are local checks.
+
+## Both native hosts accepted on the replacement installation
+
+The operator subsequently requested real iTerm2 and Ghostty acceptance and
+replacement of the locally installed Muster. No terminal implementation change
+was needed for this follow-up. The plan was to read existing sessions without
+input, exercise a dedicated new window for each source, check reconnect and
+operation deduplication, then close only those test windows.
+
+- Clean source `8a455e404b4d921057502c9413b3510597f32f7f` built the Release
+  SEP daemon, CLI, browser helper, arm64 FFI and macOS app, version 1.0.90 (81).
+  Developer ID signing, Presence signing, strict nested signatures and source
+  ancestry checks passed. The Rust update lease guarded replacement of the
+  installed bundle; the previous bundle was archived locally. Normal app
+  startup succeeded and final app/daemon hashes still matched this local build.
+- iTerm2 3.7.6 became available at its permanent application location after the
+  former temporary test copy had been cleaned up. The operator enabled its
+  Python API and connection/automation authorization. The installed daemon
+  reported both native sources, iTerm2 API available and Automation granted
+  for both applications, with no inventory errors. No authorization setting
+  was enabled programmatically.
+- For **each** source, one pre-existing session returned nonempty history and a
+  full attachment frame under its exact source-qualified ID. Cancelling that
+  subscription preserved the original session. History checks requested up to
+  300 rows; short trailing-row reads in iTerm2 can contain blank screen rows.
+- For **each** source, creation produced exactly one new session in a distinct
+  native window. Repeating its operation ID returned the same session without
+  creating another window. After confirming the test window's shell prompt,
+  octal-encoded benign `printf` input produced an exact Unicode marker through
+  both a streamed output delta and history. Repeating the input operation ID
+  returned the deduplicated receipt, and the output marker appeared once.
+- Detaching and reattaching to each test session preserved its output. A second
+  input on the reattached session produced a further output delta. Closing
+  the dedicated window removed only that session from inventory; both original
+  sessions remained. Failed harness preflight attempts were cleaned up before
+  the completed runs. No input was sent to the original user sessions.
+- Final RPC and file checks confirmed source `8a455e40`, the original device
+  identity, SEP backend, Accessibility granted, Vnet up, relay registered,
+  both native automation grants and the live iTerm2 API. The installation did
+  not change to another release during these acceptance runs.
+
+These are unlocked local native-adapter tests through the installed daemon.
+They do not establish remote/iPhone behavior, locked-console operation,
+multipane targeting, native UI rendering parity, sustained latency or older OS
+compatibility. No new simulation suite run is claimed for this documentation-only
+follow-up. No notarization submission, macOS publication or iOS OTA publication
+was performed. Hosted Actions remain disabled. Generated applications and raw
+session/device evidence are excluded from tracked source.
