@@ -8,23 +8,39 @@ use muster_proto::{
 
 /// Orca-style presentation keeps prose in the reading flow and collapses only
 /// the evidence-heavy rows. The native shell never reconstructs turn membership.
+#[cfg(test)]
 pub fn for_session(messages: &[AgentMessage], running: bool, cli: bool) -> Vec<ChatBlock> {
+    window(messages, 0, running, cli)
+}
+
+/// Keep group identities grounded in cached history while emitting only the
+/// requested window. Native shells must not infer continuity from partial groups.
+pub(crate) fn window(
+    messages: &[AgentMessage],
+    start: usize,
+    running: bool,
+    cli: bool,
+) -> Vec<ChatBlock> {
     if !cli {
-        return blocks(messages, running);
+        return window_blocks(messages, start, running);
     }
     let mut out = Vec::new();
     let mut activity = Vec::new();
+    let mut activity_first = None;
     let last_boundary = messages.iter().rposition(|m| m.kind == "turn_status");
     for (index, message) in messages.iter().enumerate() {
         let completed = !running || last_boundary.is_some_and(|end| index <= end);
         if matches!(message.kind.as_str(), "tool_call" | "tool_result")
             && message.tool_name != "diff"
         {
-            activity.push(message.clone());
+            activity_first.get_or_insert_with(|| message.id.clone());
+            if index >= start {
+                activity.push(message.clone());
+            }
             continue;
         }
-        flush(&mut activity, completed, &mut out);
-        if message.text.trim().is_empty() {
+        flush(&mut activity, activity_first.take(), completed, &mut out);
+        if index < start || message.text.trim().is_empty() {
             continue;
         }
         let (kind, title) = if message.kind == "turn_status" {
@@ -52,23 +68,37 @@ pub fn for_session(messages: &[AgentMessage], running: bool, cli: bool) -> Vec<C
             ..Default::default()
         });
     }
-    flush(&mut activity, !running, &mut out);
+    flush(&mut activity, activity_first.take(), !running, &mut out);
     out
 }
 
+#[cfg(test)]
 pub fn blocks(messages: &[AgentMessage], running: bool) -> Vec<ChatBlock> {
+    window_blocks(messages, 0, running)
+}
+
+fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Vec<ChatBlock> {
     let mut out = Vec::new();
     let mut start = 0;
     for (index, message) in messages.iter().enumerate() {
         if message.kind == "turn_summary" {
-            turn(&messages[start..index], true, &mut out);
-            out.push(ChatBlock {
-                id: message.id.clone(),
-                kind: "summary".into(),
-                message: Some(message.clone()),
-                completed: true,
-                ..Default::default()
-            });
+            if index > visible {
+                turn(
+                    &messages[start..index],
+                    true,
+                    &mut out,
+                    visible.saturating_sub(start),
+                );
+            }
+            if index >= visible {
+                out.push(ChatBlock {
+                    id: message.id.clone(),
+                    kind: "summary".into(),
+                    message: Some(message.clone()),
+                    completed: true,
+                    ..Default::default()
+                });
+            }
             start = index + 1;
         } else if message.role == "user"
             && message.kind == "text"
@@ -77,11 +107,25 @@ pub fn blocks(messages: &[AgentMessage], running: bool) -> Vec<ChatBlock> {
         {
             // Legacy transcripts can omit usage footers. A new visible prompt
             // must not pull the previous reply into the next turn's work group.
-            turn(&messages[start..index], true, &mut out);
+            if index > visible {
+                turn(
+                    &messages[start..index],
+                    true,
+                    &mut out,
+                    visible.saturating_sub(start),
+                );
+            }
             start = index;
         }
     }
-    turn(&messages[start..], !running, &mut out);
+    if messages.len() > visible {
+        turn(
+            &messages[start..],
+            !running,
+            &mut out,
+            visible.saturating_sub(start),
+        );
+    }
     out
 }
 
@@ -114,9 +158,11 @@ pub(crate) fn activity_indicator(out: &mut Vec<ChatBlock>, own: &str, descendant
     });
 }
 
-fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>) {
+fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, visible: usize) {
     let mut work = Vec::new();
+    let mut work_first = None;
     let mut activity = Vec::new();
+    let mut activity_first = None;
     // Older transcripts do not label prose phases. Keep the complete trailing
     // reply (possibly several text blocks) outside Worked. Empty text records
     // do not hide it; a later tool call still means this prose was work in progress.
@@ -131,31 +177,44 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>) {
     } else {
         messages.len()
     };
+    // A partial turn may start far before the visible page. Index provider
+    // replacements once so identity-only prefix traversal remains linear.
+    let card_calls: std::collections::HashSet<_> = messages
+        .iter()
+        .filter(|m| m.kind == "provider_card")
+        .map(|m| m.tool_call_id.as_str())
+        .collect();
+    let latest_plan = messages
+        .iter()
+        .rposition(|m| m.kind == "provider_card" && m.tool_name == "mcp__ccd_turn__update_plan");
     for (index, message) in messages.iter().enumerate() {
-        if message.kind == "tool_call"
-            && messages
-                .iter()
-                .any(|m| m.kind == "provider_card" && m.tool_call_id == message.tool_call_id)
-        {
+        if message.kind == "tool_call" && card_calls.contains(message.tool_call_id.as_str()) {
             continue;
         }
         // Incremental plan updates replace the prior snapshot within this turn.
         if message.kind == "provider_card"
             && message.tool_name == "mcp__ccd_turn__update_plan"
-            && messages[index + 1..]
-                .iter()
-                .any(|m| m.kind == "provider_card" && m.tool_name == message.tool_name)
+            && latest_plan.is_some_and(|latest| latest > index)
         {
             continue;
         }
         if matches!(message.kind.as_str(), "tool_call" | "tool_result") {
-            activity.push(message.clone());
+            activity_first.get_or_insert_with(|| message.id.clone());
+            if index >= visible {
+                activity.push(message.clone());
+            }
             continue;
         }
         if message.kind == "text" && message.text.trim().is_empty() {
             continue;
         }
-        flush(&mut activity, completed, &mut work);
+        flush_into_work(
+            &mut activity,
+            &mut activity_first,
+            completed,
+            &mut work,
+            &mut work_first,
+        );
         let compact = is_compact_context(message);
         let boundary = compact
             || message.role == "user"
@@ -164,7 +223,15 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>) {
             || message.phase == "final_answer"
             || index >= trailing_start;
         if boundary {
-            flush_work(&mut work, completed || message.role == "user", out);
+            flush_work(
+                &mut work,
+                &mut work_first,
+                completed || message.role == "user",
+                out,
+            );
+            if index < visible {
+                continue;
+            }
             out.push(ChatBlock {
                 id: message.id.clone(),
                 title: if message.kind == "provider_card" {
@@ -185,6 +252,10 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>) {
                 ..Default::default()
             });
         } else {
+            work_first.get_or_insert_with(|| message.id.clone());
+            if index < visible {
+                continue;
+            }
             work.push(ChatBlock {
                 id: message.id.clone(),
                 kind: "message".into(),
@@ -194,14 +265,39 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>) {
             });
         }
     }
-    flush(&mut activity, completed, &mut work);
-    flush_work(&mut work, completed, out);
+    flush_into_work(
+        &mut activity,
+        &mut activity_first,
+        completed,
+        &mut work,
+        &mut work_first,
+    );
+    flush_work(&mut work, &mut work_first, completed, out);
 }
 
-fn flush_work(work: &mut Vec<ChatBlock>, completed: bool, out: &mut Vec<ChatBlock>) {
-    if let Some(first) = work.first() {
+fn flush_into_work(
+    activity: &mut Vec<AgentMessage>,
+    first: &mut Option<String>,
+    completed: bool,
+    work: &mut Vec<ChatBlock>,
+    work_first: &mut Option<String>,
+) {
+    if let Some(id) = first.as_ref() {
+        work_first.get_or_insert_with(|| format!("activity:{id}"));
+    }
+    flush(activity, first.take(), completed, work);
+}
+
+fn flush_work(
+    work: &mut Vec<ChatBlock>,
+    first: &mut Option<String>,
+    completed: bool,
+    out: &mut Vec<ChatBlock>,
+) {
+    let id = first.take();
+    if let Some(id) = id.filter(|_| !work.is_empty()) {
         out.push(ChatBlock {
-            id: format!("working:{}", first.id),
+            id: format!("working:{id}"),
             kind: "working".into(),
             title: if completed { "Worked" } else { "Working" }.into(),
             children: std::mem::take(work),
@@ -228,10 +324,15 @@ fn is_compact_context(message: &AgentMessage) -> bool {
         .iter()
         .any(|prefix| message.text.trim_start().starts_with(prefix))
 }
-fn flush(activity: &mut Vec<AgentMessage>, completed: bool, out: &mut Vec<ChatBlock>) {
-    if let Some(first) = activity.first() {
+fn flush(
+    activity: &mut Vec<AgentMessage>,
+    first: Option<String>,
+    completed: bool,
+    out: &mut Vec<ChatBlock>,
+) {
+    if let Some(id) = first.filter(|_| !activity.is_empty()) {
         out.push(ChatBlock {
-            id: format!("activity:{}", first.id),
+            id: format!("activity:{id}"),
             kind: "activity".into(),
             activity_rows: activity_rows(activity, completed),
             title: activity_title(activity),
@@ -476,6 +577,84 @@ mod tests {
         assert_eq!(view[1].diffs[0].added, 1);
         assert_eq!(view[2].kind, "message");
     }
+    #[test]
+    fn window_keeps_partial_group_ids_and_excludes_hidden_payload() {
+        let messages = vec![
+            m("prompt", "user", "text"),
+            m("thought", "assistant", "reasoning"),
+            m("call-a", "assistant", "tool_call"),
+            m("result-a", "tool", "tool_result"),
+            m("progress", "assistant", "text"),
+            m("call-b", "assistant", "tool_call"),
+            m("result-b", "tool", "tool_result"),
+            m("final", "assistant", "text"),
+            m("summary", "assistant", "turn_summary"),
+            m("next-prompt", "user", "text"),
+            m("next-work", "assistant", "reasoning"),
+            m("next-call", "assistant", "tool_call"),
+            m("next-result", "tool", "tool_result"),
+            AgentMessage {
+                phase: "final_answer".into(),
+                ..m("explicit-final", "assistant", "text")
+            },
+            m("compact", "user", "compact_context"),
+            AgentMessage {
+                tool_call_id: "card-call".into(),
+                ..m("shadowed-call", "assistant", "tool_call")
+            },
+            m("before-card", "assistant", "reasoning"),
+            AgentMessage {
+                tool_call_id: "card-call".into(),
+                tool_name: "mcp__ccd_turn__update_plan".into(),
+                ..m("plan", "assistant", "provider_card")
+            },
+            m("after-card", "assistant", "reasoning"),
+            m("after-card-call", "assistant", "tool_call"),
+        ];
+        fn all<'a>(blocks: &'a [ChatBlock], out: &mut Vec<&'a ChatBlock>) {
+            for b in blocks {
+                out.push(b);
+                all(&b.children, out);
+            }
+        }
+        for cli in [false, true] {
+            for running in [false, true] {
+                let full = for_session(&messages, running, cli);
+                let mut full_nodes = Vec::new();
+                all(&full, &mut full_nodes);
+                for start in 0..=messages.len() {
+                    let partial = window(&messages, start, running, cli);
+                    let mut nodes = Vec::new();
+                    all(&partial, &mut nodes);
+                    for b in nodes {
+                        assert!(
+                            full_nodes.iter().any(|f| f.id == b.id && f.kind == b.kind),
+                            "start={start} cli={cli} running={running} id={}",
+                            b.id
+                        );
+                        for m in b.message.iter().chain(b.activity.iter()) {
+                            assert!(
+                                messages[start..].iter().any(|v| v.id == m.id),
+                                "hidden payload escaped at {start}: {}",
+                                m.id
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        let full = window(&messages, 0, true, false);
+        let partial = window(&messages, 3, true, false);
+        assert_ne!(
+            for_session(&messages[3..], true, false)[0].id,
+            full[1].id,
+            "The old sliced projection loses identity at this boundary"
+        );
+        assert_eq!(partial[0].id, full[1].id);
+        assert_eq!(partial[0].children[0].id, full[1].children[1].id);
+        assert_eq!(partial[0].children[0].activity.len(), 1);
+    }
+
     fn m(id: &str, role: &str, kind: &str) -> AgentMessage {
         AgentMessage {
             id: id.into(),

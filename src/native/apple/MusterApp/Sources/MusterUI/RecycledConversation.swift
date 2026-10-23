@@ -3,6 +3,22 @@ import SwiftUI
 import UIKit
 import MusterCore
 
+/// Keep the opened conversation's view identity while another content tab is
+/// selected. Reattaching an old controller still discards hosted SwiftUI state.
+struct ConversationTabContent<Content: View>: View {
+    let active: Bool
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        content().opacity(active ? 1 : 0)
+            .allowsHitTesting(active).accessibilityHidden(!active)
+            .onChange(of: active) { _, shown in
+                if !shown {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+    }
+}
+
 /// UIKit owns only row layout and transient presentation state. Rust supplies the complete
 /// presentation window and every load/send/answer decision.
 struct RecycledConversation: UIViewControllerRepresentable {
