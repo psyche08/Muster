@@ -72,4 +72,40 @@ owner confirms relock/releases ownership, then a late exact ledger receipt
 resolves the still-pending caller without resubmission (435 distinct tests).
 Strict Clippy passed; architecture and public-content checks passed. The client
 also accepts an exact pending draft's late result after its lease ends without
-closing a newer lease or changing a newer draft. Device acceptance remains pending.
+closing a newer lease or changing a newer draft. Physical acceptance is recorded below.
+
+
+### Signed builds and physical acceptance
+
+The macOS Developer ID build and matching physical iOS build succeeded from
+source commit `66a39fbf`. Presence entitlements, signatures and release ancestry
+checks passed. All three acceptance Macs installed the same daemon digest,
+retaining their identities, SEP backends, Accessibility grants and network
+readiness. The matching iOS app installed and ran on a physical phone. This
+acceptance run did not notarize or publish a desktop feed or iOS OTA release.
+
+Small before/after samples from dedicated native conversations show:
+
+| Case | Before: prepare + send including receipt | After | Visible-controller path |
+| --- | --- | --- | --- |
+| Desktop A, Codex, already-visible baseline | 339 + 1029 = 1368 ms | 145 + 776 = 921 ms; 105 + 577 = 682 ms | Confirmed in both new samples |
+| Desktop B, Claude, already-visible baseline | 357 + 1432 = 1789 ms | 151 + 899 = 1050 ms | Confirmed |
+
+These are daemon stage timings, not model response latency or a population
+benchmark. Provider receipt waits varied; the local build machine also had
+build activity during baseline sampling. A separate baseline requiring navigation
+is retained privately but excluded from the already-visible comparison.
+
+Physical phone acceptance passed for Desktop A's Codex conversation, including
+navigation back to a target that was no longer visible. Desktop B was confirmed
+locked before a phone-originated Claude send. Logs showed a verified operation,
+unlock under cover, the exact submission and provider receipt, queue drain,
+confirmed relock and cover release; the phone displayed the unique reply. The
+native prepare stage took 281 ms and send including receipt took 840 ms. The
+receipt arrived in 101 ms, so the slow-receipt handoff is covered by the owner
+integration test, not claimed as a naturally delayed physical sample.
+
+Desktop C installation and runtime checks passed. Its dedicated-conversation
+acceptance is still pending an uncontended UI window: unrelated foreground
+navigation continued during setup, so no test text was entered into business
+conversations. No unknown submission was retried.
