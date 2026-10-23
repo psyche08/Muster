@@ -169,7 +169,7 @@ final class ConversationLayoutTests: XCTestCase {
     }
 
     @MainActor
-    func testCacheTTLIsVisibleWithoutOpeningDetails() throws {
+    func testFooterLayoutIgnoresCacheExpiryMetadata() throws {
         let known = Muster_V1_AgentMessage.fixture {
             $0.id = "ttl"; $0.kind = "turn_summary"; $0.tsUnix = 1_790_848_800
             $0.usage = .fixture {
@@ -189,16 +189,21 @@ final class ConversationLayoutTests: XCTestCase {
         var legacy = known
         legacy.usage.clearCacheExpiry()
         for width in [CGFloat(320), 402] {
+            let size = CGSize(width: width - 32, height: 874)
+            let baseline = UIHostingController(rootView: TurnFooter(message: legacy)).sizeThatFits(in: size)
+            for value in [known, unknown] {
+                let rendered = UIHostingController(rootView: TurnFooter(message: value)).sizeThatFits(in: size)
+                XCTAssertEqual(rendered.height, baseline.height, accuracy: 1)
+            }
             let content = VStack(alignment: .leading, spacing: 12) {
                 TurnFooter(message: known)
                 TurnFooter(message: unknown)
                 TurnFooter(message: legacy)
-                TurnFooter(message: known, cacheDetails: true)
                 Spacer()
             }.padding(16)
             let host = UIHostingController(rootView: content)
             XCTAssertLessThanOrEqual(host.sizeThatFits(in: CGSize(width: width, height: 874)).width, width)
-            try snapshot(content, name: "cache-ttl-\(Int(width))", width: width)
+            try snapshot(content, name: "compact-footer-\(Int(width))", width: width)
         }
     }
 
