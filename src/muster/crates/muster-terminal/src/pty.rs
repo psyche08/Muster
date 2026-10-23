@@ -8,6 +8,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use muster_proto::v1::{TerminalFrame, TerminalLine, TerminalSession};
 use tokio::sync::{broadcast, mpsc};
@@ -43,6 +44,7 @@ struct Session {
     grid: Mutex<Grid>,
     master: std::fs::File,
     child: Mutex<Option<std::process::Child>>,
+    writes: Mutex<()>,
     frames: broadcast::Sender<TerminalFrame>,
     ended: AtomicBool,
 }
@@ -125,6 +127,14 @@ impl PtyService {
             .get(id)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("session {id}")))
+    }
+
+    pub(crate) fn contains(&self, id: &str) -> bool {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(id)
+            .is_some_and(|s| !s.ended.load(Ordering::Acquire))
     }
 
     pub async fn sessions(&self) -> Result<Vec<TerminalSession>, Error> {
@@ -273,6 +283,7 @@ impl PtyService {
             grid: Mutex::new(Grid::new(cols, rows)),
             master: master_file,
             child: Mutex::new(Some(child)),
+            writes: Mutex::new(()),
             frames,
             ended: AtomicBool::new(false),
         });
@@ -292,38 +303,45 @@ impl PtyService {
 
     fn read_loop(&self, session: Arc<Session>, mut reader: std::fs::File) {
         let mut buf = vec![0u8; 16384];
+        let mut deadline = None;
         loop {
+            if let Some(until) = deadline {
+                let ready = Instant::now() < until && readable_before(reader.as_raw_fd(), until);
+                if !ready {
+                    let mut grid = session.grid.lock().unwrap();
+                    if let Some(frame) = grid.frame(&session.id) {
+                        let _ = session.frames.send(frame);
+                    }
+                    deadline = None;
+                }
+            }
             let n = match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
                 Ok(n) => n,
             };
-            let replies = {
-                let mut grid = session.grid.lock().unwrap();
-                let replies = grid.feed(&buf[..n]);
-                if let Some(frame) = grid.frame(&session.id) {
-                    let _ = session.frames.send(frame);
-                }
-                replies
-            };
+            deadline.get_or_insert_with(|| Instant::now() + Duration::from_millis(8));
+            // Parse and answer queries immediately, even within a frame window.
+            let replies = session.grid.lock().unwrap().feed(&buf[..n]);
             if !replies.is_empty() {
+                let _guard = session.writes.lock().unwrap();
                 let _ = (&session.master).write_all(&replies);
             }
         }
-        session.ended.store(true, Ordering::Relaxed);
-        let rev = session
-            .grid
-            .lock()
-            .unwrap()
-            .frame(&session.id)
-            .map(|f| f.rev)
-            .unwrap_or(0)
-            + 1;
-        let _ = session.frames.send(TerminalFrame {
-            session: session.id.clone(),
-            rev,
-            ended: true,
-            ..Default::default()
-        });
+        {
+            let mut grid = session.grid.lock().unwrap();
+            if let Some(frame) = grid.frame(&session.id) {
+                let _ = session.frames.send(frame);
+            }
+            session.ended.store(true, Ordering::Release);
+            let _ = session.frames.send(TerminalFrame {
+                session: session.id.clone(),
+                rev: grid.revision() + 1,
+                ended: true,
+                ..Default::default()
+            });
+        }
         if let Some(mut child) = session.child.lock().unwrap().take() {
             let _ = child.wait();
         }
@@ -339,25 +357,43 @@ impl PtyService {
     ) -> Result<(), Error> {
         let session = self.get(id)?;
         let mut frames = session.frames.subscribe();
-        let full = session.grid.lock().unwrap().full_frame(id);
-        if out.send(full).await.is_err() {
+        let snapshot = || {
+            let grid = session.grid.lock().unwrap();
+            let mut full = grid.snapshot(id);
+            if session.ended.load(Ordering::Acquire) {
+                full.ended = true;
+                full.rev += 1;
+            }
+            full
+        };
+        let full = snapshot();
+        let mut revision = full.rev;
+        let ended = full.ended;
+        if out.send(full).await.is_err() || ended {
             return Ok(());
         }
         loop {
-            match frames.recv().await {
-                Ok(frame) => {
-                    let ended = frame.ended;
-                    if out.send(frame).await.is_err() || ended {
-                        return Ok(());
+            tokio::select! {
+                _ = out.closed() => return Ok(()),
+                next = frames.recv() => match next {
+                    Ok(frame) => {
+                        // A snapshot may already include queued frames.
+                        if frame.rev <= revision { continue; }
+                        revision = frame.rev;
+                        let ended = frame.ended;
+                        if out.send(frame).await.is_err() || ended { return Ok(()); }
                     }
-                }
-                Err(broadcast::error::RecvError::Lagged(_)) => {
-                    let full = session.grid.lock().unwrap().full_frame(id);
-                    if out.send(full).await.is_err() {
-                        return Ok(());
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        // Resubscribe before capturing, so no update can fall
+                        // between recovery and observing subsequent deltas.
+                        frames = session.frames.subscribe();
+                        let full = snapshot();
+                        revision = full.rev;
+                        let ended = full.ended;
+                        if out.send(full).await.is_err() || ended { return Ok(()); }
                     }
+                    Err(_) => return Ok(()),
                 }
-                Err(_) => return Ok(()),
             }
         }
     }
@@ -368,23 +404,28 @@ impl PtyService {
             return Err(Error::NotFound(format!("session {id} ended")));
         }
         let bytes = bytes.to_vec();
-        tokio::task::spawn_blocking(move || (&session.master).write_all(&bytes))
-            .await
-            .map_err(|e| Error::Unavailable(e.to_string()))?
-            .map_err(|e| Error::Unavailable(format!("write: {e}")))
+        tokio::task::spawn_blocking(move || {
+            let _guard = session.writes.lock().unwrap();
+            (&session.master).write_all(&bytes)
+        })
+        .await
+        .map_err(|e| Error::Unavailable(e.to_string()))?
+        .map_err(|e| Error::Unavailable(format!("write: {e}")))
     }
 
     pub async fn resize(&self, id: &str, cols: u32, rows: u32) -> Result<(), Error> {
         let session = self.get(id)?;
         let (cols, rows) = (cols.clamp(2, 500) as u16, rows.clamp(1, 300) as u16);
-        set_winsize(session.master.as_raw_fd(), cols, rows)
-            .map_err(|e| Error::Unavailable(format!("resize: {e}")))?;
-        let frame = {
+        {
             let mut grid = session.grid.lock().unwrap();
+            if grid.cols() == cols && grid.rows() == rows {
+                return Ok(());
+            }
+            set_winsize(session.master.as_raw_fd(), cols, rows)
+                .map_err(|e| Error::Unavailable(format!("resize: {e}")))?;
             grid.resize(cols, rows);
-            grid.full_frame(id)
-        };
-        let _ = session.frames.send(frame);
+            let _ = session.frames.send(grid.full_frame(id));
+        }
         let _ = self.list_changed.send(());
         Ok(())
     }
@@ -417,10 +458,123 @@ impl PtyService {
     }
 }
 
+/// Wait only until this burst's frame deadline, never once per output chunk.
+fn readable_before(fd: i32, deadline: Instant) -> bool {
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return false;
+        }
+        let mut event = libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: one valid pollfd, borrowed from the live PTY reader.
+        let result = unsafe { libc::poll(&mut event, 1, remaining.as_millis().max(1) as i32) };
+        if result >= 0 {
+            return result > 0;
+        }
+        if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+            return false;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn lagged_viewer_recovers_without_replaying_older_deltas() {
+        let service = PtyService::new(PtyConfig::default());
+        let created = service
+            .create_command(Path::new("/bin/sleep"), &["30".into()], None, "pty-")
+            .await
+            .unwrap();
+        let session = service.get(&created.id).unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let task_service = service.clone();
+        let id = created.id.clone();
+        let task = tokio::spawn(async move { task_service.attach(&id, 0, tx).await });
+        assert!(rx.recv().await.unwrap().full);
+        // Overflow the broadcast queue while the subscriber cannot run.
+        for i in 0..400 {
+            let mut grid = session.grid.lock().unwrap();
+            grid.feed(format!("\rframe-{i:03}").as_bytes());
+            let frame = grid.frame(&created.id).unwrap();
+            session.frames.send(frame).unwrap();
+        }
+        let full = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(full.full);
+        assert!(full.lines[0].text.contains("frame-399"));
+        let expected_rev = {
+            let mut grid = session.grid.lock().unwrap();
+            grid.feed(b"\rFINAL");
+            let frame = grid.frame(&created.id).unwrap();
+            let revision = frame.rev;
+            session.frames.send(frame).unwrap();
+            revision
+        };
+        let next = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(next.rev, expected_rev);
+        assert!(next.rev > full.rev);
+        assert!(next.lines[0].text.starts_with("FINAL"));
+        drop(rx);
+        tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        service.close(&created.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn burst_output_is_coalesced_and_end_revision_follows_last_frame() {
+        let service = PtyService::new(PtyConfig::default());
+        let created = service.create_command(Path::new("/bin/sh"), &[
+            "-c".into(), "read start; i=0; while [ $i -lt 2000 ]; do printf 'line-%s\\n' $i; i=$((i+1)); done; printf 'BURST-DONE\\n'".into()
+        ], None, "pty-").await.unwrap();
+        let (tx, mut rx) = mpsc::channel(256);
+        let svc = service.clone();
+        let id = created.id.clone();
+        let task = tokio::spawn(async move { svc.attach(&id, 0, tx).await });
+        assert!(rx.recv().await.unwrap().full);
+        service.input(&created.id, b"go\n").await.unwrap();
+        let mut previous = 0;
+        let mut count = 0;
+        let mut done = false;
+        loop {
+            let frame = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(frame.rev > previous);
+            previous = frame.rev;
+            done |= frame
+                .lines
+                .iter()
+                .any(|line| line.text.contains("BURST-DONE"));
+            if frame.ended {
+                break;
+            }
+            count += 1;
+        }
+        assert!(done, "final output must precede end");
+        assert!(
+            count < 200,
+            "2000 lines should not produce per-read frames: {count}"
+        );
+        eprintln!("2000 output lines produced {count} frames");
+        task.await.unwrap().unwrap();
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shell_echo_resize_and_close() {

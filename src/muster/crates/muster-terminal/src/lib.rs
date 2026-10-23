@@ -298,7 +298,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.sessions().await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.sessions().await,
+            Terminal::Tmux(t) => t.sessions().await,
         }
     }
 
@@ -312,7 +312,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.watch_sessions(out).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.watch_sessions(out).await,
+            Terminal::Tmux(t) => t.watch_sessions(out).await,
         }
     }
 
@@ -328,7 +328,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.attach(session, since_rev, frames).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.attach(session, since_rev, frames).await,
+            Terminal::Tmux(t) => t.attach(session, since_rev, frames).await,
         }
     }
 
@@ -339,7 +339,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.input(session, bytes).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.input(session, bytes).await,
+            Terminal::Tmux(t) => t.input(session, bytes).await,
         }
     }
 
@@ -366,7 +366,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.resize(session, cols, rows).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.resize(session, cols, rows).await,
+            Terminal::Tmux(t) => t.resize(session, cols, rows).await,
         }
     }
 
@@ -377,7 +377,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.close(session).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.close(session).await,
+            Terminal::Tmux(t) => t.close(session).await,
         }
     }
 
@@ -388,7 +388,7 @@ impl Terminal {
             #[cfg(unix)]
             Terminal::Pty(t) => t.history(session, lines).await,
             #[cfg(unix)]
-            Terminal::Tmux(t) => t.pty.history(session, lines).await,
+            Terminal::Tmux(t) => t.history(session, lines).await,
         }
     }
 }

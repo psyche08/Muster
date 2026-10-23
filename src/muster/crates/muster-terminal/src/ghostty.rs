@@ -239,6 +239,7 @@ fn frame(
         cursor_x: rows.last().map_or(0, |l| l.chars().count()) as u32,
         cursor_y: rows.len().saturating_sub(1) as u32,
         ended: false,
+        ..Default::default()
     }
 }
 

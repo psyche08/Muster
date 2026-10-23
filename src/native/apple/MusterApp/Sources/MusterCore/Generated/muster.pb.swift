@@ -2259,6 +2259,11 @@ public nonisolated struct Muster_V1_TerminalFrame: Sendable {
 
   public var ended: Bool = false
 
+  /// Managed-session metadata on full snapshots; execute only on the host.
+  public var desktopAttachCommand: String = String()
+
+  public var iterm2AttachCommand: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -7666,7 +7671,7 @@ nonisolated extension Muster_V1_TerminalLine: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalFrame"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}rev\0\u{1}full\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}rev\0\u{1}full\0\u{1}cols\0\u{1}rows\0\u{1}lines\0\u{3}cursor_x\0\u{3}cursor_y\0\u{1}ended\0\u{3}desktop_attach_command\0\u{3}iterm2_attach_command\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7683,6 +7688,8 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
       case 7: try { try decoder.decodeSingularUInt32Field(value: &self.cursorX) }()
       case 8: try { try decoder.decodeSingularUInt32Field(value: &self.cursorY) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.ended) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.desktopAttachCommand) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.iterm2AttachCommand) }()
       default: break
       }
     }
@@ -7716,6 +7723,12 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
     if self.ended != false {
       try visitor.visitSingularBoolField(value: self.ended, fieldNumber: 9)
     }
+    if !self.desktopAttachCommand.isEmpty {
+      try visitor.visitSingularStringField(value: self.desktopAttachCommand, fieldNumber: 10)
+    }
+    if !self.iterm2AttachCommand.isEmpty {
+      try visitor.visitSingularStringField(value: self.iterm2AttachCommand, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7729,6 +7742,8 @@ nonisolated extension Muster_V1_TerminalFrame: SwiftProtobuf.Message, SwiftProto
     if lhs.cursorX != rhs.cursorX {return false}
     if lhs.cursorY != rhs.cursorY {return false}
     if lhs.ended != rhs.ended {return false}
+    if lhs.desktopAttachCommand != rhs.desktopAttachCommand {return false}
+    if lhs.iterm2AttachCommand != rhs.iterm2AttachCommand {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

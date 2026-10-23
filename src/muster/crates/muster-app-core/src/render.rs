@@ -295,6 +295,8 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             ended: terminal.ended,
             status: terminal.status.clone(),
             can_paste: !terminal.ended,
+            desktop_attach_command: terminal.desktop_attach_command.clone(),
+            iterm2_attach_command: terminal.iterm2_attach_command.clone(),
         });
     }
     vm
@@ -618,6 +620,8 @@ mod tests {
             ended: false,
             status: String::new(),
             rev: 0,
+            desktop_attach_command: String::new(),
+            iterm2_attach_command: String::new(),
         });
         state.screen = app::Screen::Agents;
         assert!(project(&state, false).terminal.is_none());

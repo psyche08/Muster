@@ -97,6 +97,8 @@ pub(super) fn open_terminal(state: &mut State, ctx: &Ctx, session: String) {
         ended: false,
         status: "attaching".into(),
         rev: 0,
+        desktop_attach_command: String::new(),
+        iterm2_attach_command: String::new(),
     });
     state.go(Screen::Terminal);
     attach(state, ctx, device, session, token);
@@ -496,6 +498,8 @@ pub(super) fn open_ssh(state: &mut State, ctx: &Ctx, o: app::OpenSsh) {
         ended: false,
         status: "connecting".into(),
         rev: 0,
+        desktop_attach_command: String::new(),
+        iterm2_attach_command: String::new(),
     });
     state.go(Screen::Terminal);
     let backend = ctx.backend.clone();
@@ -561,6 +565,8 @@ pub(super) fn open_ssh(state: &mut State, ctx: &Ctx, o: app::OpenSsh) {
 
 pub(super) fn apply_frame(terminal: &mut Terminal, frame: v1::TerminalFrame) {
     if frame.full {
+        terminal.desktop_attach_command = frame.desktop_attach_command;
+        terminal.iterm2_attach_command = frame.iterm2_attach_command;
         terminal.lines = frame.lines;
         terminal.lines.sort_by_key(|l| l.index);
     } else {
@@ -955,6 +961,8 @@ pub(super) fn session_terminal_ready(
                 ended: false,
                 status: "attaching".into(),
                 rev: 0,
+                desktop_attach_command: String::new(),
+                iterm2_attach_command: String::new(),
             });
             state.session_terminal.active = true;
             attach(state, ctx, device, session, token);

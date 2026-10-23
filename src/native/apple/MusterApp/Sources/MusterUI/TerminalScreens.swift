@@ -95,6 +95,42 @@ struct TerminalsView: View {
     }
 }
 
+/// Only displays commands supplied by Shared Rust; never types into a live shell.
+struct DesktopTerminalAttachSheet: View {
+    let terminal: Muster_App_TerminalView
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Run a command in a new terminal on the Mac hosting this session. Both windows connect to the same running shell. Muster controls the viewport size.")
+                        .font(.callout)
+                }
+                Section("Ghostty or iTerm2") {
+                    command(terminal.desktopAttachCommand)
+                }
+                Section("iTerm2 native tabs and panes") {
+                    command(terminal.iterm2AttachCommand)
+                }
+                Section {
+                    Text("Closing this view keeps the shell running. Use End terminal in Muster to stop it.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Connect on the host Mac")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .frame(minWidth: 300, minHeight: 360)
+    }
+
+    @ViewBuilder private func command(_ text: String) -> some View {
+        Text(text).font(.caption.monospaced()).textSelection(.enabled)
+        Button("Copy command") { copyToPasteboard(text) }
+            .disabled(text.isEmpty || terminal.ended)
+    }
+}
+
 struct TerminalScreen: View {
     let core: MusterCore
     let vm: ViewModel
