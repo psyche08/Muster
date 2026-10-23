@@ -45,3 +45,29 @@ late receipt without a second submission; locked receipt queries reject changed
 bodies and revoked provider policy. Restarted local records preserve later drafts
 and newer leases. Strict Clippy, formatting, layer and public-content checks
 passed. Signing, installation and physical acceptance are recorded separately.
+
+### Local physical acceptance (2026-10-23)
+
+Both Apple Release builds succeeded from source commit `93529e00`. The macOS
+Developer ID signature and iOS development signature passed strict verification.
+The macOS app was installed on the local acceptance Mac with the daemon update
+lease; device identity and hardware key backend were preserved, and Accessibility,
+relay registration and the virtual network were ready after restart. These are
+local verification builds, not a notarized release or a public desktop/OTA update.
+The iOS build was signed but has not been installed in this acceptance run.
+
+Three physical sends in a dedicated native acceptance conversation each produced
+exactly one user message and one assistant reply: normal CLI submission, deliberate
+caller disconnection after the native send-button press, and submission from the
+Muster app. In the disconnected case the caller did not read the original response;
+a new connection first queried Unknown, then Applied, with one submission total.
+The normal CLI operation took approximately 0.54 seconds, including local RPC
+overhead, not assistant response latency. A changed request body returned Conflict;
+an absent operation remained Unknown. The app's normal send cleared its composer.
+
+Physical acceptance remains partial. The second remote Mac answered Muster RPC
+but its SSH deployment channel timed out and it still ran the earlier build without
+the receipt capability. The other remote Mac was unreachable. Device Hub reported
+the physical iPhone unavailable. Remote installation, phone-driven sends, locked
+native sends, client restart recovery and quiet-input contention on real hardware
+remain unverified for this change; automated coverage does not replace those cases.
