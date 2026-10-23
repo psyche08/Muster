@@ -77,3 +77,33 @@ They now verify the recent window, cached full-history reveal, stream updates
 and unchanged delta-fetch contract. No Rust runtime paging behavior was changed.
 Prepare paired Apple 1.0.86 (77). Builds, signing, publication, installation and
 physical iPhone acceptance are recorded separately after completion.
+
+### Paired release and installed runtime evidence
+
+Apple 1.0.86 (77) was built locally from
+`127178a0a6fe36a6bf5615376c02ad7851612821` after PR #12 merged. macOS Release,
+iOS archive, clean source ancestry, nested signature and Presence entitlement
+checks passed. Apple notarization `37f9ab41-615d-4d42-9bc7-d2b23e32d6f4` was
+Accepted; staple validation and Gatekeeper assessment passed.
+
+The existing desktop download and registered-device iOS OTA were published
+together. Public readback checked the root page, current manifest, exact versions,
+cache headers, artifact hashes and signatures:
+
+- macOS ZIP SHA-256: `d5df80031ad956f1837aff52f0c541a0018a6d51aeea50187dd847e1b1d65b23`.
+- iOS IPA SHA-256: `ab02b1641aa8ad429f33d5401e3e2466c51282543d0da1ff12809c3de041cbd7`.
+- Installed daemon SHA-256: `66920280297a4f926f33e49d63839c02b61282fe97d0a099cf776f38ebeafcfb`.
+
+Mac-A, Mac-B and Mac-C installed through the Rust update lease. Identity and
+Accessibility permission persisted, relay registered and Vnet became ready.
+All six directed RPC paths and all six virtual-address ping paths passed after
+installation. All three installed bundles passed hash, strict codesign, staple
+and Gatekeeper checks. Transient peer disconnects during the sequential service
+updates were followed by successful connectivity; they are not evidence of a
+new persistent network defect.
+
+No provider message was sent for this UI-only acceptance. The physical iPhone
+installation channel was unavailable; OTA publication does not establish its
+installation, scrolling latency or navigation acceptance. The owner was asked
+to try the new version, with no response available at recording time. GitHub
+Actions remained disabled; no Cloud build or historical OTA deletion occurred.
