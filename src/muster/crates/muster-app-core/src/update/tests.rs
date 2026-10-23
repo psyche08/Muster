@@ -1472,16 +1472,16 @@ fn history_window_retains_stream_anchor_and_pages_cached_data_offline() {
         ..Default::default()
     };
     chat.reconcile_history_start();
-    assert_eq!(chat.history_start.as_deref(), Some("420"));
+    assert_eq!(chat.history_start.as_deref(), Some("300"));
     chat.messages.push(message("500", "assistant"));
     chat.reconcile_history_start();
-    assert_eq!(chat.visible_messages().first().unwrap().id, "420");
-    assert_eq!(chat.visible_messages().len(), 81);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "300");
+    assert_eq!(chat.visible_messages().len(), 201);
     chat.messages[499].text = "streamed update".into();
     chat.reconcile_history_start();
-    assert_eq!(chat.history_start.as_deref(), Some("420"));
+    assert_eq!(chat.history_start.as_deref(), Some("300"));
     assert!(chat.reveal_history(false));
-    assert_eq!(chat.history_start.as_deref(), Some("340"));
+    assert_eq!(chat.history_start.as_deref(), Some("100"));
     assert!(
         !chat.has_earlier,
         "all messages are cached; no remote fetch needed"
@@ -1517,7 +1517,7 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
     );
     assert_eq!(
         state.chat.as_ref().unwrap().history_start.as_deref(),
-        Some("220")
+        Some("100")
     );
     let changed: Vec<_> = (1000..1200)
         .map(|i| message(&i.to_string(), "user"))
@@ -1533,7 +1533,7 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
     );
     assert_eq!(
         state.chat.as_ref().unwrap().history_start.as_deref(),
-        Some("1120")
+        Some("1000")
     );
     let earlier: Vec<_> = (920..1000)
         .map(|i| message(&i.to_string(), "user"))

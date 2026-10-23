@@ -328,7 +328,7 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
     let messages = common::messages(&view.chat.unwrap());
     assert_eq!(
         messages.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
-        (220..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
+        (100..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
     );
     // The watch must drain all 300 events even though the UI projects only
     // its recent window. Reveal cached history without another watch.
@@ -538,8 +538,8 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         })
         .await;
     let cached_messages = common::messages(&cached.chat.unwrap());
-    assert_eq!(cached_messages.len(), 80);
-    assert_eq!(cached_messages[0].id, "m1220");
+    assert_eq!(cached_messages.len(), 200);
+    assert_eq!(cached_messages[0].id, "m1100");
     server.hold.store(false, Ordering::SeqCst);
     server.release.notify_one();
     let view = shell
@@ -552,7 +552,7 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     let messages = common::messages(&view.chat.unwrap());
     assert_eq!(
         messages.len(),
-        81,
+        201,
         "Streaming preserves the visible ID anchor"
     );
     assert_eq!(

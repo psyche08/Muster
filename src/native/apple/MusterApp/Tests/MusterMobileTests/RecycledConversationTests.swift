@@ -39,6 +39,26 @@ final class RecycledConversationTests: XCTestCase {
     private func position(_ view: UICollectionView, _ index: Int) -> CGFloat {
         (view.layoutAttributesForItem(at: IndexPath(item: index, section: 0))?.frame.minY ?? -9999) - view.contentOffset.y
     }
+    func testTopGestureLoadsOnlyOnceAndErrorsRequireManualRetry() throws {
+        let controller = ConversationCollectionController()
+        var value = chat(0..<50); value.hasEarlier_p = true
+        var requests = 0; controller.onEarlier = { requests += 1 }
+        update(controller, value); let window = try show(controller)
+        defer { window.isHidden = true }
+        XCTAssertEqual(requests, 0, "Initial layout must not load history")
+        readAt(controller, index: 0)
+        XCTAssertEqual(requests, 1)
+        update(controller, value)
+        controller.scrollViewDidEndDecelerating(controller.collection)
+        XCTAssertEqual(requests, 1, "A projection is not a new scroll gesture")
+        value.loadError = "Synthetic offline error"; update(controller, value)
+        readAt(controller, index: 0); XCTAssertEqual(requests, 1)
+        value.loadError = ""; value.loading = true; update(controller, value)
+        readAt(controller, index: 0); XCTAssertEqual(requests, 1)
+        value.loading = false; update(controller, value)
+        readAt(controller, index: 0); XCTAssertEqual(requests, 2)
+    }
+
     func testLongHistoryRecyclesAndPrependKeepsVisibleRow() throws {
         let controller = ConversationCollectionController(); var value = chat(80..<580)
         update(controller, value); let window = try show(controller); defer { window.isHidden = true }

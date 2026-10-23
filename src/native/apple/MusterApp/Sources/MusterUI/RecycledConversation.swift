@@ -1,7 +1,10 @@
-#if os(iOS)
 import SwiftUI
-import UIKit
 import MusterCore
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Keep the opened conversation's view identity while another content tab is
 /// selected. Reattaching an old controller still discards hosted SwiftUI state.
@@ -13,12 +16,17 @@ struct ConversationTabContent<Content: View>: View {
             .allowsHitTesting(active).accessibilityHidden(!active)
             .onChange(of: active) { _, shown in
                 if !shown {
+                    #if os(iOS)
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    #elseif os(macOS)
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                    #endif
                 }
             }
     }
 }
 
+#if os(iOS)
 /// UIKit owns only row layout and transient presentation state. Rust supplies the complete
 /// presentation window and every load/send/answer decision.
 struct RecycledConversation: UIViewControllerRepresentable {
@@ -30,6 +38,7 @@ struct RecycledConversation: UIViewControllerRepresentable {
     let jumpToLatest: Int
     let holdPosition: Int
     @Binding var atLatest: Bool
+    var loadEarlier: () -> Void = {}
     @Environment(\.self) private var environment
     @Environment(\.conversationStyle) private var style
     @Environment(\.colorScheme) private var scheme
@@ -42,6 +51,7 @@ struct RecycledConversation: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: ConversationCollectionController, context: Context) {
         var environment = self.environment
         environment.transcriptDisclosures = controller.disclosures
+        controller.onEarlier = loadEarlier
         let binding = $atLatest
         controller.onLatest = { value in if binding.wrappedValue != value { binding.wrappedValue = value } }
         controller.update(chat: chat, showsInteractions: showsInteractions,
@@ -76,6 +86,8 @@ final class ConversationCollectionController: UIViewController, UICollectionView
     private var scheduled = false
     private var columnWidth: CGFloat = 760
     var onLatest: ((Bool) -> Void)?
+    var onEarlier: (() -> Void)?
+    private var historyTrigger = HistoryScrollTrigger()
 
     override func loadView() {
         let layout = UICollectionViewCompositionalLayout { [weak self] _, environment in
@@ -218,17 +230,25 @@ final class ConversationCollectionController: UIViewController, UICollectionView
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        historyTrigger.beginGesture()
         following = false; anchor = nil; onLatest?(false)
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !updating, !settling, scrollView.isDragging || scrollView.isDecelerating else { return }
         captureAnchor()
+        requestEarlierIfNeeded()
+    }
+    private func requestEarlierIfNeeded() {
+        guard let chat = previousChat, historyTrigger.request(offset: collection.contentOffset.y + collection.adjustedContentInset.top,
+            hasEarlier: chat.hasEarlier_p, loading: chat.loading, failed: !chat.loadError.isEmpty) else { return }
+        following = false; captureAnchor(); onEarlier?()
     }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate { finishedScrolling() }
     }
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { finishedScrolling() }
     private func finishedScrolling() {
+        requestEarlierIfNeeded()
         following = collection.contentSize.height - collection.bounds.height + collection.adjustedContentInset.bottom - collection.contentOffset.y <= 48
         captureAnchor(); onLatest?(following)
         scheduleSettle()
