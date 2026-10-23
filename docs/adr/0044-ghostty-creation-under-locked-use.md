@@ -71,3 +71,16 @@ Final physical-phone locked creation/input/output acceptance is still pending:
 the earlier hands-off window ended during implementation and the target was
 subsequently unlocked locally. A fresh quiet window was requested before
 relocking it. No update-feed publication or notarization was performed.
+
+
+### Physical acceptance follow-up
+
+The protected Ghostty creation path passed on the physical phone: shell startup,
+exact burst input/output, background relock, foreground recovery and leaving-view
+relock. The iTerm2 regression exposed a routing issue: making TerminalCreate a
+signable operation caused the generic remote native-operation guard to demand
+Locked Use for iTerm2 too. Exclude terminal creation from the agent queue and
+that generic guard; the explicit source-specific Ghostty check remains in force.
+Keep the ordinary console-write reservation for both sources. Add a remote
+principal RPC regression, since a local-principal fixture did not exercise that
+guard. Rebuild/reinstall the target and repeat iTerm2 physical acceptance.

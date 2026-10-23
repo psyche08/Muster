@@ -1775,6 +1775,35 @@ async fn locked_creation_is_one_shot_and_drains_before_releasing_cover() {
             })
         ));
         assert_eq!(os.creates.load(Ordering::SeqCst), 0);
+        let (app, server) = tokio::io::duplex(65536);
+        tokio::spawn(muster_rpc::serve(
+            server,
+            muster_rpc::Principal::Remote(peer),
+            Arc::new(crate::MusterHandler::new(Arc::downgrade(&daemon))),
+        ));
+        let remote = muster_rpc::Client::new(app);
+        // Unlike local calls, the remote route used to incorrectly send all
+        // TerminalCreate requests through the generic native unlock gate.
+        let error = remote
+            .call(Req::TerminalCreate(v1::TerminalCreateRequest {
+                source: "iterm2".into(),
+                op_id: "remote-iterm".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, muster_rpc::Error::Remote { code: v1::error::Code::Invalid, ref message, .. }
+            if message.contains("not configured")),
+            "iTerm2 reaches source dispatch without an unlock: {error}"
+        );
+        assert!(matches!(
+            remote.call(request.clone()).await,
+            Err(muster_rpc::Error::Remote {
+                code: v1::error::Code::LockedUseRequired,
+                ..
+            })
+        ));
         let operation = muster_proto::locked_use::operation(&request).unwrap();
         let mut queue = operation.clone();
         queue.provider_queue = "codex".into();

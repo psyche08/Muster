@@ -263,7 +263,10 @@ impl Handler for MusterHandler {
                     "Ghostty must be created after an authorized unlock",
                 );
             }
+            // Creation has its own source-specific gate above. iTerm2 must
+            // not enter an agent queue or require a Ghostty unlock.
             if let Principal::Remote(peer) = ctx.principal
+                && !matches!(request, Req::TerminalCreate(_))
                 && muster_proto::locked_use::operation(&request).is_some()
                 && !independent_session(&daemon, &request)
                 && let Some(result) = daemon
@@ -331,6 +334,7 @@ impl Handler for MusterHandler {
             };
             if matches!(ctx.principal, Principal::Remote(_))
                 && daemon.platform().locked()
+                && !matches!(request, Req::TerminalCreate(_))
                 && muster_proto::locked_use::operation(&request).is_some()
                 && !independent_session(&daemon, &request)
             {
