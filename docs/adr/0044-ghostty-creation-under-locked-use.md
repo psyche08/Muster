@@ -55,6 +55,19 @@ refusal, background/navigation cancellation and ignoring late replies. The
 five affected crate suites passed 223 tests with five environment-dependent
 ignored tests.
 
-Physical iPhone creation/input/output from a locked target, updated signed
-Mac/phone builds and installation remain pending. No update-feed publication
-is implied.
+The 44 Locked Use integration tests also passed, including challenge-field
+validation, wrong signer/principal rejection, revocation and terminal authority.
+Strict Clippy, formatting, public-content and ADR checks passed.
+
+Commit `b0f91b4f` was built for macOS and physical iOS. Developer ID signing,
+Presence entitlements, release ancestry and bundle verification passed for the
+Mac. The iPhone build passed Xcode signing and bundle verification. Both were
+installed in place; the target daemon reports the exact commit, preserves its
+hardware identity, advertises the new capability and has healthy permissions,
+virtual network and relay. Its original six iTerm2 sessions and one Ghostty
+session remain present.
+
+Final physical-phone locked creation/input/output acceptance is still pending:
+the earlier hands-off window ended during implementation and the target was
+subsequently unlocked locally. A fresh quiet window was requested before
+relocking it. No update-feed publication or notarization was performed.
