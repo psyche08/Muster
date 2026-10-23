@@ -67,12 +67,6 @@ hardware identity, advertises the new capability and has healthy permissions,
 virtual network and relay. Its original six iTerm2 sessions and one Ghostty
 session remain present.
 
-Final physical-phone locked creation/input/output acceptance is still pending:
-the earlier hands-off window ended during implementation and the target was
-subsequently unlocked locally. A fresh quiet window was requested before
-relocking it. No update-feed publication or notarization was performed.
-
-
 ### Physical acceptance follow-up
 
 The protected Ghostty creation path passed on the physical phone: shell startup,
@@ -81,6 +75,29 @@ relock. The iTerm2 regression exposed a routing issue: making TerminalCreate a
 signable operation caused the generic remote native-operation guard to demand
 Locked Use for iTerm2 too. Exclude terminal creation from the agent queue and
 that generic guard; the explicit source-specific Ghostty check remains in force.
-Keep the ordinary console-write reservation for both sources. Add a remote
-principal RPC regression, since a local-principal fixture did not exercise that
-guard. Rebuild/reinstall the target and repeat iTerm2 physical acceptance.
+Keep the ordinary console-write reservation for both sources. A remote
+principal RPC regression now covers this route; a local-principal fixture did
+not exercise that guard. All 58 target tests and strict Clippy passed again.
+
+The target was rebuilt, Developer ID signed, verified and installed from
+`0636dce5`; the physical phone retained its signed `b0f91b4f` client, whose code
+was unchanged by the target-only routing correction. Final physical acceptance
+passed for both native sources through Device Hub:
+
+- iTerm2: new native window, exact rapid alphanumeric input and Return/output,
+  with the Mac verified locked before creation and after output.
+- Ghostty: new native window created after verified unlock under cover; the
+  owner confirmed relock before the separate terminal lease opened. Shell
+  startup and exact rapid input/output passed on the final target build.
+- Existing Ghostty recovery: phone background caused relock; foreground
+  reattached and accepted a new command; leaving the view relocked again.
+- All owned test windows were closed. The original six iTerm2 and one Ghostty
+  session identifiers matched the initial inventory exactly. Final target
+  state was locked with no manual lease, and phone keyboard capture was off.
+
+Device Hub initially diverted clicks to other phone apps; reconnecting its
+screen sharing and dismissing notification banners within the phone viewport
+restored reliable control. This does not establish a Muster defect or require
+any phone permission/settings change. Physical punctuation/Unicode coverage
+remains limited as recorded in ADR 0043; the ordered RPC fixture covers those
+bytes. No update-feed publication or notarization was performed.
