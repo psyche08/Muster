@@ -491,21 +491,26 @@ fn authorize_request(
         Access::Member => Ok(()),
         Access::Need(permission) => admit(daemon, ctx, &peer, request, permission),
         Access::AgentReceipt => {
+            let allowed = |provider| {
+                authorize(
+                    daemon.roster().read().unwrap().state(),
+                    &peer,
+                    &Permission::Agent {
+                        provider,
+                        control: true,
+                    },
+                    &daemon.policy().read().unwrap(),
+                    &TargetState { locked: false },
+                ) == Decision::Allow
+            };
+            // Do not reveal whether a session exists to members without Agent access.
+            if !allowed(None) {
+                return Err(Error::Unauthorized("Send receipt access denied".into()));
+            }
             let (_, provider) = session_provider(daemon, request)?;
             let provider =
                 provider.ok_or_else(|| Error::NotFound("Receipt session unavailable".into()))?;
-            let roster = daemon.roster().read().unwrap();
-            if authorize(
-                roster.state(),
-                &peer,
-                &Permission::Agent {
-                    provider: Some(provider),
-                    control: true,
-                },
-                &daemon.policy().read().unwrap(),
-                &TargetState { locked: false },
-            ) == Decision::Allow
-            {
+            if allowed(Some(provider)) {
                 Ok(())
             } else {
                 Err(Error::Unauthorized("Send receipt access denied".into()))

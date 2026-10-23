@@ -129,6 +129,17 @@ async fn locked_receipt_lookup_requires_current_grants_and_exact_original_body()
             .await
             .is_err()
     );
+    let mut absent = request.clone();
+    absent.session = "does-not-exist".into();
+    assert!(matches!(
+        connect(&daemon, denied.public_key().device_id())
+            .call(Req::AgentSendStatus(absent))
+            .await,
+        Err(muster_rpc::Error::Remote {
+            code: v1::error::Code::Unauthorized,
+            ..
+        })
+    ));
     daemon.policy().write().unwrap().offer_agent = false;
     assert!(client.call(query()).await.is_err());
     daemon.shutdown().await;
