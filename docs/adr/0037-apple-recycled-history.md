@@ -74,3 +74,13 @@ builds do not establish compatibility with older macOS. Production signing,
 notarization, paired publication, installation and real-session acceptance of
 this change remain pending. Earlier physical acceptance of another build is not
 evidence for this change. GitHub Actions remains disabled.
+
+
+### Paired release follow-up
+
+This change shipped in 1.0.88 (79), built with current Rust FFI archives for
+both Apple platforms. The notarized macOS release is installed on three Macs;
+iOS OTA was independently downloaded and verified. See
+[ADR 0039](0039-exact-session-navigation.md#published-and-installed-1088-79)
+for source provenance, artifact hashes and runtime checks. Publication does not
+extend the earlier physical-device acceptance or establish new provider delivery.

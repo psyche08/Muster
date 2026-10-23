@@ -75,3 +75,43 @@ installation on three Macs and runtime network checks are separate pending gates
 - The affected Mac remains locked during source validation. Production-path
   navigation on the installed build and provider delivery remain unverified;
   no chat message was submitted or replayed.
+
+### Published and installed 1.0.88 (79)
+
+- Clean release source `ae8c2002162b0ace403a64c4dc76adcbdc471c65` includes
+  PR #24 and the earlier Apple transcript/client diagnostic changes. Local
+  macOS arm64 daemon, both current Rust FFI archives, macOS Release app and
+  iOS Release archive built successfully. No Cloud build was started.
+- Apple notarization `e3d120df-2569-42c5-814c-28289e357cd0` was Accepted.
+  Presence signing, strict signatures, source ancestry/fingerprints, staple
+  validation and Gatekeeper passed. Velopack packaging was followed by final
+  Developer ID signing and notarization; its intermediate unsigned ZIP was
+  not published.
+- Both platforms were published through the existing private release settings.
+  Independent public downloads, including the actual iOS page installation
+  link, verified version 1.0.88, build 79, content hashes and cache headers.
+  macOS ZIP SHA-256:
+  `6f63ab4791e0cbb5ec7e44604c5c340341e54fc87ddccff5d6eef75224980f41`.
+  iOS IPA SHA-256:
+  `23565fdb26ed4c8c39df20e681880e61a551a6864bc8211da835c104e0b9da87`.
+  No historical OTA files were deleted.
+- All three Macs acquired the Rust update lease and installed the release,
+  preserving device identity and data without retaining an old app backup.
+  All report 1.0.88 (79), Accessibility granted, relay registered and Vnet up.
+  Their installed daemon SHA-256 is
+  `428934e53617ef728f5eaec4077cbc50bef33ae33744daa1592554133b96b72c`.
+  Each installed bundle passed strict signature, staple and Gatekeeper checks.
+- All six directed Mac RPC paths and all six virtual-IP ping paths passed.
+  Startup logs confirm NetHelper open and Vnet readiness on each device.
+  Peer connection failures during sequential service replacement recovered;
+  they are not evidence of a new persistent transport defect. The existing
+  optional Cloud sign-in warning is not native navigation acceptance.
+- On the affected installed Mac, production `ax-select-session` rejected the
+  request because the console remained locked. This verifies the lock guard,
+  not the new exact-ID fallback. Real unlocked navigation, successful provider
+  delivery, fault-injected network recovery and physical iPhone acceptance
+  remain unclaimed. No provider message was submitted or retried. iOS OTA
+  publication does not establish installation on the owner's iPhone.
+- GitHub Actions remain disabled. Source tests above are local, not CI.
+  Private evidence is retained outside the repository; no raw device logs,
+  session IDs, titles or private deployment details are included here.

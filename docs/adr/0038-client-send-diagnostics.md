@@ -68,3 +68,13 @@ acceptance separate. GitHub Actions stays disabled.
   build or an end-to-end send through the newly packaged core on a phone.
 - No signing, notarization, OTA publication, installation or physical-device
   acceptance is claimed. GitHub Actions remains disabled; there is no CI result.
+
+
+### Paired release follow-up
+
+This change shipped in 1.0.88 (79), built with current Rust FFI archives for
+both Apple platforms. The notarized macOS release is installed on three Macs;
+iOS OTA was independently downloaded and verified. See
+[ADR 0039](0039-exact-session-navigation.md#published-and-installed-1088-79)
+for source provenance, artifact hashes and runtime checks. Publication does not
+extend the earlier physical-device acceptance or establish new provider delivery.
