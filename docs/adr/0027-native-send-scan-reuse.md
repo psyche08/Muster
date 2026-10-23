@@ -85,7 +85,7 @@ check signatures, device identity, Accessibility, relay and Vnet recovery.
 Record completion evidence separately. Physical iPhone acceptance and native
 send timing remain separate from release and installation verification.
 
-### Release evidence and integration handoff
+### Earlier isolated release evidence: 1.0.85 (76)
 
 Release source `d928cf77d98a4962d90f0b9963815fdab40a83e2` built macOS
 and iOS 1.0.85 (76). Both Rust FFI targets, desktop binaries, the macOS build
@@ -109,11 +109,27 @@ The iOS registered-device profile covers three devices and expires 2027-09-30.
 OTA is <https://linsheng.dev:8443/muster/>. No signed update feed, TestFlight
 build or Xcode Cloud run was published; hosted Actions remains disabled.
 
-At the owner's request to merge before integrated testing, Mac-A had installed
+At the end of this isolated release run, Mac-A had installed
 this exact artifact under the Rust desktop-update lease. Its identity stayed
 unchanged; signature, staple, Gatekeeper, Accessibility, relay and Vnet checks
 passed, including remote device-info after restart. Mac-B and Mac-C deployment
-and the six-direction network matrix were still pending at this handoff.
+and the six-direction network matrix were still pending in this run.
 Physical iPhone installation, fresh native-send receipts and comparative stage
 timing remain unverified. Release logs and signed artifacts are retained locally
 under `build/releases/Apple-1.0.85-76/`; they are not committed.
+
+### Integrated handoff readback: 2026-10-23
+
+Before merging these supplemental records, the session fetched current main
+and found that PRs #10–#13 had already integrated this optimization with
+completed Codex cards, bounded Rust conversation projection and iOS recycled
+rows. Their 1.0.85 and 1.0.86 release records supersede the isolated artifact
+above. Preserve the current 1.0.86 (77) project settings and release ledger;
+this documentation merge does not republish or reinstall the older artifact.
+See ADRs 0028, 0029 and 0030 for the integrated source and acceptance evidence.
+
+Fresh readback confirmed all three Macs running 1.0.86 with unchanged identities,
+Accessibility granted, relay registered and Vnet ready. The public OTA manifest
+reports build 77. The remaining comparative stage timings and physical iPhone
+UI acceptance should use that integrated release. These live checks do not
+repeat or extend the other session's recorded native-send acceptance.

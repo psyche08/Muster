@@ -69,16 +69,11 @@ fn snapshot(bytes: &[u8], provider: Provider, session: &str) -> Snapshot {
             continue;
         };
         match provider {
-            // An asynchronous question belongs to its turn. Once the turn
-            // completes the desktop shows no answer controls for it any more
-            // (none of 104 such local questions was ever answered afterwards),
-            // so offering it would only time out locating absent controls.
+            // Current desktop builds retain asynchronous controls after completion.
+            // A later turn still retires previous optional questions; completion
+            // alone is neither an answer receipt nor proof of absent controls.
             Provider::Codex
-                if r["type"] == "event_msg"
-                    && matches!(
-                        r["payload"]["type"].as_str(),
-                        Some("task_started" | "task_complete")
-                    ) =>
+                if r["type"] == "event_msg" && r["payload"]["type"] == "task_started" =>
             {
                 retired.extend(
                     requests
@@ -818,15 +813,32 @@ mod tests {
         assert!(done.resolved.contains("question:call"));
     }
     #[test]
+    fn completed_turn_keeps_async_card_until_the_provider_records_its_answer() {
+        let args = serde_json::json!({"questions":[{"title":"Receipt test?","options":["Received","Not received"]}]});
+        let call = serde_json::json!({"type":"response_item","payload":{"type":"function_call","name":"functions.request_user_input_async","call_id":"receipt","arguments":args.to_string()}});
+        let ack = serde_json::json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"receipt","output":"{\"accepted\":true}"}});
+        let end = serde_json::json!({"type":"event_msg","payload":{"type":"task_complete"}});
+        let text = format!("{call}\n{ack}\n{end}");
+        let current = snapshot(text.as_bytes(), Provider::Codex, "s");
+        let card = current
+            .pending
+            .expect("native async card stays visible after completion");
+        assert!(card.optional);
+        assert_eq!(card.questions[0].options[0].label, "Received");
+        assert!(!current.retired.contains("question:receipt"));
+        let reply = serde_json::json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"text":format!("<send_user_message_question_reply>{}</send_user_message_question_reply>", serde_json::json!([{"questionItemId":"[\"request_user_input_async\",\"receipt\",0]","answer":"Received"}]))}]}});
+        let done = snapshot(format!("{text}\n{reply}").as_bytes(), Provider::Codex, "s");
+        assert!(done.pending.is_none());
+        assert!(done.resolved.contains("question:receipt"));
+    }
+
+    #[test]
     fn previous_turn_optional_questions_retire_without_acknowledgement() {
         let call = serde_json::json!({"type":"response_item","payload":{"type":"function_call","name":"functions.request_user_input_async","call_id":"optional","arguments":fixture().to_string()}});
         let current = snapshot(call.to_string().as_bytes(), Provider::Codex, "s");
         assert!(current.pending.unwrap().optional);
         for boundary in [
             serde_json::json!({"type":"event_msg","payload":{"type":"task_started"}}),
-            // The 2026-10-02 08:16 question: asked, acknowledged as queued,
-            // then its turn completed. The desktop showed no controls for it.
-            serde_json::json!({"type":"event_msg","payload":{"type":"task_complete"}}),
             serde_json::json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"text":"Continue with the next task"}]}}),
         ] {
             let text = format!("{call}\n{boundary}");

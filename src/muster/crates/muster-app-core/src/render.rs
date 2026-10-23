@@ -26,7 +26,7 @@ fn session_row(session: &muster_proto::v1::AgentSession) -> muster_proto::v1::Ag
 
 fn session_timeline(chat: &crate::state::Chat) -> Vec<app::ChatBlock> {
     let mut blocks = crate::timeline::for_session(
-        &chat.messages,
+        chat.visible_messages(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
         chat.session.mode == "orca",
     );
@@ -159,7 +159,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 Vec::new()
             },
             trace: if content {
-                crate::trace::spans(&chat.messages, &chat.session.state)
+                crate::trace::spans(chat.visible_messages(), &chat.session.state)
             } else {
                 Vec::new()
             },
@@ -180,7 +180,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 },
                 outcome_unknown: chat.response_unknown,
             }),
-            has_earlier: chat.has_earlier,
+            has_earlier: chat.has_earlier || chat.history_start_index() > 0,
             sending: chat.sending || chat.loading,
             responding_interaction: chat.responding_interaction.clone(),
             response_error: chat.response_error.clone(),
@@ -370,7 +370,7 @@ impl Renderer {
             self.trace.clear();
             if let Some(chat) = state.chat.as_ref().filter(|_| key.is_some()) {
                 self.timeline = session_timeline(chat);
-                self.trace = crate::trace::spans(&chat.messages, &chat.session.state);
+                self.trace = crate::trace::spans(chat.visible_messages(), &chat.session.state);
                 #[cfg(test)]
                 {
                     self.timeline_builds += 1;
@@ -689,7 +689,11 @@ mod tests {
             .unwrap();
         let initial_revision = chat.content_revision;
         assert_eq!(chat.message_count, 1000);
-        assert_eq!(chat.timeline.len(), 1000, "each reply is its own block");
+        assert_eq!(
+            chat.timeline.len(),
+            80,
+            "each visible reply is its own block"
+        );
         for i in 1..=100 {
             state
                 .self_info
@@ -1249,5 +1253,85 @@ mod desktop_setup_tests {
             .unwrap()
             .iterm2_automation = "granted".into();
         assert!(!desktop_setup(&state).visible);
+    }
+}
+
+#[cfg(test)]
+mod history_projection_tests {
+    use super::*;
+    use crate::state::Chat;
+    use muster_proto::v1;
+
+    #[test]
+    fn large_cached_transcript_projects_a_recent_page_without_losing_history_or_cards() {
+        let mut state = State::new(true, Some("phone".into()));
+        state.screen = app::Screen::Chat;
+        state.chat = Some(Chat {
+            messages: (0..500)
+                .map(|i| v1::AgentMessage {
+                    id: format!("message-{i}"),
+                    role: "user".into(),
+                    kind: "text".into(),
+                    text: format!("message {i}: {}", "synthetic content ".repeat(100)),
+                    ..Default::default()
+                })
+                .collect(),
+            interactions: vec![v1::PendingInteraction {
+                id: "question:active".into(),
+                kind: "question".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        state.chat.as_mut().unwrap().reconcile_history_start();
+        let mut renderer = Renderer::default();
+        let small = renderer.prepare(&state).unwrap();
+        let projected = app::ViewModel::decode(small.as_slice())
+            .unwrap()
+            .chat
+            .unwrap();
+        assert_eq!(projected.timeline.len(), 80);
+        assert_eq!(
+            projected.timeline[0].message.as_ref().unwrap().id,
+            "message-420"
+        );
+        assert_eq!(projected.message_count, 500);
+        assert!(projected.has_earlier);
+        assert_eq!(projected.interactions.len(), 1);
+        let chat = state.chat.as_mut().unwrap();
+        assert!(chat.reveal_history(false));
+        assert_eq!(chat.visible_messages().len(), 160);
+        let middle = renderer
+            .prepare(&state)
+            .expect("local reveal invalidates renderer");
+        assert_eq!(
+            app::ViewModel::decode(middle.as_slice())
+                .unwrap()
+                .chat
+                .unwrap()
+                .timeline
+                .len(),
+            160
+        );
+        let chat = state.chat.as_mut().unwrap();
+        assert!(chat.reveal_history(true));
+        let full = renderer.prepare(&state).unwrap();
+        assert!(
+            !app::ViewModel::decode(full.as_slice())
+                .unwrap()
+                .chat
+                .unwrap()
+                .has_earlier
+        );
+        assert!(
+            small.len() * 5 < full.len(),
+            "recent snapshot should be substantially smaller"
+        );
+        assert_eq!(state.chat.as_ref().unwrap().messages.len(), 500);
+        eprintln!(
+            "history snapshot: recent={} bytes full={} bytes",
+            small.len(),
+            full.len()
+        );
     }
 }
