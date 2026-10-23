@@ -1583,3 +1583,284 @@ fn native_inventory_preserves_partial_failures_and_rejects_late_source_choices()
     assert_eq!(state.terminals.errors, ["iTerm2 API disabled"]);
     assert!(!state.terminals.loading);
 }
+
+#[test]
+fn native_frames_preserve_host_choices_across_cursor_deltas_and_clear_shrunken_rows() {
+    let mut state = State::new(false, Some("local".into()));
+    state.terminal = Some(remote_terminal());
+    let full = v1::TerminalFrame {
+        session: "s".into(),
+        rev: 1,
+        full: true,
+        cols: 80,
+        rows: 2,
+        lines: vec![
+            v1::TerminalLine {
+                index: 0,
+                text: "first".into(),
+                ..Default::default()
+            },
+            v1::TerminalLine {
+                index: 1,
+                text: "second".into(),
+                ..Default::default()
+            },
+        ],
+        native_sources: vec![v1::TerminalSource {
+            source: "ghostty".into(),
+            label: "Ghostty".into(),
+        }],
+        ..Default::default()
+    };
+    terminals::msg_terminal_frame(&mut state, "other-device".into(), "s".into(), full.clone());
+    terminals::msg_terminal_frame(
+        &mut state,
+        "mac".into(),
+        "other-session".into(),
+        full.clone(),
+    );
+    assert!(state.terminal.as_ref().unwrap().lines.is_empty());
+    terminals::msg_terminal_frame(&mut state, "mac".into(), "s".into(), full);
+    terminals::msg_terminal_frame(
+        &mut state,
+        "mac".into(),
+        "s".into(),
+        v1::TerminalFrame {
+            session: "s".into(),
+            rev: 2,
+            cursor_x: 4,
+            cursor_y: 1,
+            ..Default::default()
+        },
+    );
+    let terminal = state.terminal.as_ref().unwrap();
+    assert_eq!(terminal.cursor, (4, 1));
+    assert_eq!(terminal.lines.len(), 2);
+    assert_eq!(terminal.native_sources[0].source, "ghostty");
+    terminals::msg_terminal_frame(
+        &mut state,
+        "mac".into(),
+        "s".into(),
+        v1::TerminalFrame {
+            session: "s".into(),
+            rev: 3,
+            full: true,
+            rows: 1,
+            cols: 80,
+            lines: vec![v1::TerminalLine {
+                text: "short".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+    );
+    assert_eq!(state.terminal.as_ref().unwrap().lines.len(), 1);
+    terminals::msg_terminal_frame(
+        &mut state,
+        "mac".into(),
+        "s".into(),
+        v1::TerminalFrame {
+            session: "s".into(),
+            rev: 4,
+            ended: true,
+            ..Default::default()
+        },
+    );
+    assert!(state.terminal.as_ref().unwrap().ended);
+    assert_eq!(state.terminal.as_ref().unwrap().status, "ended");
+}
+
+#[tokio::test]
+async fn native_creation_requires_an_advertised_host_and_a_live_managed_handle() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.terminals.device_id = "*".into();
+    terminals::intent_terminal_create(
+        &mut state,
+        &ctx,
+        app::TerminalCreate {
+            source: "ghostty".into(),
+            ..Default::default()
+        },
+    );
+    assert_eq!(state.busy, 0);
+    state.terminals.device_id = "mac".into();
+    terminals::intent_terminal_create(
+        &mut state,
+        &ctx,
+        app::TerminalCreate {
+            source: "unadvertised".into(),
+            ..Default::default()
+        },
+    );
+    assert_eq!(state.busy, 0);
+    for (source, ended, requested) in [
+        ("iterm2", false, "ghostty"),
+        ("tmux", true, "ghostty"),
+        ("tmux", false, "unadvertised"),
+    ] {
+        state.terminal = Some(Terminal {
+            source: source.into(),
+            ended,
+            native_sources: vec![v1::TerminalSource {
+                source: "ghostty".into(),
+                label: "Ghostty".into(),
+            }],
+            ..remote_terminal()
+        });
+        terminals::intent_terminal_create(
+            &mut state,
+            &ctx,
+            app::TerminalCreate {
+                source: requested.into(),
+                attach_managed: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            state.busy, 0,
+            "invalid creation must never start a network operation"
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_handle() {
+    use std::sync::{Arc, Mutex};
+    struct Server(Mutex<Vec<v1::TerminalCreateRequest>>);
+    impl muster_rpc::Handler for Server {
+        fn call(
+            &self,
+            _: muster_rpc::Context,
+            request: Req,
+            _: muster_rpc::EventSink,
+        ) -> muster_rpc::HandlerFuture<'_> {
+            Box::pin(async move {
+                match request {
+                    Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                        device_id: "local".into(),
+                        ..Default::default()
+                    }),
+                    Req::TerminalCreate(r) => {
+                        let session = v1::TerminalSession {
+                            id: format!("{}:new", r.source),
+                            source: r.source.clone(),
+                            ..Default::default()
+                        };
+                        self.0.lock().unwrap().push(r);
+                        Resp::TerminalSession(session)
+                    }
+                    _ => Resp::Ack(v1::Ack {}),
+                }
+            })
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("fixture.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(Server(Mutex::new(Vec::new())));
+    let handler = server.clone();
+    let accept = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(muster_rpc::serve(
+                stream,
+                muster_rpc::Principal::Local,
+                handler.clone(),
+            ));
+        }
+    });
+    let shell = Arc::new(QuietShell);
+    let backend = Arc::new(
+        crate::backend::Backend::connect(
+            &crate::AppConfig {
+                dir: dir.path().into(),
+                mode: crate::Mode::Socket { path: socket },
+                allow_loopback: true,
+            },
+            shell.clone(),
+        )
+        .await
+        .unwrap(),
+    );
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell,
+        backend,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = State::new(false, Some("local".into()));
+    state.selected = "unrelated-device".into();
+    state.screen = Screen::Chat;
+    state.terminals.device_id = "local".into();
+    state.terminals.sources = ["iterm2", "ghostty"]
+        .into_iter()
+        .map(|source| v1::TerminalSource {
+            source: source.into(),
+            label: source.into(),
+        })
+        .collect();
+    state.terminal = Some(Terminal {
+        source: "tmux".into(),
+        device: "local".into(),
+        session: "tmux-exact-generation".into(),
+        native_sources: state.terminals.sources.clone(),
+        ..remote_terminal()
+    });
+    for attach_managed in [false, true] {
+        for source in ["iterm2", "ghostty"] {
+            terminals::intent_terminal_create(
+                &mut state,
+                &ctx,
+                app::TerminalCreate {
+                    source: source.into(),
+                    attach_managed,
+                    ..Default::default()
+                },
+            );
+            let Loop::Msg(message) =
+                tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            else {
+                panic!()
+            };
+            if attach_managed {
+                assert!(matches!(
+                    *message,
+                    Msg::Done {
+                        what: "native terminal",
+                        result: Ok(_)
+                    }
+                ));
+                msg(&mut state, &ctx, *message);
+                assert_eq!(state.screen, Screen::Chat);
+                assert_eq!(
+                    state.terminal.as_ref().unwrap().session,
+                    "tmux-exact-generation"
+                );
+            } else {
+                assert!(
+                    matches!(*message, Msg::TerminalCreated { ref device, result: Ok(ref session) } if device == "local" && session.source == source)
+                );
+            }
+            let requests = server.0.lock().unwrap();
+            let last = requests.last().unwrap();
+            assert_eq!(last.source, source);
+            assert_eq!(
+                last.managed_session,
+                if attach_managed {
+                    "tmux-exact-generation"
+                } else {
+                    ""
+                }
+            );
+            assert!(!last.op_id.is_empty());
+        }
+    }
+    let requests = server.0.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    let unique: std::collections::HashSet<_> = requests.iter().map(|r| &r.op_id).collect();
+    assert_eq!(unique.len(), 4);
+    accept.abort();
+}

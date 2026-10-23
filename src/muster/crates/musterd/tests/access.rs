@@ -343,6 +343,39 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             .call(Req::TerminalSessions(v1::TerminalSessionsRequest::default()))
             .await
     ));
+    for request in [
+        Req::TerminalCreate(v1::TerminalCreateRequest {
+            source: "ghostty".into(),
+            op_id: "denied-native-create".into(),
+            ..Default::default()
+        }),
+        Req::TerminalAttach(v1::TerminalAttachRequest {
+            session: "ghostty:fixture".into(),
+            since_rev: 0,
+        }),
+        Req::TerminalHistory(v1::TerminalHistoryRequest {
+            session: "ghostty:fixture".into(),
+            lines: 10,
+        }),
+        Req::TerminalInput(v1::TerminalInputRequest {
+            session: "ghostty:fixture".into(),
+            bytes: b"never".to_vec(),
+            op_id: "denied-native-input".into(),
+        }),
+        Req::TerminalResize(v1::TerminalResizeRequest {
+            session: "ghostty:fixture".into(),
+            cols: 80,
+            rows: 24,
+        }),
+        Req::TerminalClose(v1::TerminalCloseRequest {
+            session: "ghostty:fixture".into(),
+        }),
+    ] {
+        assert!(
+            unauthorized(&remote.call(request).await),
+            "authorization must precede source lookup or native work"
+        );
+    }
 
     ca.call(Req::NetworkSetScopes(v1::NetworkSetScopesRequest {
         device_id: pending.device_id.clone(),
