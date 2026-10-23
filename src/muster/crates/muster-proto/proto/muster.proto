@@ -306,6 +306,7 @@ message LockedUseOperation {
     AgentChatSetOptionsRequest chat_set_options = 10;
     DeviceLeaseRequest device = 11;
     AgentCompleteRequest complete = 12;
+    TerminalCreateRequest terminal_create = 13;
   }
   // Empty: one operation. Otherwise presence also authorizes this requester's
   // subsequent native operations for this provider during the same lease.

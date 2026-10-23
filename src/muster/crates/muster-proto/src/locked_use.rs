@@ -12,6 +12,7 @@ pub fn operation(req: &Req) -> Option<v1::LockedUseOperation> {
             Req::AgentInterrupt(r) => Operation::Interrupt(r.clone()),
             Req::AgentInspect(r) => Operation::Inspect(r.clone()),
             Req::AgentComplete(r) => Operation::Complete(r.clone()),
+            Req::TerminalCreate(r) => Operation::TerminalCreate(r.clone()),
             Req::AgentChats(r) if r.full_history => Operation::ChatLoad(r.clone()),
             Req::AgentChatOpen(r) => Operation::ChatOpen(r.clone()),
             Req::AgentChatOptions(r) => Operation::ChatOptions(r.clone()),
@@ -30,6 +31,7 @@ pub fn request(op: &v1::LockedUseOperation) -> Option<Req> {
         Operation::Interrupt(r) => Req::AgentInterrupt(r.clone()),
         Operation::Inspect(r) => Req::AgentInspect(r.clone()),
         Operation::Complete(r) => Req::AgentComplete(r.clone()),
+        Operation::TerminalCreate(r) => Req::TerminalCreate(r.clone()),
         Operation::ChatLoad(r) => Req::AgentChats(r.clone()),
         Operation::ChatOpen(r) => Req::AgentChatOpen(r.clone()),
         Operation::ChatOptions(r) => Req::AgentChatOptions(r.clone()),
@@ -56,6 +58,7 @@ pub fn turn(op: &v1::LockedUseOperation) -> Option<&str> {
         Operation::Interrupt(r) => &r.op_id,
         Operation::Inspect(r) => &r.op_id,
         Operation::Complete(r) => &r.op_id,
+        Operation::TerminalCreate(r) => &r.op_id,
         Operation::Terminal(r) => &r.op_id,
         Operation::Device(r) => &r.op_id,
         Operation::ChatLoad(r) => &r.op_id,
@@ -289,5 +292,38 @@ mod chat_tests {
         .unwrap();
         assert_eq!(turn(&empty), None);
         assert!(operation(&Req::AgentChats(v1::AgentChatsRequest::default())).is_none());
+    }
+}
+
+#[cfg(test)]
+mod creation_tests {
+    use super::*;
+    #[test]
+    fn creation_proof_binds_every_field_and_cannot_become_a_lease() {
+        let original = v1::TerminalCreateRequest {
+            op_id: "create-1".into(),
+            source: "ghostty".into(),
+            profile: "profile".into(),
+            background: false,
+            managed_session: "tmux-owned".into(),
+        };
+        let op = operation(&Req::TerminalCreate(original.clone())).unwrap();
+        assert_eq!(request(&op), Some(Req::TerminalCreate(original.clone())));
+        assert_eq!(turn(&op), Some("create-1"));
+        assert_ne!(digest(&op), digest(&terminal("create-1", "tmux-owned")));
+        for field in 0..5 {
+            let mut changed = original.clone();
+            match field {
+                0 => changed.op_id = "create-2".into(),
+                1 => changed.source = "iterm2".into(),
+                2 => changed.profile = "other".into(),
+                3 => changed.background = true,
+                _ => changed.managed_session = "tmux-other".into(),
+            }
+            assert_ne!(
+                digest(&op),
+                digest(&operation(&Req::TerminalCreate(changed)).unwrap())
+            );
+        }
     }
 }

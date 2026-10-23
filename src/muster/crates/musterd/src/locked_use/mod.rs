@@ -218,7 +218,18 @@ impl Owner {
                 .prepare_terminal(daemon, os, write, peer, turn, digest, terminal, manual)
                 .await;
         };
-        let native_provider = crate::handler::require_native_operation(&daemon, &request)?;
+        let terminal_creation = matches!(&request, Req::TerminalCreate(_));
+        let native_provider = if let Req::TerminalCreate(r) = &request {
+            crate::handler::validate_locked_terminal_creation(&daemon, r)?;
+            if !operation.provider_queue.is_empty() {
+                return Err(Error::Invalid(
+                    "terminal creation cannot authorize a provider queue".into(),
+                ));
+            }
+            String::new()
+        } else {
+            crate::handler::require_native_operation(&daemon, &request)?
+        };
         let provider = if operation.provider_queue.is_empty() {
             None
         } else {
@@ -243,18 +254,31 @@ impl Owner {
         } else {
             Gate::issue
         };
-        let c = issue(
-            &mut gate,
-            daemon.roster().read().unwrap().state(),
-            &daemon.policy().read().unwrap(),
-            peer,
-            &native_provider,
-            turn,
-            digest,
-            MAX_TTL,
-            issued_at,
-            observed,
-        )?;
+        let c = if terminal_creation {
+            gate.issue_terminal(
+                daemon.roster().read().unwrap().state(),
+                &daemon.policy().read().unwrap(),
+                peer,
+                turn,
+                digest,
+                MAX_TTL,
+                issued_at,
+                observed,
+            )?
+        } else {
+            issue(
+                &mut gate,
+                daemon.roster().read().unwrap().state(),
+                &daemon.policy().read().unwrap(),
+                peer,
+                &native_provider,
+                turn,
+                digest,
+                MAX_TTL,
+                issued_at,
+                observed,
+            )?
+        };
         if let Some(provider) = &provider {
             gate.bind_provider_queue(provider)?;
         }

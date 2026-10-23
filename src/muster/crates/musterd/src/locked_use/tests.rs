@@ -7,6 +7,8 @@ use muster_platform::locked_use::{ConsoleSample, GuardSample};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 struct Os {
+    creates: AtomicUsize,
+    hold_create: AtomicBool,
     unlocked: AtomicBool,
     released: AtomicBool,
     locks: AtomicUsize,
@@ -31,6 +33,8 @@ struct Os {
 impl Os {
     fn new() -> Arc<Self> {
         Arc::new(Self {
+            creates: AtomicUsize::new(0),
+            hold_create: AtomicBool::new(false),
             unlocked: AtomicBool::new(false),
             released: AtomicBool::new(false),
             locks: AtomicUsize::new(0),
@@ -279,6 +283,64 @@ async fn start_with(
     DeviceId,
     tokio::task::JoinHandle<()>,
 ) {
+    start_fixture(terminal, false).await
+}
+
+struct CreationHost(Arc<Os>);
+impl crate::Platform for CreationHost {
+    fn locked(&self) -> bool {
+        !self.0.unlocked.load(Ordering::SeqCst)
+    }
+}
+impl muster_terminal::ghostty::GhosttyOs for CreationHost {
+    fn running(&self) -> bool {
+        true
+    }
+    fn terminals(&self) -> Result<Vec<muster_terminal::ghostty::Listed>, muster_terminal::Error> {
+        Ok(vec![])
+    }
+    fn perform(&self, _: &str, _: &str) -> Result<(), muster_terminal::Error> {
+        panic!("no existing terminal input")
+    }
+    fn open(
+        &self,
+        _: &str,
+    ) -> Result<Box<dyn muster_terminal::ghostty::Surface>, muster_terminal::Error> {
+        panic!("creation grants no terminal lease")
+    }
+    fn create(&self) -> Result<String, muster_terminal::Error> {
+        assert!(self.0.unlocked.load(Ordering::SeqCst));
+        assert!(self.0.covered.load(Ordering::SeqCst));
+        assert!(!self.0.released.load(Ordering::SeqCst));
+        self.0.creates.fetch_add(1, Ordering::SeqCst);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while self.0.hold_create.load(Ordering::SeqCst) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !self.0.released.load(Ordering::SeqCst),
+            "cover must outlive OS work"
+        );
+        Ok("new-window".into())
+    }
+    fn close(&self, _: &str) -> Result<(), muster_terminal::Error> {
+        panic!("no automatic close")
+    }
+}
+
+async fn start_fixture(
+    terminal: bool,
+    creation: bool,
+) -> (
+    tempfile::TempDir,
+    Arc<Daemon>,
+    Arc<Owner>,
+    Arc<Os>,
+    Challenge,
+    SoftSigner,
+    DeviceId,
+    tokio::task::JoinHandle<()>,
+) {
     let dir = tempfile::tempdir().unwrap();
     let mut config = crate::DaemonConfig::new(dir.path());
     config.bind = "127.0.0.1:0".parse().unwrap();
@@ -290,10 +352,18 @@ async fn start_with(
         claude_desktop: None,
         ..Default::default()
     });
-    config.terminal = None;
-    let daemon = Daemon::start_with(config, Arc::new(crate::DefaultPlatform), None)
-        .await
-        .unwrap();
+    let os = Os::new();
+    config.terminal = creation.then(|| {
+        muster_terminal::TerminalKind::Ghostty(muster_terminal::GhosttyPlatform(Arc::new(
+            CreationHost(os.clone()),
+        )))
+    });
+    let platform: Arc<dyn crate::Platform> = if creation {
+        Arc::new(CreationHost(os.clone()))
+    } else {
+        Arc::new(crate::DefaultPlatform)
+    };
+    let daemon = Daemon::start_with(config, platform, None).await.unwrap();
     let presence = SoftSigner::generate();
     let peer_key = SoftSigner::generate();
     let peer = peer_key.public_key().device_id();
@@ -312,12 +382,14 @@ async fn start_with(
         roster.insert(genesis).unwrap();
         let mut record = DeviceRecord::new(peer_key.public_key(), "phone", DeviceKind::Phone);
         record.presence_key = Some(presence.public_key());
-        record.scopes.extend([
-            Scope::Agents,
-            Scope::AgentProvider("codex".into()),
-            Scope::LockedControl,
-            Scope::Terminals,
-        ]);
+        record
+            .scopes
+            .extend([Scope::LockedControl, Scope::Terminals]);
+        if !creation {
+            record
+                .scopes
+                .extend([Scope::Agents, Scope::AgentProvider("codex".into())]);
+        }
         let add = Author {
             roster: &roster,
             signer: &**daemon.signer(),
@@ -327,12 +399,11 @@ async fn start_with(
         roster.insert(add).unwrap();
     }
     daemon.policy().write().unwrap().allow_locked_control = true;
-    let os = Os::new();
     let port = Arc::new(Port(os.clone()));
     let owner = Arc::new(Owner::new(Some(port.clone())));
     let mut gate = Gate::new(daemon.device_id()).unwrap();
     let observed = observation(&*port, None, true);
-    let c = if terminal {
+    let c = if terminal || creation {
         gate.issue_terminal(
             daemon.roster().read().unwrap().state(),
             &daemon.policy().read().unwrap(),
@@ -1673,6 +1744,144 @@ async fn manual_cover_returns_each_receipt_without_relocking_and_drains_io_on_ca
         .unwrap();
         assert!(os.released.load(Ordering::SeqCst));
         assert!(!os.unlocked.load(Ordering::SeqCst));
+        daemon.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn locked_creation_is_one_shot_and_drains_before_releasing_cover() {
+    for cancel in [false, true] {
+        let (_dir, daemon, owner, os, old, key, peer, old_job) = start_fixture(false, true).await;
+        owner.cancel(peer, old.nonce(), None).await.unwrap();
+        old_job.await.unwrap();
+        os.released.store(false, Ordering::SeqCst);
+        let request = Req::TerminalCreate(v1::TerminalCreateRequest {
+            source: "ghostty".into(),
+            op_id: "create-once".into(),
+            ..Default::default()
+        });
+        let (app, server) = tokio::io::duplex(65536);
+        tokio::spawn(muster_rpc::serve(
+            server,
+            muster_rpc::Principal::Local,
+            Arc::new(crate::MusterHandler::new(Arc::downgrade(&daemon))),
+        ));
+        let client = muster_rpc::Client::new(app);
+        assert!(matches!(
+            client.call(request.clone()).await,
+            Err(muster_rpc::Error::Remote {
+                code: v1::error::Code::LockedUseRequired,
+                ..
+            })
+        ));
+        assert_eq!(os.creates.load(Ordering::SeqCst), 0);
+        let (app, server) = tokio::io::duplex(65536);
+        tokio::spawn(muster_rpc::serve(
+            server,
+            muster_rpc::Principal::Remote(peer),
+            Arc::new(crate::MusterHandler::new(Arc::downgrade(&daemon))),
+        ));
+        let remote = muster_rpc::Client::new(app);
+        // Unlike local calls, the remote route used to incorrectly send all
+        // TerminalCreate requests through the generic native unlock gate.
+        let error = remote
+            .call(Req::TerminalCreate(v1::TerminalCreateRequest {
+                source: "iterm2".into(),
+                op_id: "remote-iterm".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, muster_rpc::Error::Remote { code: v1::error::Code::Invalid, ref message, .. }
+            if message.contains("not configured")),
+            "iTerm2 reaches source dispatch without an unlock: {error}"
+        );
+        assert!(matches!(
+            remote.call(request.clone()).await,
+            Err(muster_rpc::Error::Remote {
+                code: v1::error::Code::LockedUseRequired,
+                ..
+            })
+        ));
+        let operation = muster_proto::locked_use::operation(&request).unwrap();
+        let mut queue = operation.clone();
+        queue.provider_queue = "codex".into();
+        assert!(owner.prepare(daemon.clone(), peer, queue).await.is_err());
+        let mut wrong = v1::TerminalCreateRequest {
+            source: "iterm2".into(),
+            op_id: "bad".into(),
+            ..Default::default()
+        };
+        assert!(crate::handler::validate_locked_terminal_creation(&daemon, &wrong).is_err());
+        wrong.source = "ghostty".into();
+        wrong.op_id.clear();
+        assert!(crate::handler::validate_locked_terminal_creation(&daemon, &wrong).is_err());
+        daemon.policy().write().unwrap().allow_locked_control = false;
+        assert!(
+            owner
+                .prepare(daemon.clone(), peer, operation.clone())
+                .await
+                .is_err()
+        );
+        daemon.policy().write().unwrap().allow_locked_control = true;
+        let Resp::LockedUseChallenge(prepared) = owner
+            .prepare(daemon.clone(), peer, operation)
+            .await
+            .unwrap()
+        else {
+            panic!()
+        };
+        let c = Challenge::decode(&prepared.challenge).unwrap();
+        assert!(owner.renew(peer, c.nonce()).await.is_err());
+        assert!(owner.terminal_lease(peer, "ghostty:new-window").is_none());
+        os.hold_create.store(true, Ordering::SeqCst);
+        let reply = execute(owner.clone(), &c, &key, peer).await;
+        let nonce = consume(&owner).await;
+        let owner_tx = owner.current.lock().unwrap().clone().unwrap();
+        owner_tx
+            .send(Command::Terminal {
+                nonce,
+                allowed: true,
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        assert_eq!(os.creates.load(Ordering::SeqCst), 0);
+        os.unlocked.store(true, Ordering::SeqCst);
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while os.creates.load(Ordering::SeqCst) == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!reply.is_finished());
+        if cancel {
+            owner.cancel(peer, c.nonce(), None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            assert!(!os.released.load(Ordering::SeqCst));
+        }
+        os.hold_create.store(false, Ordering::SeqCst);
+        let response = tokio::time::timeout(Duration::from_secs(3), reply)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        if cancel {
+            assert!(matches!(response, Resp::OpResult(_)));
+        } else {
+            assert!(
+                matches!(response, Resp::TerminalSession(ref s) if s.id == "ghostty:new-window")
+            );
+        }
+        assert!(!os.unlocked.load(Ordering::SeqCst));
+        assert!(os.released.load(Ordering::SeqCst));
+        // Replay only after an explicit local unlock; the ledger returns the same window.
+        os.unlocked.store(true, Ordering::SeqCst);
+        let replay = client.call(request).await.unwrap();
+        assert!(matches!(replay, Resp::TerminalSession(ref s) if s.id == "ghostty:new-window"));
+        assert_eq!(os.creates.load(Ordering::SeqCst), 1);
         daemon.shutdown().await;
     }
 }

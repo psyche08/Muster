@@ -675,6 +675,7 @@ fn remote_terminal() -> Terminal {
             _attach: None,
             lease: None,
             leased: false,
+            input: Default::default(),
         },
         source: "iterm2".into(),
         cols: 80,
@@ -855,6 +856,7 @@ async fn the_background_ends_a_terminal_session() {
             _attach: None,
             lease: Some(watch),
             leased: true,
+            input: Default::default(),
         },
         ..remote_terminal()
     });
@@ -1233,6 +1235,7 @@ async fn session_terminal_rejects_late_results_and_detaches_without_closing_shel
             _attach: Some(watch),
             lease: None,
             leased: false,
+            input: Default::default(),
         },
         source: "tmux".into(),
         cols: 80,
@@ -1726,7 +1729,10 @@ async fn native_creation_requires_an_advertised_host_and_a_live_managed_handle()
 #[tokio::test]
 async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_handle() {
     use std::sync::{Arc, Mutex};
-    struct Server(Mutex<Vec<v1::TerminalCreateRequest>>);
+    struct Server(
+        Mutex<Vec<v1::TerminalCreateRequest>>,
+        std::sync::atomic::AtomicBool,
+    );
     impl muster_rpc::Handler for Server {
         fn call(
             &self,
@@ -1738,6 +1744,11 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
                 match request {
                     Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
                         device_id: "local".into(),
+                        services: if self.1.load(std::sync::atomic::Ordering::SeqCst) {
+                            vec!["terminal.create.locked.v1".into()]
+                        } else {
+                            vec![]
+                        },
                         ..Default::default()
                     }),
                     Req::TerminalCreate(r) => {
@@ -1757,7 +1768,7 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("fixture.sock");
     let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-    let server = Arc::new(Server(Mutex::new(Vec::new())));
+    let server = Arc::new(Server(Mutex::new(Vec::new()), false.into()));
     let handler = server.clone();
     let accept = tokio::spawn(async move {
         while let Ok((stream, _)) = listener.accept().await {
@@ -1806,6 +1817,27 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
         native_sources: state.terminals.sources.clone(),
         ..remote_terminal()
     });
+    terminals::intent_terminal_create(
+        &mut state,
+        &ctx,
+        app::TerminalCreate {
+            source: "ghostty".into(),
+            ..Default::default()
+        },
+    );
+    let Some(Loop::Msg(message)) = rx.recv().await else {
+        panic!()
+    };
+    assert!(matches!(
+        *message,
+        Msg::TerminalCreated { result: Err(_), .. }
+    ));
+    msg(&mut state, &ctx, *message);
+    assert!(
+        server.0.lock().unwrap().is_empty(),
+        "old targets must not create a blank window"
+    );
+    server.1.store(true, std::sync::atomic::Ordering::SeqCst);
     for attach_managed in [false, true] {
         for source in ["iterm2", "ghostty"] {
             terminals::intent_terminal_create(
@@ -1828,9 +1860,10 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
             if attach_managed {
                 assert!(matches!(
                     *message,
-                    Msg::Done {
-                        what: "native terminal",
-                        result: Ok(_)
+                    Msg::TerminalCreated {
+                        attach_managed: true,
+                        result: Ok(_),
+                        ..
                     }
                 ));
                 msg(&mut state, &ctx, *message);
@@ -1841,7 +1874,7 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
                 );
             } else {
                 assert!(
-                    matches!(*message, Msg::TerminalCreated { ref device, result: Ok(ref session) } if device == "local" && session.source == source)
+                    matches!(*message, Msg::TerminalCreated { ref device, result: Ok(ref session), .. } if device == "local" && session.source == source)
                 );
             }
             let requests = server.0.lock().unwrap();
@@ -1863,4 +1896,283 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
     let unique: std::collections::HashSet<_> = requests.iter().map(|r| &r.op_id).collect();
     assert_eq!(unique.len(), 4);
     accept.abort();
+}
+
+/// Delay acknowledgements at the RPC boundary: later keys must not reach the
+/// host first, and Unicode/paste/Return must share the exact same byte stream.
+#[tokio::test]
+async fn remote_terminal_bursts_wait_for_ack_and_preserve_input_order() {
+    use std::sync::Arc;
+    type InputCall = (v1::TerminalInputRequest, tokio::sync::oneshot::Sender<Resp>);
+    struct Server(mpsc::UnboundedSender<InputCall>);
+    impl muster_rpc::Handler for Server {
+        fn call(
+            &self,
+            _: muster_rpc::Context,
+            request: Req,
+            _: muster_rpc::EventSink,
+        ) -> muster_rpc::HandlerFuture<'_> {
+            Box::pin(async move {
+                match request {
+                    Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                        device_id: "local".into(),
+                        ..Default::default()
+                    }),
+                    Req::TerminalInput(request) => {
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        self.0.send((request, tx)).unwrap();
+                        rx.await.unwrap()
+                    }
+                    _ => Resp::Ack(v1::Ack {}),
+                }
+            })
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("input.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let (calls, mut received) = mpsc::unbounded_channel();
+    let server = Arc::new(Server(calls));
+    let accept = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(muster_rpc::serve(
+                stream,
+                muster_rpc::Principal::Local,
+                server.clone(),
+            ));
+        }
+    });
+    let shell = Arc::new(QuietShell);
+    let backend = Arc::new(
+        crate::backend::Backend::connect(
+            &crate::AppConfig {
+                dir: dir.path().into(),
+                mode: crate::Mode::Socket { path: socket },
+                allow_loopback: true,
+            },
+            shell.clone(),
+        )
+        .await
+        .unwrap(),
+    );
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell,
+        backend,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = State::new(false, Some("local".into()));
+    state.screen = Screen::Terminal;
+    for source in ["iterm2", "ghostty"] {
+        state.terminal = Some(Terminal {
+            device: "local".into(),
+            source: source.into(),
+            ..remote_terminal()
+        });
+        terminal_input(&mut state, &ctx, b"printf '".to_vec());
+        let (first, first_ack) = tokio::time::timeout(Duration::from_secs(2), received.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.bytes, b"printf '");
+        for ch in "ordered ".chars() {
+            terminal_input(&mut state, &ctx, ch.to_string().into_bytes());
+        }
+        terminals::intent_terminal_paste(
+            &mut state,
+            &ctx,
+            app::TerminalPaste {
+                text: "中文🙂'".into(),
+            },
+        );
+        terminals::intent_terminal_key(
+            &mut state,
+            &ctx,
+            app::TerminalKey {
+                key: "enter".into(),
+            },
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), received.recv())
+                .await
+                .is_err()
+        );
+        first_ack
+            .send(Resp::OpResult(v1::OpResult {
+                status: v1::op_result::Status::Applied as i32,
+                ..Default::default()
+            }))
+            .unwrap();
+        let Loop::Msg(reply) = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .unwrap()
+        else {
+            panic!()
+        };
+        msg(&mut state, &ctx, *reply);
+        let (second, second_ack) = tokio::time::timeout(Duration::from_secs(2), received.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.bytes, "ordered 中文🙂'\r".as_bytes());
+        assert_eq!(second.session, first.session);
+        assert_ne!(second.op_id, first.op_id);
+        second_ack
+            .send(Resp::OpResult(v1::OpResult {
+                status: v1::op_result::Status::Duplicate as i32,
+                ..Default::default()
+            }))
+            .unwrap();
+        let Loop::Msg(reply) = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .unwrap()
+        else {
+            panic!()
+        };
+        msg(&mut state, &ctx, *reply);
+        let TerminalKind::Remote { input, .. } = &state.terminal.as_ref().unwrap().kind else {
+            panic!()
+        };
+        assert!(input.in_flight.is_none() && input.pending.is_empty() && !input.stopped);
+    }
+    accept.abort();
+}
+
+#[tokio::test]
+async fn terminal_input_failure_overflow_and_background_discard_queued_return() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.screen = Screen::Terminal;
+    for result in [
+        Err(Error::Unavailable("lost acknowledgement".into())),
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Unknown as i32,
+            ..Default::default()
+        }),
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Rejected as i32,
+            ..Default::default()
+        }),
+    ] {
+        let mut terminal = remote_terminal();
+        let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+            panic!()
+        };
+        input.in_flight = Some("first".into());
+        input.pending = b"dangerous suffix\r".to_vec();
+        state.terminal = Some(terminal);
+        terminals::msg_terminal_input_done(
+            &mut state,
+            &ctx,
+            "mac".into(),
+            Some(("s".into(), "first".into())),
+            result,
+        );
+        terminal_input(&mut state, &ctx, b"\r".to_vec());
+        let TerminalKind::Remote { input, .. } = &state.terminal.as_ref().unwrap().kind else {
+            panic!()
+        };
+        assert!(input.stopped && input.pending.is_empty() && input.in_flight.is_none());
+    }
+    for background in [false, true] {
+        let mut terminal = remote_terminal();
+        let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+            panic!()
+        };
+        input.in_flight = Some("old".into());
+        input.pending = vec![b'x'; muster_terminal::MAX_PASTE];
+        state.terminal = Some(terminal);
+        if background {
+            terminals::background_terminal(&mut state);
+        } else {
+            terminal_input(&mut state, &ctx, b"\r".to_vec());
+        }
+        terminals::msg_terminal_input_done(
+            &mut state,
+            &ctx,
+            "mac".into(),
+            Some(("s".into(), "old".into())),
+            Ok(v1::OpResult::default()),
+        );
+        let TerminalKind::Remote { input, .. } = &state.terminal.as_ref().unwrap().kind else {
+            panic!()
+        };
+        assert!(input.stopped && input.pending.is_empty() && input.in_flight.is_none());
+    }
+    // Reopening the same remote session starts a distinct input generation.
+    let mut terminal = remote_terminal();
+    let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+        panic!()
+    };
+    input.in_flight = Some("new".into());
+    input.pending = b"new input".to_vec();
+    state.terminal = Some(terminal);
+    terminals::msg_terminal_input_done(
+        &mut state,
+        &ctx,
+        "mac".into(),
+        Some(("s".into(), "old".into())),
+        Err(Error::Unavailable("late".into())),
+    );
+    let TerminalKind::Remote { input, .. } = &state.terminal.as_ref().unwrap().kind else {
+        panic!()
+    };
+    assert_eq!(input.in_flight.as_deref(), Some("new"));
+    assert_eq!(input.pending, b"new input");
+    assert!(!input.stopped);
+    state.stack = vec![Screen::Terminals];
+    intent_navigate(
+        &mut state,
+        &ctx,
+        app::Navigate {
+            back: true,
+            ..Default::default()
+        },
+    );
+    assert!(state.terminal.is_none());
+}
+
+#[test]
+fn pending_terminal_creation_is_cancelled_on_navigation_or_background() {
+    for action in 0..4 {
+        let mut state = State::new(false, Some("local".into()));
+        state.screen = Screen::Terminals;
+        let (watch, token) = state.new_watch();
+        state.terminal_creation = Some(("create-1".into(), watch));
+        match action {
+            0 => state.go(Screen::Chat),
+            1 => state.back(),
+            2 => state.detach_session_terminal(),
+            _ => terminals::background_terminal(&mut state),
+        }
+        assert!(state.terminal_creation.is_none());
+        assert!(token.is_cancelled());
+    }
+}
+
+#[tokio::test]
+async fn late_creation_reply_cannot_open_a_window_after_navigation() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.screen = Screen::Terminals;
+    let (watch, token) = state.new_watch();
+    state.terminal_creation = Some(("old".into(), watch));
+    state.busy = 1;
+    state.go(Screen::Agents);
+    terminals::msg_terminal_created(
+        &mut state,
+        &ctx,
+        "mac".into(),
+        "old".into(),
+        false,
+        Ok(v1::TerminalSession {
+            id: "ghostty:new".into(),
+            ..Default::default()
+        }),
+    );
+    assert!(token.is_cancelled());
+    assert_eq!(state.screen, Screen::Agents);
+    assert!(state.terminal.is_none());
+    assert_eq!(state.busy, 0);
 }

@@ -5,6 +5,7 @@
 use super::*;
 
 pub(super) fn open_terminals(state: &mut State, ctx: &Ctx) {
+    state.terminal_creation = None;
     let filter = if state.terminals.device_id.is_empty() {
         "*".to_string()
     } else {
@@ -85,6 +86,7 @@ pub(super) fn open_terminal(state: &mut State, ctx: &Ctx, session: String) {
             _attach: Some(watch),
             lease: None,
             leased: false,
+            input: Default::default(),
         },
         source: meta
             .as_ref()
@@ -376,10 +378,11 @@ pub(super) fn msg_terminal_lease_ended(
 /// renewing it); the foreground opens the terminal again, and with it a new
 /// session.
 pub(super) fn background_terminal(state: &mut State) {
-    if state.session_terminal.active
-        && let Some(terminal) = state.terminal.as_mut()
-        && let TerminalKind::Remote { _attach, .. } = &mut terminal.kind
+    state.terminal_creation = None;
+    if let Some(terminal) = state.terminal.as_mut()
+        && let TerminalKind::Remote { input, _attach, .. } = &mut terminal.kind
     {
+        input.stop();
         *_attach = None;
         terminal.ended = true;
         terminal.status = "Terminal detached while Muster was in the background".into();
@@ -401,7 +404,6 @@ pub(super) fn foreground_terminal(state: &mut State, ctx: &Ctx) {
     }
     if state.screen == Screen::Terminal
         && let Some(terminal) = &state.terminal
-        && terminal.source == "ghostty"
         && terminal.ended
         && matches!(terminal.kind, TerminalKind::Remote { .. })
     {
@@ -412,38 +414,117 @@ pub(super) fn foreground_terminal(state: &mut State, ctx: &Ctx) {
 }
 
 pub(super) fn terminal_input(state: &mut State, ctx: &Ctx, bytes: Vec<u8>) {
-    if state.screen != Screen::Terminal
-        && !(state.screen == Screen::Chat
-            && state.session_terminal.active
-            && !state.session_terminal.busy)
+    if !state.foreground
+        || (state.screen != Screen::Terminal
+            && !(state.screen == Screen::Chat
+                && state.session_terminal.active
+                && !state.session_terminal.busy))
     {
         return;
     }
-    let Some(terminal) = &state.terminal else {
+    let Some(terminal) = &mut state.terminal else {
         return;
     };
     if terminal.ended || bytes.is_empty() {
         return;
     }
-    match &terminal.kind {
+    match &mut terminal.kind {
         TerminalKind::Ssh { input, .. } => {
             let _ = input.send(SshCommand::Write(bytes));
         }
-        TerminalKind::Remote { .. } => {
-            let (device, session) = (terminal.device.clone(), terminal.session.clone());
-            let op_id = state.op_id();
-            op_request(
-                state,
-                ctx,
-                "input",
-                device,
-                Req::TerminalInput(v1::TerminalInputRequest {
-                    op_id,
-                    session,
-                    bytes,
-                }),
-            );
+        TerminalKind::Remote { input, .. } => {
+            if input.stopped {
+                return;
+            }
+            if bytes.len() > muster_terminal::MAX_PASTE.saturating_sub(input.pending.len()) {
+                input.stop();
+                terminal.status =
+                    "Input stopped: buffer full. Reopen this terminal before typing".into();
+                state.toast(
+                    "Terminal input buffer full; unsent input discarded. Reopen the terminal",
+                    true,
+                );
+                return;
+            }
+            input.pending.extend(bytes);
+            dispatch_terminal_input(state, ctx);
         }
+    }
+}
+
+/// Called only by the reducer, before spawning I/O: intent order is byte order.
+fn dispatch_terminal_input(state: &mut State, ctx: &Ctx) {
+    let Some(terminal) = state.terminal.as_ref() else {
+        return;
+    };
+    let TerminalKind::Remote { input, .. } = &terminal.kind else {
+        return;
+    };
+    if terminal.ended || input.stopped || input.in_flight.is_some() || input.pending.is_empty() {
+        return;
+    }
+    let op_id = state.op_id();
+    let terminal = state.terminal.as_mut().unwrap();
+    let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+        return;
+    };
+    input.in_flight = Some(op_id.clone());
+    let request = v1::TerminalInputRequest {
+        op_id: op_id.clone(),
+        session: terminal.session.clone(),
+        bytes: std::mem::take(&mut input.pending),
+    };
+    let device = terminal.device.clone();
+    let origin = Some((terminal.session.clone(), op_id));
+    op_request_from(
+        state,
+        ctx,
+        "input",
+        device,
+        Req::TerminalInput(request),
+        origin,
+    );
+}
+
+pub(super) fn msg_terminal_input_done(
+    state: &mut State,
+    ctx: &Ctx,
+    device: String,
+    origin: Option<(String, String)>,
+    result: Result<v1::OpResult, Error>,
+) {
+    let Some((session, op_id)) = origin else {
+        return;
+    };
+    let Some(terminal) = state
+        .terminal
+        .as_mut()
+        .filter(|t| t.device == device && t.session == session)
+    else {
+        return;
+    };
+    let TerminalKind::Remote { input, .. } = &mut terminal.kind else {
+        return;
+    };
+    if input.in_flight.as_deref() != Some(&op_id) || input.stopped {
+        return;
+    }
+    input.in_flight = None;
+    if matches!(&result, Ok(r) if matches!(v1::op_result::Status::try_from(r.status),
+        Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)))
+    {
+        dispatch_terminal_input(state, ctx);
+    } else {
+        let why = match result {
+            Ok(r) => r.message,
+            Err(e) => e.to_string(),
+        };
+        input.stop();
+        terminal.status = format!("Input stopped: {why}. Reopen this terminal before typing");
+        state.toast(
+            "Terminal input was not confirmed; unsent input discarded. Reopen the terminal",
+            true,
+        );
     }
 }
 
@@ -697,41 +778,156 @@ pub(super) fn intent_terminal_create(state: &mut State, ctx: &Ctx, c: app::Termi
     };
     let self_id = state.self_id.clone();
     let backend = ctx.backend.clone();
+    let network = state.network.as_ref().map(|n| n.network_id.clone());
+    let phone = state.embedded
+        && state.foreground
+        && state.self_info.as_ref().is_some_and(|i| i.kind == "phone");
     let op_id = state.op_id();
+    let (watch, token) = state.new_watch();
+    state.terminal_creation = Some((op_id.clone(), watch));
     state.busy += 1;
     spawn(ctx, async move {
-        let result = async {
-            let client = backend.client_for(&device, &self_id).await?;
-            match unary(
-                &client,
-                Req::TerminalCreate(v1::TerminalCreateRequest {
-                    profile: c.profile,
-                    background: false,
-                    source: c.source,
-                    managed_session,
-                    op_id,
-                }),
-            )
-            .await?
-            {
-                Resp::TerminalSession(mut s) => {
-                    s.device_id = device.clone();
-                    Ok(s)
-                }
-                Resp::OpResult(r) => Err(Error::Unavailable(r.message)),
-                _ => Err(unexpected()),
-            }
-        }
-        .await;
-        if c.attach_managed {
-            Msg::Done {
-                what: "native terminal",
-                result: result.map(|_| None),
-            }
-        } else {
-            Msg::TerminalCreated { device, result }
+        let request = v1::TerminalCreateRequest {
+            profile: c.profile,
+            background: false,
+            source: c.source,
+            managed_session,
+            op_id: op_id.clone(),
+        };
+        let result =
+            create_terminal_request(backend, &device, &self_id, network, phone, request, token)
+                .await;
+        Msg::TerminalCreated {
+            device,
+            op_id,
+            attach_managed: c.attach_managed,
+            result,
         }
     });
+}
+
+/// A one-shot creation proof never grants access to the resulting terminal.
+/// Its normal attach opens a separate session-bound lease after relock.
+#[allow(clippy::too_many_arguments)]
+async fn create_terminal_request(
+    backend: Arc<crate::backend::Backend>,
+    device: &str,
+    self_id: &str,
+    network: Option<String>,
+    phone: bool,
+    request: v1::TerminalCreateRequest,
+    token: CancellationToken,
+) -> Result<v1::TerminalSession, Error> {
+    let client = tokio::select! {
+        biased;
+        _ = token.cancelled() => return Err(Error::Unavailable("creation cancelled".into())),
+        client = backend.client_for(device, self_id) => client?,
+    };
+    let mut nonce = None;
+    let work = async {
+        if request.source == "ghostty" || request.source.is_empty() {
+            let Resp::DeviceInfo(info) =
+                unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+            else {
+                return Err(unexpected());
+            };
+            if !info
+                .services
+                .iter()
+                .any(|s| s == "terminal.create.locked.v1")
+            {
+                return Err(Error::Unavailable(
+                    "Update Muster on the Mac before creating a Ghostty window".into(),
+                ));
+            }
+        }
+        let response = match client.call(Req::TerminalCreate(request.clone())).await {
+            Err(muster_rpc::Error::Remote {
+                code: v1::error::Code::LockedUseRequired,
+                ..
+            }) => {
+                if !phone {
+                    return Err(Error::Unavailable(
+                        "Create a locked Ghostty window from a foreground phone".into(),
+                    ));
+                }
+                let operation =
+                    muster_proto::locked_use::operation(&Req::TerminalCreate(request.clone()))
+                        .ok_or_else(unexpected)?;
+                let Resp::LockedUseChallenge(first) = unary(
+                    &client,
+                    Req::LockedUsePrepare(v1::LockedUsePrepareRequest {
+                        operation: Some(operation.clone()),
+                    }),
+                )
+                .await?
+                else {
+                    return Err(unexpected());
+                };
+                let challenge = muster_core::locked_use::Challenge::decode(&first.challenge)
+                    .map_err(|e| Error::Invalid(e.to_string()))?;
+                nonce = Some(challenge.nonce().to_vec());
+                let network: [u8; 32] = hex::decode(network.ok_or_else(unexpected)?)
+                    .map_err(|_| unexpected())?
+                    .try_into()
+                    .map_err(|_| unexpected())?;
+                let target = muster_core::DeviceId::from_hex(device).map_err(|_| unexpected())?;
+                let requester =
+                    muster_core::DeviceId::from_hex(self_id).map_err(|_| unexpected())?;
+                let message = challenge
+                    .signing_message_for(
+                        &network,
+                        target,
+                        requester,
+                        &request.op_id,
+                        &muster_proto::locked_use::digest(&operation),
+                    )
+                    .map_err(|e| Error::Invalid(e.to_string()))?;
+                let signer = backend
+                    .signer()
+                    .ok_or_else(|| Error::Unavailable("device signing key unavailable".into()))?;
+                let signature = signer
+                    .sign(&message)
+                    .map_err(|e| Error::Unauthorized(e.to_string()))?;
+                unary(
+                    &client,
+                    Req::LockedUseExecute(v1::LockedUseExecuteRequest {
+                        challenge: first.challenge,
+                        signature,
+                    }),
+                )
+                .await?
+            }
+            result => result?,
+        };
+        match response {
+            Resp::TerminalSession(mut session) => {
+                session.device_id = device.into();
+                Ok(session)
+            }
+            Resp::OpResult(result) => Err(Error::Unavailable(result.message)),
+            _ => Err(unexpected()),
+        }
+    };
+    let result = tokio::select! {
+        biased;
+        _ = token.cancelled() => Err(Error::Unavailable("creation cancelled; inspect windows before retrying".into())),
+        result = work => result,
+    };
+    if let Some(nonce) = nonce {
+        let _ = tokio::time::timeout(
+            Duration::from_secs(3),
+            unary(
+                &client,
+                Req::LockedUseCancel(v1::LockedUseCancelRequest {
+                    nonce,
+                    ..Default::default()
+                }),
+            ),
+        )
+        .await;
+    }
+    result
 }
 
 pub(super) fn intent_terminal_resize(state: &mut State, ctx: &Ctx, r: app::TerminalResize) {
@@ -830,10 +1026,17 @@ pub(super) fn msg_terminal_created(
     state: &mut State,
     ctx: &Ctx,
     device: String,
+    op_id: String,
+    attach_managed: bool,
     result: Result<v1::TerminalSession, Error>,
 ) {
     state.busy = state.busy.saturating_sub(1);
+    if state.terminal_creation.as_ref().map(|(id, _)| id) != Some(&op_id) {
+        return;
+    }
+    state.terminal_creation = None;
     match result {
+        Ok(_) if attach_managed => {}
         Ok(session) => {
             state.terminals.sessions.push(session.clone());
             state.selected = if state.is_self(&device) {
@@ -995,6 +1198,7 @@ pub(super) fn session_terminal_ready(
                     _attach: Some(watch),
                     lease: None,
                     leased: false,
+                    input: Default::default(),
                 },
                 source: "tmux".into(),
                 cols: 80,

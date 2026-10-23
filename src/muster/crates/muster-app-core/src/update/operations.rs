@@ -443,6 +443,10 @@ pub(super) fn msg_op_done(
 ) {
     // A late success clears only the exact submitted revision, even
     // after navigation. Failure/unknown and subsequent edits survive.
+    if what == "input" {
+        super::terminals::msg_terminal_input_done(state, ctx, device, response_origin, result);
+        return;
+    }
     if what == "send"
         && let Some((_, tag)) = &response_origin
         && let Some(submitted) = state.pending_drafts.remove(tag)

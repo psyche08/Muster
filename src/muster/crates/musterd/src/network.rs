@@ -255,6 +255,7 @@ impl Daemon {
         }
         if self.terminal().is_some() {
             services.push("terminal".to_string());
+            services.push("terminal.create.locked.v1".to_string());
         }
         services.push("presence.enrollment.v1".to_string());
         services.push("forward".to_string());

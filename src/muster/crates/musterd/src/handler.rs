@@ -253,7 +253,20 @@ impl Handler for MusterHandler {
             if let Err(error) = authorize_request(&daemon, &ctx, &request, &access) {
                 return fail(error);
             }
+            if let Req::TerminalCreate(r) = &request
+                && crate::native_terminals::source(&daemon, &r.source)
+                    .is_ok_and(|t| t.source() == "ghostty")
+                && daemon.platform().locked()
+            {
+                return err(
+                    Code::LockedUseRequired,
+                    "Ghostty must be created after an authorized unlock",
+                );
+            }
+            // Creation has its own source-specific gate above. iTerm2 must
+            // not enter an agent queue or require a Ghostty unlock.
             if let Principal::Remote(peer) = ctx.principal
+                && !matches!(request, Req::TerminalCreate(_))
                 && muster_proto::locked_use::operation(&request).is_some()
                 && !independent_session(&daemon, &request)
                 && let Some(result) = daemon
@@ -321,6 +334,7 @@ impl Handler for MusterHandler {
             };
             if matches!(ctx.principal, Principal::Remote(_))
                 && daemon.platform().locked()
+                && !matches!(request, Req::TerminalCreate(_))
                 && muster_proto::locked_use::operation(&request).is_some()
                 && !independent_session(&daemon, &request)
             {
@@ -1434,69 +1448,7 @@ async fn dispatch(
                 return Err(Error::Unavailable("tmux requires a Unix host".into()));
             }
         }
-        Req::TerminalCreate(r) => {
-            use muster_proto::Message as _;
-            let terminal = crate::native_terminals::source(daemon, &r.source)?;
-            let profile = (!r.profile.is_empty()).then_some(r.profile.as_str());
-            let command = if r.managed_session.is_empty() {
-                None
-            } else {
-                #[cfg(unix)]
-                {
-                    let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
-                        unreachable!()
-                    };
-                    Some(service.native_command(&r.managed_session).await?)
-                }
-                #[cfg(not(unix))]
-                {
-                    return Err(Error::Unavailable("tmux requires Unix".into()));
-                }
-            };
-            // New clients supply operation IDs. Preserve legacy creation, but
-            // managed launches always require a ledger to prevent replay.
-            if r.op_id.is_empty() && (!r.source.is_empty() || command.is_some()) {
-                return Err(Error::Invalid(
-                    "Native terminal creation requires an operation ID".into(),
-                ));
-            }
-            let create = async {
-                crate::native_terminals::prepare(terminal).await?;
-                let session = match &command {
-                    Some(command) => terminal.create_command(profile, r.background, command).await,
-                    None => terminal.create(profile, r.background).await,
-                }.map_err(|error| Error::UnknownOutcome(format!("Native creation may have reached the application; inspect its windows before creating again: {error}")))?;
-                if session.id.is_empty() {
-                    return Err(Error::UnknownOutcome("Native application returned no session ID; inspect its windows before creating again".into()));
-                }
-                Ok::<_, Error>(crate::native_terminals::qualify(session, terminal.source()))
-            };
-            if r.op_id.is_empty() {
-                Resp::TerminalSession(create.await?)
-            } else {
-                let body = r.encode_to_vec();
-                let result = ledgered(
-                    daemon,
-                    &r.op_id,
-                    "terminal.create",
-                    terminal.source(),
-                    false,
-                    &body,
-                    async { Ok(create.await?.id) },
-                )
-                .await?;
-                match result {
-                    Resp::OpResult(result) if matches!(result.status, 0 | 1) => {
-                        Resp::TerminalSession(v1::TerminalSession {
-                            id: result.result_id,
-                            source: terminal.source().into(),
-                            ..Default::default()
-                        })
-                    }
-                    other => other,
-                }
-            }
-        }
+        Req::TerminalCreate(r) => create_native_terminal(daemon, r).await?,
         Req::TerminalResize(r) => {
             let (terminal, raw) = terminal_for(daemon, &r.session)?;
             terminal.resize(raw, r.cols, r.rows).await?;
@@ -1961,6 +1913,11 @@ async fn chat_control(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error>
 }
 
 pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
+    if let Req::TerminalCreate(r) = request {
+        validate_locked_terminal_creation(daemon, &r)?;
+        return create_native_terminal(daemon, r).await;
+    }
+
     // Fail before the operation ledger or attachment writes: missing OS
     // permission is a setup prerequisite, not an ambiguous attempted send.
     if daemon.platform().accessibility() == Some(false) {
@@ -2381,6 +2338,114 @@ pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result
     agent_of(daemon)?.require_desktop_input(&session)?;
     require_capability(agent_of(daemon)?, &session, request)?;
     Ok(provider)
+}
+
+/// The bound request runs once after authorization; OS work stays in its work queue.
+async fn create_native_terminal(
+    daemon: &Arc<Daemon>,
+    r: v1::TerminalCreateRequest,
+) -> Result<Resp, Error> {
+    use muster_proto::Message as _;
+    if crate::native_terminals::source(daemon, &r.source)?.source() == "ghostty"
+        && daemon.platform().locked()
+    {
+        return Err(Error::Unavailable(
+            "Ghostty creation requires an authorized unlock before creating its renderer".into(),
+        ));
+    }
+    let terminal = crate::native_terminals::source(daemon, &r.source)?;
+    let profile = (!r.profile.is_empty()).then_some(r.profile.as_str());
+    let command = if r.managed_session.is_empty() {
+        None
+    } else {
+        #[cfg(unix)]
+        {
+            let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
+                unreachable!()
+            };
+            Some(service.native_command(&r.managed_session).await?)
+        }
+        #[cfg(not(unix))]
+        {
+            return Err(Error::Unavailable("tmux requires Unix".into()));
+        }
+    };
+    // New clients supply operation IDs. Preserve legacy creation, but
+    // managed launches always require a ledger to prevent replay.
+    if r.op_id.is_empty() && (!r.source.is_empty() || command.is_some()) {
+        return Err(Error::Invalid(
+            "Native terminal creation requires an operation ID".into(),
+        ));
+    }
+    let create = async {
+        crate::native_terminals::prepare(terminal).await?;
+        muster_agent::control_guard::check()?;
+        muster_agent::control_guard::delivery_attempt();
+        let session = match &command {
+        Some(command) => terminal.create_command(profile, r.background, command).await,
+        None => terminal.create(profile, r.background).await,
+    }.map_err(|error| Error::UnknownOutcome(format!("Native creation may have reached the application; inspect its windows before creating again: {error}")))?;
+        if session.id.is_empty() {
+            return Err(Error::UnknownOutcome("Native application returned no session ID; inspect its windows before creating again".into()));
+        }
+        Ok::<_, Error>(crate::native_terminals::qualify(session, terminal.source()))
+    };
+    Ok(if r.op_id.is_empty() {
+        Resp::TerminalSession(create.await?)
+    } else {
+        let body = r.encode_to_vec();
+        let result = ledgered(
+            daemon,
+            &r.op_id,
+            "terminal.create",
+            terminal.source(),
+            false,
+            &body,
+            async { Ok(create.await?.id) },
+        )
+        .await?;
+        match result {
+            Resp::OpResult(result) if matches!(result.status, 0 | 1) => {
+                Resp::TerminalSession(v1::TerminalSession {
+                    id: result.result_id,
+                    source: terminal.source().into(),
+                    ..Default::default()
+                })
+            }
+            other => other,
+        }
+    })
+}
+
+/// Only an exact Ghostty creation may use the terminal-scoped one-shot unlock.
+pub(crate) fn validate_locked_terminal_creation(
+    daemon: &Daemon,
+    request: &v1::TerminalCreateRequest,
+) -> Result<(), Error> {
+    if request.op_id.is_empty()
+        || request.op_id.len() > 128
+        || crate::native_terminals::source(daemon, &request.source)?.source() != "ghostty"
+    {
+        return Err(Error::Invalid(
+            "Locked terminal creation requires Ghostty and an operation ID".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn locked_operation_permission(
+    daemon: &Daemon,
+    request: &Req,
+) -> Result<Permission, Error> {
+    if let Req::TerminalCreate(r) = request {
+        validate_locked_terminal_creation(daemon, r)?;
+        Ok(Permission::Terminal { control: true })
+    } else {
+        Ok(Permission::Agent {
+            provider: Some(require_native_operation(daemon, request)?),
+            control: true,
+        })
+    }
 }
 
 #[cfg(test)]
