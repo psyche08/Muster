@@ -38,9 +38,9 @@ final class MacConversationController: NSViewController {
     enum Row: Hashable { case header, block(String), interactions }
     struct Anchor { let row: Row; let offset: CGFloat }
     let disclosures = TranscriptDisclosures()
-    let interactionHost: NSHostingView<AnyView> = TranscriptHostingView(rootView: AnyView(EmptyView()))
+    let interactionHost = TranscriptHostingView(rootView: AnyView(EmptyView()))
     private(set) var collection: MacConversationCollection!
-    private(set) var scroll: NSScrollView!
+    private(set) var scroll: MacConversationScrollView!
     private var source: NSCollectionViewDiffableDataSource<Int, Row>!
     private var blocks: [String: Muster_App_ChatBlock] = [:]
     private var header = AnyView(EmptyView())
@@ -75,7 +75,7 @@ final class MacConversationController: NSViewController {
         collection.backgroundColors = [.clear]
         collection.isSelectable = false
         collection.register(MacConversationItem.self, forItemWithIdentifier: .init("message"))
-        scroll = NSScrollView()
+        scroll = MacConversationScrollView()
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         collection.autoresizingMask = [.width]
@@ -100,13 +100,23 @@ final class MacConversationController: NSViewController {
         }
         collection.afterLayout = { [weak self] in self?.scheduleSettle() }
         collection.userScroll = { [weak self] began, ended in self?.userScrolled(began: began, ended: ended) }
-        // Native live-scroll notifications include trackpad, wheel and scroller
-        // dragging, and keep the gesture alive through momentum scrolling.
+        scroll.wheelInput = { [weak self] began, ended in
+            guard let self else { return }
+            if began { self.collection.beginScrolling() }
+            else if ended { self.collection.endScrolling() }
+            else { self.userScrolled(began: false, ended: false) }
+        }
+        // Live-scroll notifications also cover native scroller dragging. Wheel
+        // bursts are owned by the scroll view to avoid duplicate gesture starts.
         let center = NotificationCenter.default
         scrollObservers = [
-            center.addObserver(forName: NSScrollView.willStartLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in self?.collection.beginScrolling() },
+            center.addObserver(forName: NSScrollView.willStartLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in
+                guard let self, !self.scroll.wheelActive else { return }; self.collection.beginScrolling()
+            },
             center.addObserver(forName: NSScrollView.didLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in self?.userScrolled(began: false, ended: false) },
-            center.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in self?.collection.endScrolling() }
+            center.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in
+                guard let self, !self.scroll.wheelActive else { return }; self.collection.endScrolling()
+            }
         ]
     }
 
@@ -143,7 +153,7 @@ final class MacConversationController: NSViewController {
             }
         }
         if previousChat?.interactions != chat.interactions || previousChat?.respondingInteraction != chat.respondingInteraction || previousChat?.responseError != chat.responseError || previousChat?.responseUnknown != chat.responseUnknown || restyle {
-            interactionHost.rootView = interactions
+            interactionHost.setContent(interactions)
         }
         previousChat = chat
         if lastJump != jump { following = true; anchor = nil; lastJump = jump }
@@ -223,14 +233,47 @@ final class MacConversationController: NSViewController {
     }
 }
 
+/// Phase-less mouse wheels do not reliably post NSScrollView's live-scroll
+/// notifications. Observe the event before scrolling so layout cannot snap back
+/// to latest. Coalesce a wheel/momentum burst into one paging gesture.
+final class MacConversationScrollView: NSScrollView {
+    var wheelInput: ((_ began: Bool, _ ended: Bool) -> Void)?
+    private(set) var wheelActive = false
+    private var wheelEnd: DispatchWorkItem?
+    override func scrollWheel(with event: NSEvent) {
+        // Horizontal code-block scrolling must not request transcript history.
+        guard abs(event.scrollingDeltaY) > 0 || wheelActive else {
+            super.scrollWheel(with: event); return
+        }
+        wheelEnd?.cancel()
+        if !wheelActive { wheelActive = true; wheelInput?(true, false) }
+        super.scrollWheel(with: event)
+        wheelInput?(false, false)
+        let phased = !event.phase.isEmpty || !event.momentumPhase.isEmpty
+        let ended = !event.phase.intersection([.ended, .cancelled]).isEmpty
+            || !event.momentumPhase.intersection([.ended, .cancelled]).isEmpty
+        // A paused trackpad gesture still owns its paging intent. Only wheels
+        // without phases use inactivity; delay terminal phases for momentum.
+        guard !phased || ended else { return }
+        let end = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.wheelActive = false; self.wheelEnd = nil
+            self.wheelInput?(false, true)
+        }
+        wheelEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: end)
+    }
+    deinit { wheelEnd?.cancel() }
+}
+
 final class MacConversationCollection: NSCollectionView {
     var afterLayout: (() -> Void)?
     var userScroll: ((_ began: Bool, _ ended: Bool) -> Void)?
     private(set) var scrolling = false
     override var isFlipped: Bool { true }
     override func layout() { super.layout(); afterLayout?() }
-    func beginScrolling() { scrolling = true; userScroll?(true, false) }
-    func endScrolling() { scrolling = false; userScroll?(false, true) }
+    func beginScrolling() { guard !scrolling else { return }; scrolling = true; userScroll?(true, false) }
+    func endScrolling() { guard scrolling else { return }; scrolling = false; userScroll?(false, true) }
 
 }
 
@@ -242,7 +285,7 @@ final class MacConversationItem: NSCollectionViewItem {
     func render(_ content: AnyView) {
         detach()
         let host = self.host ?? TranscriptHostingView(rootView: content)
-        host.rootView = content; self.host = host
+        host.setContent(content); self.host = host
         pin(host)
     }
     func attach(_ content: NSView) { detach(); host = nil; retained = content; pin(content) }
@@ -268,21 +311,45 @@ final class MacConversationItem: NSCollectionViewItem {
             guard let collection = self.collectionView,
                   let path = collection.indexPath(for: self),
                   let attributes = collection.layoutAttributesForItem(at: path),
-                  abs(self.view.fittingSize.height - attributes.size.height) > 0.5 else { return }
+                  abs(self.measuredHeight(width: attributes.size.width) - attributes.size.height) > 0.5 else { return }
             collection.collectionViewLayout?.invalidateLayout()
         }
     }
-    override func prepareForReuse() { super.prepareForReuse(); detach(); host?.rootView = AnyView(EmptyView()) }
+    override func prepareForReuse() { super.prepareForReuse(); detach(); host?.setContent(AnyView(EmptyView())) }
+    private func measuredHeight(width: CGFloat) -> CGFloat {
+        let content = host ?? (retained as? TranscriptHostingView)
+        content?.setColumnWidth(width)
+        view.setFrameSize(NSSize(width: width, height: view.frame.height))
+        view.layoutSubtreeIfNeeded()
+        return max(1, content?.fittingSize.height ?? view.fittingSize.height)
+    }
     override func preferredLayoutAttributesFitting(_ attributes: NSCollectionViewLayoutAttributes) -> NSCollectionViewLayoutAttributes {
         let result = attributes.copy() as! NSCollectionViewLayoutAttributes
-        view.setFrameSize(NSSize(width: attributes.size.width, height: attributes.size.height))
-        view.layoutSubtreeIfNeeded()
-        result.size.height = max(1, view.fittingSize.height)
+        result.size.height = measuredHeight(width: attributes.size.width)
         return result
     }
 }
-private final class TranscriptHostingView: NSHostingView<AnyView> {
+/// Give SwiftUI a definite horizontal proposal before asking AppKit for height.
+/// `fittingSize` alone measures the unwrapped ideal width, even when all four
+/// host edges are pinned to a collection item of a different width.
+final class TranscriptHostingView: NSHostingView<AnyView> {
     var sizeChanged: (() -> Void)?
+    private var content: AnyView
+    private var columnWidth: CGFloat?
+    required init(rootView: AnyView) {
+        content = rootView
+        super.init(rootView: rootView)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func setContent(_ content: AnyView) { self.content = content; updateRoot() }
+    func setColumnWidth(_ width: CGFloat) {
+        guard width > 0, columnWidth != width else { return }
+        columnWidth = width; updateRoot()
+    }
+    private func updateRoot() {
+        rootView = AnyView(content.frame(width: columnWidth, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true))
+    }
     override func invalidateIntrinsicContentSize() {
         super.invalidateIntrinsicContentSize()
         sizeChanged?()

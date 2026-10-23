@@ -114,6 +114,90 @@ final class MacConversationTests: XCTestCase {
         settle(); c.collection.endScrolling(); settle()
         XCTAssertEqual(fields(c.interactionHost).first?.stringValue, "Unsent synthetic answer")
     }
+    func testMultilineRowsFitTheirRenderedColumn() throws {
+        let c = MacConversationController(); var value = chat(0..<8)
+        for i in value.timeline.indices {
+            value.timeline[i].message.text = String(repeating:
+                "A long **Markdown** paragraph with several words that must wrap to the displayed column. 中文正文也必须按照实际宽度换行。\n\n", count: 4)
+        }
+        value.timeline[3].kind = "provider_card"
+        value.timeline[3].title = "Next step"
+        value.timeline[3].message.text += "\n- First **nested** list item with wrapping text.\n- Second item with `code`."
+        update(c, value); let window = show(c); defer { window.close() }
+        for width in [600.0, 420.0, 1000.0] {
+            window.setContentSize(NSSize(width: width, height: 600)); settle()
+            c.collection.beginScrolling()
+            c.collection.scrollToItems(at: [IndexPath(item: 4, section: 0)], scrollPosition: .top)
+            settle(); c.collection.endScrolling(); settle()
+            let path = IndexPath(item: 4, section: 0)
+            let attributes = try XCTUnwrap(c.collection.layoutAttributesForItem(at: path))
+            let reference = NSHostingView(rootView: ConversationBlock(block: value.timeline[3])
+                .environment(\.displayScale, window.backingScaleFactor)
+                .padding(.bottom, 14).frame(width: attributes.size.width)
+                .fixedSize(horizontal: false, vertical: true))
+            // Markdown resolves margin preferences after its first mounted layout.
+            reference.frame = NSRect(x: -2000, y: 0, width: attributes.size.width, height: 1000)
+            window.contentView?.addSubview(reference); settle()
+            let expected = reference.fittingSize.height
+            reference.removeFromSuperview()
+            XCTAssertGreaterThan(expected, 150)
+            XCTAssertEqual(attributes.size.height, expected, accuracy: 3,
+                "Row height must contain the actual wrapped content at width \(width)")
+        }
+    }
+    func testPhaseLessWheelReleasesLatestAndLoadsEarlier() throws {
+        let c = MacConversationController(); var value = chat(0..<40); value.hasEarlier_p = true
+        var requests = 0; c.onEarlier = { requests += 1 }
+        update(c, value); let window = show(c); defer { window.close() }
+        let bottom = c.scroll.contentView.bounds.minY
+        XCTAssertGreaterThan(bottom, 300)
+        let cg = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+            wheelCount: 1, wheel1: 100_000, wheel2: 0, wheel3: 0))
+        let event = try XCTUnwrap(NSEvent(cgEvent: cg))
+        XCTAssertTrue(event.phase.isEmpty)
+        for _ in 0..<3 { c.scroll.scrollWheel(with: event) }
+        settle()
+        XCTAssertFalse(c.scroll.wheelActive)
+        XCTAssertFalse(c.collection.scrolling)
+        XCTAssertLessThan(c.scroll.contentView.bounds.minY, bottom - 100,
+            "A mouse wheel must release latest following before scrolling")
+        XCTAssertEqual(requests, 1, "Reaching the top by wheel must request earlier history")
+        let top = c.scroll.contentView.bounds.minY
+        update(c, value)
+        XCTAssertEqual(c.scroll.contentView.bounds.minY, top, accuracy: 3)
+        XCTAssertEqual(requests, 1, "Projection updates must not fetch more history")
+        value.loading = true; update(c, value)
+        c.scroll.scrollWheel(with: event); settle()
+        XCTAssertEqual(requests, 1)
+        value.loading = false; value.loadError = "Synthetic offline"; update(c, value)
+        c.scroll.scrollWheel(with: event); settle()
+        XCTAssertEqual(requests, 1)
+        value.loadError = ""; update(c, value)
+        c.scroll.scrollWheel(with: event); settle()
+        XCTAssertEqual(requests, 2, "A new gesture may request the next page")
+    }
+    func testTrackpadPauseDoesNotRearmHistoryGesture() throws {
+        let c = MacConversationController(); var value = chat(0..<10); value.hasEarlier_p = true
+        var requests = 0; c.onEarlier = { requests += 1 }
+        update(c, value); let window = show(c); defer { window.close() }
+        func wheel(_ phase: CGScrollPhase) throws {
+            let cg = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+                wheelCount: 1, wheel1: 100_000, wheel2: 0, wheel3: 0))
+            cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+            let event = try XCTUnwrap(NSEvent(cgEvent: cg))
+            XCTAssertFalse(event.phase.isEmpty)
+            c.scroll.scrollWheel(with: event)
+        }
+        try wheel(.began); settle()
+        XCTAssertTrue(c.scroll.wheelActive, "A paused trackpad remains the same gesture")
+        XCTAssertEqual(requests, 1)
+        try wheel(.changed); settle()
+        XCTAssertEqual(requests, 1)
+        try wheel(.ended); settle()
+        XCTAssertFalse(c.scroll.wheelActive)
+        try wheel(.began); try wheel(.ended); settle()
+        XCTAssertEqual(requests, 2)
+    }
     func testControllerAndDisclosureStoreRelease() {
         weak var controller: MacConversationController?
         weak var disclosures: TranscriptDisclosures?
