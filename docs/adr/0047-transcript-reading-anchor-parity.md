@@ -131,3 +131,13 @@ Builds, signing, notarization, publication, installation and physical scrolling
 acceptance on a Mac and on an iPhone are not claimed by this source checkpoint.
 The 1.0.92 boundary-fallback follow-up recorded in ADR 0042 also never completed
 physical acceptance, and this change does not establish it.
+
+### Release 1.0.93 (84)
+
+This decision and ADR 0048 are released together as paired macOS and iOS build
+1.0.93 (84), so the owner can accept the reading anchor and the acknowledged
+send on real hardware. 1.0.92 (83) was built but never published or accepted,
+so `released-commits.txt` continues from 1.0.91 (82). Build, signing,
+notarization, publication, installation on the three Macs and the iPhone, and
+physical acceptance are recorded below as they happen; nothing about them is
+claimed by this commit.
