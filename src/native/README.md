@@ -43,6 +43,15 @@ them from Git history with `git show acf23be7:<path>`.
   `can_browse_files` / `provider_label`, `TerminalsView.can_create`,
   `DesktopSetupView.ready`, `can_go_back`, and display strings such as
   `JoinView.message`, `MemberView.link` and `DeviceInfo.key_label`.
+- A send this shell made that the conversation does not account for yet
+  arrives as a trailing `ChatBlock` of kind `admitted_send`, carrying the text
+  and a `title` that states what is known about it (being sent, submitted but
+  not yet in the conversation, queued for the end of the running turn, delivery
+  unconfirmed, or refused with its reason). Render both; never treat the block
+  as delivery evidence, and never resend from it. Rust retires the block when
+  the conversation's own records carry the text (ADR 0048). A shell that keeps
+  a reading position should follow the latest row when one first appears, so
+  the user's own message is on screen.
 - Terminal rows arrive as `TerminalLine{index, text, styles}`; `styles` is
   muster-terminal's 11-byte run encoding, decoded by each shell and drawn on
   a monospaced grid. Keys go back by name (`enter`, `ctrl-c`, `up`, …) or

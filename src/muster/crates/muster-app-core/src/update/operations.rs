@@ -363,9 +363,10 @@ pub(super) fn sent(state: &mut State, ctx: &Ctx, device: &str, landed: &str) {
         && dc::app_of(landed) == dc::app_of(&chat.session.id)
     {
         let mut session = chat.session.clone();
-        session.id = landed.to_string();
+        let placeholder = std::mem::replace(&mut session.id, landed.to_string());
         session.title.clear();
         let device = device.to_string();
+        super::admitted::rekey(state, &device, &placeholder, landed);
         show_chat(state, ctx, device, session);
     }
 }
@@ -583,6 +584,25 @@ pub(super) fn msg_op_done(
             state.toast(r.message.clone(), false);
         }
         return;
+    }
+    // What the host said about this send. It never removes the record: only
+    // the conversation's own messages or queue can account for the text.
+    if what == "send"
+        && same_origin
+        && let Some((_, tag)) = &response_origin
+    {
+        let (unknown, error) = match &result {
+            Ok(r) => match v1::op_result::Status::try_from(r.status) {
+                Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate) => {
+                    (false, String::new())
+                }
+                Ok(v1::op_result::Status::Rejected) => (false, r.message.clone()),
+                _ => (true, r.message.clone()),
+            },
+            Err(error) => (false, error.to_string()),
+        };
+        let op = super::admitted::op_of(tag).to_owned();
+        super::admitted::outcome(state, &op, unknown, &error);
     }
     match result {
         Ok(r) => {

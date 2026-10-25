@@ -242,6 +242,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
     state.file = None;
     state.git = None;
     state.go(Screen::Chat);
+    super::admitted::settle(state);
     watch_agent(state, ctx, device, session_id);
     super::send_recovery::restore(state, ctx);
 }
@@ -626,6 +627,12 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
     if chat.draft.text == request.text {
         state.pending_drafts.insert(tag, chat.draft.clone());
     }
+    // An explicit release means the user checked the conversation on the Mac
+    // themselves; only that drops records this conversation never accounted for.
+    if !request.release_unconfirmed.is_empty() {
+        super::admitted::release(state);
+    }
+    super::admitted::admit(state, &request.op_id, &request.text);
     diagnostic.event("validated");
     op_request(state, ctx, "send", device, Req::AgentSend(request));
 }
@@ -908,6 +915,7 @@ pub(super) fn msg_chat(
             };
         }
     }
+    super::admitted::settle(state);
 }
 
 pub(super) fn msg_agent_event(
@@ -996,6 +1004,8 @@ pub(super) fn msg_agent_event(
     if messages_changed {
         chat.cache_dirty = true;
     }
+    // A new message or queue row can account for a send this client made.
+    super::admitted::settle(state);
     if let Some((title, body, session)) = notify {
         effect(
             state,

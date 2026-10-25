@@ -63,6 +63,28 @@ pub struct Chat {
 /// Presentation paging is shared across shells; transport history is unchanged.
 pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
 
+/// One send this client dispatched into a conversation, still unaccounted for
+/// by that conversation's own records.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdmittedSend {
+    pub op_id: String,
+    pub text: String,
+    /// Occurrences of this exact text already present when it was admitted. A
+    /// repeated prompt is accounted for by its own later record, never by an
+    /// older identical message that was already there.
+    pub prior_messages: usize,
+    pub prior_queued: usize,
+    /// Still being dispatched; no outcome has come back yet.
+    pub sending: bool,
+    /// The provider's own queue accounts for it: the running turn takes it next.
+    pub queued: bool,
+    /// The outcome itself was never learned (ADR 0046). Not a failure, and not
+    /// a reason to send again.
+    pub unknown: bool,
+    /// The host refused it. The text stays so nothing the user wrote is lost.
+    pub error: String,
+}
+
 impl Chat {
     pub(crate) fn history_start_index(&self) -> usize {
         self.history_start
@@ -284,6 +306,11 @@ pub struct State {
     pub device_watch: Option<Watch>,
     pub foreground: bool,
     pub send_recoveries: HashMap<String, Watch>,
+    /// Sends this client dispatched, per conversation, kept until that
+    /// conversation's own records account for them. A record is a reason to
+    /// keep showing the text and to say what is known about it; it is never
+    /// delivery evidence, and never permission to send anything again.
+    pub admitted: HashMap<String, Vec<AdmittedSend>>,
     pub pending_drafts: HashMap<String, app::ChatDraft>,
     pub chat_call_epoch: u64,
     pub chat_calls: HashMap<
@@ -308,6 +335,7 @@ impl State {
     pub fn new(embedded: bool, self_id: Option<String>) -> Self {
         Self {
             send_recoveries: HashMap::new(),
+            admitted: HashMap::new(),
             pending_drafts: HashMap::new(),
             chat_calls: HashMap::new(),
             chat_call_epoch: 0,

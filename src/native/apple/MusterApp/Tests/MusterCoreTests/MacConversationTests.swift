@@ -39,7 +39,9 @@ final class MacConversationTests: XCTestCase {
         c!.collection.beginScrolling()
         view.scrollToItems(at: [IndexPath(item: 250, section: 0)], scrollPosition: .top)
         settle(); c!.collection.endScrolling(); settle()
-        let first = try XCTUnwrap(view.indexPathsForVisibleItems().sorted().first { $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.maxY ?? 0) > c!.scroll.contentView.bounds.minY })
+        // The reading anchor is the first row that starts on screen, which is
+        // also the row whose position the reader actually watches.
+        let first = try XCTUnwrap(view.indexPathsForVisibleItems().sorted().first { $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= c!.scroll.contentView.bounds.minY - 0.5 })
         func position(_ index: Int) -> CGFloat { view.layoutAttributesForItem(at: IndexPath(item: index, section: 0))!.frame.minY - c!.scroll.contentView.bounds.minY }
         let before = position(first.item)
         value = chat(0..<700); update(c!, value)
@@ -68,16 +70,21 @@ final class MacConversationTests: XCTestCase {
         settle()
         NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: c.scroll)
         XCTAssertEqual(requests, 1)
-        let before = try position(1)
+        // The reading anchor is the first row that starts on screen, which is
+        // also the row whose position the reader actually watches.
+        let anchored = try XCTUnwrap(view.indexPathsForVisibleItems().sorted().first {
+            $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= c.scroll.contentView.bounds.minY - 0.5
+        }).item
+        let before = try position(anchored)
         // A cached page may arrive before the wheel debounce or trackpad ends.
         value = chat(0..<260); value.hasEarlier_p = true
         update(c, value, hold: 1)
         XCTAssertTrue(c.collection.scrolling)
-        XCTAssertEqual(try position(201), before, accuracy: 4,
+        XCTAssertEqual(try position(anchored + 200), before, accuracy: 4,
             "Loading history must preserve the old row while the gesture is active")
         NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: c.scroll)
         c.collection.endScrolling(); settle()
-        XCTAssertEqual(try position(201), before, accuracy: 4,
+        XCTAssertEqual(try position(anchored + 200), before, accuracy: 4,
             "Gesture end must not adopt a newly inserted row as the reading anchor")
         XCTAssertEqual(requests, 1)
         // The correction must not freeze the reader: another gesture can move.
@@ -89,7 +96,7 @@ final class MacConversationTests: XCTestCase {
         c.collection.endScrolling(); settle()
         XCTAssertEqual(try position(170), moved, accuracy: 4)
         XCTAssertLessThan(abs(moved), 100)
-        XCTAssertGreaterThan(try position(201), before + 1000)
+        XCTAssertGreaterThan(try position(anchored + 200), before + 1000)
     }
     func testTrackpadHistoryResponsesPreserveAnchorAcrossPages() throws {
         let c = MacConversationController(); var value = chat(400..<460)
@@ -128,6 +135,65 @@ final class MacConversationTests: XCTestCase {
             XCTAssertLessThan(try position(201), before - 20)
         }
     }
+    private func wheel(_ c: MacConversationController, _ phase: CGScrollPhase, delta: Int32) throws {
+        let cg = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+            wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0))
+        cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+        c.scroll.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: cg)))
+    }
+    private func offset(_ c: MacConversationController, _ index: Int) throws -> CGFloat {
+        try XCTUnwrap(c.collection.layoutAttributesForItem(at: IndexPath(item: index, section: 0)))
+            .frame.minY - c.scroll.contentView.bounds.minY
+    }
+
+    func testRowsMeasuredWhileScrollingUpDoNotDisplaceTheReader() throws {
+        let c = MacConversationController(); var value = chat(0..<120)
+        // Heights far from the layout's estimate: each row above the viewport
+        // is first measured when the reader scrolls it into view.
+        for index in value.timeline.indices {
+            value.timeline[index].message.text = String(repeating:
+                "A long **Markdown** paragraph that wraps across the reading column.\n\n",
+                count: 2 + (index % 9) * 3)
+        }
+        update(c, value); let window = show(c); defer { window.close() }
+        c.collection.beginScrolling()
+        c.collection.scrollToItems(at: [IndexPath(item: 100, section: 0)], scrollPosition: .top)
+        settle(); c.collection.endScrolling(); settle()
+        for _ in 0..<8 {
+            let before = try offset(c, 100)
+            try wheel(c, .began, delta: 120)
+            settle()
+            XCTAssertEqual(try offset(c, 100) - before, 120, accuracy: 100,
+                "A row measured on the way up must not move the reader's row")
+            try wheel(c, .ended, delta: 0); settle()
+        }
+    }
+
+    func testAViewportMoveWithoutACallbackIsAdoptedNotPulledBack() throws {
+        let c = MacConversationController(); var value = chat(200..<500)
+        update(c, value); let window = show(c); defer { window.close() }
+        c.collection.beginScrolling()
+        c.collection.scrollToItems(at: [IndexPath(item: 250, section: 0)], scrollPosition: .top)
+        settle(); c.collection.endScrolling(); settle()
+        // Keyboard scrolling, Accessibility and scroll-to-visible move the clip
+        // view with no live-scroll notification at all.
+        let origin = c.scroll.contentView.bounds.minY
+        let moved = origin - 900
+        c.scroll.contentView.scroll(to: NSPoint(x: 0, y: moved))
+        c.scroll.reflectScrolledClipView(c.scroll.contentView)
+        settle()
+        XCTAssertLessThan(c.scroll.contentView.bounds.minY, origin - 400,
+            "A viewport move this controller never saw must be kept, not pulled back")
+        let top = c.scroll.contentView.bounds.minY
+        let first = try XCTUnwrap(c.collection.indexPathsForVisibleItems().sorted().first {
+            $0.item > 0 && (c.collection.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= top - 0.5
+        }).item
+        let before = try offset(c, first)
+        value = chat(0..<500); update(c, value, hold: 1)
+        XCTAssertEqual(try offset(c, first + 200), before, accuracy: 4,
+            "Revealed history anchors the adopted position, not the last callback's")
+    }
+
     func testReplacedBoundaryRowRetainsFollowingVisibleContent() throws {
         let c = MacConversationController(); var value = chat(200..<260)
         value.timeline[0].id = "partial-boundary"

@@ -53,6 +53,10 @@ final class MacConversationController: NSViewController {
     private var lastHold = 0
     private var following = true
     private var anchors: [Anchor] = []
+    /// The offset the current anchors were taken at, or that this controller
+    /// last reconciled to. A later difference it never saw is somebody else
+    /// moving the viewport, not geometry drifting under a stale anchor.
+    private var anchoredOffset: CGFloat?
     private var scheduled = false
     private var settling = false
     private var settlePass = 0
@@ -138,7 +142,10 @@ final class MacConversationController: NSViewController {
                 content: @escaping (Muster_App_ChatBlock) -> AnyView) {
         _ = view
         if hold != lastHold { following = false; lastHold = hold; captureAnchor() }
-        if !following && anchors.isEmpty { captureAnchor() }
+        // Captured before applying a new projection. Only an active gesture
+        // owns its own anchors; otherwise earlier geometry work may have moved
+        // the reader since, and stale offsets would restore the wrong place.
+        if !following && (anchors.isEmpty || !collection.scrolling) { captureAnchor() }
         let restyle = self.appearance != appearance || self.columnWidth != columnWidth
         self.appearance = appearance; self.columnWidth = columnWidth; self.spacing = spacing
         self.header = header; self.content = content
@@ -181,14 +188,20 @@ final class MacConversationController: NSViewController {
             (collection.layoutAttributesForItem(at: $0)?.frame.maxY ?? 0) > top
         }
         let messages = visible.filter { if case .block = source.itemIdentifier(for: $0) { return true }; return false }
+        let candidates = messages.isEmpty ? visible : messages
+        // A row that starts above the viewport keeps its origin when its own
+        // height changes, so pinning it pushes everything the reader can see
+        // down. Prefer rows that start on screen; keep the rest as fallbacks.
+        let started = candidates.filter { (collection.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= top - 0.5 }
         // A partially known group can be replaced when an older network page
         // supplies its prefix. Keep surviving visible rows as geometry fallbacks;
         // the permanent header would incorrectly pin the top of the new page.
-        anchors = (messages.isEmpty ? visible : messages).compactMap { path in
+        anchors = (started + candidates.filter { !started.contains($0) }).compactMap { path in
             guard let row = source.itemIdentifier(for: path),
                   let frame = collection.layoutAttributesForItem(at: path)?.frame else { return nil }
             return Anchor(row: row, offset: frame.minY - top)
         }
+        anchoredOffset = top
     }
 
     private func scheduleSettle() {
@@ -199,14 +212,27 @@ final class MacConversationController: NSViewController {
             self.scheduled = false; self.settleViewport()
         }
     }
+    /// Reconciles the reading position with the current geometry. Fresh anchors
+    /// make this a no-op during plain scrolling, so it also runs under a
+    /// gesture: AppKit never preserves the viewport when an off-screen row is
+    /// first measured, and that is what displaces a reader scrolling up.
     private func settleViewport(publishLatest: Bool = true) {
-        guard !updating, !settling, !collection.scrolling || reconcilingProjection else { return }
+        guard !updating, !settling else { return }
         settling = true
         var changedGeometry = false
         defer {
             settling = false
+            anchoredOffset = scroll.contentView.bounds.minY
             if changedGeometry && settlePass < 6 { settlePass += 1; scheduleSettle() }
             else { settlePass = 0; reconcilingProjection = false }
+        }
+        // The viewport also moves in ways no callback reports: keyboard
+        // scrolling, Accessibility, scroll-to-visible. Any offset this
+        // controller did not itself reconcile to is the new reading position,
+        // not a reason to pull the transcript back to an older anchor.
+        if !following, !reconcilingProjection,
+           let anchored = anchoredOffset, abs(scroll.contentView.bounds.minY - anchored) > 0.5 {
+            captureAnchor()
         }
         collection.layoutSubtreeIfNeeded()
         let height = max(scroll.contentSize.height, collection.collectionViewLayout!.collectionViewContentSize.height)
@@ -235,7 +261,9 @@ final class MacConversationController: NSViewController {
     private func userScrolled(began: Bool, ended: Bool) {
         guard !updating, !settling else { return }
         if began { historyTrigger.beginGesture(); following = false; anchors = [] }
-        captureAnchor()
+        // Estimated rows self-size over the passes that follow a geometry
+        // transaction. Adopting that intermediate state loses the reader's row.
+        if !reconcilingProjection || anchors.isEmpty { captureAnchor() }
         if let chat = previousChat, historyTrigger.request(offset: scroll.contentView.bounds.minY,
             hasEarlier: chat.hasEarlier_p, loading: chat.loading, failed: !chat.loadError.isEmpty) {
             onEarlier?()

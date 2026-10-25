@@ -2,6 +2,122 @@
 
 use super::*;
 
+fn running_chat() -> State {
+    let mut state = State::new(false, Some("local".into()));
+    state.screen = app::Screen::Chat;
+    state.chat = Some(crate::state::Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            provider: "claude".into(),
+            mode: "code".into(),
+            state: "running".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    state
+}
+
+/// `<state label>|<text>` for every send the conversation does not account for.
+fn admitted_rows(state: &State) -> Vec<String> {
+    crate::render::view_model(state)
+        .chat
+        .expect("chat view")
+        .timeline
+        .into_iter()
+        .filter(|b| b.kind == "admitted_send")
+        .map(|b| format!("{}|{}", b.title, b.message.unwrap_or_default().text))
+        .collect()
+}
+
+fn user_message(id: &str, text: &str) -> v1::AgentMessage {
+    v1::AgentMessage {
+        id: id.into(),
+        role: "user".into(),
+        kind: "text".into(),
+        text: text.into(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn an_inserted_message_stays_visible_until_the_conversation_accounts_for_it() {
+    let mut state = running_chat();
+    admitted::admit(&mut state, "op-1", "check the failing test");
+    assert_eq!(admitted_rows(&state), ["发送中|check the failing test"]);
+    // An applied RPC outcome is delivery evidence (ADR 0046), not the
+    // conversation carrying the text. The reader keeps seeing it either way.
+    admitted::outcome(&mut state, "op-1", false, "");
+    assert_eq!(
+        admitted_rows(&state),
+        ["已提交，尚未出现在会话中|check the failing test"]
+    );
+    // The provider queued it: a message inserted while the agent works.
+    state.chat.as_mut().expect("chat").interactions = vec![v1::PendingInteraction {
+        id: "queued:000:a".into(),
+        kind: muster_agent::queue::KIND.into(),
+        // Queue rows are clipped for display; the prefix still matches.
+        prompt: "check the failing…".into(),
+        ..Default::default()
+    }];
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        ["已排队，本轮结束后发送|check the failing test"]
+    );
+    // A queue that stops reporting the row is not evidence it was taken.
+    state.chat.as_mut().expect("chat").interactions.clear();
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        ["已提交，尚未出现在会话中|check the failing test"]
+    );
+    // Only the transcript itself retires the record.
+    state.chat.as_mut().expect("chat").messages =
+        vec![user_message("m1", "check the failing test")];
+    admitted::settle(&mut state);
+    assert!(admitted_rows(&state).is_empty());
+}
+
+#[test]
+fn a_repeated_prompt_rejection_and_unknown_outcome_keep_their_own_records() {
+    let mut state = running_chat();
+    // An identical message that was already there accounts for nothing.
+    state.chat.as_mut().expect("chat").messages = vec![user_message("m1", "run it again")];
+    admitted::admit(&mut state, "op-1", "run it again");
+    admitted::outcome(&mut state, "op-1", true, "");
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        ["送达未确认，请勿重复发送|run it again"]
+    );
+    state
+        .chat
+        .as_mut()
+        .expect("chat")
+        .messages
+        .push(user_message("m2", "run it again"));
+    admitted::settle(&mut state);
+    assert!(admitted_rows(&state).is_empty());
+    // A refusal keeps the text with its reason instead of discarding it.
+    admitted::admit(&mut state, "op-2", "another prompt");
+    admitted::outcome(&mut state, "op-2", false, "Mac refused the send");
+    assert_eq!(
+        admitted_rows(&state),
+        ["未发送：Mac refused the send|another prompt"]
+    );
+    // Records are per conversation and never follow another one.
+    let chat = state.chat.as_mut().expect("chat");
+    chat.session.id = "other".into();
+    assert!(admitted_rows(&state).is_empty());
+    state.chat.as_mut().expect("chat").session.id = "s".into();
+    assert_eq!(admitted_rows(&state).len(), 1);
+    // Only an explicit release, after the user checked the Mac, drops it.
+    admitted::release(&mut state);
+    assert!(admitted_rows(&state).is_empty());
+}
+
 #[test]
 fn tab_completion_is_available_for_native_claude_and_codex_only() {
     let mut state = State::new(false, Some("local".into()));

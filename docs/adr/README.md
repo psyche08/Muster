@@ -92,6 +92,10 @@ records a specific decision and does not revive code on its delete list.
 
 | [0046](0046-send-recovery-and-quiet-admission.md) | Accepted | Recover send outcomes without replay and wait for quiet before navigation |
 
+| [0047](0047-transcript-reading-anchor-parity.md) | Accepted | One reading-anchor policy for both Apple transcripts |
+
+| [0048](0048-admitted-send-acknowledgement.md) | Accepted | Acknowledge a send against the conversation, not only its outcome |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

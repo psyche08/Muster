@@ -315,6 +315,11 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in atLatest = true; contentTab = "Conversation" }
+        // A message of the reader's own belongs on screen the moment Rust
+        // admits it, even if they had scrolled up while the agent worked.
+        .onChange(of: chat.timeline.last { $0.kind == "admitted_send" }?.id ?? "") { _, admitted in
+            if !admitted.isEmpty { latestRequest += 1 }
+        }
         .onChange(of: contentTab) { old, new in
             if new == "Terminal" { core.sessionTerminal(.start) }
             else if old == "Terminal" { core.sessionTerminal(.detach) }
@@ -543,6 +548,7 @@ struct ConversationBlock: View {
             case "diff":
                 ForEach(block.diffs, id: \.id) { SessionDiffCard(file: $0) }
             case "notice": SessionNotice(block: block)
+            case "admitted_send": AdmittedSendRow(block: block)
             case "compact_context": CompactContext(message: block.message)
             case "provider_card":
                 VStack(alignment: .leading, spacing: 8) {
@@ -560,6 +566,32 @@ struct ConversationBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .environment(\.transcriptDisclosurePath, [block.id])
+    }
+}
+
+/// A message this app sent that the conversation does not account for yet.
+/// Rust decides the state and its wording; this row only shows both, so a
+/// message inserted while the agent works is never invisible.
+struct AdmittedSendRow: View, Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.block == rhs.block }
+    let block: Muster_App_ChatBlock
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.conversationStyle) private var style
+    private var palette: ChatPalette { ChatPalette(scheme: scheme, style: style) }
+    private var failed: Bool { block.title.hasPrefix("未发送") }
+    private var attention: Bool { failed || block.title.contains("未确认") || block.title.contains("尚未") }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            MessageBubble(message: block.message).opacity(failed ? 0.65 : 0.85)
+            Label(block.title, systemImage: failed ? "exclamationmark.circle"
+                : attention ? "clock.badge.questionmark" : "arrow.up.circle")
+                .font(.caption)
+                .foregroundStyle(attention ? AnyShapeStyle(.orange) : AnyShapeStyle(palette.secondary))
+                .padding(.trailing, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .combine)
     }
 }
 
