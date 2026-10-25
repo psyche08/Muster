@@ -36,6 +36,19 @@ final class RecycledConversationTests: XCTestCase {
         view.scrollToItem(at: IndexPath(item: index, section: 0), at: .top, animated: false)
         settle(); controller.scrollViewDidEndDragging(view, willDecelerate: false); settle()
     }
+    /// The rendered height of one row. UIKit never measures a row again while
+    /// it sits above the viewport top, and one `scrollToItem` on estimated rows
+    /// lands short of the row, so bring it fully inside the viewport first.
+    private func measure(_ controller: ConversationCollectionController, _ index: Int) -> CGFloat {
+        let view = controller.collection!
+        let path = IndexPath(item: index, section: 0)
+        controller.scrollViewWillBeginDragging(view)
+        view.scrollToItem(at: path, at: .centeredVertically, animated: false)
+        settle()
+        view.scrollToItem(at: path, at: .centeredVertically, animated: false)
+        settle(); controller.scrollViewDidEndDragging(view, willDecelerate: false); settle()
+        return view.layoutAttributesForItem(at: path)!.frame.height
+    }
     private func position(_ view: UICollectionView, _ index: Int) -> CGFloat {
         (view.layoutAttributesForItem(at: IndexPath(item: index, section: 0))?.frame.minY ?? -9999) - view.contentOffset.y
     }
@@ -59,6 +72,112 @@ final class RecycledConversationTests: XCTestCase {
         readAt(controller, index: 0); XCTAssertEqual(requests, 2)
     }
 
+    private func hold(_ controller: ConversationCollectionController, _ chat: Muster_App_ChatView, _ hold: Int) {
+        controller.update(chat: chat, showsInteractions: true, spacing: 14, columnWidth: 760,
+                          appearance: "fixture", jump: 0, hold: hold, header: AnyView(Text("Earlier history")),
+                          interactions: AnyView(EmptyView()), content: { AnyView(ConversationBlock(block: $0)) })
+        settle()
+    }
+
+    func testEarlierPagesDuringAnActiveGestureKeepTheReadersRow() throws {
+        let controller = ConversationCollectionController()
+        var value = chat(400..<460); value.hasEarlier_p = true
+        var requests = 0; controller.onEarlier = { requests += 1 }
+        update(controller, value); let window = try show(controller)
+        defer { window.isHidden = true }
+        let view = controller.collection!
+        for page in 1...2 {
+            controller.scrollViewWillBeginDragging(view)
+            view.scrollToItem(at: IndexPath(item: 1, section: 0), at: .top, animated: false)
+            settle()
+            XCTAssertEqual(requests, page, "A near-top gesture asks Rust for one page")
+            let before = position(view, 1)
+            // The response arrives while the gesture still owns the viewport.
+            value = chat((400 - page * 200)..<460); value.hasEarlier_p = true
+            // Mixed heights: an offset derived from estimated row heights times
+            // the inserted count cannot restore the reading position.
+            for index in 0..<200 {
+                value.timeline[index].message.text += String(repeating: "\n\nWrapped **earlier** paragraph.", count: index % 7)
+            }
+            hold(controller, value, page)
+            XCTAssertEqual(position(view, 201), before, accuracy: 4,
+                           "Revealed history must not move the row the reader is on")
+            controller.scrollViewDidEndDragging(view, willDecelerate: false); settle()
+            XCTAssertEqual(position(view, 201), before, accuracy: 4,
+                           "Gesture end must not adopt a newly inserted row as the anchor")
+            XCTAssertEqual(requests, page, "A projection is not a new scroll gesture")
+            // The correction must not freeze the reader: movement still works.
+            readAt(controller, index: 150)
+            XCTAssertLessThan(abs(position(view, 150)), 300, "A later gesture moves the reader normally")
+            XCTAssertGreaterThan(position(view, 201), before + 400)
+        }
+    }
+
+    func testRowsMeasuredWhileScrollingUpDoNotDisplaceTheReader() throws {
+        let controller = ConversationCollectionController(); var value = chat(0..<120)
+        // Heights far from the layout's estimate: each row above the viewport
+        // is first measured when the reader scrolls it into view.
+        for index in value.timeline.indices {
+            value.timeline[index].message.text = String(repeating:
+                "A long **Markdown** paragraph that wraps across the reading column.\n\n",
+                count: 2 + (index % 9) * 3)
+        }
+        update(controller, value); let window = try show(controller)
+        defer { window.isHidden = true }
+        let view = controller.collection!
+        readAt(controller, index: 100)
+        for _ in 0..<8 {
+            let before = position(view, 100)
+            controller.scrollViewWillBeginDragging(view)
+            view.contentOffset.y -= 120
+            settle()
+            XCTAssertEqual(position(view, 100) - before, 120, accuracy: 100,
+                           "A row measured on the way up must not move the reader's row")
+            controller.scrollViewDidEndDragging(view, willDecelerate: false); settle()
+        }
+    }
+
+    func testAViewportMoveWithoutACallbackIsAdoptedNotPulledBack() throws {
+        let controller = ConversationCollectionController()
+        var value = chat(200..<500)
+        update(controller, value); let window = try show(controller)
+        defer { window.isHidden = true }
+        let view = controller.collection!
+        readAt(controller, index: 250)
+        // Keyboard avoidance, Accessibility and scroll-to-visible move the
+        // viewport with no scroll-view callback at all.
+        let origin = view.contentOffset.y
+        view.contentOffset.y = origin - 900
+        settle()
+        XCTAssertLessThan(view.contentOffset.y, origin - 400,
+                          "A viewport move this controller never saw must be kept, not pulled back")
+        let top = view.contentOffset.y
+        let first = try XCTUnwrap(view.indexPathsForVisibleItems.sorted().first {
+            $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= top - 0.5
+        }).item
+        let before = position(view, first)
+        value = chat(0..<500); hold(controller, value, 1)
+        XCTAssertEqual(position(view, first + 200), before, accuracy: 4,
+                       "Revealed history anchors the adopted position")
+    }
+
+    func testReplacedBoundaryRowKeepsSurvivingVisibleContent() throws {
+        let controller = ConversationCollectionController()
+        var value = chat(200..<260)
+        // A partially known group: an older page supplies its prefix and Rust
+        // emits the complete group under a different identity.
+        value.timeline[0].id = "partial-boundary"
+        update(controller, value); let window = try show(controller)
+        defer { window.isHidden = true }
+        let view = controller.collection!
+        readAt(controller, index: 0)
+        let before = position(view, 2)
+        value = chat(0..<260); value.timeline[200].id = "complete-boundary"
+        hold(controller, value, 1)
+        XCTAssertEqual(position(view, 202), before, accuracy: 4,
+                       "A replaced boundary row must not discard surviving visible anchors")
+    }
+
     func testLongHistoryRecyclesAndPrependKeepsVisibleRow() throws {
         let controller = ConversationCollectionController(); var value = chat(80..<580)
         update(controller, value); let window = try show(controller); defer { window.isHidden = true }
@@ -67,8 +186,10 @@ final class RecycledConversationTests: XCTestCase {
         XCTAssertLessThan(view.visibleCells.count, 25)
         XCTAssertLessThan(abs(remaining(view)), 4)
         readAt(controller, index: 240)
+        // The reading anchor is the first row that starts on screen, which is
+        // also the row whose position the reader actually watches.
         let anchored = try XCTUnwrap(view.indexPathsForVisibleItems.sorted().first {
-            $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.maxY ?? 0) > view.contentOffset.y
+            $0.item > 0 && (view.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= view.contentOffset.y - 0.5
         }).item
         let before = position(view, anchored)
         value = chat(0..<580); update(controller, value)
@@ -148,34 +269,32 @@ final class RecycledConversationTests: XCTestCase {
         work.children = [value.timeline[0]]
         value.timeline[0] = work
         update(controller, value); let window = try show(controller); defer { window.isHidden = true }
-        readAt(controller, index: 1)
-        func height(_ index: Int = 1) -> CGFloat {
-            controller.collection.layoutAttributesForItem(at: IndexPath(item: index, section: 0))!.frame.height
-        }
-        let expanded = height()
+        let expanded = measure(controller, 1)
         // The same presentation choice written by the disclosure control.
         controller.disclosures.choice(["work", "working", "work"]).override = false
-        settle(); let collapsed = height()
+        settle(); let collapsed = measure(controller, 1)
         XCTAssertGreaterThan(expanded, collapsed + 40)
         readAt(controller, index: 130)
-        XCTAssertNil(controller.collection.cellForItem(at: IndexPath(item: 1, section: 0)))
+        // Scrolled far away: UIKit either discards the row's hosting cell or
+        // keeps it hidden. Either way it no longer renders the choice.
+        let away = controller.collection.cellForItem(at: IndexPath(item: 1, section: 0))
+        XCTAssertTrue(away == nil || away?.isHidden == true, "The row's hosting cell leaves the viewport")
         value.timeline[0].children[0].message.text += " Streaming update."
-        update(controller, value); readAt(controller, index: 1)
-        XCTAssertEqual(height(), collapsed, accuracy: 2, "Explicit collapse survives discarded hosting cells and streaming")
+        update(controller, value)
+        XCTAssertEqual(measure(controller, 1), collapsed, accuracy: 2, "Explicit collapse survives discarded hosting cells and streaming")
         value.timeline.insert(contentsOf: chat(200..<210).timeline, at: 0)
-        update(controller, value); readAt(controller, index: 11)
-        XCTAssertEqual(height(11), collapsed, accuracy: 2, "Prepend must preserve choices by ID, not row index")
+        update(controller, value)
+        XCTAssertEqual(measure(controller, 11), collapsed, accuracy: 2, "Prepend must preserve choices by ID, not row index")
         controller.disclosures.choice(["work", "working", "work"]).override = true
         value.timeline[10].defaultExpanded = false
-        update(controller, value); let chosenExpanded = height(11)
+        update(controller, value); let chosenExpanded = measure(controller, 11)
         XCTAssertGreaterThan(chosenExpanded, collapsed + 40, "A changed Rust default must not overwrite the reader's choice")
-        readAt(controller, index: 140); readAt(controller, index: 11)
-        XCTAssertGreaterThan(height(11), collapsed + 40, "Expanded content survives reuse after Markdown margins settle")
+        readAt(controller, index: 140)
+        XCTAssertGreaterThan(measure(controller, 11), collapsed + 40, "Expanded content survives reuse after Markdown margins settle")
         let other = ConversationCollectionController()
         update(other, value); let otherWindow = try show(other); defer { otherWindow.isHidden = true }
-        readAt(other, index: 11)
-        XCTAssertEqual(other.collection.layoutAttributesForItem(at: IndexPath(item: 11, section: 0))!.frame.height,
-                       collapsed, accuracy: 2, "Another opened session must not inherit choices with identical IDs")
+        XCTAssertEqual(measure(other, 11), collapsed, accuracy: 2,
+                       "Another opened session must not inherit choices with identical IDs")
     }
 
     func testNestedToolsAndAllTranscriptDisclosuresKeepIndependentChoices() throws {
@@ -198,28 +317,24 @@ final class RecycledConversationTests: XCTestCase {
         let controls = [("reasoning", "row-0"), ("notice", "row-1"), ("context", "row-2"),
                         ("diff", "file"), ("changes", "row-4"), ("activity", "row-5")]
         for (index, control) in controls.enumerated() {
-            readAt(controller, index: index + 1)
-            let path = IndexPath(item: index + 1, section: 0)
-            let before = controller.collection.layoutAttributesForItem(at: path)!.frame.height
+            let before = measure(controller, index + 1)
             controller.disclosures.choice(["row-\(index)", control.0, control.1]).override = true
             settle()
-            let changed = controller.collection.layoutAttributesForItem(at: path)!.frame.height
+            let changed = measure(controller, index + 1)
             XCTAssertGreaterThan(changed, before + 10, "Control must use the retained choice: \(control.0)")
-            readAt(controller, index: 130); readAt(controller, index: index + 1)
-            XCTAssertEqual(controller.collection.layoutAttributesForItem(at: path)!.frame.height, changed, accuracy: 2)
+            readAt(controller, index: 130)
+            XCTAssertEqual(measure(controller, index + 1), changed, accuracy: 2)
         }
-        readAt(controller, index: 6)
-        let closed = controller.collection.layoutAttributesForItem(at: IndexPath(item: 6, section: 0))!.frame.height
+        let closed = measure(controller, 6)
         controller.disclosures.choice(["row-5", "row-5", "tool", "shared-tool"]).override = true
         settle()
-        let opened = controller.collection.layoutAttributesForItem(at: IndexPath(item: 6, section: 0))!.frame.height
+        let opened = measure(controller, 6)
         XCTAssertGreaterThan(opened, closed + 40)
         controller.disclosures.choice(["other-group", "activity", "other-group"]).override = true
-        readAt(controller, index: 7)
-        XCTAssertEqual(controller.collection.layoutAttributesForItem(at: IndexPath(item: 7, section: 0))!.frame.height,
-                       closed, accuracy: 2, "Identical tool IDs in different groups must remain independent")
-        readAt(controller, index: 130); readAt(controller, index: 6)
-        XCTAssertEqual(controller.collection.layoutAttributesForItem(at: IndexPath(item: 6, section: 0))!.frame.height, opened, accuracy: 2)
+        XCTAssertEqual(measure(controller, 7), closed, accuracy: 2,
+                       "Identical tool IDs in different groups must remain independent")
+        readAt(controller, index: 130)
+        XCTAssertEqual(measure(controller, 6), opened, accuracy: 2)
     }
 
     func testContentTabsKeepViewportChoicesAndUnsentAnswer() throws {

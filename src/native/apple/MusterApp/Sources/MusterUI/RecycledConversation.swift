@@ -79,11 +79,23 @@ final class ConversationCollectionController: UIViewController, UICollectionView
     private var appearance = ""
     private var lastJump = 0
     private var lastHold = 0
-    private var anchor: Anchor?
+    /// Every visible row the reader can see, in order, with its screen offset.
+    /// A partially known group is replaced when an older page supplies its
+    /// prefix, so one identity is not enough to restore the reading position.
+    private var anchors: [Anchor] = []
+    /// The offset the current anchors were taken at, or that this controller
+    /// last reconciled to. A later difference it never saw is somebody else
+    /// moving the viewport, not geometry drifting under a stale anchor.
+    private var anchoredOffset: CGFloat?
     private var following = true
     private var updating = false
     private var settling = false
+    private var settlePass = 0
     private var scheduled = false
+    /// A projection change is a geometry transaction: reconcile it even while
+    /// a gesture owns the viewport, and never during plain user scrolling.
+    private var reconcilingProjection = false
+    private(set) var scrolling = false
     private var columnWidth: CGFloat = 760
     var onLatest: ((Bool) -> Void)?
     var onEarlier: (() -> Void)?
@@ -147,8 +159,9 @@ final class ConversationCollectionController: UIViewController, UICollectionView
         loadViewIfNeeded()
         if lastHold != hold { following = false; lastHold = hold; captureAnchor() }
         // Captured before applying a new projection: index paths can move when
-        // Rust reveals older history, but the anchored row ID remains stable.
-        if !following && !collection.isDragging && !collection.isDecelerating { captureAnchor() }
+        // Rust reveals older history, but the anchored row IDs remain stable.
+        // A gesture keeps the anchors its own callbacks captured.
+        if !following && (anchors.isEmpty || !gestureActive) { captureAnchor() }
         let restyle = self.appearance != appearance || self.columnWidth != columnWidth
         self.appearance = appearance; self.columnWidth = columnWidth; rowSpacing = spacing
         self.header = header; self.content = content
@@ -169,21 +182,32 @@ final class ConversationCollectionController: UIViewController, UICollectionView
             interactionHost.view.invalidateIntrinsicContentSize()
         }
         previousChat = chat
-        if lastJump != jump { following = true; anchor = nil; lastJump = jump }
+        if lastJump != jump { following = true; anchors = []; lastJump = jump }
         updating = true
         if rows != previousRows {
+            reconcilingProjection = true
             var snapshot = NSDiffableDataSourceSnapshot<Int, Row>()
             snapshot.appendSections([0]); snapshot.appendItems(rows)
             let existing = Set(previousRows)
             snapshot.reconfigureItems(changed.filter { existing.contains($0) })
             source.apply(snapshot, animatingDifferences: false)
         } else if !changed.isEmpty {
+            reconcilingProjection = true
             var snapshot = source.snapshot(); snapshot.reconfigureItems(changed)
             source.apply(snapshot, animatingDifferences: false)
         }
-        if restyle { collection.collectionViewLayout.invalidateLayout() }
+        if restyle { reconcilingProjection = true; collection.collectionViewLayout.invalidateLayout() }
         updating = false
+        // Reconcile before another scroll callback can capture newly inserted
+        // rows at the old absolute offset: a gesture outlives the history RPC.
+        // A binding is never published from inside this update callback.
+        if reconcilingProjection { settleViewport(publishLatest: false) }
         scheduleSettle()
+    }
+
+    /// Whether the reader, rather than a projection change, owns the viewport.
+    private var gestureActive: Bool {
+        collection.isDragging || collection.isDecelerating || scrolling
     }
 
     private func scheduleSettle() {
@@ -196,24 +220,48 @@ final class ConversationCollectionController: UIViewController, UICollectionView
         }
     }
 
-    private func settleViewport() {
-        guard !updating, !collection.isDragging, !collection.isDecelerating else { return }
+    /// Reconciles the reading position with the current geometry. Fresh anchors
+    /// make this a no-op during plain scrolling, so it also runs under a
+    /// gesture: that is what keeps rows measured on the way up from displacing
+    /// the reader, exactly as a SwiftUI ScrollView would.
+    private func settleViewport(publishLatest: Bool = true) {
+        guard !updating, !settling else { return }
         settling = true
-        defer { settling = false }
+        var changedGeometry = false
+        defer {
+            settling = false
+            anchoredOffset = collection.contentOffset.y
+            // Scrolling to estimated offscreen rows makes them self-size. Keep
+            // reconciling the same ID/offset while that changes the geometry.
+            if changedGeometry && settlePass < 6 { settlePass += 1; scheduleSettle() }
+            else { settlePass = 0; reconcilingProjection = false }
+        }
+        // The viewport also moves in ways no callback reports: keyboard
+        // avoidance, Accessibility, scroll-to-visible. Any offset this
+        // controller did not itself reconcile to is the new reading position,
+        // not a reason to pull the transcript back to an older anchor.
+        if !following, !reconcilingProjection,
+           let anchored = anchoredOffset, abs(collection.contentOffset.y - anchored) > 0.5 {
+            captureAnchor()
+        }
         collection.layoutIfNeeded()
         let minY = -collection.adjustedContentInset.top
         let maxY = max(minY, collection.contentSize.height - collection.bounds.height + collection.adjustedContentInset.bottom)
         var target: CGFloat?
         if following { target = maxY }
-        else if let anchor, let path = source.indexPath(for: anchor.row), let frame = collection.layoutAttributesForItem(at: path)?.frame {
-            target = min(maxY, max(minY, frame.minY - anchor.offset))
+        else {
+            for anchor in anchors {
+                guard let path = source.indexPath(for: anchor.row),
+                      let frame = collection.layoutAttributesForItem(at: path)?.frame else { continue }
+                target = min(maxY, max(minY, frame.minY - anchor.offset))
+                break
+            }
         }
         if let target, abs(collection.contentOffset.y - target) > 0.5 {
+            changedGeometry = true
             collection.setContentOffset(CGPoint(x: 0, y: target), animated: false)
-            // Scrolling to estimated offscreen rows makes them self-size. The
-            // next actual layout callback reconciles the same ID/offset again.
         }
-        onLatest?(following)
+        if publishLatest { onLatest?(following) }
     }
 
     private func captureAnchor() {
@@ -223,34 +271,54 @@ final class ConversationCollectionController: UIViewController, UICollectionView
         }
         // The load-earlier header stays at index zero when history is inserted;
         // anchoring that header would move every message the reader can see.
-        let message = visible.first { if case .block = source.itemIdentifier(for: $0) { return true }; return false }
-        guard let path = message ?? visible.first,
-              let row = source.itemIdentifier(for: path), let frame = collection.layoutAttributesForItem(at: path)?.frame else { return }
-        anchor = Anchor(row: row, offset: frame.minY - collection.contentOffset.y)
+        let messages = visible.filter { if case .block = source.itemIdentifier(for: $0) { return true }; return false }
+        let candidates = messages.isEmpty ? visible : messages
+        // A row that starts above the viewport keeps its origin when its own
+        // height changes, so pinning it pushes everything the reader can see
+        // down. Prefer rows that start on screen; keep the rest as fallbacks.
+        let started = candidates.filter { (collection.layoutAttributesForItem(at: $0)?.frame.minY ?? 0) >= top - 0.5 }
+        // A partially known group is replaced when an older page supplies its
+        // prefix. Keep every surviving visible row as an ordered geometry
+        // fallback; the permanent header would pin the new page's top instead.
+        anchors = (started + candidates.filter { !started.contains($0) }).compactMap { path in
+            guard let row = source.itemIdentifier(for: path),
+                  let frame = collection.layoutAttributesForItem(at: path)?.frame else { return nil }
+            return Anchor(row: row, offset: frame.minY - collection.contentOffset.y)
+        }
+        anchoredOffset = collection.contentOffset.y
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        scrolling = true
         historyTrigger.beginGesture()
-        following = false; anchor = nil; onLatest?(false)
+        following = false; anchors = []; onLatest?(false)
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard !updating, !settling, scrollView.isDragging || scrollView.isDecelerating else { return }
-        captureAnchor()
+        guard !updating, !settling, gestureActive else { return }
+        // Estimated rows self-size over the passes that follow a projection
+        // change. Adopting that intermediate geometry loses the reader's row.
+        if !reconcilingProjection || anchors.isEmpty { captureAnchor() }
         requestEarlierIfNeeded()
     }
     private func requestEarlierIfNeeded() {
         guard let chat = previousChat, historyTrigger.request(offset: collection.contentOffset.y + collection.adjustedContentInset.top,
             hasEarlier: chat.hasEarlier_p, loading: chat.loading, failed: !chat.loadError.isEmpty) else { return }
-        following = false; captureAnchor(); onEarlier?()
+        following = false
+        if !reconcilingProjection { captureAnchor() }
+        onEarlier?()
     }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate { finishedScrolling() }
     }
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { finishedScrolling() }
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) { finishedScrolling() }
     private func finishedScrolling() {
+        scrolling = false
         requestEarlierIfNeeded()
         following = collection.contentSize.height - collection.bounds.height + collection.adjustedContentInset.bottom - collection.contentOffset.y <= 48
-        captureAnchor(); onLatest?(following)
+        // Gesture end must not adopt a row a projection change just inserted.
+        if !reconcilingProjection { captureAnchor() }
+        onLatest?(following)
         scheduleSettle()
     }
 }

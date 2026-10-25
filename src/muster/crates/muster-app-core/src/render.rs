@@ -24,7 +24,40 @@ fn session_row(session: &muster_proto::v1::AgentSession) -> muster_proto::v1::Ag
     row
 }
 
-fn session_timeline(chat: &crate::state::Chat) -> Vec<app::ChatBlock> {
+/// A send this client made that the conversation does not account for yet,
+/// shown in the reading flow so nothing the user wrote is invisible. The title
+/// states exactly what is known; it never claims delivery.
+fn admitted_block(send: &crate::state::AdmittedSend) -> app::ChatBlock {
+    app::ChatBlock {
+        id: format!("admitted:{}", send.op_id),
+        kind: "admitted_send".into(),
+        title: if !send.error.is_empty() {
+            format!("未发送：{}", send.error)
+        } else if send.sending {
+            "发送中".into()
+        } else if send.unknown {
+            "送达未确认，请勿重复发送".into()
+        } else if send.queued {
+            "已排队，本轮结束后发送".into()
+        } else {
+            "已提交，尚未出现在会话中".into()
+        },
+        message: Some(muster_proto::v1::AgentMessage {
+            id: format!("admitted:{}", send.op_id),
+            role: "user".into(),
+            kind: "text".into(),
+            text: send.text.clone(),
+            ..Default::default()
+        }),
+        completed: false,
+        ..Default::default()
+    }
+}
+
+fn session_timeline(
+    chat: &crate::state::Chat,
+    admitted: &[crate::state::AdmittedSend],
+) -> Vec<app::ChatBlock> {
     let mut blocks = crate::timeline::window(
         &chat.messages,
         chat.history_start_index(),
@@ -45,6 +78,7 @@ fn session_timeline(chat: &crate::state::Chat) -> Vec<app::ChatBlock> {
         }
     }
     decorate(&mut blocks, crate::update::code_runs::eligible(chat));
+    blocks.extend(admitted.iter().map(admitted_block));
     blocks
 }
 
@@ -155,7 +189,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             message_count: chat.messages.len() as u32,
             content_revision: chat.content_revision,
             timeline: if content {
-                session_timeline(chat)
+                session_timeline(chat, crate::update::admitted::open(state))
             } else {
                 Vec::new()
             },
@@ -373,7 +407,7 @@ impl Renderer {
             self.timeline.clear();
             self.trace.clear();
             if let Some(chat) = state.chat.as_ref().filter(|_| key.is_some()) {
-                self.timeline = session_timeline(chat);
+                self.timeline = session_timeline(chat, crate::update::admitted::open(state));
                 self.trace = crate::trace::spans(chat.visible_messages(), &chat.session.state);
                 #[cfg(test)]
                 {

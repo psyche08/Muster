@@ -26,6 +26,7 @@ use crate::state::{
 };
 use crate::{Ctx, Error, Loop};
 
+pub(crate) mod admitted;
 mod agents;
 pub(crate) mod code_runs;
 mod desktop_chats;
