@@ -209,9 +209,11 @@ pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
             ctx.backend.suspend(false);
             reconnect(state, ctx);
             terminals::foreground_terminal(state, ctx);
+            super::send_recovery::restore(state, ctx);
         }
         app::Lifecycle::Background => {
             state.foreground = false;
+            state.send_recoveries.clear();
             // Suspended links fail by design: no evidence about anyone.
             ctx.backend.suspend(true);
             if state.embedded {

@@ -268,9 +268,17 @@ pub(super) fn op_request_from(
                 // Keep the card blocked until provider completion is observed.
                 // Explicit server rejection is definitive. RPC cancellation
                 // timeouts can occur after delivery and remain ambiguous.
-                Err(error @ muster_rpc::Error::Remote { code, .. })
-                    if code != v1::error::Code::Timeout =>
-                {
+                Err(
+                    error @ muster_rpc::Error::Remote {
+                        code:
+                            v1::error::Code::Invalid
+                            | v1::error::Code::Unauthorized
+                            | v1::error::Code::NotFound
+                            | v1::error::Code::Conflict
+                            | v1::error::Code::Busy,
+                        ..
+                    },
+                ) => {
                     return Err(error.into());
                 }
                 Err(error) if matches!(what, "respond" | "send" | "terminal_result") => {
@@ -335,7 +343,12 @@ pub(super) fn sent(state: &mut State, ctx: &Ctx, device: &str, landed: &str) {
         return;
     }
     if chat.session.id == landed {
-        chat.sent_draft_id = std::mem::take(&mut chat.pending_draft_id);
+        let tag = std::mem::take(&mut chat.pending_draft_id);
+        chat.sent_draft_id = tag
+            .split_once(':')
+            .map(|(_, draft)| draft)
+            .unwrap_or(&tag)
+            .to_owned();
         if let Some(app) = dc::app_of(landed).filter(|_| dc::is_new_session(landed)) {
             let text = format!(
                 "Sent. The conversation appears in the chat list once {} names it",
@@ -382,6 +395,17 @@ pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) 
         diagnostic.stage("authentication_cancel");
         diagnostic.rejection(reason.as_str());
         state.effects.remove(&p.effect_id);
+        if what == "send" {
+            super::send_recovery::outcome(
+                state,
+                ctx,
+                &p.device,
+                &p.response_origin,
+                &Err(Error::Unavailable(
+                    "Authentication cancelled before dispatch".into(),
+                )),
+            );
+        }
     }
     if let Some(chat) = state.chat.as_mut() {
         chat.sending = false;
@@ -389,6 +413,7 @@ pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) 
         chat.response_error = "Authentication or Locked Use cancelled; your answer was kept".into();
     }
     cancel_challenge(state, ctx, device, nonce, reason);
+    super::send_recovery::restore(state, ctx);
 }
 
 pub(super) fn cancel_challenge(
@@ -441,6 +466,7 @@ pub(super) fn msg_op_done(
     response_origin: Option<(String, String)>,
     result: Result<v1::OpResult, Error>,
 ) {
+    let mut draft_saved = true;
     // A late success clears only the exact submitted revision, even
     // after navigation. Failure/unknown and subsequent edits survive.
     if what == "input" {
@@ -449,8 +475,9 @@ pub(super) fn msg_op_done(
     }
     if what == "send"
         && let Some((_, tag)) = &response_origin
-        && let Some(submitted) = state.pending_drafts.remove(tag)
         && let Ok(result) = &result
+        && result.status != v1::op_result::Status::Unknown as i32
+        && let Some(submitted) = state.pending_drafts.get(tag).cloned()
     {
         match crate::drafts::clear_sent(&ctx.cache, &submitted, result.status) {
             Ok(Some(cleared)) => {
@@ -459,8 +486,17 @@ pub(super) fn msg_op_done(
                 }
             }
             Ok(None) => {}
-            Err(error) => state.toast(format!("消息已发送，草稿清理暂未写入磁盘：{error}"), true),
+            Err(error) => {
+                draft_saved = false;
+                state.toast(format!("消息已发送，草稿清理暂未写入磁盘：{error}"), true);
+            }
         }
+        if draft_saved {
+            state.pending_drafts.remove(tag);
+        }
+    }
+    if what == "send" && draft_saved {
+        super::send_recovery::outcome(state, ctx, &device, &response_origin, &result);
     }
     let same_origin = state.chat.as_ref().is_some_and(|c| {
         c.device == device
@@ -652,6 +688,7 @@ pub(super) fn msg_presence_needed(
                 if what == "terminal_result" {
                     super::code_runs::cancelled(state, &device);
                 }
+                super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
                 state.toast(e.to_string(), true);
                 return;
             }
@@ -684,6 +721,7 @@ pub(super) fn msg_presence_needed(
             } else {
                 "authentication_background"
             });
+            super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
             cancel_challenge(state, ctx, device, nonce.clone(), reason);
             return;
         }
@@ -735,6 +773,7 @@ pub(super) fn msg_presence_needed(
             }
             Err(error) => {
                 diagnostic.failure(&error);
+                super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
                 cancel_locked(state, ctx, CancelReason::Authentication);
                 state.toast(error.to_string(), true);
             }

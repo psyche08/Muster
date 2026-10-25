@@ -283,6 +283,7 @@ pub struct State {
     pub next_op: u64,
     pub device_watch: Option<Watch>,
     pub foreground: bool,
+    pub send_recoveries: HashMap<String, Watch>,
     pub pending_drafts: HashMap<String, app::ChatDraft>,
     pub chat_call_epoch: u64,
     pub chat_calls: HashMap<
@@ -306,6 +307,7 @@ impl State {
 
     pub fn new(embedded: bool, self_id: Option<String>) -> Self {
         Self {
+            send_recoveries: HashMap::new(),
             pending_drafts: HashMap::new(),
             chat_calls: HashMap::new(),
             chat_call_epoch: 0,

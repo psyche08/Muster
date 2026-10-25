@@ -90,6 +90,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0045](0045-native-send-fast-path.md) | Accepted | Bound native send scans and settle receipts after relocking |
 
+| [0046](0046-send-recovery-and-quiet-admission.md) | Accepted | Recover send outcomes without replay and wait for quiet before navigation |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

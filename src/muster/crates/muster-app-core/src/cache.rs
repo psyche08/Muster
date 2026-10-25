@@ -1,4 +1,5 @@
-//! Display-only cache. No permissions, pending approvals or send outcomes persist.
+//! Display cache, drafts and pending investigation requests. No permissions,
+//! approvals or trusted send outcomes persist; recovery always queries the daemon.
 use muster_proto::Message;
 use std::{
     collections::HashMap,

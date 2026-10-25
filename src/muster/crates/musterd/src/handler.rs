@@ -34,6 +34,7 @@ enum Access {
     Need(Permission),
     /// The provider of the agent session the request names decides; it is
     /// looked up only after the caller holds Agents for some provider.
+    AgentReceipt,
     AgentSession {
         control: bool,
     },
@@ -132,6 +133,7 @@ fn access_for(req: &Req) -> Access {
         | Req::AgentFiles(_)
         | Req::AgentFile(_)
         | Req::AgentGit(_) => Access::AgentSession { control: false },
+        Req::AgentSendStatus(_) => Access::AgentReceipt,
         Req::AgentSend(_)
         | Req::AgentRespond(_)
         | Req::AgentInterrupt(_)
@@ -488,6 +490,32 @@ fn authorize_request(
         )),
         Access::Member => Ok(()),
         Access::Need(permission) => admit(daemon, ctx, &peer, request, permission),
+        Access::AgentReceipt => {
+            let allowed = |provider| {
+                authorize(
+                    daemon.roster().read().unwrap().state(),
+                    &peer,
+                    &Permission::Agent {
+                        provider,
+                        control: true,
+                    },
+                    &daemon.policy().read().unwrap(),
+                    &TargetState { locked: false },
+                ) == Decision::Allow
+            };
+            // Do not reveal whether a session exists to members without Agent access.
+            if !allowed(None) {
+                return Err(Error::Unauthorized("Send receipt access denied".into()));
+            }
+            let (_, provider) = session_provider(daemon, request)?;
+            let provider =
+                provider.ok_or_else(|| Error::NotFound("Receipt session unavailable".into()))?;
+            if allowed(Some(provider)) {
+                Ok(())
+            } else {
+                Err(Error::Unauthorized("Send receipt access denied".into()))
+            }
+        }
         Access::AgentSession { control } => {
             admit(
                 daemon,
@@ -569,6 +597,7 @@ fn admit(
 /// The agent session a request names, and its provider if it exists.
 fn session_provider(daemon: &Daemon, request: &Req) -> Result<(String, Option<String>), Error> {
     let session = match request {
+        Req::AgentSendStatus(r) => r.session.clone(),
         Req::AgentWatch(r) => r.session.clone(),
         Req::AgentMessages(r) => r.session.clone(),
         Req::AgentFiles(r) => r.session.clone(),
@@ -1628,6 +1657,7 @@ async fn dispatch(
             }
             Resp::Ack(v1::Ack {})
         }
+        Req::AgentSendStatus(r) => send_status(daemon, &r)?,
         Req::AgentMessages(r) => Resp::AgentMessages(agent_of(daemon)?.history_page(&r).await?),
         request @ (Req::AgentSend(_)
         | Req::AgentRespond(_)
@@ -1912,6 +1942,40 @@ async fn chat_control(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error>
     })
 }
 
+fn send_status(daemon: &Daemon, request: &v1::AgentSendRequest) -> Result<Resp, Error> {
+    use muster_proto::Message;
+    if request.op_id.is_empty() || request.session.is_empty() {
+        return Err(Error::Invalid(
+            "Receipt requires the original operation and session".into(),
+        ));
+    }
+    let outcome =
+        daemon
+            .store()
+            .ledger()
+            .outcome(&request.op_id, "agent.send", &request.encode_to_vec())?;
+    Ok(match outcome {
+        muster_store::Outcome::Applied(id) => op_result(
+            Status::Applied,
+            "",
+            String::from_utf8(id).map_err(|_| Error::Unavailable("Invalid receipt".into()))?,
+        ),
+        muster_store::Outcome::Rejected(reason) => {
+            op_result(Status::Rejected, String::from_utf8_lossy(&reason), "")
+        }
+        muster_store::Outcome::Conflict => {
+            return Err(Error::Conflict(
+                "Receipt does not match the original send".into(),
+            ));
+        }
+        muster_store::Outcome::Unknown => op_result(
+            Status::Unknown,
+            "Waiting for confirmation; the message will not be resent",
+            "",
+        ),
+    })
+}
+
 pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
     if let Req::TerminalCreate(r) = request {
         validate_locked_terminal_creation(daemon, &r)?;
@@ -1966,6 +2030,15 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         "Agent {what} op={op_id:?} target={session:?}: native preparation started queue_ms={}",
         preparation_started.elapsed().as_millis()
     );
+    #[cfg(target_os = "macos")]
+    if what == "send" && crate::agent_bridge::drives_desktop(daemon.platform().as_ref()) {
+        muster_agent::control_guard::wait_for_quiet(
+            muster_platform::macos::input::user_input_idle,
+            Duration::from_millis(250),
+            Duration::from_secs(3),
+        )
+        .await?;
+    }
     crate::agent_bridge::ensure_native(daemon.platform().as_ref(), agent.clone(), &session)
         .await
         .inspect_err(|error| {

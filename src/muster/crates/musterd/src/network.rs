@@ -242,6 +242,7 @@ impl Daemon {
                 services.push("agent.orca.v1".to_string());
             }
             services.push("agent.attachments".to_string());
+            services.push("agent.send.status.v1".to_string());
             services.push("agent.questions.v1".to_string());
             if cfg!(target_os = "macos") {
                 // Desktop Chat mode (Claude / ChatGPT apps through Accessibility).

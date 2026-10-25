@@ -281,7 +281,7 @@ pub fn holder(daemon: &crate::Daemon, app: &App) -> Option<muster_agent::desktop
 /// Accessibility entry point below asks the injected platform, not the
 /// build target: a daemon started with `DefaultPlatform` (a Linux server,
 /// a test) never touches the host's desktop apps.
-fn drives_desktop(platform: &dyn Platform) -> bool {
+pub(crate) fn drives_desktop(platform: &dyn Platform) -> bool {
     platform.accessibility().is_some()
 }
 

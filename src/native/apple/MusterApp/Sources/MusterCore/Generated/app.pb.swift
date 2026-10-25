@@ -3217,6 +3217,40 @@ public nonisolated struct Muster_App_CodeRunView: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// Local Rust recovery record, never authority or delivery evidence.
+public nonisolated struct Muster_App_PendingAgentSend: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Muster_V1_AgentSendRequest {
+    get {_request ?? Muster_V1_AgentSendRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var draft: Muster_App_ChatDraft {
+    get {_draft ?? Muster_App_ChatDraft()}
+    set {_draft = newValue}
+  }
+  /// Returns true if `draft` has been explicitly set.
+  public var hasDraft: Bool {self._draft != nil}
+  /// Clears the value of `draft`. Subsequent reads from it will return its default value.
+  public mutating func clearDraft() {self._draft = nil}
+
+  public var draftID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Muster_V1_AgentSendRequest? = nil
+  fileprivate var _draft: Muster_App_ChatDraft? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "muster.app"
@@ -9016,6 +9050,50 @@ nonisolated extension Muster_App_CodeRunView: SwiftProtobuf.Message, SwiftProtob
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_PendingAgentSend: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PendingAgentSend"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}draft\0\u{3}draft_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._draft) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.draftID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._draft {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if !self.draftID.isEmpty {
+      try visitor.visitSingularStringField(value: self.draftID, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_PendingAgentSend, rhs: Muster_App_PendingAgentSend) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs._draft != rhs._draft {return false}
+    if lhs.draftID != rhs.draftID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

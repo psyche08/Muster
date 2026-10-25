@@ -195,6 +195,38 @@ pub fn check() -> Result<(), crate::Error> {
     }
 }
 
+/// Wait before any navigation or draft write, never replay an interrupted write.
+/// Platforms report HID idle time; policy and cancellation remain shared Rust.
+pub async fn wait_for_quiet(
+    idle_for: impl Fn() -> std::time::Duration,
+    quiet: std::time::Duration,
+    budget: std::time::Duration,
+) -> Result<(), crate::Error> {
+    let deadline = tokio::time::Instant::now() + budget;
+    let mut waited = false;
+    loop {
+        check()?;
+        let idle = idle_for();
+        if idle >= quiet {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(crate::Error::Conflict(
+                "The Mac is being used locally; nothing was written or sent. Retry when it is idle"
+                    .into(),
+            ));
+        }
+        if !waited {
+            log::info!("native admission: waiting for local input to become quiet");
+            waited = true;
+        }
+        tokio::time::sleep_until(deadline.min(
+            tokio::time::Instant::now() + (quiet - idle).min(std::time::Duration::from_millis(50)),
+        ))
+        .await;
+    }
+}
+
 /// Prepare a write using read-only observations. If local input changes during
 /// preparation, wait for a short quiet interval and revalidate from scratch.
 /// Never put a side effect in `prepare`: once a write begins its original input
@@ -276,6 +308,58 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn quiet_admission_is_bounded_and_revocable_and_idle_is_immediate() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::Duration;
+        let start = tokio::time::Instant::now();
+        wait_for_quiet(
+            || Duration::from_secs(1),
+            Duration::from_millis(250),
+            Duration::from_secs(3),
+        )
+        .await
+        .unwrap();
+        assert!(start.elapsed() < Duration::from_millis(50));
+        assert!(matches!(
+            wait_for_quiet(
+                || Duration::ZERO,
+                Duration::from_millis(250),
+                Duration::from_millis(70)
+            )
+            .await,
+            Err(crate::Error::Conflict(_))
+        ));
+        let live = Arc::new(AtomicBool::new(true));
+        let check_live = live.clone();
+        let revoke = live.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            revoke.store(false, Ordering::SeqCst);
+        });
+        assert!(
+            scope(
+                Arc::new(move || check_live.load(Ordering::SeqCst)),
+                wait_for_quiet(
+                    || Duration::ZERO,
+                    Duration::from_millis(250),
+                    Duration::from_secs(3)
+                )
+            )
+            .await
+            .is_err()
+        );
+        let start = tokio::time::Instant::now();
+        wait_for_quiet(
+            || start.elapsed(),
+            Duration::from_millis(60),
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
+        assert!(start.elapsed() >= Duration::from_millis(60));
+    }
+
     #[tokio::test]
     async fn aborted_caller_keeps_blocking_work_registered_and_live_check_inherited() {
         use std::sync::atomic::{AtomicBool, Ordering};
