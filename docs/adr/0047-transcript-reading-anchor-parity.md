@@ -131,3 +131,53 @@ Builds, signing, notarization, publication, installation and physical scrolling
 acceptance on a Mac and on an iPhone are not claimed by this source checkpoint.
 The 1.0.92 boundary-fallback follow-up recorded in ADR 0042 also never completed
 physical acceptance, and this change does not establish it.
+
+### Release 1.0.93 (84)
+
+This decision and ADR 0048 are released together as paired macOS and iOS build
+1.0.93 (84), so the owner can accept the reading anchor and the acknowledged
+send on real hardware. 1.0.92 (83) was built but never published or accepted,
+so `released-commits.txt` continues from 1.0.91 (82).
+
+Clean source `c91a4704088b11dd5a3bf6b1dbbf3aebb5220d71`. The release daemon
+carries exactly that one build stamp, and `verify-release.sh` accepted the
+bundle: presence signing `89LGY6BD53.dev.linsheng.muster`, release ancestry over
+`released-commits.txt`, and every string in `release-fingerprints.txt`.
+
+macOS was signed with the Developer ID identity and the existing
+"Muster Developer ID Presence" profile, the same profile the installed 1.0.92
+carries, so the device identity and hardware key backend are not disturbed. The
+first build left the outer bundle without a secure timestamp while its nested
+helpers had one; it was rebuilt with `--timestamp` before submission, which is
+why notarization was attempted only once. Apple notarization
+`116f7550-cf6c-4120-b044-96f95d6fb1f4` was Accepted. Stapling and
+`stapler validate` passed, `spctl -a -t install` reported
+"accepted, source=Notarized Developer ID", and strict deep `codesign --verify`
+passed after stapling. The notarized ZIP's SHA-256 is
+`79e3cbff1460d3ebd8a57af0fe2f23df2bb4dbf5d03dd937ad36bb2aea59799c`.
+
+The iOS Release archive is 1.0.93 (84), development-signed for the registered
+devices, and passed strict verification. `package-ota.py` prepared the OTA
+directory for three registered devices with a profile that expires 2027-09-30:
+the hash-named and fixed IPA, the hash-named and fixed manifests, the install
+plist, the page and `SHA256SUMS`. Both checksums verified, each fixed alias is
+byte-identical to its hash-named file, and the manifest binds build 84 to the
+hash-named IPA. The IPA's SHA-256 is
+`5c89611e5073590af62bdfe9d1ed9f758a59143d31f89e99c325da4cd40e19fa`.
+
+Not done, and not claimed. No Velopack package or desktop feed was produced and
+nothing was published. The release destination (`MUSTER_RELEASE_HOST`,
+`MUSTER_RELEASE_SSH_PORT`, `MUSTER_RELEASE_ROOT`) is not available in this
+environment, and on being told so the owner chose to stop at the local
+artifacts: no iOS OTA publication this time, and no installation on the local
+Mac, which deliberately stays on 1.0.92 (83). The prepared OTA directory was
+therefore never uploaded and no public download was verified, so
+`released-commits.txt` still ends at 1.0.91 (82). The physical iPhone was not at
+hand either. There is consequently no installed build of this branch anywhere,
+and no physical acceptance of the reading anchor or of the acknowledged send;
+both remain open on exactly the evidence recorded above.
+
+The artifacts are retained for a later publication, outside the repository, at
+`src/native/apple/MusterApp/build/releases/`: `mac-1.0.93-84/` holds the
+notarized and stapled ZIP, `ota-1.0.93-84/` the seven checked OTA files, and
+`iOS-1.0.93-84/Muster.xcarchive` the archive and its dSYMs.

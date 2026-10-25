@@ -102,3 +102,11 @@ Builds, signing, installation and physical acceptance of an inserted message on
 a Mac and on an iPhone are not claimed by this source checkpoint. In
 particular, no physical case has yet been run in which the provider holds a
 queued message and the record is observed through to the transcript.
+
+### Release 1.0.93 (84)
+
+Released together with ADR 0047 as paired macOS and iOS build 1.0.93 (84). The
+acceptance case this needs is a message inserted while the agent is working: it
+must appear in the conversation at once with its state, survive leaving and
+reopening the conversation, and be retired only when the provider's own
+transcript carries it. ADR 0047 records the release evidence for both.
