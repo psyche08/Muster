@@ -944,7 +944,10 @@ async fn main() -> anyhow::Result<()> {
             match &policy.web_window {
                 None => println!("web window: off"),
                 Some(window) => {
-                    println!("web window: {} through this machine's browser", window.origin);
+                    println!(
+                        "web window: {} through this machine's browser",
+                        window.origin
+                    );
                     println!(
                         "  members read with browser.view and act with browser.control{}",
                         if policy.allow_locked_control {
@@ -1219,7 +1222,10 @@ async fn main() -> anyhow::Result<()> {
         )?,
         Command::AgentWatch { session } => {
             let mut call = client
-                .start(Req::AgentWatch(v1::AgentWatchRequest { session }))
+                .start(Req::AgentWatch(v1::AgentWatchRequest {
+                    session,
+                    ..Default::default()
+                }))
                 .await?;
             while let Some(ev) = call.events.recv().await {
                 if let v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(ev) }) = ev {

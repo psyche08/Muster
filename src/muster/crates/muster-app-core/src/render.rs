@@ -88,6 +88,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         browser: Some(state.browser.clone()),
         desktop_setup: Some(desktop_setup(state)),
         desktop_update: Some(state.desktop_update.clone()),
+        multica: Some(state.multica.clone()),
         selected_device_has_services: service_devices
             .iter()
             .any(|m| m.device_id == state.target()),

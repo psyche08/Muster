@@ -13,9 +13,10 @@ pub mod cloud_http;
 pub mod ghostty;
 pub mod handler;
 pub mod locked_use;
+pub mod multica;
 pub mod network;
-pub mod web;
 mod presence;
+pub mod web;
 
 mod diagnostics;
 mod inspection;
@@ -197,6 +198,7 @@ struct VnetStartup {
 }
 
 pub struct Daemon {
+    multica: multica::Manager,
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
     plugin_setup: std::sync::atomic::AtomicU8,
     pub(crate) locked_use: Arc<locked_use::Owner>,
@@ -337,6 +339,7 @@ impl Daemon {
         });
         let daemon = Arc::new(Self {
             locked_use,
+            multica: multica::Manager::new(&config.dir),
             config,
             store,
             signer,
@@ -372,6 +375,17 @@ impl Daemon {
             desktop_locks,
             agent_operations: crate::agent_bridge::ProviderQueues::default(),
         });
+        if daemon.config.listen && cfg!(target_os = "macos") {
+            let weak = Arc::downgrade(&daemon);
+            let task = tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    let Some(d) = weak.upgrade() else { break };
+                    d.multica.maintain(&d.socket_path()).await;
+                }
+            });
+            daemon.tasks.lock().unwrap().push(task);
+        }
         let node = daemon.node();
         daemon.wire_node(&node);
         if daemon.config.listen {

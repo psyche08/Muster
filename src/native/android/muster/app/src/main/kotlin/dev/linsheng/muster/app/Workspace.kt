@@ -40,7 +40,7 @@ fun selectedWorkspace(vm: ViewModel): Screen = when (vm.workspace) {
     else -> Screen.AGENTS
 }
 
-private val workspaceTabs = listOf("Chat" to Screen.DESKTOP_CHATS, "Agents" to Screen.AGENTS, "Terminals" to Screen.TERMINALS)
+private val workspaceTabs = listOf("Agents" to Screen.AGENTS, "Terminals" to Screen.TERMINALS)
 
 @Composable
 fun WorkspaceSwitcher(core: MusterCore, vm: ViewModel) {

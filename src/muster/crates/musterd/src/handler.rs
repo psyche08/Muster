@@ -60,6 +60,7 @@ fn access_for(req: &Req) -> Access {
         })
     };
     match req {
+        Req::Multica(_) => Access::LocalOnly,
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -1030,6 +1031,7 @@ async fn dispatch(
             };
             daemon.locked_use.extend(peer, r).await?
         }
+        Req::Multica(r) => Resp::Multica(daemon.multica.request(r, &daemon.socket_path()).await?),
         Req::BrowserSetup(r) => {
             Resp::BrowserStatus(crate::browser::setup(daemon, r.install).await?)
         }
@@ -1347,7 +1349,10 @@ async fn dispatch(
                 .local_addr()
                 .map_err(|error| Error::Unavailable(error.to_string()))?
                 .port();
-            log::info!("forward 127.0.0.1:{bound} stands for {to} on {}", peer.short());
+            log::info!(
+                "forward 127.0.0.1:{bound} stands for {to} on {}",
+                peer.short()
+            );
             events
                 .send(v1::event::Ev::ForwardOpened(v1::ForwardOpened {
                     local_port: u32::from(bound),
@@ -1677,6 +1682,16 @@ async fn dispatch(
             let visible = AgentVisibility::new(daemon, ctx);
             let mut rx = agent.subscribe();
             let filter = r.session.clone();
+            let catalog_only = r.catalog_only && filter.is_empty();
+            let limit = if catalog_only {
+                if r.limit == 0 {
+                    200
+                } else {
+                    r.limit.min(1000) as usize
+                }
+            } else {
+                0
+            };
             // The watched session's provider, fixed for the stream's life.
             let mut provider = None;
             let mut _watch = None;
@@ -1685,7 +1700,7 @@ async fn dispatch(
                 events
                     .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
                         ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
-                            sessions: visible.list(&agent, None, 0),
+                            sessions: visible.list(&agent, None, limit),
                         })),
                     }))
                     .await?;
@@ -1731,11 +1746,26 @@ async fn dispatch(
                         "agents: access withdrawn while watching".into(),
                     ));
                 }
+                if catalog_only {
+                    if matches!(
+                        event,
+                        muster_agent::Event::ListChanged | muster_agent::Event::State(_)
+                    ) {
+                        events
+                            .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
+                                ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
+                                    sessions: visible.list(&agent, None, limit),
+                                })),
+                            }))
+                            .await?;
+                    }
+                    continue;
+                }
                 let shown = |session: &str| !filter.is_empty() || visible.session(&agent, session);
                 let ev = match event {
                     muster_agent::Event::ListChanged if filter.is_empty() => {
                         v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
-                            sessions: visible.list(&agent, None, 0),
+                            sessions: visible.list(&agent, None, limit),
                         })
                     }
                     muster_agent::Event::ListChanged => match agent.session(&filter) {

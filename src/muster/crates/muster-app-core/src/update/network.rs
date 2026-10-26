@@ -822,6 +822,7 @@ pub(super) fn msg_network(state: &mut State, ctx: &Ctx, status: v1::NetworkStatu
     if has && had && (members_changed || presence_changed) {
         match state.screen {
             Screen::Home | Screen::Agents => open_agents(state, ctx),
+            _ if state.workspace() == Screen::Agents => load_catalog(state, ctx),
             Screen::Terminals if presence_changed => super::terminals::open_terminals(state, ctx),
             _ if presence_changed && state.workspace() == Screen::DesktopChats => {
                 super::desktop_chats::load_desktop_chats(state, ctx)

@@ -198,6 +198,8 @@ public final class MusterCore: MusterShell {
         }))
     }
 
+    public func multica(_ request: Muster_V1_MulticaRequest) { send(.multica(request)) }
+
     public func desktopUpdate(_ action: Muster_App_DesktopUpdateAction.Action) { send(.desktopUpdateAction(.with { $0.action = action })) }
     public func desktopSetup(_ action: Muster_App_DesktopSetupAction.Action) { send(.desktopSetupAction(.with { $0.action = action })) }
     public func setDeviceLockedUse(_ on: Bool, device: String) {

@@ -255,10 +255,7 @@ pub struct AgentService {
 /// Watches the transcript trees of both providers; every event wakes the
 /// poll loop, a create/remove/rename also asks for a rescan. `None` when
 /// the platform offers no watcher: polling alone then does the job.
-fn watch_homes(
-    config: &AgentConfig,
-    tx: mpsc::UnboundedSender<bool>,
-) -> Option<notify::RecommendedWatcher> {
+fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::RecommendedWatcher> {
     use notify::event::{EventKind, ModifyKind};
     use notify::{RecursiveMode, Watcher};
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
@@ -269,21 +266,40 @@ fn watch_homes(
                     | EventKind::Remove(_)
                     | EventKind::Modify(ModifyKind::Name(_))
             );
-            let _ = tx.send(structural);
+            if structural || matches!(event.kind, EventKind::Modify(_)) {
+                let _ = tx.try_send(true);
+            }
         }
     })
     .map_err(|error| log::info!("file watcher unavailable, polling only: {error}"))
     .ok()?;
     let roots = [
-        config.codex_home.as_ref().map(|h| h.join("sessions")),
-        config.claude_home.as_ref().map(|h| h.join("projects")),
+        (config.codex_home.clone(), RecursiveMode::NonRecursive),
+        (
+            config.codex_home.as_ref().map(|h| h.join("sessions")),
+            RecursiveMode::Recursive,
+        ),
+        (
+            config
+                .codex_home
+                .as_ref()
+                .map(|h| h.join("archived_sessions")),
+            RecursiveMode::Recursive,
+        ),
+        (
+            config.claude_home.as_ref().map(|h| h.join("projects")),
+            RecursiveMode::Recursive,
+        ),
+        (config.claude_desktop.clone(), RecursiveMode::Recursive),
+        (config.catdesk_home.clone(), RecursiveMode::Recursive),
     ];
     let mut watching = 0;
-    for root in roots.into_iter().flatten() {
+    for (root, mode) in roots {
+        let Some(root) = root else { continue };
         if !root.is_dir() {
             continue;
         }
-        match watcher.watch(&root, RecursiveMode::Recursive) {
+        match watcher.watch(&root, mode) {
             Ok(()) => {
                 log::info!("watching {}", root.display());
                 watching += 1;
@@ -336,7 +352,7 @@ impl AgentService {
             orca,
             predict,
         });
-        let (wake_tx, wake_rx) = mpsc::unbounded_channel();
+        let (wake_tx, wake_rx) = mpsc::channel(1);
         let watcher = watch_homes(&service.config, wake_tx.clone());
         tokio::spawn(service.clone().poll_loop(wake_rx, wake_tx, watcher));
         tokio::spawn(service.clone().controller_loop(ctl_rx));
@@ -967,7 +983,10 @@ impl AgentService {
             let changed = new_catalog.len() != inner.catalog.len()
                 || new_catalog.iter().any(|(id, d)| {
                     inner.catalog.get(id).is_none_or(|old| {
-                        old.path != d.path
+                        old.meta.title != d.meta.title
+                            || old.meta.updated_unix != d.meta.updated_unix
+                            || old.meta.cwd != d.meta.cwd
+                            || old.path != d.path
                             || old.modified != d.modified
                             || old.size != d.size
                             || old.archived != d.archived
@@ -1005,8 +1024,8 @@ impl AgentService {
     /// keeping a sender here means `recv` never ends.
     async fn poll_loop(
         self: Arc<Self>,
-        mut wake: mpsc::UnboundedReceiver<bool>,
-        _keep: mpsc::UnboundedSender<bool>,
+        mut wake: mpsc::Receiver<bool>,
+        _keep: mpsc::Sender<bool>,
         _watcher: Option<notify::RecommendedWatcher>,
     ) {
         self.rescan().await;
@@ -1015,13 +1034,17 @@ impl AgentService {
         // a file created inside a directory that was itself just created
         // can land before the watcher covers the new directory.
         let mut followup: Option<Instant> = None;
+        let mut catalog_dirty = false;
         loop {
-            let wait = match followup {
+            let mut wait = match followup {
                 Some(at) => at
                     .saturating_duration_since(Instant::now())
                     .min(self.config.poll),
                 None => self.config.poll,
             };
+            if catalog_dirty {
+                wait = wait.min(Duration::from_millis(500).saturating_sub(last_rescan.elapsed()));
+            }
             let mut structural = false;
             tokio::select! {
                 _ = tokio::time::sleep(wait) => {}
@@ -1034,16 +1057,22 @@ impl AgentService {
                     }
                 }
             }
+            catalog_dirty |= structural;
             self.poll_queues();
             self.poll_open().await;
             let followup_due = followup.is_some_and(|at| Instant::now() >= at);
             if followup_due {
                 followup = None;
             }
-            if structural || followup_due || last_rescan.elapsed() >= self.config.rescan {
+            if (catalog_dirty && last_rescan.elapsed() >= Duration::from_millis(500))
+                || followup_due
+                || last_rescan.elapsed() >= self.config.rescan
+            {
+                let changed_files = catalog_dirty;
+                catalog_dirty = false;
                 self.rescan().await;
                 last_rescan = Instant::now();
-                if structural {
+                if changed_files {
                     followup = Some(Instant::now() + Duration::from_millis(500));
                 }
             }

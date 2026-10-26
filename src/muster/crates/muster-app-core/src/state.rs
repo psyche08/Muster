@@ -271,8 +271,9 @@ pub struct State {
     pub join: app::JoinView,
     pub agents: app::AgentsView,
     pub agents_epoch: u64,
+    pub catalog_watches: HashMap<String, Watch>,
     pub agents_pending: usize,
-    pub agents_retry: u64,
+    pub multica: v1::MulticaStatus,
     /// Errors of the list refresh in flight; they replace the shown ones
     /// when it completes, so a refresh does not blink them away.
     pub agents_errors: Vec<String>,
@@ -379,8 +380,9 @@ impl State {
             },
             agents: app::AgentsView::default(),
             agents_epoch: 0,
+            catalog_watches: HashMap::new(),
             agents_pending: 0,
-            agents_retry: 1,
+            multica: v1::MulticaStatus::default(),
             agents_errors: Vec::new(),
             chat: None,
             desktop_chats: app::DesktopChatsView::default(),
@@ -580,6 +582,7 @@ impl State {
                 | Screen::Agents
                 | Screen::Terminals
                 | Screen::DesktopChats
+                | Screen::Multica
         )
     }
 
@@ -599,7 +602,11 @@ impl State {
             path.push(screen as i32);
             if matches!(
                 screen,
-                Screen::Onboarding | Screen::Agents | Screen::Terminals | Screen::DesktopChats
+                Screen::Onboarding
+                    | Screen::Agents
+                    | Screen::Terminals
+                    | Screen::DesktopChats
+                    | Screen::Multica
             ) {
                 path.reverse();
                 return path;
@@ -621,7 +628,11 @@ impl State {
             .find(|s| {
                 matches!(
                     s,
-                    Screen::DesktopChats | Screen::Agents | Screen::Terminals | Screen::Home
+                    Screen::Multica
+                        | Screen::DesktopChats
+                        | Screen::Agents
+                        | Screen::Terminals
+                        | Screen::Home
                 )
             })
             .map(|s| if s == Screen::Home { Screen::Agents } else { s })
@@ -686,6 +697,7 @@ impl State {
     pub fn cancel_all(&mut self) {
         self.detach_session_terminal();
         self.manual_watches.clear();
+        self.catalog_watches.clear();
         self.terminal_creation = None;
         self.device_watch = None;
         self.chat = None;

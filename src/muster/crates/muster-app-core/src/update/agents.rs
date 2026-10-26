@@ -79,18 +79,23 @@ pub(super) fn visible_agents(mut sessions: Vec<v1::AgentSession>) -> Vec<v1::Age
 }
 
 pub(super) fn open_agents(state: &mut State, ctx: &Ctx) {
+    state.go(Screen::Agents);
+    load_catalog(state, ctx);
+}
+
+pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
     let filter = if state.agents.device_id.is_empty() {
         "*".to_string()
     } else {
         state.agents.device_id.clone()
     };
-    state.go(Screen::Agents);
     state.agents.device_id = filter.clone();
     state.agents_errors.clear();
     state
         .agents
         .sessions
         .retain(|s| filter == "*" || s.device_id == filter);
+    state.catalog_watches.clear();
     state.agents_epoch += 1;
     let epoch = state.agents_epoch;
     // An offline Mac is neither asked nor shown (its cache stays on disk);
@@ -124,46 +129,111 @@ pub(super) fn open_agents(state: &mut State, ctx: &Ctx) {
         } else {
             state.self_id.clone()
         };
+        let (watch, token) = state.new_watch();
+        state.catalog_watches.insert(device.clone(), watch);
         let backend = ctx.backend.clone();
-        spawn(ctx, async move {
-            let result = async {
-                let client = tokio::time::timeout(
-                    Duration::from_secs(3),
-                    backend.client_for(&device, &self_id),
-                )
-                .await
-                .map_err(|_| Error::Unavailable("device connection timed out".into()))??;
-                // Connection establishment and the read RPC have separate budgets.
-                // A recovering relay must not consume the catalog's entire deadline.
-                let response = tokio::time::timeout(
-                    Duration::from_secs(3),
-                    unary(
-                        &client,
-                        Req::AgentList(v1::AgentListRequest {
-                            limit: AGENT_LIST_LIMIT,
-                            ..Default::default()
-                        }),
-                    ),
-                )
-                .await
-                .map_err(|_| Error::Unavailable("session list response timed out".into()))??;
-                match response {
-                    Resp::AgentSessions(mut page) => {
+        let tx = ctx.tx.clone();
+        tokio::spawn(async move {
+            let mut retry = 1;
+            loop {
+                let mut active = None;
+                let attempt = async {
+                    let client = tokio::time::timeout(
+                        Duration::from_secs(3),
+                        backend.client_for(&device, &self_id),
+                    )
+                    .await
+                    .map_err(|_| Error::Unavailable("catalog connection timed out".into()))??;
+                    active = Some(
+                        client
+                            .start(Req::AgentWatch(v1::AgentWatchRequest {
+                                session: String::new(),
+                                catalog_only: true,
+                                limit: AGENT_LIST_LIMIT,
+                            }))
+                            .await?,
+                    );
+                    let call = active.as_mut().unwrap();
+                    let mut first = true;
+                    loop {
+                        let event = if first {
+                            tokio::time::timeout(Duration::from_secs(3), call.events.recv())
+                                .await
+                                .map_err(|_| {
+                                    Error::Unavailable("catalog snapshot timed out".into())
+                                })?
+                        } else {
+                            call.events.recv().await
+                        };
+                        let Some(event) = event else { break };
+                        if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                            ev: Some(v1::agent_event::Ev::ListChanged(mut page)),
+                        }) = event
+                        {
+                            first = false;
+                            retry = 1;
+                            page.sessions.truncate(AGENT_LIST_LIMIT as usize);
+                            for session in &mut page.sessions {
+                                session.device_id = device.clone();
+                                session.device_name = name.clone();
+                            }
+                            let _ = tx.send(loop_message(Msg::Agents {
+                                epoch,
+                                device: device.clone(),
+                                result: Ok(page.sessions),
+                            }));
+                        }
+                    }
+                    // Older daemons may not stream catalogs. A bounded snapshot
+                    // remains a compatibility fallback before reconnecting.
+                    if let Ok(Ok(Resp::AgentSessions(mut page))) = tokio::time::timeout(
+                        Duration::from_secs(3),
+                        unary(
+                            &client,
+                            Req::AgentList(v1::AgentListRequest {
+                                limit: AGENT_LIST_LIMIT,
+                                ..Default::default()
+                            }),
+                        ),
+                    )
+                    .await
+                    {
                         for session in &mut page.sessions {
                             session.device_id = device.clone();
                             session.device_name = name.clone();
                         }
-                        Ok(page.sessions)
+                        let _ = tx.send(loop_message(Msg::Agents {
+                            epoch,
+                            device: device.clone(),
+                            result: Ok(page.sessions),
+                        }));
+                        retry = 3;
+                        return Ok(());
                     }
-                    _ => Err(unexpected()),
+                    Err::<(), Error>(Error::Unavailable(
+                        "catalog subscription ended; reconnecting".into(),
+                    ))
+                };
+                let result = tokio::select! {
+                    _ = token.cancelled() => None,
+                    result = attempt => Some(result),
+                };
+                if let Some(call) = active.take() {
+                    let _ = call.cancel().await;
                 }
-            }
-            .await
-            .map_err(|error: Error| Error::Unavailable(format!("{name}: {error}")));
-            Msg::Agents {
-                epoch,
-                device,
-                result,
+                let Some(result) = result else { break };
+                if let Err(error) = result {
+                    let _ = tx.send(loop_message(Msg::Agents {
+                        epoch,
+                        device: device.clone(),
+                        result: Err(Error::Unavailable(format!("{name}: {error}"))),
+                    }));
+                }
+                tokio::select! {
+                    _ = token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(retry)) => {},
+                }
+                retry = (retry * 2).min(15);
             }
         });
     }
@@ -370,6 +440,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     client
                         .start(Req::AgentWatch(v1::AgentWatchRequest {
                             session: session_id.clone(),
+                            ..Default::default()
                         }))
                         .await?,
                 );
@@ -787,15 +858,6 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     });
 }
 
-pub(super) fn msg_retry_agents(state: &mut State, ctx: &Ctx, epoch: u64) {
-    if epoch == state.agents_epoch
-        && state.foreground
-        && matches!(state.screen, Screen::Home | Screen::Agents)
-    {
-        open_agents(state, ctx);
-    }
-}
-
 pub(super) fn msg_agents(
     state: &mut State,
     ctx: &Ctx,
@@ -833,21 +895,6 @@ pub(super) fn msg_agents(
     }
     if state.agents_pending == 0 {
         state.agents.errors = std::mem::take(&mut state.agents_errors);
-        let delay = if state.agents.errors.is_empty() {
-            state.agents_retry = 1;
-            // A successful list is a snapshot, not a subscription.
-            // Refresh while visible; RetryAgents rejects old epochs
-            // and stops in the background or on another screen.
-            3
-        } else {
-            let delay = state.agents_retry;
-            state.agents_retry = (delay * 2).min(8);
-            delay
-        };
-        spawn(ctx, async move {
-            tokio::time::sleep(Duration::from_secs(delay)).await;
-            Msg::RetryAgents(epoch)
-        });
     }
 }
 

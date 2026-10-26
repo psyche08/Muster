@@ -1080,3 +1080,47 @@ async fn claude_queue_is_visible_and_retires_when_provider_dequeues_it() {
     .unwrap();
     assert!(service.pending(session).is_empty());
 }
+
+#[tokio::test]
+async fn index_only_rename_pushes_without_waiting_for_periodic_rescan() {
+    let dir = tempfile::tempdir().unwrap();
+    let day = dir.path().join("sessions/2026/10/26");
+    std::fs::create_dir_all(&day).unwrap();
+    let id = "11111111-1111-4111-8111-111111111111";
+    std::fs::write(
+        day.join(format!("rollout-2026-10-26T12-00-00-{id}.jsonl")),
+        format!("{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"{id}\"}}}}\n"),
+    )
+    .unwrap();
+    let index = dir.path().join("session_index.jsonl");
+    let write_name = |name: &str| {
+        std::fs::write(
+            &index,
+            format!("{{\"id\":\"{id}\",\"thread_name\":\"{name}\"}}\n"),
+        )
+        .unwrap()
+    };
+    write_name("Before");
+    let service = AgentService::start(AgentConfig {
+        codex_home: Some(dir.path().into()),
+        claude_home: None,
+        catdesk_home: None,
+        poll: Duration::from_secs(60),
+        rescan: Duration::from_secs(60),
+        ..AgentConfig::default()
+    });
+    service.rescan().await;
+    let mut events = service.subscribe();
+    write_name("After");
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if matches!(events.recv().await.unwrap(), Event::ListChanged)
+                && service.session(id).is_some_and(|s| s.title == "After")
+            {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+}

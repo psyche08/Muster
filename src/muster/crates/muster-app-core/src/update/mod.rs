@@ -32,6 +32,7 @@ pub(crate) mod code_runs;
 mod desktop_chats;
 mod files;
 pub(crate) mod manual_locked_use;
+mod multica;
 mod network;
 mod operations;
 mod orca;
@@ -125,7 +126,7 @@ pub enum Msg {
         request: Box<Req>,
         message: Vec<u8>,
     },
-    RetryAgents(u64),
+    Multica(Result<v1::MulticaStatus, Error>),
     DiagnosticsUploaded {
         name: String,
         result: Result<String, Error>,
@@ -293,6 +294,7 @@ fn effect(state: &mut State, ctx: &Ctx, kind: EffectKind, ef: app::effect::Ef) -
 pub fn init(state: &mut State, ctx: &Ctx) {
     activate_network(state, ctx);
     load_basics(state, ctx);
+    multica::request(state, ctx, v1::MulticaRequest::default());
 }
 
 // ------------------------------------------------------------- intents
@@ -327,6 +329,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenBrowser(open) => network::intent_open_browser(state, ctx, open),
         It::BrowserSetup(r) => browser_setup(state, ctx, r.install),
         It::BrowserRun(r) => network::intent_browser_run(state, ctx, r),
+        It::Multica(request) => multica::request(state, ctx, request),
         It::Refresh(_) => intent_refresh(state, ctx),
         It::Navigate(n) => intent_navigate(state, ctx, n),
         It::UploadDiagnostics(u) => network::intent_upload_diagnostics(state, ctx, u),
@@ -426,6 +429,12 @@ fn intent_navigate(state: &mut State, ctx: &Ctx, n: app::Navigate) {
         if screen == Screen::Invite && !state.can_invite() {
             state.toast("Only an admin device can invite", true);
             return;
+        }
+        if screen == Screen::Multica && !state.multica.installed {
+            return;
+        }
+        if screen == Screen::Settings || screen == Screen::Multica {
+            multica::request(state, ctx, v1::MulticaRequest::default());
         }
         if screen == Screen::DesktopChats {
             open_desktop_chats(state, ctx, String::new());
@@ -567,7 +576,13 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             request,
             message,
         ),
-        Msg::RetryAgents(epoch) => agents::msg_retry_agents(state, ctx, epoch),
+        Msg::Multica(result) => {
+            state.multica.busy = false;
+            match result {
+                Ok(status) => state.multica = status,
+                Err(error) => state.multica.message = error.to_string(),
+            }
+        }
         Msg::DiagnosticsUploaded { name, result } => {
             network::msg_diagnostics_uploaded(state, name, result)
         }

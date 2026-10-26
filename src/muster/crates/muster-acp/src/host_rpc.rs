@@ -106,6 +106,7 @@ impl Host for RpcHost {
             .client
             .start(Req::AgentWatch(v1::AgentWatchRequest {
                 session: session.to_owned(),
+                ..Default::default()
             }))
             .await
             .map_err(|error| error.to_string())?;

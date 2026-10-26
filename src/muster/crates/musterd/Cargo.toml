@@ -20,6 +20,8 @@ name = "musterd"
 path = "src/main.rs"
 
 [dependencies]
+muster-acp = { path = "../muster-acp" }
+url = "2"
 muster-browser = { path = "../muster-browser" }
 muster-web = { path = "../muster-web" }
 muster-core = { path = "../muster-core" }

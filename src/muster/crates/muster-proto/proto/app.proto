@@ -43,6 +43,7 @@ message Intent {
     SetDeviceLockedUse set_device_locked_use = 86;
     DesktopSetupAction desktop_setup_action = 23;
     DesktopUpdateAction desktop_update_action = 24;
+    muster.v1.MulticaRequest multica = 89;
 
     OpenAgents open_agents = 30;
     OrcaCreate orca_create = 87;
@@ -394,6 +395,7 @@ enum Screen {
   GIT = 12;
   BROWSER = 13;
   DESKTOP_CHATS = 14;
+  MULTICA = 15;
 }
 
 message ViewModel {
@@ -434,6 +436,7 @@ message ViewModel {
   AccessView join_access = 31;
   repeated DeviceLockedUseView device_locked_use = 33;
   DeviceActions device_actions = 32; // for selected_device on the DEVICE screen
+  muster.v1.MulticaStatus multica = 35;
   repeated Screen navigation_path = 34; // visible root through current screen
 }
 

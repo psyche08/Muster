@@ -224,6 +224,21 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     .unwrap()
     .unwrap();
     let remote = Client::new(tokio::io::join(recv, send));
+    for action in [
+        v1::multica_request::Action::Check,
+        v1::multica_request::Action::Install,
+        v1::multica_request::Action::Save,
+    ] {
+        assert!(unauthorized(
+            &remote
+                .call(Req::Multica(v1::MulticaRequest {
+                    action: action as i32,
+                    ..Default::default()
+                }))
+                .await
+        ));
+    }
+
     assert!(unauthorized(
         &remote
             .call(Req::DesktopUpdateLease(v1::DesktopUpdateLeaseRequest {}))
@@ -407,6 +422,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     let mut watch = remote
         .start(Req::AgentWatch(v1::AgentWatchRequest {
             session: String::new(),
+            ..Default::default()
         }))
         .await
         .unwrap();

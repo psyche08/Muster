@@ -483,6 +483,9 @@ struct SettingsView: View {
                     if vm.desktopUpdate.canInstall { Button("安装并重启 Muster") { core.desktopUpdate(.install) } }
                 }
             }
+            if vm.multica.supported && !vm.embedded {
+                MulticaSettings(core: core, status: vm.multica)
+            }
             Section("Network devices") {
                 ForEach(vm.pending, id: \.deviceID) { join in
                     VStack(alignment: .leading, spacing: 6) {

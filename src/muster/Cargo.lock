@@ -2330,6 +2330,7 @@ dependencies = [
  "hex",
  "libc",
  "log",
+ "muster-acp",
  "muster-agent",
  "muster-browser",
  "muster-core",
@@ -2354,6 +2355,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "url",
 ]
 
 [[package]]

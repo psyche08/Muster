@@ -213,6 +213,7 @@ pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
         }
         app::Lifecycle::Background => {
             state.foreground = false;
+            state.catalog_watches.clear();
             state.send_recoveries.clear();
             // Suspended links fail by design: no evidence about anyone.
             ctx.backend.suspend(true);
@@ -263,8 +264,8 @@ pub(super) fn reconnect(state: &mut State, ctx: &Ctx) {
     activate_network(state, ctx);
     ctx.backend.network_changed();
     load_basics(state, ctx);
-    if matches!(state.screen, Screen::Home | Screen::Agents) {
-        open_agents(state, ctx);
+    if state.workspace() == Screen::Agents {
+        load_catalog(state, ctx);
     }
     if let Some((device, session)) = state.chat_target()
         && state.on_path(Screen::Chat)
