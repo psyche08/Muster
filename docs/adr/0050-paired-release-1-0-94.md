@@ -145,9 +145,27 @@ and both hash-named plists first, then the fixed aliases, page and
   answer `302` to the latest fixed manifest, and a removed hash-named IPA URL
   answers `410`.
 
-`prune-releases.py` validated the live aliases and reports 36 superseded iOS
-files; they were left in place pending the owner's explicit authorization, as
-earlier deletions were.
+### Superseded iOS releases removed on the owner's explicit authorization
+
+The owner authorized the cleanup after the publication checks above.
+`prune-releases.py` was re-run read-only immediately beforehand: it revalidated
+the live aliases, listed the same 36 files, and the new build's hash appeared
+nowhere in that list. `--apply` then removed 36 superseded files on the
+publisher — 12 hash-named IPAs with their 12 `manifest-` and 12 `install-`
+plists — leaving exactly the seven current files. The desktop directory was not
+touched; its 1.0.91 portable ZIP, `SHA256SUMS` and the `index.html` symlink to
+`../ios/index.html` are unchanged.
+
+Public behaviour was rechecked afterwards. The current IPA, both its aliases,
+the fixed manifest, the install plist, the page and `SHA256SUMS` all still
+serve, and both IPA aliases still hash to the value above. Three removed
+hash-named IPA URLs answer `410`, and removed historical `manifest-` URLs answer
+`302` to the fixed manifest, whose bytes are identical to what was published.
+The current build's own `manifest-<hash>.plist` URL also answers `302` to the
+fixed manifest, by the same nginx rule, and resolves to identical bytes; its
+`install-<hash>.plist` still serves directly with `200`, which is what an
+unchanged-install retry needs. All four entry points and the macOS download
+answer `200`.
 
 ### Not claimed
 
