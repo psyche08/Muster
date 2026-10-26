@@ -140,6 +140,7 @@ message Request {
     AgentSendRequest agent_send_status = 68;
     ForwardOpenRequest forward_open = 69;
     MulticaRequest multica = 70;
+    MulticaBrowseRequest multica_browse = 71;
   }
 }
 
@@ -188,6 +189,7 @@ message Response {
     AgentCompletion agent_completion = 56;
     PresenceInfo presence_info = 65;
     MulticaStatus multica = 70;
+    MulticaPage multica_page = 71;
   }
 }
 
@@ -1024,4 +1026,37 @@ message MulticaStatus {
   string message = 10;
   string login_command = 11;
   bool busy = 12;
+}
+
+// Local-owner read-only projection; never contains login or custom environment.
+message MulticaBrowseRequest {
+  string workspace_id = 1;
+  uint32 offset = 2;
+  string issue_id = 3;
+  string agent_id = 4;
+}
+message MulticaWorkspace { string id = 1; string name = 2; }
+message MulticaIssue {
+  string id = 1; string identifier = 2; string title = 3; string description = 4;
+  string status = 5; string priority = 6; string assignee_id = 7;
+  string assignee_type = 8; string updated_at = 9;
+}
+message MulticaAgent {
+  string id = 1; string name = 2; string description = 3; string status = 4;
+  string runtime_id = 5; string model = 6;
+}
+message MulticaRuntime {
+  string id = 1; string name = 2; string provider = 3; string status = 4;
+  string last_seen_at = 5; string device_info = 6;
+}
+message MulticaPage {
+  repeated MulticaWorkspace workspaces = 1;
+  string workspace_id = 2;
+  repeated MulticaIssue issues = 3;
+  repeated MulticaAgent agents = 4;
+  repeated MulticaRuntime runtimes = 5;
+  uint32 offset = 6; bool has_more = 7;
+  MulticaIssue issue = 8; MulticaAgent agent = 9;
+  bool busy = 10; string error = 11;
+  uint32 next_offset = 12; uint32 previous_offset = 13;
 }

@@ -274,6 +274,9 @@ pub struct State {
     pub catalog_watches: HashMap<String, Watch>,
     pub agents_pending: usize,
     pub multica: v1::MulticaStatus,
+    pub multica_page: v1::MulticaPage,
+    pub multica_query: v1::MulticaBrowseRequest,
+    pub multica_generation: u64,
     /// Errors of the list refresh in flight; they replace the shown ones
     /// when it completes, so a refresh does not blink them away.
     pub agents_errors: Vec<String>,
@@ -383,6 +386,9 @@ impl State {
             catalog_watches: HashMap::new(),
             agents_pending: 0,
             multica: v1::MulticaStatus::default(),
+            multica_page: v1::MulticaPage::default(),
+            multica_query: v1::MulticaBrowseRequest::default(),
+            multica_generation: 0,
             agents_errors: Vec::new(),
             chat: None,
             desktop_chats: app::DesktopChatsView::default(),

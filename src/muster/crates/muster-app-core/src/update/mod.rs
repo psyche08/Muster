@@ -127,6 +127,10 @@ pub enum Msg {
         message: Vec<u8>,
     },
     Multica(Result<v1::MulticaStatus, Error>),
+    MulticaPage {
+        generation: u64,
+        result: Result<v1::MulticaPage, Error>,
+    },
     DiagnosticsUploaded {
         name: String,
         result: Result<String, Error>,
@@ -329,6 +333,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenBrowser(open) => network::intent_open_browser(state, ctx, open),
         It::BrowserSetup(r) => browser_setup(state, ctx, r.install),
         It::BrowserRun(r) => network::intent_browser_run(state, ctx, r),
+        It::MulticaBrowse(request) => multica::browse(state, ctx, request),
         It::Multica(request) => multica::request(state, ctx, request),
         It::Refresh(_) => intent_refresh(state, ctx),
         It::Navigate(n) => intent_navigate(state, ctx, n),
@@ -432,6 +437,9 @@ fn intent_navigate(state: &mut State, ctx: &Ctx, n: app::Navigate) {
         }
         if screen == Screen::Multica && !state.multica.installed {
             return;
+        }
+        if screen == Screen::Multica {
+            multica::browse(state, ctx, state.multica_query.clone());
         }
         if screen == Screen::Settings || screen == Screen::Multica {
             multica::request(state, ctx, v1::MulticaRequest::default());
@@ -576,6 +584,7 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             request,
             message,
         ),
+        Msg::MulticaPage { generation, result } => multica::apply_page(state, generation, result),
         Msg::Multica(result) => {
             state.multica.busy = false;
             match result {

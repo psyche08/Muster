@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 mod bridge;
+mod browse;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -26,6 +27,7 @@ pub struct Manager {
     path: PathBuf,
     executable: Option<PathBuf>,
     gate: tokio::sync::Mutex<()>,
+    browse_gate: tokio::sync::Semaphore,
     bridge: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     last_error: std::sync::Mutex<String>,
 }
@@ -42,6 +44,7 @@ impl Manager {
             path: root.join("multica.json"),
             executable: None,
             gate: tokio::sync::Mutex::new(()),
+            browse_gate: tokio::sync::Semaphore::new(2),
             bridge: tokio::sync::Mutex::new(None),
             last_error: std::sync::Mutex::new(String::new()),
         }

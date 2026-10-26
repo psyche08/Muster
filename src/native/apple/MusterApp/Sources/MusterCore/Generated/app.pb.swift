@@ -348,6 +348,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .multica(newValue)}
   }
 
+  public var multicaBrowse: Muster_V1_MulticaBrowseRequest {
+    get {
+      if case .multicaBrowse(let v)? = _storage._it {return v}
+      return Muster_V1_MulticaBrowseRequest()
+    }
+    set {_uniqueStorage()._it = .multicaBrowse(newValue)}
+  }
+
   public var openAgents: Muster_App_OpenAgents {
     get {
       if case .openAgents(let v)? = _storage._it {return v}
@@ -621,6 +629,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case desktopSetupAction(Muster_App_DesktopSetupAction)
     case desktopUpdateAction(Muster_App_DesktopUpdateAction)
     case multica(Muster_V1_MulticaRequest)
+    case multicaBrowse(Muster_V1_MulticaBrowseRequest)
     case openAgents(Muster_App_OpenAgents)
     case orcaCreate(Muster_App_OrcaCreate)
     case openAgent(Muster_App_OpenAgent)
@@ -2055,6 +2064,15 @@ public nonisolated struct Muster_App_ViewModel: @unchecked Sendable {
   /// Clears the value of `multica`. Subsequent reads from it will return its default value.
   public mutating func clearMultica() {_uniqueStorage()._multica = nil}
 
+  public var multicaPage: Muster_V1_MulticaPage {
+    get {_storage._multicaPage ?? Muster_V1_MulticaPage()}
+    set {_uniqueStorage()._multicaPage = newValue}
+  }
+  /// Returns true if `multicaPage` has been explicitly set.
+  public var hasMulticaPage: Bool {_storage._multicaPage != nil}
+  /// Clears the value of `multicaPage`. Subsequent reads from it will return its default value.
+  public mutating func clearMulticaPage() {_uniqueStorage()._multicaPage = nil}
+
   /// visible root through current screen
   public var navigationPath: [Muster_App_Screen] {
     get {_storage._navigationPath}
@@ -3287,7 +3305,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{4}+code_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{4}*code_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -3996,6 +4014,19 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .multica(v)
           }
         }()
+        case 90: try {
+          var v: Muster_V1_MulticaBrowseRequest?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .multicaBrowse(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .multicaBrowse(v)
+          }
+        }()
         case 132: try {
           var v: Muster_App_CodeAction?
           var hadOneofValue = false
@@ -4229,6 +4260,10 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .multica?: try {
         guard case .multica(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 89)
+      }()
+      case .multicaBrowse?: try {
+        guard case .multicaBrowse(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 90)
       }()
       case .codeAction?: try {
         guard case .codeAction(let v)? = _storage._it else { preconditionFailure() }
@@ -6597,7 +6632,7 @@ nonisolated extension Muster_App_EffectResult: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ViewModel"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{b}presence\0\u{c}\u{e}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{3}multica_page\0\u{b}presence\0\u{c}\u{e}\u{1}")
 
   fileprivate class _StorageClass {
     var _screen: Muster_App_Screen = .onboarding
@@ -6633,6 +6668,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
     var _deviceLockedUse: [Muster_App_DeviceLockedUseView] = []
     var _deviceActions: Muster_App_DeviceActions? = nil
     var _multica: Muster_V1_MulticaStatus? = nil
+    var _multicaPage: Muster_V1_MulticaPage? = nil
     var _navigationPath: [Muster_App_Screen] = []
 
       // This property is used as the initial default value for new instances of the type.
@@ -6677,6 +6713,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       _deviceLockedUse = source._deviceLockedUse
       _deviceActions = source._deviceActions
       _multica = source._multica
+      _multicaPage = source._multicaPage
       _navigationPath = source._navigationPath
     }
   }
@@ -6730,6 +6767,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         case 33: try { try decoder.decodeRepeatedMessageField(value: &_storage._deviceLockedUse) }()
         case 34: try { try decoder.decodeRepeatedEnumField(value: &_storage._navigationPath) }()
         case 35: try { try decoder.decodeSingularMessageField(value: &_storage._multica) }()
+        case 36: try { try decoder.decodeSingularMessageField(value: &_storage._multicaPage) }()
         default: break
         }
       }
@@ -6844,6 +6882,9 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       try { if let v = _storage._multica {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 35)
       } }()
+      try { if let v = _storage._multicaPage {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 36)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6886,6 +6927,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         if _storage._deviceLockedUse != rhs_storage._deviceLockedUse {return false}
         if _storage._deviceActions != rhs_storage._deviceActions {return false}
         if _storage._multica != rhs_storage._multica {return false}
+        if _storage._multicaPage != rhs_storage._multicaPage {return false}
         if _storage._navigationPath != rhs_storage._navigationPath {return false}
         return true
       }

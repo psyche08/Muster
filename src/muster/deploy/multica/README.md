@@ -128,8 +128,12 @@ container and daemon into musterd's supervisor; closing the UI does not stop it.
 
 An existing `mlt` container is discovered without changing it. Save its settings
 to opt into supervision; its tools and credentials are preserved. The installed
-container makes the Multica tab visible after Agents and Terminals. The tab uses
-the configured application URL and its own WebKit login, without a remote proxy.
+container makes the Multica tab visible after Agents and Terminals. The native
+page lists workspaces, issues, agents and runtime status using the logged-in
+container CLI. Workspace selection affects only that query, not the daemon
+profile. Issue and agent details are read-only; no browser login or remote proxy
+is involved. The configured application URL remains part of container setup.
+See ADR 0053 for the separate, still-unimplemented desktop execution mapping.
 
 To move existing data, disable keep-alive and save first, finish running tasks,
 then stop the selected container using Apple `container stop`. Choose a new,
