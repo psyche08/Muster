@@ -114,3 +114,21 @@ before delivery because the target was locked or no longer at its console.
 No unknown outcome was retried. Codex creation, existing-session acceptance,
 no-window/relaunch behavior, Locked Use and scheduler execution remain pending.
 No native runtime or fallback capability is advertised by this release.
+
+### Resumed console check and entrypoint review
+
+The owner subsequently confirmed an unlocked target. Live observations showed
+an unlocked active console, but a manual Locked Use transaction owned by a
+different device. A new existing-session test was refused by the console-write
+barrier before delivery. Unlocking the screen does not transfer that
+transaction's authorization to a local CLI or another requester. No transaction
+was cancelled, no direct AX action was used to bypass it, and no native send or
+CLI fallback was performed. Continue GUI acceptance only after the owner ends
+that manual transaction and establishes a free, unlocked console.
+
+While that external prerequisite remained pending, read-only inspection of the
+actual target bundles confirmed native new-page routes in ChatGPT
+26.1021.31345 and Claude 3.6556.2. The findings and their unverified boundaries
+are recorded in the [native creation review](../NATIVE_SESSION_CREATION_REVIEW.md).
+This is diagnostic documentation only: no shipped runtime routing, provider
+capabilities, signing, installation or release version changed in this follow-up.
