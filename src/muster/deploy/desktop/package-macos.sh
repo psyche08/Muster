@@ -13,8 +13,11 @@ case "$(uname -m)" in arm64) channel=osx-arm64;; x86_64) channel=osx-x64;; *) ex
 # Never package a daemon that drops an earlier release's source or fixes.
 "$(dirname "$0")/verify-release.sh" "$app"
 # Preserve Xcode-expanded keychain groups; the source plist has build variables.
-entitlements=$(mktemp)
-trap 'rm -f "$entitlements"' EXIT
+# vpk 1.2.158 refuses a --signEntitlements path whose name does not end in
+# `.entitlements`, which a bare mktemp name does not.
+entitlements_dir=$(mktemp -d)
+entitlements="$entitlements_dir/exported.entitlements"
+trap 'rm -rf "$entitlements_dir"' EXIT
 swift "$(dirname "$0")/check-presence-signing.swift" "$app" --export-entitlements "$entitlements"
 args=(pack --packId Muster --packTitle Muster --packVersion "$version" --packDir "$app" --mainExe Muster --runtime "$channel" --channel "$channel" --delta None --noInst --outputDir "$output" --signAppIdentity "$SIGN_IDENTITY" --signDisableDeep --signEntitlements "$entitlements")
 if [ -n "${MUSTER_NOTARY_PROFILE:-}" ]; then args+=(--notaryProfile "$MUSTER_NOTARY_PROFILE"); fi

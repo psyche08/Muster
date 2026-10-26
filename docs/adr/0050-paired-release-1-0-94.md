@@ -110,14 +110,10 @@ passed after stapling.
 - notarized and stapled ZIP: `d1c898b233148aaf37066241f56dbb4657ded29c8a62c83f934dafd1015ad076`
 - daemon: `458c572cb2a016b749ae9943e2a369c6e9df66d82d9415285edb70671e9f98dd`
 
-No Velopack package and no desktop feed were produced, and nothing was published
-or installed on any Mac. `vpk` 1.2.158 is present but no .NET runtime exists on
-any machine in the fleet, and the owner declined installing one for this
-release. The three Macs therefore stay on their existing 1.0.92 builds, the
-public macOS download stays at 1.0.91, and
-`https://linsheng.dev:8443/muster/desktop/releases.osx-arm64.json` still returns
-404, so in-app desktop updates remain unavailable. `released-commits.txt` gains
-no entry for 1.0.94 and continues from 1.0.91 (82).
+At this point no Velopack package or desktop feed existed yet, because no .NET
+runtime was available for `vpk`. That was resolved later in the same day and the
+desktop half was published; see "Desktop published with a restored signed feed"
+below.
 
 ### Published and publicly verified iOS 1.0.94 (85)
 
@@ -179,3 +175,75 @@ exercised. No TestFlight or App Store Connect upload was made. Hosted Actions
 remain disabled, so the absence of hosted checks is not a CI pass. The split
 1.0.92 installations (`66a39fbf` on one Mac, `93529e00` on the other two) are
 recorded here and remain unrepaired.
+
+### Desktop published with a restored signed feed
+
+The owner authorized installing a .NET runtime on one machine so `vpk` could
+run. Microsoft's official user-local installer put the .NET SDK under `~/.dotnet`
+with no `sudo`, and Velopack CLI 1.2.158 was installed from nuget.org as a global
+tool; a small wrapper pins `DOTNET_ROOT` so the pinned-version check in
+`package-macos.sh` passes. Nothing outside `~/.dotnet` was touched.
+
+Packaging ran against a tree detached at the build commit
+`fdb9c024bf02215dbaa777338a51946a750ad31f`, so `verify-release.sh`'s
+HEAD-equals-stamp rule held, and it accepted the staged bundle again: presence
+signing, release ancestry and every fingerprint. `vpk pack` re-signed the outer
+bundle with the same Developer ID identity under `--signDisableDeep`, so the
+daemon's own signature was preserved byte for byte — the packaged daemon still
+hashes to `458c572cb2a016b749ae9943e2a369c6e9df66d82d9415285edb70671e9f98dd`,
+the same binary the notarized ZIP carries. Because the re-sign invalidates the
+earlier ticket, Velopack notarized the bundle again:
+`c9802de5-1457-4818-a0a5-a0d292d9dc62` Accepted, stapled, and verified with
+`spctl`. The app inside the published portable bundle reports 1.0.94 (85),
+carries the `fdb9c024` stamp, validates its staple, is accepted by Gatekeeper as
+"Notarized Developer ID", passes strict deep `codesign --verify`, and passes
+presence signing.
+
+- portable ZIP: `45cba2a152ff77514bf9b1c40d91d8ad9c85ef39bb1a9fc91e12776b65273453`
+- full nupkg: `3281f8fc8e310b4c3023853ad700b0f5b972053032034a340c49c7f582e4cdc7`
+
+Published in the runbook's order — the nupkg, portable ZIP and `SHA256SUMS`
+first, then `releases.osx-arm64.json` and its `.sig`. Verified afterwards from
+the public HTTPS URLs: all five files answer `200`, the downloaded portable ZIP
+and nupkg hash to the values above, the served feed names the nupkg with that
+SHA-256 and a matching byte size, and `Cache-Control: no-store` is set on the
+feed and both packages.
+
+The feed signature was verified independently, the way the updater does it: over
+`UTF8("releases.osx-arm64.json") + LF + the exact served JSON bytes`, against
+`muster-app-core/src/desktop_update/release-public.pem`, the key compiled into
+the app. `openssl` reports "Verified OK". A negative control — the same
+signature against a feed with the version altered — reports "Verification
+failure". The private release key is not served: three plausible key paths under
+the desktop directory answer `404`. In-app desktop updates are therefore
+available again, after `releases.osx-arm64.json` had been absent (404) since the
+1.0.91 publication.
+
+`released-commits.txt` now records 1.0.94 against `fdb9c024`, because the
+desktop package is published.
+
+This release also fixes `package-macos.sh`, which could not have produced this
+package as written: it passed `--signEntitlements` a bare `mktemp` path, and vpk
+1.2.158 refuses an entitlements path that does not end in `.entitlements`. The
+script now exports into a `.entitlements` file inside a temporary directory. It
+was also checked in non-executable while its siblings were not, so it is now
+`100755`. This release's package was produced by running the script's exact
+steps by hand, with the fix applied only to the repository, so that the
+packaging tree could stay clean and equal to the build commit.
+
+### Installation on the Macs: not done here
+
+Installing was not performed in this session. The two other Macs were not
+reachable, and the attended installation on this Mac was declined by the
+environment's own guardrails rather than attempted and failed. So all three Macs
+remain on their existing 1.0.92 builds and this build has no installed-runtime,
+identity, relay, Vnet, RPC or ping evidence.
+
+With the signed feed restored, the documented upgrade path is available to the
+owner on each Mac: Settings -> Muster Updates, which checks, downloads, installs
+and restarts explicitly through the Rust update lease. The pre-install baseline
+on this Mac was recorded for comparison: device `M1Max`, id `3508fbf9…6196d`,
+fingerprint `GUEP-X6MF-6FUR-UXBK`, version 1.0.92, Accessibility granted,
+relay registered, Vnet `192.168.13.11`, with both other Macs directly connected at 2 ms
+and 4 ms. An installation is accepted only when the daemon reports 1.0.94 with
+that identity unchanged and relay and Vnet healthy.
