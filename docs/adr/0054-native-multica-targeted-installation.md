@@ -49,8 +49,68 @@ applications or a protocol handshake alone do not establish that capability.
 
 ## Verification
 
-Pending: release build, signature and Presence checks, notarization, guarded
+Release build, signature and Presence checks, notarization, guarded
 installation, unchanged device identity, service recovery, native page rendering
-and read-only query acceptance. Source tests are recorded in ADR 0053.
-No native provider prompt, scheduler execution or physical phone acceptance is
-claimed. No public macOS or iOS publication is planned.
+and read-only query acceptance are recorded below. Workbench source tests are
+recorded in ADR 0053. The operator's native-provider diagnostic is separate from
+the deployed product. No scheduler execution or physical phone acceptance is
+claimed, and no public macOS or iOS publication occurred.
+
+### Target acceptance on 2026-10-26
+
+- Source: `13801519f122914d4a64840e376ee987b52914b7`, version 1.0.96 (87).
+  Eight Multica tests passed (one operator-only integration test ignored),
+  including rejected legacy symlinks, missing/mismatched mounts, unchanged
+  source data on rejection and valid adopted mounts. Daemon library/test
+  Clippy passed with warnings denied. Public-content and ADR gates passed.
+- Build: daemon, CLI, browser helper, Apple FFI and macOS Release passed.
+  The provenance gate refused an earlier build after source changed; rebuilding
+  the final committed source passed clean-tree, ancestry and fingerprint gates.
+  Developer ID, nested signatures and Presence entitlements passed verification.
+- Package: Apple notarization `189edc71-9317-499d-a0d9-408124ef21d5` was Accepted;
+  stapling and Gatekeeper passed on both build and target hosts. Portable ZIP
+  SHA-256 is `6504ece701ff86229bf41a3de960a422031225e90530ef642930d589c6e5ef57`;
+  installed daemon SHA-256 is
+  `7d5e89805920d98ec02ba32254047f97840cbbbc2ae59cefa576345c00e6f656`.
+- Installation: the target acquired the Rust update lease and replaced only
+  its application bundle. Version/build, unchanged device identity,
+  Accessibility, Relay and Vnet recovered. No old application backup was made.
+  The installer's final daemon start raced with the supervisor and returned
+  nonzero; subsequent read-only status confirmed Multica 0.3.56 already running
+  with its four agents and two workspaces. No installation retry was needed.
+- Storage: the Documents/Multica directory and matching configured mount root
+  remain in place; the old root is absent and is not a symlink. Keep-alive stays
+  enabled. No further data migration or credential changes were performed.
+- Installed UI/API: AX inspection confirmed the native workspace picker,
+  task list, runtime selector, running indicator and pagination, with no embedded
+  web area. The installed typed query returned two workspaces, 50 issues,
+  54 agents and 66 runtime records; a requested issue detail matched its ID.
+  These are observations of the target, not fixed product limits.
+- Scope: no public desktop feed, iOS OTA or TestFlight publication occurred.
+  The native page is deployed; desktop-first scheduler execution is not.
+
+### Separate native-provider calibration
+
+The owner explicitly authorized isolated desktop test sessions with a fixed
+no-file-change prompt. Claude 3.6556.2 opened a separate new-session window.
+Its new page and completed-session page both exposed `about:blank`, so the
+historical `/epitaxy/new` URL rule cannot accept it. Exact full cwd was exposed
+by the folder control's description/help, and local mode by its environment
+control. A native file panel can own AX focus as a sheet attached to that
+window; the parent/child identity must be verified, not a window index.
+
+A temporary operator diagnostic, not the shipped create/runtime adapter,
+verified signed process identity, full test cwd, local mode, empty composer,
+retained AX objects, physical-input counters and a provider desktop lease. The
+first draft read was too early; inspection proved it was an unsubmitted draft.
+After its exact asynchronous echo was verified, a durable attempt record
+preceded one Send. The provider catalog returned one new session with the exact
+cwd, and its transcript contained the requested prompt and `MUSTER_NATIVE_OK`.
+The test does not establish Multica scheduler integration or task credentials.
+
+The existing controller did not bind that standalone `about:blank` surface.
+A separate existing-session send through the installed daemon was rejected
+before delivery because the target was locked or no longer at its console.
+No unknown outcome was retried. Codex creation, existing-session acceptance,
+no-window/relaunch behavior, Locked Use and scheduler execution remain pending.
+No native runtime or fallback capability is advertised by this release.

@@ -34,3 +34,26 @@ Recommendation: port the historical native-create protocol and workspace logic
 as a separate decision, then accept each provider with a unique native route,
 full cwd verification, one submit and provider receipt, both unlocked and through
 Locked Use. Do not expose the action as supported until those gates pass.
+
+## Current calibration and window requirements
+
+ADR [0054](adr/0054-native-multica-targeted-installation.md) records a separate
+operator diagnostic against a current Claude desktop build. An isolated native
+first turn received its provider response, but the standalone window continued
+to expose `about:blank`. This is not a shipped create adapter or a scheduler
+acceptance result. The existing-session test was stopped by the console guard.
+
+The owner requires explicit distinctions between the main window, a newly
+created standalone window and the target session window. Window position or
+title alone must never authorize input. Bind creation to a verified new window
+and page, revalidate after close/recreation, preserve drafts, and check session,
+full directory and composer immediately before sending. Native file sheets must
+be bound to their parent window. Existing-session sends and first-message
+creation need separate acceptance tests.
+
+An installed application with no windows is not absent. Running with all
+windows closed and not running at all require separate launch/window recovery
+paths and observations; neither condition permits CLI fallback while the
+application is installed. Test those cases without closing or replacing the
+owner's unrelated working windows. Desktop-first routing also still needs a
+task-scoped credential channel and the scheduler's actual provider protocol.
