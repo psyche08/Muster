@@ -98,6 +98,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0049](0049-web-window-onto-one-origin.md) | Proposed | A web window onto one origin, fetched by the person's own browser |
 
+| [0050](0050-paired-release-1-0-94.md) | Accepted | Land the outstanding branches and release them as 1.0.94 (85) |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
