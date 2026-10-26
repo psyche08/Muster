@@ -102,6 +102,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0051](0051-multica-management-and-live-catalog.md) | Accepted | Manage Multica containers and subscribe to session catalogs |
 
+| [0052](0052-targeted-multica-deployment.md) | Accepted | Deploy Multica management and relocate the existing workspace root |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
