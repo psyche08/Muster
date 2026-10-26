@@ -125,6 +125,31 @@ infer startup from `open` returning zero, loop GUI relaunches, force launchd, or
 repeat installation when only post-install verification is incomplete. A
 protected-session refusal still stops installation before bundle replacement.
 
+Two conditions look alike here and are not the same, which stalled the 1.0.94
+installation on Mac-A. Launch Services needs a moment to pick up a replaced
+bundle and returns -609 until it has; that is why
+`MusterApp/scripts/install-mac.sh` retries `open` at the same point. The "one
+`open`, no relaunch loop" rule is about a *launched* app that fails to
+materialize its window task and register its daemon. So wait long enough before
+the single launch — ten seconds was enough on all three Macs, three was not —
+and do not relaunch afterwards. A script that treats the two as one condition
+either launches too early and stops, or relaunches when it must not.
+
+Do not drive a fleet installation over the Vnet address. Stopping musterd tears
+down the virtual network, so an SSH session addressed to a member's `192.168.13.x`
+address is cut at the daemon stop, mid-script: during the 1.0.94 rollout Mac-B
+was left with a replaced bundle, no running daemon and no route back, and had to
+be reached over its physical bridge address. Address each member by an address
+that does not depend on Muster. `launchctl asuser <uid> open` is not an
+alternative from such a session; it needs root and fails with "Could not switch
+to audit session".
+
+`xcrun stapler validate` can also fail transiently on a bundle whose ticket it
+must fetch from Apple, while `spctl -a -t install` on the same bytes reports
+"accepted, source=Notarized Developer ID". Treat a single stapler failure as
+inconclusive, re-check with `-v` and against `spctl`, and never weaken the gate
+to get past it.
+
 Release destination (confirmed 2026-09-30): connect as `${MUSTER_RELEASE_HOST}`
 over SSH port `${MUSTER_RELEASE_SSH_PORT}` and publish to `${MUSTER_RELEASE_ROOT}/desktop/`, served at
 the fixed HTTPS source above. Subsequent Mac releases use this distribution
@@ -3002,3 +3027,59 @@ Actions remains disabled. iOS OTA publication is not physical-iPhone acceptance.
 No new production retry fault injection, kernel-network fault injection,
 Locked Use cycle, or Mac-C consent grant is claimed here; earlier permission
 acceptance remains ADR 0018. No additional old OTA files were deleted.
+
+### 2026-10-26 Web window and ADR renumbering on three Macs (1.0.94 / build 85)
+
+Published source `fdb9c024bf02215dbaa777338a51946a750ad31f` on macOS and iOS,
+the merge of the two branches that were open against `main`: the web window
+([ADR 0049](adr/0049-web-window-onto-one-origin.md), renumbered from a taken
+0026) and the ADR renumbering of
+[ADR 0025](adr/0025-ignore-the-scheduler-token-in-the-working-tree.md).
+Releases 1.0.83–1.0.91 were recorded in their own ADRs rather than here;
+1.0.92 (83) and 1.0.93 (84) were built but never published.
+
+Apple notarization `60fa0735-122b-4901-9e97-da756cbac003` was Accepted for the
+signed bundle, and `c9802de5-1457-4818-a0a5-a0d292d9dc62` for the Velopack
+re-sign, which is a second ticket because packing re-signs the outer bundle.
+`--signDisableDeep` preserved the daemon's own signature byte for byte, so the
+daemon in the published package is the same binary the notarized ZIP carries:
+
+- macOS portable ZIP: `45cba2a152ff77514bf9b1c40d91d8ad9c85ef39bb1a9fc91e12776b65273453`
+- macOS full nupkg: `3281f8fc8e310b4c3023853ad700b0f5b972053032034a340c49c7f582e4cdc7`
+- daemon: `458c572cb2a016b749ae9943e2a369c6e9df66d82d9415285edb70671e9f98dd`
+- iOS IPA: `cf890b3b61d61ace9a4eee96b1e6269a05e59e5841c88536bdd6b636b9843629`
+
+**The signed desktop feed is back.** `releases.osx-arm64.json` had answered 404
+since the 1.0.91 publication, because no .NET runtime was available for `vpk`
+and `prune-releases.py` removes a feed that does not match the latest portable
+version. In-app desktop updates were unavailable fleet-wide for that whole
+period. The feed signature was verified the way the updater verifies it, over
+`UTF8(filename) + LF` and the exact served JSON bytes against the compiled-in
+`release-public.pem`: "Verified OK", with a version-altered feed rejected.
+
+Mac-A, Mac-B and Mac-C all installed the published portable bundle. Each one's
+installed daemon hashes to the value above, so all three run the published
+binary and not a local rebuild — which matters, because before this release the
+three machines ran two *different* builds under the one version string 1.0.92.
+Every device identity, fingerprint and Secure Enclave key backend is unchanged;
+Accessibility is granted, Vnet up and the relay registered on each; each machine
+sees the other two as `direct`. All six virtual-IP ping directions pass, 24 of
+24 packets with no loss. Both merged changes are demonstrably in the shipped
+binary rather than only in source: web-window string literals are present in the
+installed daemon, and it advertises the `agent.send.status.v1` service that
+1.0.92 did not.
+
+The paired iOS OTA build 85 was published and verified through the public page:
+both IPA aliases hash to the value above, the manifest binds build 85 to the
+hash-named IPA, cache headers are `no-store`, historical manifest URLs redirect
+to the latest and removed package URLs answer 410. 36 superseded iOS files were
+removed on explicit authorization, leaving the seven current ones.
+
+Not claimed. No provider conversation was exercised, so there is no send,
+receipt or continuation evidence for this build, and the web window has no
+acceptance of its own on any device. Physical iPhone installation remains
+unverified. Hosted Actions remain disabled, so the absence of hosted checks is
+not a CI pass. Three operational findings from this rollout — the Launch
+Services versus relaunch distinction, never installing over the Vnet address,
+and transient `stapler validate` failures — are recorded under "Packaging"
+above, and the release itself in [ADR 0050](adr/0050-paired-release-1-0-94.md).

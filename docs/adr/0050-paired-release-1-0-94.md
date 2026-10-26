@@ -163,6 +163,46 @@ fixed manifest, by the same nginx rule, and resolves to identical bytes; its
 unchanged-install retry needs. All four entry points and the macOS download
 answer `200`.
 
+### Installed on Mac-B and Mac-C as well
+
+Both remaining Macs installed the same published portable bundle, each with the
+lease granted, the old GUI exited, its launchd service booted out and only the
+verified bundle replaced. Both verify the way Mac-A did: the installed daemon
+hashes to `458c572c…f98dd`, so all three machines now run the published binary
+rather than a local rebuild. That is worth stating plainly, because before this
+release the three ran two different builds under the single version string
+1.0.92 (`66a39fbf` on Mac-A, `93529e00` on the other two); the fleet is now on
+one artifact again.
+
+Each daemon reports version 1.0.94 and build commit `fdb9c02` with its device
+id, fingerprint and `sep` key backend unchanged from the identity captured
+immediately before its own replacement. Accessibility is granted, Vnet up and
+the relay registered on all three, and each machine sees the other two as
+`direct`. All six virtual-IP ping directions pass, 24 of 24 packets, no loss.
+
+Three operational findings, all recorded in the runbook's "Packaging" section:
+
+The Mac-B rollout cut its own connection. Its SSH route is its Vnet address, so
+stopping musterd tore down the path mid-script, right after the launchd bootout.
+The bundle replacement had completed, but the launch and verification had not,
+leaving Mac-B with the new bundle, no running daemon and no route back. It was
+recovered over its physical bridge address, which does not depend on Muster. A
+fleet installation must address members by an address Muster does not provide.
+`launchctl asuser <uid> open` is not a workaround from such a session: it needs
+root and fails with "Could not switch to audit session".
+
+Waiting ten seconds before the single `open`, instead of three, started the GUI
+first time on both Mac-B and Mac-C. That confirms the diagnosis of the Mac-A
+stall: the failure was Launch Services not yet having a usable registration for
+the replaced bundle, not a launched app failing to register its daemon, and the
+two conditions need different handling.
+
+`xcrun stapler validate` failed once on Mac-C against bytes it had just verified
+as the published daemon, then succeeded with `-v` after fetching the ticket from
+Apple, while `spctl -a -t install` accepted the same bundle as "Notarized
+Developer ID" throughout. The gate was left as it is and the installation simply
+re-run; a transient ticket lookup is not a reason to weaken a signing check.
+
 ### Not claimed
 
 No Mac ran this build, so there is no installed runtime, relay, Vnet, RPC or
@@ -284,14 +324,11 @@ script that conflates them stalls exactly as this one did.
 
 ### Not claimed
 
-Mac-B and Mac-C were not installed and were not reachable from the release
-machine in this session, so they remain on their existing 1.0.92 builds and this
-release has no evidence from them. Only two of the six virtual-IP ping
-directions were exercised, both outbound from Mac-A; no inbound direction and no
-cross-device RPC was tested. No provider conversation was exercised, so there is
-no send, receipt or continuation evidence for 1.0.94, and the web window of
-ADR 0049 still has no acceptance of its own on any device. Physical iPhone
-installation and acceptance remain unverified, as for every earlier release. The
-split 1.0.92 builds recorded above are now partly resolved — Mac-A has moved to
-1.0.94 — but Mac-B and Mac-C still run `93529e00` under the 1.0.92 version
-string.
+No cross-device RPC was exercised: the bundled CLI addresses only its own
+daemon, so each machine's RPC was verified locally and the transport between
+them by the six ping directions, not by a request crossing devices. No provider
+conversation was exercised, so there is no send, receipt or continuation
+evidence for 1.0.94, and the web window of ADR 0049 still has no acceptance of
+its own on any device — it shipped to the fleet without one. Physical iPhone
+installation and acceptance remain unverified, as for every earlier release. No
+Locked Use cycle, fault injection or new consent grant is claimed here.
