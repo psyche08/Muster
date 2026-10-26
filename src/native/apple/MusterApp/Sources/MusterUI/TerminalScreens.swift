@@ -17,20 +17,20 @@ struct WorkspaceSwitcher: View {
 
     /// The tab the core says the screen belongs to (Home counts as Agents).
     private var selected: Muster_App_Screen {
-        [.desktopChats, .terminals].contains(vm.workspace) ? vm.workspace : .agents
+        [.multica, .terminals].contains(vm.workspace) ? vm.workspace : .agents
     }
 
     var body: some View {
         Picker("Workspace", selection: Binding(get: { selected }, set: { tab in
             switch tab {
-            case .desktopChats: core.openDesktopChats()
+            case .multica: core.navigate(to: .multica)
             case .terminals: core.openTerminals(device: vm.agents.deviceID.isEmpty ? "*" : vm.agents.deviceID)
             default: core.openAgents(device: vm.terminals.deviceID.isEmpty ? "*" : vm.terminals.deviceID)
             }
         })) {
-            Text("Chat").tag(Muster_App_Screen.desktopChats)
             Text("Agents").tag(Muster_App_Screen.agents)
             Text("Terminals").tag(Muster_App_Screen.terminals)
+            if vm.multica.installed { Text("Multica").tag(Muster_App_Screen.multica) }
         }
         .pickerStyle(.segmented)
         .frame(width: 270)

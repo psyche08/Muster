@@ -131,7 +131,7 @@ public struct MusterRootView: View {
 
     /// The workspace tabs, where the switcher replaces Back (the core never
     /// shows HOME: it routes it to AGENTS).
-    private static let roots: [Muster_App_Screen] = [.desktopChats, .agents, .terminals]
+    private static let roots: [Muster_App_Screen] = [.desktopChats, .agents, .terminals, .multica]
     /// What a Mac shows to the right of the Chat or Agents list.
     private static let details: [Muster_App_Screen] = [.chat, .files, .file, .git]
 
@@ -143,7 +143,7 @@ public struct MusterRootView: View {
             && (vm.screen == vm.workspace || Self.details.contains(vm.screen))
         #else
         // The workspace's list on the left, the conversation or terminal on the right.
-        return layout.side && (Self.roots.contains(vm.screen) || Self.phoneDetails.contains(vm.screen))
+        return vm.workspace != .multica && layout.side && (Self.roots.contains(vm.screen) || Self.phoneDetails.contains(vm.screen))
         #endif
     }
 
@@ -213,6 +213,7 @@ public struct MusterRootView: View {
         case .home, .agents: HomeView(core: core, vm: vm)
         case .chat: ChatView(core: core, vm: vm).id("\(vm.chat.deviceID):\(vm.chat.session.id)")
         case .desktopChats: DesktopChatsView(core: core, vm: vm)
+        case .multica: MulticaView(core: core, status: vm.multica)
         case .terminals: TerminalsView(core: core, vm: vm)
         case .terminal: TerminalScreen(core: core, vm: vm)
         case .browser: BrowserView(core: core, vm: vm)

@@ -573,3 +573,148 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     core.shutdown();
     task.abort();
 }
+
+#[derive(Default)]
+struct PushCatalog {
+    changes: Notify,
+    revision: AtomicUsize,
+    lists: AtomicUsize,
+    watches: AtomicUsize,
+    cancelled: AtomicUsize,
+}
+impl Handler for PushCatalog {
+    fn call(&self, _: Context, request: v1::request::Req, events: EventSink) -> HandlerFuture<'_> {
+        use v1::{request::Req, response::Resp};
+        Box::pin(async move {
+            match request {
+                Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                    device_id: "local".into(),
+                    ..Default::default()
+                }),
+                Req::NetworkStatus(_) => Resp::NetworkStatus(v1::NetworkStatus {
+                    has_network: true,
+                    members: vec![v1::MemberView {
+                        device_id: "local".into(),
+                        name: "Local".into(),
+                        kind: "desktop".into(),
+                        is_self: true,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                Req::AgentList(_) => {
+                    self.lists.fetch_add(1, Ordering::SeqCst);
+                    Resp::Ack(v1::Ack {})
+                }
+                Req::AgentWatch(r) => {
+                    assert!(r.catalog_only);
+                    assert_eq!(r.limit, 200);
+                    assert!(r.session.is_empty());
+                    self.watches.fetch_add(1, Ordering::SeqCst);
+                    loop {
+                        let revision = self.revision.load(Ordering::SeqCst);
+                        events
+                            .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
+                                ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
+                                    sessions: if revision == 2 {
+                                        vec![]
+                                    } else {
+                                        vec![v1::AgentSession {
+                                            id: "pushed".into(),
+                                            title: format!("Revision {revision}"),
+                                            ..Default::default()
+                                        }]
+                                    },
+                                })),
+                            }))
+                            .await
+                            .unwrap();
+                        tokio::select! {
+                            _ = events.cancelled().cancelled() => break,
+                            _ = self.changes.notified() => {},
+                        }
+                    }
+                    self.cancelled.fetch_add(1, Ordering::SeqCst);
+                    Resp::Ack(v1::Ack {})
+                }
+                Req::PolicyGet(_) => Resp::Policy(v1::Policy::default()),
+                Req::NetworkPending(_) => Resp::PendingJoins(v1::PendingJoins::default()),
+                Req::DeviceWatch(_) => {
+                    events.cancelled().cancelled().await;
+                    Resp::Ack(v1::Ack {})
+                }
+                _ => Resp::Ack(v1::Ack {}),
+            }
+        })
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catalog_push_replaces_renamed_and_removed_rows_without_polling() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("push.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(PushCatalog::default());
+    let handler = server.clone();
+    let task = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        muster_rpc::serve(stream, Principal::Local, handler).await;
+    });
+    let shell = Arc::new(TestShell::default());
+    let core = AppCore::start(
+        AppConfig {
+            dir: dir.path().into(),
+            mode: Mode::Socket { path: socket },
+            allow_loopback: true,
+        },
+        shell.clone(),
+    )
+    .await
+    .unwrap();
+    shell
+        .wait(|v| {
+            v.agents
+                .as_ref()
+                .is_some_and(|a| a.sessions.first().is_some_and(|s| s.title == "Revision 0"))
+        })
+        .await;
+    server.revision.store(1, Ordering::SeqCst);
+    server.changes.notify_one();
+    shell
+        .wait(|v| {
+            v.agents
+                .as_ref()
+                .is_some_and(|a| a.sessions.first().is_some_and(|s| s.title == "Revision 1"))
+        })
+        .await;
+    server.revision.store(2, Ordering::SeqCst);
+    server.changes.notify_one();
+    shell
+        .wait(|v| {
+            v.agents
+                .as_ref()
+                .is_some_and(|a| !a.loading && a.sessions.is_empty())
+        })
+        .await;
+    assert_eq!(server.lists.load(Ordering::SeqCst), 0);
+    core.lifecycle(app::Lifecycle::Background);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while server.cancelled.load(Ordering::SeqCst) < server.watches.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    server.revision.store(3, Ordering::SeqCst);
+    core.lifecycle(app::Lifecycle::Foreground);
+    shell
+        .wait(|v| {
+            v.agents
+                .as_ref()
+                .is_some_and(|a| a.sessions.first().is_some_and(|s| s.title == "Revision 3"))
+        })
+        .await;
+    assert_eq!(server.lists.load(Ordering::SeqCst), 0);
+    core.backend().local().close();
+    core.shutdown();
+    task.abort();
+}

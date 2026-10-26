@@ -18,7 +18,6 @@ class WorkspaceTab {
 }
 
 const workspaceTabs: WorkspaceTab[] = [
-  new WorkspaceTab('Chat', pb.app.Screen.DESKTOP_CHATS),
   new WorkspaceTab('Agents', pb.app.Screen.AGENTS),
   new WorkspaceTab('Terminals', pb.app.Screen.TERMINALS),
 ];

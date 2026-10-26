@@ -101,7 +101,7 @@ host**. A path that exists only in the container fails there. Mount one
 directory at the same path on both sides and point the daemon at it:
 
 ```sh
-container run --volume "$HOME/multica_workspaces:$HOME/multica_workspaces" …
+container run --volume "$HOME/Documents/Multica/workspaces:$HOME/Documents/Multica/workspaces" …
 ```
 
 and set `MULTICA_WORKSPACES_ROOT` to that path. Nothing here works around a
@@ -113,3 +113,28 @@ A container-side command reached the host's `musterd` through this bridge,
 opened a real session, and ran a Codex turn that executed a tool call and
 settled `end_turn`. No scheduler drove it — the frames were sent by hand. See
 `docs/validation/MULTICA-DAEMON-2026-10-21.md`.
+
+## Managed desktop setup
+
+Muster Settings now provides the local Multica installation entry (ADR 0051).
+Install Apple `container` first, then supply the trusted operator installer URL
+and server/application HTTPS URLs. New installations use `~/Documents/Multica`:
+`config/` persists the guest CLI configuration, `workspaces/` is mounted at the
+same absolute path on host and guest, and `bin/` holds the host CLI needed by
+provider tasks. The installer runs inside the container and on the host with
+`MULTICA_BIN_DIR` set to that private `bin/` directory. Complete Multica login
+using the terminal command shown in Settings. Enabling keep-alive opts the
+container and daemon into musterd's supervisor; closing the UI does not stop it.
+
+An existing `mlt` container is discovered without changing it. Save its settings
+to opt into supervision; its tools and credentials are preserved. The installed
+container makes the Multica tab visible after Agents and Terminals. The tab uses
+the configured application URL and its own WebKit login, without a remote proxy.
+
+To move existing data, disable keep-alive and save first, finish running tasks,
+then stop the selected container using Apple `container stop`. Choose a new,
+nonexistent directory on the same filesystem and save again. Rust moves the data
+and keeps an old-path symlink so existing task and mount paths continue to work.
+Re-enable keep-alive after saving. The destination parent must exist; a different
+filesystem requires a separate manual migration. Do not remove the compatibility
+symlink while the container still uses that mount path.

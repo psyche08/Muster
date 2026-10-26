@@ -139,6 +139,7 @@ message Request {
     // Read-only lookup of the exact original send; never executes or unlocks.
     AgentSendRequest agent_send_status = 68;
     ForwardOpenRequest forward_open = 69;
+    MulticaRequest multica = 70;
   }
 }
 
@@ -186,6 +187,7 @@ message Response {
     DiagnosticsSaved diagnostics_saved = 55;
     AgentCompletion agent_completion = 56;
     PresenceInfo presence_info = 65;
+    MulticaStatus multica = 70;
   }
 }
 
@@ -660,6 +662,8 @@ message AgentSessionPage {
 
 message AgentWatchRequest {
   string session = 1;  // "" = list changes for all sessions
+  bool catalog_only = 2; // no message contents; bounded catalog snapshots
+  uint32 limit = 3; // catalog-only snapshot limit, default 200, maximum 1000
 }
 
 message AgentMessage {
@@ -994,4 +998,30 @@ message PresenceInfo {
   bytes public_key = 1;
   PresenceEnrollment enrollment = 2;
   bool enrolled = 3; // Rust-verified candidate matches the active enrolled key.
+}
+
+// Container administration and local deployment configuration are local-owner only.
+message MulticaRequest {
+  enum Action { CHECK = 0; SAVE = 1; INSTALL = 2; }
+  Action action = 1;
+  string data_dir = 2;
+  string installer_url = 3;
+  string server_url = 4;
+  string app_url = 5;
+  bool keep_alive = 6;
+  string container_name = 7;
+}
+message MulticaStatus {
+  bool supported = 1;
+  bool installed = 2;
+  bool running = 3;
+  string data_dir = 4;
+  string installer_url = 5;
+  string server_url = 6;
+  string app_url = 7;
+  bool keep_alive = 8;
+  string container_name = 9;
+  string message = 10;
+  string login_command = 11;
+  bool busy = 12;
 }
