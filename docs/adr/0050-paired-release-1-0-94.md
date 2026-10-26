@@ -231,19 +231,67 @@ was also checked in non-executable while its siblings were not, so it is now
 steps by hand, with the fix applied only to the repository, so that the
 packaging tree could stay clean and equal to the build commit.
 
-### Installation on the Macs: not done here
+### Installed and accepted on Mac-A
 
-Installing was not performed in this session. The two other Macs were not
-reachable, and the attended installation on this Mac was declined by the
-environment's own guardrails rather than attempted and failed. So all three Macs
-remain on their existing 1.0.92 builds and this build has no installed-runtime,
-identity, relay, Vnet, RPC or ping evidence.
+Mac-A installed the published portable bundle through the attended path. The
+Rust desktop-update lease was granted (no protected session, console drained),
+the old GUI exited, its user launchd service was booted out, and only the
+verified bundle was replaced. Pairing and store state under Application Support
+survived untouched.
 
-With the signed feed restored, the documented upgrade path is available to the
-owner on each Mac: Settings -> Muster Updates, which checks, downloads, installs
-and restarts explicitly through the Rust update lease. The pre-install baseline
-on this Mac was recorded for comparison: device `M1Max`, id `3508fbf9…6196d`,
-fingerprint `GUEP-X6MF-6FUR-UXBK`, version 1.0.92, Accessibility granted,
-relay registered, Vnet `192.168.13.11`, with both other Macs directly connected at 2 ms
-and 4 ms. An installation is accepted only when the daemon reports 1.0.94 with
-that identity unchanged and relay and Vnet healthy.
+The installed artifact is the published one, not a rebuild: the installed
+daemon hashes to `458c572cb2a016b749ae9943e2a369c6e9df66d82d9415285edb70671e9f98dd`,
+the same binary the notarized ZIP and the published portable bundle carry.
+`/Applications/Muster.app` reports 1.0.94 (85), its Velopack `sq.version` reads
+1.0.94 so the updater's recorded version agrees with the bundle, and the install
+validates its staple, is accepted by Gatekeeper as "Notarized Developer ID",
+passes strict deep `codesign --verify` and passes presence signing
+`89LGY6BD53.dev.linsheng.muster`.
+
+The running daemon was asked to describe itself rather than inferred from the
+binary. It reports version 1.0.94 and build commit `fdb9c02`, with device id
+`3508fbf9…6196d`, fingerprint `GUEP-X6MF-6FUR-UXBK` and key backend `sep`
+(Secure Enclave) all unchanged from the pre-install baseline, so the device
+identity and hardware key backend were not disturbed. Accessibility is granted,
+`locked` false, `console` true, Vnet up on `192.168.13.11`, relay registered.
+
+Both merged changes are demonstrably in the shipped binary, not merely in the
+source: three distinct web-window string literals from
+[ADR 0049](0049-web-window-onto-one-origin.md)'s `musterd/src/web.rs` are
+present in the installed daemon, and the daemon advertises the
+`agent.send.status.v1` service that [ADR 0048](0048-admitted-send-acknowledgement.md)
+added, which the 1.0.92 baseline did not advertise.
+
+Links to the other two Macs recovered and both outbound virtual-IP pings pass:
+4/4 packets with 0% loss to `192.168.13.12` and `192.168.13.13`, minimum
+round-trips 1.271 ms and 0.724 ms. Worth recording honestly: 21 seconds after
+startup the Mac-C link still showed `relay 15ms`, and only after about 45
+seconds did both settle to `direct` (9 ms and 23 ms). A link column read
+immediately after a restart is not evidence of a transport regression.
+
+Startup did not complete on its own. Three seconds after the replacement a
+single normal `env -u MUSTER_DIR open` did not materialize the GUI, so no
+daemon registered and the launchd service stayed absent; the owner then opened
+Muster normally and everything above followed. This is the documented hazard of
+inferring startup from `open`, and it exposed a contradiction worth writing
+down: this runbook says to issue **one** `open` and not to loop GUI relaunches,
+while `MusterApp/scripts/install-mac.sh` retries `open` every two seconds up to
+five times at the same point, commenting that Launch Services needs a moment
+after a bundle replacement or returns -609. Those address different conditions —
+the prohibition is on relaunching the GUI when a launched app fails to register
+its daemon, not on Launch Services having no usable registration yet — and a
+script that conflates them stalls exactly as this one did.
+
+### Not claimed
+
+Mac-B and Mac-C were not installed and were not reachable from the release
+machine in this session, so they remain on their existing 1.0.92 builds and this
+release has no evidence from them. Only two of the six virtual-IP ping
+directions were exercised, both outbound from Mac-A; no inbound direction and no
+cross-device RPC was tested. No provider conversation was exercised, so there is
+no send, receipt or continuation evidence for 1.0.94, and the web window of
+ADR 0049 still has no acceptance of its own on any device. Physical iPhone
+installation and acceptance remain unverified, as for every earlier release. The
+split 1.0.92 builds recorded above are now partly resolved — Mac-A has moved to
+1.0.94 — but Mac-B and Mac-C still run `93529e00` under the 1.0.92 version
+string.
