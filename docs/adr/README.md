@@ -96,6 +96,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0048](0048-admitted-send-acknowledgement.md) | Accepted | Acknowledge a send against the conversation, not only its outcome |
 
+| [0049](0049-web-window-onto-one-origin.md) | Proposed | A web window onto one origin, fetched by the person's own browser |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

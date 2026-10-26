@@ -156,6 +156,22 @@ pub struct LocalPolicy {
     /// the owner makes rather than a default they inherit.
     #[serde(default)]
     pub offer_tasks: bool,
+    /// The web window (ADR 0049): the one foreign origin this machine serves
+    /// on a loopback port, for members with no route to it. `None` is off,
+    /// which is how a machine starts — it carries somebody else's site, so
+    /// the owner says which one, if any.
+    #[serde(default)]
+    pub web_window: Option<WebWindow>,
+}
+
+/// One origin this machine's browser fetches for members who cannot reach it.
+/// Opening the window and letting a member through stay two decisions: the
+/// member also needs `browser.view` to read through it and `browser.control`
+/// to act, both under `offer_agent` and, while locked, `allow_locked_control`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebWindow {
+    /// Scheme, host and port, no path: "https://example.test".
+    pub origin: String,
 }
 
 impl Default for LocalPolicy {
@@ -174,6 +190,7 @@ impl Default for LocalPolicy {
             offer_agent: true,
             offer_terminal: true,
             offer_tasks: false,
+            web_window: None,
         }
     }
 }
@@ -290,6 +307,31 @@ mod tests {
         assert!(policy.offer_terminal);
     }
 
+    /// The window reuses the browser's own permission, so the browser's lock
+    /// rule is the window's: viewing or acting while the screen is locked
+    /// needs the owner to have offered control while locked.
+    #[test]
+    fn a_locked_machine_lends_its_browser_only_with_locked_control_on() {
+        let (roster, phone) = roster_with(&["browser.view"]);
+        let mut policy = LocalPolicy::default();
+        assert!(policy.web_window.is_none());
+        policy.web_window = Some(WebWindow {
+            origin: "https://example.test".into(),
+        });
+        let read = Permission::Browser { control: false };
+        let locked = TargetState { locked: true };
+
+        assert!(
+            authorize(roster.state(), &phone, &read, &policy, &TargetState::default()).is_allow()
+        );
+        assert_eq!(
+            authorize(roster.state(), &phone, &read, &policy, &locked),
+            Decision::Deny("refused by local policy")
+        );
+        policy.allow_locked_control = true;
+        assert!(authorize(roster.state(), &phone, &read, &policy, &locked).is_allow());
+    }
+
     /// A stored policy written before the field existed must read as off, not
     /// as missing-and-therefore-whatever.
     #[test]
@@ -303,6 +345,7 @@ mod tests {
         });
         let policy: LocalPolicy = serde_json::from_value(stored).expect("older policy still loads");
         assert!(!policy.offer_tasks);
+        assert!(policy.web_window.is_none());
     }
 
     use crate::roster::{Author, DeviceKind, DeviceRecord, Roster};

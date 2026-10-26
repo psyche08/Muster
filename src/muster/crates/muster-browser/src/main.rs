@@ -80,14 +80,23 @@ async fn run() -> Result<()> {
         };
         next_id += 1;
         let Some((mut client, _)) = accepted else {
-            exchange(&mut stdout, &mut rx, json!({"op": "detachAll"}), next_id).await?;
+            exchange(
+                &mut stdout,
+                &mut rx,
+                json!({"op": "detachAll"}),
+                next_id,
+                DEADLINE,
+            )
+            .await?;
             idle.as_mut()
                 .reset(tokio::time::Instant::now() + std::time::Duration::from_secs(15));
             continue;
         };
         let request = async {
             write_frame(&mut client, &json!({"ready": true}), 128).await?;
-            let raw = read_frame(&mut client, MAX_REQUEST).await?;
+            // The widest frame any operation may use; `validate` then holds
+            // this one to its own limit.
+            let raw = read_frame(&mut client, MAX_FETCH_REQUEST).await?;
             let request: Request = serde_json::from_value(raw)?;
             request.validate()?;
             Ok::<_, anyhow::Error>(request)
@@ -107,6 +116,7 @@ async fn run() -> Result<()> {
             &mut rx,
             serde_json::to_value(&request)?,
             next_id,
+            request.deadline(),
         )
         .await;
         let (reply, fatal) = match response {
@@ -148,10 +158,11 @@ async fn exchange<W: tokio::io::AsyncWrite + Unpin>(
     rx: &mut tokio::sync::mpsc::Receiver<Result<Value>>,
     mut command: Value,
     id: u64,
+    deadline: std::time::Duration,
 ) -> Result<Value> {
     command["reqId"] = json!(id);
-    tokio::time::timeout(DEADLINE, async {
-        write_frame(stdout, &command, MAX_REQUEST).await?;
+    tokio::time::timeout(deadline, async {
+        write_frame(stdout, &command, MAX_FETCH_REQUEST).await?;
         let reply = rx.recv().await.context("extension disconnected")??;
         ensure!(
             reply["reqId"].as_u64() == Some(id),
@@ -164,7 +175,7 @@ async fn exchange<W: tokio::io::AsyncWrite + Unpin>(
         Ok(reply)
     })
     .await
-    .context("3 second browser deadline exceeded")?
+    .with_context(|| format!("{} second browser deadline exceeded", deadline.as_secs()))?
 }
 
 fn main() -> Result<()> {

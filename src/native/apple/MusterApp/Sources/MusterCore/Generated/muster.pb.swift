@@ -761,6 +761,14 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .agentSendStatus(newValue)}
   }
 
+  public var forwardOpen: Muster_V1_ForwardOpenRequest {
+    get {
+      if case .forwardOpen(let v)? = req {return v}
+      return Muster_V1_ForwardOpenRequest()
+    }
+    set {req = .forwardOpen(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Req: Equatable, Sendable {
@@ -823,6 +831,7 @@ public nonisolated struct Muster_V1_Request: Sendable {
     case deviceInstallPresence(Muster_V1_DeviceInstallPresenceRequest)
     /// Read-only lookup of the exact original send; never executes or unlocks.
     case agentSendStatus(Muster_V1_AgentSendRequest)
+    case forwardOpen(Muster_V1_ForwardOpenRequest)
 
   }
 
@@ -1178,6 +1187,14 @@ public nonisolated struct Muster_V1_Event: Sendable {
     set {ev = .desktopUpdateReady(newValue)}
   }
 
+  public var forwardOpened: Muster_V1_ForwardOpened {
+    get {
+      if case .forwardOpened(let v)? = ev {return v}
+      return Muster_V1_ForwardOpened()
+    }
+    set {ev = .forwardOpened(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Ev: Equatable, Sendable {
@@ -1190,6 +1207,7 @@ public nonisolated struct Muster_V1_Event: Sendable {
     case agentEvent(Muster_V1_AgentEvent)
     /// local streaming lease; held until cancellation/disconnect
     case desktopUpdateReady(Muster_V1_Ack)
+    case forwardOpened(Muster_V1_ForwardOpened)
 
   }
 
@@ -2142,6 +2160,36 @@ public nonisolated struct Muster_V1_Policy: Sendable {
   /// decision to take, not a default to inherit.
   public var offerTasks: Bool = false
 
+  /// The web window (ADR 0049); absent is off.
+  public var webWindow: Muster_V1_WebWindow {
+    get {_webWindow ?? Muster_V1_WebWindow()}
+    set {_webWindow = newValue}
+  }
+  /// Returns true if `webWindow` has been explicitly set.
+  public var hasWebWindow: Bool {self._webWindow != nil}
+  /// Clears the value of `webWindow`. Subsequent reads from it will return its default value.
+  public mutating func clearWebWindow() {self._webWindow = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _webWindow: Muster_V1_WebWindow? = nil
+}
+
+/// One origin this machine serves to members that cannot reach it, fetched by
+/// the person's own browser. It listens on no TCP port: members reach it over
+/// the "web" service, reading with `browser.view` and acting with
+/// `browser.control`, under `offer_agent`; while the screen is locked, only if
+/// `allow_locked_control` is on.
+public nonisolated struct Muster_V1_WebWindow: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// "https://example.test", scheme host and port only
+  public var origin: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2166,6 +2214,46 @@ public nonisolated struct Muster_V1_PolicySetRequest: Sendable {
   public init() {}
 
   fileprivate var _policy: Muster_V1_Policy? = nil
+}
+
+/// A loopback port on THIS machine standing for `port` on `device`'s loopback,
+/// carried over a forward stream (ARCHITECTURE §3.5) — or, with `window`, for
+/// that member's web window (ADR 0049), carried over its "web" service. Local
+/// callers only; the member decides for its own side. The call stays open and
+/// answers ForwardOpened once the port is listening; cancelling it closes the
+/// port and every connection on it.
+public nonisolated struct Muster_V1_ForwardOpenRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// member device id, hex
+  public var device: String = String()
+
+  /// the port on that member's loopback; 0 with `window`
+  public var port: UInt32 = 0
+
+  /// 0 asks the operating system for one
+  public var localPort: UInt32 = 0
+
+  /// the origin of the member's web window, instead of a port
+  public var window: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_ForwardOpened: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var localPort: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Muster_V1_TerminalSessionsRequest: Sendable {
@@ -3940,7 +4028,7 @@ nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4702,6 +4790,19 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
           self.req = .agentSendStatus(v)
         }
       }()
+      case 69: try {
+        var v: Muster_V1_ForwardOpenRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .forwardOpen(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .forwardOpen(v)
+        }
+      }()
       default: break
       }
     }
@@ -4944,6 +5045,10 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
     case .agentSendStatus?: try {
       guard case .agentSendStatus(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 68)
+    }()
+    case .forwardOpen?: try {
+      guard case .forwardOpen(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 69)
     }()
     case nil: break
     }
@@ -5479,7 +5584,7 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Event"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5591,6 +5696,19 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.ev = .desktopUpdateReady(v)
         }
       }()
+      case 68: try {
+        var v: Muster_V1_ForwardOpened?
+        var hadOneofValue = false
+        if let current = self.ev {
+          hadOneofValue = true
+          if case .forwardOpened(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.ev = .forwardOpened(v)
+        }
+      }()
       default: break
       }
     }
@@ -5633,6 +5751,10 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .desktopUpdateReady?: try {
       guard case .desktopUpdateReady(let v)? = self.ev else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 57)
+    }()
+    case .forwardOpened?: try {
+      guard case .forwardOpened(let v)? = self.ev else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 68)
     }()
     case nil: break
     }
@@ -7459,7 +7581,7 @@ nonisolated extension Muster_V1_PolicyGetRequest: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_Policy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Policy"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}open_ports\0\u{3}allow_locked_control\0\u{3}ax_allowlist\0\u{3}offer_agent\0\u{3}offer_terminal\0\u{3}offer_tasks\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}open_ports\0\u{3}allow_locked_control\0\u{3}ax_allowlist\0\u{3}offer_agent\0\u{3}offer_terminal\0\u{3}offer_tasks\0\u{3}web_window\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7473,12 +7595,17 @@ nonisolated extension Muster_V1_Policy: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 4: try { try decoder.decodeSingularBoolField(value: &self.offerAgent) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.offerTerminal) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.offerTasks) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._webWindow) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.openPorts.isEmpty {
       try visitor.visitRepeatedStringField(value: self.openPorts, fieldNumber: 1)
     }
@@ -7497,6 +7624,9 @@ nonisolated extension Muster_V1_Policy: SwiftProtobuf.Message, SwiftProtobuf._Me
     if self.offerTasks != false {
       try visitor.visitSingularBoolField(value: self.offerTasks, fieldNumber: 6)
     }
+    try { if let v = self._webWindow {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7507,6 +7637,37 @@ nonisolated extension Muster_V1_Policy: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.offerAgent != rhs.offerAgent {return false}
     if lhs.offerTerminal != rhs.offerTerminal {return false}
     if lhs.offerTasks != rhs.offerTasks {return false}
+    if lhs._webWindow != rhs._webWindow {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_WebWindow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WebWindow"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}origin\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.origin) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.origin.isEmpty {
+      try visitor.visitSingularStringField(value: self.origin, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_WebWindow, rhs: Muster_V1_WebWindow) -> Bool {
+    if lhs.origin != rhs.origin {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7541,6 +7702,81 @@ nonisolated extension Muster_V1_PolicySetRequest: SwiftProtobuf.Message, SwiftPr
 
   public static func ==(lhs: Muster_V1_PolicySetRequest, rhs: Muster_V1_PolicySetRequest) -> Bool {
     if lhs._policy != rhs._policy {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_ForwardOpenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ForwardOpenRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{1}port\0\u{3}local_port\0\u{1}window\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.device) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.port) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.localPort) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.window) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.device.isEmpty {
+      try visitor.visitSingularStringField(value: self.device, fieldNumber: 1)
+    }
+    if self.port != 0 {
+      try visitor.visitSingularUInt32Field(value: self.port, fieldNumber: 2)
+    }
+    if self.localPort != 0 {
+      try visitor.visitSingularUInt32Field(value: self.localPort, fieldNumber: 3)
+    }
+    if !self.window.isEmpty {
+      try visitor.visitSingularStringField(value: self.window, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_ForwardOpenRequest, rhs: Muster_V1_ForwardOpenRequest) -> Bool {
+    if lhs.device != rhs.device {return false}
+    if lhs.port != rhs.port {return false}
+    if lhs.localPort != rhs.localPort {return false}
+    if lhs.window != rhs.window {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_ForwardOpened: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ForwardOpened"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}local_port\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.localPort) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.localPort != 0 {
+      try visitor.visitSingularUInt32Field(value: self.localPort, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_ForwardOpened, rhs: Muster_V1_ForwardOpened) -> Bool {
+    if lhs.localPort != rhs.localPort {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

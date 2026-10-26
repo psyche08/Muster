@@ -2309,12 +2309,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "muster-web"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "musterd"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "clap",
+ "data-encoding",
  "env_logger",
  "futures-util",
  "hex",
@@ -2331,6 +2341,7 @@ dependencies = [
  "muster-rpc",
  "muster-store",
  "muster-terminal",
+ "muster-web",
  "quinn",
  "rcgen",
  "reqwest",

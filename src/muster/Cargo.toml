@@ -13,6 +13,7 @@ members = [
     "crates/muster-agent",
     "crates/muster-acp",
     "crates/muster-browser",
+    "crates/muster-web",
     "crates/musterd",
     "crates/muster-cli",
     "crates/muster-app-core",

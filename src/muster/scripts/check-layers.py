@@ -33,11 +33,15 @@ ALLOWED = {
     "muster-agent": {"muster-proto", "muster-core"},
     "muster-terminal": {"muster-proto", "muster-core"},
     "muster-browser": {"muster-paths"},
+    # The web window serves one foreign origin on a loopback port; it knows
+    # nothing of Muster's own types.
+    "muster-web": set(),
     # OS adapters: what only the operating system provides, behind traits.
     "muster-platform": {"muster-proto", "muster-agent", "muster-store", "muster-core"},
     # Composition: the daemon and its command line.
     "musterd": {
         "muster-browser",
+        "muster-web",
         "muster-core",
         "muster-net",
         "muster-proto",

@@ -14,6 +14,7 @@ pub mod ghostty;
 pub mod handler;
 pub mod locked_use;
 pub mod network;
+pub mod web;
 mod presence;
 
 mod diagnostics;
@@ -223,6 +224,10 @@ pub struct Daemon {
     tmux: Arc<Terminal>,
     platform: Arc<dyn Platform>,
     vnet: Mutex<Option<Arc<Vnet>>>,
+    /// The web window the policy asks for, if any (ADR 0049). Members' streams
+    /// hold a reference while they are served; the last one to go closes its
+    /// socket, so moving the window is: take it, then open the new one.
+    pub(crate) web: tokio::sync::Mutex<Option<Arc<muster_web::Window>>>,
     #[cfg(target_os = "macos")]
     vnet_helper: Mutex<Option<muster_platform::macos::nethelper::NetHelper>>,
     /// Fires whenever roster, peers-of-interest or pending joins change.
@@ -356,6 +361,7 @@ impl Daemon {
             tmux,
             platform,
             vnet: Mutex::new(None),
+            web: tokio::sync::Mutex::new(None),
             #[cfg(target_os = "macos")]
             vnet_helper: Mutex::new(None),
             changed,
@@ -396,6 +402,11 @@ impl Daemon {
         }
         if daemon.config.vnet {
             daemon.maybe_start_vnet().await;
+        }
+        // A window the owner opened earlier is open again after a restart; a
+        // port it can no longer bind is logged, not fatal.
+        if let Err(error) = daemon.sync_web_window().await {
+            log::warn!("web window: {error}");
         }
         if let Some(path) = daemon.config.authorized_keys.clone() {
             let task = tokio::spawn(authorized_keys::run(Arc::downgrade(&daemon), path));
@@ -869,6 +880,14 @@ impl ServiceHandler for RemoteService {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
         let daemon = self.daemon.clone();
         Box::pin(async move {
+            // The web window has a service of its own rather than a port: a
+            // member reaches it only through here, under the browser's scopes.
+            if hello.service == web::SERVICE && hello.version == web::VERSION {
+                if let Some(daemon) = daemon.upgrade() {
+                    web::serve(&daemon, peer, send, recv).await;
+                }
+                return;
+            }
             if hello.service != SERVICE || hello.version != SERVICE_VERSION {
                 log::info!(
                     "{} asked for unknown service {}/{}",

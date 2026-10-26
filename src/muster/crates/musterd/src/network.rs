@@ -544,6 +544,9 @@ impl Daemon {
             offer_agent: policy.offer_agent,
             offer_terminal: policy.offer_terminal,
             offer_tasks: policy.offer_tasks,
+            web_window: policy.web_window.as_ref().map(|window| v1::WebWindow {
+                origin: window.origin.clone(),
+            }),
         }
     }
 
@@ -559,10 +562,54 @@ impl Daemon {
             offer_agent: view.offer_agent,
             offer_terminal: view.offer_terminal,
             offer_tasks: view.offer_tasks,
+            web_window: view
+                .web_window
+                .as_ref()
+                .map(|window| -> Result<_, Error> {
+                    // Refused here rather than logged later: whoever sets the
+                    // policy is the one who can correct it.
+                    window.origin.parse::<muster_web::Origin>().map_err(|error| {
+                        Error::Invalid(format!("web window: {error}"))
+                    })?;
+                    Ok(muster_core::policy::WebWindow {
+                        origin: window.origin.clone(),
+                    })
+                })
+                .transpose()?,
         };
         self.store().set_policy(&policy)?;
         *self.policy().write().unwrap() = policy;
         let _ = self.changed.send(());
+        Ok(())
+    }
+
+    /// Opens, moves or closes the web window so that it matches the policy.
+    /// Called when the daemon starts and whenever the policy changes.
+    pub async fn sync_web_window(&self) -> Result<(), Error> {
+        let wanted = self.policy().read().unwrap().web_window.clone();
+        let mut held = self.web.lock().await;
+        let Some(wanted) = wanted else {
+            if held.take().is_some() {
+                log::info!("web window closed");
+            }
+            return Ok(());
+        };
+        let origin = wanted
+            .origin
+            .parse::<muster_web::Origin>()
+            .map_err(|error| Error::Invalid(error.to_string()))?;
+        if held.as_ref().is_some_and(|open| open.origin() == &origin) {
+            return Ok(());
+        }
+        // The old window holds its socket until it is dropped.
+        held.take();
+        // The browser fetches, not the daemon: the session for the site is
+        // the person's, held in Chrome (ADR 0026).
+        let upstream = crate::web::Browser::new(muster_browser::socket_in(&self.config.dir));
+        let window = muster_web::Window::open(origin, &crate::web::socket_in(&self.config.dir), upstream)
+            .await
+            .map_err(|error| Error::Unavailable(format!("web window: {error}")))?;
+        *held = Some(Arc::new(window));
         Ok(())
     }
 }
