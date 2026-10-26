@@ -136,9 +136,11 @@ is involved. The configured application URL remains part of container setup.
 See ADR 0053 for the separate, still-unimplemented desktop execution mapping.
 
 To move existing data, disable keep-alive and save first, finish running tasks,
-then stop the selected container using Apple `container stop`. Choose a new,
-nonexistent directory on the same filesystem and save again. Rust moves the data
-and keeps an old-path symlink so existing task and mount paths continue to work.
-Re-enable keep-alive after saving. The destination parent must exist; a different
-filesystem requires a separate manual migration. Do not remove the compatibility
-symlink while the container still uses that mount path.
+then stop the selected container using Apple `container stop`. Complete an
+attended offline migration of its data and all bind mounts, including the guest
+workspace path and daemon workspace configuration. Remove the old path; do not
+retain a compatibility symlink. Settings accepts the new root only after the
+old path is absent and the stopped container inventory confirms the required
+mounts. It never moves data or rewrites Apple's private container metadata.
+See ADRs 0052/0054 for the migration and verification boundary. Re-enable
+keep-alive only after saving the verified new root.

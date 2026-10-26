@@ -167,17 +167,14 @@ impl Manager {
             if row.is_some() && c.container_name != old.container_name {
                 return Err(Error::Invalid("Keep the installed container name".into()));
             }
-            if row.is_some() && c.data_dir != old.data_dir {
-                if row
-                    .as_ref()
-                    .is_some_and(|r| r["status"]["state"] == "running")
-                {
+            if let Some(row) = row.as_ref()
+                && c.data_dir != old.data_dir
+            {
+                if row["status"]["state"] == "running" {
                     return Err(Error::Conflict("Turn off keep-alive and stop the container before moving its data directory".into()));
                 }
-                relocate(Path::new(&old.data_dir), Path::new(&c.data_dir))?;
-                if c.mount_dir.is_empty() {
-                    c.mount_dir = old.data_dir.clone();
-                }
+                accept_migrated_root(&old, &c, row)?;
+                c.mount_dir = c.data_dir.clone();
             }
             if action == v1::multica_request::Action::Install
                 && (row.is_none() || (c.managed && !c.installed))
@@ -481,38 +478,50 @@ fn validate(r: v1::MulticaRequest, old: &Config) -> Result<Config, Error> {
         mount_dir: old.mount_dir.clone(),
     })
 }
-#[cfg(unix)]
-fn relocate(old: &Path, new: &Path) -> Result<(), Error> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    if old.components().count() < 3
-        || home
-            .as_ref()
-            .is_some_and(|h| old == h || old == h.join("Documents"))
+// A save adopts a completed offline migration. It never creates a legacy
+// symlink or edits Apple's version-specific container metadata.
+fn accept_migrated_root(old: &Config, new: &Config, row: &serde_json::Value) -> Result<(), Error> {
+    let old_path = Path::new(&old.data_dir);
+    let new_path = Path::new(&new.data_dir);
+    if !matches!(old_path.symlink_metadata(), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        || !new_path.is_dir()
+        || new_path.is_symlink()
     {
-        return Err(Error::Invalid(
-            "Refusing to move a home or system directory".into(),
+        return Err(Error::Conflict(
+            "Complete the offline data migration and remove the old path before saving; no compatibility link is created".into(),
         ));
     }
-    if new.exists()
-        || new.symlink_metadata().is_ok()
-        || new.starts_with(old)
-        || old.is_symlink()
-        || old.parent().is_none()
-    {
-        return Err(Error::Invalid(
-            "Migration needs a new, non-nested directory and an ordinary source directory".into(),
+    let mounts = row["configuration"]["mounts"].as_array();
+    let mounted = |source: &Path, destination: &Path| {
+        mounts.is_some_and(|mounts| {
+            mounts.iter().any(|mount| {
+                mount["source"].as_str() == source.to_str()
+                    && mount["destination"].as_str() == destination.to_str()
+            })
+        })
+    };
+    let matches = if new.managed {
+        mounted(new_path, Path::new("/muster"))
+            && mounted(&new_path.join("config"), Path::new("/root/.multica"))
+            && mounted(&new_path.join("workspaces"), &new_path.join("workspaces"))
+    } else {
+        mounted(new_path, new_path)
+    };
+    let retains_old = mounts.is_some_and(|mounts| {
+        mounts.iter().any(|mount| {
+            ["source", "destination"].iter().any(|key| {
+                mount[key]
+                    .as_str()
+                    .is_some_and(|path| Path::new(path).starts_with(old_path))
+            })
+        })
+    });
+    if !matches || retains_old {
+        return Err(Error::Conflict(
+            "Update the stopped container's bind mounts to the new data root before saving".into(),
         ));
-    }
-    std::fs::rename(old, new).map_err(io)?;
-    if let Err(e) = std::os::unix::fs::symlink(new, old) {
-        std::fs::rename(new, old).map_err(io)?;
-        return Err(io(e));
     }
     Ok(())
-}
-#[cfg(not(unix))]
-fn relocate(_: &Path, _: &Path) -> Result<(), Error> {
-    Err(Error::Unavailable("Requires macOS".into()))
 }
 fn private_write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     use std::io::Write;
@@ -731,20 +740,47 @@ mod tests {
         );
         assert!(default_root().ends_with("/Documents/Multica"));
     }
-    #[cfg(unix)]
     #[test]
-    fn migration_preserves_data_and_original_shared_path_without_overwriting() {
+    fn migration_requires_removed_old_root_and_matching_mounts() {
         let dir = tempfile::tempdir().unwrap();
-        let old = dir.path().join("legacy");
-        let new = dir.path().join("Documents Multica");
-        std::fs::create_dir(&old).unwrap();
-        std::fs::write(old.join("task"), "keep").unwrap();
-        relocate(&old, &new).unwrap();
-        assert!(old.is_symlink());
-        assert_eq!(std::fs::read(old.join("task")).unwrap(), b"keep");
-        assert_eq!(std::fs::read(new.join("task")).unwrap(), b"keep");
-        assert!(relocate(&new, &old).is_err());
-        assert_eq!(std::fs::read(new.join("task")).unwrap(), b"keep");
+        let old_path = dir.path().join("legacy");
+        let new_path = dir.path().join("Documents Multica");
+        std::fs::create_dir(&old_path).unwrap();
+        std::fs::write(old_path.join("task"), "keep").unwrap();
+        let old = Config {
+            data_dir: old_path.to_string_lossy().into(),
+            ..Default::default()
+        };
+        let mut new = Config {
+            data_dir: new_path.to_string_lossy().into(),
+            ..Default::default()
+        };
+        let mut row = serde_json::json!({"configuration":{"mounts":[{"source":new_path,"destination":new_path}]}});
+        assert!(accept_migrated_root(&old, &new, &row).is_err());
+        assert_eq!(std::fs::read(old_path.join("task")).unwrap(), b"keep");
+        assert!(!new_path.exists());
+        std::fs::rename(&old_path, &new_path).unwrap();
+        accept_migrated_root(&old, &new, &row).unwrap();
+        assert!(!old_path.exists());
+        assert_eq!(std::fs::read(new_path.join("task")).unwrap(), b"keep");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&new_path, &old_path).unwrap();
+            assert!(accept_migrated_root(&old, &new, &row).is_err());
+            std::fs::remove_file(&old_path).unwrap();
+        }
+        row["configuration"]["mounts"][0]["destination"] = serde_json::json!(old_path);
+        assert!(accept_migrated_root(&old, &new, &row).is_err());
+        new.managed = true;
+        row["configuration"]["mounts"] = serde_json::json!([
+            {"source":new_path,"destination":"/muster"},
+            {"source":new_path.join("config"),"destination":"/root/.multica"},
+            {"source":new_path.join("workspaces"),"destination":new_path.join("workspaces")}
+        ]);
+        accept_migrated_root(&old, &new, &row).unwrap();
+        row["configuration"]["mounts"][2]["source"] =
+            serde_json::json!(old_path.join("workspaces"));
+        assert!(accept_migrated_root(&old, &new, &row).is_err());
     }
 }
 

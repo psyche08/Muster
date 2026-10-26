@@ -20,6 +20,13 @@ Keep the existing migrated container and Documents/Multica root. Replace only
 the application bundle, with no old bundle backup. This is a targeted install;
 do not publish or alter the public desktop/iOS release feeds.
 
+Supersede ADR 0051's compatibility-link relocation: a Settings save must never
+retain or create the old data path. For an existing container, accept a changed
+root only after an attended offline migration has removed the old path and
+updated every managed bind mount. Reject a save before any filesystem or
+configuration change otherwise. Do not generically rewrite Apple's private
+container metadata; ADR 0052's migration was specific to a verified runtime.
+
 Keep the workbench read-only and preserve the existing container login.
 Do not advertise native execution or CLI fallback as implemented. Calibration
 must honor native input guards; a detected local-input conflict stops that
