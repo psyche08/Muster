@@ -203,6 +203,37 @@ Apple, while `spctl -a -t install` accepted the same bundle as "Notarized
 Developer ID" throughout. The gate was left as it is and the installation simply
 re-run; a transient ticket lookup is not a reason to weaken a signing check.
 
+### Provider end-to-end on the installed build
+
+A real send was exercised on Mac-A against an existing Codex session through the
+installed 1.0.94 daemon, with the owner choosing the target session. The prompt
+asked for a fixed one-line answer carrying a nonce and explicitly forbade file
+edits, commands and tool use, so the reply is attributable and the session's own
+work is untouched.
+
+The prompt reached the provider and the exact requested reply came back:
+
+    [text] user: ... 只回复一行文本：收到 E2E-155008-1310
+    [text] assistant: 收到 E2E-155008-1310
+
+It was a genuine provider round trip, not a local echo: the turn's own accounting
+records `model=gpt-6-astra`, 14 output tokens against a 143,148-token input with
+a 99.9% cache hit, and a known cost. The round trip completed inside five
+seconds, so the intermediate running state fell between polls and no activity
+transition is claimed. Dedup holds: the prompt appears exactly once in the
+transcript and the reply exactly once, with no repeated send.
+
+Two interface findings came out of setting this up, both worth knowing before
+the next acceptance run. `muster send` and `muster messages` require the **full**
+session id; `muster agents` prints ids truncated to eight characters, and a
+truncated id returns `NotFound`, which reads like a missing session rather than a
+malformed argument. The full ids come from the `agent_list` RPC. Separately, only
+sessions whose `native_app` column is set can be addressed at all — a session
+listed with `none` returns the same `NotFound` — and the listing can still show a
+session that no longer exists. Mac-C had exactly one addressable session, a live
+work session, which is why the test ran on Mac-A; all three machines run the same
+artifact, so the evidence is not weaker for it.
+
 ### Not claimed
 
 No Mac ran this build, so there is no installed runtime, relay, Vnet, RPC or
@@ -324,11 +355,13 @@ script that conflates them stalls exactly as this one did.
 
 ### Not claimed
 
-No cross-device RPC was exercised: the bundled CLI addresses only its own
-daemon, so each machine's RPC was verified locally and the transport between
-them by the six ping directions, not by a request crossing devices. No provider
-conversation was exercised, so there is no send, receipt or continuation
-evidence for 1.0.94, and the web window of ADR 0049 still has no acceptance of
-its own on any device — it shipped to the fleet without one. Physical iPhone
-installation and acceptance remain unverified, as for every earlier release. No
-Locked Use cycle, fault injection or new consent grant is claimed here.
+No cross-device send or RPC was exercised: the bundled CLI addresses only its
+own daemon, so each machine's RPC was verified locally, the transport between
+them by the six ping directions, and the provider path on one machine only. The
+send above was a Codex session; no Claude send, question card, approval or
+continued multi-turn reply was exercised, and the single 14-token answer is not
+evidence about longer replies or interruption. The web window of ADR 0049 still
+has no acceptance of its own on any device — it shipped to the fleet without
+one. Physical iPhone installation and acceptance remain unverified, as for every
+earlier release. No Locked Use cycle, fault injection or new consent grant is
+claimed here.

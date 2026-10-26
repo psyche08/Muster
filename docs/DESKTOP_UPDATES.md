@@ -150,6 +150,15 @@ must fetch from Apple, while `spctl -a -t install` on the same bytes reports
 inconclusive, re-check with `-v` and against `spctl`, and never weaken the gate
 to get past it.
 
+For a provider send acceptance through the bundled CLI, `muster send` and
+`muster messages` need the **full** session id. `muster agents` prints ids
+truncated to eight characters and a truncated id returns `NotFound`, which reads
+like a missing session rather than a malformed argument; the full ids come from
+the `agent_list` RPC. Only sessions whose `native_app` column is set can be
+addressed, a session listed with `none` returns the same `NotFound`, and the
+listing can show a session that no longer exists. The CLI addresses only its own
+daemon, so a cross-device send is not reachable this way.
+
 Release destination (confirmed 2026-09-30): connect as `${MUSTER_RELEASE_HOST}`
 over SSH port `${MUSTER_RELEASE_SSH_PORT}` and publish to `${MUSTER_RELEASE_ROOT}/desktop/`, served at
 the fixed HTTPS source above. Subsequent Mac releases use this distribution
