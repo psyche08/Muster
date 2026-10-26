@@ -43,13 +43,13 @@ records a specific decision and does not revive code on its delete list.
 
 | [0021](0021-desktop-startup-retry.md) | Accepted | Retry complete desktop startup through Shared Rust |
 
-| [0016](0016-ignore-the-scheduler-token-in-the-working-tree.md) | Accepted | Ignore the scheduler token that sits in the working tree |
-
 | [0022](0022-sanitize-current-public-tree.md) | Accepted | Sanitize the current public source tree |
 
 | [0023](0023-bootstrap-sanitized-repository.md) | Accepted | Bootstrap a sanitized repository with one commit |
 
 | [0024](0024-cloud-external-testing-opt-in.md) | Accepted; hosted configuration pending | Make Cloud external testing opt-in |
+
+| [0025](0025-ignore-the-scheduler-token-in-the-working-tree.md) | Accepted | Ignore the scheduler token that sits in the working tree |
 
 | [0026](0026-cloud-trust-and-native-diagnostics.md) | Accepted | Platform Cloud trust and bounded native diagnostics |
 
