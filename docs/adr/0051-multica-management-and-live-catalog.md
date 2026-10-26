@@ -96,3 +96,7 @@ available internally. Device/provider acceptance is recorded separately below.
 CLI syntax follows Apple's [container command reference](https://github.com/apple/container/blob/main/docs/command-reference.md).
 Android/HarmonyOS only hide the Chat picker item here; they were not built.
 iOS device build, physical-device push timing and WebKit site login remain unverified.
+
+The desktop WebKit page is superseded by the native read-only workbench in
+[ADR 0053](0053-multica-native-workbench-and-runtime-routing.md). Runtime execution
+and container management are not changed by that follow-up.

@@ -44,6 +44,7 @@ message Intent {
     DesktopSetupAction desktop_setup_action = 23;
     DesktopUpdateAction desktop_update_action = 24;
     muster.v1.MulticaRequest multica = 89;
+    muster.v1.MulticaBrowseRequest multica_browse = 90;
 
     OpenAgents open_agents = 30;
     OrcaCreate orca_create = 87;
@@ -437,6 +438,7 @@ message ViewModel {
   repeated DeviceLockedUseView device_locked_use = 33;
   DeviceActions device_actions = 32; // for selected_device on the DEVICE screen
   muster.v1.MulticaStatus multica = 35;
+  muster.v1.MulticaPage multica_page = 36;
   repeated Screen navigation_path = 34; // visible root through current screen
 }
 

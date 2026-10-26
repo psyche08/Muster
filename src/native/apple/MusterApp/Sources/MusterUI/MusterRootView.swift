@@ -213,7 +213,7 @@ public struct MusterRootView: View {
         case .home, .agents: HomeView(core: core, vm: vm)
         case .chat: ChatView(core: core, vm: vm).id("\(vm.chat.deviceID):\(vm.chat.session.id)")
         case .desktopChats: DesktopChatsView(core: core, vm: vm)
-        case .multica: MulticaView(core: core, status: vm.multica)
+        case .multica: MulticaView(core: core, status: vm.multica, page: vm.multicaPage)
         case .terminals: TerminalsView(core: core, vm: vm)
         case .terminal: TerminalScreen(core: core, vm: vm)
         case .browser: BrowserView(core: core, vm: vm)

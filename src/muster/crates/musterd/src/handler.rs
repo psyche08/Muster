@@ -60,7 +60,7 @@ fn access_for(req: &Req) -> Access {
         })
     };
     match req {
-        Req::Multica(_) => Access::LocalOnly,
+        Req::Multica(_) | Req::MulticaBrowse(_) => Access::LocalOnly,
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -1031,6 +1031,7 @@ async fn dispatch(
             };
             daemon.locked_use.extend(peer, r).await?
         }
+        Req::MulticaBrowse(r) => Resp::MulticaPage(daemon.multica.browse(r).await?),
         Req::Multica(r) => Resp::Multica(daemon.multica.request(r, &daemon.socket_path()).await?),
         Req::BrowserSetup(r) => {
             Resp::BrowserStatus(crate::browser::setup(daemon, r.install).await?)

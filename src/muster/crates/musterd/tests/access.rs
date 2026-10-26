@@ -241,6 +241,12 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
 
     assert!(unauthorized(
         &remote
+            .call(Req::MulticaBrowse(v1::MulticaBrowseRequest::default()))
+            .await
+    ));
+
+    assert!(unauthorized(
+        &remote
             .call(Req::DesktopUpdateLease(v1::DesktopUpdateLeaseRequest {}))
             .await
     ));

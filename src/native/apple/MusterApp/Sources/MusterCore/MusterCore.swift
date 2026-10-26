@@ -198,6 +198,12 @@ public final class MusterCore: MusterShell {
         }))
     }
 
+    public func multicaBrowse(_ request: Muster_V1_MulticaBrowseRequest) {
+        var intent = Muster_App_Intent()
+        intent.multicaBrowse = request
+        send(intent)
+    }
+
     public func multica(_ request: Muster_V1_MulticaRequest) { send(.multica(request)) }
 
     public func desktopUpdate(_ action: Muster_App_DesktopUpdateAction.Action) { send(.desktopUpdateAction(.with { $0.action = action })) }

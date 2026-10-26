@@ -104,6 +104,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0052](0052-targeted-multica-deployment.md) | Accepted | Deploy Multica management and relocate the existing workspace root |
 
+| [0053](0053-multica-native-workbench-and-runtime-routing.md) | Accepted | Native read-only Multica workbench; desktop execution still pending |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
