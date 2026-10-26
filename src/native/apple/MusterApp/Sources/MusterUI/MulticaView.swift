@@ -18,7 +18,7 @@ struct MulticaSettings: View {
             TextField("Multica 服务 HTTPS 地址", text: $draft.serverURL)
             TextField("Multica 页面 HTTPS 地址", text: $draft.appURL)
             Toggle("保持 Multica 容器和 daemon 运行", isOn: $draft.keepAlive)
-            Text("新安装默认使用 ~/Documents/Multica。迁移已有数据前，请先关闭保活并停止容器；保存后移动数据，保留旧挂载路径的兼容链接。")
+            Text("新安装默认使用 ~/Documents/Multica。修改已有容器的数据目录前，需关闭保活、停止容器，完成数据与挂载迁移并移除旧路径，再保存设置。")
                 .font(.footnote).foregroundStyle(.secondary)
             HStack {
                 Button(status.installed ? "保存设置" : "安装 Multica") {

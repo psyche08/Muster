@@ -100,3 +100,9 @@ iOS device build, physical-device push timing and WebKit site login remain unver
 The desktop WebKit page is superseded by the native read-only workbench in
 [ADR 0053](0053-multica-native-workbench-and-runtime-routing.md). Runtime execution
 and container management are not changed by that follow-up.
+
+### Data relocation supersession
+
+ADR [0054](0054-native-multica-targeted-installation.md) supersedes the
+compatibility-symlink decision. Settings adopts a verified offline migration
+with no old path; it no longer moves data while retaining the original mount.

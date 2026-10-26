@@ -106,6 +106,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0053](0053-multica-native-workbench-and-runtime-routing.md) | Accepted | Native read-only Multica workbench; desktop execution still pending |
 
+| [0054](0054-native-multica-targeted-installation.md) | Accepted | Targeted installation of the native Multica workbench |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
