@@ -43,13 +43,13 @@ records a specific decision and does not revive code on its delete list.
 
 | [0021](0021-desktop-startup-retry.md) | Accepted | Retry complete desktop startup through Shared Rust |
 
-| [0016](0016-ignore-the-scheduler-token-in-the-working-tree.md) | Accepted | Ignore the scheduler token that sits in the working tree |
-
 | [0022](0022-sanitize-current-public-tree.md) | Accepted | Sanitize the current public source tree |
 
 | [0023](0023-bootstrap-sanitized-repository.md) | Accepted | Bootstrap a sanitized repository with one commit |
 
 | [0024](0024-cloud-external-testing-opt-in.md) | Accepted; hosted configuration pending | Make Cloud external testing opt-in |
+
+| [0025](0025-ignore-the-scheduler-token-in-the-working-tree.md) | Accepted | Ignore the scheduler token that sits in the working tree |
 
 | [0026](0026-cloud-trust-and-native-diagnostics.md) | Accepted | Platform Cloud trust and bounded native diagnostics |
 
@@ -95,6 +95,10 @@ records a specific decision and does not revive code on its delete list.
 | [0047](0047-transcript-reading-anchor-parity.md) | Accepted | One reading-anchor policy for both Apple transcripts |
 
 | [0048](0048-admitted-send-acknowledgement.md) | Accepted | Acknowledge a send against the conversation, not only its outcome |
+
+| [0049](0049-web-window-onto-one-origin.md) | Proposed | A web window onto one origin, fetched by the person's own browser |
+
+| [0050](0050-paired-release-1-0-94.md) | Accepted | Land the outstanding branches and release them as 1.0.94 (85) |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

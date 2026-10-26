@@ -3,7 +3,9 @@
 set -euo pipefail
 base=${1:-origin/main}
 git rev-parse --verify "$base^{commit}" >/dev/null
-records=$(git diff --name-only --diff-filter=AM "$base"...HEAD -- 'docs/adr/[0-9][0-9][0-9][0-9]-*.md')
+# R counts too: renumbering a record is a change to it, and git reports that
+# as a rename, which an AM-only filter cannot see.
+records=$(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'docs/adr/[0-9][0-9][0-9][0-9]-*.md')
 if [ -z "$records" ]; then
   echo "check-adr: add or update a numbered docs/adr/NNNN-*.md record for this change" >&2
   exit 1

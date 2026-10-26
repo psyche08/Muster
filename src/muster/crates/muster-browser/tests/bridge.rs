@@ -4,6 +4,65 @@ use serde_json::json;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
+/// The window's operation (ADR 0049). The browser says who the request is, so
+/// a caller cannot name the host or hand over a session of its own, and
+/// reaching a site waits longer than driving a tab already on screen.
+#[test]
+fn a_window_fetch_leaves_identity_to_the_browser() {
+    let fetch = |method: &str, headers: Vec<(String, String)>| Request::Fetch {
+        url: "https://example.test/issues".into(),
+        method: method.into(),
+        headers,
+        body: String::new(),
+    };
+    let header = |name: &str| vec![(name.to_string(), "x".to_string())];
+
+    assert!(fetch("GET", header("accept")).validate().is_ok());
+    for refused in ["cookie", "host", "connection", "content-length"] {
+        assert!(
+            fetch("GET", header(refused)).validate().is_err(),
+            "{refused} is the browser's to set"
+        );
+    }
+    assert!(
+        fetch("GET", vec![("x".into(), "a\r\nevil: 1".into())])
+            .validate()
+            .is_err(),
+        "a header value spans one line"
+    );
+    for refused in ["CONNECT", "TRACE", "get"] {
+        assert!(fetch(refused, Vec::new()).validate().is_err(), "{refused}");
+    }
+    for refused in [
+        "file:///tmp/private",
+        "javascript:alert(1)",
+        "chrome://settings",
+        "https://user:password@example.com",
+    ] {
+        assert!(
+            Request::Fetch {
+                url: refused.into(),
+                method: String::new(),
+                headers: Vec::new(),
+                body: String::new(),
+            }
+            .validate()
+            .is_err(),
+            "{refused}"
+        );
+    }
+
+    // Reading a page replays safely; anything else may have changed the site.
+    assert!(!fetch("GET", Vec::new()).is_mutation());
+    assert!(!fetch("", Vec::new()).is_mutation());
+    assert!(fetch("POST", Vec::new()).is_mutation());
+
+    assert_eq!(fetch("GET", Vec::new()).deadline(), FETCH_DEADLINE);
+    assert_eq!(Request::Ping {}.deadline(), DEADLINE);
+    assert_eq!(fetch("GET", Vec::new()).max_request(), MAX_FETCH_REQUEST);
+    assert_eq!(Request::Ping {}.max_request(), MAX_REQUEST);
+}
+
 #[test]
 fn schema_rejects_arbitrary_cdp_and_requires_document_bound_explicit_targets() {
     for value in [

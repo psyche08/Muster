@@ -21,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 muster-browser = { path = "../muster-browser" }
+muster-web = { path = "../muster-web" }
 muster-core = { path = "../muster-core" }
 muster-net = { path = "../muster-net" }
 muster-proto = { path = "../muster-proto" }
@@ -40,6 +41,7 @@ env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true
+data-encoding.workspace = true
 quinn.workspace = true
 libc.workspace = true
 reqwest.workspace = true

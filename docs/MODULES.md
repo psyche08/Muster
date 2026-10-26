@@ -22,6 +22,7 @@ depends only on the layers below it, with the two exceptions named in §2.
 │ muster-platform (macOS: AX, lock state, SEP, NetHelper XPC, Locked Use)    │
 ├─ 3 Services (the integration layer) ──────────────────────────────────────┤
 │ muster-agent (Agent Halo)   muster-terminal (iTerm2 / SSH)   muster-browser│
+│ muster-web (the one-origin web window)                                     │
 ├─ 2 Infrastructure ────────────────────────────────────────────────────────┤
 │ muster-store   muster-rpc   muster-net   muster-relay   muster-apns        │
 ├─ 1 Foundation (no I/O, no runtime) ───────────────────────────────────────┤
@@ -33,7 +34,7 @@ depends only on the layers below it, with the two exceptions named in §2.
 |---|---|---|---|
 | 1 Foundation | `muster-core`, `muster-proto`, `muster-paths` | Device identity, the signed roster and its fold, scopes, local policy, the one `authorize()`, Locked Use proofs, the desktop app registry (`apps`); protobuf schemas; state-directory paths | I/O, async, platform code, a dependency on any other workspace crate |
 | 2 Infrastructure | `muster-store`, `muster-rpc`, `muster-net`, `muster-relay`, `muster-apns` | SQLite state and the OperationLedger; muster-rpc envelopes over any byte stream; the QUIC link, paths, gossip, pairing, forwarding, vnet; the dumb relay; the APNs provider | Product semantics (what an agent session or a terminal is), authorization decisions beyond what `muster-core` exports |
-| 3 Services | `muster-agent`, `muster-terminal`, `muster-browser` | Agent Halo: viewers, controllers, Chat mode, question cards, queues, receipts, **app profiles**; the iTerm2 client, VT grid, SSH client; the Chrome native host | OS calls (no Accessibility, no Apple Events, no XPC); knowledge of the daemon or the shells |
+| 3 Services | `muster-agent`, `muster-terminal`, `muster-browser`, `muster-web` | Agent Halo: viewers, controllers, Chat mode, question cards, queues, receipts, **app profiles**; the iTerm2 client, VT grid, SSH client; the Chrome native host; the web window onto one foreign origin (ADR 0049) | OS calls (no Accessibility, no Apple Events, no XPC); knowledge of the daemon or the shells |
 | 4 OS adapters | `muster-platform` | Traits for what only the OS provides, and their macOS implementations: Accessibility driving of the profiled apps, lock state, input counter, code signing, Secure Enclave signing, NetHelper XPC, Locked Use console helpers | Business decisions: it executes a profile's strategies and the engine's checks, it does not choose them; a dependency on `musterd` or `muster-app-core` |
 | 5 Composition | `musterd`, `muster-cli`, `muster-acp` | The daemon composes identity, roster, link, services, authorization and the Locked Use actor; the CLI and its ACP runtime adapter speak muster-rpc to it | Logic that another layer should own (a provider branch belongs in a profile, a protocol rule in `muster-core` / `muster-net`) |
 | 6 Clients | `muster-app-core`, `muster-ffi` | One reducer per feature, ViewModel projections, subscriptions, in-app SSH; nine C functions | Anything a shell could reconstruct business state from: the shell receives display-only ViewModels and sends Intents |
@@ -49,9 +50,9 @@ muster-core      → (none)                     muster-proto → (none)     must
 muster-store     → core                       muster-rpc   → proto, core
 muster-net       → core                       muster-relay → core, net  muster-apns → (none)
 muster-agent     → proto, core                muster-terminal → proto, core
-muster-browser   → paths
+muster-browser   → paths                      muster-web   → (none)
 muster-platform  → proto, agent, store, core
-musterd          → browser, core, net, proto, store, rpc, terminal, agent, platform, paths
+musterd          → browser, web, core, net, proto, store, rpc, terminal, agent, platform, paths
 muster-acp       → proto, rpc
 muster-cli       → proto, rpc, paths, browser, acp
 muster-app-core  → agent, proto, rpc, musterd, terminal, core, net

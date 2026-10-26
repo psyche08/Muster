@@ -2,7 +2,14 @@
 
 Chrome web accessibility is a local Agent Halo capability. JavaScript adapts `chrome.debugger`,
 `chrome.tabs`, and Native Messaging; Shared Rust `muster-browser` owns request types,
-validation, serial scheduling, the 3-second execution deadline, AX tree pruning, and release after 15 seconds idle. There is no Python runtime.
+validation, serial scheduling, each operation's execution deadline, AX tree pruning, and release after 15 seconds idle. There is no Python runtime.
+
+The extension also makes one request on the browser's behalf for the web window
+(ADR 0049): `fetch` reaches a site as this browser, with the session the person is
+already signed in with, and opens no tab. It asks for no site access when installed
+(`optional_host_permissions`, nothing required) and refuses until the person grants
+that one origin in `chrome://extensions`. The caller may not send `cookie`, `host`,
+`connection` or `content-length`, and `Set-Cookie` never travels back.
 
 ```text
 muster browser → muster-browser (Rust client / private Unix socket)
@@ -85,6 +92,12 @@ src/muster/target/release/muster browser '{"op":"sessions"}'
 src/muster/target/release/muster browser '{"op":"detach","tabId":123}'
 ```
 
+```sh
+# The web window's own operation; the reply is the site's bytes, base64.
+src/muster/target/release/muster browser \
+  '{"op":"fetch","url":"https://example.test/issues","method":"GET","headers":[["accept","text/html"]],"body":""}'
+```
+
 `open {url}` and `close {tabId}` are also supported. Open returns the new tab ID without waiting for page load;
 a subsequent snapshot queries the actual page state. Every request involving an existing tab must specify tabId;
 input must specify a node and does not rely on current focus. Input from old snapshots is rejected after the document changes.
@@ -96,8 +109,9 @@ This does not freeze the page: the DOM can still change within the same document
   Directory mode 0700, socket mode 0600; a file lock limits use to one Chrome profile. A second host does not take over an old instance.
 - The socket returns ready before receiving one request. The Rust client does not queue writes in advance while the host is busy.
   Native Messaging and the local socket both use a native-endian u32 length followed by UTF-8 JSON.
-  Requests are ≤256 KiB and responses ≤8 MiB; Rust checks lengths before allocation. Unknown fields and arbitrary CDP/eval are rejected.
-- Connection/host execution deadline: 3 seconds. A complete CLI call has an additional 4-second outer deadline.
+  Requests are ≤256 KiB (a `fetch`, which carries a body, ≤768 KiB — Chrome caps one message to the extension at 1 MB)
+  and responses ≤8 MiB, with a `fetch` reply's body ≤5 MiB; Rust checks lengths before allocation. Unknown fields and arbitrary CDP/eval are rejected.
+- Connection/host execution deadline: 3 seconds, and 20 for a `fetch`, which is network-bound rather than local. A complete CLI call has one further second.
   Execution timeout or loss of the native channel closes the host without replay; writes return outcome unknown.
   The extension only restores the Native Messaging connection, never resends executed requests, and releases the debugger after disconnection.
 - After 15 seconds without requests, Rust sends detachAll, releasing only tabs attached by this extension.

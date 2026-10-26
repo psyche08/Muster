@@ -124,6 +124,37 @@ enum Command {
         /// Stop the Accessibility controller from driving this app (bundle id)
         #[arg(long = "ax-remove")]
         ax_remove: Vec<String>,
+        /// Lend this machine's browser to members for this one origin
+        /// ("https://example.test"): they read through it with
+        /// `browser.view` and act with `browser.control`.
+        #[arg(long)]
+        web_origin: Option<String>,
+        /// Close the web window
+        #[arg(long, conflicts_with = "web_origin")]
+        close_web: bool,
+    },
+    /// A loopback port here standing for a port on a member's loopback. The
+    /// port stays open until this command ends.
+    Forward {
+        /// Member: device id, fingerprint prefix or name
+        device: String,
+        /// The port on that member's loopback
+        port: u16,
+        /// The port to listen on here; 0 asks the operating system for one
+        #[arg(long, default_value_t = 0)]
+        local_port: u16,
+    },
+    /// A loopback port here standing for a member's web window onto one
+    /// origin, read with that member's browser. Open it in a browser here;
+    /// the port stays open until this command ends.
+    Window {
+        /// Member: device id, fingerprint prefix or name
+        device: String,
+        /// The origin of the member's window ("https://example.test")
+        origin: String,
+        /// The port to listen on here; 0 asks the operating system for one
+        #[arg(long, default_value_t = 0)]
+        local_port: u16,
     },
     /// Agent Halo browser. Remote locked operations can be reviewed and authenticated in Muster.
     Browser {
@@ -255,6 +286,45 @@ fn op_id() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     format!("cli-{nanos}-{}", std::process::id())
+}
+
+/// Holds a loopback port here for a member's `port`, or for its web window
+/// onto `window` when that is set, until the call ends.
+async fn forward(
+    client: &Client,
+    device: &str,
+    local_port: u16,
+    port: u32,
+    window: String,
+) -> anyhow::Result<()> {
+    let device = resolve_device(client, device).await?;
+    let what = if window.is_empty() {
+        format!("127.0.0.1:{port}")
+    } else {
+        format!("its window onto {window}")
+    };
+    let mut call = client
+        .start(Req::ForwardOpen(v1::ForwardOpenRequest {
+            device: device.clone(),
+            port,
+            local_port: u32::from(local_port),
+            window,
+        }))
+        .await?;
+    while let Some(ev) = call.events.recv().await {
+        if let v1::event::Ev::ForwardOpened(opened) = ev {
+            println!(
+                "127.0.0.1:{} stands for {what} on {}",
+                opened.local_port,
+                &device[..12]
+            );
+            break;
+        }
+    }
+    // The port lives as long as this call: until the daemon stops or this
+    // command is interrupted. A member's refusal is per connection.
+    call.finish().await?;
+    Ok(())
 }
 
 async fn resolve_device(client: &Client, text: &str) -> anyhow::Result<String> {
@@ -811,6 +881,8 @@ async fn main() -> anyhow::Result<()> {
             offer_tasks,
             ax_allow,
             ax_remove,
+            web_origin,
+            close_web,
         } => {
             let Resp::Policy(mut policy) =
                 client.call(Req::PolicyGet(v1::PolicyGetRequest {})).await?
@@ -823,7 +895,9 @@ async fn main() -> anyhow::Result<()> {
                 || offer_terminal.is_some()
                 || offer_tasks.is_some()
                 || !ax_allow.is_empty()
-                || !ax_remove.is_empty();
+                || !ax_remove.is_empty()
+                || web_origin.is_some()
+                || close_web;
             if change {
                 for bundle in ax_allow {
                     if !policy.ax_allowlist.contains(&bundle) {
@@ -846,6 +920,11 @@ async fn main() -> anyhow::Result<()> {
                 if let Some(v) = offer_tasks {
                     policy.offer_tasks = v;
                 }
+                if close_web {
+                    policy.web_window = None;
+                } else if let Some(origin) = web_origin {
+                    policy.web_window = Some(v1::WebWindow { origin });
+                }
                 if let Resp::Policy(p) = client
                     .call(Req::PolicySet(v1::PolicySetRequest {
                         policy: Some(policy.clone()),
@@ -862,6 +941,37 @@ async fn main() -> anyhow::Result<()> {
                 policy.offer_agent, policy.offer_terminal, policy.offer_tasks
             );
             println!("ax allowlist: {}", policy.ax_allowlist.join(", "));
+            match &policy.web_window {
+                None => println!("web window: off"),
+                Some(window) => {
+                    println!("web window: {} through this machine's browser", window.origin);
+                    println!(
+                        "  members read with browser.view and act with browser.control{}",
+                        if policy.allow_locked_control {
+                            ", also while the screen is locked"
+                        } else {
+                            "; not while the screen is locked"
+                        }
+                    );
+                    if !policy.offer_agent {
+                        println!("  closed to members while offer agent is off");
+                    }
+                }
+            }
+        }
+        Command::Forward {
+            device,
+            port,
+            local_port,
+        } => {
+            forward(&client, &device, local_port, u32::from(port), String::new()).await?;
+        }
+        Command::Window {
+            device,
+            origin,
+            local_port,
+        } => {
+            forward(&client, &device, local_port, 0, origin).await?;
         }
         Command::Browser {
             request,
