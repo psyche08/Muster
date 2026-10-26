@@ -57,3 +57,42 @@ paths and observations; neither condition permits CLI fallback while the
 application is installed. Test those cases without closing or replacing the
 owner's unrelated working windows. Desktop-first routing also still needs a
 task-scoped credential channel and the scheduler's actual provider protocol.
+
+## Native new-page routes observed in installed bundles
+
+Read-only inspection on the target found the following routes in ChatGPT
+26.1021.31345 and Claude 3.6556.2. These are observed implementation details,
+not a claim of a stable API or a completed native-create adapter. No route was
+invoked during this review because another device owned the console.
+
+| Provider | Observed native entry | What the implementation establishes |
+| --- | --- | --- |
+| Codex in ChatGPT.app | `codex://new?mode=codex&path=<encoded-absolute-directory>` | The parser accepts a new-thread route, explicit app mode and path. The handler checks that the path is a directory, resolves or creates a local project, then navigates to the new-page composer. |
+| Claude Code in Claude.app | `claude://code/new?folder=<encoded-absolute-directory>` | The installed app's own Finder service constructs this form. The Code URL handler forwards the folder into its native new-page flow. |
+
+Codex also accepts a `prompt` query field, which the inspected handler projects
+as `prefillPrompt`; that is not a Send or a provider receipt. Claude's Code
+handler accepts `q`/`prompt` and forwards it as `q`; whether that flow merely
+prefills or takes any further action still needs attended verification. Do not
+put scheduler tokens, task credentials or private environment values in either
+URL. Prefer directory-only navigation and the existing guarded draft/echo/Send
+path once the exact new form is bound.
+
+These entries may replace menu and native folder-panel traversal in a future
+adapter, but they do not answer which window will be reused, whether a current
+draft is preserved, or how a closed-window application recovers. Verify those
+properties separately. Dispatch to the verified application bundle instead of
+the default scheme handler; percent-encode directory values, reject unsupported
+providers and invalid paths, and recheck the full selected directory and local
+execution mode after navigation. A successful `open` is only dispatch evidence.
+In Codex, resolving a new directory may create a saved project; that side effect
+must be accounted for in the product flow and acceptance fixture.
+
+The resumed existing-session test established a separate prerequisite: a
+manual Locked Use transaction can own an otherwise unlocked console. Its owner
+must release it before a local diagnostic operates the desktop. A direct AX
+script, alternate deep link, different requester or CLI fallback must not be
+used to evade that console barrier. At this point the prior single Claude
+operator test remains the only confirmed native first-turn result; production
+new-session routing, existing-session acceptance and both launch/no-window
+cases are still outstanding.
