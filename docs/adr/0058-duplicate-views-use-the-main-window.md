@@ -70,4 +70,31 @@ many windows open; that path is unchanged.
 - **Source and tests:** Shared Rust tests cover the main window, the frontmost
   fallback with minimized windows skipped, and each refusal. The touched crates'
   tests and Clippy with warnings denied are recorded in the pull request.
-- **Builds, installation and acceptance:** recorded below once performed.
+
+### Build, installation and acceptance on 2026-10-27
+
+- **Tests:** six `native_scan` tests including the three for `choose_view`;
+  `muster-core`, `muster-agent`, `muster-platform` and `musterd` 499 passed,
+  0 failed; Clippy with warnings denied passed.
+- **Build:** 1.1.1 (91) from clean `299166e7ff6c14f94fa519b2982b59caf6bbc3fc`,
+  with ADR 0057's gates, signing and packaging. Apple notarization
+  `9100b14e-0ae3-4520-beec-44d54ab5f514` Accepted, stapled, Gatekeeper
+  "Notarized Developer ID". Portable ZIP SHA-256
+  `5372d9b01108cd78b9a5f27b8d15b5bf7ad0aa4fc2229d579bcc3b0940a63d05`, daemon
+  SHA-256 `dec4ef2cd7efcfa0d854634d5a55935706212b14878c09fb49772759ef3da892`.
+- **Installation:** M4Pro (13:29 UTC) and the Mac Mini (13:30) by ADR 0057's
+  installer; unchanged identities, installed daemon equal to the package's,
+  Locked Use plugin re-verified, relay and Vnet up, M4Pro `direct` with 3/3
+  pings. M1Max was off the network and still runs 1.1.0.
+- **Acceptance (M4Pro, owner's phone, Locked Use):** at 13:32:17 UTC the
+  signed operation unlocked M4Pro under the cover. The scan found nine web
+  areas, three on «分析 licong41 网络不可访问», with window ranks 0 (main), 1
+  and 7, and chose the main window's view (`chosen=Some(0)`); every scan in the
+  operation chose the same view. The composer was empty, the exact echo arrived
+  in 236 ms, Send was pressed once, the Codex receipt arrived after 999 ms,
+  the ledger recorded `applied`, and the console relocked under the cover. The
+  conversation's transcript holds the owner's message as its user record, and
+  Codex began working on it. No `CoverLost` or `WatchdogLost` occurred.
+
+Not exercised: the frontmost-window fallback (the app reported a main window),
+the minimized-window exclusion, and the remaining refusals on a device.

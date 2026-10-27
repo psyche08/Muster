@@ -56,6 +56,61 @@ published. No old application bundle is retained.
 
 ## Verification
 
-Pending: release build, provenance and Presence gates, notarization, guarded
-installation, unchanged device identity, service recovery and the device
-acceptance described above.
+The owner consented on 2026-10-27 to replacing M4Pro's branch build, to
+acceptance sends only into dedicated conversations, and to landing after
+acceptance.
+
+### Build and installation on 2026-10-27
+
+- **Source and gates:** clean source `7c02cea1ec1ac6fc3fe8c7f0db4e17ca166529f9`.
+  `verify-release.sh` passed (stamp equals HEAD, clean tree, released ancestry,
+  fingerprints) and Presence signing verified on the built and packed bundles.
+- **Signing:** this Mac holds the team's older Developer ID certificate (valid
+  to 2027-02) and its "Muster Developer ID Presence" profile; the "Presence G2"
+  certificate used for 1.0.94 and 1.0.98 is held only on the other two Macs.
+  Both profiles grant identical entitlements, and every designated requirement
+  in the bundle is team-based (`certificate leaf[subject.OU] = "89LGY6BD53"`),
+  so TCC grants, Locked Use trust and Secure Enclave keychain groups are
+  unaffected. The gate checks that the embedded profile authorizes the signing
+  certificate, which it does.
+- **Package:** Velopack 1.2.158 with `package-macos.sh`'s gates and `vpk pack`
+  arguments; the feed signature step was not run because nothing is published
+  and the offline feed key is not on the build Mac. Apple notarization
+  `49acb168-484b-4c79-a982-8df01bcd5935` Accepted for the Velopack-signed
+  bundle; stapled; Gatekeeper "Notarized Developer ID". `--signDisableDeep`
+  kept the daemon byte-identical to the build. Portable ZIP SHA-256
+  `9616873a55857cce0a81e901c35b8657bf658e077060a8dffe9dc558c78d0bdc`, daemon
+  SHA-256 `19321790a29e2521fc8af29a03efb59e1adfb1697bcaf3f153753bab70223260`.
+- **Installation:** M4Pro (12:19 UTC, over its physical bridge address), M1Max
+  (12:21, detached installer over its Vnet-carried tunnel, back after about a
+  minute) and the Mac Mini (12:23, locally, last). Each run verified the package
+  hash, signature, Gatekeeper, version and stamp, held the daemon's
+  `DesktopUpdateLease` until `DesktopUpdateReady`, stopped only Muster's app and
+  daemon, replaced only the bundle, waited ten seconds and launched once. No
+  backup, no forced kill. On all three: unchanged device id and fingerprint,
+  installed daemon equal to the package's, Locked Use plugin re-verified by the
+  root helper, relay registered, Vnet up, every link `direct`, and all six
+  virtual-IP ping directions 4/4.
+
+### Device acceptance on 2026-10-27
+
+- **Mac Mini, Codex, dedicated conversation:** a send's transcript user record
+  is exactly the sent text and Codex replied as instructed; exact echo in 77 ms,
+  provider receipt in 578 ms, ledger `applied`.
+- **M4Pro, session scan (ADR 0056):** right after start its AX controller
+  attached to five Codex conversation views at once — the condition that hit
+  the node ceiling at 07:52 that morning. A later traced scan with nine views
+  completed in 848 nodes, 43 ms.
+- **Read-only surface diagnostic on M4Pro:** the Codex composer exposes
+  `AXValue`, `AXSelectedText` and `AXSelectedTextRange` as settable, so both of
+  ADR 0055's clearing mechanisms are available there.
+- **M4Pro, Locked Use from the phone:** two sends at 13:07 and 13:08 unlocked
+  under the cover and relocked correctly, but refused with "more than one view
+  shows this session"; see ADR 0058, which 1.1.1 resolves.
+
+Not accepted on 1.1.0: a send into a composer that already holds a draft and an
+answer while the composer or the card's field holds text (they need the owner
+to place text in an input box; computer-use was declined, and no other UI
+automation was used instead); a `CoverLost`-prone cover reporting gap; any
+check on M1Max after it left the network at 12:59 UTC (its physical interface
+stopped answering; it had no conversation windows open since 08:20).
