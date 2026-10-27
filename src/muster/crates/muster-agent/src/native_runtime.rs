@@ -23,9 +23,47 @@ pub fn destination(installed: Option<bool>, cli: Option<PathBuf>) -> Result<Dest
 }
 
 pub fn cli(provider: &str) -> Option<PathBuf> {
-    matches!(provider, "codex" | "claude")
-        .then(|| crate::orca::runtime::program::resolve(provider))
-        .flatten()
+    if !matches!(provider, "codex" | "claude") {
+        return None;
+    }
+    if let Some(path) = crate::orca::runtime::program::resolve(provider) {
+        return Some(path);
+    }
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| {
+            std::env::split_paths(&p)
+                .filter(|p| p.is_absolute())
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(PathBuf::from(home).join(".local/bin"));
+    }
+    dirs.extend([
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+    ]);
+    dirs.into_iter()
+        .map(|d| d.join(provider))
+        .find(|p| executable(p))
+}
+
+fn executable(path: &Path) -> bool {
+    let Ok(meta) = path.metadata() else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 /// Resolve only the selected local project. Duplicate labels or multiple roots
@@ -52,6 +90,19 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn standalone_script_cli_is_available_only_when_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("codex");
+        std::fs::write(&path, "#!/usr/bin/env node\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!executable(&path));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(executable(&path));
+        assert!(!executable(dir.path()));
+    }
     #[test]
     fn installed_always_selects_desktop_even_with_cli() {
         for cli in [None, Some(PathBuf::from("/bin/cli"))] {

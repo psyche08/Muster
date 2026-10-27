@@ -375,20 +375,30 @@ impl Manager {
             bridge::ensure(self, c, socket, gateway).await?;
         }
         if !daemon_running(self, c).await {
-            self.command(
-                &[
-                    "exec",
-                    "--env",
-                    &format!("MULTICA_WORKSPACES_ROOT={}", workspaces(c)),
-                    &c.container_name,
-                    "sh", "-c", "if [ -f /root/.multica/muster-environment ]; then xargs -0 sh -c 'exec env \"$@\" multica daemon start' starter < /root/.multica/muster-environment; else exec multica daemon start; fi",
-                ],
-                30,
-            )
-            .await?;
+            let args = daemon_start_args(c);
+            self.command(&args.iter().map(String::as_str).collect::<Vec<_>>(), 30)
+                .await?;
         }
         Ok(())
     }
+}
+fn daemon_start_args(c: &Config) -> Vec<String> {
+    let mut args = vec![
+        "exec".into(),
+        "--env".into(),
+        format!("MULTICA_WORKSPACES_ROOT={}", workspaces(c)),
+    ];
+    if c.managed || c.runtime_bridge {
+        args.extend([
+            "--env".into(),
+            "MULTICA_CODEX_PATH=/usr/local/bin/codex".into(),
+            "--env".into(),
+            "MULTICA_NATIVE_CLAUDE_PATH=/usr/local/bin/muster-native-claude".into(),
+        ]);
+    }
+    args.extend([c.container_name.clone(), "sh".into(), "-c".into(),
+        "if [ -f /root/.multica/muster-environment ]; then xargs -0 sh -c 'exec env \"$@\" multica daemon start' starter < /root/.multica/muster-environment; else exec multica daemon start; fi".into()]);
+    args
 }
 fn default_root() -> String {
     std::env::var_os("HOME")
@@ -659,7 +669,9 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
 
 async fn install_host(c: &Config) -> Result<(), Error> {
     if c.installer_url.is_empty() {
-        return Err(Error::Invalid("Enter the trusted HTTPS Multica installer URL".into()));
+        return Err(Error::Invalid(
+            "Enter the trusted HTTPS Multica installer URL".into(),
+        ));
     }
     let root = Path::new(&c.data_dir);
     let installer = root.join("install.sh");
@@ -707,6 +719,22 @@ async fn install_host(c: &Config) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bridge_start_selects_native_claude_without_changing_legacy_daemons() {
+        let mut c = Config::default();
+        assert!(
+            !daemon_start_args(&c)
+                .iter()
+                .any(|a| a.contains("MULTICA_NATIVE_CLAUDE_PATH"))
+        );
+        c.runtime_bridge = true;
+        let args = daemon_start_args(&c);
+        assert!(
+            args.contains(&"MULTICA_NATIVE_CLAUDE_PATH=/usr/local/bin/muster-native-claude".into())
+        );
+        assert!(args.contains(&"MULTICA_CODEX_PATH=/usr/local/bin/codex".into()));
+        assert!(!args.iter().any(|a| a.starts_with("MULTICA_CLAUDE_PATH=")));
+    }
     fn request(path: &Path) -> v1::MulticaRequest {
         v1::MulticaRequest {
             data_dir: path.to_string_lossy().into_owned(),

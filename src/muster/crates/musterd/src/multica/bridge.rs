@@ -143,9 +143,14 @@ async fn refresh_wrappers(manager: &Manager, c: &Config) -> Result<(), Error> {
         root.to_path_buf()
     };
     for provider in ["codex", "claude"] {
+        let command = if provider == "claude" {
+            "muster-native-claude"
+        } else {
+            "codex"
+        };
         let dest = destination(provider)?;
         if dest == Destination::Unavailable {
-            manager.command(&["exec",&c.container_name,"sh","-c","if [ -f \"$1\" ] && grep -q '^# Muster runtime bridge$' \"$1\"; then rm -- \"$1\"; fi","remove",&format!("/usr/local/bin/{provider}")],10).await?;
+            manager.command(&["exec",&c.container_name,"sh","-c","if [ -f \"$1\" ] && grep -q '^# Muster runtime bridge$' \"$1\"; then rm -- \"$1\"; fi","remove",&format!("/usr/local/bin/{command}")],10).await?;
             continue;
         }
         let version = match dest {
@@ -174,7 +179,7 @@ async fn refresh_wrappers(manager: &Manager, c: &Config) -> Result<(), Error> {
                     "cmp -s \"$1\" \"$2\" || install -m 0755 \"$1\" \"$2\"",
                     "install",
                     &shared.join(format!("runtime-{provider}")).to_string_lossy(),
-                    &format!("/usr/local/bin/{provider}"),
+                    &format!("/usr/local/bin/{command}"),
                 ],
                 10,
             )

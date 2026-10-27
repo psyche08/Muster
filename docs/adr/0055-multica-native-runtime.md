@@ -101,3 +101,10 @@ windowless/cold-launch acceptance, or a real scheduler task.
 Existing-container adoption also installs the host Multica CLI when missing,
 using the configured trusted installer. A container-only binary cannot supply
 the native task callback; opting into the bridge must provision both sides.
+
+Multica 0.3.56 distinguishes the enterprise Claude provider from `native-claude`.
+Use a separate Muster-owned native Claude command and set
+`MULTICA_NATIVE_CLAUDE_PATH` when starting the adopted daemon. Preserve unrelated
+Claude commands. Codex uses its own explicit path; a missing owned wrapper must
+not cause container PATH fallback. CLI fallback also accepts executable
+standalone script launchers, since npm installations need not be Mach-O files.
