@@ -209,3 +209,16 @@ for a bounded stability interval; also apply this to Codex's newly created
 window. Preserve draft checks and exact post-navigation directory proof. Do
 not resend a route or prompt after an uncertain submission. Rebuild and repeat
 cold/windowless and scheduler acceptance on the signed installed candidate.
+
+The subsequent installed cold case also showed replacement of the preliminary
+startup window before navigation. Include composer readiness in settling the
+activation window set, before binding any target identity. A changed startup
+object resets settling; after the target is bound, replacement remains an
+immediate failure. This case was refused before draft or submission.
+
+Codex's zero-window case exposed the equivalent page-level race after routing:
+its old blank composer can be published while the requested page is replacing
+it. Retain the owned window, but bind its page/composer only after that same
+page proves the full requested directory and local mode. Late trust prompts
+remain in the preparation loop. Once binding/drafting begins, page or composer
+replacement still refuses delivery; revalidate immediately before draft write.

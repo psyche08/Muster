@@ -142,8 +142,12 @@ fn open(path: &Path, route: Option<&url::Url>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn settled_windows(guard: &Guard, root: &Element) -> Result<Vec<Element>, Error> {
-    let until = Instant::now() + Duration::from_secs(8);
+async fn settled_windows(
+    guard: &Guard,
+    root: &Element,
+    require_renderer: bool,
+) -> Result<Vec<Element>, Error> {
+    let until = Instant::now() + Duration::from_secs(25);
     let mut previous = windows(root);
     let mut stable = Instant::now();
     loop {
@@ -153,7 +157,17 @@ async fn settled_windows(guard: &Guard, root: &Element) -> Result<Vec<Element>, 
             previous = current;
             stable = Instant::now();
         }
-        if root.element("AXMenuBar").is_some() && stable.elapsed() > Duration::from_millis(700) {
+        let mut ready = root.element("AXMenuBar").is_some();
+        if require_renderer {
+            ready &= !previous.is_empty();
+            for window in &previous {
+                ready &= unique(window, |n| guard.profile.controls.composer.matches(n))?.is_some();
+            }
+        }
+        if !ready {
+            stable = Instant::now();
+        }
+        if ready && stable.elapsed() > Duration::from_millis(700) {
             return Ok(previous);
         }
         if Instant::now() >= until {
@@ -187,6 +201,53 @@ async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Resu
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+}
+
+fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool, Error> {
+    let all = nodes(page)?;
+    let good = if provider == "claude" {
+        all.iter().any(|n| {
+            n.role() == "AXPopUpButton"
+                && n.string("AXDescription").as_deref() == Some("Environment: This computer")
+        }) && all.iter().any(|n| {
+            n.role() == "AXPopUpButton"
+                && n.string("AXHelp").is_some_and(|display| {
+                    let home = std::env::var_os("HOME").map(PathBuf::from);
+                    muster_agent::native_runtime::directory_label_matches(
+                        &display,
+                        cwd,
+                        home.as_deref(),
+                    ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
+                })
+        })
+    } else {
+        let labels: Vec<_> = all
+            .iter()
+            .filter_map(|n| {
+                (n.role() == "AXPopUpButton")
+                    .then(|| n.string("AXDescription"))
+                    .flatten()
+                    .and_then(|d| d.strip_prefix("Change project: ").map(str::to_owned))
+            })
+            .collect();
+        let state = std::env::var_os("CODEX_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".codex")
+            })
+            .join(".codex-global-state.json");
+        labels.len() == 1
+            && std::fs::read(state)
+                .is_ok_and(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
+            && all
+                .iter()
+                .any(|n| label(n, "Switch mode, current mode: Codex"))
+            && all.iter().any(|n| {
+                n.role() == "AXStaticText"
+                    && n.string("AXValue").as_deref() == Some("This computer")
+            })
+    };
+    Ok(good)
 }
 
 /// Retain the exact window/page across submit and provider receipt discovery.
@@ -250,17 +311,15 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     let root = Element::application(pid);
     root.enable_manual_accessibility();
     let before_activation = if was_running {
-        settled_windows(&guard, &root).await?
+        settled_windows(&guard, &root, false).await?
     } else {
         Vec::new()
     };
     guard.check()?;
     open(&bundle, None)?;
-    settled_windows(&guard, &root).await?;
-    let before = windows(&root);
-    for window in &before {
-        renderer_ready(&guard, &root, window).await?;
-    }
+    // Cold startup may replace its preliminary window before the renderer is
+    // ready. Bind the settled object set, not that transient startup shell.
+    let before = settled_windows(&guard, &root, true).await?;
     // Never navigate over any nonempty draft if the provider ignores raise.
     for n in nodes(&root)? {
         if profile.controls.composer.matches(&n)
@@ -342,7 +401,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     };
     // Both providers can expose the window before a late trust dialog. Keep
     // its object identity and wait for the complete form, pressing trust once.
-    let deadline = Instant::now() + Duration::from_secs(12);
+    let deadline = Instant::now() + Duration::from_secs(25);
     let mut trusted = false;
     let (page, composer) = loop {
         guard.check()?;
@@ -373,7 +432,8 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
                         matches!(u.as_str(), "about:blank" | "https://claude.ai/epitaxy")
                     }
                 })
-        })? && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
+        })? && selection_matches(provider, &page, cwd)?
+            && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
         {
             break (page, composer);
         }
@@ -390,50 +450,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         {
             return Err(conflict("Native form was closed or replaced"));
         }
-        let all = nodes(&page)?;
-        let good = if provider == "claude" {
-            all.iter().any(|n| {
-                n.role() == "AXPopUpButton"
-                    && n.string("AXDescription").as_deref() == Some("Environment: This computer")
-            }) && all.iter().any(|n| {
-                n.role() == "AXPopUpButton"
-                    && n.string("AXHelp").is_some_and(|display| {
-                        let home = std::env::var_os("HOME").map(PathBuf::from);
-                        muster_agent::native_runtime::directory_label_matches(
-                            &display,
-                            cwd,
-                            home.as_deref(),
-                        ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
-                    })
-            })
-        } else {
-            let labels: Vec<_> = all
-                .iter()
-                .filter_map(|n| {
-                    (n.role() == "AXPopUpButton")
-                        .then(|| n.string("AXDescription"))
-                        .flatten()
-                        .and_then(|d| d.strip_prefix("Change project: ").map(str::to_owned))
-                })
-                .collect();
-            let state = std::env::var_os("CODEX_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".codex")
-                })
-                .join(".codex-global-state.json");
-            labels.len() == 1
-                && std::fs::read(state)
-                    .is_ok_and(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
-                && all
-                    .iter()
-                    .any(|n| label(n, "Switch mode, current mode: Codex"))
-                && all.iter().any(|n| {
-                    n.role() == "AXStaticText"
-                        && n.string("AXValue").as_deref() == Some("This computer")
-                })
-        };
-        Ok(good)
+        selection_matches(provider, &page, cwd)
     };
     let form = || -> Result<(), Error> {
         if selection()? {
@@ -444,21 +461,13 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
             ))
         }
     };
-    let deadline = Instant::now() + Duration::from_secs(8);
-    while !selection()? {
-        if Instant::now() >= deadline {
-            return Err(conflict(
-                "Exact native directory and local mode are not verified",
-            ));
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
     if composer
         .string("AXValue")
         .is_none_or(|v| !profile.is_empty(&v))
     {
         return Err(conflict("Native composer is not empty"));
     }
+    form()?;
     composer
         .set_string("AXValue", prompt)
         .map_err(|_| unavailable("Draft write refused"))?;
