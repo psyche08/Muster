@@ -269,3 +269,35 @@ The operator has explicitly deferred Codex zero-window/cold-start checks that
 would require pausing another existing task. Continue independent Claude and
 scheduler checks and Codex creation in a new window; preserve that running task
 and report the deferred coverage separately.
+
+### Native Codex and scheduler receipts
+
+On candidate `5822072`, a new-window Codex protocol turn returned
+`MUSTER_NATIVE_OK` with a completed turn and a confirmed provider transcript.
+The subsequent resume resolved the same binding but failed before submission:
+the existing desktop selector could not uniquely locate that session. The
+binding remains conservative after that attempted continuation; it was not
+reset or replayed. Continuation acceptance remains open.
+
+The existing private idle test agent was then rebound from the retired alias
+to the registered Codex runtime. One synthetic scheduler issue completed on
+its first attempt. Its result contained the expected marker, its opaque native
+alias resolved to a real Codex transcript with phase `ready`, and transcript
+inspection confirmed task-scoped Multica CLI calls and the final assistant
+marker. This establishes actual Codex scheduler execution and host CLI callback
+use, separately from the earlier protocol-only test. No Claude scheduler issue
+has yet been created.
+
+The next installed 1.0.98 (89) candidate is built from
+`035152cf8a92c7469906706f831f1c6066289023`, with daemon SHA-256
+`7a3f47443f679ddf18bcb1e7d25e8c9786fb96104d00e82b5a6aa5eef51103bf`.
+Apple notarization `fb2f517f-f019-420b-b435-673013559a89`, signature, stapling and
+target Gatekeeper checks passed. An initial signing attempt failed on the
+timestamp service and succeeded on retry without unlocking any Keychain.
+Identity, Accessibility, Relay and Vnet recovered. Its platform library tests
+and strict Clippy passed; this initialization change still needs installed
+Claude cold/windowless acceptance. The OS reported a locked screen after
+installation, so no further desktop write was attempted. Await local unlock;
+Codex cold/zero-window coverage remains explicitly deferred by the operator.
+Keep the PR unmerged until the remaining required receipts and continuation
+checks are resolved. Public release feeds remain unchanged.
