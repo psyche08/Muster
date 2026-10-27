@@ -112,24 +112,28 @@ pub fn directory_label_matches(label: &str, cwd: &Path, home: Option<&Path>) -> 
         .is_some_and(|relative| !relative.is_empty() && label == format!("~/{relative}"))
 }
 
-/// Resolve only one selected project with one exact root.
-pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> bool {
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-        return false;
-    };
-    let Some(projects) = json["local-projects"].as_object() else {
-        return false;
-    };
-    let mut matches = projects
-        .values()
-        .filter(|p| p["name"].as_str() == Some(label));
-    let Some(project) = matches.next() else {
-        return false;
-    };
-    matches.next().is_none()
-        && project["rootPaths"]
-            .as_array()
-            .is_some_and(|roots| roots.len() == 1 && roots[0].as_str() == cwd.to_str())
+/// An identity proven against the provider's selected local project and exact root.
+/// Retain it across form preparation; a different selection invalidates the proof.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodexProject(String);
+
+pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProject> {
+    let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let selected = &json["selected-project"];
+    if selected["type"].as_str() != Some("local") || !cwd.is_absolute() {
+        return None;
+    }
+    let id = selected["projectId"].as_str().filter(|id| !id.is_empty())?;
+    let project = json["local-projects"].as_object()?.get(id)?;
+    if project["name"].as_str() != Some(label)
+        || project
+            .get("id")
+            .is_some_and(|value| value.as_str() != Some(id))
+    {
+        return None;
+    }
+    let roots = project["rootPaths"].as_array()?;
+    (roots.len() == 1 && roots[0].as_str() == cwd.to_str()).then(|| CodexProject(id.to_owned()))
 }
 
 #[cfg(test)]
@@ -225,27 +229,48 @@ mod tests {
         );
     }
     #[test]
-    fn project_requires_unique_label_and_exact_single_root() {
-        let cwd = Path::new("/tmp/test-project");
-        for (data, ok) in [
-            (
-                r#"{"local-projects":{"one":{"name":"test","rootPaths":["/tmp/test-project"]}}}"#,
-                true,
-            ),
-            (
-                r#"{"local-projects":{"one":{"name":"test","rootPaths":["/tmp/other"]}}}"#,
-                false,
-            ),
-            (
-                r#"{"local-projects":{"one":{"name":"test","rootPaths":["/tmp/test-project","/tmp/other"]}}}"#,
-                false,
-            ),
-            (
-                r#"{"local-projects":{"one":{"name":"test","rootPaths":["/tmp/test-project"]},"two":{"name":"test","rootPaths":["/tmp/test-project"]}}}"#,
-                false,
-            ),
+    fn project_requires_selected_identity_and_exact_single_root() {
+        let cwd = Path::new("/tmp/one/workdir");
+        let base = serde_json::json!({
+            "selected-project": {"type": "local", "projectId": "one"},
+            "local-projects": {
+                "one": {"id":"one", "name":"workdir", "rootPaths":["/tmp/one/workdir"]},
+                "two": {"id":"two", "name":"workdir", "rootPaths":["/tmp/two/workdir"]}
+            }
+        });
+        let proof =
+            |j: &serde_json::Value| codex_project(&serde_json::to_vec(j).unwrap(), "workdir", cwd);
+        let first = proof(&base).unwrap();
+        for selected in [
+            serde_json::Value::Null,
+            serde_json::json!({"type":"remote", "projectId":"one"}),
+            serde_json::json!({"type":"local", "projectId":"missing"}),
+            serde_json::json!({"type":"local", "projectId":"two"}),
+            serde_json::json!({"type":"local", "projectId":""}),
         ] {
-            assert_eq!(codex_project(data.as_bytes(), "test", cwd), ok);
+            let mut changed = base.clone();
+            changed["selected-project"] = selected;
+            assert!(proof(&changed).is_none());
         }
+        for roots in [
+            serde_json::json!([]),
+            serde_json::json!(["/tmp/two/workdir"]),
+            serde_json::json!(["/tmp/one/workdir", "/tmp/two/workdir"]),
+        ] {
+            let mut changed = base.clone();
+            changed["local-projects"]["one"]["rootPaths"] = roots;
+            assert!(proof(&changed).is_none());
+        }
+        for (field, value) in [("name", "other"), ("id", "two")] {
+            let mut changed = base.clone();
+            changed["local-projects"]["one"][field] = value.into();
+            assert!(proof(&changed).is_none());
+        }
+        let mut changed = base.clone();
+        changed["local-projects"]["two"]["rootPaths"] = serde_json::json!(["/tmp/one/workdir"]);
+        changed["selected-project"]["projectId"] = "two".into();
+        assert_ne!(proof(&changed).unwrap(), first);
+        assert!(codex_project(b"invalid", "workdir", cwd).is_none());
+        assert!(codex_project(&serde_json::to_vec(&base).unwrap(), "other", cwd).is_none());
     }
 }

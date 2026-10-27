@@ -216,10 +216,20 @@ async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Resu
     }
 }
 
-fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool, Error> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Selection {
+    Claude,
+    Codex(muster_agent::native_runtime::CodexProject),
+}
+
+fn selection_matches(
+    provider: &str,
+    page: &Element,
+    cwd: &Path,
+) -> Result<Option<Selection>, Error> {
     let all = nodes(page)?;
-    let good = if provider == "claude" {
-        all.iter().any(|n| {
+    let proof = if provider == "claude" {
+        let good = all.iter().any(|n| {
             n.role() == "AXPopUpButton"
                 && n.string("AXDescription").as_deref() == Some("Environment: This computer")
         }) && all.iter().any(|n| {
@@ -232,7 +242,8 @@ fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool,
                         home.as_deref(),
                     ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
                 })
-        })
+        });
+        good.then_some(Selection::Claude)
     } else {
         let labels: Vec<_> = all
             .iter()
@@ -249,9 +260,7 @@ fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool,
                 PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".codex")
             })
             .join(".codex-global-state.json");
-        labels.len() == 1
-            && std::fs::read(state)
-                .is_ok_and(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
+        if labels.len() == 1
             && all
                 .iter()
                 .any(|n| label(n, "Switch mode, current mode: Codex"))
@@ -259,8 +268,16 @@ fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool,
                 n.role() == "AXStaticText"
                     && n.string("AXValue").as_deref() == Some("This computer")
             })
+        {
+            std::fs::read(state)
+                .ok()
+                .and_then(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
+                .map(Selection::Codex)
+        } else {
+            None
+        }
     };
-    Ok(good)
+    Ok(proof)
 }
 
 fn new_page(provider: &str, page: &Element) -> bool {
@@ -462,7 +479,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     // its object identity and wait for the complete form, pressing trust once.
     let deadline = Instant::now() + Duration::from_secs(25);
     let mut trusted = false;
-    let (page, composer) = loop {
+    let (page, composer, project) = loop {
         guard.check()?;
         if !windows(&root).contains(&window) {
             return Err(conflict("New native window was replaced"));
@@ -484,10 +501,10 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         }
         if let Some(page) = unique(&window, |n| new_page(provider, n))?
             && (!reuses_main || empty_session_marker(&page)?)
-            && selection_matches(provider, &page, cwd)?
+            && let Some(project) = selection_matches(provider, &page, cwd)?
             && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
         {
-            break (page, composer);
+            break (page, composer, project);
         }
         if Instant::now() >= deadline {
             return Err(unavailable(
@@ -504,7 +521,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         }
         Ok(new_page(provider, &page)
             && (!reuses_main || empty_session_marker(&page)?)
-            && selection_matches(provider, &page, cwd)?)
+            && selection_matches(provider, &page, cwd)?.as_ref() == Some(&project))
     };
     let form = || -> Result<(), Error> {
         if selection()? {

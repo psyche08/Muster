@@ -4,6 +4,9 @@
 - Status: Accepted; duplicate scheduler project names remain an acceptance blocker
 - Related: ADR 0055, PR 52; supersedes its new-window-only rule for the Claude main shell
 
+ADR [0057](0057-native-codex-project-identity.md) supersedes name-only
+project resolution for repeated scheduler directory basenames.
+
 ## Context
 
 Native Codex creation and actual scheduler execution returned real receipts.
