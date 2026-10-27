@@ -1333,3 +1333,14 @@ now walked again, up to three walks in total with 100 ms between them; the node
 ceiling and the time budget are not repeated. Every refusal names its stop
 ("node limit", "time limit", "node read failed (code)"). Source changes with
 unit coverage only; not yet accepted on an installed build.
+
+## Several windows on one conversation (2026-10-27)
+
+See [ADR 0058](adr/0058-duplicate-views-use-the-main-window.md). The Codex app
+opens a window per thread activation, and Mac-B's ChatGPT app held nine
+windows, three on the same thread; every send to that thread was refused as
+"more than one view shows this session". When several views show the target,
+the one in the app's main window is used; an inactive app may report no main
+window (as under Locked Use), and then the frontmost visible view is. Minimized
+windows are never chosen, and undecidable cases still refuse. The whole
+operation stays in the chosen view.

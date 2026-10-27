@@ -114,6 +114,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0057](0057-targeted-deployment-1-1-0.md) | Accepted | Targeted deployment of 1.1.0 (90) and device acceptance |
 
+| [0058](0058-duplicate-views-use-the-main-window.md) | Accepted | Several views of one conversation use the main window's view |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

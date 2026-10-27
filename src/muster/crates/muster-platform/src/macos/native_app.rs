@@ -934,6 +934,32 @@ fn find_surface(
     find_surface_traced(profile, app, session, resolver, None)
 }
 
+/// OS facts about the windows that hold several views of one conversation:
+/// the app's main window and its front-to-back window order. Read only.
+fn view_places(app: &Element, views: &[Element]) -> Vec<muster_agent::native_scan::ViewPlace> {
+    let main = app.element("AXMainWindow");
+    let windows = app
+        .attribute("AXWindows")
+        .map(|value| Element::elements_of(&value))
+        .unwrap_or_default();
+    views
+        .iter()
+        .map(|view| {
+            let window = view.element("AXWindow");
+            muster_agent::native_scan::ViewPlace {
+                main_window: window.is_some() && window == main,
+                window_rank: window
+                    .as_ref()
+                    .and_then(|window| windows.iter().position(|w| w == window)),
+                minimized: window
+                    .as_ref()
+                    .and_then(|window| window.bool("AXMinimized"))
+                    .unwrap_or(false),
+            }
+        })
+        .collect()
+}
+
 /// Why one surface scan did not produce a surface.
 enum SurfaceScan {
     /// The control scan stopped early; Shared Rust decides whether to repeat.
@@ -992,8 +1018,8 @@ fn scan_surface(
     trace: Option<&Trace>,
 ) -> Result<Surface, SurfaceScan> {
     use muster_agent::native_scan::descend_web_area;
-    let mut web_area = None;
-    let mut ambiguous = false;
+    // Every view that shows the session; Shared Rust picks one when several do.
+    let mut views: Vec<Element> = Vec::new();
     let mut areas = 0usize;
     // A conversation's view is resolved from its own key; its transcript is
     // never needed here and is left to the control scan.
@@ -1024,10 +1050,7 @@ fn scan_surface(
                 key.title.as_ref().map_or(0, |s| s.chars().count()), resolved.as_ref().map(|s| label(s)), resolved.as_deref() == Some(session)));
         }
         if resolved.as_deref() == Some(session) {
-            if web_area.is_some() {
-                ambiguous = true;
-            }
-            web_area = Some(node.clone());
+            views.push(node.clone());
         }
         if descend_web_area(resolved.is_some()) {
             ax::Visit::Descend
@@ -1036,7 +1059,11 @@ fn scan_surface(
         }
     });
     if let Some(trace) = trace {
-        trace.record(format_args!("web_areas={areas} target_found={} ambiguous={ambiguous} walk={walk:?} (nodes, stop, ms)", web_area.is_some()));
+        trace.record(format_args!(
+            "web_areas={areas} target_found={} target_views={} walk={walk:?} (nodes, stop, ms)",
+            !views.is_empty(),
+            views.len()
+        ));
     }
     if walk.1 != "complete" {
         // Only the ceiling or the budget can stop this walk: its visitor
@@ -1054,11 +1081,56 @@ fn scan_surface(
         ))
         .into());
     }
-    if ambiguous {
-        return Err(Error::Unavailable("more than one view shows this session".into()).into());
-    }
-    let web_area = web_area
-        .ok_or_else(|| Error::NotFound(format!("session {session} is not open in the app")))?;
+    let web_area = match views.len() {
+        0 => {
+            return Err(
+                Error::NotFound(format!("session {session} is not open in the app")).into(),
+            );
+        }
+        1 => views.remove(0),
+        _ => {
+            let places = view_places(app, &views);
+            let chosen = muster_agent::native_scan::choose_view(&places);
+            let facts = places
+                .iter()
+                .map(|p| {
+                    format!(
+                        "(main={} rank={:?} minimized={})",
+                        p.main_window, p.window_rank, p.minimized
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            if let Some(trace) = trace {
+                trace.record(format_args!(
+                    "duplicate_views={} chosen={chosen:?} places={facts}",
+                    views.len()
+                ));
+            }
+            let Some(index) = chosen else {
+                log::warn!(
+                    "native_app scan of {}: {} views show this session and none is the main or frontmost visible one: {facts}",
+                    &session[..8.min(session.len())],
+                    views.len()
+                );
+                return Err(
+                    Error::Unavailable("more than one view shows this session".into()).into(),
+                );
+            };
+            log::info!(
+                "native_app scan of {}: {} views show this session; using view {} {}",
+                &session[..8.min(session.len())],
+                views.len(),
+                index + 1,
+                if places[index].main_window {
+                    "in the main window"
+                } else {
+                    "in the frontmost visible window"
+                }
+            );
+            views.swap_remove(index)
+        }
+    };
     let Controls {
         composer,
         send,
