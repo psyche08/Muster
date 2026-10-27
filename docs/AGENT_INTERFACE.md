@@ -1313,3 +1313,23 @@ drive can be read without one.
 Source changes with unit coverage only. Clearing either editor against the live
 Claude and ChatGPT desktop apps, and a send during a watchdog reporting gap,
 have not been accepted on an installed build.
+
+## Session scans skip transcripts; control scans retry a vanished node (2026-10-27)
+
+See [ADR 0056](adr/0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md).
+The last live "incomplete scan" refusals in the device logs had two causes. The
+session scan walked into every open conversation's transcript, so with five
+Codex views open on Mac-B it reached the 4,096-node ceiling in 363 ms after it
+had already found the target, and refused the send and several background
+attaches. A web area is resolved from its own URL and title, so the session
+scan no longer enters one that resolves to a conversation; it still enters the
+app shell and any web area that resolves to nothing, still refuses ambiguity,
+and the control scan still requires exactly one composer in the chosen view.
+
+The control scan gave up on the first node read that failed. Electron rebuilds
+the composer around a write, and a node destroyed mid-walk refused a send 482 ms
+after a successful write on another Mac. A scan that stopped on a failed node read is
+now walked again, up to three walks in total with 100 ms between them; the node
+ceiling and the time budget are not repeated. Every refusal names its stop
+("node limit", "time limit", "node read failed (code)"). Source changes with
+unit coverage only; not yet accepted on an installed build.

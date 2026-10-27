@@ -934,6 +934,19 @@ fn find_surface(
     find_surface_traced(profile, app, session, resolver, None)
 }
 
+/// Why one surface scan did not produce a surface.
+enum SurfaceScan {
+    /// The control scan stopped early; Shared Rust decides whether to repeat.
+    Incomplete(muster_agent::native_scan::ScanStop),
+    Failed(Error),
+}
+
+impl From<Error> for SurfaceScan {
+    fn from(error: Error) -> Self {
+        Self::Failed(error)
+    }
+}
+
 fn find_surface_traced(
     profile: &AppProfile,
     app: &Element,
@@ -941,12 +954,52 @@ fn find_surface_traced(
     resolver: &Resolver,
     trace: Option<&Trace>,
 ) -> Result<Surface, Error> {
+    use muster_agent::native_scan::{SCAN_RETRY_PAUSE, repeat_scan};
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match scan_surface(profile, app, session, resolver, trace) {
+            Ok(surface) => return Ok(surface),
+            Err(SurfaceScan::Incomplete(stop)) if repeat_scan(stop, attempts) => {
+                log::info!(
+                    "native_app scan of {}: controls stopped early ({}); walking again after attempt {attempts}",
+                    &session[..8.min(session.len())],
+                    stop.describe()
+                );
+                std::thread::sleep(SCAN_RETRY_PAUSE);
+            }
+            Err(SurfaceScan::Incomplete(stop)) => {
+                log::warn!(
+                    "native_app scan of {}: controls stopped early ({}) after {attempts} walks; not sent",
+                    &session[..8.min(session.len())],
+                    stop.describe()
+                );
+                return Err(Error::Unavailable(format!(
+                    "The native control scan was incomplete ({}); not sent",
+                    stop.describe()
+                )));
+            }
+            Err(SurfaceScan::Failed(error)) => return Err(error),
+        }
+    }
+}
+
+fn scan_surface(
+    profile: &AppProfile,
+    app: &Element,
+    session: &str,
+    resolver: &Resolver,
+    trace: Option<&Trace>,
+) -> Result<Surface, SurfaceScan> {
+    use muster_agent::native_scan::descend_web_area;
     let mut web_area = None;
     let mut ambiguous = false;
     let mut areas = 0usize;
-    let walk = app.walk_report(|node| {
+    // A conversation's view is resolved from its own key; its transcript is
+    // never needed here and is left to the control scan.
+    let walk = app.walk_pruned(|node| {
         if node.role() != "AXWebArea" {
-            return true;
+            return ax::Visit::Descend;
         }
         areas += 1;
         let key = WebAreaKey::of(node);
@@ -976,20 +1029,33 @@ fn find_surface_traced(
             }
             web_area = Some(node.clone());
         }
-        true
+        if descend_web_area(resolved.is_some()) {
+            ax::Visit::Descend
+        } else {
+            ax::Visit::Skip
+        }
     });
     if let Some(trace) = trace {
         trace.record(format_args!("web_areas={areas} target_found={} ambiguous={ambiguous} walk={walk:?} (nodes, stop, ms)", web_area.is_some()));
     }
     if walk.1 != "complete" {
-        return Err(Error::Unavailable(
-            "The native session scan was incomplete; not sent".into(),
-        ));
+        // Only the ceiling or the budget can stop this walk: its visitor
+        // never ends it, and an unreadable node just has no children.
+        log::warn!(
+            "native_app scan of {}: session scan stopped at {} after {} nodes, {} ms ({areas} web areas)",
+            &session[..8.min(session.len())],
+            walk.1,
+            walk.0,
+            walk.2
+        );
+        return Err(Error::Unavailable(format!(
+            "The native session scan was incomplete ({}); not sent",
+            walk.1.replace('_', " ")
+        ))
+        .into());
     }
     if ambiguous {
-        return Err(Error::Unavailable(
-            "more than one view shows this session".into(),
-        ));
+        return Err(Error::Unavailable("more than one view shows this session".into()).into());
     }
     let web_area = web_area
         .ok_or_else(|| Error::NotFound(format!("session {session} is not open in the app")))?;
@@ -997,23 +1063,20 @@ fn find_surface_traced(
         composer,
         send,
         diagnostics,
-        complete,
+        stop,
     } = find_controls(profile, &web_area);
     if let Some(trace) = trace {
         for detail in &diagnostics {
             trace.record(format_args!("{detail}"));
         }
     }
-    if !complete {
-        return Err(Error::Unavailable(
-            "The native control scan was incomplete; not sent".into(),
-        ));
+    if let Some(stop) = stop {
+        return Err(SurfaceScan::Incomplete(stop));
     }
     if composer.len() > 1 {
-        return Err(Error::Unavailable(format!(
-            "expected one prompt, found {}",
-            composer.len()
-        )));
+        return Err(
+            Error::Unavailable(format!("expected one prompt, found {}", composer.len())).into(),
+        );
     }
     Ok(Surface {
         web_area,
@@ -1060,7 +1123,8 @@ struct Controls {
     composer: Vec<Element>,
     send: Vec<Element>,
     diagnostics: Vec<String>,
-    complete: bool,
+    /// Why the walk stopped before the whole web area; `None` when complete.
+    stop: Option<muster_agent::native_scan::ScanStop>,
 }
 
 fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
@@ -1072,10 +1136,15 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     let mut buttons = 0;
     let mut diagnostics = Vec::new();
     let started = std::time::Instant::now();
-    let mut complete = true;
+    let mut stop = None;
     while let Some((node, parent)) = todo.pop_front() {
-        if elements.len() >= ax::MAX_NODES || started.elapsed() > ax::WALK_BUDGET {
-            complete = false;
+        use muster_agent::native_scan::ScanStop;
+        if elements.len() >= ax::MAX_NODES {
+            stop = Some(ScanStop::NodeLimit);
+            break;
+        }
+        if started.elapsed() > ax::WALK_BUDGET {
+            stop = Some(ScanStop::TimeLimit);
             break;
         }
         if elements.contains(&node) {
@@ -1084,12 +1153,16 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         let index = elements.len();
         // One IPC per node for both selector matching and traversal. Never
         // fetch transcript values: only control metadata is needed here.
-        let Ok(values) = node.try_attributes(&CONTROL_ATTRIBUTES) else {
-            complete = false;
-            break;
+        let values = match node.try_attributes(&CONTROL_ATTRIBUTES) {
+            Ok(values) => values,
+            Err(code) => {
+                stop = Some(ScanStop::NodeRead(Some(code)));
+                break;
+            }
         };
         let Some(field) = control_metadata(&values) else {
-            complete = false;
+            // A live element always has a role; one without is going away.
+            stop = Some(ScanStop::NodeRead(None));
             break;
         };
         let is_composer = profile.controls.composer.matches(&field);
@@ -1145,6 +1218,7 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         }
         elements.push(node);
     }
+    let complete = stop.is_none();
     if complete {
         // Queued rows carry their own submit controls: only those in the
         // composer's branch send.
@@ -1176,12 +1250,12 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         .into_iter()
         .map(|index| send[index].clone())
         .collect();
-    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms)", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis()));
+    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
     Controls {
         composer,
         send,
         diagnostics,
-        complete,
+        stop,
     }
 }
 
@@ -2141,10 +2215,11 @@ impl Controller for NativeAppController {
         let composer = locate()?;
         let original = composer.string("AXValue");
         let controls = find_controls(self.profile, &self.surface.lock().unwrap().web_area);
-        if !controls.complete {
-            return Err(Error::Unavailable(
-                "The native control scan was incomplete; no Tab sent".into(),
-            ));
+        if let Some(stop) = controls.stop {
+            return Err(Error::Unavailable(format!(
+                "The native control scan was incomplete ({}); no Tab sent",
+                stop.describe()
+            )));
         }
         let buttons = controls.send;
         let may_submit = buttons

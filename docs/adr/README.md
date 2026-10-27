@@ -110,6 +110,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0055](0055-clear-every-input-before-a-submission.md) | Accepted | Clear every input before a submission; hold a quiet cover |
 
+| [0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md) | Accepted | Session scans skip transcripts; control scans retry a vanished node |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
