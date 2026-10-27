@@ -199,3 +199,13 @@ receipts; calibration and a visible form alone do not count as success.
 
 Ship resumed acceptance fixes as targeted desktop 1.0.98 (89). Publication
 feeds remain unchanged; record its signed installation independently of 1.0.97.
+
+Two installed cold-launch cases reproduced a retained old folder with no
+submission. Once the renderer was ready, a guarded directory-only calibration
+of the same refused case opened the exact requested workspace trust prompt.
+Native window/menu publication is therefore insufficient launch readiness.
+Before routing, wait for the retained window's composer to remain published
+for a bounded stability interval; also apply this to Codex's newly created
+window. Preserve draft checks and exact post-navigation directory proof. Do
+not resend a route or prompt after an uncertain submission. Rebuild and repeat
+cold/windowless and scheduler acceptance on the signed installed candidate.

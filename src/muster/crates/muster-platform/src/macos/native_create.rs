@@ -163,6 +163,32 @@ async fn settled_windows(guard: &Guard, root: &Element) -> Result<Vec<Element>, 
     }
 }
 
+// Electron can publish its native window/menu before its renderer subscribes
+// to navigation. Do not dispatch a directory route into that startup interval.
+async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Result<(), Error> {
+    let deadline = Instant::now() + Duration::from_secs(25);
+    let mut ready_since = None;
+    loop {
+        guard.check()?;
+        if !windows(root).contains(window) {
+            return Err(conflict("Native startup window was replaced"));
+        }
+        let ready = unique(window, |n| guard.profile.controls.composer.matches(n))?.is_some();
+        if ready {
+            let since = ready_since.get_or_insert_with(Instant::now);
+            if since.elapsed() >= Duration::from_millis(700) {
+                return Ok(());
+            }
+        } else {
+            ready_since = None;
+        }
+        if Instant::now() >= deadline {
+            return Err(unavailable("Native renderer is not ready for navigation"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Retain the exact window/page across submit and provider receipt discovery.
 pub struct Submitted {
     guard: Guard,
@@ -232,6 +258,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     open(&bundle, None)?;
     settled_windows(&guard, &root).await?;
     let before = windows(&root);
+    for window in &before {
+        renderer_ready(&guard, &root, window).await?;
+    }
     // Never navigate over any nonempty draft if the provider ignores raise.
     for n in nodes(&root)? {
         if profile.controls.composer.matches(&n)
@@ -287,6 +316,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         fresh
             .raise()
             .map_err(|_| unavailable("Cannot raise the new window"))?;
+        renderer_ready(&guard, &root, &fresh).await?;
         guard.check()?;
         open(&bundle, Some(&route))?;
         fresh
