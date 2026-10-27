@@ -4,6 +4,10 @@
 - Status: Accepted; device acceptance pending
 - Related: ADRs 0009, 0046, 0048, 0053 and 0054
 
+ADR [0056](0056-native-session-identity-and-warm-creation.md) supersedes the
+new-window-only rule for a verified Claude main shell and fixes Codex title
+identity across an open viewer and a later desktop rename.
+
 ## Context
 
 The Kiro ACP compatibility command actually creates Codex CLI sessions. The

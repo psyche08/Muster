@@ -110,6 +110,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0055](0055-multica-native-runtime.md) | Accepted | Desktop-first Multica runtimes and provider protocol adapters |
 
+| [0056](0056-native-session-identity-and-warm-creation.md) | Accepted | Native session identity and verified warm Claude creation |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

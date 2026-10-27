@@ -1133,8 +1133,7 @@ impl AgentService {
                                 (open.viewer.meta().title.clone(), open.viewer.custom_title());
                             if let Some(d) = inner.catalog.get_mut(&id) {
                                 // Keep a rename the viewer read for the next scan.
-                                d.meta.title = title;
-                                d.custom_title = custom;
+                                Self::refine_catalog_title(d, title, custom);
                                 // The stat is also scan_all's recency cache key.
                                 // Never mark fresh bytes as cached while retaining
                                 // the old last-message time (even for an open viewer).
@@ -1337,8 +1336,20 @@ impl AgentService {
         let _ = self.events.send(Event::ListChanged);
     }
 
-    /// The title a session is shown with: its open viewer's, else the scan's.
+    // Codex's index is read on every scan. A viewer opened before its rename
+    // must not replace that current name with the original prompt.
+    fn refine_catalog_title(d: &mut Discovered, title: String, custom: bool) {
+        if d.provider != Provider::Codex || d.meta.title.starts_with("session ") {
+            d.meta.title = title;
+            d.custom_title = custom;
+        }
+    }
+
+    /// Codex uses its current index; transcript-named providers use their viewer.
     fn title_locked<'a>(inner: &'a Inner, d: &'a Discovered) -> &'a str {
+        if d.provider == Provider::Codex {
+            return &d.meta.title;
+        }
         inner.open.get(&d.id).map_or(d.meta.title.as_str(), |open| {
             open.viewer.meta().title.as_str()
         })
@@ -1581,6 +1592,7 @@ impl AgentService {
         let mut meta = open
             .map(|o| o.viewer.meta().clone())
             .unwrap_or_else(|| d.meta.clone());
+        meta.title = Self::title_locked(inner, d).to_owned();
         if meta.cwd.as_os_str().is_empty() {
             // A project the app reported after the viewer opened.
             meta.cwd = d.meta.cwd.clone();
@@ -2046,8 +2058,7 @@ impl AgentService {
         // The whole file was read: its newest title outlives the viewer.
         let (title, custom) = (open.viewer.meta().title.clone(), open.viewer.custom_title());
         if let Some(d) = inner.catalog.get_mut(id) {
-            d.meta.title = title;
-            d.custom_title = custom;
+            Self::refine_catalog_title(d, title, custom);
         }
         let session = Self::project_locked(&inner, id);
         drop(inner);

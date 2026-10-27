@@ -9,13 +9,15 @@ pub enum Destination {
     Unavailable,
 }
 
-/// Select only a newly created opaque window identity, including activation
-/// from a proved empty baseline when that provider reuses its new main window.
-pub fn new_window<T: PartialEq + Clone>(
+/// Choose an opaque new-session window. A reusable main shell must have been
+/// uniquely verified by the OS adapter before navigation; the caller must
+/// prove its new-session page, directory/mode and empty composer before writing.
+pub fn session_window<T: PartialEq + Clone>(
     before_activation: &[T],
     before_route: &[T],
     current: &[T],
     allow_activation: bool,
+    reusable_main: Option<&T>,
 ) -> Result<Option<T>, Error> {
     let fresh: Vec<_> = current
         .iter()
@@ -33,6 +35,12 @@ pub fn new_window<T: PartialEq + Clone>(
         && current.contains(&before_route[0])
     {
         return Ok(Some(before_route[0].clone()));
+    }
+    if let Some(main) = reusable_main
+        && before_route.contains(main)
+        && current.contains(main)
+    {
+        return Ok(Some(main.clone()));
     }
     Ok(None)
 }
@@ -129,13 +137,35 @@ mod tests {
     use super::*;
     #[test]
     fn only_new_or_proved_activation_windows_are_eligible() {
-        assert_eq!(new_window(&[1], &[1], &[1, 2], true).unwrap(), Some(2));
-        assert_eq!(new_window(&[], &[2], &[2], true).unwrap(), Some(2));
-        assert_eq!(new_window(&[], &[2], &[2], false).unwrap(), None);
-        assert_eq!(new_window(&[2], &[2], &[2], true).unwrap(), None);
-        assert_eq!(new_window(&[], &[1, 2], &[1, 2], true).unwrap(), None);
-        assert_eq!(new_window(&[], &[2], &[], true).unwrap(), None);
-        assert!(new_window(&[1], &[1], &[1, 2, 3], true).is_err());
+        assert_eq!(
+            session_window(&[1], &[1], &[1, 2], true, None).unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            session_window(&[], &[2], &[2], true, None).unwrap(),
+            Some(2)
+        );
+        assert_eq!(session_window(&[], &[2], &[2], false, None).unwrap(), None);
+        assert_eq!(session_window(&[2], &[2], &[2], true, None).unwrap(), None);
+        assert_eq!(
+            session_window(&[], &[1, 2], &[1, 2], true, None).unwrap(),
+            None
+        );
+        assert_eq!(session_window(&[], &[2], &[], true, None).unwrap(), None);
+        assert!(session_window(&[1], &[1], &[1, 2, 3], true, None).is_err());
+        assert_eq!(
+            session_window(&[1, 2], &[1, 2], &[1, 2], true, Some(&2)).unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            session_window(&[1], &[1], &[1], true, Some(&2)).unwrap(),
+            None
+        );
+        assert_eq!(
+            session_window(&[1, 2], &[1, 2], &[1], true, Some(&2)).unwrap(),
+            None
+        );
+        assert!(session_window(&[1], &[1], &[1, 2, 3], true, Some(&1)).is_err());
     }
     #[test]
     fn directory_labels_require_the_entire_authorized_path() {

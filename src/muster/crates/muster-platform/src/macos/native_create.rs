@@ -263,6 +263,23 @@ fn selection_matches(provider: &str, page: &Element, cwd: &Path) -> Result<bool,
     Ok(good)
 }
 
+fn new_page(provider: &str, page: &Element) -> bool {
+    page.role() == "AXWebArea"
+        && page.string("AXURL").is_some_and(|u| {
+            if provider == "codex" {
+                u == "app://-/index.html"
+            } else {
+                matches!(u.as_str(), "about:blank" | "https://claude.ai/epitaxy")
+            }
+        })
+}
+
+fn empty_session_marker(window: &Element) -> Result<bool, Error> {
+    Ok(nodes(window)?.iter().any(|n| {
+        n.role() == "AXStaticText" && n.string("AXValue").as_deref() == Some("New session")
+    }))
+}
+
 /// Retain the exact window/page across submit and provider receipt discovery.
 pub struct Submitted {
     guard: Guard,
@@ -341,6 +358,26 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
             return Err(conflict("Existing native draft is preserved"));
         }
     }
+    // Claude's documented code/new route targets its main renderer. Identify
+    // that shell before navigation; only its verified empty new-session form
+    // may later receive a draft. Existing popouts are not inferred by title.
+    let mut reusable_main = None;
+    if provider == "claude" {
+        let shell = url::Url::from_file_path(
+            bundle.join("Contents/Resources/app.asar/.vite/renderer/main_window/index.html"),
+        )
+        .map_err(|_| unavailable("Invalid native shell path"))?;
+        for candidate in &before {
+            if unique(candidate, |n| {
+                n.role() == "AXWebArea" && n.string("AXURL").as_deref() == Some(shell.as_str())
+            })?
+            .is_some()
+                && reusable_main.replace(candidate.clone()).is_some()
+            {
+                return Err(conflict("Native main window is ambiguous"));
+            }
+        }
+    }
     let mut route = url::Url::parse(if provider == "codex" {
         "codex://new"
     } else {
@@ -359,7 +396,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         route.query_pairs_mut().append_pair("folder", cwd_text);
     }
     // Codex navigation reuses the foreground window; first create a new one.
-    // Claude's code/new entry opens a standalone window itself.
+    // Claude's code/new entry may create a window or reuse its verified main shell.
     let window = if provider == "codex" {
         let menu = root
             .element("AXMenuBar")
@@ -398,11 +435,12 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         let deadline = Instant::now() + Duration::from_secs(8);
         loop {
             guard.check()?;
-            if let Some(fresh) = muster_agent::native_runtime::new_window(
+            if let Some(fresh) = muster_agent::native_runtime::session_window(
                 &before_activation,
                 &before,
                 &windows(&root),
                 true,
+                reusable_main.as_ref(),
             )? {
                 break fresh;
             }
@@ -412,6 +450,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     };
+    let reuses_main = provider == "claude"
+        && before_activation.contains(&window)
+        && reusable_main.as_ref() == Some(&window);
     // Both providers can expose the window before a late trust dialog. Keep
     // its object identity and wait for the complete form, pressing trust once.
     let deadline = Instant::now() + Duration::from_secs(25);
@@ -436,16 +477,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
             guard.press(&trust)?;
             trusted = true;
         }
-        if let Some(page) = unique(&window, |n| {
-            n.role() == "AXWebArea"
-                && n.string("AXURL").is_some_and(|u| {
-                    if provider == "codex" {
-                        u == "app://-/index.html"
-                    } else {
-                        matches!(u.as_str(), "about:blank" | "https://claude.ai/epitaxy")
-                    }
-                })
-        })? && selection_matches(provider, &page, cwd)?
+        if let Some(page) = unique(&window, |n| new_page(provider, n))?
+            && (!reuses_main || empty_session_marker(&page)?)
+            && selection_matches(provider, &page, cwd)?
             && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
         {
             break (page, composer);
@@ -463,7 +497,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         {
             return Err(conflict("Native form was closed or replaced"));
         }
-        selection_matches(provider, &page, cwd)
+        Ok(new_page(provider, &page)
+            && (!reuses_main || empty_session_marker(&page)?)
+            && selection_matches(provider, &page, cwd)?)
     };
     let form = || -> Result<(), Error> {
         if selection()? {
