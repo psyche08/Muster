@@ -139,3 +139,43 @@ Codex with a running process and zero windows acknowledged its New Window menu
 action without creating a window. Activate the verified bundle and settle AX
 window publication before taking the baseline for all launches. Only a later
 new window may receive input; activation never authorizes a restored window.
+
+### Target deployment and deferred acceptance
+
+The final deployed candidate is desktop 1.0.97 (88), built from
+`cf11f2f8c5e715d984f7fc91a03062094a812bd7`. Its daemon SHA-256 is
+`f163020066976fa00f4780c4af14ae1bf19b030ee2b6f3a955f7dddaa80e6062`.
+Developer ID verification, Apple notarization, ticket stapling and target
+Gatekeeper assessment passed. Installation preserved device identity and
+restored Accessibility, Relay and Vnet. No old application backup was retained;
+public desktop/iOS feeds were not published.
+
+The existing container now has the Codex and Native Claude providers registered
+online; the old Kiro alias is offline. Login, container storage and the selected
+`~/Documents/Multica` root were preserved, and the previous data root remains
+absent. The one idle test agent still bound to the old alias has deliberately
+not been rebound before successful native acceptance.
+
+Final source checks passed 374 library tests (six environment/operator cases
+ignored), strict Clippy, public-content and ADR checks. CLI fallback was tested
+through a real isolated child process for argv, cwd, task environment, streamed
+input/output and input closure. The target's desktop apps were not uninstalled
+to simulate their absence; physical absent-app fallback is not claimed.
+
+Desktop acceptance is **not complete**. The latest Codex attempt started from
+verified zero windows, reached a new form, and was rejected by directory/mode
+validation before submitting. Subsequent observation found the window in a
+different business conversation; the exact cause of the earlier validation
+failure remains unresolved. The latest Claude cold-launch preparation stopped
+on a physical-input guard before its runtime request. Earlier isolated
+calibration confirmed the windowless Claude main form, its full home-relative
+folder label, and Codex activation followed by a uniquely new window, but these
+are not provider receipt or scheduler task acceptance.
+
+The operator explicitly requested retaining the installed candidate and
+postponing further desktop acceptance. Stop desktop automation at this point.
+Keep the PR in draft, with no completed native first/existing-turn or real
+scheduler-task claim. Resume with exclusive-console confirmation, preserve
+existing drafts/tasks, inspect the recorded refused operations, and never replay
+an unknown send. Full scheduler receipt, cold-launch coverage and test-agent
+rebinding remain open.
