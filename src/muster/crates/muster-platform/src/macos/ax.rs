@@ -528,6 +528,47 @@ impl Element {
         (seen.len(), "complete", started.elapsed().as_millis())
     }
 
+    /// A false visitor result prunes only that branch. Unlike `walk_report`,
+    /// every sibling is still visited, and child-read failures are incomplete.
+    pub fn walk_pruned_report(
+        &self,
+        visit: impl FnMut(&Element) -> bool,
+    ) -> (usize, &'static str, u128) {
+        muster_agent::native_tree::walk_pruned(
+            self.clone(),
+            MAX_NODES,
+            WALK_BUDGET,
+            |node| {
+                let value = match node.attribute_result("AXChildren") {
+                    Ok(value) => value,
+                    Err(-25205 | -25212) => return Some(Vec::new()),
+                    Err(_) => return None,
+                };
+                if value.type_of() != CFArray::<CFType>::type_id() {
+                    return None;
+                }
+                // SAFETY: type checked; `value` keeps the array alive.
+                let array: CFArray<CFType> =
+                    unsafe { CFArray::wrap_under_get_rule(value.as_CFTypeRef() as CFArrayRef) };
+                if array.len() as usize > MAX_CHILDREN {
+                    return None;
+                }
+                // SAFETY: this type-id function has no preconditions.
+                let ax_type = unsafe { AXUIElementGetTypeID() };
+                if array.iter().any(|item| item.type_of() != ax_type) {
+                    return None;
+                }
+                Some(
+                    array
+                        .iter()
+                        .map(|item| Self::bounded(item.clone()))
+                        .collect(),
+                )
+            },
+            visit,
+        )
+    }
+
     /// A text listing of the subtree for diagnosis: depth, role, subrole,
     /// title, description, a short value, and the URL of web areas. Bounded
     /// by `limit` nodes and `budget`.

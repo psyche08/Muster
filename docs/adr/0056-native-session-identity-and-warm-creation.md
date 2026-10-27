@@ -34,6 +34,16 @@ page, stale form, replaced window or nonempty draft cannot qualify. Continue
 requiring a newly discovered provider transcript with the exact first prompt.
 No failed or uncertain submission is replayed.
 
+Session discovery must scan page identities across every window without
+descending into each Codex page's conversation controls. The current signed
+Codex layout identifies each session at its `app://-/index.html` web area.
+Prune only that page's descendants during identity discovery; still visit all
+sibling windows, reject duplicate target pages, and fully scan controls inside
+the uniquely selected page. Introduce an explicitly branch-pruning traversal
+instead of interpreting the old stop-on-false walker as pruning. Sidebar
+discovery uses the same distinction when retaining navigation roots. Keep
+node/time bounds and fail closed on unreadable/truncated child lists.
+
 ## Alternatives
 
 Keeping the old restriction makes each later Claude task depend on manually
@@ -73,3 +83,18 @@ alias bound to a ready provider transcript, which contains task-scoped CLI
 calls and a final assistant response with the expected marker. Warm creation
 then failed before submission because no new window appeared; that failed
 alias is preserved and will not be replayed.
+
+The signed `6a0cec8` candidate passed Codex creation and Claude cold creation,
+continuation and warm creation. Codex continuation instead exposed an unrelated
+long-window scan exceeding its bound, before sending. The identity scan must
+avoid conversation descendants while still proving all page candidates were
+examined. Add regressions for later sibling duplicates, cycles, pruning,
+unreadable children and bounds before redeployment; do not replay that alias.
+
+Those regressions and the affected agent/platform suites passed (320 tests,
+five ignored); strict Clippy passed. A read-only target diagnostic using the
+new production walker visited all five Codex page roots, completing in 26 ms
+over 302 shell nodes. This confirms scan completeness on the current layout,
+not a successful continuation. The real warm Claude scheduler task on
+`6a0cec8` also completed on its first attempt with a ready native binding and
+the expected marker. Rebuild and repeat continuation after installation.

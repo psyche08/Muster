@@ -26,6 +26,7 @@ pub mod native_options;
 pub mod native_send;
 pub mod native_sidebar;
 pub mod native_step;
+pub mod native_tree;
 pub mod orca;
 pub mod prediction;
 pub mod profile;

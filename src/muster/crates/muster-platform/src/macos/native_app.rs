@@ -343,7 +343,7 @@ fn scan_sidebar(
     use muster_agent::profile::SessionList;
     let sessions = profile.controls.sessions;
     let mut navigation = Vec::new();
-    let app_walk = app.walk_report(|node| {
+    let app_walk = app.walk_pruned_report(|node| {
         let id = node
             .string("AXIdentifier")
             .or_else(|| node.string("AXDOMIdentifier"))
@@ -899,7 +899,7 @@ fn find_surface_traced(
     let mut web_area = None;
     let mut ambiguous = false;
     let mut areas = 0usize;
-    let walk = app.walk_report(|node| {
+    let walk = app.walk_pruned_report(|node| {
         if node.role() != "AXWebArea" {
             return true;
         }
@@ -931,7 +931,11 @@ fn find_surface_traced(
             }
             web_area = Some(node.clone());
         }
-        true
+        // Codex names a session at the page boundary. Inspect every window's
+        // page, but not unrelated conversation controls during identity scan.
+        // The chosen page receives a separate complete control scan below.
+        !(profile.app.provider == "codex"
+            && key.url.as_deref() == Some("app://-/index.html"))
     });
     if let Some(trace) = trace {
         trace.record(format_args!("web_areas={areas} target_found={} ambiguous={ambiguous} walk={walk:?} (nodes, stop, ms)", web_area.is_some()));
