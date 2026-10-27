@@ -20,6 +20,17 @@ use core_foundation_sys::string::CFStringRef;
 pub type AXError = i32;
 /// kAXErrorInvalidUIElement: the element is gone and answers nothing.
 pub const INVALID_ELEMENT: AXError = -25202;
+
+/// What a walk does after visiting a node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visit {
+    /// Visit the node's children too.
+    Descend,
+    /// Leave the node's children out; the walk goes on elsewhere.
+    Skip,
+    /// End the walk here.
+    Stop,
+}
 type AXUIElementRef = *const c_void;
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -501,6 +512,21 @@ impl Element {
         &self,
         mut visit: impl FnMut(&Element) -> bool,
     ) -> (usize, &'static str, u128) {
+        self.walk_pruned(|node| {
+            if visit(node) {
+                Visit::Descend
+            } else {
+                Visit::Stop
+            }
+        })
+    }
+
+    /// Same traversal as `walk_report`, leaving out the subtrees the visitor
+    /// skips. Skipped nodes still count towards the node ceiling.
+    pub fn walk_pruned(
+        &self,
+        mut visit: impl FnMut(&Element) -> Visit,
+    ) -> (usize, &'static str, u128) {
         let started = Instant::now();
         let mut queue = std::collections::VecDeque::from([self.clone()]);
         let mut seen: Vec<Element> = Vec::new();
@@ -515,10 +541,13 @@ impl Element {
                 continue;
             }
             seen.push(node.clone());
-            if !visit(&node) {
-                return (seen.len(), "visitor_stop", started.elapsed().as_millis());
+            match visit(&node) {
+                Visit::Descend => queue.extend(node.children()),
+                Visit::Skip => {}
+                Visit::Stop => {
+                    return (seen.len(), "visitor_stop", started.elapsed().as_millis());
+                }
             }
-            queue.extend(node.children());
         }
         (seen.len(), "complete", started.elapsed().as_millis())
     }

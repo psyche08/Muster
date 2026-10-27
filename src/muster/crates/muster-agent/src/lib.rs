@@ -23,6 +23,7 @@ pub mod files;
 pub mod jsonl;
 pub mod model;
 pub mod native_options;
+pub mod native_scan;
 pub mod native_send;
 pub mod native_sidebar;
 pub mod native_step;
