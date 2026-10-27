@@ -587,6 +587,9 @@ pub(super) async fn run(
             && work.is_idle()
             && !release_pending
             && gate.phase() == Phase::Active
+            // Admission is withheld while the cover is unreported. Leave the
+            // next operation in the queue instead of popping it to a refusal.
+            && !gate.cover_quiet()
         {
             if let Some(next) = queue.pop_front() {
                 if next.cancel.is_cancelled() {

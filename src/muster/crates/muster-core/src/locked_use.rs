@@ -17,6 +17,17 @@ pub const DOMAIN: &str = "MUSTER-LOCKED-USE-V1";
 pub const MIN_TTL: Duration = Duration::from_secs(5);
 pub const MAX_TTL: Duration = Duration::from_secs(15);
 pub const MAX_OBSERVATION_AGE: Duration = Duration::from_millis(250);
+/// How long the cover may go unreported while the watchdog is alive and has
+/// reported no loss. The watchdog owns the cover: it checks the cover's health
+/// every loop, reports a lost cover explicitly, and locks the screen itself if
+/// this process disappears. A gap in its reporting is therefore not evidence
+/// of an uncovered display, only of a stalled sample, and every `CoverLost`
+/// recorded on the owner's Macs was such a gap: a healthy report 250-462 ms
+/// old, with the owner's own poll delayed in the same tick. Treating the first
+/// one as proof aborted sends that nothing was wrong with. Nothing is admitted
+/// while the cover is unreported; only an unreported cover that outlasts this
+/// stops the transaction.
+pub const MAX_COVER_QUIET: Duration = Duration::from_millis(1_000);
 /// A terminal session ends after this long without terminal input, even
 /// while its requester keeps renewing it.
 pub const TERMINAL_IDLE: Duration = Duration::from_secs(600);
@@ -281,6 +292,11 @@ struct Lease {
     action_taken: bool,
     provider_queue: Option<String>,
     relock_after: Option<Instant>,
+    /// A fresh cover report carrying this lease's nonce has been observed.
+    /// Until then a missing report is a cover that never came up.
+    cover_seen: bool,
+    /// Since when the cover has been unreported, while still required.
+    cover_quiet_since: Option<Instant>,
     stop: Option<StopReason>,
 }
 
@@ -539,6 +555,8 @@ impl Gate {
             action_taken: false,
             provider_queue: None,
             relock_after: None,
+            cover_seen: false,
+            cover_quiet_since: None,
             stop: None,
         });
         self.phase = Phase::AwaitingSignature;
@@ -795,7 +813,13 @@ impl Gate {
             }
             return Directive::LockAndKeepCovered(StopReason::UnexpectedScreenState);
         }
+        // While the cover is unreported nothing new is admitted: no operation
+        // starts, no queued operation is dispatched, and an interrupt waits.
+        // Work already in flight continues under the watchdog, which locks the
+        // screen itself the moment the cover is actually lost.
+        let quiet = self.cover_quiet();
         match self.phase {
+            Phase::Active if quiet => Directive::WaitForUnlock,
             Phase::Active if self.lease.as_ref().unwrap().action_taken => Directive::MonitorAction,
             Phase::Active => Directive::ReadyForAction,
             Phase::Armed => Directive::PrepareCoverAndWatchdog,
@@ -942,6 +966,14 @@ impl Gate {
         Ok(lease.deadline)
     }
 
+    /// Whether the newest observation carried no fresh cover report. The
+    /// transaction is held, not stopped, for `MAX_COVER_QUIET`.
+    pub fn cover_quiet(&self) -> bool {
+        self.lease
+            .as_ref()
+            .is_some_and(|lease| lease.cover_quiet_since.is_some())
+    }
+
     /// Terminal input from the session's requester: it keeps the session
     /// from going idle. Nothing else does.
     pub fn note_input(&mut self, requester: DeviceId, now: Instant) {
@@ -988,6 +1020,21 @@ impl Gate {
                 inspection: lease.inspection,
             }
         };
+        // A cover report that is merely older than one observation window is
+        // not a lost cover. Record how long it has been quiet and keep the
+        // transaction while a live watchdog reports no loss; `cover_quiet`
+        // withholds every admission meanwhile.
+        let cover_quiet_too_long = if !require_cover {
+            lease.cover_quiet_since = None;
+            false
+        } else if o.cover_nonce == Some(lease.challenge.nonce) {
+            lease.cover_seen = true;
+            lease.cover_quiet_since = None;
+            false
+        } else {
+            let since = *lease.cover_quiet_since.get_or_insert(now);
+            !lease.cover_seen || now.saturating_duration_since(since) >= MAX_COVER_QUIET
+        };
         let reason = if now >= lease.deadline {
             Some(StopReason::Expired)
         } else if lease.terminal && now >= lease.last_input + TERMINAL_IDLE {
@@ -1009,10 +1056,13 @@ impl Gate {
             Some(StopReason::LocalInput)
         } else if !o.connected {
             Some(StopReason::Disconnected)
-        } else if require_cover && o.cover_nonce != Some(lease.challenge.nonce) {
-            Some(StopReason::CoverLost)
         } else if require_cover && o.watchdog_nonce != Some(lease.challenge.nonce) {
+            // The watchdog process is the cover's owner and witness. Losing it
+            // is a real loss, and it is checked before a quiet cover so the
+            // tolerance below can never apply without a live witness.
             Some(StopReason::WatchdogLost)
+        } else if require_cover && cover_quiet_too_long {
+            Some(StopReason::CoverLost)
         } else {
             None
         };

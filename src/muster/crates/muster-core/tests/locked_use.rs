@@ -609,7 +609,8 @@ fn live_observation_failures_revoke_action_authority() {
         ),
         (|o| o.connected = false, StopReason::Disconnected),
         (|o| o.screen = Screen::Unknown, StopReason::ObservationLost),
-        (|o| o.cover_nonce = None, StopReason::CoverLost),
+        // A missing cover report is held for MAX_COVER_QUIET first; see
+        // `a_briefly_unreported_cover_holds_the_transaction_instead_of_stopping_it`.
         (|o| o.watchdog_nonce = None, StopReason::WatchdogLost),
         (
             |o| o.screen = Screen::Locked,
@@ -623,6 +624,66 @@ fn live_observation_failures_revoke_action_authority() {
         assert_eq!(f.poll(), Directive::LockAndKeepCovered(*reason));
         assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
     }
+}
+
+#[test]
+fn a_briefly_unreported_cover_holds_the_transaction_instead_of_stopping_it() {
+    let mut f = Fixture::new();
+    let c = f.active();
+    // The watchdog is alive and reports no loss; its ready status is only
+    // older than one observation window, as every CoverLost on the owner's
+    // Macs was. Nothing new is admitted while the cover is unreported.
+    f.observation.cover_nonce = None;
+    assert_eq!(f.poll(), Directive::WaitForUnlock);
+    assert!(f.gate.cover_quiet());
+    assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
+    assert_eq!(f.gate.phase(), Phase::Active);
+    assert_eq!(f.gate.last_stop(), None);
+    // A fresh report resumes the same transaction; nothing was replayed.
+    f.tick(500);
+    f.observation.cover_nonce = Some(*c.nonce());
+    assert_eq!(f.poll(), Directive::ReadyForAction);
+    assert!(!f.gate.cover_quiet());
+    f.action(f.peer, "turn-1", &[9; 32]).unwrap();
+}
+
+#[test]
+fn an_unreported_cover_that_outlasts_the_tolerance_stops_the_transaction() {
+    let mut f = Fixture::new();
+    f.active();
+    f.observation.cover_nonce = None;
+    assert_eq!(f.poll(), Directive::WaitForUnlock);
+    f.tick(999);
+    assert_eq!(f.poll(), Directive::WaitForUnlock);
+    f.tick(1);
+    assert_eq!(
+        f.poll(),
+        Directive::LockAndKeepCovered(StopReason::CoverLost)
+    );
+    assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
+}
+
+#[test]
+fn a_cover_that_never_reported_is_lost_at_once() {
+    let mut f = Fixture::new();
+    let c = f.arm();
+    // Nothing ever carried this lease's nonce, so there is no stale evidence
+    // to tolerate: the cover never came up.
+    f.observation.cover_nonce = None;
+    assert!(f.consume(&c).is_err());
+    assert_eq!(f.gate.last_stop(), Some(StopReason::CoverLost));
+}
+
+#[test]
+fn a_lost_watchdog_is_never_tolerated_as_a_quiet_cover() {
+    let mut f = Fixture::new();
+    f.active();
+    f.observation.cover_nonce = None;
+    f.observation.watchdog_nonce = None;
+    assert_eq!(
+        f.poll(),
+        Directive::LockAndKeepCovered(StopReason::WatchdogLost)
+    );
 }
 
 #[test]
@@ -1602,7 +1663,16 @@ fn manual_maintenance_cannot_revive_expired_or_uncovered_console() {
         f.manual_active(true);
         match failure {
             "expired" => f.tick(15_000),
-            "cover" => f.observation.cover_nonce = None,
+            "cover" => {
+                // Held on the first quiet tick, stopped once the gap outlasts
+                // MAX_COVER_QUIET. Neither tick revives anything.
+                f.observation.cover_nonce = None;
+                f.gate
+                    .maintain_device(f.roster.state(), &f.policy, f.now, f.observation)
+                    .unwrap();
+                assert!(f.gate.cover_quiet());
+                f.tick(1_000);
+            }
             "watchdog" => f.observation.watchdog_nonce = None,
             "input" => f.observation.input_generation = Some(8),
             "console" => f.observation.console.as_mut().unwrap().audit_session += 1,

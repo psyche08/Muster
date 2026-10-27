@@ -471,7 +471,11 @@ impl ConsoleGuard for Guard {
         GuardSample {
             observed_unlock,
             status_age: self.last.map(|(_, at)| at.elapsed()),
-            alive: alive && covered,
+            // The watchdog's own liveness. Reporting it only together with a
+            // fresh cover status made one stalled sample look like a lost
+            // watchdog as well as a lost cover, and stopped the transaction
+            // twice over for a gap the watchdog itself never saw.
+            alive,
             covered,
             failed: !alive
                 || self

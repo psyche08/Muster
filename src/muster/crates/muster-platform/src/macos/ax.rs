@@ -18,6 +18,8 @@ use core_foundation_sys::base::CFTypeRef;
 use core_foundation_sys::string::CFStringRef;
 
 pub type AXError = i32;
+/// kAXErrorInvalidUIElement: the element is gone and answers nothing.
+pub const INVALID_ELEMENT: AXError = -25202;
 type AXUIElementRef = *const c_void;
 
 #[link(name = "ApplicationServices", kind = "framework")]

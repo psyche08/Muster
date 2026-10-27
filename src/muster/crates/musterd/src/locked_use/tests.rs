@@ -864,14 +864,30 @@ async fn completion_and_cancellation_keep_cover_and_console_until_ax_queue_drain
         if stop != "completion" {
             if stop == "cancel" {
                 owner.cancel(peer, &nonce, None).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(120)).await;
+                assert!(
+                    !os.unlocked.load(Ordering::SeqCst),
+                    "cancel locks promptly under cover"
+                );
             } else {
+                // The guard reports no cover, and no loss. The transaction is
+                // held while the gap can still be a stalled sample, admitting
+                // nothing new, and relocks once it outlasts MAX_COVER_QUIET.
                 os.covered.store(false, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(120)).await;
+                assert!(
+                    os.unlocked.load(Ordering::SeqCst),
+                    "a briefly unreported cover is held, not stopped"
+                );
+                tokio::time::sleep(
+                    muster_core::locked_use::MAX_COVER_QUIET + Duration::from_millis(300),
+                )
+                .await;
+                assert!(
+                    !os.unlocked.load(Ordering::SeqCst),
+                    "an unreported cover that outlasts the tolerance locks under cover"
+                );
             }
-            tokio::time::sleep(Duration::from_millis(120)).await;
-            assert!(
-                !os.unlocked.load(Ordering::SeqCst),
-                "cancel locks promptly under cover"
-            );
         } else {
             assert!(
                 os.unlocked.load(Ordering::SeqCst),
