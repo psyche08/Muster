@@ -1,7 +1,7 @@
 # ADR 0056: Native session identity and warm Claude creation
 
 - Date: 2026-10-27
-- Status: Accepted; Codex continuation verified, final Claude repetition awaiting quiet input
+- Status: Accepted; duplicate scheduler project names remain an acceptance blocker
 - Related: ADR 0055, PR 52; supersedes its new-window-only rule for the Claude main shell
 
 ## Context
@@ -143,3 +143,37 @@ changes; a subsequent 45-second admission check could not obtain 15 quiet
 seconds and started no desktop test. Retain failed aliases unchanged, preserve
 the deployed version and request a quiet console before final repetition.
 Codex cold/zero-window checks remain explicitly deferred by the operator.
+
+### Final scheduler repetition and requested cleanup
+
+The operator subsequently deferred Claude cold repetition to preserve an
+unrelated running task. Its window and task were not stopped. The installed
+daemon hash still matched `826d522` above.
+
+A new Codex scheduler issue failed both scheduler-managed attempts at its
+30-second no-progress deadline. The exact native-create ledger entries were
+rejected when console authorization ended; both bindings remained attempted
+with no provider identity. These attempts were not manually replayed. A fresh
+direct test using a uniquely named project returned the real provider marker.
+Scoped project-state inspection found two projects named `workdir`, including
+the new scheduler directory. The existing exact-label-to-single-root proof
+therefore cannot establish which directory is selected. This is an unresolved
+runtime limitation for ordinary repeated scheduler directories; do not relax
+the path proof, claim acceptance, or merge the PR until it is fixed.
+
+The operator then requested removal of test tasks and directories. Four
+synthetic scheduler issues were permanently deleted through the authenticated
+service API, and a follow-up GET returned 404 for each. Their four work roots,
+the dedicated directory containing 25 direct test directories, the earlier
+temporary acceptance root, and 30 test-only runtime binding namespaces were
+removed. Two test-owned REPL processes were terminated before removing their
+working directories. Seven identified Codex test conversations and the two
+agents created for these tests were archived through their supported APIs;
+archival is not a claim of permanent conversation deletion. The pre-existing
+agent, business tasks, provider history outside that archive set, container
+login, application data root and installed candidate were retained. Temporary
+screen keep-awake was ended. No new test tasks were created after cleanup.
+
+Keep PR 52 unmerged with the duplicate-project limitation visible. The recorded
+earlier receipts remain historical evidence; deleting test artifacts does not
+turn the final failed scheduler repetition into a passing result.
