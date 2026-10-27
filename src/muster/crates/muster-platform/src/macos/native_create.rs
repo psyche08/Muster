@@ -177,10 +177,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     }
     let generation = input::user_input_generation();
     let bundle = bundle_path(profile)?;
-    let was_running = !native_app::app_pids(profile).is_empty();
-    if !was_running {
-        open(&bundle, None)?;
-    }
+    // Activate the signed app before using its menu. A running process with
+    // no windows may otherwise acknowledge AXPress without opening anything.
+    open(&bundle, None)?;
     let start_wait = Instant::now();
     let pid = loop {
         console()?;
@@ -202,9 +201,9 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     guard.check()?;
     let root = Element::application(pid);
     root.enable_manual_accessibility();
-    // A cold launch can restore windows asynchronously. Settle that set before
-    // taking the baseline; it never authorizes an existing window for input.
-    if !was_running {
+    // Launch/activation and AX enablement can publish windows asynchronously.
+    // Settle every baseline; existing windows never authorize composer input.
+    {
         let until = Instant::now() + Duration::from_secs(8);
         let mut previous = windows(&root);
         let mut stable = Instant::now();
@@ -220,7 +219,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
                 break;
             }
             if Instant::now() >= until {
-                return Err(unavailable("Cold launch did not settle its windows"));
+                return Err(unavailable("Native activation did not settle its windows"));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -303,32 +302,50 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     };
-    // The only accepted trust dialog names this exact selected directory.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    if let Some(trust) = unique(&window, |n| {
-        n.role() == "AXButton" && (label(n, "Trust folder") || label(n, "Trust workspace"))
-    })? {
-        if !nodes(&window)?
-            .iter()
-            .any(|n| n.role() == "AXStaticText" && n.string("AXValue").as_deref() == Some(cwd_text))
+    // Both providers can expose the window before a late trust dialog. Keep
+    // its object identity and wait for the complete form, pressing trust once.
+    let deadline = Instant::now() + Duration::from_secs(12);
+    let mut trusted = false;
+    let (page, composer) = loop {
+        guard.check()?;
+        if !windows(&root).contains(&window) {
+            return Err(conflict("New native window was replaced"));
+        }
+        if !trusted
+            && let Some(trust) = unique(&window, |n| {
+                n.role() == "AXButton" && (label(n, "Trust folder") || label(n, "Trust workspace"))
+            })?
         {
-            return Err(conflict(
-                "Trust dialog does not name the requested directory",
+            if !nodes(&window)?.iter().any(|n| {
+                n.role() == "AXStaticText" && n.string("AXValue").as_deref() == Some(cwd_text)
+            }) {
+                return Err(conflict(
+                    "Trust dialog does not name the requested directory",
+                ));
+            }
+            guard.press(&trust)?;
+            trusted = true;
+        }
+        if let Some(page) = unique(&window, |n| {
+            n.role() == "AXWebArea"
+                && n.string("AXURL").is_some_and(|u| {
+                    if provider == "codex" {
+                        u == "app://-/index.html"
+                    } else {
+                        matches!(u.as_str(), "about:blank" | "https://claude.ai/epitaxy")
+                    }
+                })
+        })? && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
+        {
+            break (page, composer);
+        }
+        if Instant::now() >= deadline {
+            return Err(unavailable(
+                "Native form did not become ready; no submission",
             ));
         }
-        guard.press(&trust)?;
-    }
-    let page = wait(&guard, &window, |n| {
-        n.role() == "AXWebArea"
-            && n.string("AXURL").as_deref()
-                == Some(if provider == "codex" {
-                    "app://-/index.html"
-                } else {
-                    "about:blank"
-                })
-    })
-    .await?;
-    let composer = wait(&guard, &page, |n| profile.controls.composer.matches(n)).await?;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
     let form = || -> Result<(), Error> {
         guard.check()?;
         if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
@@ -342,8 +359,14 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
                     && n.string("AXDescription").as_deref() == Some("Environment: This computer")
             }) && all.iter().any(|n| {
                 n.role() == "AXPopUpButton"
-                    && n.string("AXHelp").as_deref() == Some(cwd_text)
-                    && n.string("AXDescription") == Some(format!("Folder: {cwd_text}"))
+                    && n.string("AXHelp").is_some_and(|display| {
+                        let home = std::env::var_os("HOME").map(PathBuf::from);
+                        muster_agent::native_runtime::directory_label_matches(
+                            &display,
+                            cwd,
+                            home.as_deref(),
+                        ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
+                    })
             })
         } else {
             let labels: Vec<_> = all

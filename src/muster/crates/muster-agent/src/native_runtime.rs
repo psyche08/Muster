@@ -66,8 +66,17 @@ fn executable(path: &Path) -> bool {
     }
 }
 
-/// Resolve only the selected local project. Duplicate labels or multiple roots
-/// cannot authorize a new native session, even if one root happens to match.
+/// Accept only the full path or its exact known-home display abbreviation.
+pub fn directory_label_matches(label: &str, cwd: &Path, home: Option<&Path>) -> bool {
+    if cwd.to_str() == Some(label) {
+        return true;
+    }
+    home.and_then(|home| cwd.strip_prefix(home).ok())
+        .and_then(Path::to_str)
+        .is_some_and(|relative| !relative.is_empty() && label == format!("~/{relative}"))
+}
+
+/// Resolve only one selected project with one exact root.
 pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> bool {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return false;
@@ -90,6 +99,35 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn directory_labels_require_the_entire_authorized_path() {
+        let home = Path::new("/tmp/native-fixture/home");
+        let cwd = home.join("Documents/Multica/task");
+        assert!(directory_label_matches(
+            cwd.to_str().unwrap(),
+            &cwd,
+            Some(home)
+        ));
+        assert!(directory_label_matches(
+            "~/Documents/Multica/task",
+            &cwd,
+            Some(home)
+        ));
+        for bad in [
+            "task",
+            "Multica/task",
+            "~/task",
+            "~/Documents/Multica/task-other",
+            "/tmp/native-fixture/other/Documents/Multica/task",
+        ] {
+            assert!(!directory_label_matches(bad, &cwd, Some(home)));
+        }
+        assert!(!directory_label_matches(
+            "~/Documents/Multica/task",
+            &cwd,
+            None
+        ));
+    }
     #[cfg(unix)]
     #[test]
     fn standalone_script_cli_is_available_only_when_executable() {

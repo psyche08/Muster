@@ -126,3 +126,16 @@ The first native protocol attempt was refused before submission because
 requirements with `=`; the unchanged strict bundle/team requirements then passed
 for both target applications. This is a launch-argument correction, not a
 signature-validation relaxation.
+
+Windowless Claude opens its main Code page at `https://claude.ai/epitaxy`,
+whereas a new standalone Code window uses `about:blank`. Bind the newly created
+window by object identity and accept either exact page only after finding its
+composer and verifying local mode and directory. Wait for late trust dialogs
+until the form is ready; never repeat a trust press. Home-relative folder labels
+are accepted only when they are the exact `~/` rendering of the requested full
+directory beneath the known home, not a basename or suffix match.
+
+Codex with a running process and zero windows acknowledged its New Window menu
+action without creating a window. Activate the verified bundle and settle AX
+window publication before taking the baseline for all launches. Only a later
+new window may receive input; activation never authorizes a restored window.
