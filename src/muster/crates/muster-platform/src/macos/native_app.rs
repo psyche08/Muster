@@ -118,6 +118,51 @@ fn draft_selection(
     composer.set_string("AXSelectedText", text)
 }
 
+/// One attempt to empty an editor. Shared Rust chose the mechanism and
+/// confirms the result; this performs the OS calls and rechecks authority and
+/// local input between them. Nothing here can submit.
+pub(super) fn clear_editor(
+    profile: &AppProfile,
+    editor: &Element,
+    with: muster_agent::native_send::ClearWith,
+) -> Result<(), ax::AXError> {
+    use muster_agent::native_send::ClearWith;
+    let generation = user_input_generation();
+    let check = || {
+        if user_input_generation() != generation || muster_agent::control_guard::check().is_err() {
+            Err(-25200) // AX failure: authority/input changed between OS calls.
+        } else {
+            Ok(())
+        }
+    };
+    check()?;
+    match with {
+        // A DOM write. Chromium applies it to a plain field; a rich editor
+        // may re-read it or ignore it, which the confirmation decides.
+        ClearWith::Value => editor.set_string("AXValue", ""),
+        // An editing command (`beforeinput`) the editor applies to its own
+        // document, like the selection draft write for Lexical.
+        ClearWith::Selection => {
+            editor.set_bool("AXFocused", true)?;
+            check()?;
+            let length = editor
+                .string("AXValue")
+                .map(|value| {
+                    if profile.is_empty(&value) {
+                        0
+                    } else {
+                        value.encode_utf16().count()
+                    }
+                })
+                .ok_or(-25212)?; // An unreadable draft is not an empty draft.
+            check()?;
+            editor.set_range("AXSelectedTextRange", 0, length)?;
+            check()?;
+            editor.set_string("AXSelectedText", "")
+        }
+    }
+}
+
 /// A live element answers a profile's queries.
 impl muster_agent::profile::AxQuery for Element {
     fn role(&self) -> String {
@@ -1117,12 +1162,21 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
                 .collect();
         }
     }
+    // Electron rebuilds the composer and its controls around a write. A
+    // candidate it destroyed answers kAXErrorInvalidUIElement and can press
+    // nothing, so it must not make the live control ambiguous. Its unreadable
+    // enabled state otherwise refused the send as "found 2".
+    let stale = send
+        .iter()
+        .filter(|button| button.status("AXEnabled") == ax::INVALID_ELEMENT)
+        .count();
+    send.retain(|button| button.status("AXEnabled") != ax::INVALID_ELEMENT);
     let enabled: Vec<_> = send.iter().map(|button| button.bool("AXEnabled")).collect();
     send = muster_agent::native_send::actionable_submits(&enabled)
         .into_iter()
         .map(|index| send[index].clone())
         .collect();
-    diagnostics.push(format!("controls composers={} send_buttons={} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms)", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis()));
+    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms)", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis()));
     Controls {
         composer,
         send,
@@ -1547,6 +1601,96 @@ impl NativeAppController {
         }
         Ok(())
     }
+    /// Empty the composer and confirm it empty before any draft write.
+    /// Electron's rich editors merge a value written over a draft, so the
+    /// exact echo could never match and the request was reported as not sent
+    /// while a mixed draft stayed behind. Shared Rust owns the policy; the
+    /// surface is resolved again between attempts because a write can rebuild
+    /// it. Nothing here presses anything.
+    /// `answering` is the answer path, where a waiting question card is
+    /// expected and must not refuse the clear; a send refuses while a card
+    /// waits, as it always has. It also reports `None` for a conversation
+    /// with no visible composer: there is nothing to clear, and the card's
+    /// own controls are what the answer drives. A send needs the composer and
+    /// says so.
+    async fn empty_composer(
+        &self,
+        trace: &Trace,
+        generation: u64,
+        expected: Option<&PendingInteraction>,
+        answering: bool,
+    ) -> Result<Option<Element>, Error> {
+        use muster_agent::native_send::{ClearWait, Clearing};
+        let started = std::time::Instant::now();
+        let mut wait = ClearWait::default();
+        loop {
+            muster_agent::control_guard::check()?;
+            if user_input_generation() != generation {
+                return Err(Error::Conflict(
+                    "local input changed before clearing the composer; not sent".into(),
+                ));
+            }
+            if !answering {
+                self.composer_question_guard(expected)?;
+            }
+            let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let Some(composer) = fresh.composer.clone() else {
+                *self.surface.lock().unwrap() = fresh;
+                if answering {
+                    return Ok(None);
+                }
+                return Err(Error::Unavailable(
+                    "The native prompt is not visible; not sent".into(),
+                ));
+            };
+            self.check_write_surface(&fresh.web_area, &composer)?;
+            *self.surface.lock().unwrap() = fresh;
+            let value = composer.string("AXValue");
+            let draft = value.as_deref().map(|value| !self.profile.is_empty(value));
+            match wait.observe(started.elapsed(), draft) {
+                Clearing::Done => {
+                    if wait.attempts() > 0 {
+                        trace.record(format_args!(
+                            "composer_cleared attempts={} elapsed_ms={}",
+                            wait.attempts(),
+                            started.elapsed().as_millis()
+                        ));
+                    }
+                    return Ok(Some(composer));
+                }
+                Clearing::Clear(with) => {
+                    trace.record(format_args!(
+                        "composer_clear with={with:?} value_chars={:?} elapsed_ms={}",
+                        value.as_ref().map(|value| value.chars().count()),
+                        started.elapsed().as_millis()
+                    ));
+                    clear_editor(self.profile, &composer, with).map_err(|code| {
+                        Error::Unavailable(format!("AX composer clear failed ({code}); not sent"))
+                    })?;
+                }
+                Clearing::Wait => {}
+                Clearing::Timeout => {
+                    log::warn!(
+                        "native_app send to {}: the composer still held a draft after {} ms ({} clear attempts); not sent",
+                        &self.session[..8.min(self.session.len())],
+                        started.elapsed().as_millis(),
+                        wait.attempts()
+                    );
+                    return Err(Error::Unavailable(
+                        "the native composer could not be emptied; nothing was written or sent"
+                            .into(),
+                    ));
+                }
+                Clearing::Unreadable => {
+                    return Err(Error::Unavailable(
+                        "the prompt cannot be read; not sent".into(),
+                    ));
+                }
+            }
+            tokio::time::sleep(ECHO_POLL).await;
+        }
+    }
+
     async fn send_prompt(
         &self,
         text: &str,
@@ -1637,6 +1781,15 @@ impl NativeAppController {
                 ));
             }
             if action == DraftAction::Write {
+                // Start from an empty composer: a write over a draft is
+                // merged, never replaced, so the echo below could not match.
+                trace.stage("clear_draft");
+                let current = self
+                    .empty_composer(&trace, generation, expected, false)
+                    .await?
+                    .ok_or_else(|| {
+                        Error::Unavailable("The native prompt is not visible; not sent".into())
+                    })?;
                 trace.stage("write_draft");
                 self.composer_question_guard(expected)?;
                 draft(self.profile, &current, text).map_err(|code| {
@@ -2109,7 +2262,13 @@ impl Controller for NativeAppController {
         if self.profile.controls.questions.is_none() {
             return self.surface_diagnostic();
         }
-        self.inspect_question_form()
+        // With no card waiting there is no form to read, but the composer and
+        // send controls this session would drive are what the operator is
+        // after. Report them instead of only "no pending native question".
+        match self.inspect_question_form() {
+            Err(Error::NotFound(_)) => self.surface_diagnostic(),
+            other => other,
+        }
     }
 
     async fn answer_questions(

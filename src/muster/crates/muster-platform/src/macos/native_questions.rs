@@ -1017,12 +1017,11 @@ impl NativeAppController {
                 Error::Unavailable("The question's custom answer field is not visible".into())
             })?;
             let element = &tree.nodes[editor].element;
-            let existing = element.string("AXValue").unwrap_or_default();
-            if !existing.trim().is_empty() && existing.trim() != plan.text {
-                return Err(Error::Conflict(
-                    "The native question already contains a different draft. Review or clear that draft in the native app before retrying; it was not overwritten".into(),
-                ));
-            }
+            // Start from an empty field. A value written over a draft is
+            // merged by Electron's editors, so the answer would be mixed with
+            // whatever the field already held and submitted that way.
+            self.empty_question_editor(pending, generation, element, &plan.text)
+                .await?;
             self.check_question_control(pending, generation, element)?;
             muster_agent::control_guard::delivery_attempt();
             self.question_writes
@@ -1038,6 +1037,68 @@ impl NativeAppController {
                 Error::Unavailable("Question controls changed before the page action".into())
             })?;
         Ok(FilledQuestion::Form(tree, form))
+    }
+
+    /// Empty the question's answer field and confirm it empty before the
+    /// answer is written. Shared Rust decides each attempt and owns the
+    /// confirmation; this only reads and clears, and submits nothing. An
+    /// answer that is already exactly in the field needs no clearing.
+    async fn empty_question_editor(
+        &self,
+        pending: &PendingInteraction,
+        generation: u64,
+        element: &Element,
+        text: &str,
+    ) -> Result<(), Error> {
+        use muster_agent::native_send::{ClearWait, Clearing};
+        let started = Instant::now();
+        let mut wait = ClearWait::default();
+        loop {
+            self.check_question_control(pending, generation, element)?;
+            let draft = element
+                .string("AXValue")
+                .map(|value| !value.trim().is_empty() && value.trim() != text);
+            match wait.observe(started.elapsed(), draft) {
+                Clearing::Done => {
+                    if wait.attempts() > 0 {
+                        log::info!(
+                            "AX question field cleared: session={} question={} attempts={} elapsed_ms={}",
+                            self.session,
+                            pending.id,
+                            wait.attempts(),
+                            started.elapsed().as_millis()
+                        );
+                    }
+                    return Ok(());
+                }
+                Clearing::Clear(with) => {
+                    super::clear_editor(self.profile, element, with).map_err(|code| {
+                        Error::Unavailable(format!(
+                            "Question answer field clear failed ({code}); nothing was submitted"
+                        ))
+                    })?;
+                }
+                Clearing::Wait => tokio::time::sleep(Duration::from_millis(50)).await,
+                Clearing::Timeout => {
+                    log::warn!(
+                        "AX question field still held a draft: session={} question={} attempts={} elapsed_ms={}; nothing was submitted",
+                        self.session,
+                        pending.id,
+                        wait.attempts(),
+                        started.elapsed().as_millis()
+                    );
+                    return Err(Error::Unavailable(
+                        "The question's answer field could not be emptied; nothing was submitted"
+                            .into(),
+                    ));
+                }
+                Clearing::Unreadable => {
+                    return Err(Error::Unavailable(
+                        "The question's answer field cannot be read; nothing was submitted".into(),
+                    ));
+                }
+            }
+        }
     }
 
     fn submit_question_page(
@@ -1175,6 +1236,18 @@ impl NativeAppController {
                 Ok((pending, plans))
             })
             .await?;
+        // A draft left in the conversation's own composer breaks answering:
+        // it adds a second, enabled Send to the surface and holds the app's
+        // focus, so the card's Submit cannot take focus and no activation key
+        // is sent. Empty every input this answer depends on first, and confirm
+        // it empty, so the console starts from a known state.
+        {
+            let mut trace = Trace::new("answer", self.profile.app.provider, &self.session);
+            trace.stage("clear_composer");
+            // A conversation with no visible composer has nothing to clear.
+            self.empty_composer(&trace, generation, None, true).await?;
+            trace.finish();
+        }
         if let Some(first) = plans.first().filter(|p| {
             cards(self.profile).paged && !muster_agent::claude_cards::immediate(&p.question)
         }) {

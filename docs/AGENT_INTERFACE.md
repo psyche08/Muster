@@ -1263,3 +1263,53 @@ logs include counts of recognized enabled/disabled controls without card content
 A test message reached the specified idle Mac-C session, but `/usr/bin/true`
 was automatically approved by the environment, so live approval-card acceptance
 is still pending. These source changes are not yet installed-device validation.
+
+## Inputs cleared before every submission, and a quiet cover (2026-10-27)
+
+See [ADR 0055](adr/0055-clear-every-input-before-a-submission.md). The daemon
+logs of all three Macs were read for every failed send and answer. A draft left
+in an editor was the largest cause: a write over it is merged by Electron's rich
+editors instead of replacing it, so the composer held the old draft *and*
+Muster's text (50 characters written, 70 read back; 1,721 written, 2,423 read
+back), the exact echo never matched, and the request was refused as "the app did
+not confirm the draft" — 191 times across the three devices. A draft also
+refused an answer outright, added a second enabled Send to the surface
+("expected one send button, found 2") and held the application's focus so a
+question card's Submit could not take it.
+
+Every submission now starts from a confirmed-empty editor. Shared Rust decides
+each attempt and owns the confirmation: it tries the editor's own editing
+command (select the whole value, replace the selection with nothing), then a
+plain empty value write, alternating every 400 ms for at most 2 s, because no
+profile can state which mechanism an app build honors. This clears the composer
+before a draft write, a question's custom answer field before the answer, and
+the conversation's composer before a card is answered. A field already holding
+exactly the text to write is left alone, and a conversation with no visible
+composer has nothing to clear; an unreadable value is never an empty one. An explicit send already replaced a differing native draft, so this makes
+that decision work; for a question field it is a change — the draft is cleared
+instead of preserved, so each submission starts from a known state. An editor
+that cannot be emptied is reported as definitely not sent.
+
+`CoverLost` never once meant an uncovered display. All 37 stops recorded on
+Mac-A and Mac-B carry the same evidence: a healthy watchdog report 250-462 ms
+old, with the owner's own poll delayed in the same tick, while the watchdog —
+which checks the cover every loop and reports a loss explicitly — reported
+none. A cover that carries no fresh report is now held for one second once the
+lease has seen one, with every admission withheld meanwhile: no operation
+starts, no queued operation is dispatched, and the queue is left untouched
+rather than popped to a refusal. Work already in flight continues, because the
+watchdog owns the cover and locks the screen itself if this process disappears.
+A lost watchdog is still checked first, and a cover that never reported at all
+is still lost at once. The watchdog's reported liveness is now its own, no
+longer conflated with a fresh cover status.
+
+A submit candidate the app destroyed around a write answers
+`kAXErrorInvalidUIElement`; it is excluded before the controls are counted,
+since an element that is gone can press nothing. Unknown-but-live duplicates
+remain ambiguous. The question diagnostic falls back to the surface diagnostic
+when no card is waiting, so the composer and send controls a session would
+drive can be read without one.
+
+Source changes with unit coverage only. Clearing either editor against the live
+Claude and ChatGPT desktop apps, and a send during a watchdog reporting gap,
+have not been accepted on an installed build.

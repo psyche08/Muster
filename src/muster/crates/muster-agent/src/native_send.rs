@@ -239,11 +239,131 @@ impl DraftWait {
     }
 }
 
+/// How to empty an editor before writing into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClearWith {
+    /// Select the whole value and replace the selection with nothing: an
+    /// editing command the editor applies to its own document.
+    Selection,
+    /// Write an empty value: a DOM write a rich editor may re-read.
+    Value,
+}
+
+/// What an editor's value says about emptying it.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Clearing {
+    /// The editor is empty: write the text.
+    Done,
+    /// Perform this attempt now.
+    Clear(ClearWith),
+    /// An attempt is settling; read the value again.
+    Wait,
+    /// The editor still holds a draft. Nothing was written or submitted.
+    Timeout,
+    /// The value cannot be read. An unreadable draft is not an empty one.
+    Unreadable,
+}
+
+/// A draft left in an editor is not replaced by writing a value over it:
+/// Electron's rich editors re-read their own document and merge, so the field
+/// ends up holding the old draft *and* Muster's text. The exact echo can then
+/// never match, the request is reported as not sent, and the mixed draft stays
+/// behind for the next attempt to grow. Every submission therefore empties
+/// each editor it will use, confirms it empty, and only then writes. Both
+/// mechanisms are attempted in turn because no profile can state which one a
+/// given app build honors, and the confirmation decides.
+pub const CLEAR_DEADLINE: Duration = Duration::from_secs(2);
+/// How long one attempt may settle before the next mechanism is tried.
+const CLEAR_SETTLE: Duration = Duration::from_millis(400);
+
+#[derive(Default)]
+pub struct ClearWait {
+    attempts: usize,
+    last: Option<Duration>,
+}
+
+impl ClearWait {
+    /// `draft` is whether the editor's value is a draft; `None` is unreadable.
+    pub fn observe(&mut self, elapsed: Duration, draft: Option<bool>) -> Clearing {
+        match draft {
+            None => Clearing::Unreadable,
+            Some(false) => Clearing::Done,
+            Some(true) if elapsed >= CLEAR_DEADLINE => Clearing::Timeout,
+            Some(true) if self.last.is_some_and(|at| elapsed < at + CLEAR_SETTLE) => Clearing::Wait,
+            Some(true) => {
+                self.last = Some(elapsed);
+                self.attempts += 1;
+                Clearing::Clear(if self.attempts % 2 == 1 {
+                    ClearWith::Selection
+                } else {
+                    ClearWith::Value
+                })
+            }
+        }
+    }
+
+    /// Whether this editor held a draft that had to be emptied. Diagnostics
+    /// only; it never relaxes the confirmation.
+    pub fn attempts(&self) -> usize {
+        self.attempts
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     fn ms(n: u64) -> Duration {
         Duration::from_millis(n)
+    }
+
+    #[test]
+    fn an_editor_is_emptied_through_both_mechanisms_before_any_write() {
+        let mut wait = ClearWait::default();
+        // An empty editor is written into directly.
+        assert_eq!(wait.observe(ms(0), Some(false)), Clearing::Done);
+        assert_eq!(wait.attempts(), 0);
+
+        // A draft is emptied through the editor's own editing command first,
+        // then by a value write, alternating while the value is re-read.
+        let mut wait = ClearWait::default();
+        assert_eq!(
+            wait.observe(ms(0), Some(true)),
+            Clearing::Clear(ClearWith::Selection)
+        );
+        assert_eq!(wait.observe(ms(100), Some(true)), Clearing::Wait);
+        assert_eq!(wait.observe(ms(399), Some(true)), Clearing::Wait);
+        assert_eq!(
+            wait.observe(ms(400), Some(true)),
+            Clearing::Clear(ClearWith::Value)
+        );
+        assert_eq!(
+            wait.observe(ms(800), Some(true)),
+            Clearing::Clear(ClearWith::Selection)
+        );
+        // The editor accepted it: the write may proceed.
+        assert_eq!(wait.observe(ms(850), Some(false)), Clearing::Done);
+        assert_eq!(wait.attempts(), 3);
+    }
+
+    #[test]
+    fn an_editor_that_keeps_its_draft_or_cannot_be_read_blocks_the_write() {
+        let mut wait = ClearWait::default();
+        assert_eq!(
+            wait.observe(ms(0), Some(true)),
+            Clearing::Clear(ClearWith::Selection)
+        );
+        for at in [400, 800, 1_200, 1_600] {
+            assert!(matches!(
+                wait.observe(ms(at), Some(true)),
+                Clearing::Clear(_)
+            ));
+            assert_eq!(wait.observe(ms(at + 100), Some(true)), Clearing::Wait);
+        }
+        assert_eq!(wait.observe(ms(2_000), Some(true)), Clearing::Timeout);
+        // The deadline is final: a later read does not reopen the attempts.
+        assert_eq!(wait.observe(ms(2_400), Some(true)), Clearing::Timeout);
+        // An unreadable value is never treated as an emptied editor.
+        assert_eq!(wait.observe(ms(10), None), Clearing::Unreadable);
     }
 
     #[test]

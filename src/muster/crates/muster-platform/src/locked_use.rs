@@ -15,7 +15,11 @@ pub struct ConsoleSample {
 }
 
 pub struct GuardSample {
+    /// A ready watchdog status fresher than one observation window.
     pub covered: bool,
+    /// The watchdog process is running and accepted the owner's heartbeat.
+    /// Independent of `covered`: a stalled sample leaves the cover
+    /// unreported, not the watchdog lost.
     pub alive: bool,
     /// Terminal watchdog failure, distinct from startup not yet being ready.
     pub failed: bool,
