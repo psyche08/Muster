@@ -108,6 +108,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0054](0054-native-multica-targeted-installation.md) | Accepted | Targeted installation of the native Multica workbench |
 
+| [0055](0055-multica-native-runtime.md) | Accepted | Desktop-first Multica runtimes and provider protocol adapters |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

@@ -141,6 +141,7 @@ message Request {
     ForwardOpenRequest forward_open = 69;
     MulticaRequest multica = 70;
     MulticaBrowseRequest multica_browse = 71;
+    AgentNativeCreateRequest agent_native_create = 72;
   }
 }
 
@@ -1059,4 +1060,12 @@ message MulticaPage {
   MulticaIssue issue = 8; MulticaAgent agent = 9;
   bool busy = 10; string error = 11;
   uint32 next_offset = 12; uint32 previous_offset = 13;
+}
+
+// Local-owner desktop creation used by the scheduler bridge. No CLI fallback.
+message AgentNativeCreateRequest {
+  string op_id = 1;
+  string provider = 2;
+  string directory = 3;
+  string prompt = 4;
 }

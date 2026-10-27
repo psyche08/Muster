@@ -1,0 +1,420 @@
+//! Native new-session OS adapter. The daemon owns authorization and delivery.
+use super::{
+    ax::{self, Element},
+    codesign, input, native_app,
+};
+use muster_agent::{Error, control_guard, profile::App};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
+
+fn unavailable(s: impl Into<String>) -> Error {
+    Error::Unavailable(s.into())
+}
+fn conflict(s: &str) -> Error {
+    Error::Conflict(s.into())
+}
+fn nodes(root: &Element) -> Result<Vec<Element>, Error> {
+    let mut nodes = Vec::new();
+    let (_, report, _) = root.walk_report(|n| {
+        nodes.push(n.clone());
+        true
+    });
+    if report != "complete" {
+        return Err(unavailable("Incomplete native form"));
+    }
+    Ok(nodes)
+}
+fn unique(root: &Element, test: impl Fn(&Element) -> bool) -> Result<Option<Element>, Error> {
+    let matches: Vec<_> = nodes(root)?.into_iter().filter(test).collect();
+    match matches.len() {
+        0 => Ok(None),
+        1 => Ok(matches.into_iter().next()),
+        _ => Err(conflict("Ambiguous native control")),
+    }
+}
+fn windows(root: &Element) -> Vec<Element> {
+    root.attribute("AXWindows")
+        .map(|v| Element::elements_of(&v))
+        .unwrap_or_default()
+}
+fn label(n: &Element, value: &str) -> bool {
+    ["AXTitle", "AXDescription"]
+        .iter()
+        .any(|a| n.string(a).as_deref() == Some(value))
+}
+fn console() -> Result<(), Error> {
+    control_guard::check()?;
+    if super::lock::session_state()
+        .is_none_or(|s| s.screen_locked || !s.on_console || !s.login_done)
+    {
+        return Err(conflict(
+            "Native creation requires an unlocked active console",
+        ));
+    }
+    Ok(())
+}
+struct Guard {
+    profile: &'static App,
+    pid: u32,
+    start: u64,
+    generation: u64,
+}
+impl Guard {
+    fn check(&self) -> Result<(), Error> {
+        console()?;
+        if codesign::process_start(self.pid) != Some(self.start)
+            || !codesign::process_satisfies(self.pid, &self.profile.app.requirement())
+            || input::user_input_generation() != self.generation
+        {
+            return Err(conflict(
+                "Native process or physical input changed; nothing is retried",
+            ));
+        }
+        Ok(())
+    }
+    fn press(&self, e: &Element) -> Result<(), Error> {
+        self.check()?;
+        e.press()
+            .map_err(|_| unavailable("Native control refused the action"))
+    }
+}
+async fn wait(
+    guard: &Guard,
+    root: &Element,
+    test: impl Fn(&Element) -> bool,
+) -> Result<Element, Error> {
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        guard.check()?;
+        if let Some(n) = unique(root, &test)? {
+            return Ok(n);
+        }
+        if Instant::now() >= deadline {
+            return Err(unavailable("Native control did not appear; no submission"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+fn bundle_path(profile: &App) -> Result<PathBuf, Error> {
+    let name = profile
+        .executable
+        .split('/')
+        .next()
+        .ok_or_else(|| unavailable("Invalid app profile"))?;
+    let mut roots = vec![PathBuf::from("/Applications")];
+    if let Some(home) = std::env::var_os("HOME") {
+        roots.push(PathBuf::from(home).join("Applications"))
+    }
+    let path = roots
+        .into_iter()
+        .map(|r| r.join(name))
+        .find(|p| p.is_dir())
+        .ok_or_else(|| unavailable("Installed desktop app was not found in Applications"))?;
+    let status = std::process::Command::new("/usr/bin/codesign")
+        .args(["--verify", "--strict", "-R", &profile.app.requirement()])
+        .arg(&path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|_| unavailable("Cannot verify app signature"))?;
+    if !status.success() {
+        return Err(unavailable("Desktop app signature is invalid"));
+    }
+    Ok(path)
+}
+fn open(path: &Path, route: Option<&url::Url>) -> Result<(), Error> {
+    console()?;
+    let mut command = std::process::Command::new("/usr/bin/open");
+    command.arg("-a").arg(path);
+    if let Some(route) = route {
+        command.arg(route.as_str());
+    }
+    if !command
+        .status()
+        .map_err(|_| unavailable("App launch failed"))?
+        .success()
+    {
+        return Err(unavailable("App launch was refused"));
+    }
+    Ok(())
+}
+
+/// Retain the exact window/page across submit and provider receipt discovery.
+pub struct Submitted {
+    guard: Guard,
+    root: Element,
+    window: Element,
+    page: Element,
+}
+impl Submitted {
+    pub fn visible(&self) -> Result<bool, Error> {
+        self.guard.check()?;
+        Ok(windows(&self.root).contains(&self.window) && self.window.contains(&self.page))
+    }
+}
+
+pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitted, Error> {
+    let profile = muster_agent::profile::app(provider)
+        .filter(|_| matches!(provider, "codex" | "claude"))
+        .ok_or_else(|| Error::Invalid("Unsupported native provider".into()))?;
+    console()?;
+    if !ax::trusted() {
+        return Err(unavailable(
+            "Native creation needs Accessibility permission",
+        ));
+    }
+    // Quiet admission precedes navigation, never a retry after a side effect.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while input::user_input_idle() < Duration::from_millis(500) {
+        console()?;
+        if Instant::now() >= deadline {
+            return Err(conflict("Physical input is active"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let generation = input::user_input_generation();
+    let bundle = bundle_path(profile)?;
+    let was_running = !native_app::app_pids(profile).is_empty();
+    if !was_running {
+        open(&bundle, None)?;
+    }
+    let start_wait = Instant::now();
+    let pid = loop {
+        console()?;
+        let pids = native_app::app_pids(profile);
+        if pids.len() == 1 {
+            break pids[0];
+        }
+        if pids.len() > 1 || start_wait.elapsed() > Duration::from_secs(10) {
+            return Err(unavailable("Expected one native app process"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    let guard = Guard {
+        profile,
+        pid,
+        start: codesign::process_start(pid).ok_or_else(|| unavailable("App exited"))?,
+        generation,
+    };
+    guard.check()?;
+    let root = Element::application(pid);
+    root.enable_manual_accessibility();
+    // A cold launch can restore windows asynchronously. Settle that set before
+    // taking the baseline; it never authorizes an existing window for input.
+    if !was_running {
+        let until = Instant::now() + Duration::from_secs(8);
+        let mut previous = windows(&root);
+        let mut stable = Instant::now();
+        loop {
+            guard.check()?;
+            let current = windows(&root);
+            if current != previous {
+                previous = current;
+                stable = Instant::now();
+            }
+            if root.element("AXMenuBar").is_some() && stable.elapsed() > Duration::from_millis(700)
+            {
+                break;
+            }
+            if Instant::now() >= until {
+                return Err(unavailable("Cold launch did not settle its windows"));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+    let before = windows(&root);
+    // Never navigate over any nonempty draft if the provider ignores raise.
+    for n in nodes(&root)? {
+        if profile.controls.composer.matches(&n)
+            && n.string("AXValue").is_none_or(|v| !profile.is_empty(&v))
+        {
+            return Err(conflict("Existing native draft is preserved"));
+        }
+    }
+    let mut route = url::Url::parse(if provider == "codex" {
+        "codex://new"
+    } else {
+        "claude://code/new"
+    })
+    .unwrap();
+    let cwd_text = cwd
+        .to_str()
+        .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?;
+    if provider == "codex" {
+        route
+            .query_pairs_mut()
+            .append_pair("mode", "codex")
+            .append_pair("path", cwd_text);
+    } else {
+        route.query_pairs_mut().append_pair("folder", cwd_text);
+    }
+    // Codex navigation reuses the foreground window; first create a new one.
+    // Claude's code/new entry opens a standalone window itself.
+    let window = if provider == "codex" {
+        let menu = root
+            .element("AXMenuBar")
+            .ok_or_else(|| unavailable("No native menu bar"))?;
+        let new = wait(&guard, &menu, |n| {
+            n.role() == "AXMenuItem" && label(n, "New Window")
+        })
+        .await?;
+        guard.press(&new)?;
+        let deadline = Instant::now() + Duration::from_secs(8);
+        let fresh = loop {
+            guard.check()?;
+            let fresh: Vec<_> = windows(&root)
+                .into_iter()
+                .filter(|w| !before.contains(w))
+                .collect();
+            if fresh.len() == 1 {
+                break fresh[0].clone();
+            }
+            if fresh.len() > 1 || Instant::now() >= deadline {
+                return Err(conflict("New window identity is ambiguous"));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        };
+        guard.check()?;
+        fresh
+            .raise()
+            .map_err(|_| unavailable("Cannot raise the new window"))?;
+        guard.check()?;
+        open(&bundle, Some(&route))?;
+        fresh
+    } else {
+        guard.check()?;
+        open(&bundle, Some(&route))?;
+        let deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            guard.check()?;
+            let fresh: Vec<_> = windows(&root)
+                .into_iter()
+                .filter(|w| !before.contains(w))
+                .collect();
+            if fresh.len() == 1 {
+                break fresh[0].clone();
+            }
+            if fresh.len() > 1 || Instant::now() >= deadline {
+                return Err(conflict("New window identity is ambiguous"));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    };
+    // The only accepted trust dialog names this exact selected directory.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    if let Some(trust) = unique(&window, |n| {
+        n.role() == "AXButton" && (label(n, "Trust folder") || label(n, "Trust workspace"))
+    })? {
+        if !nodes(&window)?
+            .iter()
+            .any(|n| n.role() == "AXStaticText" && n.string("AXValue").as_deref() == Some(cwd_text))
+        {
+            return Err(conflict(
+                "Trust dialog does not name the requested directory",
+            ));
+        }
+        guard.press(&trust)?;
+    }
+    let page = wait(&guard, &window, |n| {
+        n.role() == "AXWebArea"
+            && n.string("AXURL").as_deref()
+                == Some(if provider == "codex" {
+                    "app://-/index.html"
+                } else {
+                    "about:blank"
+                })
+    })
+    .await?;
+    let composer = wait(&guard, &page, |n| profile.controls.composer.matches(n)).await?;
+    let form = || -> Result<(), Error> {
+        guard.check()?;
+        if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
+        {
+            return Err(conflict("Native form was closed or replaced"));
+        }
+        let all = nodes(&page)?;
+        let good = if provider == "claude" {
+            all.iter().any(|n| {
+                n.role() == "AXPopUpButton"
+                    && n.string("AXDescription").as_deref() == Some("Environment: This computer")
+            }) && all.iter().any(|n| {
+                n.role() == "AXPopUpButton"
+                    && n.string("AXHelp").as_deref() == Some(cwd_text)
+                    && n.string("AXDescription") == Some(format!("Folder: {cwd_text}"))
+            })
+        } else {
+            let labels: Vec<_> = all
+                .iter()
+                .filter_map(|n| {
+                    (n.role() == "AXPopUpButton")
+                        .then(|| n.string("AXDescription"))
+                        .flatten()
+                        .and_then(|d| d.strip_prefix("Change project: ").map(str::to_owned))
+                })
+                .collect();
+            let state = std::env::var_os("CODEX_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".codex")
+                })
+                .join(".codex-global-state.json");
+            labels.len() == 1
+                && std::fs::read(state)
+                    .is_ok_and(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
+                && all
+                    .iter()
+                    .any(|n| label(n, "Switch mode, current mode: Codex"))
+                && all.iter().any(|n| {
+                    n.role() == "AXStaticText"
+                        && n.string("AXValue").as_deref() == Some("This computer")
+                })
+        };
+        if !good {
+            return Err(conflict(
+                "Exact native directory and local mode are not verified",
+            ));
+        }
+        Ok(())
+    };
+    form()?;
+    if composer
+        .string("AXValue")
+        .is_none_or(|v| !profile.is_empty(&v))
+    {
+        return Err(conflict("Native composer is not empty"));
+    }
+    composer
+        .set_string("AXValue", prompt)
+        .map_err(|_| unavailable("Draft write refused"))?;
+    let deadline = Instant::now() + Duration::from_secs(4);
+    loop {
+        form()?;
+        if composer.string("AXValue").as_deref() == Some(prompt) {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err(conflict("Draft did not echo; not submitted"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let send = wait(&guard, &page, |n| {
+        profile.controls.send.matches(n) && n.bool("AXEnabled") == Some(true)
+    })
+    .await?;
+    form()?;
+    if composer.string("AXValue").as_deref() != Some(prompt) {
+        return Err(conflict("Draft changed before submit"));
+    }
+    control_guard::delivery_attempt();
+    guard.press(&send).map_err(|e| {
+        Error::UnknownOutcome(format!("Native submit attempted: {e}; do not replay"))
+    })?;
+    Ok(Submitted {
+        guard,
+        root,
+        window,
+        page,
+    })
+}

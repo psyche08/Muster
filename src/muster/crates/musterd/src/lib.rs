@@ -1204,3 +1204,5 @@ mod relay_text_tests {
         assert!(matches!(parse_relay(Some("  ")).await, RelayConfig::None));
     }
 }
+
+mod native_create;

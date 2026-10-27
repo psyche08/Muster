@@ -448,6 +448,13 @@ impl Element {
         if status == 0 { Ok(()) } else { Err(status) }
     }
 
+    pub fn raise(&self) -> Result<(), AXError> {
+        let action = CFString::new("AXRaise");
+        // SAFETY: valid retained element and action name.
+        let status = unsafe { AXUIElementPerformAction(self.raw(), action.as_concrete_TypeRef()) };
+        if status == 0 { Ok(()) } else { Err(status) }
+    }
+
     pub fn press(&self) -> Result<(), AXError> {
         let action = CFString::new("AXPress");
         // SAFETY: valid element.

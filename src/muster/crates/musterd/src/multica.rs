@@ -19,6 +19,7 @@ struct Config {
     keep_alive: bool,
     container_name: String,
     managed: bool,
+    runtime_bridge: bool,
     installed: bool,
     // Stable shared path retained after a physical data-directory migration.
     mount_dir: String,
@@ -164,6 +165,9 @@ impl Manager {
                 Err(error) => return Err(error),
             };
             let mut c = validate(r, &old)?;
+            if action == v1::multica_request::Action::Install {
+                c.runtime_bridge = true;
+            }
             if row.is_some() && c.container_name != old.container_name {
                 return Err(Error::Invalid("Keep the installed container name".into()));
             }
@@ -353,7 +357,7 @@ impl Manager {
         if row["status"]["state"] != "running" {
             self.command(&["start", &c.container_name], 60).await?;
         }
-        if c.managed {
+        if c.managed || c.runtime_bridge {
             let (_, row) = self.observed(c.clone()).await?;
             let gateway = row
                 .as_ref()
@@ -474,6 +478,7 @@ fn validate(r: v1::MulticaRequest, old: &Config) -> Result<Config, Error> {
         keep_alive: r.keep_alive,
         container_name: r.container_name,
         managed: old.managed,
+        runtime_bridge: old.runtime_bridge,
         installed: old.installed,
         mount_dir: old.mount_dir.clone(),
     })

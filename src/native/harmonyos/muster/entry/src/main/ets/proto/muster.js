@@ -38,6 +38,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.ICancel|null} [cancel] Envelope cancel
              * @property {Uint8Array|null} [presence] Envelope presence
              * @property {string|null} [target] Envelope target
+             * @property {Uint8Array|null} [presenceEnrollment] Envelope presenceEnrollment
              */
 
             /**
@@ -111,6 +112,14 @@ export const muster = $root.muster = (() => {
              */
             Envelope.prototype.target = "";
 
+            /**
+             * Envelope presenceEnrollment.
+             * @member {Uint8Array} presenceEnrollment
+             * @memberof muster.v1.Envelope
+             * @instance
+             */
+            Envelope.prototype.presenceEnrollment = $util.newBuffer([]);
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
@@ -167,6 +176,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.presence);
                 if (message.target != null && Object.hasOwnProperty.call(message, "target"))
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.target);
+                if (message.presenceEnrollment != null && Object.hasOwnProperty.call(message, "presenceEnrollment"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).bytes(message.presenceEnrollment);
                 return writer;
             };
 
@@ -230,6 +241,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 7: {
                             message.target = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.presenceEnrollment = reader.bytes();
                             break;
                         }
                     default:
@@ -935,6 +950,14 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.INetworkRefreshRequest|null} [networkRefresh] Request networkRefresh
              * @property {muster.v1.IOrcaCreateRequest|null} [orcaCreate] Request orcaCreate
              * @property {muster.v1.IAgentCompleteRequest|null} [agentComplete] Request agentComplete
+             * @property {muster.v1.IDevicePresenceRequest|null} [devicePresence] Request devicePresence
+             * @property {muster.v1.INetworkPresenceRequest|null} [networkPresence] Request networkPresence
+             * @property {muster.v1.IDeviceInstallPresenceRequest|null} [deviceInstallPresence] Request deviceInstallPresence
+             * @property {muster.v1.IAgentSendRequest|null} [agentSendStatus] Request agentSendStatus
+             * @property {muster.v1.IForwardOpenRequest|null} [forwardOpen] Request forwardOpen
+             * @property {muster.v1.IMulticaRequest|null} [multica] Request multica
+             * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Request multicaBrowse
+             * @property {muster.v1.IAgentNativeCreateRequest|null} [agentNativeCreate] Request agentNativeCreate
              */
 
             /**
@@ -1384,17 +1407,81 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.agentComplete = null;
 
+            /**
+             * Request devicePresence.
+             * @member {muster.v1.IDevicePresenceRequest|null|undefined} devicePresence
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.devicePresence = null;
+
+            /**
+             * Request networkPresence.
+             * @member {muster.v1.INetworkPresenceRequest|null|undefined} networkPresence
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.networkPresence = null;
+
+            /**
+             * Request deviceInstallPresence.
+             * @member {muster.v1.IDeviceInstallPresenceRequest|null|undefined} deviceInstallPresence
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.deviceInstallPresence = null;
+
+            /**
+             * Request agentSendStatus.
+             * @member {muster.v1.IAgentSendRequest|null|undefined} agentSendStatus
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.agentSendStatus = null;
+
+            /**
+             * Request forwardOpen.
+             * @member {muster.v1.IForwardOpenRequest|null|undefined} forwardOpen
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.forwardOpen = null;
+
+            /**
+             * Request multica.
+             * @member {muster.v1.IMulticaRequest|null|undefined} multica
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.multica = null;
+
+            /**
+             * Request multicaBrowse.
+             * @member {muster.v1.IMulticaBrowseRequest|null|undefined} multicaBrowse
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.multicaBrowse = null;
+
+            /**
+             * Request agentNativeCreate.
+             * @member {muster.v1.IAgentNativeCreateRequest|null|undefined} agentNativeCreate
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.agentNativeCreate = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1534,6 +1621,22 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.OrcaCreateRequest.encode(message.orcaCreate, writer.uint32(/* id 63, wireType 2 =*/506).fork(), q + 1).ldelim();
                 if (message.agentComplete != null && Object.hasOwnProperty.call(message, "agentComplete"))
                     $root.muster.v1.AgentCompleteRequest.encode(message.agentComplete, writer.uint32(/* id 64, wireType 2 =*/514).fork(), q + 1).ldelim();
+                if (message.devicePresence != null && Object.hasOwnProperty.call(message, "devicePresence"))
+                    $root.muster.v1.DevicePresenceRequest.encode(message.devicePresence, writer.uint32(/* id 65, wireType 2 =*/522).fork(), q + 1).ldelim();
+                if (message.networkPresence != null && Object.hasOwnProperty.call(message, "networkPresence"))
+                    $root.muster.v1.NetworkPresenceRequest.encode(message.networkPresence, writer.uint32(/* id 66, wireType 2 =*/530).fork(), q + 1).ldelim();
+                if (message.deviceInstallPresence != null && Object.hasOwnProperty.call(message, "deviceInstallPresence"))
+                    $root.muster.v1.DeviceInstallPresenceRequest.encode(message.deviceInstallPresence, writer.uint32(/* id 67, wireType 2 =*/538).fork(), q + 1).ldelim();
+                if (message.agentSendStatus != null && Object.hasOwnProperty.call(message, "agentSendStatus"))
+                    $root.muster.v1.AgentSendRequest.encode(message.agentSendStatus, writer.uint32(/* id 68, wireType 2 =*/546).fork(), q + 1).ldelim();
+                if (message.forwardOpen != null && Object.hasOwnProperty.call(message, "forwardOpen"))
+                    $root.muster.v1.ForwardOpenRequest.encode(message.forwardOpen, writer.uint32(/* id 69, wireType 2 =*/554).fork(), q + 1).ldelim();
+                if (message.multica != null && Object.hasOwnProperty.call(message, "multica"))
+                    $root.muster.v1.MulticaRequest.encode(message.multica, writer.uint32(/* id 70, wireType 2 =*/562).fork(), q + 1).ldelim();
+                if (message.multicaBrowse != null && Object.hasOwnProperty.call(message, "multicaBrowse"))
+                    $root.muster.v1.MulticaBrowseRequest.encode(message.multicaBrowse, writer.uint32(/* id 71, wireType 2 =*/570).fork(), q + 1).ldelim();
+                if (message.agentNativeCreate != null && Object.hasOwnProperty.call(message, "agentNativeCreate"))
+                    $root.muster.v1.AgentNativeCreateRequest.encode(message.agentNativeCreate, writer.uint32(/* id 72, wireType 2 =*/578).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -1787,6 +1890,38 @@ export const muster = $root.muster = (() => {
                             message.agentComplete = $root.muster.v1.AgentCompleteRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 65: {
+                            message.devicePresence = $root.muster.v1.DevicePresenceRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 66: {
+                            message.networkPresence = $root.muster.v1.NetworkPresenceRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 67: {
+                            message.deviceInstallPresence = $root.muster.v1.DeviceInstallPresenceRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 68: {
+                            message.agentSendStatus = $root.muster.v1.AgentSendRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 69: {
+                            message.forwardOpen = $root.muster.v1.ForwardOpenRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 70: {
+                            message.multica = $root.muster.v1.MulticaRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 71: {
+                            message.multicaBrowse = $root.muster.v1.MulticaBrowseRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 72: {
+                            message.agentNativeCreate = $root.muster.v1.AgentNativeCreateRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -1827,6 +1962,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [opId] OrcaCreateRequest opId
              * @property {string|null} [directory] OrcaCreateRequest directory
              * @property {string|null} [agent] OrcaCreateRequest agent
+             * @property {Object.<string,string>|null} [env] OrcaCreateRequest env
              */
 
             /**
@@ -1838,6 +1974,7 @@ export const muster = $root.muster = (() => {
              * @param {muster.v1.IOrcaCreateRequest=} [properties] Properties to set
              */
             function OrcaCreateRequest(properties) {
+                this.env = {};
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -1867,6 +2004,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             OrcaCreateRequest.prototype.agent = "";
+
+            /**
+             * OrcaCreateRequest env.
+             * @member {Object.<string,string>} env
+             * @memberof muster.v1.OrcaCreateRequest
+             * @instance
+             */
+            OrcaCreateRequest.prototype.env = $util.emptyObject;
 
             /**
              * Creates a new OrcaCreateRequest instance using the specified properties.
@@ -1902,6 +2047,9 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.directory);
                 if (message.agent != null && Object.hasOwnProperty.call(message, "agent"))
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.agent);
+                if (message.env != null && Object.hasOwnProperty.call(message, "env"))
+                    for (let keys = Object.keys(message.env), i = 0; i < keys.length; ++i)
+                        writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.env[keys[i]]).ldelim();
                 return writer;
             };
 
@@ -1923,7 +2071,7 @@ export const muster = $root.muster = (() => {
                     long = 0;
                 if (long > $Reader.recursionLimit)
                     throw Error("maximum nesting depth exceeded");
-                let end, message;
+                let end, message, key, value;
                 if (length === undefined)
                     end = reader.len;
                 else {
@@ -1949,6 +2097,37 @@ export const muster = $root.muster = (() => {
                         }
                     case 3: {
                             message.agent = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            if (message.env === $util.emptyObject)
+                                message.env = {};
+                            let end2 = reader.uint32() + reader.pos;
+                            if (end2 > reader.len)
+                                throw RangeError("index out of range");
+                            reader.len = end2;
+                            key = "";
+                            value = "";
+                            while (reader.pos < end2) {
+                                let tag2 = reader.uint32();
+                                switch (tag2 >>> 3) {
+                                case 1:
+                                    key = reader.string();
+                                    break;
+                                case 2:
+                                    value = reader.string();
+                                    break;
+                                default:
+                                    reader.skipType(tag2 & 7, long);
+                                    break;
+                                }
+                            }
+                            if (reader.pos !== end2)
+                                throw RangeError("index out of range");
+                            reader.len = end;
+                            if (key === "__proto__")
+                                $util.makeProp(message.env, key);
+                            message.env[key] = value;
                             break;
                         }
                     default:
@@ -2013,6 +2192,9 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentChatOptions|null} [agentChatOptions] Response agentChatOptions
              * @property {muster.v1.IDiagnosticsSaved|null} [diagnosticsSaved] Response diagnosticsSaved
              * @property {muster.v1.IAgentCompletion|null} [agentCompletion] Response agentCompletion
+             * @property {muster.v1.IPresenceInfo|null} [presenceInfo] Response presenceInfo
+             * @property {muster.v1.IMulticaStatus|null} [multica] Response multica
+             * @property {muster.v1.IMulticaPage|null} [multicaPage] Response multicaPage
              */
 
             /**
@@ -2230,17 +2412,41 @@ export const muster = $root.muster = (() => {
              */
             Response.prototype.agentCompletion = null;
 
+            /**
+             * Response presenceInfo.
+             * @member {muster.v1.IPresenceInfo|null|undefined} presenceInfo
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.presenceInfo = null;
+
+            /**
+             * Response multica.
+             * @member {muster.v1.IMulticaStatus|null|undefined} multica
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.multica = null;
+
+            /**
+             * Response multicaPage.
+             * @member {muster.v1.IMulticaPage|null|undefined} multicaPage
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.multicaPage = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Response resp.
-             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|undefined} resp
+             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|undefined} resp
              * @memberof muster.v1.Response
              * @instance
              */
             Object.defineProperty(Response.prototype, "resp", {
-                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion"]),
+                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2322,6 +2528,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.DiagnosticsSaved.encode(message.diagnosticsSaved, writer.uint32(/* id 55, wireType 2 =*/442).fork(), q + 1).ldelim();
                 if (message.agentCompletion != null && Object.hasOwnProperty.call(message, "agentCompletion"))
                     $root.muster.v1.AgentCompletion.encode(message.agentCompletion, writer.uint32(/* id 56, wireType 2 =*/450).fork(), q + 1).ldelim();
+                if (message.presenceInfo != null && Object.hasOwnProperty.call(message, "presenceInfo"))
+                    $root.muster.v1.PresenceInfo.encode(message.presenceInfo, writer.uint32(/* id 65, wireType 2 =*/522).fork(), q + 1).ldelim();
+                if (message.multica != null && Object.hasOwnProperty.call(message, "multica"))
+                    $root.muster.v1.MulticaStatus.encode(message.multica, writer.uint32(/* id 70, wireType 2 =*/562).fork(), q + 1).ldelim();
+                if (message.multicaPage != null && Object.hasOwnProperty.call(message, "multicaPage"))
+                    $root.muster.v1.MulticaPage.encode(message.multicaPage, writer.uint32(/* id 71, wireType 2 =*/570).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2459,6 +2671,18 @@ export const muster = $root.muster = (() => {
                             message.agentCompletion = $root.muster.v1.AgentCompletion.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 65: {
+                            message.presenceInfo = $root.muster.v1.PresenceInfo.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 70: {
+                            message.multica = $root.muster.v1.MulticaStatus.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 71: {
+                            message.multicaPage = $root.muster.v1.MulticaPage.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -2504,6 +2728,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.ITerminalFrame|null} [terminalFrame] Event terminalFrame
              * @property {muster.v1.IAgentEvent|null} [agentEvent] Event agentEvent
              * @property {muster.v1.IAck|null} [desktopUpdateReady] Event desktopUpdateReady
+             * @property {muster.v1.IForwardOpened|null} [forwardOpened] Event forwardOpened
              */
 
             /**
@@ -2585,17 +2810,25 @@ export const muster = $root.muster = (() => {
              */
             Event.prototype.desktopUpdateReady = null;
 
+            /**
+             * Event forwardOpened.
+             * @member {muster.v1.IForwardOpened|null|undefined} forwardOpened
+             * @memberof muster.v1.Event
+             * @instance
+             */
+            Event.prototype.forwardOpened = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Event ev.
-             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|undefined} ev
+             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|undefined} ev
              * @memberof muster.v1.Event
              * @instance
              */
             Object.defineProperty(Event.prototype, "ev", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopUpdateReady"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopUpdateReady", "forwardOpened"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2643,6 +2876,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentEvent.encode(message.agentEvent, writer.uint32(/* id 41, wireType 2 =*/330).fork(), q + 1).ldelim();
                 if (message.desktopUpdateReady != null && Object.hasOwnProperty.call(message, "desktopUpdateReady"))
                     $root.muster.v1.Ack.encode(message.desktopUpdateReady, writer.uint32(/* id 57, wireType 2 =*/458).fork(), q + 1).ldelim();
+                if (message.forwardOpened != null && Object.hasOwnProperty.call(message, "forwardOpened"))
+                    $root.muster.v1.ForwardOpened.encode(message.forwardOpened, writer.uint32(/* id 68, wireType 2 =*/546).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2710,6 +2945,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 57: {
                             message.desktopUpdateReady = $root.muster.v1.Ack.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 68: {
+                            message.forwardOpened = $root.muster.v1.ForwardOpened.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -4865,6 +5104,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentChatSetOptionsRequest|null} [chatSetOptions] LockedUseOperation chatSetOptions
              * @property {muster.v1.IDeviceLeaseRequest|null} [device] LockedUseOperation device
              * @property {muster.v1.IAgentCompleteRequest|null} [complete] LockedUseOperation complete
+             * @property {muster.v1.ITerminalCreateRequest|null} [terminalCreate] LockedUseOperation terminalCreate
              * @property {string|null} [providerQueue] LockedUseOperation providerQueue
              */
 
@@ -4972,6 +5212,14 @@ export const muster = $root.muster = (() => {
             LockedUseOperation.prototype.complete = null;
 
             /**
+             * LockedUseOperation terminalCreate.
+             * @member {muster.v1.ITerminalCreateRequest|null|undefined} terminalCreate
+             * @memberof muster.v1.LockedUseOperation
+             * @instance
+             */
+            LockedUseOperation.prototype.terminalCreate = null;
+
+            /**
              * LockedUseOperation providerQueue.
              * @member {string} providerQueue
              * @memberof muster.v1.LockedUseOperation
@@ -4984,12 +5232,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * LockedUseOperation operation.
-             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|undefined} operation
+             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|undefined} operation
              * @memberof muster.v1.LockedUseOperation
              * @instance
              */
             Object.defineProperty(LockedUseOperation.prototype, "operation", {
-                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete"]),
+                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete", "terminalCreate"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -5045,6 +5293,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.DeviceLeaseRequest.encode(message.device, writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
                 if (message.complete != null && Object.hasOwnProperty.call(message, "complete"))
                     $root.muster.v1.AgentCompleteRequest.encode(message.complete, writer.uint32(/* id 12, wireType 2 =*/98).fork(), q + 1).ldelim();
+                if (message.terminalCreate != null && Object.hasOwnProperty.call(message, "terminalCreate"))
+                    $root.muster.v1.TerminalCreateRequest.encode(message.terminalCreate, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -5124,6 +5374,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 12: {
                             message.complete = $root.muster.v1.AgentCompleteRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 13: {
+                            message.terminalCreate = $root.muster.v1.TerminalCreateRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 4: {
@@ -9592,6 +9846,8 @@ export const muster = $root.muster = (() => {
              * @property {Array.<string>|null} [axAllowlist] Policy axAllowlist
              * @property {boolean|null} [offerAgent] Policy offerAgent
              * @property {boolean|null} [offerTerminal] Policy offerTerminal
+             * @property {boolean|null} [offerTasks] Policy offerTasks
+             * @property {muster.v1.IWebWindow|null} [webWindow] Policy webWindow
              */
 
             /**
@@ -9652,6 +9908,22 @@ export const muster = $root.muster = (() => {
             Policy.prototype.offerTerminal = false;
 
             /**
+             * Policy offerTasks.
+             * @member {boolean} offerTasks
+             * @memberof muster.v1.Policy
+             * @instance
+             */
+            Policy.prototype.offerTasks = false;
+
+            /**
+             * Policy webWindow.
+             * @member {muster.v1.IWebWindow|null|undefined} webWindow
+             * @memberof muster.v1.Policy
+             * @instance
+             */
+            Policy.prototype.webWindow = null;
+
+            /**
              * Creates a new Policy instance using the specified properties.
              * @function create
              * @memberof muster.v1.Policy
@@ -9691,6 +9963,10 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 4, wireType 0 =*/32).bool(message.offerAgent);
                 if (message.offerTerminal != null && Object.hasOwnProperty.call(message, "offerTerminal"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.offerTerminal);
+                if (message.offerTasks != null && Object.hasOwnProperty.call(message, "offerTasks"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.offerTasks);
+                if (message.webWindow != null && Object.hasOwnProperty.call(message, "webWindow"))
+                    $root.muster.v1.WebWindow.encode(message.webWindow, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -9752,6 +10028,14 @@ export const muster = $root.muster = (() => {
                             message.offerTerminal = reader.bool();
                             break;
                         }
+                    case 6: {
+                            message.offerTasks = reader.bool();
+                            break;
+                        }
+                    case 7: {
+                            message.webWindow = $root.muster.v1.WebWindow.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -9781,6 +10065,140 @@ export const muster = $root.muster = (() => {
             };
 
             return Policy;
+        })();
+
+        v1.WebWindow = (function() {
+
+            /**
+             * Properties of a WebWindow.
+             * @memberof muster.v1
+             * @interface IWebWindow
+             * @property {string|null} [origin] WebWindow origin
+             */
+
+            /**
+             * Constructs a new WebWindow.
+             * @memberof muster.v1
+             * @classdesc Represents a WebWindow.
+             * @implements IWebWindow
+             * @constructor
+             * @param {muster.v1.IWebWindow=} [properties] Properties to set
+             */
+            function WebWindow(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * WebWindow origin.
+             * @member {string} origin
+             * @memberof muster.v1.WebWindow
+             * @instance
+             */
+            WebWindow.prototype.origin = "";
+
+            /**
+             * Creates a new WebWindow instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.WebWindow
+             * @static
+             * @param {muster.v1.IWebWindow=} [properties] Properties to set
+             * @returns {muster.v1.WebWindow} WebWindow instance
+             */
+            WebWindow.create = function create(properties) {
+                return new WebWindow(properties);
+            };
+
+            /**
+             * Encodes the specified WebWindow message. Does not implicitly {@link muster.v1.WebWindow.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.WebWindow
+             * @static
+             * @param {muster.v1.IWebWindow} message WebWindow message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            WebWindow.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.origin != null && Object.hasOwnProperty.call(message, "origin"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.origin);
+                return writer;
+            };
+
+            /**
+             * Decodes a WebWindow message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.WebWindow
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.WebWindow} WebWindow
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            WebWindow.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.WebWindow();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.origin = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for WebWindow
+             * @function getTypeUrl
+             * @memberof muster.v1.WebWindow
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            WebWindow.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.WebWindow";
+            };
+
+            return WebWindow;
         })();
 
         v1.PolicySetRequest = (function() {
@@ -9915,6 +10333,319 @@ export const muster = $root.muster = (() => {
             };
 
             return PolicySetRequest;
+        })();
+
+        v1.ForwardOpenRequest = (function() {
+
+            /**
+             * Properties of a ForwardOpenRequest.
+             * @memberof muster.v1
+             * @interface IForwardOpenRequest
+             * @property {string|null} [device] ForwardOpenRequest device
+             * @property {number|null} [port] ForwardOpenRequest port
+             * @property {number|null} [localPort] ForwardOpenRequest localPort
+             * @property {string|null} [window] ForwardOpenRequest window
+             */
+
+            /**
+             * Constructs a new ForwardOpenRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a ForwardOpenRequest.
+             * @implements IForwardOpenRequest
+             * @constructor
+             * @param {muster.v1.IForwardOpenRequest=} [properties] Properties to set
+             */
+            function ForwardOpenRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ForwardOpenRequest device.
+             * @member {string} device
+             * @memberof muster.v1.ForwardOpenRequest
+             * @instance
+             */
+            ForwardOpenRequest.prototype.device = "";
+
+            /**
+             * ForwardOpenRequest port.
+             * @member {number} port
+             * @memberof muster.v1.ForwardOpenRequest
+             * @instance
+             */
+            ForwardOpenRequest.prototype.port = 0;
+
+            /**
+             * ForwardOpenRequest localPort.
+             * @member {number} localPort
+             * @memberof muster.v1.ForwardOpenRequest
+             * @instance
+             */
+            ForwardOpenRequest.prototype.localPort = 0;
+
+            /**
+             * ForwardOpenRequest window.
+             * @member {string} window
+             * @memberof muster.v1.ForwardOpenRequest
+             * @instance
+             */
+            ForwardOpenRequest.prototype.window = "";
+
+            /**
+             * Creates a new ForwardOpenRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.ForwardOpenRequest
+             * @static
+             * @param {muster.v1.IForwardOpenRequest=} [properties] Properties to set
+             * @returns {muster.v1.ForwardOpenRequest} ForwardOpenRequest instance
+             */
+            ForwardOpenRequest.create = function create(properties) {
+                return new ForwardOpenRequest(properties);
+            };
+
+            /**
+             * Encodes the specified ForwardOpenRequest message. Does not implicitly {@link muster.v1.ForwardOpenRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.ForwardOpenRequest
+             * @static
+             * @param {muster.v1.IForwardOpenRequest} message ForwardOpenRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ForwardOpenRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.device != null && Object.hasOwnProperty.call(message, "device"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.device);
+                if (message.port != null && Object.hasOwnProperty.call(message, "port"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.port);
+                if (message.localPort != null && Object.hasOwnProperty.call(message, "localPort"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.localPort);
+                if (message.window != null && Object.hasOwnProperty.call(message, "window"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.window);
+                return writer;
+            };
+
+            /**
+             * Decodes a ForwardOpenRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.ForwardOpenRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.ForwardOpenRequest} ForwardOpenRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ForwardOpenRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.ForwardOpenRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.device = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.port = reader.uint32();
+                            break;
+                        }
+                    case 3: {
+                            message.localPort = reader.uint32();
+                            break;
+                        }
+                    case 4: {
+                            message.window = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for ForwardOpenRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.ForwardOpenRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            ForwardOpenRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.ForwardOpenRequest";
+            };
+
+            return ForwardOpenRequest;
+        })();
+
+        v1.ForwardOpened = (function() {
+
+            /**
+             * Properties of a ForwardOpened.
+             * @memberof muster.v1
+             * @interface IForwardOpened
+             * @property {number|null} [localPort] ForwardOpened localPort
+             */
+
+            /**
+             * Constructs a new ForwardOpened.
+             * @memberof muster.v1
+             * @classdesc Represents a ForwardOpened.
+             * @implements IForwardOpened
+             * @constructor
+             * @param {muster.v1.IForwardOpened=} [properties] Properties to set
+             */
+            function ForwardOpened(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ForwardOpened localPort.
+             * @member {number} localPort
+             * @memberof muster.v1.ForwardOpened
+             * @instance
+             */
+            ForwardOpened.prototype.localPort = 0;
+
+            /**
+             * Creates a new ForwardOpened instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.ForwardOpened
+             * @static
+             * @param {muster.v1.IForwardOpened=} [properties] Properties to set
+             * @returns {muster.v1.ForwardOpened} ForwardOpened instance
+             */
+            ForwardOpened.create = function create(properties) {
+                return new ForwardOpened(properties);
+            };
+
+            /**
+             * Encodes the specified ForwardOpened message. Does not implicitly {@link muster.v1.ForwardOpened.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.ForwardOpened
+             * @static
+             * @param {muster.v1.IForwardOpened} message ForwardOpened message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ForwardOpened.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.localPort != null && Object.hasOwnProperty.call(message, "localPort"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.localPort);
+                return writer;
+            };
+
+            /**
+             * Decodes a ForwardOpened message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.ForwardOpened
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.ForwardOpened} ForwardOpened
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ForwardOpened.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.ForwardOpened();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.localPort = reader.uint32();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for ForwardOpened
+             * @function getTypeUrl
+             * @memberof muster.v1.ForwardOpened
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            ForwardOpened.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.ForwardOpened";
+            };
+
+            return ForwardOpened;
         })();
 
         v1.TerminalSessionsRequest = (function() {
@@ -10305,6 +11036,155 @@ export const muster = $root.muster = (() => {
             return TerminalSession;
         })();
 
+        v1.TerminalSource = (function() {
+
+            /**
+             * Properties of a TerminalSource.
+             * @memberof muster.v1
+             * @interface ITerminalSource
+             * @property {string|null} [source] TerminalSource source
+             * @property {string|null} [label] TerminalSource label
+             */
+
+            /**
+             * Constructs a new TerminalSource.
+             * @memberof muster.v1
+             * @classdesc Represents a TerminalSource.
+             * @implements ITerminalSource
+             * @constructor
+             * @param {muster.v1.ITerminalSource=} [properties] Properties to set
+             */
+            function TerminalSource(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * TerminalSource source.
+             * @member {string} source
+             * @memberof muster.v1.TerminalSource
+             * @instance
+             */
+            TerminalSource.prototype.source = "";
+
+            /**
+             * TerminalSource label.
+             * @member {string} label
+             * @memberof muster.v1.TerminalSource
+             * @instance
+             */
+            TerminalSource.prototype.label = "";
+
+            /**
+             * Creates a new TerminalSource instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.TerminalSource
+             * @static
+             * @param {muster.v1.ITerminalSource=} [properties] Properties to set
+             * @returns {muster.v1.TerminalSource} TerminalSource instance
+             */
+            TerminalSource.create = function create(properties) {
+                return new TerminalSource(properties);
+            };
+
+            /**
+             * Encodes the specified TerminalSource message. Does not implicitly {@link muster.v1.TerminalSource.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.TerminalSource
+             * @static
+             * @param {muster.v1.ITerminalSource} message TerminalSource message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            TerminalSource.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.source != null && Object.hasOwnProperty.call(message, "source"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.source);
+                if (message.label != null && Object.hasOwnProperty.call(message, "label"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.label);
+                return writer;
+            };
+
+            /**
+             * Decodes a TerminalSource message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.TerminalSource
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.TerminalSource} TerminalSource
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            TerminalSource.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.TerminalSource();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.source = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.label = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for TerminalSource
+             * @function getTypeUrl
+             * @memberof muster.v1.TerminalSource
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            TerminalSource.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.TerminalSource";
+            };
+
+            return TerminalSource;
+        })();
+
         v1.TerminalSessionList = (function() {
 
             /**
@@ -10312,6 +11192,8 @@ export const muster = $root.muster = (() => {
              * @memberof muster.v1
              * @interface ITerminalSessionList
              * @property {Array.<muster.v1.ITerminalSession>|null} [sessions] TerminalSessionList sessions
+             * @property {Array.<muster.v1.ITerminalSource>|null} [sources] TerminalSessionList sources
+             * @property {Array.<string>|null} [errors] TerminalSessionList errors
              */
 
             /**
@@ -10324,6 +11206,8 @@ export const muster = $root.muster = (() => {
              */
             function TerminalSessionList(properties) {
                 this.sessions = [];
+                this.sources = [];
+                this.errors = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -10337,6 +11221,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             TerminalSessionList.prototype.sessions = $util.emptyArray;
+
+            /**
+             * TerminalSessionList sources.
+             * @member {Array.<muster.v1.ITerminalSource>} sources
+             * @memberof muster.v1.TerminalSessionList
+             * @instance
+             */
+            TerminalSessionList.prototype.sources = $util.emptyArray;
+
+            /**
+             * TerminalSessionList errors.
+             * @member {Array.<string>} errors
+             * @memberof muster.v1.TerminalSessionList
+             * @instance
+             */
+            TerminalSessionList.prototype.errors = $util.emptyArray;
 
             /**
              * Creates a new TerminalSessionList instance using the specified properties.
@@ -10369,6 +11269,12 @@ export const muster = $root.muster = (() => {
                 if (message.sessions != null && message.sessions.length)
                     for (let i = 0; i < message.sessions.length; ++i)
                         $root.muster.v1.TerminalSession.encode(message.sessions[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.sources != null && message.sources.length)
+                    for (let i = 0; i < message.sources.length; ++i)
+                        $root.muster.v1.TerminalSource.encode(message.sources[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.errors != null && message.errors.length)
+                    for (let i = 0; i < message.errors.length; ++i)
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.errors[i]);
                 return writer;
             };
 
@@ -10410,6 +11316,18 @@ export const muster = $root.muster = (() => {
                             if (!(message.sessions && message.sessions.length))
                                 message.sessions = [];
                             message.sessions.push($root.muster.v1.TerminalSession.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 2: {
+                            if (!(message.sources && message.sources.length))
+                                message.sources = [];
+                            message.sources.push($root.muster.v1.TerminalSource.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 3: {
+                            if (!(message.errors && message.errors.length))
+                                message.errors = [];
+                            message.errors.push(reader.string());
                             break;
                         }
                     default:
@@ -10771,6 +11689,9 @@ export const muster = $root.muster = (() => {
              * @property {number|null} [cursorX] TerminalFrame cursorX
              * @property {number|null} [cursorY] TerminalFrame cursorY
              * @property {boolean|null} [ended] TerminalFrame ended
+             * @property {string|null} [desktopAttachCommand] TerminalFrame desktopAttachCommand
+             * @property {string|null} [iterm2AttachCommand] TerminalFrame iterm2AttachCommand
+             * @property {Array.<muster.v1.ITerminalSource>|null} [nativeSources] TerminalFrame nativeSources
              */
 
             /**
@@ -10783,6 +11704,7 @@ export const muster = $root.muster = (() => {
              */
             function TerminalFrame(properties) {
                 this.lines = [];
+                this.nativeSources = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -10862,6 +11784,30 @@ export const muster = $root.muster = (() => {
             TerminalFrame.prototype.ended = false;
 
             /**
+             * TerminalFrame desktopAttachCommand.
+             * @member {string} desktopAttachCommand
+             * @memberof muster.v1.TerminalFrame
+             * @instance
+             */
+            TerminalFrame.prototype.desktopAttachCommand = "";
+
+            /**
+             * TerminalFrame iterm2AttachCommand.
+             * @member {string} iterm2AttachCommand
+             * @memberof muster.v1.TerminalFrame
+             * @instance
+             */
+            TerminalFrame.prototype.iterm2AttachCommand = "";
+
+            /**
+             * TerminalFrame nativeSources.
+             * @member {Array.<muster.v1.ITerminalSource>} nativeSources
+             * @memberof muster.v1.TerminalFrame
+             * @instance
+             */
+            TerminalFrame.prototype.nativeSources = $util.emptyArray;
+
+            /**
              * Creates a new TerminalFrame instance using the specified properties.
              * @function create
              * @memberof muster.v1.TerminalFrame
@@ -10908,6 +11854,13 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 8, wireType 0 =*/64).uint32(message.cursorY);
                 if (message.ended != null && Object.hasOwnProperty.call(message, "ended"))
                     writer.uint32(/* id 9, wireType 0 =*/72).bool(message.ended);
+                if (message.desktopAttachCommand != null && Object.hasOwnProperty.call(message, "desktopAttachCommand"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.desktopAttachCommand);
+                if (message.iterm2AttachCommand != null && Object.hasOwnProperty.call(message, "iterm2AttachCommand"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.iterm2AttachCommand);
+                if (message.nativeSources != null && message.nativeSources.length)
+                    for (let i = 0; i < message.nativeSources.length; ++i)
+                        $root.muster.v1.TerminalSource.encode(message.nativeSources[i], writer.uint32(/* id 12, wireType 2 =*/98).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -10981,6 +11934,20 @@ export const muster = $root.muster = (() => {
                         }
                     case 9: {
                             message.ended = reader.bool();
+                            break;
+                        }
+                    case 10: {
+                            message.desktopAttachCommand = reader.string();
+                            break;
+                        }
+                    case 11: {
+                            message.iterm2AttachCommand = reader.string();
+                            break;
+                        }
+                    case 12: {
+                            if (!(message.nativeSources && message.nativeSources.length))
+                                message.nativeSources = [];
+                            message.nativeSources.push($root.muster.v1.TerminalSource.decode(reader, reader.uint32(), undefined, long + 1));
                             break;
                         }
                     default:
@@ -11186,6 +12153,9 @@ export const muster = $root.muster = (() => {
              * @interface ITerminalCreateRequest
              * @property {string|null} [profile] TerminalCreateRequest profile
              * @property {boolean|null} [background] TerminalCreateRequest background
+             * @property {string|null} [source] TerminalCreateRequest source
+             * @property {string|null} [managedSession] TerminalCreateRequest managedSession
+             * @property {string|null} [opId] TerminalCreateRequest opId
              */
 
             /**
@@ -11220,6 +12190,30 @@ export const muster = $root.muster = (() => {
             TerminalCreateRequest.prototype.background = false;
 
             /**
+             * TerminalCreateRequest source.
+             * @member {string} source
+             * @memberof muster.v1.TerminalCreateRequest
+             * @instance
+             */
+            TerminalCreateRequest.prototype.source = "";
+
+            /**
+             * TerminalCreateRequest managedSession.
+             * @member {string} managedSession
+             * @memberof muster.v1.TerminalCreateRequest
+             * @instance
+             */
+            TerminalCreateRequest.prototype.managedSession = "";
+
+            /**
+             * TerminalCreateRequest opId.
+             * @member {string} opId
+             * @memberof muster.v1.TerminalCreateRequest
+             * @instance
+             */
+            TerminalCreateRequest.prototype.opId = "";
+
+            /**
              * Creates a new TerminalCreateRequest instance using the specified properties.
              * @function create
              * @memberof muster.v1.TerminalCreateRequest
@@ -11251,6 +12245,12 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.profile);
                 if (message.background != null && Object.hasOwnProperty.call(message, "background"))
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.background);
+                if (message.source != null && Object.hasOwnProperty.call(message, "source"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.source);
+                if (message.managedSession != null && Object.hasOwnProperty.call(message, "managedSession"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.managedSession);
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.opId);
                 return writer;
             };
 
@@ -11294,6 +12294,18 @@ export const muster = $root.muster = (() => {
                         }
                     case 2: {
                             message.background = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.source = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.managedSession = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.opId = reader.string();
                             break;
                         }
                     default:
@@ -12648,6 +13660,8 @@ export const muster = $root.muster = (() => {
              * @memberof muster.v1
              * @interface IAgentWatchRequest
              * @property {string|null} [session] AgentWatchRequest session
+             * @property {boolean|null} [catalogOnly] AgentWatchRequest catalogOnly
+             * @property {number|null} [limit] AgentWatchRequest limit
              */
 
             /**
@@ -12672,6 +13686,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AgentWatchRequest.prototype.session = "";
+
+            /**
+             * AgentWatchRequest catalogOnly.
+             * @member {boolean} catalogOnly
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.catalogOnly = false;
+
+            /**
+             * AgentWatchRequest limit.
+             * @member {number} limit
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.limit = 0;
 
             /**
              * Creates a new AgentWatchRequest instance using the specified properties.
@@ -12703,6 +13733,10 @@ export const muster = $root.muster = (() => {
                     throw Error("max depth exceeded");
                 if (message.session != null && Object.hasOwnProperty.call(message, "session"))
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.session);
+                if (message.catalogOnly != null && Object.hasOwnProperty.call(message, "catalogOnly"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.catalogOnly);
+                if (message.limit != null && Object.hasOwnProperty.call(message, "limit"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.limit);
                 return writer;
             };
 
@@ -12742,6 +13776,14 @@ export const muster = $root.muster = (() => {
                     switch (tag >>> 3) {
                     case 1: {
                             message.session = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.catalogOnly = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.limit = reader.uint32();
                             break;
                         }
                     default:
@@ -20247,6 +21289,2803 @@ export const muster = $root.muster = (() => {
             return TerminalRun;
         })();
 
+        v1.DevicePresenceRequest = (function() {
+
+            /**
+             * Properties of a DevicePresenceRequest.
+             * @memberof muster.v1
+             * @interface IDevicePresenceRequest
+             * @property {Uint8Array|null} [publicKey] DevicePresenceRequest publicKey
+             */
+
+            /**
+             * Constructs a new DevicePresenceRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a DevicePresenceRequest.
+             * @implements IDevicePresenceRequest
+             * @constructor
+             * @param {muster.v1.IDevicePresenceRequest=} [properties] Properties to set
+             */
+            function DevicePresenceRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DevicePresenceRequest publicKey.
+             * @member {Uint8Array} publicKey
+             * @memberof muster.v1.DevicePresenceRequest
+             * @instance
+             */
+            DevicePresenceRequest.prototype.publicKey = $util.newBuffer([]);
+
+            /**
+             * Creates a new DevicePresenceRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DevicePresenceRequest
+             * @static
+             * @param {muster.v1.IDevicePresenceRequest=} [properties] Properties to set
+             * @returns {muster.v1.DevicePresenceRequest} DevicePresenceRequest instance
+             */
+            DevicePresenceRequest.create = function create(properties) {
+                return new DevicePresenceRequest(properties);
+            };
+
+            /**
+             * Encodes the specified DevicePresenceRequest message. Does not implicitly {@link muster.v1.DevicePresenceRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DevicePresenceRequest
+             * @static
+             * @param {muster.v1.IDevicePresenceRequest} message DevicePresenceRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DevicePresenceRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.publicKey != null && Object.hasOwnProperty.call(message, "publicKey"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.publicKey);
+                return writer;
+            };
+
+            /**
+             * Decodes a DevicePresenceRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DevicePresenceRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DevicePresenceRequest} DevicePresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DevicePresenceRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DevicePresenceRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.publicKey = reader.bytes();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DevicePresenceRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.DevicePresenceRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DevicePresenceRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DevicePresenceRequest";
+            };
+
+            return DevicePresenceRequest;
+        })();
+
+        v1.NetworkPresenceRequest = (function() {
+
+            /**
+             * Properties of a NetworkPresenceRequest.
+             * @memberof muster.v1
+             * @interface INetworkPresenceRequest
+             * @property {string|null} [deviceId] NetworkPresenceRequest deviceId
+             * @property {boolean|null} [grantLockedControl] NetworkPresenceRequest grantLockedControl
+             * @property {boolean|null} [revoke] NetworkPresenceRequest revoke
+             */
+
+            /**
+             * Constructs a new NetworkPresenceRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a NetworkPresenceRequest.
+             * @implements INetworkPresenceRequest
+             * @constructor
+             * @param {muster.v1.INetworkPresenceRequest=} [properties] Properties to set
+             */
+            function NetworkPresenceRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NetworkPresenceRequest deviceId.
+             * @member {string} deviceId
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @instance
+             */
+            NetworkPresenceRequest.prototype.deviceId = "";
+
+            /**
+             * NetworkPresenceRequest grantLockedControl.
+             * @member {boolean} grantLockedControl
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @instance
+             */
+            NetworkPresenceRequest.prototype.grantLockedControl = false;
+
+            /**
+             * NetworkPresenceRequest revoke.
+             * @member {boolean} revoke
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @instance
+             */
+            NetworkPresenceRequest.prototype.revoke = false;
+
+            /**
+             * Creates a new NetworkPresenceRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @static
+             * @param {muster.v1.INetworkPresenceRequest=} [properties] Properties to set
+             * @returns {muster.v1.NetworkPresenceRequest} NetworkPresenceRequest instance
+             */
+            NetworkPresenceRequest.create = function create(properties) {
+                return new NetworkPresenceRequest(properties);
+            };
+
+            /**
+             * Encodes the specified NetworkPresenceRequest message. Does not implicitly {@link muster.v1.NetworkPresenceRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @static
+             * @param {muster.v1.INetworkPresenceRequest} message NetworkPresenceRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NetworkPresenceRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.deviceId);
+                if (message.grantLockedControl != null && Object.hasOwnProperty.call(message, "grantLockedControl"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.grantLockedControl);
+                if (message.revoke != null && Object.hasOwnProperty.call(message, "revoke"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.revoke);
+                return writer;
+            };
+
+            /**
+             * Decodes a NetworkPresenceRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.NetworkPresenceRequest} NetworkPresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NetworkPresenceRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.NetworkPresenceRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.grantLockedControl = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.revoke = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for NetworkPresenceRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.NetworkPresenceRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            NetworkPresenceRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.NetworkPresenceRequest";
+            };
+
+            return NetworkPresenceRequest;
+        })();
+
+        v1.PresenceEnrollment = (function() {
+
+            /**
+             * Properties of a PresenceEnrollment.
+             * @memberof muster.v1
+             * @interface IPresenceEnrollment
+             * @property {Uint8Array|null} [binding] PresenceEnrollment binding
+             * @property {Array.<Uint8Array>|null} [rosterEntries] PresenceEnrollment rosterEntries
+             */
+
+            /**
+             * Constructs a new PresenceEnrollment.
+             * @memberof muster.v1
+             * @classdesc Represents a PresenceEnrollment.
+             * @implements IPresenceEnrollment
+             * @constructor
+             * @param {muster.v1.IPresenceEnrollment=} [properties] Properties to set
+             */
+            function PresenceEnrollment(properties) {
+                this.rosterEntries = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * PresenceEnrollment binding.
+             * @member {Uint8Array} binding
+             * @memberof muster.v1.PresenceEnrollment
+             * @instance
+             */
+            PresenceEnrollment.prototype.binding = $util.newBuffer([]);
+
+            /**
+             * PresenceEnrollment rosterEntries.
+             * @member {Array.<Uint8Array>} rosterEntries
+             * @memberof muster.v1.PresenceEnrollment
+             * @instance
+             */
+            PresenceEnrollment.prototype.rosterEntries = $util.emptyArray;
+
+            /**
+             * Creates a new PresenceEnrollment instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.PresenceEnrollment
+             * @static
+             * @param {muster.v1.IPresenceEnrollment=} [properties] Properties to set
+             * @returns {muster.v1.PresenceEnrollment} PresenceEnrollment instance
+             */
+            PresenceEnrollment.create = function create(properties) {
+                return new PresenceEnrollment(properties);
+            };
+
+            /**
+             * Encodes the specified PresenceEnrollment message. Does not implicitly {@link muster.v1.PresenceEnrollment.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.PresenceEnrollment
+             * @static
+             * @param {muster.v1.IPresenceEnrollment} message PresenceEnrollment message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            PresenceEnrollment.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.binding != null && Object.hasOwnProperty.call(message, "binding"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.binding);
+                if (message.rosterEntries != null && message.rosterEntries.length)
+                    for (let i = 0; i < message.rosterEntries.length; ++i)
+                        writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.rosterEntries[i]);
+                return writer;
+            };
+
+            /**
+             * Decodes a PresenceEnrollment message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.PresenceEnrollment
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.PresenceEnrollment} PresenceEnrollment
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            PresenceEnrollment.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.PresenceEnrollment();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.binding = reader.bytes();
+                            break;
+                        }
+                    case 2: {
+                            if (!(message.rosterEntries && message.rosterEntries.length))
+                                message.rosterEntries = [];
+                            message.rosterEntries.push(reader.bytes());
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for PresenceEnrollment
+             * @function getTypeUrl
+             * @memberof muster.v1.PresenceEnrollment
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            PresenceEnrollment.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.PresenceEnrollment";
+            };
+
+            return PresenceEnrollment;
+        })();
+
+        v1.DeviceInstallPresenceRequest = (function() {
+
+            /**
+             * Properties of a DeviceInstallPresenceRequest.
+             * @memberof muster.v1
+             * @interface IDeviceInstallPresenceRequest
+             * @property {muster.v1.IPresenceEnrollment|null} [enrollment] DeviceInstallPresenceRequest enrollment
+             */
+
+            /**
+             * Constructs a new DeviceInstallPresenceRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a DeviceInstallPresenceRequest.
+             * @implements IDeviceInstallPresenceRequest
+             * @constructor
+             * @param {muster.v1.IDeviceInstallPresenceRequest=} [properties] Properties to set
+             */
+            function DeviceInstallPresenceRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DeviceInstallPresenceRequest enrollment.
+             * @member {muster.v1.IPresenceEnrollment|null|undefined} enrollment
+             * @memberof muster.v1.DeviceInstallPresenceRequest
+             * @instance
+             */
+            DeviceInstallPresenceRequest.prototype.enrollment = null;
+
+            /**
+             * Creates a new DeviceInstallPresenceRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DeviceInstallPresenceRequest
+             * @static
+             * @param {muster.v1.IDeviceInstallPresenceRequest=} [properties] Properties to set
+             * @returns {muster.v1.DeviceInstallPresenceRequest} DeviceInstallPresenceRequest instance
+             */
+            DeviceInstallPresenceRequest.create = function create(properties) {
+                return new DeviceInstallPresenceRequest(properties);
+            };
+
+            /**
+             * Encodes the specified DeviceInstallPresenceRequest message. Does not implicitly {@link muster.v1.DeviceInstallPresenceRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DeviceInstallPresenceRequest
+             * @static
+             * @param {muster.v1.IDeviceInstallPresenceRequest} message DeviceInstallPresenceRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DeviceInstallPresenceRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.enrollment != null && Object.hasOwnProperty.call(message, "enrollment"))
+                    $root.muster.v1.PresenceEnrollment.encode(message.enrollment, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes a DeviceInstallPresenceRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DeviceInstallPresenceRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DeviceInstallPresenceRequest} DeviceInstallPresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DeviceInstallPresenceRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DeviceInstallPresenceRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.enrollment = $root.muster.v1.PresenceEnrollment.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DeviceInstallPresenceRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.DeviceInstallPresenceRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DeviceInstallPresenceRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DeviceInstallPresenceRequest";
+            };
+
+            return DeviceInstallPresenceRequest;
+        })();
+
+        v1.PresenceInfo = (function() {
+
+            /**
+             * Properties of a PresenceInfo.
+             * @memberof muster.v1
+             * @interface IPresenceInfo
+             * @property {Uint8Array|null} [publicKey] PresenceInfo publicKey
+             * @property {muster.v1.IPresenceEnrollment|null} [enrollment] PresenceInfo enrollment
+             * @property {boolean|null} [enrolled] PresenceInfo enrolled
+             */
+
+            /**
+             * Constructs a new PresenceInfo.
+             * @memberof muster.v1
+             * @classdesc Represents a PresenceInfo.
+             * @implements IPresenceInfo
+             * @constructor
+             * @param {muster.v1.IPresenceInfo=} [properties] Properties to set
+             */
+            function PresenceInfo(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * PresenceInfo publicKey.
+             * @member {Uint8Array} publicKey
+             * @memberof muster.v1.PresenceInfo
+             * @instance
+             */
+            PresenceInfo.prototype.publicKey = $util.newBuffer([]);
+
+            /**
+             * PresenceInfo enrollment.
+             * @member {muster.v1.IPresenceEnrollment|null|undefined} enrollment
+             * @memberof muster.v1.PresenceInfo
+             * @instance
+             */
+            PresenceInfo.prototype.enrollment = null;
+
+            /**
+             * PresenceInfo enrolled.
+             * @member {boolean} enrolled
+             * @memberof muster.v1.PresenceInfo
+             * @instance
+             */
+            PresenceInfo.prototype.enrolled = false;
+
+            /**
+             * Creates a new PresenceInfo instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.PresenceInfo
+             * @static
+             * @param {muster.v1.IPresenceInfo=} [properties] Properties to set
+             * @returns {muster.v1.PresenceInfo} PresenceInfo instance
+             */
+            PresenceInfo.create = function create(properties) {
+                return new PresenceInfo(properties);
+            };
+
+            /**
+             * Encodes the specified PresenceInfo message. Does not implicitly {@link muster.v1.PresenceInfo.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.PresenceInfo
+             * @static
+             * @param {muster.v1.IPresenceInfo} message PresenceInfo message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            PresenceInfo.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.publicKey != null && Object.hasOwnProperty.call(message, "publicKey"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.publicKey);
+                if (message.enrollment != null && Object.hasOwnProperty.call(message, "enrollment"))
+                    $root.muster.v1.PresenceEnrollment.encode(message.enrollment, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.enrolled != null && Object.hasOwnProperty.call(message, "enrolled"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.enrolled);
+                return writer;
+            };
+
+            /**
+             * Decodes a PresenceInfo message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.PresenceInfo
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.PresenceInfo} PresenceInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            PresenceInfo.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.PresenceInfo();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.publicKey = reader.bytes();
+                            break;
+                        }
+                    case 2: {
+                            message.enrollment = $root.muster.v1.PresenceEnrollment.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.enrolled = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for PresenceInfo
+             * @function getTypeUrl
+             * @memberof muster.v1.PresenceInfo
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            PresenceInfo.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.PresenceInfo";
+            };
+
+            return PresenceInfo;
+        })();
+
+        v1.MulticaRequest = (function() {
+
+            /**
+             * Properties of a MulticaRequest.
+             * @memberof muster.v1
+             * @interface IMulticaRequest
+             * @property {muster.v1.MulticaRequest.Action|null} [action] MulticaRequest action
+             * @property {string|null} [dataDir] MulticaRequest dataDir
+             * @property {string|null} [installerUrl] MulticaRequest installerUrl
+             * @property {string|null} [serverUrl] MulticaRequest serverUrl
+             * @property {string|null} [appUrl] MulticaRequest appUrl
+             * @property {boolean|null} [keepAlive] MulticaRequest keepAlive
+             * @property {string|null} [containerName] MulticaRequest containerName
+             */
+
+            /**
+             * Constructs a new MulticaRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaRequest.
+             * @implements IMulticaRequest
+             * @constructor
+             * @param {muster.v1.IMulticaRequest=} [properties] Properties to set
+             */
+            function MulticaRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaRequest action.
+             * @member {muster.v1.MulticaRequest.Action} action
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.action = 0;
+
+            /**
+             * MulticaRequest dataDir.
+             * @member {string} dataDir
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.dataDir = "";
+
+            /**
+             * MulticaRequest installerUrl.
+             * @member {string} installerUrl
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.installerUrl = "";
+
+            /**
+             * MulticaRequest serverUrl.
+             * @member {string} serverUrl
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.serverUrl = "";
+
+            /**
+             * MulticaRequest appUrl.
+             * @member {string} appUrl
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.appUrl = "";
+
+            /**
+             * MulticaRequest keepAlive.
+             * @member {boolean} keepAlive
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.keepAlive = false;
+
+            /**
+             * MulticaRequest containerName.
+             * @member {string} containerName
+             * @memberof muster.v1.MulticaRequest
+             * @instance
+             */
+            MulticaRequest.prototype.containerName = "";
+
+            /**
+             * Creates a new MulticaRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaRequest
+             * @static
+             * @param {muster.v1.IMulticaRequest=} [properties] Properties to set
+             * @returns {muster.v1.MulticaRequest} MulticaRequest instance
+             */
+            MulticaRequest.create = function create(properties) {
+                return new MulticaRequest(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaRequest message. Does not implicitly {@link muster.v1.MulticaRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaRequest
+             * @static
+             * @param {muster.v1.IMulticaRequest} message MulticaRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.action);
+                if (message.dataDir != null && Object.hasOwnProperty.call(message, "dataDir"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.dataDir);
+                if (message.installerUrl != null && Object.hasOwnProperty.call(message, "installerUrl"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.installerUrl);
+                if (message.serverUrl != null && Object.hasOwnProperty.call(message, "serverUrl"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.serverUrl);
+                if (message.appUrl != null && Object.hasOwnProperty.call(message, "appUrl"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.appUrl);
+                if (message.keepAlive != null && Object.hasOwnProperty.call(message, "keepAlive"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.keepAlive);
+                if (message.containerName != null && Object.hasOwnProperty.call(message, "containerName"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.containerName);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaRequest} MulticaRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.dataDir = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.installerUrl = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.serverUrl = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.appUrl = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.keepAlive = reader.bool();
+                            break;
+                        }
+                    case 7: {
+                            message.containerName = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaRequest";
+            };
+
+            /**
+             * Action enum.
+             * @name muster.v1.MulticaRequest.Action
+             * @enum {number}
+             * @property {number} CHECK=0 CHECK value
+             * @property {number} SAVE=1 SAVE value
+             * @property {number} INSTALL=2 INSTALL value
+             */
+            MulticaRequest.Action = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "CHECK"] = 0;
+                values[valuesById[1] = "SAVE"] = 1;
+                values[valuesById[2] = "INSTALL"] = 2;
+                return values;
+            })();
+
+            return MulticaRequest;
+        })();
+
+        v1.MulticaStatus = (function() {
+
+            /**
+             * Properties of a MulticaStatus.
+             * @memberof muster.v1
+             * @interface IMulticaStatus
+             * @property {boolean|null} [supported] MulticaStatus supported
+             * @property {boolean|null} [installed] MulticaStatus installed
+             * @property {boolean|null} [running] MulticaStatus running
+             * @property {string|null} [dataDir] MulticaStatus dataDir
+             * @property {string|null} [installerUrl] MulticaStatus installerUrl
+             * @property {string|null} [serverUrl] MulticaStatus serverUrl
+             * @property {string|null} [appUrl] MulticaStatus appUrl
+             * @property {boolean|null} [keepAlive] MulticaStatus keepAlive
+             * @property {string|null} [containerName] MulticaStatus containerName
+             * @property {string|null} [message] MulticaStatus message
+             * @property {string|null} [loginCommand] MulticaStatus loginCommand
+             * @property {boolean|null} [busy] MulticaStatus busy
+             */
+
+            /**
+             * Constructs a new MulticaStatus.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaStatus.
+             * @implements IMulticaStatus
+             * @constructor
+             * @param {muster.v1.IMulticaStatus=} [properties] Properties to set
+             */
+            function MulticaStatus(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaStatus supported.
+             * @member {boolean} supported
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.supported = false;
+
+            /**
+             * MulticaStatus installed.
+             * @member {boolean} installed
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.installed = false;
+
+            /**
+             * MulticaStatus running.
+             * @member {boolean} running
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.running = false;
+
+            /**
+             * MulticaStatus dataDir.
+             * @member {string} dataDir
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.dataDir = "";
+
+            /**
+             * MulticaStatus installerUrl.
+             * @member {string} installerUrl
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.installerUrl = "";
+
+            /**
+             * MulticaStatus serverUrl.
+             * @member {string} serverUrl
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.serverUrl = "";
+
+            /**
+             * MulticaStatus appUrl.
+             * @member {string} appUrl
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.appUrl = "";
+
+            /**
+             * MulticaStatus keepAlive.
+             * @member {boolean} keepAlive
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.keepAlive = false;
+
+            /**
+             * MulticaStatus containerName.
+             * @member {string} containerName
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.containerName = "";
+
+            /**
+             * MulticaStatus message.
+             * @member {string} message
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.message = "";
+
+            /**
+             * MulticaStatus loginCommand.
+             * @member {string} loginCommand
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.loginCommand = "";
+
+            /**
+             * MulticaStatus busy.
+             * @member {boolean} busy
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.busy = false;
+
+            /**
+             * Creates a new MulticaStatus instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaStatus
+             * @static
+             * @param {muster.v1.IMulticaStatus=} [properties] Properties to set
+             * @returns {muster.v1.MulticaStatus} MulticaStatus instance
+             */
+            MulticaStatus.create = function create(properties) {
+                return new MulticaStatus(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaStatus message. Does not implicitly {@link muster.v1.MulticaStatus.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaStatus
+             * @static
+             * @param {muster.v1.IMulticaStatus} message MulticaStatus message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaStatus.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.supported != null && Object.hasOwnProperty.call(message, "supported"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.supported);
+                if (message.installed != null && Object.hasOwnProperty.call(message, "installed"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.installed);
+                if (message.running != null && Object.hasOwnProperty.call(message, "running"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.running);
+                if (message.dataDir != null && Object.hasOwnProperty.call(message, "dataDir"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.dataDir);
+                if (message.installerUrl != null && Object.hasOwnProperty.call(message, "installerUrl"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.installerUrl);
+                if (message.serverUrl != null && Object.hasOwnProperty.call(message, "serverUrl"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.serverUrl);
+                if (message.appUrl != null && Object.hasOwnProperty.call(message, "appUrl"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.appUrl);
+                if (message.keepAlive != null && Object.hasOwnProperty.call(message, "keepAlive"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.keepAlive);
+                if (message.containerName != null && Object.hasOwnProperty.call(message, "containerName"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.containerName);
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.message);
+                if (message.loginCommand != null && Object.hasOwnProperty.call(message, "loginCommand"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.loginCommand);
+                if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
+                    writer.uint32(/* id 12, wireType 0 =*/96).bool(message.busy);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaStatus message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaStatus
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaStatus} MulticaStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaStatus.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaStatus();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.supported = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            message.installed = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.running = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.dataDir = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.installerUrl = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.serverUrl = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.appUrl = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.keepAlive = reader.bool();
+                            break;
+                        }
+                    case 9: {
+                            message.containerName = reader.string();
+                            break;
+                        }
+                    case 10: {
+                            message.message = reader.string();
+                            break;
+                        }
+                    case 11: {
+                            message.loginCommand = reader.string();
+                            break;
+                        }
+                    case 12: {
+                            message.busy = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaStatus
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaStatus
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaStatus.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaStatus";
+            };
+
+            return MulticaStatus;
+        })();
+
+        v1.MulticaBrowseRequest = (function() {
+
+            /**
+             * Properties of a MulticaBrowseRequest.
+             * @memberof muster.v1
+             * @interface IMulticaBrowseRequest
+             * @property {string|null} [workspaceId] MulticaBrowseRequest workspaceId
+             * @property {number|null} [offset] MulticaBrowseRequest offset
+             * @property {string|null} [issueId] MulticaBrowseRequest issueId
+             * @property {string|null} [agentId] MulticaBrowseRequest agentId
+             */
+
+            /**
+             * Constructs a new MulticaBrowseRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaBrowseRequest.
+             * @implements IMulticaBrowseRequest
+             * @constructor
+             * @param {muster.v1.IMulticaBrowseRequest=} [properties] Properties to set
+             */
+            function MulticaBrowseRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaBrowseRequest workspaceId.
+             * @member {string} workspaceId
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @instance
+             */
+            MulticaBrowseRequest.prototype.workspaceId = "";
+
+            /**
+             * MulticaBrowseRequest offset.
+             * @member {number} offset
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @instance
+             */
+            MulticaBrowseRequest.prototype.offset = 0;
+
+            /**
+             * MulticaBrowseRequest issueId.
+             * @member {string} issueId
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @instance
+             */
+            MulticaBrowseRequest.prototype.issueId = "";
+
+            /**
+             * MulticaBrowseRequest agentId.
+             * @member {string} agentId
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @instance
+             */
+            MulticaBrowseRequest.prototype.agentId = "";
+
+            /**
+             * Creates a new MulticaBrowseRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @static
+             * @param {muster.v1.IMulticaBrowseRequest=} [properties] Properties to set
+             * @returns {muster.v1.MulticaBrowseRequest} MulticaBrowseRequest instance
+             */
+            MulticaBrowseRequest.create = function create(properties) {
+                return new MulticaBrowseRequest(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaBrowseRequest message. Does not implicitly {@link muster.v1.MulticaBrowseRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @static
+             * @param {muster.v1.IMulticaBrowseRequest} message MulticaBrowseRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaBrowseRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.workspaceId != null && Object.hasOwnProperty.call(message, "workspaceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.workspaceId);
+                if (message.offset != null && Object.hasOwnProperty.call(message, "offset"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.offset);
+                if (message.issueId != null && Object.hasOwnProperty.call(message, "issueId"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.issueId);
+                if (message.agentId != null && Object.hasOwnProperty.call(message, "agentId"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.agentId);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaBrowseRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaBrowseRequest} MulticaBrowseRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaBrowseRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaBrowseRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.workspaceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.offset = reader.uint32();
+                            break;
+                        }
+                    case 3: {
+                            message.issueId = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.agentId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaBrowseRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaBrowseRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaBrowseRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaBrowseRequest";
+            };
+
+            return MulticaBrowseRequest;
+        })();
+
+        v1.MulticaWorkspace = (function() {
+
+            /**
+             * Properties of a MulticaWorkspace.
+             * @memberof muster.v1
+             * @interface IMulticaWorkspace
+             * @property {string|null} [id] MulticaWorkspace id
+             * @property {string|null} [name] MulticaWorkspace name
+             */
+
+            /**
+             * Constructs a new MulticaWorkspace.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaWorkspace.
+             * @implements IMulticaWorkspace
+             * @constructor
+             * @param {muster.v1.IMulticaWorkspace=} [properties] Properties to set
+             */
+            function MulticaWorkspace(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaWorkspace id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaWorkspace
+             * @instance
+             */
+            MulticaWorkspace.prototype.id = "";
+
+            /**
+             * MulticaWorkspace name.
+             * @member {string} name
+             * @memberof muster.v1.MulticaWorkspace
+             * @instance
+             */
+            MulticaWorkspace.prototype.name = "";
+
+            /**
+             * Creates a new MulticaWorkspace instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaWorkspace
+             * @static
+             * @param {muster.v1.IMulticaWorkspace=} [properties] Properties to set
+             * @returns {muster.v1.MulticaWorkspace} MulticaWorkspace instance
+             */
+            MulticaWorkspace.create = function create(properties) {
+                return new MulticaWorkspace(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaWorkspace message. Does not implicitly {@link muster.v1.MulticaWorkspace.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaWorkspace
+             * @static
+             * @param {muster.v1.IMulticaWorkspace} message MulticaWorkspace message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaWorkspace.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaWorkspace message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaWorkspace
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaWorkspace} MulticaWorkspace
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaWorkspace.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaWorkspace();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaWorkspace
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaWorkspace
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaWorkspace.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaWorkspace";
+            };
+
+            return MulticaWorkspace;
+        })();
+
+        v1.MulticaIssue = (function() {
+
+            /**
+             * Properties of a MulticaIssue.
+             * @memberof muster.v1
+             * @interface IMulticaIssue
+             * @property {string|null} [id] MulticaIssue id
+             * @property {string|null} [identifier] MulticaIssue identifier
+             * @property {string|null} [title] MulticaIssue title
+             * @property {string|null} [description] MulticaIssue description
+             * @property {string|null} [status] MulticaIssue status
+             * @property {string|null} [priority] MulticaIssue priority
+             * @property {string|null} [assigneeId] MulticaIssue assigneeId
+             * @property {string|null} [assigneeType] MulticaIssue assigneeType
+             * @property {string|null} [updatedAt] MulticaIssue updatedAt
+             */
+
+            /**
+             * Constructs a new MulticaIssue.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaIssue.
+             * @implements IMulticaIssue
+             * @constructor
+             * @param {muster.v1.IMulticaIssue=} [properties] Properties to set
+             */
+            function MulticaIssue(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaIssue id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.id = "";
+
+            /**
+             * MulticaIssue identifier.
+             * @member {string} identifier
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.identifier = "";
+
+            /**
+             * MulticaIssue title.
+             * @member {string} title
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.title = "";
+
+            /**
+             * MulticaIssue description.
+             * @member {string} description
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.description = "";
+
+            /**
+             * MulticaIssue status.
+             * @member {string} status
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.status = "";
+
+            /**
+             * MulticaIssue priority.
+             * @member {string} priority
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.priority = "";
+
+            /**
+             * MulticaIssue assigneeId.
+             * @member {string} assigneeId
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.assigneeId = "";
+
+            /**
+             * MulticaIssue assigneeType.
+             * @member {string} assigneeType
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.assigneeType = "";
+
+            /**
+             * MulticaIssue updatedAt.
+             * @member {string} updatedAt
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.updatedAt = "";
+
+            /**
+             * Creates a new MulticaIssue instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaIssue
+             * @static
+             * @param {muster.v1.IMulticaIssue=} [properties] Properties to set
+             * @returns {muster.v1.MulticaIssue} MulticaIssue instance
+             */
+            MulticaIssue.create = function create(properties) {
+                return new MulticaIssue(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaIssue message. Does not implicitly {@link muster.v1.MulticaIssue.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaIssue
+             * @static
+             * @param {muster.v1.IMulticaIssue} message MulticaIssue message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaIssue.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.identifier != null && Object.hasOwnProperty.call(message, "identifier"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.identifier);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.title);
+                if (message.description != null && Object.hasOwnProperty.call(message, "description"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.description);
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.status);
+                if (message.priority != null && Object.hasOwnProperty.call(message, "priority"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.priority);
+                if (message.assigneeId != null && Object.hasOwnProperty.call(message, "assigneeId"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.assigneeId);
+                if (message.assigneeType != null && Object.hasOwnProperty.call(message, "assigneeType"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.assigneeType);
+                if (message.updatedAt != null && Object.hasOwnProperty.call(message, "updatedAt"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.updatedAt);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaIssue message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaIssue
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaIssue} MulticaIssue
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaIssue.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaIssue();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.identifier = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.description = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.status = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.priority = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.assigneeId = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.assigneeType = reader.string();
+                            break;
+                        }
+                    case 9: {
+                            message.updatedAt = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaIssue
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaIssue
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaIssue.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaIssue";
+            };
+
+            return MulticaIssue;
+        })();
+
+        v1.MulticaAgent = (function() {
+
+            /**
+             * Properties of a MulticaAgent.
+             * @memberof muster.v1
+             * @interface IMulticaAgent
+             * @property {string|null} [id] MulticaAgent id
+             * @property {string|null} [name] MulticaAgent name
+             * @property {string|null} [description] MulticaAgent description
+             * @property {string|null} [status] MulticaAgent status
+             * @property {string|null} [runtimeId] MulticaAgent runtimeId
+             * @property {string|null} [model] MulticaAgent model
+             */
+
+            /**
+             * Constructs a new MulticaAgent.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaAgent.
+             * @implements IMulticaAgent
+             * @constructor
+             * @param {muster.v1.IMulticaAgent=} [properties] Properties to set
+             */
+            function MulticaAgent(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaAgent id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.id = "";
+
+            /**
+             * MulticaAgent name.
+             * @member {string} name
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.name = "";
+
+            /**
+             * MulticaAgent description.
+             * @member {string} description
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.description = "";
+
+            /**
+             * MulticaAgent status.
+             * @member {string} status
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.status = "";
+
+            /**
+             * MulticaAgent runtimeId.
+             * @member {string} runtimeId
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.runtimeId = "";
+
+            /**
+             * MulticaAgent model.
+             * @member {string} model
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.model = "";
+
+            /**
+             * Creates a new MulticaAgent instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaAgent
+             * @static
+             * @param {muster.v1.IMulticaAgent=} [properties] Properties to set
+             * @returns {muster.v1.MulticaAgent} MulticaAgent instance
+             */
+            MulticaAgent.create = function create(properties) {
+                return new MulticaAgent(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaAgent message. Does not implicitly {@link muster.v1.MulticaAgent.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaAgent
+             * @static
+             * @param {muster.v1.IMulticaAgent} message MulticaAgent message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaAgent.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+                if (message.description != null && Object.hasOwnProperty.call(message, "description"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.description);
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.status);
+                if (message.runtimeId != null && Object.hasOwnProperty.call(message, "runtimeId"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.runtimeId);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.model);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaAgent message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaAgent
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaAgent} MulticaAgent
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaAgent.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaAgent();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.description = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.status = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.runtimeId = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaAgent
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaAgent
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaAgent.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaAgent";
+            };
+
+            return MulticaAgent;
+        })();
+
+        v1.MulticaRuntime = (function() {
+
+            /**
+             * Properties of a MulticaRuntime.
+             * @memberof muster.v1
+             * @interface IMulticaRuntime
+             * @property {string|null} [id] MulticaRuntime id
+             * @property {string|null} [name] MulticaRuntime name
+             * @property {string|null} [provider] MulticaRuntime provider
+             * @property {string|null} [status] MulticaRuntime status
+             * @property {string|null} [lastSeenAt] MulticaRuntime lastSeenAt
+             * @property {string|null} [deviceInfo] MulticaRuntime deviceInfo
+             */
+
+            /**
+             * Constructs a new MulticaRuntime.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaRuntime.
+             * @implements IMulticaRuntime
+             * @constructor
+             * @param {muster.v1.IMulticaRuntime=} [properties] Properties to set
+             */
+            function MulticaRuntime(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaRuntime id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.id = "";
+
+            /**
+             * MulticaRuntime name.
+             * @member {string} name
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.name = "";
+
+            /**
+             * MulticaRuntime provider.
+             * @member {string} provider
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.provider = "";
+
+            /**
+             * MulticaRuntime status.
+             * @member {string} status
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.status = "";
+
+            /**
+             * MulticaRuntime lastSeenAt.
+             * @member {string} lastSeenAt
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.lastSeenAt = "";
+
+            /**
+             * MulticaRuntime deviceInfo.
+             * @member {string} deviceInfo
+             * @memberof muster.v1.MulticaRuntime
+             * @instance
+             */
+            MulticaRuntime.prototype.deviceInfo = "";
+
+            /**
+             * Creates a new MulticaRuntime instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaRuntime
+             * @static
+             * @param {muster.v1.IMulticaRuntime=} [properties] Properties to set
+             * @returns {muster.v1.MulticaRuntime} MulticaRuntime instance
+             */
+            MulticaRuntime.create = function create(properties) {
+                return new MulticaRuntime(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaRuntime message. Does not implicitly {@link muster.v1.MulticaRuntime.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaRuntime
+             * @static
+             * @param {muster.v1.IMulticaRuntime} message MulticaRuntime message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaRuntime.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.provider);
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.status);
+                if (message.lastSeenAt != null && Object.hasOwnProperty.call(message, "lastSeenAt"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.lastSeenAt);
+                if (message.deviceInfo != null && Object.hasOwnProperty.call(message, "deviceInfo"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.deviceInfo);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaRuntime message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaRuntime
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaRuntime} MulticaRuntime
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaRuntime.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaRuntime();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.status = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.lastSeenAt = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.deviceInfo = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaRuntime
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaRuntime
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaRuntime.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaRuntime";
+            };
+
+            return MulticaRuntime;
+        })();
+
+        v1.MulticaPage = (function() {
+
+            /**
+             * Properties of a MulticaPage.
+             * @memberof muster.v1
+             * @interface IMulticaPage
+             * @property {Array.<muster.v1.IMulticaWorkspace>|null} [workspaces] MulticaPage workspaces
+             * @property {string|null} [workspaceId] MulticaPage workspaceId
+             * @property {Array.<muster.v1.IMulticaIssue>|null} [issues] MulticaPage issues
+             * @property {Array.<muster.v1.IMulticaAgent>|null} [agents] MulticaPage agents
+             * @property {Array.<muster.v1.IMulticaRuntime>|null} [runtimes] MulticaPage runtimes
+             * @property {number|null} [offset] MulticaPage offset
+             * @property {boolean|null} [hasMore] MulticaPage hasMore
+             * @property {muster.v1.IMulticaIssue|null} [issue] MulticaPage issue
+             * @property {muster.v1.IMulticaAgent|null} [agent] MulticaPage agent
+             * @property {boolean|null} [busy] MulticaPage busy
+             * @property {string|null} [error] MulticaPage error
+             * @property {number|null} [nextOffset] MulticaPage nextOffset
+             * @property {number|null} [previousOffset] MulticaPage previousOffset
+             */
+
+            /**
+             * Constructs a new MulticaPage.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaPage.
+             * @implements IMulticaPage
+             * @constructor
+             * @param {muster.v1.IMulticaPage=} [properties] Properties to set
+             */
+            function MulticaPage(properties) {
+                this.workspaces = [];
+                this.issues = [];
+                this.agents = [];
+                this.runtimes = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaPage workspaces.
+             * @member {Array.<muster.v1.IMulticaWorkspace>} workspaces
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.workspaces = $util.emptyArray;
+
+            /**
+             * MulticaPage workspaceId.
+             * @member {string} workspaceId
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.workspaceId = "";
+
+            /**
+             * MulticaPage issues.
+             * @member {Array.<muster.v1.IMulticaIssue>} issues
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.issues = $util.emptyArray;
+
+            /**
+             * MulticaPage agents.
+             * @member {Array.<muster.v1.IMulticaAgent>} agents
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.agents = $util.emptyArray;
+
+            /**
+             * MulticaPage runtimes.
+             * @member {Array.<muster.v1.IMulticaRuntime>} runtimes
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.runtimes = $util.emptyArray;
+
+            /**
+             * MulticaPage offset.
+             * @member {number} offset
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.offset = 0;
+
+            /**
+             * MulticaPage hasMore.
+             * @member {boolean} hasMore
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.hasMore = false;
+
+            /**
+             * MulticaPage issue.
+             * @member {muster.v1.IMulticaIssue|null|undefined} issue
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.issue = null;
+
+            /**
+             * MulticaPage agent.
+             * @member {muster.v1.IMulticaAgent|null|undefined} agent
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.agent = null;
+
+            /**
+             * MulticaPage busy.
+             * @member {boolean} busy
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.busy = false;
+
+            /**
+             * MulticaPage error.
+             * @member {string} error
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.error = "";
+
+            /**
+             * MulticaPage nextOffset.
+             * @member {number} nextOffset
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.nextOffset = 0;
+
+            /**
+             * MulticaPage previousOffset.
+             * @member {number} previousOffset
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.previousOffset = 0;
+
+            /**
+             * Creates a new MulticaPage instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaPage
+             * @static
+             * @param {muster.v1.IMulticaPage=} [properties] Properties to set
+             * @returns {muster.v1.MulticaPage} MulticaPage instance
+             */
+            MulticaPage.create = function create(properties) {
+                return new MulticaPage(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaPage message. Does not implicitly {@link muster.v1.MulticaPage.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaPage
+             * @static
+             * @param {muster.v1.IMulticaPage} message MulticaPage message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaPage.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.workspaces != null && message.workspaces.length)
+                    for (let i = 0; i < message.workspaces.length; ++i)
+                        $root.muster.v1.MulticaWorkspace.encode(message.workspaces[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.workspaceId != null && Object.hasOwnProperty.call(message, "workspaceId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.workspaceId);
+                if (message.issues != null && message.issues.length)
+                    for (let i = 0; i < message.issues.length; ++i)
+                        $root.muster.v1.MulticaIssue.encode(message.issues[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.agents != null && message.agents.length)
+                    for (let i = 0; i < message.agents.length; ++i)
+                        $root.muster.v1.MulticaAgent.encode(message.agents[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                if (message.runtimes != null && message.runtimes.length)
+                    for (let i = 0; i < message.runtimes.length; ++i)
+                        $root.muster.v1.MulticaRuntime.encode(message.runtimes[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
+                if (message.offset != null && Object.hasOwnProperty.call(message, "offset"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).uint32(message.offset);
+                if (message.hasMore != null && Object.hasOwnProperty.call(message, "hasMore"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.hasMore);
+                if (message.issue != null && Object.hasOwnProperty.call(message, "issue"))
+                    $root.muster.v1.MulticaIssue.encode(message.issue, writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
+                if (message.agent != null && Object.hasOwnProperty.call(message, "agent"))
+                    $root.muster.v1.MulticaAgent.encode(message.agent, writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
+                if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.busy);
+                if (message.error != null && Object.hasOwnProperty.call(message, "error"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.error);
+                if (message.nextOffset != null && Object.hasOwnProperty.call(message, "nextOffset"))
+                    writer.uint32(/* id 12, wireType 0 =*/96).uint32(message.nextOffset);
+                if (message.previousOffset != null && Object.hasOwnProperty.call(message, "previousOffset"))
+                    writer.uint32(/* id 13, wireType 0 =*/104).uint32(message.previousOffset);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaPage message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaPage
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaPage} MulticaPage
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaPage.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaPage();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            if (!(message.workspaces && message.workspaces.length))
+                                message.workspaces = [];
+                            message.workspaces.push($root.muster.v1.MulticaWorkspace.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 2: {
+                            message.workspaceId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            if (!(message.issues && message.issues.length))
+                                message.issues = [];
+                            message.issues.push($root.muster.v1.MulticaIssue.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 4: {
+                            if (!(message.agents && message.agents.length))
+                                message.agents = [];
+                            message.agents.push($root.muster.v1.MulticaAgent.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 5: {
+                            if (!(message.runtimes && message.runtimes.length))
+                                message.runtimes = [];
+                            message.runtimes.push($root.muster.v1.MulticaRuntime.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 6: {
+                            message.offset = reader.uint32();
+                            break;
+                        }
+                    case 7: {
+                            message.hasMore = reader.bool();
+                            break;
+                        }
+                    case 8: {
+                            message.issue = $root.muster.v1.MulticaIssue.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 9: {
+                            message.agent = $root.muster.v1.MulticaAgent.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 10: {
+                            message.busy = reader.bool();
+                            break;
+                        }
+                    case 11: {
+                            message.error = reader.string();
+                            break;
+                        }
+                    case 12: {
+                            message.nextOffset = reader.uint32();
+                            break;
+                        }
+                    case 13: {
+                            message.previousOffset = reader.uint32();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaPage
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaPage
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaPage.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaPage";
+            };
+
+            return MulticaPage;
+        })();
+
+        v1.AgentNativeCreateRequest = (function() {
+
+            /**
+             * Properties of an AgentNativeCreateRequest.
+             * @memberof muster.v1
+             * @interface IAgentNativeCreateRequest
+             * @property {string|null} [opId] AgentNativeCreateRequest opId
+             * @property {string|null} [provider] AgentNativeCreateRequest provider
+             * @property {string|null} [directory] AgentNativeCreateRequest directory
+             * @property {string|null} [prompt] AgentNativeCreateRequest prompt
+             */
+
+            /**
+             * Constructs a new AgentNativeCreateRequest.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentNativeCreateRequest.
+             * @implements IAgentNativeCreateRequest
+             * @constructor
+             * @param {muster.v1.IAgentNativeCreateRequest=} [properties] Properties to set
+             */
+            function AgentNativeCreateRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentNativeCreateRequest opId.
+             * @member {string} opId
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.opId = "";
+
+            /**
+             * AgentNativeCreateRequest provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.provider = "";
+
+            /**
+             * AgentNativeCreateRequest directory.
+             * @member {string} directory
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.directory = "";
+
+            /**
+             * AgentNativeCreateRequest prompt.
+             * @member {string} prompt
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.prompt = "";
+
+            /**
+             * Creates a new AgentNativeCreateRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @static
+             * @param {muster.v1.IAgentNativeCreateRequest=} [properties] Properties to set
+             * @returns {muster.v1.AgentNativeCreateRequest} AgentNativeCreateRequest instance
+             */
+            AgentNativeCreateRequest.create = function create(properties) {
+                return new AgentNativeCreateRequest(properties);
+            };
+
+            /**
+             * Encodes the specified AgentNativeCreateRequest message. Does not implicitly {@link muster.v1.AgentNativeCreateRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @static
+             * @param {muster.v1.IAgentNativeCreateRequest} message AgentNativeCreateRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentNativeCreateRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.opId);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.directory);
+                if (message.prompt != null && Object.hasOwnProperty.call(message, "prompt"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.prompt);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentNativeCreateRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentNativeCreateRequest} AgentNativeCreateRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentNativeCreateRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentNativeCreateRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.prompt = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentNativeCreateRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentNativeCreateRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentNativeCreateRequest";
+            };
+
+            return AgentNativeCreateRequest;
+        })();
+
         return v1;
     })();
 
@@ -20286,6 +24125,8 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.ISetDeviceLockedUse|null} [setDeviceLockedUse] Intent setDeviceLockedUse
              * @property {muster.app.IDesktopSetupAction|null} [desktopSetupAction] Intent desktopSetupAction
              * @property {muster.app.IDesktopUpdateAction|null} [desktopUpdateAction] Intent desktopUpdateAction
+             * @property {muster.v1.IMulticaRequest|null} [multica] Intent multica
+             * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Intent multicaBrowse
              * @property {muster.app.IOpenAgents|null} [openAgents] Intent openAgents
              * @property {muster.app.IOrcaCreate|null} [orcaCreate] Intent orcaCreate
              * @property {muster.app.IOpenAgent|null} [openAgent] Intent openAgent
@@ -20501,6 +24342,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.desktopUpdateAction = null;
+
+            /**
+             * Intent multica.
+             * @member {muster.v1.IMulticaRequest|null|undefined} multica
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multica = null;
+
+            /**
+             * Intent multicaBrowse.
+             * @member {muster.v1.IMulticaBrowseRequest|null|undefined} multicaBrowse
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multicaBrowse = null;
 
             /**
              * Intent openAgents.
@@ -20755,12 +24612,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "openAgents", "orcaCreate", "openAgent", "agentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "openAgents", "orcaCreate", "openAgent", "agentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -20894,6 +24751,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.OrcaCreate.encode(message.orcaCreate, writer.uint32(/* id 87, wireType 2 =*/698).fork(), q + 1).ldelim();
                 if (message.composerComplete != null && Object.hasOwnProperty.call(message, "composerComplete"))
                     $root.muster.app.ComposerComplete.encode(message.composerComplete, writer.uint32(/* id 88, wireType 2 =*/706).fork(), q + 1).ldelim();
+                if (message.multica != null && Object.hasOwnProperty.call(message, "multica"))
+                    $root.muster.v1.MulticaRequest.encode(message.multica, writer.uint32(/* id 89, wireType 2 =*/714).fork(), q + 1).ldelim();
+                if (message.multicaBrowse != null && Object.hasOwnProperty.call(message, "multicaBrowse"))
+                    $root.muster.v1.MulticaBrowseRequest.encode(message.multicaBrowse, writer.uint32(/* id 90, wireType 2 =*/722).fork(), q + 1).ldelim();
                 if (message.codeAction != null && Object.hasOwnProperty.call(message, "codeAction"))
                     $root.muster.app.CodeAction.encode(message.codeAction, writer.uint32(/* id 132, wireType 2 =*/1058).fork(), q + 1).ldelim();
                 return writer;
@@ -21015,6 +24876,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 24: {
                             message.desktopUpdateAction = $root.muster.app.DesktopUpdateAction.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 89: {
+                            message.multica = $root.muster.v1.MulticaRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 90: {
+                            message.multicaBrowse = $root.muster.v1.MulticaBrowseRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 30: {
@@ -26823,6 +30692,8 @@ export const muster = $root.muster = (() => {
              * @memberof muster.app
              * @interface ITerminalCreate
              * @property {string|null} [profile] TerminalCreate profile
+             * @property {string|null} [source] TerminalCreate source
+             * @property {boolean|null} [attachManaged] TerminalCreate attachManaged
              */
 
             /**
@@ -26847,6 +30718,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             TerminalCreate.prototype.profile = "";
+
+            /**
+             * TerminalCreate source.
+             * @member {string} source
+             * @memberof muster.app.TerminalCreate
+             * @instance
+             */
+            TerminalCreate.prototype.source = "";
+
+            /**
+             * TerminalCreate attachManaged.
+             * @member {boolean} attachManaged
+             * @memberof muster.app.TerminalCreate
+             * @instance
+             */
+            TerminalCreate.prototype.attachManaged = false;
 
             /**
              * Creates a new TerminalCreate instance using the specified properties.
@@ -26878,6 +30765,10 @@ export const muster = $root.muster = (() => {
                     throw Error("max depth exceeded");
                 if (message.profile != null && Object.hasOwnProperty.call(message, "profile"))
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.profile);
+                if (message.source != null && Object.hasOwnProperty.call(message, "source"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.source);
+                if (message.attachManaged != null && Object.hasOwnProperty.call(message, "attachManaged"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.attachManaged);
                 return writer;
             };
 
@@ -26917,6 +30808,14 @@ export const muster = $root.muster = (() => {
                     switch (tag >>> 3) {
                     case 1: {
                             message.profile = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.source = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.attachManaged = reader.bool();
                             break;
                         }
                     default:
@@ -28546,6 +32445,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IPrepareDesktopUpdate|null} [prepareDesktopUpdate] Effect prepareDesktopUpdate
              * @property {muster.app.IFinishDesktopUpdate|null} [finishDesktopUpdate] Effect finishDesktopUpdate
              * @property {muster.app.IActivateNetwork|null} [activateNetwork] Effect activateNetwork
+             * @property {muster.app.ISendDiagnostic|null} [sendDiagnostic] Effect sendDiagnostic
              */
 
             /**
@@ -28651,17 +32551,25 @@ export const muster = $root.muster = (() => {
              */
             Effect.prototype.activateNetwork = null;
 
+            /**
+             * Effect sendDiagnostic.
+             * @member {muster.app.ISendDiagnostic|null|undefined} sendDiagnostic
+             * @memberof muster.app.Effect
+             * @instance
+             */
+            Effect.prototype.sendDiagnostic = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Effect ef.
-             * @member {"scanQr"|"authenticate"|"notify"|"openUrl"|"cover"|"localAuth"|"authorizeDesktopHelper"|"restartDesktop"|"prepareDesktopUpdate"|"finishDesktopUpdate"|"activateNetwork"|undefined} ef
+             * @member {"scanQr"|"authenticate"|"notify"|"openUrl"|"cover"|"localAuth"|"authorizeDesktopHelper"|"restartDesktop"|"prepareDesktopUpdate"|"finishDesktopUpdate"|"activateNetwork"|"sendDiagnostic"|undefined} ef
              * @memberof muster.app.Effect
              * @instance
              */
             Object.defineProperty(Effect.prototype, "ef", {
-                get: $util.oneOfGetter($oneOfFields = ["scanQr", "authenticate", "notify", "openUrl", "cover", "localAuth", "authorizeDesktopHelper", "restartDesktop", "prepareDesktopUpdate", "finishDesktopUpdate", "activateNetwork"]),
+                get: $util.oneOfGetter($oneOfFields = ["scanQr", "authenticate", "notify", "openUrl", "cover", "localAuth", "authorizeDesktopHelper", "restartDesktop", "prepareDesktopUpdate", "finishDesktopUpdate", "activateNetwork", "sendDiagnostic"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -28715,6 +32623,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.FinishDesktopUpdate.encode(message.finishDesktopUpdate, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                 if (message.activateNetwork != null && Object.hasOwnProperty.call(message, "activateNetwork"))
                     $root.muster.app.ActivateNetwork.encode(message.activateNetwork, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
+                if (message.sendDiagnostic != null && Object.hasOwnProperty.call(message, "sendDiagnostic"))
+                    $root.muster.app.SendDiagnostic.encode(message.sendDiagnostic, writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -28796,6 +32706,10 @@ export const muster = $root.muster = (() => {
                             message.activateNetwork = $root.muster.app.ActivateNetwork.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 15: {
+                            message.sendDiagnostic = $root.muster.app.SendDiagnostic.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -28825,6 +32739,140 @@ export const muster = $root.muster = (() => {
             };
 
             return Effect;
+        })();
+
+        app.SendDiagnostic = (function() {
+
+            /**
+             * Properties of a SendDiagnostic.
+             * @memberof muster.app
+             * @interface ISendDiagnostic
+             * @property {Uint8Array|null} [json] SendDiagnostic json
+             */
+
+            /**
+             * Constructs a new SendDiagnostic.
+             * @memberof muster.app
+             * @classdesc Represents a SendDiagnostic.
+             * @implements ISendDiagnostic
+             * @constructor
+             * @param {muster.app.ISendDiagnostic=} [properties] Properties to set
+             */
+            function SendDiagnostic(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * SendDiagnostic json.
+             * @member {Uint8Array} json
+             * @memberof muster.app.SendDiagnostic
+             * @instance
+             */
+            SendDiagnostic.prototype.json = $util.newBuffer([]);
+
+            /**
+             * Creates a new SendDiagnostic instance using the specified properties.
+             * @function create
+             * @memberof muster.app.SendDiagnostic
+             * @static
+             * @param {muster.app.ISendDiagnostic=} [properties] Properties to set
+             * @returns {muster.app.SendDiagnostic} SendDiagnostic instance
+             */
+            SendDiagnostic.create = function create(properties) {
+                return new SendDiagnostic(properties);
+            };
+
+            /**
+             * Encodes the specified SendDiagnostic message. Does not implicitly {@link muster.app.SendDiagnostic.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.SendDiagnostic
+             * @static
+             * @param {muster.app.ISendDiagnostic} message SendDiagnostic message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            SendDiagnostic.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.json != null && Object.hasOwnProperty.call(message, "json"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.json);
+                return writer;
+            };
+
+            /**
+             * Decodes a SendDiagnostic message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.SendDiagnostic
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.SendDiagnostic} SendDiagnostic
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            SendDiagnostic.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.SendDiagnostic();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.json = reader.bytes();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for SendDiagnostic
+             * @function getTypeUrl
+             * @memberof muster.app.SendDiagnostic
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            SendDiagnostic.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.SendDiagnostic";
+            };
+
+            return SendDiagnostic;
         })();
 
         app.Cover = (function() {
@@ -30532,6 +34580,7 @@ export const muster = $root.muster = (() => {
          * @property {number} GIT=12 GIT value
          * @property {number} BROWSER=13 BROWSER value
          * @property {number} DESKTOP_CHATS=14 DESKTOP_CHATS value
+         * @property {number} MULTICA=15 MULTICA value
          */
         app.Screen = (function() {
             const valuesById = {}, values = Object.create(valuesById);
@@ -30550,6 +34599,7 @@ export const muster = $root.muster = (() => {
             values[valuesById[12] = "GIT"] = 12;
             values[valuesById[13] = "BROWSER"] = 13;
             values[valuesById[14] = "DESKTOP_CHATS"] = 14;
+            values[valuesById[15] = "MULTICA"] = 15;
             return values;
         })();
 
@@ -30591,6 +34641,8 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IAccessView|null} [joinAccess] ViewModel joinAccess
              * @property {Array.<muster.app.IDeviceLockedUseView>|null} [deviceLockedUse] ViewModel deviceLockedUse
              * @property {muster.app.IDeviceActions|null} [deviceActions] ViewModel deviceActions
+             * @property {muster.v1.IMulticaStatus|null} [multica] ViewModel multica
+             * @property {muster.v1.IMulticaPage|null} [multicaPage] ViewModel multicaPage
              * @property {Array.<muster.app.Screen>|null} [navigationPath] ViewModel navigationPath
              */
 
@@ -30871,6 +34923,22 @@ export const muster = $root.muster = (() => {
             ViewModel.prototype.deviceActions = null;
 
             /**
+             * ViewModel multica.
+             * @member {muster.v1.IMulticaStatus|null|undefined} multica
+             * @memberof muster.app.ViewModel
+             * @instance
+             */
+            ViewModel.prototype.multica = null;
+
+            /**
+             * ViewModel multicaPage.
+             * @member {muster.v1.IMulticaPage|null|undefined} multicaPage
+             * @memberof muster.app.ViewModel
+             * @instance
+             */
+            ViewModel.prototype.multicaPage = null;
+
+            /**
              * ViewModel navigationPath.
              * @member {Array.<muster.app.Screen>} navigationPath
              * @memberof muster.app.ViewModel
@@ -30980,6 +35048,10 @@ export const muster = $root.muster = (() => {
                         writer.int32(message.navigationPath[i]);
                     writer.ldelim();
                 }
+                if (message.multica != null && Object.hasOwnProperty.call(message, "multica"))
+                    $root.muster.v1.MulticaStatus.encode(message.multica, writer.uint32(/* id 35, wireType 2 =*/282).fork(), q + 1).ldelim();
+                if (message.multicaPage != null && Object.hasOwnProperty.call(message, "multicaPage"))
+                    $root.muster.v1.MulticaPage.encode(message.multicaPage, writer.uint32(/* id 36, wireType 2 =*/290).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -31151,6 +35223,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 32: {
                             message.deviceActions = $root.muster.app.DeviceActions.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 35: {
+                            message.multica = $root.muster.v1.MulticaStatus.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 36: {
+                            message.multicaPage = $root.muster.v1.MulticaPage.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 34: {
@@ -35347,6 +39427,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [loading] TerminalsView loading
              * @property {Array.<string>|null} [errors] TerminalsView errors
              * @property {boolean|null} [canCreate] TerminalsView canCreate
+             * @property {Array.<muster.v1.ITerminalSource>|null} [sources] TerminalsView sources
              */
 
             /**
@@ -35360,6 +39441,7 @@ export const muster = $root.muster = (() => {
             function TerminalsView(properties) {
                 this.sessions = [];
                 this.errors = [];
+                this.sources = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -35415,6 +39497,14 @@ export const muster = $root.muster = (() => {
             TerminalsView.prototype.canCreate = false;
 
             /**
+             * TerminalsView sources.
+             * @member {Array.<muster.v1.ITerminalSource>} sources
+             * @memberof muster.app.TerminalsView
+             * @instance
+             */
+            TerminalsView.prototype.sources = $util.emptyArray;
+
+            /**
              * Creates a new TerminalsView instance using the specified properties.
              * @function create
              * @memberof muster.app.TerminalsView
@@ -35456,6 +39546,9 @@ export const muster = $root.muster = (() => {
                         writer.uint32(/* id 5, wireType 2 =*/42).string(message.errors[i]);
                 if (message.canCreate != null && Object.hasOwnProperty.call(message, "canCreate"))
                     writer.uint32(/* id 6, wireType 0 =*/48).bool(message.canCreate);
+                if (message.sources != null && message.sources.length)
+                    for (let i = 0; i < message.sources.length; ++i)
+                        $root.muster.v1.TerminalSource.encode(message.sources[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -35521,6 +39614,12 @@ export const muster = $root.muster = (() => {
                             message.canCreate = reader.bool();
                             break;
                         }
+                    case 7: {
+                            if (!(message.sources && message.sources.length))
+                                message.sources = [];
+                            message.sources.push($root.muster.v1.TerminalSource.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -35570,6 +39669,9 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [status] TerminalView status
              * @property {boolean|null} [resizable] TerminalView resizable
              * @property {boolean|null} [canPaste] TerminalView canPaste
+             * @property {string|null} [desktopAttachCommand] TerminalView desktopAttachCommand
+             * @property {string|null} [iterm2AttachCommand] TerminalView iterm2AttachCommand
+             * @property {Array.<muster.v1.ITerminalSource>|null} [nativeSources] TerminalView nativeSources
              */
 
             /**
@@ -35582,6 +39684,7 @@ export const muster = $root.muster = (() => {
              */
             function TerminalView(properties) {
                 this.lines = [];
+                this.nativeSources = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -35685,6 +39788,30 @@ export const muster = $root.muster = (() => {
             TerminalView.prototype.canPaste = false;
 
             /**
+             * TerminalView desktopAttachCommand.
+             * @member {string} desktopAttachCommand
+             * @memberof muster.app.TerminalView
+             * @instance
+             */
+            TerminalView.prototype.desktopAttachCommand = "";
+
+            /**
+             * TerminalView iterm2AttachCommand.
+             * @member {string} iterm2AttachCommand
+             * @memberof muster.app.TerminalView
+             * @instance
+             */
+            TerminalView.prototype.iterm2AttachCommand = "";
+
+            /**
+             * TerminalView nativeSources.
+             * @member {Array.<muster.v1.ITerminalSource>} nativeSources
+             * @memberof muster.app.TerminalView
+             * @instance
+             */
+            TerminalView.prototype.nativeSources = $util.emptyArray;
+
+            /**
              * Creates a new TerminalView instance using the specified properties.
              * @function create
              * @memberof muster.app.TerminalView
@@ -35737,6 +39864,13 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 11, wireType 0 =*/88).bool(message.resizable);
                 if (message.canPaste != null && Object.hasOwnProperty.call(message, "canPaste"))
                     writer.uint32(/* id 12, wireType 0 =*/96).bool(message.canPaste);
+                if (message.desktopAttachCommand != null && Object.hasOwnProperty.call(message, "desktopAttachCommand"))
+                    writer.uint32(/* id 13, wireType 2 =*/106).string(message.desktopAttachCommand);
+                if (message.iterm2AttachCommand != null && Object.hasOwnProperty.call(message, "iterm2AttachCommand"))
+                    writer.uint32(/* id 14, wireType 2 =*/114).string(message.iterm2AttachCommand);
+                if (message.nativeSources != null && message.nativeSources.length)
+                    for (let i = 0; i < message.nativeSources.length; ++i)
+                        $root.muster.v1.TerminalSource.encode(message.nativeSources[i], writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -35822,6 +39956,20 @@ export const muster = $root.muster = (() => {
                         }
                     case 12: {
                             message.canPaste = reader.bool();
+                            break;
+                        }
+                    case 13: {
+                            message.desktopAttachCommand = reader.string();
+                            break;
+                        }
+                    case 14: {
+                            message.iterm2AttachCommand = reader.string();
+                            break;
+                        }
+                    case 15: {
+                            if (!(message.nativeSources && message.nativeSources.length))
+                                message.nativeSources = [];
+                            message.nativeSources.push($root.muster.v1.TerminalSource.decode(reader, reader.uint32(), undefined, long + 1));
                             break;
                         }
                     default:
@@ -38510,6 +42658,170 @@ export const muster = $root.muster = (() => {
             };
 
             return CodeRunView;
+        })();
+
+        app.PendingAgentSend = (function() {
+
+            /**
+             * Properties of a PendingAgentSend.
+             * @memberof muster.app
+             * @interface IPendingAgentSend
+             * @property {muster.v1.IAgentSendRequest|null} [request] PendingAgentSend request
+             * @property {muster.app.IChatDraft|null} [draft] PendingAgentSend draft
+             * @property {string|null} [draftId] PendingAgentSend draftId
+             */
+
+            /**
+             * Constructs a new PendingAgentSend.
+             * @memberof muster.app
+             * @classdesc Represents a PendingAgentSend.
+             * @implements IPendingAgentSend
+             * @constructor
+             * @param {muster.app.IPendingAgentSend=} [properties] Properties to set
+             */
+            function PendingAgentSend(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * PendingAgentSend request.
+             * @member {muster.v1.IAgentSendRequest|null|undefined} request
+             * @memberof muster.app.PendingAgentSend
+             * @instance
+             */
+            PendingAgentSend.prototype.request = null;
+
+            /**
+             * PendingAgentSend draft.
+             * @member {muster.app.IChatDraft|null|undefined} draft
+             * @memberof muster.app.PendingAgentSend
+             * @instance
+             */
+            PendingAgentSend.prototype.draft = null;
+
+            /**
+             * PendingAgentSend draftId.
+             * @member {string} draftId
+             * @memberof muster.app.PendingAgentSend
+             * @instance
+             */
+            PendingAgentSend.prototype.draftId = "";
+
+            /**
+             * Creates a new PendingAgentSend instance using the specified properties.
+             * @function create
+             * @memberof muster.app.PendingAgentSend
+             * @static
+             * @param {muster.app.IPendingAgentSend=} [properties] Properties to set
+             * @returns {muster.app.PendingAgentSend} PendingAgentSend instance
+             */
+            PendingAgentSend.create = function create(properties) {
+                return new PendingAgentSend(properties);
+            };
+
+            /**
+             * Encodes the specified PendingAgentSend message. Does not implicitly {@link muster.app.PendingAgentSend.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.PendingAgentSend
+             * @static
+             * @param {muster.app.IPendingAgentSend} message PendingAgentSend message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            PendingAgentSend.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.request != null && Object.hasOwnProperty.call(message, "request"))
+                    $root.muster.v1.AgentSendRequest.encode(message.request, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.draft != null && Object.hasOwnProperty.call(message, "draft"))
+                    $root.muster.app.ChatDraft.encode(message.draft, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.draftId != null && Object.hasOwnProperty.call(message, "draftId"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.draftId);
+                return writer;
+            };
+
+            /**
+             * Decodes a PendingAgentSend message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.PendingAgentSend
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.PendingAgentSend} PendingAgentSend
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            PendingAgentSend.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.PendingAgentSend();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.request = $root.muster.v1.AgentSendRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 2: {
+                            message.draft = $root.muster.app.ChatDraft.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.draftId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for PendingAgentSend
+             * @function getTypeUrl
+             * @memberof muster.app.PendingAgentSend
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            PendingAgentSend.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.PendingAgentSend";
+            };
+
+            return PendingAgentSend;
         })();
 
         return app;

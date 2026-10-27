@@ -1,45 +1,22 @@
 #!/bin/sh
-# Container side of the ACP stdio bridge.
-#
-# The Multica daemon in this container detects this by name and launches it as
-# the task's runtime command. It owns no logic: it answers the version probe
-# and otherwise hands its stdio to Muster's own `muster acp` on the host,
-# which is where musterd and the signed-in provider CLIs live.
-#
-# The launch arguments the daemon appends for its protocol family are the
-# daemon's, not ours, so they are ignored.
+# Framing only: Rust owns routing, provider protocol and authorization.
 set -eu
-
-HOST="${MUSTER_BRIDGE_HOST:-192.168.64.1}"
-PORT="${MUSTER_BRIDGE_PORT:-8799}"
-TOKEN="${MUSTER_BRIDGE_TOKEN:?MUSTER_BRIDGE_TOKEN must be set}"
-# Reported to the daemon's probe. Keep it at what the host's muster acp
-# actually implements; a scheduler may gate features on this.
-VERSION="${MUSTER_BRIDGE_VERSION:-0.1.0}"
-
+provider="${MUSTER_RUNTIME_PROVIDER:?missing runtime provider}"
+case "$provider" in codex|claude) ;; *) exit 2 ;; esac
 for arg in "$@"; do
-  case "$arg" in
-    --version | -v | version)
-      echo "$VERSION"
-      exit 0
-      ;;
+  case "$arg" in --version|-v|version)
+    cat "${MUSTER_BRIDGE_VERSION_FILE:?missing runtime version}"
+    printf '\n'
+    exit 0 ;;
   esac
 done
-
-# The task's own environment has to cross too. The scheduler injects it into
-# *this* process, but the turn runs on the host, and its brief tells the agent
-# to use the scheduler's CLI with that credential — without it the agent can
-# neither read its issue nor post its result. Only the scheduler's own
-# variables are forwarded, one `NAME=value` per line, terminated by a blank
-# line. This does put the task-scoped token on the bridge, which is why the
-# bridge is token-gated and bound to the container interface.
-#
-# The token line goes first, then the environment block, then this process's
-# stdin becomes the ACP stream. socat's stdout is this process's stdout, so
-# the agent's frames come back out.
+TOKEN="${MUSTER_BRIDGE_TOKEN:?missing bridge token}"
 {
-  printf '%s\n' "$TOKEN"
+  printf '%s\n%s\n%s\n' "$TOKEN" MUSTER_NATIVE_V1 "$provider"
+  printf '%s' "$PWD" | base64 -w0
+  printf '\n%s\n' "$#"
+  for arg in "$@"; do printf '%s' "$arg" | base64 -w0; printf '\n'; done
   env | grep '^MULTICA_' || true
   printf '\n'
   cat
-} | socat - "TCP:$HOST:$PORT"
+} | socat - "TCP:${MUSTER_BRIDGE_HOST:?}:${MUSTER_BRIDGE_PORT:?}"
