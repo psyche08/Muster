@@ -222,3 +222,35 @@ it. Retain the owned window, but bind its page/composer only after that same
 page proves the full requested directory and local mode. Late trust prompts
 remain in the preparation loop. Once binding/drafting begins, page or composer
 replacement still refuses delivery; revalidate immediately before draft write.
+
+### Latest targeted candidate and remaining acceptance
+
+Desktop 1.0.98 (89) is installed from source
+`5822072f7be6b630034f512cfaee97e13fe094b1`, with daemon SHA-256
+`f2672ce6a3e9a432e1b802e9ef704209fa7c684f4fe73211b7f4b8d60e0d56ae`.
+Apple notarization `dc8bc926-f9eb-4430-9bf7-b38961b60753` was accepted;
+signature, ticket and target Gatekeeper verification passed. Device identity,
+Accessibility, Relay and Vnet recovered after installation. Container data and
+keep-alive configuration remain in the selected Documents root; the old root
+is absent. Public desktop/iOS feeds remain unchanged.
+
+The affected library suite passed 375 tests with six operator/environment cases
+ignored. After the final platform adjustment, all 37 platform library tests
+passed again. Strict Clippy, public-content and ADR checks passed. These checks
+do not establish desktop or scheduler acceptance.
+
+With operator approval, the identified pre-existing running Codex task was
+stopped once. Zero-window baselines and actual Claude process exit were verified.
+Earlier refused forms had not submitted the test prompt. On the latest candidate,
+the next native cold-start requests were interrupted by the process/input guard.
+A later 45-second quiet-admission check could not obtain 15 consecutive seconds
+without input, so it started no test. Read-only mouse-event attribution then
+reported sustained events with source PID 0; it does not identify a responsible
+application or distinguish hardware from system-level remote input.
+
+Native first/existing-turn receipts and actual scheduler tasks remain unverified.
+No scheduler issue was created and the legacy idle test agent was not rebound.
+The PR remains in draft, unmerged, pending a stable exclusive console and both
+providers' real receipts. Do not weaken the input guard or replay an uncertain
+submission to complete acceptance. Record any resumed results separately from
+this signed installation and its source commit.
