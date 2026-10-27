@@ -150,14 +150,24 @@ async fn settled_windows(
     let until = Instant::now() + Duration::from_secs(25);
     let mut previous = windows(root);
     let mut stable = Instant::now();
+    let mut accessibility_enabled = false;
+    let mut changes = 0;
     loop {
         guard.check()?;
+        // The process can exist before it accepts AX writes (-25204). Retry
+        // this idempotent OS adaptation until acknowledged, not navigation.
+        if require_renderer && !accessibility_enabled {
+            accessibility_enabled = root.set_bool("AXManualAccessibility", true).is_ok();
+            let _ = root.set_bool("AXEnhancedUserInterface", true);
+        }
         let current = windows(root);
         if current != previous {
             previous = current;
             stable = Instant::now();
+            changes += 1;
         }
-        let mut ready = root.element("AXMenuBar").is_some();
+        let menu_ready = root.element("AXMenuBar").is_some();
+        let mut ready = menu_ready;
         if require_renderer {
             ready &= !previous.is_empty();
             for window in &previous {
@@ -171,7 +181,10 @@ async fn settled_windows(
             return Ok(previous);
         }
         if Instant::now() >= until {
-            return Err(unavailable("Native activation did not settle its windows"));
+            return Err(unavailable(format!(
+                "Native activation did not settle: windows={}, menu={menu_ready}, renderer={ready}, changes={changes}, accessibility={accessibility_enabled}",
+                previous.len()
+            )));
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

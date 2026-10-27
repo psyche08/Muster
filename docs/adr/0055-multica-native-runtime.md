@@ -254,3 +254,18 @@ The PR remains in draft, unmerged, pending a stable exclusive console and both
 providers' real receipts. Do not weaken the input guard or replay an uncertain
 submission to complete acceptance. Record any resumed results separately from
 this signed installation and its source commit.
+
+### Acceptance resumed with quiet input
+
+After the operator disconnected input sources, event counters stayed unchanged
+through a Claude cold launch, but activation readiness timed out. Both Swift
+and the production Rust AX reader reproduced initial accessibility-enablement
+failures (`-25204`) while the process existed before its UI was ready. Retry
+only that idempotent AX adaptation until the application acknowledges it; do
+not retry navigation, drafting or submission. Readiness failure diagnostics
+report only counts and booleans, never window contents or credentials.
+
+The operator has explicitly deferred Codex zero-window/cold-start checks that
+would require pausing another existing task. Continue independent Claude and
+scheduler checks and Codex creation in a new window; preserve that running task
+and report the deferred coverage separately.
