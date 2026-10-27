@@ -1,7 +1,7 @@
 # ADR 0056: Native session identity and warm Claude creation
 
 - Date: 2026-10-27
-- Status: Accepted; installed continuation verification pending
+- Status: Accepted; Codex continuation verified, final Claude repetition awaiting quiet input
 - Related: ADR 0055, PR 52; supersedes its new-window-only rule for the Claude main shell
 
 ## Context
@@ -110,3 +110,36 @@ its global draft-preservation scan aggregated five unrelated forms and hit
 in 67–80 ms (827–1153 nodes, one composer each), while the aggregate hit the
 node limit. Partition only this existing-draft scan by the already-retained
 window identities; keep all per-window completeness and draft checks.
+
+### Latest installed evidence
+
+Targeted desktop 1.0.98 (89) is installed from source
+`826d522b002962d9ca21e873c07f3329b2e2fe71`. Its daemon SHA-256 is
+`71a4da6e28e5d884ba15ad8f4adb45f72606ba866f613b06f4b844fa5e18ed1a`.
+Apple notarization `a1c07d97-88e9-44b7-a010-5299b64a9449` was accepted;
+signature, stapling, target Gatekeeper, identity, Accessibility, Relay and Vnet
+checks passed. No old application backup was retained. The selected Documents
+data root remains active with keep-alive enabled; the previous root is absent.
+Public desktop and iOS feeds remain unchanged.
+
+On this installed source, Codex created a new session alongside existing
+windows and returned the expected marker. Repeated synthetic prompts produced
+duplicate generated titles; continuation correctly refused those ambiguous
+sessions with a complete scan. A fresh test session was given a unique test
+name through the desktop app's title API. The same native binding then returned
+the expected marker on its second turn. This verifies rename handling,
+multi-window discovery, first creation and continuation without relaxing
+duplicate-name rejection or replaying failed aliases.
+
+Affected source checks passed 377 library tests and 42 integration tests,
+with seven operator/environment cases ignored overall. The final per-window
+draft change repeated all 37 platform tests and strict Clippy successfully.
+Public-content and ADR gates passed. No CI checks were reported on the PR.
+
+Claude cold creation, continuation, running-zero-window scheduler execution,
+warm creation and warm scheduler execution passed on the earlier installed
+candidates above. Repetition on the latest candidate encountered renewed input
+changes; a subsequent 45-second admission check could not obtain 15 quiet
+seconds and started no desktop test. Retain failed aliases unchanged, preserve
+the deployed version and request a quiet console before final repetition.
+Codex cold/zero-window checks remain explicitly deferred by the operator.
