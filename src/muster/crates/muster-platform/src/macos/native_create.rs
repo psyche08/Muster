@@ -350,10 +350,15 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     // Cold startup may replace its preliminary window before the renderer is
     // ready. Bind the settled object set, not that transient startup shell.
     let before = settled_windows(&guard, &root, true).await?;
-    // Never navigate over any nonempty draft if the provider ignores raise.
-    for n in nodes(&root)? {
-        if profile.controls.composer.matches(&n)
-            && n.string("AXValue").is_none_or(|v| !profile.is_empty(&v))
+    // Check every retained window independently: several complete forms must
+    // not exhaust one form's node budget. Never navigate over a nonempty draft
+    // if the provider ignores raise; missing/ambiguous editors fail closed.
+    for window in &before {
+        let composer = unique(window, |n| profile.controls.composer.matches(n))?
+            .ok_or_else(|| unavailable("Existing native composer is unavailable"))?;
+        if composer
+            .string("AXValue")
+            .is_none_or(|v| !profile.is_empty(&v))
         {
             return Err(conflict("Existing native draft is preserved"));
         }

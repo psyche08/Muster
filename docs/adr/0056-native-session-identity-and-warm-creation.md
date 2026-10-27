@@ -44,6 +44,11 @@ instead of interpreting the old stop-on-false walker as pruning. Sidebar
 discovery uses the same distinction when retaining navigation roots. Keep
 node/time bounds and fail closed on unreadable/truncated child lists.
 
+Apply creation's existing-draft check separately to every retained window,
+using each window's unique composer. Never combine all independent windows
+under one form's node budget. Require each complete window scan to succeed;
+unreadable, ambiguous or nonempty composers still refuse navigation.
+
 ## Alternatives
 
 Keeping the old restriction makes each later Claude task depend on manually
@@ -98,3 +103,10 @@ over 302 shell nodes. This confirms scan completeness on the current layout,
 not a successful continuation. The real warm Claude scheduler task on
 `6a0cec8` also completed on its first attempt with a ready native binding and
 the expected marker. Rebuild and repeat continuation after installation.
+
+On installed `203e03e`, a later creation was refused before any new window:
+its global draft-preservation scan aggregated five unrelated forms and hit
+4096 nodes. Read-only diagnosis confirmed every individual window completed
+in 67–80 ms (827–1153 nodes, one composer each), while the aggregate hit the
+node limit. Partition only this existing-draft scan by the already-retained
+window identities; keep all per-window completeness and draft checks.
