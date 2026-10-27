@@ -195,6 +195,11 @@ pub(super) async fn ensure(
     socket: &Path,
     gateway: &str,
 ) -> Result<(), Error> {
+    if !Path::new(&c.data_dir).join("bin/multica").is_file() {
+        return Err(Error::Unavailable(
+            "Host Multica CLI is missing; use Install to provision it".into(),
+        ));
+    }
     let mut bridge = manager.bridge.lock().await;
     if bridge.as_ref().is_some_and(|t| !t.is_finished()) {
         return refresh_wrappers(manager, c).await;

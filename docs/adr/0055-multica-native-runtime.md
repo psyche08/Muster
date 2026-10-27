@@ -113,3 +113,16 @@ CLI forwarding owns a separate child process group and tears it down when the
 bridge disconnects or is cancelled. The fallback test checks original argv,
 working directory, task environment and streamed input/output through that
 actual process boundary, without changing installed application inventory.
+
+Target adoption found an existing installation with no installer URL and a
+working host Multica CLI. Reuse that local executable in the selected data
+root before requiring an installer URL. Bridge startup must refuse to advertise
+runtimes until the host callback CLI exists. The first deployed candidate
+required this provisioning manually; final acceptance must identify the fixed
+build separately.
+
+The first native protocol attempt was refused before submission because
+`codesign -R` treated the inline requirement as a filename. Prefix inline
+requirements with `=`; the unchanged strict bundle/team requirements then passed
+for both target applications. This is a launch-argument correction, not a
+signature-validation relaxation.

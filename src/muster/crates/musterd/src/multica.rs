@@ -668,12 +668,40 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
 }
 
 async fn install_host(c: &Config) -> Result<(), Error> {
+    let root = Path::new(&c.data_dir);
+    let mut candidates = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(PathBuf::from(home).join(".local/bin/multica"));
+    }
+    candidates.extend([
+        PathBuf::from("/opt/homebrew/bin/multica"),
+        PathBuf::from("/usr/local/bin/multica"),
+    ]);
+    for candidate in candidates {
+        if let Ok(version) = run(&candidate, &["--version"], 5).await
+            && String::from_utf8_lossy(&version)
+                .trim_start()
+                .starts_with("multica ")
+        {
+            std::fs::create_dir_all(root.join("bin")).map_err(io)?;
+            std::fs::copy(&candidate, root.join("bin/multica")).map_err(io)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(
+                    root.join("bin/multica"),
+                    std::fs::Permissions::from_mode(0o755),
+                )
+                .map_err(io)?;
+            }
+            return Ok(());
+        }
+    }
     if c.installer_url.is_empty() {
         return Err(Error::Invalid(
             "Enter the trusted HTTPS Multica installer URL".into(),
         ));
     }
-    let root = Path::new(&c.data_dir);
     let installer = root.join("install.sh");
     let download = tokio::process::Command::new("/usr/bin/curl")
         .args([

@@ -113,7 +113,8 @@ fn bundle_path(profile: &App) -> Result<PathBuf, Error> {
         .find(|p| p.is_dir())
         .ok_or_else(|| unavailable("Installed desktop app was not found in Applications"))?;
     let status = std::process::Command::new("/usr/bin/codesign")
-        .args(["--verify", "--strict", "-R", &profile.app.requirement()])
+        .args(["--verify", "--strict", "-R"])
+        .arg(format!("={}", profile.app.requirement()))
         .arg(&path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
