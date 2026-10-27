@@ -245,6 +245,11 @@ impl Manager {
                     }
                 }
             }
+            if action == v1::multica_request::Action::Install
+                && !Path::new(&c.data_dir).join("bin/multica").is_file()
+            {
+                install_host(&c).await?;
+            }
             *self.last_error.lock().unwrap() = if c.keep_alive {
                 self.ensure(&c, socket)
                     .await
@@ -649,6 +654,14 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
                 .await?;
         }
     }
+    install_host(c).await
+}
+
+async fn install_host(c: &Config) -> Result<(), Error> {
+    if c.installer_url.is_empty() {
+        return Err(Error::Invalid("Enter the trusted HTTPS Multica installer URL".into()));
+    }
+    let root = Path::new(&c.data_dir);
     let installer = root.join("install.sh");
     let download = tokio::process::Command::new("/usr/bin/curl")
         .args([

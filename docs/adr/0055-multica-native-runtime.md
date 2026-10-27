@@ -97,3 +97,7 @@ existing local-socket test; the run with loopback permission passed. Strict
 Clippy passed for these libraries and their tests. Swift and Harmony protocol
 bindings were regenerated. These results do not establish signed installation,
 windowless/cold-launch acceptance, or a real scheduler task.
+
+Existing-container adoption also installs the host Multica CLI when missing,
+using the configured trusted installer. A container-only binary cannot supply
+the native task callback; opting into the bridge must provision both sides.
