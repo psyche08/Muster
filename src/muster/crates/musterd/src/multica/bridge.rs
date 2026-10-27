@@ -268,15 +268,7 @@ pub(super) async fn ensure(
                             match pinned_destination(&session_root,&launch.provider).map_err(|e|e.to_string())? {
                                 Destination::Unavailable=>Err("Provider is unavailable".into()),
                                 Destination::Cli(program)=>{
-                                    let mut command=tokio::process::Command::new(program);command.args(&launch.args).current_dir(&launch.cwd).envs(&launch.env).env("PATH",format!("{}:{}",root.join("bin").display(),std::env::var("PATH").unwrap_or_default())).kill_on_drop(true).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
-                                    let mut child=command.spawn().map_err(|_|"CLI launch failed")?;
-                                    let mut stdin=child.stdin.take().unwrap();let mut stdout=child.stdout.take().unwrap();
-                                    use tokio::io::AsyncWriteExt;
-                                    let input=async {let result=tokio::io::copy(&mut reader,&mut stdin).await;let _=stdin.shutdown().await;result};
-                                    let output=tokio::io::copy(&mut stdout,&mut write);
-                                    tokio::pin!(input,output);
-                                    tokio::select!{_= &mut output=>{},_= &mut input=>{let _=output.await;}}
-                                    let _=child.kill().await;let _=child.wait().await;Ok(())
+                                    forward_cli(&program,&launch,&root,&mut reader,&mut write).await
                                 },
                                 Destination::Desktop=>{
                                     let cli=root.join("bin/multica");
@@ -297,6 +289,63 @@ pub(super) async fn ensure(
     }));
     Ok(())
 }
+#[cfg(unix)]
+struct CliGroup(u32);
+#[cfg(unix)]
+impl Drop for CliGroup {
+    fn drop(&mut self) {
+        // The leader has not been reaped, so this owned process-group ID cannot
+        // have been recycled. Never signal the daemon's own process group.
+        unsafe {
+            libc::kill(-(self.0 as i32), libc::SIGKILL);
+        }
+    }
+}
+#[cfg(unix)]
+async fn forward_cli<R: tokio::io::AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
+    program: &Path,
+    launch: &Launch,
+    root: &Path,
+    reader: &mut R,
+    write: &mut W,
+) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(&launch.args)
+        .current_dir(&launch.cwd)
+        .envs(&launch.env)
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                root.join("bin").display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .process_group(0)
+        .kill_on_drop(true)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let mut child = command.spawn().map_err(|_| "CLI launch failed")?;
+    let group = CliGroup(child.id().ok_or("CLI exited before ownership")?);
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let input = async move {
+        let result = tokio::io::copy(reader, &mut stdin).await;
+        let _ = stdin.shutdown().await;
+        drop(stdin);
+        result
+    };
+    let output = tokio::io::copy(&mut stdout, write);
+    tokio::pin!(input, output);
+    tokio::select! { _= &mut output=>{}, _= &mut input=>{let _=output.await;} }
+    drop(group);
+    let _ = child.wait().await;
+    Ok(())
+}
+
 #[cfg(not(unix))]
 pub(super) async fn ensure(_: &Manager, _: &Config, _: &Path, _: &str) -> Result<(), Error> {
     Err(Error::Unavailable("Apple container requires macOS".into()))
@@ -308,6 +357,42 @@ mod tests {
     use base64::Engine;
     fn encoded(s: &str) -> String {
         base64::engine::general_purpose::STANDARD.encode(s)
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cli_fallback_preserves_protocol_arguments_directory_and_environment() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let script = root.path().join("fixture-cli");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$MULTICA_TASK_ID\" \"$1\" \"$2\"\ncat\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let cwd = root.path().canonicalize().unwrap();
+        let launch = Launch {
+            provider: "codex".into(),
+            cwd: cwd.clone(),
+            args: vec!["app-server".into(), "literal argument".into()],
+            env: HashMap::from([("MULTICA_TASK_ID".into(), "fixture-task".into())]),
+        };
+        let selected = native_runtime::destination(Some(false), Some(script.clone())).unwrap();
+        let Destination::Cli(program) = selected else {
+            panic!("expected CLI fallback")
+        };
+        let mut input = &b"{\"id\":1}\n"[..];
+        let mut output = Vec::new();
+        forward_cli(&program, &launch, root.path(), &mut input, &mut output)
+            .await
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            format!(
+                "{}\nfixture-task\napp-server\nliteral argument\n{{\"id\":1}}\n",
+                cwd.display()
+            )
+        );
     }
     #[tokio::test]
     async fn bridge_requires_token_provider_directory_and_bounded_launch() {

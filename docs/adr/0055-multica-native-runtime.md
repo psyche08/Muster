@@ -108,3 +108,8 @@ Use a separate Muster-owned native Claude command and set
 Claude commands. Codex uses its own explicit path; a missing owned wrapper must
 not cause container PATH fallback. CLI fallback also accepts executable
 standalone script launchers, since npm installations need not be Mach-O files.
+
+CLI forwarding owns a separate child process group and tears it down when the
+bridge disconnects or is cancelled. The fallback test checks original argv,
+working directory, task environment and streamed input/output through that
+actual process boundary, without changing installed application inventory.
