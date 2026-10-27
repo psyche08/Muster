@@ -179,3 +179,23 @@ scheduler-task claim. Resume with exclusive-console confirmation, preserve
 existing drafts/tasks, inspect the recorded refused operations, and never replay
 an unknown send. Full scheduler receipt, cold-launch coverage and test-agent
 rebinding remain open.
+
+### Resumed exclusive-console verification
+
+The operator has resumed acceptance and authorized exclusive target use and
+merging PR 52 after successful receipts. A repeatable zero-window Claude case
+showed that activation itself creates the only new main window, then the Code
+route reuses it. Record a settled pre-activation window set as well as the
+pre-route set. Only when the former was empty and activation created exactly
+one retained window may that window be used; a pre-existing user window remains
+ineligible. Shared Rust selects by opaque object equality, never title/order.
+
+Codex's new form exposes its composer before its selected directory/mode and
+project record settle. Wait boundedly for the initial full selection proof;
+process/input/window changes still fail immediately. After drafting begins,
+selection changes fail immediately without retrying or sending. Verify these
+paths on the installed signed build, followed by real protocol and scheduler
+receipts; calibration and a visible form alone do not count as success.
+
+Ship resumed acceptance fixes as targeted desktop 1.0.98 (89). Publication
+feeds remain unchanged; record its signed installation independently of 1.0.97.

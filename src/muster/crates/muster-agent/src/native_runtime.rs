@@ -9,6 +9,34 @@ pub enum Destination {
     Unavailable,
 }
 
+/// Select only a newly created opaque window identity, including activation
+/// from a proved empty baseline when that provider reuses its new main window.
+pub fn new_window<T: PartialEq + Clone>(
+    before_activation: &[T],
+    before_route: &[T],
+    current: &[T],
+    allow_activation: bool,
+) -> Result<Option<T>, Error> {
+    let fresh: Vec<_> = current
+        .iter()
+        .filter(|w| !before_route.contains(w))
+        .collect();
+    if fresh.len() > 1 {
+        return Err(Error::Conflict("New window identity is ambiguous".into()));
+    }
+    if let Some(window) = fresh.first() {
+        return Ok(Some((*window).clone()));
+    }
+    if allow_activation
+        && before_activation.is_empty()
+        && before_route.len() == 1
+        && current.contains(&before_route[0])
+    {
+        return Ok(Some(before_route[0].clone()));
+    }
+    Ok(None)
+}
+
 /// Running state and window count deliberately are not policy inputs.
 pub fn destination(installed: Option<bool>, cli: Option<PathBuf>) -> Result<Destination, Error> {
     match installed {
@@ -99,6 +127,16 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_new_or_proved_activation_windows_are_eligible() {
+        assert_eq!(new_window(&[1], &[1], &[1, 2], true).unwrap(), Some(2));
+        assert_eq!(new_window(&[], &[2], &[2], true).unwrap(), Some(2));
+        assert_eq!(new_window(&[], &[2], &[2], false).unwrap(), None);
+        assert_eq!(new_window(&[2], &[2], &[2], true).unwrap(), None);
+        assert_eq!(new_window(&[], &[1, 2], &[1, 2], true).unwrap(), None);
+        assert_eq!(new_window(&[], &[2], &[], true).unwrap(), None);
+        assert!(new_window(&[1], &[1], &[1, 2, 3], true).is_err());
+    }
     #[test]
     fn directory_labels_require_the_entire_authorized_path() {
         let home = Path::new("/tmp/native-fixture/home");

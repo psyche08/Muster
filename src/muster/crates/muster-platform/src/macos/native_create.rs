@@ -142,6 +142,27 @@ fn open(path: &Path, route: Option<&url::Url>) -> Result<(), Error> {
     Ok(())
 }
 
+async fn settled_windows(guard: &Guard, root: &Element) -> Result<Vec<Element>, Error> {
+    let until = Instant::now() + Duration::from_secs(8);
+    let mut previous = windows(root);
+    let mut stable = Instant::now();
+    loop {
+        guard.check()?;
+        let current = windows(root);
+        if current != previous {
+            previous = current;
+            stable = Instant::now();
+        }
+        if root.element("AXMenuBar").is_some() && stable.elapsed() > Duration::from_millis(700) {
+            return Ok(previous);
+        }
+        if Instant::now() >= until {
+            return Err(unavailable("Native activation did not settle its windows"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Retain the exact window/page across submit and provider receipt discovery.
 pub struct Submitted {
     guard: Guard,
@@ -177,9 +198,10 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     }
     let generation = input::user_input_generation();
     let bundle = bundle_path(profile)?;
-    // Activate the signed app before using its menu. A running process with
-    // no windows may otherwise acknowledge AXPress without opening anything.
-    open(&bundle, None)?;
+    let was_running = !native_app::app_pids(profile).is_empty();
+    if !was_running {
+        open(&bundle, None)?;
+    }
     let start_wait = Instant::now();
     let pid = loop {
         console()?;
@@ -201,29 +223,14 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     guard.check()?;
     let root = Element::application(pid);
     root.enable_manual_accessibility();
-    // Launch/activation and AX enablement can publish windows asynchronously.
-    // Settle every baseline; existing windows never authorize composer input.
-    {
-        let until = Instant::now() + Duration::from_secs(8);
-        let mut previous = windows(&root);
-        let mut stable = Instant::now();
-        loop {
-            guard.check()?;
-            let current = windows(&root);
-            if current != previous {
-                previous = current;
-                stable = Instant::now();
-            }
-            if root.element("AXMenuBar").is_some() && stable.elapsed() > Duration::from_millis(700)
-            {
-                break;
-            }
-            if Instant::now() >= until {
-                return Err(unavailable("Native activation did not settle its windows"));
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    }
+    let before_activation = if was_running {
+        settled_windows(&guard, &root).await?
+    } else {
+        Vec::new()
+    };
+    guard.check()?;
+    open(&bundle, None)?;
+    settled_windows(&guard, &root).await?;
     let before = windows(&root);
     // Never navigate over any nonempty draft if the provider ignores raise.
     for n in nodes(&root)? {
@@ -289,14 +296,15 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         let deadline = Instant::now() + Duration::from_secs(8);
         loop {
             guard.check()?;
-            let fresh: Vec<_> = windows(&root)
-                .into_iter()
-                .filter(|w| !before.contains(w))
-                .collect();
-            if fresh.len() == 1 {
-                break fresh[0].clone();
+            if let Some(fresh) = muster_agent::native_runtime::new_window(
+                &before_activation,
+                &before,
+                &windows(&root),
+                true,
+            )? {
+                break fresh;
             }
-            if fresh.len() > 1 || Instant::now() >= deadline {
+            if Instant::now() >= deadline {
                 return Err(conflict("New window identity is ambiguous"));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -346,7 +354,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     };
-    let form = || -> Result<(), Error> {
+    let selection = || -> Result<bool, Error> {
         guard.check()?;
         if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
         {
@@ -395,14 +403,26 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
                         && n.string("AXValue").as_deref() == Some("This computer")
                 })
         };
-        if !good {
+        Ok(good)
+    };
+    let form = || -> Result<(), Error> {
+        if selection()? {
+            Ok(())
+        } else {
+            Err(conflict(
+                "Exact native directory and local mode are not verified",
+            ))
+        }
+    };
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while !selection()? {
+        if Instant::now() >= deadline {
             return Err(conflict(
                 "Exact native directory and local mode are not verified",
             ));
         }
-        Ok(())
-    };
-    form()?;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
     if composer
         .string("AXValue")
         .is_none_or(|v| !profile.is_empty(&v))
