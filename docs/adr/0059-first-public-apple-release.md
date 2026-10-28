@@ -1,7 +1,7 @@
 # ADR 0059: First public Apple release and pull-request-only main
 
 - Date: 2026-10-28
-- Status: Accepted; hosted configuration and release acceptance pending
+- Status: Accepted; public macOS publication, iOS beta review pending
 - Related: [ADR 0023](0023-bootstrap-sanitized-repository.md), [ADR 0024](0024-cloud-external-testing-opt-in.md), [ADR 0057](0057-targeted-deployment-1-1-0.md), [ADR 0058](0058-duplicate-views-use-the-main-window.md), [release runbook](../DESKTOP_UPDATES.md)
 
 ## Context
@@ -104,3 +104,29 @@ end-to-end provider acceptance is claimed by these packaging checks.
   to this packaging run.
 - **Installation/runtime/end-to-end:** not performed for this version. Prior
   device acceptance in ADRs 0057 and 0058 is not a new acceptance run.
+
+
+### Public distribution decision and hosted evidence
+
+The owner confirmed public visibility and supplied the private publisher
+configuration on 2026-10-28. GitHub now reports `public` for Muster; the
+historical archive remains private. Active ruleset `26021219` applies only to
+`refs/heads/main`, requires pull requests, blocks deletion and force pushes,
+and has no bypass actors. Zero approving reviews are required; this does not
+waive the PR requirement. Hosted Actions remain disabled.
+
+The App Store Connect build for 1.1.2 (92) is VALID and IN_BETA_TESTING for
+internal testing. Membership in the existing Public Beta group is verified;
+its external state is WAITING_FOR_BETA_REVIEW. No new public-build availability
+or physical iPhone installation is claimed. The group invitation is enabled;
+it may still provide an older approved build until Apple's review completes.
+
+The public download page is now sourced from `deploy/public/download.html`.
+It makes TestFlight the primary iOS route and explicitly states the selected
+build's review status. Registered-device OTA remains a separate secondary
+route with the existing signed app, hash-bound manifest and fixed aliases.
+Publish the same page at the existing root, desktop and iOS entry points.
+This continues the first-public-release decision; it does not alter future
+Cloud distribution. Without an available feed signing key, publish the signed,
+notarized portable Mac package and remove obsolete update metadata only after
+validating both new platform aliases, as the release runbook requires.
