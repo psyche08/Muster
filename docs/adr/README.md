@@ -116,6 +116,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0058](0058-duplicate-views-use-the-main-window.md) | Accepted | Several views of one conversation use the main window's view |
 
+| [0059](0059-first-public-apple-release.md) | Accepted; publication pending | First public Apple release and PR-only main |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
