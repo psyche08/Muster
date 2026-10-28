@@ -69,3 +69,38 @@ checksums. Read back the main rule and the iOS build's processing, beta-group,
 review and external-testing state. Verify published downloads match built
 artifacts. Keep unresolved acceptance explicit; no new device installation or
 end-to-end provider acceptance is claimed by these packaging checks.
+
+
+### Packaging evidence, 2026-10-28
+
+- **Source:** `02718a540a5d3bd0fc1e979e5b81bf0c90a6d14a`, merged by
+  PR #56 (`836ad6a0`). Version 1.1.2 (92) is identical across both Apple
+  targets. The public-content scan passed for 723 tracked text files, all
+  seven release-ancestry regression tests passed, and the ADR/diff gates passed.
+  Hosted GitHub Actions remain disabled under ADR 0016; no CI pass is claimed.
+- **Builds:** optimized daemon/CLI/browser host and all three Apple FFI targets
+  compiled; the macOS Release build and iOS Release archive/export succeeded.
+- **macOS signing:** Developer ID and nested signatures, Presence provisioning,
+  clean daemon stamp, recorded-release ancestry and required fingerprints passed.
+  A transient Apple timestamp-service failure during the first packaging attempt
+  was resolved by retrying with timestamping still enabled. Notarization
+  `0ee50f89-4895-438c-81fa-6d16e7f23120` was Accepted; ticket stapling, stapler
+  validation, strict nested verification and Gatekeeper assessment passed.
+  Final portable ZIP SHA-256 is
+  `7c39a006294ac5af18af100c8f411c75ee4dc05b39cd041e653ec9b21b08c500`.
+- **iOS signing/upload:** App Store Connect export passed strict signature and
+  version checks with production APNs and debugging disabled. IPA SHA-256 is
+  `e3e200d47f06289d9777c2684d9646e4636acfe2edd2b77f71e795d17197a3fc`.
+  Apple acknowledged the upload without errors; build processing and selected
+  public-beta acceptance remain pending at this evidence checkpoint.
+- **GitHub publication:** release `v1.1.2` is a draft targeting the exact build
+  commit above. Its uploaded ZIP digest matches the local hash. No public
+  release or source-visibility change is claimed. The API still reports private
+  visibility and rejects protection with HTTP 403 under the current plan;
+  confirmation of public visibility versus a private-plan upgrade is pending.
+- **Download site:** the operator's private release destination, SSH port and
+  root have not been supplied in this session. No download-site mutation or
+  signed update-feed publication is claimed; no feed private key was available
+  to this packaging run.
+- **Installation/runtime/end-to-end:** not performed for this version. Prior
+  device acceptance in ADRs 0057 and 0058 is not a new acceptance run.
