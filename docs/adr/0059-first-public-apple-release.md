@@ -130,3 +130,28 @@ This continues the first-public-release decision; it does not alter future
 Cloud distribution. Without an available feed signing key, publish the signed,
 notarized portable Mac package and remove obsolete update metadata only after
 validating both new platform aliases, as the release runbook requires.
+
+
+### Public download acceptance
+
+GitHub release `v1.1.2` is published, targets the exact build commit above,
+and exposes the notarized ZIP and checksum file without authentication. The
+public repository and release checksum were verified anonymously. The private
+historical archive and disabled Actions setting are unchanged.
+
+The publisher accepted eleven files after checking both apps are 1.1.2 (92)
+and every staged hash matches. Public HTTPS reads of root/desktop/iOS pages
+match the committed download page. The portable ZIP matches the notarized
+hash above. Registered-device IPA SHA-256 is
+`0c252e7262e43968312e6d7696cea714bd30f27a7a844b5ff03cf8948dc57631`;
+its fixed alias, content-addressed asset and build-92 manifest agree. All
+checked responses retain `no-store` cache policy, and a historical manifest
+resolves to the new current manifest. This verifies downloadable bytes and
+routing, not installation. The selected TestFlight build remains subject to
+Apple Beta App Review.
+
+Historical-file cleanup was not executed: automatic approval review rejected
+removing old public downloads and signed feed metadata without specific
+historical-asset deletion authorization. The new aliases and page remain
+published, while the previous package/feed files are retained pending operator
+approval. No 1.1.2 signed update feed is claimed.
