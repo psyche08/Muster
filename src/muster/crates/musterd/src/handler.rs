@@ -2193,7 +2193,9 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
     let preparation_started = std::time::Instant::now();
     log::info!("Agent {what} op={op_id:?} target={session:?}: waiting for provider queue");
     // FIFO for this provider, including navigation, input and its receipt.
-    let _app = match crate::agent_bridge::hold_session(daemon, agent, &session, what).await {
+    let _app = match crate::agent_bridge::hold_session(daemon, agent, &session, what).await.inspect_err(|error| {
+        log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger phase=provider_queue elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
+    }) {
         Ok(guard) => guard,
         Err(error @ Error::Timeout(_)) => {
             return Ok(op_result(Status::Rejected, error.to_string(), ""));
@@ -2211,7 +2213,9 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
             Duration::from_millis(250),
             Duration::from_secs(3),
         )
-        .await?;
+        .await.inspect_err(|error| {
+            log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger phase=quiet_input elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
+        })?;
     }
     crate::agent_bridge::ensure_native(daemon.platform().as_ref(), agent.clone(), &session)
         .await

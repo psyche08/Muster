@@ -120,6 +120,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0061](0061-send-receipt-format-and-manual-resolution.md) | Accepted | Provider URL formatting and explicit send resolution |
 
+| [0062](0062-scoped-composers-and-send-preparation-outcomes.md) | Accepted | Scoped composers and complete send-preparation diagnostics |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

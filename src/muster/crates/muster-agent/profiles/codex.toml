@@ -69,6 +69,8 @@ final_phase = "final_answer"
 [controls]
 # Exclude sidebar and workspace review controls from permission decisions.
 approval_scope = "main-conversation"
+# Multiple editors require explicit main-versus-auxiliary ancestry.
+composer_scope = "main-conversation"
 # Replace the entire composer value; require the exact echo before submitting.
 draft = "value"
 # An empty composer reports its placeholder as its value.

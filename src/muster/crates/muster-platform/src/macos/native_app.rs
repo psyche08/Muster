@@ -1158,7 +1158,7 @@ fn scan_surface(
     })
 }
 
-const CONTROL_ATTRIBUTES: [&str; 7] = [
+const CONTROL_ATTRIBUTES: [&str; 8] = [
     "AXRole",
     "AXTitle",
     "AXDescription",
@@ -1166,6 +1166,7 @@ const CONTROL_ATTRIBUTES: [&str; 7] = [
     "AXChildren",
     "AXEnabled",
     "AXFocused",
+    "AXSubrole",
 ];
 
 fn control_metadata(
@@ -1200,9 +1201,11 @@ struct Controls {
 }
 
 fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
-    use muster_agent::native_send::{ControlNode, composer_submits};
+    use muster_agent::native_scan::choose_composer;
+    use muster_agent::native_send::{ControlNode, composer_submits_for};
     let (mut composer, mut send) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
+    let mut subroles = Vec::new();
     let mut elements = Vec::new();
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
@@ -1246,6 +1249,12 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
                 .queue
                 .as_ref()
                 .is_some_and(|queue| queue.row.matches(&field));
+        subroles.push(
+            values[7]
+                .as_ref()
+                .and_then(ax::value_string)
+                .unwrap_or_default(),
+        );
         nodes.push(ControlNode {
             parent,
             composer: is_composer,
@@ -1292,10 +1301,26 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     }
     let complete = stop.is_none();
     if complete {
+        let selected = choose_composer(profile.controls.composer_scope, &nodes, &subroles);
+        diagnostics.push(format!(
+            "composer_scope={:?} candidates={} selected={selected:?}",
+            profile.controls.composer_scope,
+            composer.len()
+        ));
+        if let Some(index) = selected {
+            composer = vec![elements[index].clone()];
+        } else if composer.len() == 1 {
+            // A sole editor explicitly inside an auxiliary pane is not the
+            // conversation's composer. Multiple ambiguous candidates stay
+            // present so find_surface reports the ambiguity rather than a miss.
+            composer.clear();
+        }
         // Queued rows carry their own submit controls: only those in the
         // composer's branch send.
         if profile.controls.queue.is_some() {
-            send = composer_submits(&nodes)
+            send = selected
+                .map(|index| composer_submits_for(&nodes, index))
+                .unwrap_or_default()
                 .into_iter()
                 .map(|i| elements[i].clone())
                 .collect();
