@@ -420,6 +420,10 @@ fn print_op(resp: Resp) -> anyhow::Result<()> {
                 v1::op_result::Status::Duplicate => println!("already applied {}", r.result_id),
                 v1::op_result::Status::Rejected => anyhow::bail!("rejected: {}", r.message),
                 v1::op_result::Status::Unknown => anyhow::bail!("outcome unknown: {}", r.message),
+                v1::op_result::Status::UserConfirmed => println!(
+                    "user confirmed delivery (no provider receipt): {}",
+                    r.message
+                ),
             }
         }
         Resp::Ack(_) => println!("ok"),

@@ -250,6 +250,9 @@ public nonisolated struct Muster_V1_OpResult: Sendable {
 
     /// a crash left the outcome undecidable; never retried automatically
     case unknown // = 3
+
+    /// operator attestation, not a provider receipt; never resend
+    case userConfirmed // = 4
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -262,6 +265,7 @@ public nonisolated struct Muster_V1_OpResult: Sendable {
       case 1: self = .duplicate
       case 2: self = .rejected
       case 3: self = .unknown
+      case 4: self = .userConfirmed
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -272,6 +276,7 @@ public nonisolated struct Muster_V1_OpResult: Sendable {
       case .duplicate: return 1
       case .rejected: return 2
       case .unknown: return 3
+      case .userConfirmed: return 4
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -282,6 +287,7 @@ public nonisolated struct Muster_V1_OpResult: Sendable {
       .duplicate,
       .rejected,
       .unknown,
+      .userConfirmed,
     ]
 
   }
@@ -785,6 +791,15 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .multicaBrowse(newValue)}
   }
 
+  /// Explicit user attestation for the exact original send. Never submits input.
+  public var agentConfirmDelivered: Muster_V1_AgentSendRequest {
+    get {
+      if case .agentConfirmDelivered(let v)? = req {return v}
+      return Muster_V1_AgentSendRequest()
+    }
+    set {req = .agentConfirmDelivered(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Req: Equatable, Sendable {
@@ -850,6 +865,8 @@ public nonisolated struct Muster_V1_Request: Sendable {
     case forwardOpen(Muster_V1_ForwardOpenRequest)
     case multica(Muster_V1_MulticaRequest)
     case multicaBrowse(Muster_V1_MulticaBrowseRequest)
+    /// Explicit user attestation for the exact original send. Never submits input.
+    case agentConfirmDelivered(Muster_V1_AgentSendRequest)
 
   }
 
@@ -4352,12 +4369,12 @@ nonisolated extension Muster_V1_OpResult: SwiftProtobuf.Message, SwiftProtobuf._
 }
 
 nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0APPLIED\0\u{1}DUPLICATE\0\u{1}REJECTED\0\u{1}UNKNOWN\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0APPLIED\0\u{1}DUPLICATE\0\u{1}REJECTED\0\u{1}UNKNOWN\0\u{1}USER_CONFIRMED\0")
 }
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_confirm_delivered\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5158,6 +5175,19 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
           self.req = .multicaBrowse(v)
         }
       }()
+      case 72: try {
+        var v: Muster_V1_AgentSendRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .agentConfirmDelivered(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .agentConfirmDelivered(v)
+        }
+      }()
       default: break
       }
     }
@@ -5412,6 +5442,10 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
     case .multicaBrowse?: try {
       guard case .multicaBrowse(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 71)
+    }()
+    case .agentConfirmDelivered?: try {
+      guard case .agentConfirmDelivered(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 72)
     }()
     case nil: break
     }

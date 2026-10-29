@@ -2333,6 +2333,21 @@ impl AgentService {
         self.controller(id)?.release_unconfirmed(operation)
     }
 
+    /// No controller creation or AX work: recovery also works after host restart.
+    pub fn confirm_delivered(
+        &self,
+        id: &str,
+        operation: &str,
+        persist: &crate::control_guard::Confirmation,
+    ) -> Result<(), Error> {
+        let inner = self.inner.lock().unwrap();
+        if let Some(controller) = inner.controllers.get(id) {
+            controller.confirm_delivered(operation, persist)
+        } else {
+            persist()
+        }
+    }
+
     pub async fn send_to(&self, id: &str, text: &str) -> Result<String, Error> {
         if text.trim().is_empty() {
             return Err(Error::Invalid("empty message".into()));

@@ -1,5 +1,6 @@
-//! Confirm sends from newly appended provider records of the exact text (user
+//! Confirm sends from newly appended provider records of matching text (user
 //! records, or a Claude prompt-queue acceptance/delivery), never from AX clicks.
+//! Codex equal-label URL wrappers are formatting; other edits are not equivalent.
 //! Turn-end records are diagnostic only: they cannot prove a prompt was lost.
 use crate::{
     model::{Provider, now_unix, parse_ts},
@@ -85,7 +86,7 @@ impl Receipt {
             return false;
         }
         for (_, record) in &read.records {
-            if user_text(record, provider).is_some_and(|t| t.trim_end() == text.as_str()) {
+            if user_text(record, provider).is_some_and(|t| text_matches(provider, text, &t)) {
                 return true;
             }
             if turn_ended.is_none() && ends_turn(record, provider) {
@@ -100,6 +101,38 @@ impl Receipt {
         }
         false
     }
+}
+
+/// Only Codex's equal-label URL wrapping is equivalent to the submitted text.
+/// Normalize the observed side only: literal Markdown in a prompt stays literal.
+pub fn text_matches(provider: Provider, submitted: &str, observed: &str) -> bool {
+    let submitted = submitted.trim_end();
+    let observed = observed.trim_end();
+    submitted == observed
+        || (provider == Provider::Codex && unwrap_url_links(observed) == submitted)
+}
+
+fn unwrap_url_links(text: &str) -> String {
+    use std::sync::LazyLock;
+    // Be conservative with literal code; this is not Markdown interpretation.
+    if text.contains('`') {
+        return text.to_owned();
+    }
+    static LINKS: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"\[(https?://[^\s\[\]\(\)\\`]+)\]\((https?://[^\s\[\]\(\)\\`]+)\)")
+            .unwrap()
+    });
+    LINKS
+        .replace_all(text, |caps: &regex::Captures<'_>| {
+            let whole = caps.get(0).unwrap();
+            let before = &text[..whole.start()];
+            if caps[1] == caps[2] && !before.ends_with(['!', '\\']) {
+                caps[1].to_owned()
+            } else {
+                whole.as_str().to_owned()
+            }
+        })
+        .into_owned()
 }
 
 /// The provider finished a turn (the grammar's `turn.ended`: a main-thread
@@ -160,6 +193,48 @@ fn user_text(record: &Value, provider: Provider) -> Option<String> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn codex_equal_url_formatting_is_not_general_markdown_equivalence() {
+        let prompt = "read https://example.com/article?a=1 then http://example.org/x ";
+        let formatted = "read [https://example.com/article?a=1](https://example.com/article?a=1) then [http://example.org/x](http://example.org/x)\n";
+        assert!(text_matches(Provider::Codex, prompt, formatted));
+        assert!(!text_matches(Provider::Claude, prompt, formatted));
+        for changed in [
+            "read [https://example.com/article?a=1](https://example.com/other) then http://example.org/x",
+            "read [article](https://example.com/article?a=1) then http://example.org/x",
+            "read ![https://example.com/article?a=1](https://example.com/article?a=1) then http://example.org/x",
+            "Read https://example.com/article?a=1 then http://example.org/x",
+        ] {
+            assert!(!text_matches(Provider::Codex, prompt, changed));
+        }
+        assert!(!text_matches(
+            Provider::Codex,
+            "`https://example.com`",
+            "`[https://example.com](https://example.com)`"
+        ));
+        assert!(
+            !text_matches(Provider::Codex, formatted, prompt),
+            "do not strip user-authored literal Markdown"
+        );
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let record = serde_json::json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":formatted}]}});
+        writeln!(file, "{record}").unwrap();
+        let mut receipt = Receipt::new(file.path(), Provider::Codex, prompt).unwrap();
+        assert!(
+            !receipt.confirmed(),
+            "an older equal message is not this send"
+        );
+        let mut assistant = record.clone();
+        assistant["payload"]["role"] = "assistant".into();
+        writeln!(file, "{assistant}").unwrap();
+        assert!(!receipt.confirmed());
+        write!(file, "{record}").unwrap();
+        assert!(!receipt.confirmed());
+        writeln!(file).unwrap();
+        assert!(receipt.confirmed());
+    }
+
     #[test]
     fn claude_desktop_human_receipt_with_separate_notification_blocks() {
         let human = serde_json::json!({

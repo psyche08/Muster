@@ -160,6 +160,13 @@ impl Controller for DelayedReceipt {
     fn pending(&self) -> Vec<PendingInteraction> {
         vec![]
     }
+    fn confirm_delivered(
+        &self,
+        operation: &str,
+        persist: &muster_agent::control_guard::Confirmation,
+    ) -> Result<(), muster_agent::Error> {
+        self.guard.user_confirm(operation, persist)
+    }
     fn reports_delivery(&self) -> bool {
         true
     }
@@ -322,5 +329,69 @@ async fn late_native_receipt_updates_original_rpc_ledger_without_resending() {
     assert_eq!(result.status, v1::op_result::Status::Applied as i32);
     assert_eq!(result.result_id, controller.session_id());
     assert_eq!(controller.sends.load(Ordering::SeqCst), 2);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn manual_resolution_clears_native_latch_without_resubmission() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = DaemonConfig::new(dir.path());
+    config.bind = "127.0.0.1:0".parse().unwrap();
+    config.agent = Some(muster_agent::AgentConfig {
+        codex_home: None,
+        claude_home: None,
+        catdesk_home: None,
+        claude_desktop: None,
+        ..Default::default()
+    });
+    config.terminal = None;
+    let daemon = Daemon::start_with(config, Arc::new(musterd::DefaultPlatform), None)
+        .await
+        .unwrap();
+    let transcript = tempfile::NamedTempFile::new().unwrap();
+    let controller = Arc::new(DelayedReceipt {
+        guard: Default::default(),
+        transcript: transcript.path().into(),
+        sends: Default::default(),
+    });
+    daemon.agent().unwrap().attach(controller.clone());
+    let client = muster_rpc::Client::new(
+        tokio::net::UnixStream::connect(daemon.socket_path())
+            .await
+            .unwrap(),
+    );
+    let request = v1::AgentSendRequest {
+        op_id: "manual-op".into(),
+        session: controller.session_id(),
+        text: "format changed".into(),
+        ..Default::default()
+    };
+    let Resp::OpResult(r) = client.call(Req::AgentSend(request.clone())).await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(r.status, v1::op_result::Status::Unknown as i32);
+    assert!(controller.guard.is_unconfirmed());
+    for _ in 0..2 {
+        let Resp::OpResult(r) = client
+            .call(Req::AgentConfirmDelivered(request.clone()))
+            .await
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(r.status, v1::op_result::Status::UserConfirmed as i32);
+        assert!(!controller.guard.is_unconfirmed());
+    }
+    assert_eq!(
+        controller.sends.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+    assert_eq!(std::fs::read_to_string(transcript.path()).unwrap(), "");
+    client.call(Req::AgentSend(request)).await.unwrap();
+    assert_eq!(
+        controller.sends.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "an explicit replay still cannot send twice"
+    );
     daemon.shutdown().await;
 }

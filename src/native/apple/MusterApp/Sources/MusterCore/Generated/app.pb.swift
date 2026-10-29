@@ -388,6 +388,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .agentSend(newValue)}
   }
 
+  public var resolveAgentSend: Muster_App_ResolveAgentSend {
+    get {
+      if case .resolveAgentSend(let v)? = _storage._it {return v}
+      return Muster_App_ResolveAgentSend()
+    }
+    set {_uniqueStorage()._it = .resolveAgentSend(newValue)}
+  }
+
   public var agentRespond: Muster_App_AgentRespond {
     get {
       if case .agentRespond(let v)? = _storage._it {return v}
@@ -634,6 +642,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case orcaCreate(Muster_App_OrcaCreate)
     case openAgent(Muster_App_OpenAgent)
     case agentSend(Muster_App_AgentSend)
+    case resolveAgentSend(Muster_App_ResolveAgentSend)
     case agentRespond(Muster_App_AgentRespond)
     case agentInterrupt(Muster_App_AgentInterrupt)
     case agentLoadEarlier(Muster_App_AgentLoadEarlier)
@@ -1095,6 +1104,21 @@ public nonisolated struct Muster_App_OpenAgent: Sendable {
   public var session: String = String()
 
   public var deviceID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_App_ResolveAgentSend: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var token: String = String()
+
+  /// False: recheck only. True: the user explicitly saw the message on the Mac.
+  public var delivered: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3305,7 +3329,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{4}*code_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{4})code_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4027,6 +4051,19 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .multicaBrowse(v)
           }
         }()
+        case 91: try {
+          var v: Muster_App_ResolveAgentSend?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .resolveAgentSend(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .resolveAgentSend(v)
+          }
+        }()
         case 132: try {
           var v: Muster_App_CodeAction?
           var hadOneofValue = false
@@ -4264,6 +4301,10 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .multicaBrowse?: try {
         guard case .multicaBrowse(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 90)
+      }()
+      case .resolveAgentSend?: try {
+        guard case .resolveAgentSend(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 91)
       }()
       case .codeAction?: try {
         guard case .codeAction(let v)? = _storage._it else { preconditionFailure() }
@@ -5084,6 +5125,41 @@ nonisolated extension Muster_App_OpenAgent: SwiftProtobuf.Message, SwiftProtobuf
   public static func ==(lhs: Muster_App_OpenAgent, rhs: Muster_App_OpenAgent) -> Bool {
     if lhs.session != rhs.session {return false}
     if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_ResolveAgentSend: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResolveAgentSend"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}delivered\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.delivered) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    if self.delivered != false {
+      try visitor.visitSingularBoolField(value: self.delivered, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_ResolveAgentSend, rhs: Muster_App_ResolveAgentSend) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.delivered != rhs.delivered {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

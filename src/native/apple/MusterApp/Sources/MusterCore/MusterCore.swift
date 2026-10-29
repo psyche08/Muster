@@ -213,6 +213,10 @@ public final class MusterCore: MusterShell {
     }
 
     public func cancelLockedUse() { send(.cancelLockedUse(Muster_App_CancelLockedUse())) }
+    public func resolveAgentSend(token: String, delivered: Bool) {
+        send(.resolveAgentSend(Muster_App_ResolveAgentSend.with { $0.token = token; $0.delivered = delivered }))
+    }
+
     public func agentInterrupt() { send(.agentInterrupt(Muster_App_AgentInterrupt())) }
 
     public func agentLoadEarlier(all: Bool = false) { var r = Muster_App_AgentLoadEarlier(); r.all = all; send(.agentLoadEarlier(r)) }

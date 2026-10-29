@@ -104,6 +104,14 @@ pub trait Controller: Send + Sync {
     fn release_unconfirmed(&self, _operation: &str) -> Result<(), Error> {
         Ok(())
     }
+    /// Explicit user attestation. Controllers with a latch must persist before release.
+    fn confirm_delivered(
+        &self,
+        _operation: &str,
+        persist: &crate::control_guard::Confirmation,
+    ) -> Result<(), Error> {
+        persist()
+    }
     /// Sends, naming the session the text landed in when that is another
     /// one (the first send of a new desktop chat becomes its conversation).
     async fn send_to(&self, text: &str) -> Result<Option<String>, Error> {

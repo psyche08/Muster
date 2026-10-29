@@ -1117,6 +1117,24 @@ the signed Locked Use operation. The daemon rereads evidence before releasing
 exactly that token. If the provider confirmed it, release is refused to prevent
 duplicate delivery. A different token is refused with the current token.
 
+### Explicit delivery resolution (ADR 0061)
+
+Codex user-record receipt matching accepts only equal-label HTTP(S) Markdown
+links as formatting of the original bare URL. It does not equate different
+labels, destinations, literal code, assistant output or older transcript records.
+The timeline uses this same comparison for complete user messages.
+
+An updated Apple client also offers a read-only recheck and a separate confirmed
+"seen on Mac, do not resend" action. `agent_confirm_delivered` takes the entire
+original `AgentSendRequest`, requires the current provider control grant and
+checks its ledger binding. It records `USER_CONFIRMED`, distinct from `APPLIED`
+provider evidence, and clears only the corresponding write latch after durable
+storage. It never submits input or unlocks the host. Missing/conflicting/rejected
+operations remain unresolved. Repeated confirmation is safe; status queries
+recover the decision after a lost response. The host advertises
+`agent.send.confirm.v1`; older hosts require an update. Newer composer edits
+survive settlement, and unknown outcomes are never labelled "not sent".
+
 ### Native send readiness (2026-10-13)
 
 Mac-C exposed two Codex `Send` controls after drafting: one disabled and one

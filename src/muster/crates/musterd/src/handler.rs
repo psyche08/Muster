@@ -137,7 +137,7 @@ fn access_for(req: &Req) -> Access {
         | Req::AgentFiles(_)
         | Req::AgentFile(_)
         | Req::AgentGit(_) => Access::AgentSession { control: false },
-        Req::AgentSendStatus(_) => Access::AgentReceipt,
+        Req::AgentSendStatus(_) | Req::AgentConfirmDelivered(_) => Access::AgentReceipt,
         Req::AgentSend(_)
         | Req::AgentRespond(_)
         | Req::AgentInterrupt(_)
@@ -601,7 +601,7 @@ fn admit(
 /// The agent session a request names, and its provider if it exists.
 fn session_provider(daemon: &Daemon, request: &Req) -> Result<(String, Option<String>), Error> {
     let session = match request {
-        Req::AgentSendStatus(r) => r.session.clone(),
+        Req::AgentSendStatus(r) | Req::AgentConfirmDelivered(r) => r.session.clone(),
         Req::AgentWatch(r) => r.session.clone(),
         Req::AgentMessages(r) => r.session.clone(),
         Req::AgentFiles(r) => r.session.clone(),
@@ -1810,6 +1810,22 @@ async fn dispatch(
             }
             Resp::Ack(v1::Ack {})
         }
+        Req::AgentConfirmDelivered(r) => {
+            // Validate binding before touching a controller; missing rows are checked
+            // atomically by the store callback. This path never acquires the console.
+            send_status(daemon, &r)?;
+            let host = daemon.clone();
+            let original = r.clone();
+            let persist: muster_agent::control_guard::Confirmation = Arc::new(move || {
+                use muster_proto::Message;
+                host.store()
+                    .ledger()
+                    .user_confirm_send(&original.op_id, &original.encode_to_vec())
+                    .map_err(|e| muster_agent::Error::Conflict(e.to_string()))
+            });
+            agent_of(daemon)?.confirm_delivered(&r.session, &r.op_id, &persist)?;
+            send_status(daemon, &r)?
+        }
         Req::AgentSendStatus(r) => send_status(daemon, &r)?,
         Req::AgentMessages(r) => Resp::AgentMessages(agent_of(daemon)?.history_page(&r).await?),
         request @ (Req::AgentSend(_)
@@ -2108,6 +2124,11 @@ fn send_status(daemon: &Daemon, request: &v1::AgentSendRequest) -> Result<Resp, 
             .ledger()
             .outcome(&request.op_id, "agent.send", &request.encode_to_vec())?;
     Ok(match outcome {
+        muster_store::Outcome::UserConfirmed => op_result(
+            Status::UserConfirmed,
+            "已由用户确认送达；没有重发，尚无提供方回执",
+            request.session.clone(),
+        ),
         muster_store::Outcome::Applied(id) => op_result(
             Status::Applied,
             "",

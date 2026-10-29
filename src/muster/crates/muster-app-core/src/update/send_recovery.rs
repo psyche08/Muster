@@ -90,7 +90,8 @@ pub(super) fn outcome(
     let terminal = match result {
         Ok(r) => matches!(
             v1::op_result::Status::try_from(r.status),
-            Ok(v1::op_result::Status::Applied
+            Ok(v1::op_result::Status::UserConfirmed
+                | v1::op_result::Status::Applied
                 | v1::op_result::Status::Duplicate
                 | v1::op_result::Status::Rejected)
         ),
@@ -193,7 +194,7 @@ fn start(
                 _ = cancel.cancelled() => return,
                 result = tokio::time::timeout(Duration::from_secs(8), query) => result.unwrap_or_else(|_| Err(Error::Unavailable("发送结果查询超时".into()))),
             };
-            let terminal = matches!(&result, Ok(r) if matches!(v1::op_result::Status::try_from(r.status), Ok(v1::op_result::Status::Applied | v1::op_result::Status::Rejected)));
+            let terminal = matches!(&result, Ok(r) if matches!(v1::op_result::Status::try_from(r.status), Ok(v1::op_result::Status::UserConfirmed | v1::op_result::Status::Applied | v1::op_result::Status::Rejected)));
             let stopped = matches!(&result, Err(Error::Unauthorized(_) | Error::Invalid(_)));
             if tx
                 .send(loop_message(Msg::SendRecovered {
@@ -214,6 +215,69 @@ fn start(
                 _ = cancel.cancelled() => return,
                 _ = tokio::time::sleep(Duration::from_secs(if attempts < 6 { 2 } else { 15 })) => {}
             }
+        }
+    });
+}
+
+/// An explicit action on the original pending request; never an AgentSend call.
+pub(super) fn resolve(state: &mut State, ctx: &Ctx, action: app::ResolveAgentSend) {
+    let Some(chat) = &state.chat else { return };
+    if chat.sending || chat.unconfirmed.as_ref().map(|u| &u.token) != Some(&action.token) {
+        return;
+    }
+    let device = chat.device.clone();
+    let key = key(state, &device, &chat.session.id);
+    let Some(pending) =
+        load(ctx, &key).filter(|p| p.request.as_ref().is_some_and(|r| r.op_id == action.token))
+    else {
+        state.toast(
+            "本客户端没有原始发送记录，无法安全确认；请使用发送消息的设备",
+            true,
+        );
+        return;
+    };
+    state.send_recoveries.remove(&key);
+    if !action.delivered {
+        start(state, ctx, device, key, pending);
+        return;
+    }
+    let backend = ctx.backend.clone();
+    let route = state.self_id.clone();
+    spawn(ctx, async move {
+        let query = async {
+            let client = backend.client_for(&device, &route).await?;
+            let Resp::DeviceInfo(info) =
+                unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await?
+            else {
+                return Err(unexpected());
+            };
+            if !info.services.iter().any(|s| s == "agent.send.confirm.v1") {
+                return Err(Error::Invalid(
+                    "目标 Mac 需更新后才能手动确认；消息未重发".into(),
+                ));
+            }
+            let Resp::OpResult(result) = unary(
+                &client,
+                Req::AgentConfirmDelivered(pending.request.clone().expect("loaded")),
+            )
+            .await?
+            else {
+                return Err(unexpected());
+            };
+            Ok(result)
+        };
+        let result = tokio::time::timeout(Duration::from_secs(8), query)
+            .await
+            .unwrap_or_else(|_| {
+                Err(Error::Unavailable(
+                    "确认结果未知，请重新核对；不会重发".into(),
+                ))
+            });
+        Msg::SendRecovered {
+            device,
+            key,
+            pending,
+            result,
         }
     });
 }
@@ -240,9 +304,15 @@ pub(super) fn recovered(
         Ok(r)
             if matches!(
                 v1::op_result::Status::try_from(r.status),
-                Ok(v1::op_result::Status::Applied | v1::op_result::Status::Rejected)
+                Ok(v1::op_result::Status::UserConfirmed
+                    | v1::op_result::Status::Applied
+                    | v1::op_result::Status::Rejected)
             ) =>
         {
+            if r.status == v1::op_result::Status::UserConfirmed as i32 {
+                super::admitted::user_confirmed(state, &device, &request.session, &request.op_id);
+                state.toast("已记录你的送达确认，没有重发消息", false);
+            }
             if let Some(draft) = &pending.draft {
                 state
                     .pending_drafts
@@ -274,6 +344,10 @@ pub(super) fn recovered(
             }
             if matches!(result, Err(Error::Unauthorized(_) | Error::Invalid(_))) {
                 state.send_recoveries.remove(&key);
+            } else {
+                // A manual confirmation can lose its response. Resume read-only
+                // investigation of the same request, never replay the mutation.
+                start(state, ctx, device, key, pending);
             }
         }
     }
@@ -343,6 +417,39 @@ mod tests {
             ..Default::default()
         }
     }
+    #[tokio::test]
+    async fn manual_confirmation_settles_original_and_preserves_newer_composer() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut state, ctx) = fixture(dir.path()).await;
+        super::super::admitted::admit(&mut state, "first", "original");
+        prepare(&mut state, &ctx, "mac", &request("first"), "first:ui").unwrap();
+        restore(&mut state, &ctx);
+        let journal = key(&state, "mac", "session");
+        let pending = load(&ctx, &journal).unwrap();
+        let newer = app::ChatDraft {
+            key: "draft".into(),
+            revision: "2".into(),
+            text: "next message".into(),
+        };
+        ctx.cache.put_durable(newer.key.clone(), &newer).unwrap();
+        state.chat.as_mut().unwrap().draft = newer.clone();
+        recovered(
+            &mut state,
+            &ctx,
+            "mac".into(),
+            journal.clone(),
+            pending,
+            Ok(v1::OpResult {
+                status: v1::op_result::Status::UserConfirmed as i32,
+                ..Default::default()
+            }),
+        );
+        assert!(load(&ctx, &journal).is_none());
+        assert_eq!(state.chat.as_ref().unwrap().draft, newer);
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+        assert!(state.admitted[&super::super::admitted::key("mac", "session")][0].user_confirmed);
+    }
+
     #[tokio::test]
     async fn restored_worker_recovers_late_receipt_over_rpc_without_submitting() {
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -456,6 +563,153 @@ mod tests {
             server.confirmed.store(true, Ordering::SeqCst);
         }
         assert_eq!(server.queries.load(Ordering::SeqCst), 2);
+        assert!(load(&ctx, &key(&state, "mac", "session")).is_none());
+        assert!(state.send_recoveries.is_empty());
+        accept.abort();
+    }
+
+    #[tokio::test]
+    async fn manual_action_recovers_uncertain_ack_without_a_send_rpc() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        struct Server {
+            confirmed: AtomicBool,
+            queries: AtomicUsize,
+        }
+        impl muster_rpc::Handler for Server {
+            fn call(
+                &self,
+                _: muster_rpc::Context,
+                req: Req,
+                _: muster_rpc::EventSink,
+            ) -> muster_rpc::HandlerFuture<'_> {
+                Box::pin(async move {
+                    match req {
+                        Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                            services: vec![
+                                "agent.send.status.v1".into(),
+                                "agent.send.confirm.v1".into(),
+                            ],
+                            ..Default::default()
+                        }),
+                        Req::AgentConfirmDelivered(r) => {
+                            assert_eq!(r, request("original"));
+                            assert!(
+                                !self.confirmed.swap(true, Ordering::SeqCst),
+                                "manual mutation must not be replayed"
+                            );
+                            Resp::Error(v1::Error {
+                                code: v1::error::Code::Unavailable as i32,
+                                message: "acknowledgement unavailable after persistence".into(),
+                                ..Default::default()
+                            })
+                        }
+                        Req::AgentSendStatus(r) => {
+                            assert_eq!(r, request("original"));
+                            self.queries.fetch_add(1, Ordering::SeqCst);
+                            Resp::OpResult(v1::OpResult {
+                                status: if self.confirmed.load(Ordering::SeqCst) {
+                                    v1::op_result::Status::UserConfirmed
+                                } else {
+                                    v1::op_result::Status::Unknown
+                                } as i32,
+                                result_id: "session".into(),
+                                ..Default::default()
+                            })
+                        }
+                        _ => panic!("recovery attempted something other than a read"),
+                    }
+                })
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("rpc.sock");
+        let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+        let server = Arc::new(Server {
+            confirmed: false.into(),
+            queries: 0.into(),
+        });
+        let handler = server.clone();
+        let accept = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                tokio::spawn(muster_rpc::serve(
+                    stream,
+                    muster_rpc::Principal::Local,
+                    handler.clone(),
+                ));
+            }
+        });
+        let shell = Arc::new(Shell);
+        let backend = Arc::new(
+            crate::backend::Backend::connect(
+                &crate::AppConfig {
+                    dir: dir.path().into(),
+                    mode: crate::Mode::Socket { path: socket },
+                    allow_loopback: true,
+                },
+                shell.clone(),
+            )
+            .await
+            .unwrap(),
+        );
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut ctx = Ctx {
+            shell,
+            backend,
+            tx,
+            cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+        };
+        let mut state = State::new(false, Some("mac".into()));
+        state.chat = Some(Chat {
+            device: "mac".into(),
+            session: v1::AgentSession {
+                id: "session".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        prepare(&mut state, &ctx, "mac", &request("original"), "original:ui").unwrap();
+        // Recreate the cache as after a process exit. Only the durable request remains.
+        ctx.cache = Arc::new(crate::cache::Cache::new(dir.path().join("cache")));
+        restore(&mut state, &ctx);
+        for expected in [
+            Some(v1::op_result::Status::Unknown),
+            None,
+            Some(v1::op_result::Status::UserConfirmed),
+        ] {
+            let Loop::Msg(message) = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            else {
+                panic!()
+            };
+            let Msg::SendRecovered {
+                device,
+                key,
+                pending,
+                result,
+            } = *message
+            else {
+                panic!()
+            };
+            match expected {
+                Some(expected) => assert_eq!(result.as_ref().unwrap().status, expected as i32),
+                None => assert!(result.is_err()),
+            }
+            recovered(&mut state, &ctx, device, key, pending, result);
+            if expected == Some(v1::op_result::Status::Unknown) {
+                resolve(
+                    &mut state,
+                    &ctx,
+                    app::ResolveAgentSend {
+                        token: "original".into(),
+                        delivered: true,
+                    },
+                );
+            }
+        }
+        assert_eq!(server.queries.load(Ordering::SeqCst), 2);
+        assert!(server.confirmed.load(Ordering::SeqCst));
         assert!(load(&ctx, &key(&state, "mac", "session")).is_none());
         assert!(state.send_recoveries.is_empty());
         accept.abort();
