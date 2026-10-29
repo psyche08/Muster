@@ -158,8 +158,15 @@ where
                                 TurnEvent::Settled(r)=>{reason=r;break},_=>{}
                             }}
                         }
-                        output.send(json!({"method":"item/completed","params":{"threadId":sid,"turnId":tid,"item":{"id":tid,"type":"agentMessage","text":body,"phase":"final_answer"}}})).await;
+                        // A failed submission is not a final answer. Some scheduler
+                        // clients act on this item before reading turn/completed.
+                        if reason == StopReason::EndTurn {
+                            output.send(json!({"method":"item/completed","params":{"threadId":sid,"turnId":tid,"item":{"id":tid,"type":"agentMessage","text":body,"phase":"final_answer"}}})).await;
+                        }
                         let (status,error)=match reason {StopReason::EndTurn=>("completed",Value::Null),StopReason::Cancelled=>("interrupted",Value::Null),StopReason::Error(e)=>("failed",json!({"message":e})),_=>("failed",json!({"message":"Provider refused the turn"}))};
+                        if status == "failed" {
+                            output.send(json!({"method":"error","params":{"threadId":sid,"turnId":tid,"error":error,"willRetry":false}})).await;
+                        }
                         completion.store(true,std::sync::atomic::Ordering::SeqCst);
                         output.send(json!({"method":"turn/completed","params":{"threadId":sid,"turn":{"id":tid,"status":status,"error":error}}})).await;
                     })});Ok(json!({"turn":{"id":turn,"status":"inProgress"}}))
@@ -297,7 +304,8 @@ mod tests {
     use tokio::{io::AsyncWriteExt, sync::mpsc};
     struct Fake {
         creates: AtomicUsize,
-        fail: bool,
+        stop: StopReason,
+        reject: bool,
     }
     #[async_trait::async_trait]
     impl Host for Fake {
@@ -309,17 +317,16 @@ mod tests {
             Err("unconfirmed".into())
         }
         async fn prompt(&self, _: &str, _: &str) -> Result<mpsc::Receiver<TurnEvent>, String> {
+            if self.reject {
+                return Err("fixture submission rejected".into());
+            }
             let (tx, rx) = mpsc::channel(4);
             tx.send(TurnEvent::Text("fixture reply".into()))
                 .await
                 .unwrap();
-            tx.send(TurnEvent::Settled(if self.fail {
-                StopReason::Error("fixture failure".into())
-            } else {
-                StopReason::EndTurn
-            }))
-            .await
-            .unwrap();
+            tx.send(TurnEvent::Settled(self.stop.clone()))
+                .await
+                .unwrap();
             Ok(rx)
         }
         async fn interject(&self, _: &str, _: &str) -> Result<(), String> {
@@ -344,7 +351,8 @@ mod tests {
     async fn codex_failed_resume_cannot_fall_through_to_fresh_thread() {
         let host = Arc::new(Fake {
             creates: AtomicUsize::new(0),
-            fail: false,
+            stop: StopReason::EndTurn,
+            reject: false,
         });
         let (a, b) = tokio::io::duplex(8192);
         let (r, w) = tokio::io::split(a);
@@ -368,36 +376,62 @@ mod tests {
         server.await.unwrap().unwrap();
     }
     #[tokio::test]
-    async fn codex_turn_reports_provider_failure_instead_of_successful_output() {
-        let host = Arc::new(Fake {
-            creates: AtomicUsize::new(0),
-            fail: true,
-        });
-        let (a, b) = tokio::io::duplex(8192);
-        let (r, w) = tokio::io::split(a);
-        let (r2, mut w2) = tokio::io::split(b);
-        let mut r2 = BufReader::new(r2);
-        let server = tokio::spawn(codex(r, w, host, "/tmp/fixture".into(), &[]));
-        send(&mut w2, json!({"id":1,"method":"initialize"})).await;
-        next(&mut r2).await;
-        send(
-            &mut w2,
-            json!({"id":2,"method":"thread/start","params":{"cwd":"/tmp/fixture"}}),
-        )
-        .await;
-        next(&mut r2).await;
-        send(&mut w2,json!({"id":3,"method":"turn/start","params":{"threadId":"fixture-session","input":[{"type":"text","text":"hello"}]}})).await;
-        loop {
-            let frame = next(&mut r2).await;
-            if frame["method"] == "turn/completed" {
-                assert_eq!(frame["params"]["turn"]["status"], "failed");
-                break;
+    async fn codex_terminal_frames_never_turn_failure_or_cancellation_into_a_final_answer() {
+        for (stop, reject, expected) in [
+            (StopReason::EndTurn, false, "completed"),
+            (StopReason::Error("fixture failure".into()), false, "failed"),
+            (StopReason::Cancelled, false, "interrupted"),
+            (StopReason::EndTurn, true, "failed"),
+        ] {
+            let host = Arc::new(Fake {
+                creates: AtomicUsize::new(0),
+                stop,
+                reject,
+            });
+            let (a, b) = tokio::io::duplex(8192);
+            let (r, w) = tokio::io::split(a);
+            let (r2, mut w2) = tokio::io::split(b);
+            let mut r2 = BufReader::new(r2);
+            let server = tokio::spawn(codex(r, w, host, "/tmp/fixture".into(), &[]));
+            send(&mut w2, json!({"id":1,"method":"initialize"})).await;
+            next(&mut r2).await;
+            send(
+                &mut w2,
+                json!({"id":2,"method":"thread/start","params":{"cwd":"/tmp/fixture"}}),
+            )
+            .await;
+            next(&mut r2).await;
+            send(&mut w2,json!({"id":3,"method":"turn/start","params":{"threadId":"fixture-session","input":[{"type":"text","text":"hello"}]}})).await;
+            let mut finals = 0;
+            let mut errors = 0;
+            loop {
+                let frame = next(&mut r2).await;
+                if frame["method"] == "item/completed" {
+                    assert_eq!(expected, "completed", "failed turn emitted a final answer");
+                    assert_eq!(frame["params"]["item"]["text"], "fixture reply");
+                    finals += 1;
+                }
+                if frame["method"] == "error" {
+                    assert_eq!(frame["params"]["willRetry"], false);
+                    assert!(
+                        frame["params"]["error"]["message"]
+                            .as_str()
+                            .is_some_and(|s| !s.is_empty())
+                    );
+                    errors += 1;
+                }
+                if frame["method"] == "turn/completed" {
+                    assert_eq!(frame["params"]["turn"]["status"], expected);
+                    assert_eq!(finals, usize::from(expected == "completed"));
+                    assert_eq!(errors, usize::from(expected == "failed"));
+                    break;
+                }
             }
+            w2.shutdown().await.unwrap();
+            drop(w2);
+            drop(r2);
+            server.await.unwrap().unwrap();
         }
-        w2.shutdown().await.unwrap();
-        drop(w2);
-        drop(r2);
-        server.await.unwrap().unwrap();
     }
     #[test]
     fn native_settings_and_nontext_requests_are_not_silently_accepted() {

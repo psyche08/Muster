@@ -49,6 +49,19 @@ Add a release fingerprint for the native bridge so future packages cannot
 silently omit it again. Preserve the candidate ADR history under 0061–0063 to
 avoid collisions with mainline 0055–0057.
 
+Device acceptance also exposed an incorrect terminal notification: the Codex
+adapter emitted a `final_answer` item even when native submission was rejected.
+One scheduler run recorded completion with no reply despite a rejected local
+operation. Emit a final answer only after EndTurn; failed turns emit a terminal
+error notification before their failed completion. Cancellation has no final
+answer. Do not depend on the consumer reconciling a misleading success signal
+with a later error. Test both immediate submission rejection and failure after
+partial output, as well as cancellation and successful completion.
+
+Keep process identity and HID generation checks unchanged, but distinguish
+their rejection reasons so operator interference is not mistaken for a process
+restart. Never retry a rejected/ambiguous native submission automatically.
+
 ## Consequences
 
 Native routing remains Rust-owned. Persistent wrappers must be reconciled when

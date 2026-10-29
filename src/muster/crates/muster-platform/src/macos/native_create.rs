@@ -66,11 +66,13 @@ impl Guard {
         console()?;
         if codesign::process_start(self.pid) != Some(self.start)
             || !codesign::process_satisfies(self.pid, &self.profile.app.requirement())
-            || input::user_input_generation() != self.generation
         {
             return Err(conflict(
-                "Native process or physical input changed; nothing is retried",
+                "Native process identity changed; nothing is retried",
             ));
+        }
+        if input::user_input_generation() != self.generation {
+            return Err(conflict("Physical input changed; nothing is retried"));
         }
         Ok(())
     }
