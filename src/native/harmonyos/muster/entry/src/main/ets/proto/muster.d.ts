@@ -29,6 +29,9 @@ export namespace muster {
 
             /** Envelope target */
             target?: (string|null);
+
+            /** Envelope presenceEnrollment */
+            presenceEnrollment?: (Uint8Array|null);
         }
 
         /** Represents an Envelope. */
@@ -60,6 +63,9 @@ export namespace muster {
 
             /** Envelope target. */
             public target: string;
+
+            /** Envelope presenceEnrollment. */
+            public presenceEnrollment: Uint8Array;
 
             /** Envelope msg. */
             public msg?: ("request"|"response"|"event"|"cancel");
@@ -508,6 +514,30 @@ export namespace muster {
 
             /** Request agentComplete */
             agentComplete?: (muster.v1.IAgentCompleteRequest|null);
+
+            /** Request devicePresence */
+            devicePresence?: (muster.v1.IDevicePresenceRequest|null);
+
+            /** Request networkPresence */
+            networkPresence?: (muster.v1.INetworkPresenceRequest|null);
+
+            /** Request deviceInstallPresence */
+            deviceInstallPresence?: (muster.v1.IDeviceInstallPresenceRequest|null);
+
+            /** Request agentSendStatus */
+            agentSendStatus?: (muster.v1.IAgentSendRequest|null);
+
+            /** Request forwardOpen */
+            forwardOpen?: (muster.v1.IForwardOpenRequest|null);
+
+            /** Request multica */
+            multica?: (muster.v1.IMulticaRequest|null);
+
+            /** Request multicaBrowse */
+            multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
+
+            /** Request agentNativeCreate */
+            agentNativeCreate?: (muster.v1.IAgentNativeCreateRequest|null);
         }
 
         /** Represents a Request. */
@@ -681,8 +711,32 @@ export namespace muster {
             /** Request agentComplete. */
             public agentComplete?: (muster.v1.IAgentCompleteRequest|null);
 
+            /** Request devicePresence. */
+            public devicePresence?: (muster.v1.IDevicePresenceRequest|null);
+
+            /** Request networkPresence. */
+            public networkPresence?: (muster.v1.INetworkPresenceRequest|null);
+
+            /** Request deviceInstallPresence. */
+            public deviceInstallPresence?: (muster.v1.IDeviceInstallPresenceRequest|null);
+
+            /** Request agentSendStatus. */
+            public agentSendStatus?: (muster.v1.IAgentSendRequest|null);
+
+            /** Request forwardOpen. */
+            public forwardOpen?: (muster.v1.IForwardOpenRequest|null);
+
+            /** Request multica. */
+            public multica?: (muster.v1.IMulticaRequest|null);
+
+            /** Request multicaBrowse. */
+            public multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
+
+            /** Request agentNativeCreate. */
+            public agentNativeCreate?: (muster.v1.IAgentNativeCreateRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -728,6 +782,9 @@ export namespace muster {
 
             /** OrcaCreateRequest agent */
             agent?: (string|null);
+
+            /** OrcaCreateRequest env */
+            env?: ({ [k: string]: string }|null);
         }
 
         /** Represents an OrcaCreateRequest. */
@@ -747,6 +804,9 @@ export namespace muster {
 
             /** OrcaCreateRequest agent. */
             public agent: string;
+
+            /** OrcaCreateRequest env. */
+            public env: { [k: string]: string };
 
             /**
              * Creates a new OrcaCreateRequest instance using the specified properties.
@@ -858,6 +918,15 @@ export namespace muster {
 
             /** Response agentCompletion */
             agentCompletion?: (muster.v1.IAgentCompletion|null);
+
+            /** Response presenceInfo */
+            presenceInfo?: (muster.v1.IPresenceInfo|null);
+
+            /** Response multica */
+            multica?: (muster.v1.IMulticaStatus|null);
+
+            /** Response multicaPage */
+            multicaPage?: (muster.v1.IMulticaPage|null);
         }
 
         /** Represents a Response. */
@@ -944,8 +1013,17 @@ export namespace muster {
             /** Response agentCompletion. */
             public agentCompletion?: (muster.v1.IAgentCompletion|null);
 
+            /** Response presenceInfo. */
+            public presenceInfo?: (muster.v1.IPresenceInfo|null);
+
+            /** Response multica. */
+            public multica?: (muster.v1.IMulticaStatus|null);
+
+            /** Response multicaPage. */
+            public multicaPage?: (muster.v1.IMulticaPage|null);
+
             /** Response resp. */
-            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion");
+            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage");
 
             /**
              * Creates a new Response instance using the specified properties.
@@ -1006,6 +1084,9 @@ export namespace muster {
 
             /** Event desktopUpdateReady */
             desktopUpdateReady?: (muster.v1.IAck|null);
+
+            /** Event forwardOpened */
+            forwardOpened?: (muster.v1.IForwardOpened|null);
         }
 
         /** Represents an Event. */
@@ -1041,8 +1122,11 @@ export namespace muster {
             /** Event desktopUpdateReady. */
             public desktopUpdateReady?: (muster.v1.IAck|null);
 
+            /** Event forwardOpened. */
+            public forwardOpened?: (muster.v1.IForwardOpened|null);
+
             /** Event ev. */
-            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady");
+            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened");
 
             /**
              * Creates a new Event instance using the specified properties.
@@ -1921,6 +2005,9 @@ export namespace muster {
             /** LockedUseOperation complete */
             complete?: (muster.v1.IAgentCompleteRequest|null);
 
+            /** LockedUseOperation terminalCreate */
+            terminalCreate?: (muster.v1.ITerminalCreateRequest|null);
+
             /** LockedUseOperation providerQueue */
             providerQueue?: (string|null);
         }
@@ -1967,11 +2054,14 @@ export namespace muster {
             /** LockedUseOperation complete. */
             public complete?: (muster.v1.IAgentCompleteRequest|null);
 
+            /** LockedUseOperation terminalCreate. */
+            public terminalCreate?: (muster.v1.ITerminalCreateRequest|null);
+
             /** LockedUseOperation providerQueue. */
             public providerQueue: string;
 
             /** LockedUseOperation operation. */
-            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete");
+            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate");
 
             /**
              * Creates a new LockedUseOperation instance using the specified properties.
@@ -3742,6 +3832,12 @@ export namespace muster {
 
             /** Policy offerTerminal */
             offerTerminal?: (boolean|null);
+
+            /** Policy offerTasks */
+            offerTasks?: (boolean|null);
+
+            /** Policy webWindow */
+            webWindow?: (muster.v1.IWebWindow|null);
         }
 
         /** Represents a Policy. */
@@ -3767,6 +3863,12 @@ export namespace muster {
 
             /** Policy offerTerminal. */
             public offerTerminal: boolean;
+
+            /** Policy offerTasks. */
+            public offerTasks: boolean;
+
+            /** Policy webWindow. */
+            public webWindow?: (muster.v1.IWebWindow|null);
 
             /**
              * Creates a new Policy instance using the specified properties.
@@ -3795,6 +3897,58 @@ export namespace muster {
 
             /**
              * Gets the default type url for Policy
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a WebWindow. */
+        interface IWebWindow {
+
+            /** WebWindow origin */
+            origin?: (string|null);
+        }
+
+        /** Represents a WebWindow. */
+        class WebWindow implements IWebWindow {
+
+            /**
+             * Constructs a new WebWindow.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IWebWindow);
+
+            /** WebWindow origin. */
+            public origin: string;
+
+            /**
+             * Creates a new WebWindow instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns WebWindow instance
+             */
+            public static create(properties?: muster.v1.IWebWindow): muster.v1.WebWindow;
+
+            /**
+             * Encodes the specified WebWindow message. Does not implicitly {@link muster.v1.WebWindow.verify|verify} messages.
+             * @param message WebWindow message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IWebWindow, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a WebWindow message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns WebWindow
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.WebWindow;
+
+            /**
+             * Gets the default type url for WebWindow
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -3847,6 +4001,128 @@ export namespace muster {
 
             /**
              * Gets the default type url for PolicySetRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a ForwardOpenRequest. */
+        interface IForwardOpenRequest {
+
+            /** ForwardOpenRequest device */
+            device?: (string|null);
+
+            /** ForwardOpenRequest port */
+            port?: (number|null);
+
+            /** ForwardOpenRequest localPort */
+            localPort?: (number|null);
+
+            /** ForwardOpenRequest window */
+            window?: (string|null);
+        }
+
+        /** Represents a ForwardOpenRequest. */
+        class ForwardOpenRequest implements IForwardOpenRequest {
+
+            /**
+             * Constructs a new ForwardOpenRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IForwardOpenRequest);
+
+            /** ForwardOpenRequest device. */
+            public device: string;
+
+            /** ForwardOpenRequest port. */
+            public port: number;
+
+            /** ForwardOpenRequest localPort. */
+            public localPort: number;
+
+            /** ForwardOpenRequest window. */
+            public window: string;
+
+            /**
+             * Creates a new ForwardOpenRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ForwardOpenRequest instance
+             */
+            public static create(properties?: muster.v1.IForwardOpenRequest): muster.v1.ForwardOpenRequest;
+
+            /**
+             * Encodes the specified ForwardOpenRequest message. Does not implicitly {@link muster.v1.ForwardOpenRequest.verify|verify} messages.
+             * @param message ForwardOpenRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IForwardOpenRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ForwardOpenRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ForwardOpenRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.ForwardOpenRequest;
+
+            /**
+             * Gets the default type url for ForwardOpenRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a ForwardOpened. */
+        interface IForwardOpened {
+
+            /** ForwardOpened localPort */
+            localPort?: (number|null);
+        }
+
+        /** Represents a ForwardOpened. */
+        class ForwardOpened implements IForwardOpened {
+
+            /**
+             * Constructs a new ForwardOpened.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IForwardOpened);
+
+            /** ForwardOpened localPort. */
+            public localPort: number;
+
+            /**
+             * Creates a new ForwardOpened instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ForwardOpened instance
+             */
+            public static create(properties?: muster.v1.IForwardOpened): muster.v1.ForwardOpened;
+
+            /**
+             * Encodes the specified ForwardOpened message. Does not implicitly {@link muster.v1.ForwardOpened.verify|verify} messages.
+             * @param message ForwardOpened message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IForwardOpened, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ForwardOpened message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ForwardOpened
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.ForwardOpened;
+
+            /**
+             * Gets the default type url for ForwardOpened
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -4005,11 +4281,75 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a TerminalSource. */
+        interface ITerminalSource {
+
+            /** TerminalSource source */
+            source?: (string|null);
+
+            /** TerminalSource label */
+            label?: (string|null);
+        }
+
+        /** Represents a TerminalSource. */
+        class TerminalSource implements ITerminalSource {
+
+            /**
+             * Constructs a new TerminalSource.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.ITerminalSource);
+
+            /** TerminalSource source. */
+            public source: string;
+
+            /** TerminalSource label. */
+            public label: string;
+
+            /**
+             * Creates a new TerminalSource instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TerminalSource instance
+             */
+            public static create(properties?: muster.v1.ITerminalSource): muster.v1.TerminalSource;
+
+            /**
+             * Encodes the specified TerminalSource message. Does not implicitly {@link muster.v1.TerminalSource.verify|verify} messages.
+             * @param message TerminalSource message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.ITerminalSource, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TerminalSource message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TerminalSource
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.TerminalSource;
+
+            /**
+             * Gets the default type url for TerminalSource
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a TerminalSessionList. */
         interface ITerminalSessionList {
 
             /** TerminalSessionList sessions */
             sessions?: (muster.v1.ITerminalSession[]|null);
+
+            /** TerminalSessionList sources */
+            sources?: (muster.v1.ITerminalSource[]|null);
+
+            /** TerminalSessionList errors */
+            errors?: (string[]|null);
         }
 
         /** Represents a TerminalSessionList. */
@@ -4023,6 +4363,12 @@ export namespace muster {
 
             /** TerminalSessionList sessions. */
             public sessions: muster.v1.ITerminalSession[];
+
+            /** TerminalSessionList sources. */
+            public sources: muster.v1.ITerminalSource[];
+
+            /** TerminalSessionList errors. */
+            public errors: string[];
 
             /**
              * Creates a new TerminalSessionList instance using the specified properties.
@@ -4208,6 +4554,15 @@ export namespace muster {
 
             /** TerminalFrame ended */
             ended?: (boolean|null);
+
+            /** TerminalFrame desktopAttachCommand */
+            desktopAttachCommand?: (string|null);
+
+            /** TerminalFrame iterm2AttachCommand */
+            iterm2AttachCommand?: (string|null);
+
+            /** TerminalFrame nativeSources */
+            nativeSources?: (muster.v1.ITerminalSource[]|null);
         }
 
         /** Represents a TerminalFrame. */
@@ -4245,6 +4600,15 @@ export namespace muster {
 
             /** TerminalFrame ended. */
             public ended: boolean;
+
+            /** TerminalFrame desktopAttachCommand. */
+            public desktopAttachCommand: string;
+
+            /** TerminalFrame iterm2AttachCommand. */
+            public iterm2AttachCommand: string;
+
+            /** TerminalFrame nativeSources. */
+            public nativeSources: muster.v1.ITerminalSource[];
 
             /**
              * Creates a new TerminalFrame instance using the specified properties.
@@ -4351,6 +4715,15 @@ export namespace muster {
 
             /** TerminalCreateRequest background */
             background?: (boolean|null);
+
+            /** TerminalCreateRequest source */
+            source?: (string|null);
+
+            /** TerminalCreateRequest managedSession */
+            managedSession?: (string|null);
+
+            /** TerminalCreateRequest opId */
+            opId?: (string|null);
         }
 
         /** Represents a TerminalCreateRequest. */
@@ -4367,6 +4740,15 @@ export namespace muster {
 
             /** TerminalCreateRequest background. */
             public background: boolean;
+
+            /** TerminalCreateRequest source. */
+            public source: string;
+
+            /** TerminalCreateRequest managedSession. */
+            public managedSession: string;
+
+            /** TerminalCreateRequest opId. */
+            public opId: string;
 
             /**
              * Creates a new TerminalCreateRequest instance using the specified properties.
@@ -4914,6 +5296,12 @@ export namespace muster {
 
             /** AgentWatchRequest session */
             session?: (string|null);
+
+            /** AgentWatchRequest catalogOnly */
+            catalogOnly?: (boolean|null);
+
+            /** AgentWatchRequest limit */
+            limit?: (number|null);
         }
 
         /** Represents an AgentWatchRequest. */
@@ -4927,6 +5315,12 @@ export namespace muster {
 
             /** AgentWatchRequest session. */
             public session: string;
+
+            /** AgentWatchRequest catalogOnly. */
+            public catalogOnly: boolean;
+
+            /** AgentWatchRequest limit. */
+            public limit: number;
 
             /**
              * Creates a new AgentWatchRequest instance using the specified properties.
@@ -7865,6 +8259,1098 @@ export namespace muster {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+
+        /** Properties of a DevicePresenceRequest. */
+        interface IDevicePresenceRequest {
+
+            /** DevicePresenceRequest publicKey */
+            publicKey?: (Uint8Array|null);
+        }
+
+        /** Represents a DevicePresenceRequest. */
+        class DevicePresenceRequest implements IDevicePresenceRequest {
+
+            /**
+             * Constructs a new DevicePresenceRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDevicePresenceRequest);
+
+            /** DevicePresenceRequest publicKey. */
+            public publicKey: Uint8Array;
+
+            /**
+             * Creates a new DevicePresenceRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DevicePresenceRequest instance
+             */
+            public static create(properties?: muster.v1.IDevicePresenceRequest): muster.v1.DevicePresenceRequest;
+
+            /**
+             * Encodes the specified DevicePresenceRequest message. Does not implicitly {@link muster.v1.DevicePresenceRequest.verify|verify} messages.
+             * @param message DevicePresenceRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDevicePresenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DevicePresenceRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DevicePresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DevicePresenceRequest;
+
+            /**
+             * Gets the default type url for DevicePresenceRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a NetworkPresenceRequest. */
+        interface INetworkPresenceRequest {
+
+            /** NetworkPresenceRequest deviceId */
+            deviceId?: (string|null);
+
+            /** NetworkPresenceRequest grantLockedControl */
+            grantLockedControl?: (boolean|null);
+
+            /** NetworkPresenceRequest revoke */
+            revoke?: (boolean|null);
+        }
+
+        /** Represents a NetworkPresenceRequest. */
+        class NetworkPresenceRequest implements INetworkPresenceRequest {
+
+            /**
+             * Constructs a new NetworkPresenceRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.INetworkPresenceRequest);
+
+            /** NetworkPresenceRequest deviceId. */
+            public deviceId: string;
+
+            /** NetworkPresenceRequest grantLockedControl. */
+            public grantLockedControl: boolean;
+
+            /** NetworkPresenceRequest revoke. */
+            public revoke: boolean;
+
+            /**
+             * Creates a new NetworkPresenceRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NetworkPresenceRequest instance
+             */
+            public static create(properties?: muster.v1.INetworkPresenceRequest): muster.v1.NetworkPresenceRequest;
+
+            /**
+             * Encodes the specified NetworkPresenceRequest message. Does not implicitly {@link muster.v1.NetworkPresenceRequest.verify|verify} messages.
+             * @param message NetworkPresenceRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.INetworkPresenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NetworkPresenceRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NetworkPresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.NetworkPresenceRequest;
+
+            /**
+             * Gets the default type url for NetworkPresenceRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a PresenceEnrollment. */
+        interface IPresenceEnrollment {
+
+            /** PresenceEnrollment binding */
+            binding?: (Uint8Array|null);
+
+            /** PresenceEnrollment rosterEntries */
+            rosterEntries?: (Uint8Array[]|null);
+        }
+
+        /** Represents a PresenceEnrollment. */
+        class PresenceEnrollment implements IPresenceEnrollment {
+
+            /**
+             * Constructs a new PresenceEnrollment.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IPresenceEnrollment);
+
+            /** PresenceEnrollment binding. */
+            public binding: Uint8Array;
+
+            /** PresenceEnrollment rosterEntries. */
+            public rosterEntries: Uint8Array[];
+
+            /**
+             * Creates a new PresenceEnrollment instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns PresenceEnrollment instance
+             */
+            public static create(properties?: muster.v1.IPresenceEnrollment): muster.v1.PresenceEnrollment;
+
+            /**
+             * Encodes the specified PresenceEnrollment message. Does not implicitly {@link muster.v1.PresenceEnrollment.verify|verify} messages.
+             * @param message PresenceEnrollment message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IPresenceEnrollment, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a PresenceEnrollment message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns PresenceEnrollment
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.PresenceEnrollment;
+
+            /**
+             * Gets the default type url for PresenceEnrollment
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a DeviceInstallPresenceRequest. */
+        interface IDeviceInstallPresenceRequest {
+
+            /** DeviceInstallPresenceRequest enrollment */
+            enrollment?: (muster.v1.IPresenceEnrollment|null);
+        }
+
+        /** Represents a DeviceInstallPresenceRequest. */
+        class DeviceInstallPresenceRequest implements IDeviceInstallPresenceRequest {
+
+            /**
+             * Constructs a new DeviceInstallPresenceRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDeviceInstallPresenceRequest);
+
+            /** DeviceInstallPresenceRequest enrollment. */
+            public enrollment?: (muster.v1.IPresenceEnrollment|null);
+
+            /**
+             * Creates a new DeviceInstallPresenceRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DeviceInstallPresenceRequest instance
+             */
+            public static create(properties?: muster.v1.IDeviceInstallPresenceRequest): muster.v1.DeviceInstallPresenceRequest;
+
+            /**
+             * Encodes the specified DeviceInstallPresenceRequest message. Does not implicitly {@link muster.v1.DeviceInstallPresenceRequest.verify|verify} messages.
+             * @param message DeviceInstallPresenceRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDeviceInstallPresenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DeviceInstallPresenceRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DeviceInstallPresenceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DeviceInstallPresenceRequest;
+
+            /**
+             * Gets the default type url for DeviceInstallPresenceRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a PresenceInfo. */
+        interface IPresenceInfo {
+
+            /** PresenceInfo publicKey */
+            publicKey?: (Uint8Array|null);
+
+            /** PresenceInfo enrollment */
+            enrollment?: (muster.v1.IPresenceEnrollment|null);
+
+            /** PresenceInfo enrolled */
+            enrolled?: (boolean|null);
+        }
+
+        /** Represents a PresenceInfo. */
+        class PresenceInfo implements IPresenceInfo {
+
+            /**
+             * Constructs a new PresenceInfo.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IPresenceInfo);
+
+            /** PresenceInfo publicKey. */
+            public publicKey: Uint8Array;
+
+            /** PresenceInfo enrollment. */
+            public enrollment?: (muster.v1.IPresenceEnrollment|null);
+
+            /** PresenceInfo enrolled. */
+            public enrolled: boolean;
+
+            /**
+             * Creates a new PresenceInfo instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns PresenceInfo instance
+             */
+            public static create(properties?: muster.v1.IPresenceInfo): muster.v1.PresenceInfo;
+
+            /**
+             * Encodes the specified PresenceInfo message. Does not implicitly {@link muster.v1.PresenceInfo.verify|verify} messages.
+             * @param message PresenceInfo message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IPresenceInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a PresenceInfo message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns PresenceInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.PresenceInfo;
+
+            /**
+             * Gets the default type url for PresenceInfo
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaRequest. */
+        interface IMulticaRequest {
+
+            /** MulticaRequest action */
+            action?: (muster.v1.MulticaRequest.Action|null);
+
+            /** MulticaRequest dataDir */
+            dataDir?: (string|null);
+
+            /** MulticaRequest installerUrl */
+            installerUrl?: (string|null);
+
+            /** MulticaRequest serverUrl */
+            serverUrl?: (string|null);
+
+            /** MulticaRequest appUrl */
+            appUrl?: (string|null);
+
+            /** MulticaRequest keepAlive */
+            keepAlive?: (boolean|null);
+
+            /** MulticaRequest containerName */
+            containerName?: (string|null);
+        }
+
+        /** Represents a MulticaRequest. */
+        class MulticaRequest implements IMulticaRequest {
+
+            /**
+             * Constructs a new MulticaRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaRequest);
+
+            /** MulticaRequest action. */
+            public action: muster.v1.MulticaRequest.Action;
+
+            /** MulticaRequest dataDir. */
+            public dataDir: string;
+
+            /** MulticaRequest installerUrl. */
+            public installerUrl: string;
+
+            /** MulticaRequest serverUrl. */
+            public serverUrl: string;
+
+            /** MulticaRequest appUrl. */
+            public appUrl: string;
+
+            /** MulticaRequest keepAlive. */
+            public keepAlive: boolean;
+
+            /** MulticaRequest containerName. */
+            public containerName: string;
+
+            /**
+             * Creates a new MulticaRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaRequest instance
+             */
+            public static create(properties?: muster.v1.IMulticaRequest): muster.v1.MulticaRequest;
+
+            /**
+             * Encodes the specified MulticaRequest message. Does not implicitly {@link muster.v1.MulticaRequest.verify|verify} messages.
+             * @param message MulticaRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaRequest;
+
+            /**
+             * Gets the default type url for MulticaRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace MulticaRequest {
+
+            /** Action enum. */
+            enum Action {
+                CHECK = 0,
+                SAVE = 1,
+                INSTALL = 2
+            }
+        }
+
+        /** Properties of a MulticaStatus. */
+        interface IMulticaStatus {
+
+            /** MulticaStatus supported */
+            supported?: (boolean|null);
+
+            /** MulticaStatus installed */
+            installed?: (boolean|null);
+
+            /** MulticaStatus running */
+            running?: (boolean|null);
+
+            /** MulticaStatus dataDir */
+            dataDir?: (string|null);
+
+            /** MulticaStatus installerUrl */
+            installerUrl?: (string|null);
+
+            /** MulticaStatus serverUrl */
+            serverUrl?: (string|null);
+
+            /** MulticaStatus appUrl */
+            appUrl?: (string|null);
+
+            /** MulticaStatus keepAlive */
+            keepAlive?: (boolean|null);
+
+            /** MulticaStatus containerName */
+            containerName?: (string|null);
+
+            /** MulticaStatus message */
+            message?: (string|null);
+
+            /** MulticaStatus loginCommand */
+            loginCommand?: (string|null);
+
+            /** MulticaStatus busy */
+            busy?: (boolean|null);
+        }
+
+        /** Represents a MulticaStatus. */
+        class MulticaStatus implements IMulticaStatus {
+
+            /**
+             * Constructs a new MulticaStatus.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaStatus);
+
+            /** MulticaStatus supported. */
+            public supported: boolean;
+
+            /** MulticaStatus installed. */
+            public installed: boolean;
+
+            /** MulticaStatus running. */
+            public running: boolean;
+
+            /** MulticaStatus dataDir. */
+            public dataDir: string;
+
+            /** MulticaStatus installerUrl. */
+            public installerUrl: string;
+
+            /** MulticaStatus serverUrl. */
+            public serverUrl: string;
+
+            /** MulticaStatus appUrl. */
+            public appUrl: string;
+
+            /** MulticaStatus keepAlive. */
+            public keepAlive: boolean;
+
+            /** MulticaStatus containerName. */
+            public containerName: string;
+
+            /** MulticaStatus message. */
+            public message: string;
+
+            /** MulticaStatus loginCommand. */
+            public loginCommand: string;
+
+            /** MulticaStatus busy. */
+            public busy: boolean;
+
+            /**
+             * Creates a new MulticaStatus instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaStatus instance
+             */
+            public static create(properties?: muster.v1.IMulticaStatus): muster.v1.MulticaStatus;
+
+            /**
+             * Encodes the specified MulticaStatus message. Does not implicitly {@link muster.v1.MulticaStatus.verify|verify} messages.
+             * @param message MulticaStatus message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaStatus message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaStatus;
+
+            /**
+             * Gets the default type url for MulticaStatus
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaBrowseRequest. */
+        interface IMulticaBrowseRequest {
+
+            /** MulticaBrowseRequest workspaceId */
+            workspaceId?: (string|null);
+
+            /** MulticaBrowseRequest offset */
+            offset?: (number|null);
+
+            /** MulticaBrowseRequest issueId */
+            issueId?: (string|null);
+
+            /** MulticaBrowseRequest agentId */
+            agentId?: (string|null);
+        }
+
+        /** Represents a MulticaBrowseRequest. */
+        class MulticaBrowseRequest implements IMulticaBrowseRequest {
+
+            /**
+             * Constructs a new MulticaBrowseRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaBrowseRequest);
+
+            /** MulticaBrowseRequest workspaceId. */
+            public workspaceId: string;
+
+            /** MulticaBrowseRequest offset. */
+            public offset: number;
+
+            /** MulticaBrowseRequest issueId. */
+            public issueId: string;
+
+            /** MulticaBrowseRequest agentId. */
+            public agentId: string;
+
+            /**
+             * Creates a new MulticaBrowseRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaBrowseRequest instance
+             */
+            public static create(properties?: muster.v1.IMulticaBrowseRequest): muster.v1.MulticaBrowseRequest;
+
+            /**
+             * Encodes the specified MulticaBrowseRequest message. Does not implicitly {@link muster.v1.MulticaBrowseRequest.verify|verify} messages.
+             * @param message MulticaBrowseRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaBrowseRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaBrowseRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaBrowseRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaBrowseRequest;
+
+            /**
+             * Gets the default type url for MulticaBrowseRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaWorkspace. */
+        interface IMulticaWorkspace {
+
+            /** MulticaWorkspace id */
+            id?: (string|null);
+
+            /** MulticaWorkspace name */
+            name?: (string|null);
+        }
+
+        /** Represents a MulticaWorkspace. */
+        class MulticaWorkspace implements IMulticaWorkspace {
+
+            /**
+             * Constructs a new MulticaWorkspace.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaWorkspace);
+
+            /** MulticaWorkspace id. */
+            public id: string;
+
+            /** MulticaWorkspace name. */
+            public name: string;
+
+            /**
+             * Creates a new MulticaWorkspace instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaWorkspace instance
+             */
+            public static create(properties?: muster.v1.IMulticaWorkspace): muster.v1.MulticaWorkspace;
+
+            /**
+             * Encodes the specified MulticaWorkspace message. Does not implicitly {@link muster.v1.MulticaWorkspace.verify|verify} messages.
+             * @param message MulticaWorkspace message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaWorkspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaWorkspace message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaWorkspace
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaWorkspace;
+
+            /**
+             * Gets the default type url for MulticaWorkspace
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaIssue. */
+        interface IMulticaIssue {
+
+            /** MulticaIssue id */
+            id?: (string|null);
+
+            /** MulticaIssue identifier */
+            identifier?: (string|null);
+
+            /** MulticaIssue title */
+            title?: (string|null);
+
+            /** MulticaIssue description */
+            description?: (string|null);
+
+            /** MulticaIssue status */
+            status?: (string|null);
+
+            /** MulticaIssue priority */
+            priority?: (string|null);
+
+            /** MulticaIssue assigneeId */
+            assigneeId?: (string|null);
+
+            /** MulticaIssue assigneeType */
+            assigneeType?: (string|null);
+
+            /** MulticaIssue updatedAt */
+            updatedAt?: (string|null);
+        }
+
+        /** Represents a MulticaIssue. */
+        class MulticaIssue implements IMulticaIssue {
+
+            /**
+             * Constructs a new MulticaIssue.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaIssue);
+
+            /** MulticaIssue id. */
+            public id: string;
+
+            /** MulticaIssue identifier. */
+            public identifier: string;
+
+            /** MulticaIssue title. */
+            public title: string;
+
+            /** MulticaIssue description. */
+            public description: string;
+
+            /** MulticaIssue status. */
+            public status: string;
+
+            /** MulticaIssue priority. */
+            public priority: string;
+
+            /** MulticaIssue assigneeId. */
+            public assigneeId: string;
+
+            /** MulticaIssue assigneeType. */
+            public assigneeType: string;
+
+            /** MulticaIssue updatedAt. */
+            public updatedAt: string;
+
+            /**
+             * Creates a new MulticaIssue instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaIssue instance
+             */
+            public static create(properties?: muster.v1.IMulticaIssue): muster.v1.MulticaIssue;
+
+            /**
+             * Encodes the specified MulticaIssue message. Does not implicitly {@link muster.v1.MulticaIssue.verify|verify} messages.
+             * @param message MulticaIssue message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaIssue, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaIssue message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaIssue
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaIssue;
+
+            /**
+             * Gets the default type url for MulticaIssue
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaAgent. */
+        interface IMulticaAgent {
+
+            /** MulticaAgent id */
+            id?: (string|null);
+
+            /** MulticaAgent name */
+            name?: (string|null);
+
+            /** MulticaAgent description */
+            description?: (string|null);
+
+            /** MulticaAgent status */
+            status?: (string|null);
+
+            /** MulticaAgent runtimeId */
+            runtimeId?: (string|null);
+
+            /** MulticaAgent model */
+            model?: (string|null);
+        }
+
+        /** Represents a MulticaAgent. */
+        class MulticaAgent implements IMulticaAgent {
+
+            /**
+             * Constructs a new MulticaAgent.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaAgent);
+
+            /** MulticaAgent id. */
+            public id: string;
+
+            /** MulticaAgent name. */
+            public name: string;
+
+            /** MulticaAgent description. */
+            public description: string;
+
+            /** MulticaAgent status. */
+            public status: string;
+
+            /** MulticaAgent runtimeId. */
+            public runtimeId: string;
+
+            /** MulticaAgent model. */
+            public model: string;
+
+            /**
+             * Creates a new MulticaAgent instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaAgent instance
+             */
+            public static create(properties?: muster.v1.IMulticaAgent): muster.v1.MulticaAgent;
+
+            /**
+             * Encodes the specified MulticaAgent message. Does not implicitly {@link muster.v1.MulticaAgent.verify|verify} messages.
+             * @param message MulticaAgent message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaAgent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaAgent message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaAgent
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaAgent;
+
+            /**
+             * Gets the default type url for MulticaAgent
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaRuntime. */
+        interface IMulticaRuntime {
+
+            /** MulticaRuntime id */
+            id?: (string|null);
+
+            /** MulticaRuntime name */
+            name?: (string|null);
+
+            /** MulticaRuntime provider */
+            provider?: (string|null);
+
+            /** MulticaRuntime status */
+            status?: (string|null);
+
+            /** MulticaRuntime lastSeenAt */
+            lastSeenAt?: (string|null);
+
+            /** MulticaRuntime deviceInfo */
+            deviceInfo?: (string|null);
+        }
+
+        /** Represents a MulticaRuntime. */
+        class MulticaRuntime implements IMulticaRuntime {
+
+            /**
+             * Constructs a new MulticaRuntime.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaRuntime);
+
+            /** MulticaRuntime id. */
+            public id: string;
+
+            /** MulticaRuntime name. */
+            public name: string;
+
+            /** MulticaRuntime provider. */
+            public provider: string;
+
+            /** MulticaRuntime status. */
+            public status: string;
+
+            /** MulticaRuntime lastSeenAt. */
+            public lastSeenAt: string;
+
+            /** MulticaRuntime deviceInfo. */
+            public deviceInfo: string;
+
+            /**
+             * Creates a new MulticaRuntime instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaRuntime instance
+             */
+            public static create(properties?: muster.v1.IMulticaRuntime): muster.v1.MulticaRuntime;
+
+            /**
+             * Encodes the specified MulticaRuntime message. Does not implicitly {@link muster.v1.MulticaRuntime.verify|verify} messages.
+             * @param message MulticaRuntime message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaRuntime, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaRuntime message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaRuntime
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaRuntime;
+
+            /**
+             * Gets the default type url for MulticaRuntime
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaPage. */
+        interface IMulticaPage {
+
+            /** MulticaPage workspaces */
+            workspaces?: (muster.v1.IMulticaWorkspace[]|null);
+
+            /** MulticaPage workspaceId */
+            workspaceId?: (string|null);
+
+            /** MulticaPage issues */
+            issues?: (muster.v1.IMulticaIssue[]|null);
+
+            /** MulticaPage agents */
+            agents?: (muster.v1.IMulticaAgent[]|null);
+
+            /** MulticaPage runtimes */
+            runtimes?: (muster.v1.IMulticaRuntime[]|null);
+
+            /** MulticaPage offset */
+            offset?: (number|null);
+
+            /** MulticaPage hasMore */
+            hasMore?: (boolean|null);
+
+            /** MulticaPage issue */
+            issue?: (muster.v1.IMulticaIssue|null);
+
+            /** MulticaPage agent */
+            agent?: (muster.v1.IMulticaAgent|null);
+
+            /** MulticaPage busy */
+            busy?: (boolean|null);
+
+            /** MulticaPage error */
+            error?: (string|null);
+
+            /** MulticaPage nextOffset */
+            nextOffset?: (number|null);
+
+            /** MulticaPage previousOffset */
+            previousOffset?: (number|null);
+        }
+
+        /** Represents a MulticaPage. */
+        class MulticaPage implements IMulticaPage {
+
+            /**
+             * Constructs a new MulticaPage.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaPage);
+
+            /** MulticaPage workspaces. */
+            public workspaces: muster.v1.IMulticaWorkspace[];
+
+            /** MulticaPage workspaceId. */
+            public workspaceId: string;
+
+            /** MulticaPage issues. */
+            public issues: muster.v1.IMulticaIssue[];
+
+            /** MulticaPage agents. */
+            public agents: muster.v1.IMulticaAgent[];
+
+            /** MulticaPage runtimes. */
+            public runtimes: muster.v1.IMulticaRuntime[];
+
+            /** MulticaPage offset. */
+            public offset: number;
+
+            /** MulticaPage hasMore. */
+            public hasMore: boolean;
+
+            /** MulticaPage issue. */
+            public issue?: (muster.v1.IMulticaIssue|null);
+
+            /** MulticaPage agent. */
+            public agent?: (muster.v1.IMulticaAgent|null);
+
+            /** MulticaPage busy. */
+            public busy: boolean;
+
+            /** MulticaPage error. */
+            public error: string;
+
+            /** MulticaPage nextOffset. */
+            public nextOffset: number;
+
+            /** MulticaPage previousOffset. */
+            public previousOffset: number;
+
+            /**
+             * Creates a new MulticaPage instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaPage instance
+             */
+            public static create(properties?: muster.v1.IMulticaPage): muster.v1.MulticaPage;
+
+            /**
+             * Encodes the specified MulticaPage message. Does not implicitly {@link muster.v1.MulticaPage.verify|verify} messages.
+             * @param message MulticaPage message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaPage, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaPage message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaPage
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaPage;
+
+            /**
+             * Gets the default type url for MulticaPage
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentNativeCreateRequest. */
+        interface IAgentNativeCreateRequest {
+
+            /** AgentNativeCreateRequest opId */
+            opId?: (string|null);
+
+            /** AgentNativeCreateRequest provider */
+            provider?: (string|null);
+
+            /** AgentNativeCreateRequest directory */
+            directory?: (string|null);
+
+            /** AgentNativeCreateRequest prompt */
+            prompt?: (string|null);
+        }
+
+        /** Represents an AgentNativeCreateRequest. */
+        class AgentNativeCreateRequest implements IAgentNativeCreateRequest {
+
+            /**
+             * Constructs a new AgentNativeCreateRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentNativeCreateRequest);
+
+            /** AgentNativeCreateRequest opId. */
+            public opId: string;
+
+            /** AgentNativeCreateRequest provider. */
+            public provider: string;
+
+            /** AgentNativeCreateRequest directory. */
+            public directory: string;
+
+            /** AgentNativeCreateRequest prompt. */
+            public prompt: string;
+
+            /**
+             * Creates a new AgentNativeCreateRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentNativeCreateRequest instance
+             */
+            public static create(properties?: muster.v1.IAgentNativeCreateRequest): muster.v1.AgentNativeCreateRequest;
+
+            /**
+             * Encodes the specified AgentNativeCreateRequest message. Does not implicitly {@link muster.v1.AgentNativeCreateRequest.verify|verify} messages.
+             * @param message AgentNativeCreateRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentNativeCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentNativeCreateRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentNativeCreateRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentNativeCreateRequest;
+
+            /**
+             * Gets the default type url for AgentNativeCreateRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Namespace app. */
@@ -7935,6 +9421,12 @@ export namespace muster {
 
             /** Intent desktopUpdateAction */
             desktopUpdateAction?: (muster.app.IDesktopUpdateAction|null);
+
+            /** Intent multica */
+            multica?: (muster.v1.IMulticaRequest|null);
+
+            /** Intent multicaBrowse */
+            multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
 
             /** Intent openAgents */
             openAgents?: (muster.app.IOpenAgents|null);
@@ -8102,6 +9594,12 @@ export namespace muster {
             /** Intent desktopUpdateAction. */
             public desktopUpdateAction?: (muster.app.IDesktopUpdateAction|null);
 
+            /** Intent multica. */
+            public multica?: (muster.v1.IMulticaRequest|null);
+
+            /** Intent multicaBrowse. */
+            public multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
+
             /** Intent openAgents. */
             public openAgents?: (muster.app.IOpenAgents|null);
 
@@ -8196,7 +9694,7 @@ export namespace muster {
             public setPushToken?: (muster.app.ISetPushToken|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -10427,6 +11925,12 @@ export namespace muster {
 
             /** TerminalCreate profile */
             profile?: (string|null);
+
+            /** TerminalCreate source */
+            source?: (string|null);
+
+            /** TerminalCreate attachManaged */
+            attachManaged?: (boolean|null);
         }
 
         /** Represents a TerminalCreate. */
@@ -10440,6 +11944,12 @@ export namespace muster {
 
             /** TerminalCreate profile. */
             public profile: string;
+
+            /** TerminalCreate source. */
+            public source: string;
+
+            /** TerminalCreate attachManaged. */
+            public attachManaged: boolean;
 
             /**
              * Creates a new TerminalCreate instance using the specified properties.
@@ -11123,6 +12633,9 @@ export namespace muster {
 
             /** Effect activateNetwork */
             activateNetwork?: (muster.app.IActivateNetwork|null);
+
+            /** Effect sendDiagnostic */
+            sendDiagnostic?: (muster.app.ISendDiagnostic|null);
         }
 
         /** Represents an Effect. */
@@ -11167,8 +12680,11 @@ export namespace muster {
             /** Effect activateNetwork. */
             public activateNetwork?: (muster.app.IActivateNetwork|null);
 
+            /** Effect sendDiagnostic. */
+            public sendDiagnostic?: (muster.app.ISendDiagnostic|null);
+
             /** Effect ef. */
-            public ef?: ("scanQr"|"authenticate"|"notify"|"openUrl"|"cover"|"localAuth"|"authorizeDesktopHelper"|"restartDesktop"|"prepareDesktopUpdate"|"finishDesktopUpdate"|"activateNetwork");
+            public ef?: ("scanQr"|"authenticate"|"notify"|"openUrl"|"cover"|"localAuth"|"authorizeDesktopHelper"|"restartDesktop"|"prepareDesktopUpdate"|"finishDesktopUpdate"|"activateNetwork"|"sendDiagnostic");
 
             /**
              * Creates a new Effect instance using the specified properties.
@@ -11197,6 +12713,58 @@ export namespace muster {
 
             /**
              * Gets the default type url for Effect
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a SendDiagnostic. */
+        interface ISendDiagnostic {
+
+            /** SendDiagnostic json */
+            json?: (Uint8Array|null);
+        }
+
+        /** Represents a SendDiagnostic. */
+        class SendDiagnostic implements ISendDiagnostic {
+
+            /**
+             * Constructs a new SendDiagnostic.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.ISendDiagnostic);
+
+            /** SendDiagnostic json. */
+            public json: Uint8Array;
+
+            /**
+             * Creates a new SendDiagnostic instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SendDiagnostic instance
+             */
+            public static create(properties?: muster.app.ISendDiagnostic): muster.app.SendDiagnostic;
+
+            /**
+             * Encodes the specified SendDiagnostic message. Does not implicitly {@link muster.app.SendDiagnostic.verify|verify} messages.
+             * @param message SendDiagnostic message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.ISendDiagnostic, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SendDiagnostic message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SendDiagnostic
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.SendDiagnostic;
+
+            /**
+             * Gets the default type url for SendDiagnostic
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -11875,7 +13443,8 @@ export namespace muster {
             FILE = 11,
             GIT = 12,
             BROWSER = 13,
-            DESKTOP_CHATS = 14
+            DESKTOP_CHATS = 14,
+            MULTICA = 15
         }
 
         /** Properties of a ViewModel. */
@@ -11976,6 +13545,12 @@ export namespace muster {
 
             /** ViewModel deviceActions */
             deviceActions?: (muster.app.IDeviceActions|null);
+
+            /** ViewModel multica */
+            multica?: (muster.v1.IMulticaStatus|null);
+
+            /** ViewModel multicaPage */
+            multicaPage?: (muster.v1.IMulticaPage|null);
 
             /** ViewModel navigationPath */
             navigationPath?: (muster.app.Screen[]|null);
@@ -12085,6 +13660,12 @@ export namespace muster {
 
             /** ViewModel deviceActions. */
             public deviceActions?: (muster.app.IDeviceActions|null);
+
+            /** ViewModel multica. */
+            public multica?: (muster.v1.IMulticaStatus|null);
+
+            /** ViewModel multicaPage. */
+            public multicaPage?: (muster.v1.IMulticaPage|null);
 
             /** ViewModel navigationPath. */
             public navigationPath: muster.app.Screen[];
@@ -13738,6 +15319,9 @@ export namespace muster {
 
             /** TerminalsView canCreate */
             canCreate?: (boolean|null);
+
+            /** TerminalsView sources */
+            sources?: (muster.v1.ITerminalSource[]|null);
         }
 
         /** Represents a TerminalsView. */
@@ -13766,6 +15350,9 @@ export namespace muster {
 
             /** TerminalsView canCreate. */
             public canCreate: boolean;
+
+            /** TerminalsView sources. */
+            public sources: muster.v1.ITerminalSource[];
 
             /**
              * Creates a new TerminalsView instance using the specified properties.
@@ -13838,6 +15425,15 @@ export namespace muster {
 
             /** TerminalView canPaste */
             canPaste?: (boolean|null);
+
+            /** TerminalView desktopAttachCommand */
+            desktopAttachCommand?: (string|null);
+
+            /** TerminalView iterm2AttachCommand */
+            iterm2AttachCommand?: (string|null);
+
+            /** TerminalView nativeSources */
+            nativeSources?: (muster.v1.ITerminalSource[]|null);
         }
 
         /** Represents a TerminalView. */
@@ -13884,6 +15480,15 @@ export namespace muster {
 
             /** TerminalView canPaste. */
             public canPaste: boolean;
+
+            /** TerminalView desktopAttachCommand. */
+            public desktopAttachCommand: string;
+
+            /** TerminalView iterm2AttachCommand. */
+            public iterm2AttachCommand: string;
+
+            /** TerminalView nativeSources. */
+            public nativeSources: muster.v1.ITerminalSource[];
 
             /**
              * Creates a new TerminalView instance using the specified properties.
@@ -14957,6 +16562,70 @@ export namespace muster {
 
             /**
              * Gets the default type url for CodeRunView
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a PendingAgentSend. */
+        interface IPendingAgentSend {
+
+            /** PendingAgentSend request */
+            request?: (muster.v1.IAgentSendRequest|null);
+
+            /** PendingAgentSend draft */
+            draft?: (muster.app.IChatDraft|null);
+
+            /** PendingAgentSend draftId */
+            draftId?: (string|null);
+        }
+
+        /** Represents a PendingAgentSend. */
+        class PendingAgentSend implements IPendingAgentSend {
+
+            /**
+             * Constructs a new PendingAgentSend.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IPendingAgentSend);
+
+            /** PendingAgentSend request. */
+            public request?: (muster.v1.IAgentSendRequest|null);
+
+            /** PendingAgentSend draft. */
+            public draft?: (muster.app.IChatDraft|null);
+
+            /** PendingAgentSend draftId. */
+            public draftId: string;
+
+            /**
+             * Creates a new PendingAgentSend instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns PendingAgentSend instance
+             */
+            public static create(properties?: muster.app.IPendingAgentSend): muster.app.PendingAgentSend;
+
+            /**
+             * Encodes the specified PendingAgentSend message. Does not implicitly {@link muster.app.PendingAgentSend.verify|verify} messages.
+             * @param message PendingAgentSend message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IPendingAgentSend, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a PendingAgentSend message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns PendingAgentSend
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.PendingAgentSend;
+
+            /**
+             * Gets the default type url for PendingAgentSend
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
