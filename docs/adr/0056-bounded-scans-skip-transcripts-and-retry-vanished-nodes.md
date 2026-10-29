@@ -117,3 +117,10 @@ count, time and web-area count when a session scan stops.
 - **Runtime acceptance:** not performed. A send with five or more conversation
   views open, and a send whose control scan meets a vanished node, still need
   acceptance on an installed build.
+
+## Follow-up
+
+[ADR 0062](0062-scoped-composers-and-send-preparation-outcomes.md) supersedes
+only the requirement for one raw matching editor in the entire resolved view:
+an explicit main/auxiliary scope can establish one eligible composer. All
+scan-completeness, bounded-retry and session-identity decisions remain in force.

@@ -879,6 +879,13 @@ Missing/replaced composers can settle within the echo window; ambiguous
 buttons remain rejected. Live authorization/input checks continue before
 focus and the single final press; a press is never automatically retried.
 
+Codex's `composer_scope = "main-conversation"` profile can resolve duplicate
+prompt editors only when one is in the main landmark and all others have
+explicit auxiliary-pane ancestry. Unknown ancestry or two main editors still
+refuse. The selected editor's submit cannot come from a foreign editor's branch
+or an ancestor shared with it. Single-editor layouts remain compatible unless
+that editor is explicitly auxiliary. See [ADR 0062](adr/0062-scoped-composers-and-send-preparation-outcomes.md).
+
 ## CLI protocol access and read-only inspection
 
 The installed CLI is `/Applications/Muster.app/Contents/Helpers/muster` on macOS.

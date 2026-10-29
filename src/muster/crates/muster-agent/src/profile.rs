@@ -192,6 +192,7 @@ impl ApprovalScope {
 pub struct Controls {
     /// The text area a prompt is drafted in.
     pub composer: Selector,
+    pub composer_scope: crate::native_scan::ComposerScope,
     /// What the composer reports as its value while empty.
     pub placeholders: &'static [&'static str],
     pub draft: Draft,

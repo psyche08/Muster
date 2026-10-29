@@ -178,6 +178,8 @@ struct ControlsSection {
     approve: SelectorSpec,
     #[serde(default)]
     approval_scope: Option<String>,
+    #[serde(default)]
+    composer_scope: Option<String>,
     sessions: SessionsSpec,
     queue: Option<QueueSpec>,
     questions: Option<QuestionsSpec>,
@@ -674,6 +676,11 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         let send = self.selector(&at, &spec.send);
         let stop = self.selector(&at, &spec.stop);
         let approve = self.selector(&at, &spec.approve);
+        let composer_scope = match spec.composer_scope.as_deref() {
+            None | Some("web-area") => "crate::native_scan::ComposerScope::WebArea",
+            Some("main-conversation") => "crate::native_scan::ComposerScope::MainConversation",
+            Some(other) => at.fail(format!("invalid composer_scope {other:?}")),
+        };
         let approval_scope = match spec.approval_scope.as_deref() {
             None | Some("web-area") => "ApprovalScope::WebArea",
             Some("main-conversation") => "ApprovalScope::MainConversation",
@@ -681,7 +688,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
+            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
             list(&spec.placeholders),
         );
     }

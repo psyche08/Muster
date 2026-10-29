@@ -95,11 +95,31 @@ pub fn composer_submits(nodes: &[ControlNode]) -> Vec<usize> {
     if composers.len() != 1 {
         return Vec::new();
     }
-    let mut has_composer: Vec<_> = nodes.iter().map(|n| n.composer).collect();
+    composer_submits_for(nodes, composers[0])
+}
+
+/// A selected editor may coexist with auxiliary editors. A submit must reach
+/// the selected editor before reaching any branch holding another editor.
+pub fn composer_submits_for(nodes: &[ControlNode], selected: usize) -> Vec<usize> {
+    if !nodes.get(selected).is_some_and(|n| n.composer)
+        || nodes
+            .iter()
+            .enumerate()
+            .any(|(i, n)| n.parent.is_some_and(|p| p >= i))
+    {
+        return Vec::new();
+    }
+    let mut has_composer: Vec<_> = (0..nodes.len()).map(|i| i == selected).collect();
+    let mut has_other: Vec<_> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| n.composer && i != selected)
+        .collect();
     let mut has_delete: Vec<_> = nodes.iter().map(|n| n.queued_delete).collect();
     for i in (0..nodes.len()).rev() {
         if let Some(p) = nodes[i].parent {
             has_composer[p] |= has_composer[i];
+            has_other[p] |= has_other[i];
             has_delete[p] |= has_delete[i];
         }
     }
@@ -114,6 +134,9 @@ pub fn composer_submits(nodes: &[ControlNode]) -> Vec<usize> {
             while let Some(p) = parent {
                 // The web area is not an acceptable composer scope.
                 nodes[p].parent?;
+                if has_other[p] {
+                    return None;
+                }
                 if has_composer[p] {
                     return Some(i);
                 }

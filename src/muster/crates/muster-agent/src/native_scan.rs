@@ -122,9 +122,178 @@ pub fn choose_view(views: &[ViewPlace]) -> Option<usize> {
     }
 }
 
+/// Where a provider's prompt editors may live inside its resolved web view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComposerScope {
+    WebArea,
+    MainConversation,
+}
+
+/// Return a global node index, never a guessed first/focused editor. Missing
+/// ancestry cannot disambiguate two live editors. Parents precede children.
+pub fn choose_composer(
+    scope: ComposerScope,
+    nodes: &[crate::native_send::ControlNode],
+    subroles: &[String],
+) -> Option<usize> {
+    if nodes.len() != subroles.len()
+        || nodes.iter().enumerate().any(|(i, n)| {
+            if i == 0 {
+                n.parent.is_some()
+            } else {
+                n.parent.is_none_or(|p| p >= i)
+            }
+        })
+    {
+        return None;
+    }
+    let candidates: Vec<_> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.composer)
+        .map(|(i, _)| i)
+        .collect();
+    if scope == ComposerScope::WebArea {
+        return (candidates.len() == 1).then(|| candidates[0]);
+    }
+    // Parents precede children, so classify all ancestry in one bounded pass.
+    let mut ancestry: Vec<(bool, bool)> = Vec::with_capacity(nodes.len());
+    let mut main = Vec::new();
+    let mut unknown = Vec::new();
+    for (index, node) in nodes.iter().enumerate() {
+        let (mut in_main, mut auxiliary) = node.parent.map(|p| ancestry[p]).unwrap_or_default();
+        in_main |= subroles[index] == "AXLandmarkMain";
+        auxiliary |= matches!(
+            subroles[index].as_str(),
+            "AXLandmarkComplementary" | "AXLandmarkNavigation" | "AXTabPanel"
+        );
+        ancestry.push((in_main, auxiliary));
+        if node.composer && !auxiliary {
+            if in_main {
+                main.push(index);
+            } else {
+                unknown.push(index);
+            }
+        }
+    }
+    match (main.as_slice(), unknown.as_slice()) {
+        ([only], []) => Some(*only),
+        ([], [only]) if candidates.len() == 1 => Some(*only),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn control(
+        parent: Option<usize>,
+        composer: bool,
+        submit: bool,
+    ) -> crate::native_send::ControlNode {
+        crate::native_send::ControlNode {
+            parent,
+            composer,
+            submit,
+            queued_delete: false,
+        }
+    }
+
+    #[test]
+    fn duplicate_composers_need_positive_main_and_auxiliary_evidence() {
+        // The resolved web view contains a main composer and an auxiliary pane.
+        let nodes = vec![
+            control(None, false, false),
+            control(Some(0), false, false),
+            control(Some(1), false, false),
+            control(Some(2), true, false),
+            control(Some(2), false, true),
+            control(Some(1), false, false),
+            control(Some(5), true, false),
+            control(Some(5), false, true),
+        ];
+        let mut roles = vec![String::new(); nodes.len()];
+        roles[1] = "AXLandmarkMain".into();
+        for role in [
+            "AXLandmarkComplementary",
+            "AXLandmarkNavigation",
+            "AXTabPanel",
+        ] {
+            roles[5] = role.into();
+            assert_eq!(
+                choose_composer(crate::profile::CODEX.composer_scope, &nodes, &roles),
+                Some(3)
+            );
+            assert_eq!(crate::native_send::composer_submits_for(&nodes, 3), vec![4]);
+        }
+        assert_eq!(
+            choose_composer(ComposerScope::WebArea, &nodes, &roles),
+            None
+        );
+        roles[5].clear(); // Two editors in the main conversation remain ambiguous.
+        assert_eq!(
+            choose_composer(crate::profile::CODEX.composer_scope, &nodes, &roles),
+            None
+        );
+        roles[1].clear(); // A main editor plus another with unknown ancestry is insufficient.
+        roles[2] = "AXLandmarkMain".into();
+        assert_eq!(
+            choose_composer(crate::profile::CODEX.composer_scope, &nodes, &roles),
+            None
+        );
+        roles[5] = "AXLandmarkComplementary".into();
+        assert_eq!(
+            choose_composer(crate::profile::CODEX.composer_scope, &nodes, &roles),
+            Some(3)
+        );
+        assert_eq!(
+            choose_composer(crate::profile::CODEX.composer_scope, &nodes, &roles[..2]),
+            None
+        );
+        let mut malformed = nodes;
+        malformed[1].parent = Some(6);
+        assert_eq!(
+            choose_composer(crate::profile::CODEX.composer_scope, &malformed, &roles),
+            None
+        );
+    }
+
+    #[test]
+    fn a_single_unlabelled_editor_remains_compatible_but_not_a_known_auxiliary() {
+        let nodes = vec![control(None, false, false), control(Some(0), true, false)];
+        let mut roles = vec![String::new(); nodes.len()];
+        assert_eq!(
+            choose_composer(ComposerScope::MainConversation, &nodes, &roles),
+            Some(1)
+        );
+        roles[1] = "AXLandmarkComplementary".into();
+        assert_eq!(
+            choose_composer(ComposerScope::MainConversation, &nodes, &roles),
+            None
+        );
+        assert_eq!(
+            choose_composer(ComposerScope::WebArea, &nodes, &roles),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn common_or_foreign_branches_cannot_supply_the_selected_editors_send() {
+        let nodes = vec![
+            control(None, false, false),
+            control(Some(0), false, false),
+            control(Some(1), false, false),
+            control(Some(2), true, false),
+            control(Some(1), false, false),
+            control(Some(4), true, false),
+            control(Some(4), false, true),
+            control(Some(1), false, true),
+        ];
+        assert!(crate::native_send::composer_submits_for(&nodes, 3).is_empty());
+        assert!(crate::native_send::composer_submits(&nodes).is_empty());
+        assert!(crate::native_send::composer_submits_for(&nodes, 100).is_empty());
+    }
 
     #[test]
     fn only_a_failed_node_read_is_walked_again_and_only_twice() {
