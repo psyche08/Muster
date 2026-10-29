@@ -1,5 +1,5 @@
 //! Read-only provider follow-up queues. Native controls remain the only write path.
-use crate::{Error, PendingInteraction};
+use crate::{Error, PendingInteraction, model::Provider};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -17,15 +17,22 @@ pub type Source = Arc<dyn Fn() -> Result<Vec<QueuedMessage>, Error> + Send + Syn
 pub struct QueuedMessage {
     pub id: String,
     source_id: String,
+    /// Retained when the app-server takes over a local deferred item. Physical
+    /// migration is not a new user submission.
+    client_source_id: Option<String>,
     pub text: String,
     pub can_send: bool,
 }
 impl QueuedMessage {
+    fn identities(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.source_id.as_str()).chain(self.client_source_id.as_deref())
+    }
     #[cfg(test)]
     pub(crate) fn test(source_id: &str, text: &str) -> Self {
         Self {
             id: format!("queued:000:{source_id}"),
             source_id: source_id.into(),
+            client_source_id: None,
             text: text.into(),
             can_send: true,
         }
@@ -163,6 +170,7 @@ pub(crate) fn read_claude(
             Some(QueuedMessage {
                 id: format!("queued:{index:03}:{hash}"),
                 source_id: format!("claude:{session}:{offset}"),
+                client_source_id: None,
                 text: text.clone(),
                 can_send: false,
             })
@@ -218,7 +226,8 @@ pub fn read_session(
                 .join("\n");
             let client = payload["clientUserMessageId"]
                 .as_str()
-                .or_else(|| payload["client_user_message_id"].as_str());
+                .or_else(|| payload["client_user_message_id"].as_str())
+                .filter(|id| !id.is_empty());
             if client.is_some_and(|id| result.iter().any(|m| m.source_id == format!("local:{id}")))
             {
                 continue;
@@ -227,6 +236,7 @@ pub fn read_session(
                 .map_err(|e| Error::Unavailable(e.to_string()))?;
             server.push(QueuedMessage {
                 source_id: format!("server:{id}"),
+                client_source_id: client.map(|id| format!("local:{id}")),
                 id: format!(
                     "queued:{:03}:{}",
                     server.len(),
@@ -271,14 +281,21 @@ fn input_text(input: &Value) -> Option<String> {
 /// A newly persisted queue item is acceptance, not model execution/completion.
 #[derive(Clone)]
 pub struct Admission {
+    provider: Provider,
     before: HashSet<String>,
     text: String,
     source: Source,
 }
 impl Admission {
-    pub fn new(source: Source, text: &str) -> Result<Self, Error> {
-        let before = source()?.iter().map(|m| m.source_id.clone()).collect();
+    pub fn new(source: Source, provider: &str, text: &str) -> Result<Self, Error> {
+        let provider = Provider::parse(provider)
+            .ok_or_else(|| Error::Invalid("Unknown queue provider".into()))?;
+        let before = source()?
+            .iter()
+            .flat_map(|m| m.identities().map(str::to_owned))
+            .collect();
         Ok(Self {
+            provider,
             before,
             text: text.trim_end().into(),
             source,
@@ -288,7 +305,10 @@ impl Admission {
         (self.source)().is_ok_and(|items| {
             items
                 .iter()
-                .filter(|m| !self.before.contains(&m.source_id) && m.text.trim_end() == self.text)
+                .filter(|m| {
+                    !m.identities().any(|id| self.before.contains(id))
+                        && crate::receipt::text_matches(self.provider, &self.text, &m.text)
+                })
                 .count()
                 == 1
         })
@@ -336,6 +356,7 @@ fn parse(bytes: &[u8]) -> Result<HashMap<String, Vec<QueuedMessage>>, Error> {
             let token = serde_json::to_vec(&(session, id, text, context)).map_err(|_| invalid())?;
             messages.push(QueuedMessage {
                 source_id: format!("local:{id}"),
+                client_source_id: None,
                 id: format!(
                     "queued:{position:03}:{}",
                     hex::encode(Sha256::digest(token))
@@ -383,6 +404,24 @@ pub fn ordered_interactions(items: &[PendingInteraction]) -> Vec<PendingInteract
         .collect()
 }
 
+/// Display accounting only: a clipped preview may describe an admitted send,
+/// but it must never settle a receipt or release an unconfirmed-write latch.
+/// Both comparisons preserve submitted literal Markdown; only the observed
+/// Codex representation is eligible for equal-label URL unwrapping.
+pub fn display_matches(provider: Option<Provider>, submitted: &str, preview: &str) -> bool {
+    let submitted = normalize(submitted);
+    let matches = |preview: &str| {
+        let preview = normalize(preview);
+        match preview.strip_suffix('…') {
+            Some(prefix) if !prefix.is_empty() => submitted.starts_with(prefix),
+            _ => submitted == preview,
+        }
+    };
+    matches(preview)
+        || (provider == Some(Provider::Codex)
+            && matches(&crate::receipt::unwrap_url_links(preview)))
+}
+
 pub fn normalize(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -393,6 +432,199 @@ mod tests {
     fn item(id: &str, text: &str) -> Value {
         serde_json::json!({"id":id,"text":text,"context":{"prompt":text}})
     }
+    #[test]
+    fn formatted_queue_admission_preserves_identity_uniqueness_and_full_text() {
+        const SUBMITTED: &str = "Read https://example.com/plan";
+        const FORMATTED: &str = "Read [https://example.com/plan](https://example.com/plan)";
+        for provider in ["codex", "claude", "catdesk"] {
+            let items = Arc::new(std::sync::Mutex::new(vec![QueuedMessage::test(
+                "old", "before",
+            )]));
+            let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let (current, failure) = (items.clone(), failed.clone());
+            let source: Source = Arc::new(move || {
+                if failure.load(std::sync::atomic::Ordering::SeqCst) {
+                    Err(Error::Unavailable("queue unavailable".into()))
+                } else {
+                    Ok(current.lock().unwrap().clone())
+                }
+            });
+            let admission = Admission::new(source.clone(), provider, SUBMITTED).unwrap();
+            items.lock().unwrap()[0].text = FORMATTED.into();
+            assert!(!admission.confirmed(), "an edited old item cannot confirm");
+            for text in [
+                "Read [https://example.com/plan](https://example.com/other)",
+                "Read [https://example.com/plan](https://example.com/plan) extra",
+                "Read https://example.com/…",
+                "Read  https://example.com/plan",
+                "Read `[https://example.com/plan](https://example.com/plan)`",
+            ] {
+                items.lock().unwrap().truncate(1);
+                items.lock().unwrap().push(QueuedMessage::test("new", text));
+                assert!(!admission.confirmed(), "{provider}: {text}");
+            }
+            items.lock().unwrap()[1].text = FORMATTED.into();
+            assert_eq!(admission.confirmed(), provider == "codex");
+            items.lock().unwrap()[1].text = SUBMITTED.into();
+            assert!(admission.confirmed());
+            items
+                .lock()
+                .unwrap()
+                .push(QueuedMessage::test("duplicate", SUBMITTED));
+            assert!(!admission.confirmed(), "two new matches are ambiguous");
+            items.lock().unwrap().pop();
+            failed.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(!admission.confirmed());
+            assert!(Admission::new(source, provider, SUBMITTED).is_err());
+            failed.store(false, std::sync::atomic::Ordering::SeqCst);
+            items.lock().unwrap().clear();
+            assert!(!admission.confirmed(), "queue removal is not evidence");
+        }
+    }
+
+    #[test]
+    fn formatted_local_and_server_queue_items_confirm_without_a_transcript() {
+        for server in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let db = if server {
+                let db = rusqlite::Connection::open(dir.path().join("queue_1.sqlite")).unwrap();
+                db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE queued_items (id TEXT, thread_id TEXT, payload_json TEXT, queue_order INTEGER, created_at_ms INTEGER);").unwrap();
+                Some(db)
+            } else {
+                None
+            };
+            let home = dir.path().to_owned();
+            let reader = std::sync::Mutex::new(Reader::default());
+            let source: Source =
+                Arc::new(move || read_session(&mut reader.lock().unwrap(), &home, "s"));
+            let admission =
+                Admission::new(source.clone(), "codex", "Read https://example.com/plan").unwrap();
+            let text = "Read [https://example.com/plan](https://example.com/plan)";
+            if let Some(db) = db.as_ref() {
+                let payload = serde_json::json!({"input":[{"type":"text","text":text}]});
+                db.execute(
+                    "INSERT INTO queued_items VALUES ('new','other',?1,0,0)",
+                    [payload.to_string()],
+                )
+                .unwrap();
+                assert!(!admission.confirmed(), "another session cannot confirm");
+                db.execute(
+                    "INSERT INTO queued_items VALUES ('new','s',?1,0,0)",
+                    [payload.to_string()],
+                )
+                .unwrap();
+            } else {
+                let state = serde_json::json!({"queued-follow-ups":{"s":[item("new",text)]}});
+                std::fs::write(
+                    dir.path().join(".codex-global-state.json"),
+                    state.to_string(),
+                )
+                .unwrap();
+            }
+            assert!(admission.confirmed());
+            let before_existing =
+                Admission::new(source, "codex", "Read https://example.com/plan").unwrap();
+            assert!(
+                !before_existing.confirmed(),
+                "already queued is not newly accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_of_an_existing_local_item_is_not_a_new_receipt() {
+        for client_key in ["clientUserMessageId", "client_user_message_id"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(".codex-global-state.json");
+            let text = "Read https://example.com/plan";
+            std::fs::write(
+                &path,
+                serde_json::json!({"queued-follow-ups":{"s":[item("old-client",text)]}})
+                    .to_string(),
+            )
+            .unwrap();
+            let db = rusqlite::Connection::open(dir.path().join("queue_1.sqlite")).unwrap();
+            db.execute_batch("CREATE TABLE queued_items (id TEXT, thread_id TEXT, payload_json TEXT, queue_order INTEGER, created_at_ms INTEGER);").unwrap();
+            let home = dir.path().to_owned();
+            let reader = std::sync::Mutex::new(Reader::default());
+            let source: Source =
+                Arc::new(move || read_session(&mut reader.lock().unwrap(), &home, "s"));
+            let admission = Admission::new(source.clone(), "codex", text).unwrap();
+            let payload = |client: &str| {
+                serde_json::json!({(client_key):client, "input":[{"type":"text","text":"Read [https://example.com/plan](https://example.com/plan)"}]}).to_string()
+            };
+            db.execute(
+                "INSERT INTO queued_items VALUES ('server-old','s',?1,0,0)",
+                [payload("old-client")],
+            )
+            .unwrap();
+            assert_eq!(
+                source().unwrap().len(),
+                1,
+                "local/server views of one item are deduplicated"
+            );
+            std::fs::write(&path, r#"{"queued-follow-ups":{}}"#).unwrap();
+            assert!(
+                !admission.confirmed(),
+                "an old local item migrated, nothing new was accepted"
+            );
+            // A fresh item has both a new physical and a new client identity.
+            db.execute(
+                "INSERT INTO queued_items VALUES ('server-new','s',?1,1,0)",
+                [payload("new-client")],
+            )
+            .unwrap();
+            assert!(admission.confirmed());
+            let baseline = Admission::new(source, "codex", text).unwrap();
+            db.execute(
+                "UPDATE queued_items SET payload_json=?1 WHERE id='server-new'",
+                [payload("edited-client")],
+            )
+            .unwrap();
+            assert!(
+                !baseline.confirmed(),
+                "changing client metadata does not bypass the old physical identity"
+            );
+        }
+    }
+
+    #[test]
+    fn formatted_preview_matching_is_display_only_and_provider_scoped() {
+        let formatted = "Read [https://example.com/plan](https://example.com/plan) then…";
+        assert!(display_matches(
+            Some(Provider::Codex),
+            "Read https://example.com/plan then review it",
+            formatted
+        ));
+        assert!(!display_matches(
+            Some(Provider::Claude),
+            "Read https://example.com/plan then review it",
+            formatted
+        ));
+        assert!(!display_matches(
+            None,
+            "Read https://example.com/plan then review it",
+            formatted
+        ));
+        assert!(!display_matches(
+            Some(Provider::Codex),
+            "Read https://example.com/plan then review it",
+            "Read [https://example.com/plan](https://example.com/other) then…"
+        ));
+        assert!(
+            display_matches(Some(Provider::Codex), formatted, formatted),
+            "literal submitted Markdown remains literal"
+        );
+        assert!(
+            !crate::receipt::text_matches(
+                Provider::Codex,
+                "Read https://example.com/plan then review it",
+                formatted
+            ),
+            "a preview must never become a receipt"
+        );
+    }
+
     #[test]
     fn claude_queue_tracks_fifo_removals_partial_records_and_rewrites() {
         use std::io::Write;
@@ -480,12 +712,13 @@ mod tests {
         let current = Arc::new(std::sync::Mutex::new(vec![QueuedMessage {
             id: "queued:000:old".into(),
             source_id: "local:1".into(),
+            client_source_id: None,
             text: "before".into(),
             can_send: true,
         }]));
         let state = current.clone();
         let source: Source = Arc::new(move || Ok(state.lock().unwrap().clone()));
-        let admission = Admission::new(source, "hello").unwrap();
+        let admission = Admission::new(source, "codex", "hello").unwrap();
         {
             let mut state = current.lock().unwrap();
             state[0].text = "hello".into();
@@ -495,6 +728,7 @@ mod tests {
         current.lock().unwrap().push(QueuedMessage {
             id: "queued:000:new".into(),
             source_id: "server:2".into(),
+            client_source_id: None,
             text: "hello".into(),
             can_send: true,
         });

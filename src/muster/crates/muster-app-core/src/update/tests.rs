@@ -2389,3 +2389,56 @@ fn codex_formatted_receipts_retire_only_new_occurrences_and_unknown_is_not_unsen
     admitted::settle(&mut state);
     assert!(admitted_rows(&state).is_empty());
 }
+
+#[test]
+fn formatted_queue_accounting_keeps_old_occurrences_and_unknown_outcomes_separate() {
+    let mut state = running_chat();
+    state.chat.as_mut().unwrap().session.provider = "codex".into();
+    let text = "Read https://example.com/plan then review it";
+    let formatted = "Read [https://example.com/plan](https://example.com/plan) then review it";
+    let row = |id: &str, prompt: &str| v1::PendingInteraction {
+        id: id.into(),
+        kind: muster_agent::queue::KIND.into(),
+        prompt: prompt.into(),
+        ..Default::default()
+    };
+    state.chat.as_mut().unwrap().interactions = vec![row("old", formatted)];
+    admitted::admit(&mut state, "send", text);
+    admitted::outcome(&mut state, "send", false, "");
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        [format!("已提交，尚未出现在会话中|{text}")]
+    );
+    state.chat.as_mut().unwrap().interactions.push(row(
+        "new",
+        "Read [https://example.com/plan](https://example.com/plan) then…",
+    ));
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        [format!("已排队，本轮结束后发送|{text}")]
+    );
+    // A display preview cannot settle a host's unknown receipt outcome.
+    admitted::outcome(&mut state, "send", true, "Waiting for receipt");
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        [format!("送达未确认，请勿重复发送|{text}")]
+    );
+    admitted::outcome(&mut state, "send", false, "");
+    state.chat.as_mut().unwrap().interactions.clear();
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        [format!("已提交，尚未出现在会话中|{text}")]
+    );
+    state
+        .chat
+        .as_mut()
+        .unwrap()
+        .messages
+        .push(user_message("delivered", formatted));
+    admitted::settle(&mut state);
+    assert!(admitted_rows(&state).is_empty());
+}

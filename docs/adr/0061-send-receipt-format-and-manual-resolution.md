@@ -71,3 +71,9 @@ separately below; no deployment or physical acceptance is claimed at this stage.
   Swift protocol code. These are shared UI compilations, not signed app bundles.
 - No signing, notarization, publication, installation or physical desktop/phone
   acceptance is claimed. The existing stuck message was not replayed or altered.
+
+### Queue matching follow-up
+
+[ADR 0063](0063-queue-receipts-use-provider-text-matching.md) applies the same
+provider formatting rule to full queue admission and display-only queue
+accounting, preserving their separate evidence requirements.

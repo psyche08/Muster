@@ -22,16 +22,6 @@ pub(crate) fn key(device: &str, session: &str) -> String {
     format!("{device}\u{1}{session}")
 }
 
-/// Whether `found`, as the conversation records it, is the admitted `text`.
-/// Both sides are already normalized. A queue row's prompt is clipped for
-/// display, so compare only what survived the clip.
-fn accounted(text: &str, found: &str) -> bool {
-    match found.strip_suffix('…') {
-        Some(prefix) if !prefix.is_empty() => text.starts_with(prefix),
-        _ => text == found,
-    }
-}
-
 /// How often each of `texts` appears as a user message, and as a row of the
 /// provider's queue. One pass: this runs on every streamed event while a send
 /// is still unaccounted for, over a transcript of any length.
@@ -59,9 +49,12 @@ fn counts(chat: &Chat, texts: &[String]) -> Vec<(usize, usize)> {
         if interaction.kind != muster_agent::queue::KIND {
             continue;
         }
-        let recorded = muster_agent::queue::normalize(&interaction.prompt);
         for (index, text) in texts.iter().enumerate() {
-            if accounted(text, &recorded) {
+            if muster_agent::queue::display_matches(
+                muster_agent::model::Provider::parse(&chat.session.provider),
+                text,
+                &interaction.prompt,
+            ) {
                 found[index].1 += 1;
             }
         }

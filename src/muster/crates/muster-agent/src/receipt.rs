@@ -112,7 +112,7 @@ pub fn text_matches(provider: Provider, submitted: &str, observed: &str) -> bool
         || (provider == Provider::Codex && unwrap_url_links(observed) == submitted)
 }
 
-fn unwrap_url_links(text: &str) -> String {
+pub(crate) fn unwrap_url_links(text: &str) -> String {
     use std::sync::LazyLock;
     // Be conservative with literal code; this is not Markdown interpretation.
     if text.contains('`') {

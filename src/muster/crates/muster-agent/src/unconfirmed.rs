@@ -482,7 +482,7 @@ mod tests {
         let state = items.clone();
         let source: crate::queue::Source = Arc::new(move || Ok(state.lock().unwrap().clone()));
         let guard = WriteGuard::default();
-        let admission = Admission::new(source, "hello").unwrap();
+        let admission = Admission::new(source, "codex", "hello").unwrap();
         guard.arm(origin(), None, Some(admission)).unwrap();
         assert!(guard.admit().is_err());
         items
@@ -493,6 +493,30 @@ mod tests {
             guard.reconcile(),
             Reconciled::Confirmed(origin(), Evidence::Admission)
         );
+    }
+
+    #[test]
+    fn formatted_queue_admission_releases_unknown_once_without_a_transcript() {
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let current = items.clone();
+        let source: crate::queue::Source = Arc::new(move || Ok(current.lock().unwrap().clone()));
+        let guard = WriteGuard::default();
+        let admission = Admission::new(source, "codex", "Read https://example.com/plan").unwrap();
+        guard.arm(origin(), None, Some(admission)).unwrap();
+        assert!(matches!(guard.reconcile(), Reconciled::Unconfirmed(_)));
+        items
+            .lock()
+            .unwrap()
+            .push(crate::queue::QueuedMessage::test(
+                "server:new",
+                "Read [https://example.com/plan](https://example.com/plan)",
+            ));
+        assert_eq!(
+            guard.reconcile(),
+            Reconciled::Confirmed(origin(), Evidence::Admission)
+        );
+        assert_eq!(guard.reconcile(), Reconciled::Clear);
+        assert!(guard.admit().is_ok());
     }
 
     #[test]

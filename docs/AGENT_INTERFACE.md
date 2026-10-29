@@ -1046,6 +1046,13 @@ messages, other command modes, sidechains, `dequeue` and `remove` records do
 not confirm a send. Locally, prompt-mode `queued_command` attachments (about 300
 per Mac) are common, so this applies to every send made while Claude is busy.
 
+Codex queue admission now uses the same provider-scoped full-text URL matching
+as transcript receipts. Its pre-press baseline retains both physical item IDs
+and available client-message IDs, so local-to-server migration of a known item
+does not establish a new submission. The client uses a separate display-only
+matcher for queued previews; a clipped preview cannot settle an unknown receipt.
+See [ADR 0063](adr/0063-queue-receipts-use-provider-text-matching.md).
+
 ## AX recordings on Mac-C (2026-10-03)
 
 The states that the 2026-10-03 fixtures lacked were recorded on Mac-C (Muster 1.0.31) with the console in use: a running Claude Code turn, a running Codex turn, a Claude Code question card, and both apps' Chat mode. No message was sent. The running turns were already running; the question card was this repository's own agent asking; Chat mode was entered with `chat-open` and left with `debug ax-chat-mode … code`. The redacted trees are in `src/muster/crates/muster-agent/tests/fixtures/ax`.

@@ -2144,7 +2144,12 @@ impl NativeAppController {
         trace.stage("prepare_receipt");
         let receipt = (self.send_receipt_source)(text)?;
         let admission = if self.profile.controls.queue.is_some() {
-            muster_agent::queue::Admission::new(self.queue_source.clone(), text).ok()
+            muster_agent::queue::Admission::new(
+                self.queue_source.clone(),
+                self.profile.app.provider,
+                text,
+            )
+            .ok()
         } else {
             None
         };

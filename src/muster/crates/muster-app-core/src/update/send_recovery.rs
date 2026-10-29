@@ -600,7 +600,6 @@ mod tests {
                             Resp::Error(v1::Error {
                                 code: v1::error::Code::Unavailable as i32,
                                 message: "acknowledgement unavailable after persistence".into(),
-                                ..Default::default()
                             })
                         }
                         Req::AgentSendStatus(r) => {
