@@ -110,3 +110,7 @@ acceptance case this needs is a message inserted while the agent is working: it
 must appear in the conversation at once with its state, survive leaving and
 reopening the conversation, and be retired only when the provider's own
 transcript carries it. ADR 0047 records the release evidence for both.
+
+### Subsequent decision
+
+[ADR 0061](0061-send-receipt-format-and-manual-resolution.md) supersedes exact-text-only matching for Codex URL formatting and adds separately recorded user confirmation without replay.

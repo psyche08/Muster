@@ -593,9 +593,11 @@ pub(super) fn msg_op_done(
     {
         let (unknown, error) = match &result {
             Ok(r) => match v1::op_result::Status::try_from(r.status) {
-                Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate) => {
-                    (false, String::new())
-                }
+                Ok(
+                    v1::op_result::Status::Applied
+                    | v1::op_result::Status::Duplicate
+                    | v1::op_result::Status::UserConfirmed,
+                ) => (false, String::new()),
                 Ok(v1::op_result::Status::Rejected) => (false, r.message.clone()),
                 _ => (true, r.message.clone()),
             },
@@ -609,7 +611,9 @@ pub(super) fn msg_op_done(
             let status =
                 v1::op_result::Status::try_from(r.status).unwrap_or(v1::op_result::Status::Unknown);
             match status {
-                v1::op_result::Status::Applied | v1::op_result::Status::Duplicate => {
+                v1::op_result::Status::Applied
+                | v1::op_result::Status::Duplicate
+                | v1::op_result::Status::UserConfirmed => {
                     if what == "send" && same_origin {
                         sent(state, ctx, &device, &r.result_id);
                     }

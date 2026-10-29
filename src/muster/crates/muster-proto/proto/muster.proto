@@ -60,6 +60,7 @@ message OpResult {
     DUPLICATE = 1;  // same op_id, same body: earlier result returned
     REJECTED = 2;   // same op_id, different body, or refused
     UNKNOWN = 3;    // a crash left the outcome undecidable; never retried automatically
+    USER_CONFIRMED = 4; // operator attestation, not a provider receipt; never resend
   }
   Status status = 1;
   string message = 2;
@@ -141,6 +142,8 @@ message Request {
     ForwardOpenRequest forward_open = 69;
     MulticaRequest multica = 70;
     MulticaBrowseRequest multica_browse = 71;
+    // Explicit user attestation for the exact original send. Never submits input.
+    AgentSendRequest agent_confirm_delivered = 72;
   }
 }
 

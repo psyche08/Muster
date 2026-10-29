@@ -118,3 +118,7 @@ workaround above with a tested extension implementation fix.
 Device Hub still reported the physical iPhone unavailable, the third Mac remained
 offline, and successful locked delivery still needed user Presence authentication.
 Those outstanding acceptance items are not claimed as passed.
+
+### Subsequent decision
+
+[ADR 0061](0061-send-receipt-format-and-manual-resolution.md) supersedes exact-text-only matching for Codex URL formatting and adds separately recorded user confirmation without replay.

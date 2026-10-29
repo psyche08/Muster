@@ -358,6 +358,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::ComposerComplete(_) => desktop_chats::complete(state, ctx),
         It::ChatSetOptions(o) => desktop_chats::intent_chat_set_options(state, ctx, o),
         It::AgentSend(s) => agents::intent_agent_send(state, ctx, s),
+        It::ResolveAgentSend(r) => send_recovery::resolve(state, ctx, r),
         It::AgentRespond(r) => agents::intent_agent_respond(state, ctx, r),
         It::AgentInterrupt(_) => agents::intent_agent_interrupt(state, ctx),
         It::AgentLoadEarlier(load) => agents::intent_agent_load_earlier(state, ctx, load),

@@ -118,6 +118,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0059](0059-first-public-apple-release.md) | Accepted; iOS review pending | First public Apple release and PR-only main |
 
+| [0061](0061-send-receipt-format-and-manual-resolution.md) | Accepted | Provider URL formatting and explicit send resolution |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

@@ -43,7 +43,14 @@ fn counts(chat: &Chat, texts: &[String]) -> Vec<(usize, usize)> {
         }
         let recorded = muster_agent::queue::normalize(&message.text);
         for (index, text) in texts.iter().enumerate() {
-            if accounted(text, &recorded) {
+            if text == &recorded
+                || (chat.session.provider == "codex"
+                    && muster_agent::receipt::text_matches(
+                        muster_agent::model::Provider::Codex,
+                        text,
+                        &recorded,
+                    ))
+            {
                 found[index].0 += 1;
             }
         }
@@ -74,6 +81,7 @@ pub(crate) fn admit(state: &mut State, op_id: &str, text: &str) {
     let list = state.admitted.entry(key).or_default();
     list.retain(|a| a.op_id != op_id);
     list.push(AdmittedSend {
+        user_confirmed: false,
         op_id: op_id.to_owned(),
         text: text.to_owned(),
         prior_messages,
@@ -106,6 +114,18 @@ pub(crate) fn outcome(state: &mut State, op_id: &str, unknown: bool, error: &str
     record.unknown = unknown;
     record.error = error.to_owned();
     bump(state);
+}
+
+pub(crate) fn user_confirmed(state: &mut State, device: &str, session: &str, op: &str) {
+    if let Some(records) = state.admitted.get_mut(&key(device, session)) {
+        if let Some(record) = records.iter_mut().find(|r| r.op_id == op) {
+            record.user_confirmed = true;
+            record.sending = false;
+            record.unknown = false;
+            record.error.clear();
+            bump(state);
+        }
+    }
 }
 
 /// Drop the records this conversation now accounts for, and mark the ones its

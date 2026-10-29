@@ -67,6 +67,7 @@ pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
 /// by that conversation's own records.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdmittedSend {
+    pub user_confirmed: bool,
     pub op_id: String,
     pub text: String,
     /// Occurrences of this exact text already present when it was admitted. A

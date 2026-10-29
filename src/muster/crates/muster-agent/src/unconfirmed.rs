@@ -1,12 +1,13 @@
 //! A native write whose delivery is unconfirmed blocks every later write to
-//! the same session. Only new provider evidence clears it: a newly appended
+//! the same session. Provider evidence can clear it: a newly appended
 //! user record with the same text, or a newly persisted queue item. Elapsed
 //! time, a new request, a lost AX surface or a locked screen never do, and
 //! reading the evidence needs neither: it is a read of provider files.
 //!
 //! A turn ending without the prompt is not proof of loss: a provider may
 //! persist its receipt much later. Only evidence or an explicit user release
-//! after checking the desktop app ends the latch.
+//! after checking the desktop app ends the latch. A separately persisted user
+//! delivery confirmation also ends it, without manufacturing provider evidence.
 use crate::{Error, queue::Admission, receipt::Receipt};
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -94,7 +95,7 @@ struct Pending {
 #[derive(Default)]
 struct State {
     pending: Option<Pending>,
-    /// The token of the write most recently confirmed by evidence: a release
+    /// The token of the write most recently confirmed by evidence or the user: a release
     /// naming it arrives after the write did, and must not send again.
     confirmed: Option<String>,
 }
@@ -128,6 +129,30 @@ impl WriteGuard {
             evidence: None,
             confirmation: crate::control_guard::current_delivery().and_then(|d| d.confirmation()),
         });
+        Ok(())
+    }
+
+    /// Record an operator attestation before clearing only the named latch.
+    pub fn user_confirm(
+        &self,
+        token: &str,
+        persist: &crate::control_guard::Confirmation,
+    ) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(pending) = &state.pending {
+            if pending.origin.token() != token {
+                return Err(refused(&pending.origin));
+            }
+        }
+        let names_pending = state.pending.is_some();
+        reconcile(&mut state);
+        persist()?;
+        state.pending = None;
+        // Reject a subsequent not-delivered release of the same operation.
+        if names_pending || state.confirmed.is_none() {
+            state.confirmed = Some(token.to_owned());
+        }
+        log::info!("send {token} acknowledged by user; no input submitted");
         Ok(())
     }
 
@@ -264,6 +289,32 @@ mod tests {
         let receipt = Receipt::new(file.path(), Provider::Codex, text).unwrap();
         guard.arm(origin(), Some(receipt), None).unwrap();
         guard
+    }
+
+    #[test]
+    fn manual_confirmation_persists_before_releasing_only_its_operation() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let guard = armed(&file, "hello");
+        let failure: crate::control_guard::Confirmation =
+            Arc::new(|| Err(Error::Io("disk full".into())));
+        assert!(guard.user_confirm("app-1-15", &failure).is_err());
+        assert!(guard.is_unconfirmed());
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls = count.clone();
+        let persist: crate::control_guard::Confirmation = Arc::new(move || {
+            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        });
+        assert!(guard.user_confirm("old", &persist).is_err());
+        assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 0);
+        guard.user_confirm("app-1-15", &persist).unwrap();
+        assert!(!guard.is_unconfirmed());
+        assert!(
+            guard.release("app-1-15").is_err(),
+            "manual delivered must not become not-delivered resend"
+        );
+        guard.user_confirm("app-1-15", &persist).unwrap();
+        assert!(guard.admit().is_ok());
     }
 
     #[test]

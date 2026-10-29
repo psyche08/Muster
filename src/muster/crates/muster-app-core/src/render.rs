@@ -31,12 +31,14 @@ fn admitted_block(send: &crate::state::AdmittedSend) -> app::ChatBlock {
     app::ChatBlock {
         id: format!("admitted:{}", send.op_id),
         kind: "admitted_send".into(),
-        title: if !send.error.is_empty() {
+        title: if send.unknown {
+            "送达未确认，请勿重复发送".into()
+        } else if send.user_confirmed {
+            "已由你确认送达（非提供方回执），未重发".into()
+        } else if !send.error.is_empty() {
             format!("未发送：{}", send.error)
         } else if send.sending {
             "发送中".into()
-        } else if send.unknown {
-            "送达未确认，请勿重复发送".into()
         } else if send.queued {
             "已排队，本轮结束后发送".into()
         } else {

@@ -255,6 +255,7 @@ pub enum Begin {
 /// Read-only outcome of an exactly bound request. Absence never authorizes replay.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
+    UserConfirmed,
     Unknown,
     Conflict,
     Applied(Vec<u8>),
@@ -294,7 +295,7 @@ impl Ledger<'_> {
             }
             Some((stored_hash, _, _)) if stored_hash != hash => Begin::Conflict,
             Some((_, status, result)) => match status.as_str() {
-                "applied" | "rejected" => Begin::Duplicate(result),
+                "applied" | "rejected" | "user_confirmed" => Begin::Duplicate(result),
                 _ => Begin::Unknown,
             },
         };
@@ -314,6 +315,22 @@ impl Ledger<'_> {
             return Err(Error::Other(format!(
                 "operation {op_id} cannot be confirmed with this evidence"
             )));
+        }
+        Ok(())
+    }
+
+    /// Explicit operator attestation, durably bound to an existing original send.
+    /// Do not overwrite actual provider evidence or create a missing operation.
+    pub fn user_confirm_send(&self, op_id: &str, body: &[u8]) -> Result<()> {
+        let conn = self.store.conn.lock().unwrap();
+        let changed = conn.execute(
+            "UPDATE ops SET status = CASE WHEN status = 'applied' THEN status ELSE 'user_confirmed' END, updated = ?3 WHERE op_id = ?1 AND kind = 'agent.send' AND body_hash = ?2 AND status IN ('pending', 'unknown', 'user_confirmed', 'applied')",
+            params![op_id, Self::body_hash(body).as_slice(), now()],
+        )?;
+        if changed == 0 {
+            return Err(Error::Other(
+                "Original send is missing, rejected or mismatched".into(),
+            ));
         }
         Ok(())
     }
@@ -371,6 +388,7 @@ impl Ledger<'_> {
             {
                 Outcome::Conflict
             }
+            Some((_, _, status, _)) if status == "user_confirmed" => Outcome::UserConfirmed,
             Some((_, _, status, result)) if status == "applied" => {
                 Outcome::Applied(result.unwrap_or_default())
             }
@@ -419,6 +437,54 @@ mod tests {
     use muster_core::roster::{Author, DeviceKind, DeviceRecord};
     use muster_core::{HwSigner, SoftSigner};
     use std::net::Ipv4Addr;
+
+    #[test]
+    fn manual_send_resolution_is_bound_durable_and_not_provider_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("state.db");
+        let store = Store::open(&path).unwrap();
+        let ledger = store.ledger();
+        assert!(ledger.user_confirm_send("one", b"body").is_err());
+        ledger.begin("one", "agent.send", b"body").unwrap();
+        assert!(ledger.user_confirm_send("one", b"changed").is_err());
+        ledger.user_confirm_send("one", b"body").unwrap();
+        ledger.user_confirm_send("one", b"body").unwrap();
+        assert_eq!(
+            ledger.outcome("one", "agent.send", b"body").unwrap(),
+            Outcome::UserConfirmed
+        );
+        assert!(
+            ledger
+                .confirmed_result("one", "agent.send", &Ledger::body_hash(b"body"))
+                .unwrap()
+                .is_none()
+        );
+        assert!(matches!(
+            ledger.begin("one", "agent.send", b"body").unwrap(),
+            Begin::Duplicate(_)
+        ));
+        ledger.begin("rejected", "agent.send", b"body").unwrap();
+        ledger.reject("rejected", b"no").unwrap();
+        assert!(ledger.user_confirm_send("rejected", b"body").is_err());
+        ledger.begin("other", "other", b"body").unwrap();
+        assert!(ledger.user_confirm_send("other", b"body").is_err());
+        ledger.begin("applied", "agent.send", b"body").unwrap();
+        ledger.complete("applied", b"session").unwrap();
+        ledger.user_confirm_send("applied", b"body").unwrap();
+        assert_eq!(
+            ledger.outcome("applied", "agent.send", b"body").unwrap(),
+            Outcome::Applied(b"session".to_vec())
+        );
+        drop(store);
+        let reopened = Store::open(&path).unwrap();
+        assert_eq!(
+            reopened
+                .ledger()
+                .outcome("one", "agent.send", b"body")
+                .unwrap(),
+            Outcome::UserConfirmed
+        );
+    }
 
     #[test]
     fn outcome_lookup_never_creates_or_changes_rows_and_survives_restart() {

@@ -2240,6 +2240,14 @@ impl Controller for NativeAppController {
             .collect()
     }
 
+    fn confirm_delivered(
+        &self,
+        operation: &str,
+        persist: &muster_agent::control_guard::Confirmation,
+    ) -> Result<(), Error> {
+        self.unconfirmed.user_confirm(operation, persist)
+    }
+
     fn release_unconfirmed(&self, operation: &str) -> Result<(), Error> {
         self.unconfirmed.release(operation)
     }

@@ -140,7 +140,49 @@ async fn locked_receipt_lookup_requires_current_grants_and_exact_original_body()
             ..
         })
     ));
+    let mut manual = request.clone();
+    manual.op_id = "manual".into();
+    let confirm = || Req::AgentConfirmDelivered(manual.clone());
+    assert!(
+        client.call(confirm()).await.is_err(),
+        "missing operations cannot be invented"
+    );
+    daemon
+        .store()
+        .ledger()
+        .begin(&manual.op_id, "agent.send", &manual.encode_to_vec())
+        .unwrap();
+    let mut mismatch = manual.clone();
+    mismatch.text.push('x');
+    assert!(
+        client
+            .call(Req::AgentConfirmDelivered(mismatch))
+            .await
+            .is_err()
+    );
+    assert!(
+        connect(&daemon, denied.public_key().device_id())
+            .call(confirm())
+            .await
+            .is_err()
+    );
+    for _ in 0..2 {
+        let Resp::OpResult(r) = client.call(confirm()).await.unwrap() else {
+            panic!()
+        };
+        assert_eq!(r.status, Status::UserConfirmed as i32);
+    }
+    let Resp::OpResult(r) = client
+        .call(Req::AgentSendStatus(manual.clone()))
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(r.status, Status::UserConfirmed as i32);
+    assert_eq!(r.result_id, manual.session);
     daemon.policy().write().unwrap().offer_agent = false;
+    assert!(client.call(confirm()).await.is_err());
     assert!(client.call(query()).await.is_err());
     daemon.shutdown().await;
 }

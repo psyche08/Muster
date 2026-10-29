@@ -50,6 +50,7 @@ message Intent {
     OrcaCreate orca_create = 87;
     OpenAgent open_agent = 31;
     AgentSend agent_send = 32;
+    ResolveAgentSend resolve_agent_send = 91;
     AgentRespond agent_respond = 33;
     AgentInterrupt agent_interrupt = 34;
     AgentLoadEarlier agent_load_earlier = 36;
@@ -179,6 +180,12 @@ message OpenAgent {
   string session = 1;
   string device_id = 2;
 }
+message ResolveAgentSend {
+  string token = 1;
+  // False: recheck only. True: the user explicitly saw the message on the Mac.
+  bool delivered = 2;
+}
+
 message AgentSend {
   string text = 1;
   repeated muster.v1.AgentAttachment attachments = 2;

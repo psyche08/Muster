@@ -7,7 +7,8 @@ use muster_proto::{app::ChatDraft, v1::op_result::Status};
 pub(crate) fn saves_before(action: &muster_proto::app::intent::It) -> bool {
     use muster_proto::app::{desktop_setup_action, desktop_update_action, intent::It};
     match action {
-        It::Navigate(_)
+        It::ResolveAgentSend(_)
+        | It::Navigate(_)
         | It::SelectDevice(_)
         | It::OpenAgents(_)
         | It::OpenAgent(_)
@@ -49,7 +50,7 @@ pub(crate) fn clear_sent(
 ) -> std::io::Result<Option<ChatDraft>> {
     if !matches!(
         Status::try_from(status),
-        Ok(Status::Applied | Status::Duplicate)
+        Ok(Status::Applied | Status::Duplicate | Status::UserConfirmed)
     ) {
         return Ok(None);
     }

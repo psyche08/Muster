@@ -2366,3 +2366,26 @@ async fn late_send_receipt_updates_only_its_draft_without_finishing_a_new_lease(
     assert!(state.chat.as_ref().unwrap().sending);
     assert_eq!(state.chat.as_ref().unwrap().pending_draft_id, "draft-2");
 }
+
+#[test]
+fn codex_formatted_receipts_retire_only_new_occurrences_and_unknown_is_not_unsent() {
+    let mut state = running_chat();
+    state.chat.as_mut().unwrap().session.provider = "codex".into();
+    let formatted = "Read [https://example.com/plan](https://example.com/plan)";
+    state.chat.as_mut().unwrap().messages = vec![user_message("old", formatted)];
+    admitted::admit(&mut state, "send", "Read https://example.com/plan");
+    admitted::outcome(&mut state, "send", true, "Waiting for receipt");
+    admitted::settle(&mut state);
+    assert_eq!(
+        admitted_rows(&state),
+        ["送达未确认，请勿重复发送|Read https://example.com/plan"]
+    );
+    state
+        .chat
+        .as_mut()
+        .unwrap()
+        .messages
+        .push(user_message("new", formatted));
+    admitted::settle(&mut state);
+    assert!(admitted_rows(&state).is_empty());
+}

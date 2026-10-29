@@ -187,6 +187,10 @@ fn accept_op(result: v1::OpResult) -> Result<(), String> {
         } else {
             result.message
         }),
+        Ok(Status::UserConfirmed) => Err(
+            "Delivery was manually confirmed by the user; no provider receipt, do not resend"
+                .into(),
+        ),
         Ok(Status::Unknown) => Err(format!(
             "the operation's outcome is unknown and was not retried: {}",
             result.message
