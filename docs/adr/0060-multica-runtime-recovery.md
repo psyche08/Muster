@@ -1,7 +1,7 @@
 # ADR 0060: Recover native Multica runtimes across release upgrades
 
 - Date: 2026-10-29
-- Status: Proposed; implementation and device acceptance pending
+- Status: Proposed; transport recovery installed, Codex creation acceptance blocked
 - Related: ADR 0053; native runtime candidate PR 52; ADR 0059
 
 ## Context
@@ -71,9 +71,8 @@ unlocked console and dedicated test conversations.
 
 ## Verification
 
-Pending: merge review, regression tests, release provenance, signed build,
-target installation, restart recovery, bounded protocol initialization and
-actual native task receipts. Do not report these as completed until observed.
+Source, package, installation and runtime evidence are recorded separately
+below. Codex creation and repeated-directory receipts remain a landing gate.
 
 ### Source verification
 
@@ -86,4 +85,61 @@ actual native task receipts. Do not report these as completed until observed.
   connection-refusal and EOF tests pass with the new process cleanup.
 - The target container's missing Git and SSH client packages were installed;
   Git reports 2.39.5. No task was replayed and no provider receipt is claimed.
-- Build, signing, installation, restart and provider acceptance remain pending.
+- Agent service integration passed 15 tests with one environment case ignored.
+- The terminal-notification correction passed all 22 ACP library tests,
+  including immediate rejection, partial-output failure, cancellation and
+  success. Strict Clippy passed for the ACP/platform libraries and tests.
+- ADR, whitespace and public-content checks passed (735 tracked text files).
+
+### Build and targeted installation
+
+Candidate `4d5abcd2` was built and signed as desktop 1.1.3 (93). Notarization
+`ee78d587-2fb1-4305-8f0c-9b66efea4ccb` was Accepted; stapling, Gatekeeper,
+signature, Presence and release-provenance checks passed. The first package's
+SHA-256 was `1339390ae82dec58168b1a4cd890596b8b691dae8384ffdf773cb429a29d3a0f`.
+
+The follow-up `cf5bb557` includes corrected terminal notifications and distinct
+process/input rejection messages. It was rebuilt and signed with the same
+unpublished candidate version. Notarization
+`3109eaf6-e8b1-4d30-84a0-59b7079a512e` was Accepted with the same package gates.
+The replacement package's SHA-256 is
+`11d0335fbb787192d142d059f530f9c07d24d751fd312de85da2daaf5f759ce9`.
+Both installations required an idle scheduler and Rust desktop update lease.
+The designated desktop now reports `cf5bb557`; identity and fingerprint were
+preserved, Accessibility and Relay recovered, and the native bridge restarted
+with reconciled wrappers. No Keychain unlock operation was used.
+
+All three Apple FFI targets built. This was a targeted desktop repair: no
+public macOS or iOS feed, GitHub Release or TestFlight distribution changed.
+
+### Runtime and provider acceptance
+
+- Installed initialization completed in 93 ms. A deliberately oversized
+  synthetic request was rejected by daemon validation before any AX action;
+  the actual protocol emitted `turn/started`, terminal `error`, and failed
+  `turn/completed`, no final answer, then exited cleanly when stdin closed.
+- A dedicated Claude scheduler task returned its exact synthetic marker.
+  This is an actual native provider reply, independently of initialization.
+- Six independent Codex tasks produced no accepted provider reply. Three
+  stopped on process/input protection; contemporaneous HID counters confirmed
+  mouse/keyboard activity. Three stopped before directory navigation because
+  the new window's composer was not published within 25 seconds, including
+  two cases in the operator-confirmed quiet interval.
+- One rejected task was incorrectly marked completed by the scheduler with
+  no text on the first candidate. This prompted `cf5bb557`; it is explicitly
+  excluded from successful acceptance. No failed/ambiguous task was replayed.
+- Read-only AX observation found the fresh default ChatGPT shell at 17 nodes
+  with no composer while the app's own main-frame/ready-to-show logs reported
+  about 0.5 seconds. A read-only hit test did not resolve the missing form.
+  Installed application code queues navigation messages until web contents
+  are ready. Whether allowing earlier directory navigation resolves this
+  mismatch is an unverified hypothesis, not an accepted change to the guard.
+- A separate directory-only calibration script is prepared but has not run;
+  it awaits a new quiet interval after the agreed five-minute window ended.
+  Existing drafts/windows are preserved. Failed test issues were cancelled
+  with no new run; the verified Claude issue was marked done. Dedicated test
+  agents and local evidence remain available for continued acceptance.
+
+PR 60 remains a draft and is not landed. Codex creation, two same-basename
+directory receipts and final test-artifact cleanup remain unresolved. The
+installed transport/error correction is not a claim of complete Codex recovery.
