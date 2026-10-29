@@ -134,9 +134,27 @@ public macOS or iOS feed, GitHub Release or TestFlight distribution changed.
   Installed application code queues navigation messages until web contents
   are ready. Whether allowing earlier directory navigation resolves this
   mismatch is an unverified hypothesis, not an accepted change to the guard.
-- A separate directory-only calibration script is prepared but has not run;
-  it awaits a new quiet interval after the agreed five-minute window ended.
-  Existing drafts/windows are preserved. Failed test issues were cancelled
+- A separate directory-only calibration ran in a newly confirmed quiet interval.
+  It retained the unique new window, waited for its page shell (1.47 seconds,
+  zero composers), and sent the directory route once. The target form still
+  did not appear within 25 seconds. A later read found the exact synthetic
+  directory's trust prompt and an empty composer, confirming delayed route
+  delivery rather than a successful prompt or a permanently lost route.
+  The test did not accept trust, write a draft or submit a message. Cleanup
+  first refused when the shell changed; after uniquely matching the test path,
+  trust prompt and empty composer, it closed that window and preserved the five
+  original windows. The earlier-navigation hypothesis alone therefore does not
+  resolve the observed timeout; the production readiness guard is unchanged.
+- The same test window's application log reports main-frame readiness in
+  675 ms, then post-login Statsig bootstrap timeout on attempt six, followed by
+  an account lookup failure (`accountsHttpStatus=0`,
+  `failureType=accounts_request_failed`). Installed static application code
+  bounds each `/wham/statsig/bootstrap` attempt to ten seconds. This is evidence
+  of delayed/failed application initialization, not proof of a specific network
+  root cause. A credential-free HTTPS probe through the configured system proxy
+  completed TLS in under one second and received HTTP 403; it does not establish
+  that authenticated bootstrap works. No credentials or proxy settings changed.
+- Existing drafts/windows are preserved. Failed test issues were cancelled
   with no new run; the verified Claude issue was marked done. Dedicated test
   agents and local evidence remain available for continued acceptance.
 
