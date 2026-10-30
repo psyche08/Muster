@@ -1,7 +1,7 @@
 # ADR 0067: Integrate runtime recovery and publish Apple 1.1.4
 
 - Date: 2026-10-30
-- Status: Accepted; publication and device acceptance pending
+- Status: Accepted; published and installed; Apple external review and native acceptance limitations recorded below
 - Related: ADR 0059, ADR 0060, ADR 0061–0066; PR 60–63
 
 ## Context
@@ -74,3 +74,49 @@ passes for the six affected crates and all targets. The 18-crate layer map,
 seven release-ancestry tests and two runtime transport cleanup tests pass.
 Swift and HarmonyOS bindings and the Apple project were regenerated. Device
 execution, builds and publication remain separate stages below.
+
+### Publication and device acceptance — 2026-10-30
+
+**Code and tests.** PR 64 merged the complete PR 60 history and the integration
+above. GitHub reports both PRs merged. Tag `v1.1.4` targets clean build source
+`6a7ea5fd1d8dbcb6726b5ffe19782e142cad52bc`. The integration checks above passed
+locally; hosted Actions was disabled, so there is no hosted CI pass to claim.
+
+**Build and signing.** Release daemon/CLI, all three Apple FFI targets, the Mac
+application, the iOS archive and App Store export succeeded. Strict code signing,
+release ancestry and compiled fingerprints passed. Apple notarization
+`9c5f47a3-0bf8-4d33-904c-c8ba41f1b89e` was accepted; stapling, ticket validation
+and Gatekeeper assessment passed. The App Store IPA uses production APNs with
+debugging disabled. No Keychain unlock command was used.
+
+**Distribution.** GitHub Release `v1.1.4` is public. The private publisher updated
+the documented desktop and iOS directories and all three download entry pages.
+Independent public HTTPS downloads matched the Mac and OTA hashes; fixed aliases,
+hash-bound IPA manifests, historical-manifest redirection and no-store headers
+passed. The registered-device OTA profile covers three devices and expires on
+2027-09-30. App Store Connect build 94 is `VALID`, in internal testing, and was
+explicitly attached to the existing Public Beta group. Its external state is
+`WAITING_FOR_BETA_REVIEW`; the public invitation may still offer the preceding
+approved build. Default Cloud external distribution remains off. No new signed
+desktop update feed was published.
+
+**Installation and runtime.** Mac-A, Mac-B and Mac-C installed the identical
+notarized portable bundle through a Rust desktop-update lease. Each reports
+1.1.4 (94), source `6a7ea5fd`, and daemon SHA-256
+`aa1928729494eebee67e3fa64afebfffa219f2a264bb241fbb2b2526d8d96d62`.
+Device IDs, fingerprints and Secure Enclave backends were unchanged. Strict
+bundle signatures, Accessibility, Locked Use setup, registered relay and Vnet
+passed on all three. The scheduler-bearing Mac was idle before replacement;
+its keep-alive setting was restored and the scheduler independently reported
+running with zero active tasks afterward. All six directed device-info RPCs
+returned the expected peer identity/source/version, and all 24 virtual-IP ping
+packets arrived without loss. The original management route remains usable;
+the temporary loopback-only SSH channel was removed after acceptance.
+
+**Remaining acceptance.** This release does not establish native Codex
+new-session creation, repeated-directory routing, a new real provider send,
+physical iPhone installation or in-app update acceptance. Existing provider
+messages were not replayed or manually marked delivered during release testing.
+Apple external Beta App Review remains pending. Build, upload and mesh startup
+do not substitute for these end-to-end results. Private evidence is retained
+under `build/releases/Apple-1.1.4-94/` and is not committed.
