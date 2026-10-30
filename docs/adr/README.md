@@ -140,6 +140,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0070](0070-paired-release-1-1-5.md) | Accepted; release pending | Publish paired Apple 1.1.5 |
 
+| [0071](0071-small-change-execution.md) | Accepted | Bound the execution cost of small changes |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
