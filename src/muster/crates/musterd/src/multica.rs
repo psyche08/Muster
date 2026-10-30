@@ -19,6 +19,7 @@ struct Config {
     keep_alive: bool,
     container_name: String,
     managed: bool,
+    runtime_bridge: bool,
     installed: bool,
     // Stable shared path retained after a physical data-directory migration.
     mount_dir: String,
@@ -164,6 +165,9 @@ impl Manager {
                 Err(error) => return Err(error),
             };
             let mut c = validate(r, &old)?;
+            if action == v1::multica_request::Action::Install {
+                c.runtime_bridge = true;
+            }
             if row.is_some() && c.container_name != old.container_name {
                 return Err(Error::Invalid("Keep the installed container name".into()));
             }
@@ -240,6 +244,15 @@ impl Manager {
                         }
                     }
                 }
+            }
+            if action == v1::multica_request::Action::Install && !c.managed {
+                self.command(&["exec", &c.container_name, "sh", "-c",
+                    "set -eu; command -v git >/dev/null && command -v ssh >/dev/null && command -v socat >/dev/null || { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git openssh-client socat; }"], 300).await?;
+            }
+            if action == v1::multica_request::Action::Install
+                && !Path::new(&c.data_dir).join("bin/multica").is_file()
+            {
+                install_host(&c).await?;
             }
             *self.last_error.lock().unwrap() = if c.keep_alive {
                 self.ensure(&c, socket)
@@ -353,7 +366,7 @@ impl Manager {
         if row["status"]["state"] != "running" {
             self.command(&["start", &c.container_name], 60).await?;
         }
-        if c.managed {
+        if c.managed || c.runtime_bridge {
             let (_, row) = self.observed(c.clone()).await?;
             let gateway = row
                 .as_ref()
@@ -366,20 +379,30 @@ impl Manager {
             bridge::ensure(self, c, socket, gateway).await?;
         }
         if !daemon_running(self, c).await {
-            self.command(
-                &[
-                    "exec",
-                    "--env",
-                    &format!("MULTICA_WORKSPACES_ROOT={}", workspaces(c)),
-                    &c.container_name,
-                    "sh", "-c", "if [ -f /root/.multica/muster-environment ]; then xargs -0 sh -c 'exec env \"$@\" multica daemon start' starter < /root/.multica/muster-environment; else exec multica daemon start; fi",
-                ],
-                30,
-            )
-            .await?;
+            let args = daemon_start_args(c);
+            self.command(&args.iter().map(String::as_str).collect::<Vec<_>>(), 30)
+                .await?;
         }
         Ok(())
     }
+}
+fn daemon_start_args(c: &Config) -> Vec<String> {
+    let mut args = vec![
+        "exec".into(),
+        "--env".into(),
+        format!("MULTICA_WORKSPACES_ROOT={}", workspaces(c)),
+    ];
+    if c.managed || c.runtime_bridge {
+        args.extend([
+            "--env".into(),
+            "MULTICA_CODEX_PATH=/usr/local/bin/codex".into(),
+            "--env".into(),
+            "MULTICA_NATIVE_CLAUDE_PATH=/usr/local/bin/muster-native-claude".into(),
+        ]);
+    }
+    args.extend([c.container_name.clone(), "sh".into(), "-c".into(),
+        "if [ -f /root/.multica/muster-environment ]; then xargs -0 sh -c 'exec env \"$@\" multica daemon start' starter < /root/.multica/muster-environment; else exec multica daemon start; fi".into()]);
+    args
 }
 fn default_root() -> String {
     std::env::var_os("HOME")
@@ -474,6 +497,7 @@ fn validate(r: v1::MulticaRequest, old: &Config) -> Result<Config, Error> {
         keep_alive: r.keep_alive,
         container_name: r.container_name,
         managed: old.managed,
+        runtime_bridge: old.runtime_bridge,
         installed: old.installed,
         mount_dir: old.mount_dir.clone(),
     })
@@ -624,7 +648,7 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
             .await?;
     }
     manager.command(&["exec", &c.container_name, "sh", "-c",
-        "set -eu; apt-get update -qq; apt-get install -y -qq curl ca-certificates socat git; curl --proto '=https' --proto-redir '=https' -fsSL \"$1\" -o /tmp/multica-install.sh; bash /tmp/multica-install.sh; test -x /usr/local/bin/multica",
+        "set -eu; apt-get update -qq; apt-get install -y -qq curl ca-certificates socat git openssh-client; curl --proto '=https' --proto-redir '=https' -fsSL \"$1\" -o /tmp/multica-install.sh; bash /tmp/multica-install.sh; test -x /usr/local/bin/multica",
         "setup", &c.installer_url], 300).await?;
     for (key, value) in [("server_url", &c.server_url), ("app_url", &c.app_url)] {
         if !value.is_empty() {
@@ -643,6 +667,44 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
                 )
                 .await?;
         }
+    }
+    install_host(c).await
+}
+
+async fn install_host(c: &Config) -> Result<(), Error> {
+    let root = Path::new(&c.data_dir);
+    let mut candidates = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(PathBuf::from(home).join(".local/bin/multica"));
+    }
+    candidates.extend([
+        PathBuf::from("/opt/homebrew/bin/multica"),
+        PathBuf::from("/usr/local/bin/multica"),
+    ]);
+    for candidate in candidates {
+        if let Ok(version) = run(&candidate, &["--version"], 5).await
+            && String::from_utf8_lossy(&version)
+                .trim_start()
+                .starts_with("multica ")
+        {
+            std::fs::create_dir_all(root.join("bin")).map_err(io)?;
+            std::fs::copy(&candidate, root.join("bin/multica")).map_err(io)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(
+                    root.join("bin/multica"),
+                    std::fs::Permissions::from_mode(0o755),
+                )
+                .map_err(io)?;
+            }
+            return Ok(());
+        }
+    }
+    if c.installer_url.is_empty() {
+        return Err(Error::Invalid(
+            "Enter the trusted HTTPS Multica installer URL".into(),
+        ));
     }
     let installer = root.join("install.sh");
     let download = tokio::process::Command::new("/usr/bin/curl")
@@ -689,6 +751,22 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bridge_start_selects_native_claude_without_changing_legacy_daemons() {
+        let mut c = Config::default();
+        assert!(
+            !daemon_start_args(&c)
+                .iter()
+                .any(|a| a.contains("MULTICA_NATIVE_CLAUDE_PATH"))
+        );
+        c.runtime_bridge = true;
+        let args = daemon_start_args(&c);
+        assert!(
+            args.contains(&"MULTICA_NATIVE_CLAUDE_PATH=/usr/local/bin/muster-native-claude".into())
+        );
+        assert!(args.contains(&"MULTICA_CODEX_PATH=/usr/local/bin/codex".into()));
+        assert!(!args.iter().any(|a| a.starts_with("MULTICA_CLAUDE_PATH=")));
+    }
     fn request(path: &Path) -> v1::MulticaRequest {
         v1::MulticaRequest {
             data_dir: path.to_string_lossy().into_owned(),
@@ -739,6 +817,26 @@ mod tests {
             c.data_dir
         );
         assert!(default_root().ends_with("/Documents/Multica"));
+    }
+    #[test]
+    fn adopted_native_bridge_survives_settings_save_and_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = Manager::new(dir.path());
+        let mut old: Config = serde_json::from_str(
+            r#"{"managed":false,"runtime_bridge":true,"keep_alive":true,"container_name":"mlt"}"#,
+        )
+        .unwrap();
+        old.data_dir = dir.path().join("data").to_string_lossy().into_owned();
+        let saved = validate(request(Path::new(&old.data_dir)), &old).unwrap();
+        manager.save(&saved).unwrap();
+        let restored = Manager::new(dir.path()).load().unwrap();
+        assert!(!restored.managed);
+        assert!(restored.runtime_bridge);
+        assert!(
+            daemon_start_args(&restored)
+                .iter()
+                .any(|a| a == "MULTICA_CODEX_PATH=/usr/local/bin/codex")
+        );
     }
     #[test]
     fn migration_requires_removed_old_root_and_matching_mounts() {

@@ -133,6 +133,10 @@ async fn native_codex_title_must_identify_one_session_even_when_another_is_newer
     );
     assert!(service.codex_session_by_title("Missing Task").is_none());
     assert!(service.codex_session_by_title(" ").is_none());
+    // Native receipt discovery opens both viewers before the desktop may
+    // publish a generated name. Cached viewers must not mask index changes.
+    service.messages(target, 10, None).await.unwrap();
+    service.messages(other, 10, None).await.unwrap();
 
     // A more recently modified rollout with the same name must never steal
     // the AX title binding from the requested session.
@@ -149,6 +153,35 @@ async fn native_codex_title_must_identify_one_session_even_when_another_is_newer
     assert_eq!(
         service.codex_session_by_title("Another Task").as_deref(),
         Some(other)
+    );
+
+    std::fs::write(
+        &index_path,
+        format!("{{\"id\":\"{target}\",\"thread_name\":\"Renamed Native Task\"}}\n{{\"id\":\"{other}\",\"thread_name\":\"Another Task\"}}\n"),
+    ).unwrap();
+    service.rescan().await;
+    assert_eq!(
+        service.session(target).unwrap().title,
+        "Renamed Native Task"
+    );
+    assert_eq!(
+        service.native_navigation_title(target),
+        Some(("Renamed Native Task".into(), true))
+    );
+    assert!(service.codex_session_by_title("Locked Use Test").is_none());
+    let path = day.join(format!("rollout-2026-09-28T12-00-00-{target}.jsonl"));
+    writeln!(std::fs::OpenOptions::new().append(true).open(path).unwrap(),
+        "{}", serde_json::json!({"type":"event_msg","payload":{"type":"user_message","message":"Follow-up prompt"}})).unwrap();
+    service.messages(target, 10, None).await.unwrap();
+    assert_eq!(
+        service.session(target).unwrap().title,
+        "Renamed Native Task"
+    );
+    assert_eq!(
+        service
+            .codex_session_by_title("Renamed Native Task")
+            .as_deref(),
+        Some(target)
     );
 }
 
