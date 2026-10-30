@@ -184,6 +184,8 @@ message ResolveAgentSend {
   string token = 1;
   // False: recheck only. True: the user explicitly saw the message on the Mac.
   bool delivered = 2;
+  // Hide this notice without asserting delivery or dispatching a send.
+  bool dismiss = 3;
 }
 
 message AgentSend {
@@ -788,4 +790,6 @@ message PendingAgentSend {
   muster.v1.AgentSendRequest request = 1;
   ChatDraft draft = 2;
   string draft_id = 3;
+  // Consumed by the next explicit send; not evidence of delivery.
+  string dismissed_token = 4;
 }

@@ -98,8 +98,8 @@ pub trait Controller: Send + Sync {
         ))
     }
     async fn send(&self, text: &str) -> Result<(), Error>;
-    /// The user checked the desktop app and found the unconfirmed earlier
-    /// write `operation` names not delivered: stop it blocking this session.
+    /// Explicitly release the unconfirmed write named by `operation` before
+    /// the next send. This is not evidence of delivery or non-delivery.
     /// Controllers without such a latch have nothing to release.
     fn release_unconfirmed(&self, _operation: &str) -> Result<(), Error> {
         Ok(())

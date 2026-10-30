@@ -77,3 +77,9 @@ separately below; no deployment or physical acceptance is claimed at this stage.
 [ADR 0063](0063-queue-receipts-use-provider-text-matching.md) applies the same
 provider formatting rule to full queue admission and display-only queue
 accounting, preserving their separate evidence requirements.
+
+### Retry and ignore follow-up
+
+[ADR 0068](0068-send-retry-and-ignore.md) supersedes the visible recovery actions
+and inspect-before-explicit-release UI policy. Explicit dismissal does not assert
+delivery; read-only reconciliation and host receipt checks remain in place.

@@ -46,8 +46,6 @@ struct ChatComposer: View {
     @State private var error: String?
     @State private var preview: ComposerAttachment?
     @State private var submittedDraft = ""
-    @State private var confirmDelivery = false
-    @State private var confirmationToken = ""
     #if os(iOS)
     @State private var keyboardFocusRequest = 0
     @State private var photoPicker = false
@@ -343,29 +341,20 @@ struct ChatComposer: View {
                        releaseUnconfirmed: token)
     }
 
-    /// The Mac refused the last send: an earlier one has no receipt from the
-    /// desktop app. Once the user has looked at the conversation on the Mac
-    /// and it is not there, this draft goes again and releases it.
     private func unconfirmed(_ refusal: Muster_App_UnconfirmedSend) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("上一条消息还没有在 Mac 上确认送达").font(.subheadline.weight(.semibold))
-            Text("请先在 Mac 上查看这个对话。已看到消息请选择确认送达；确实没有出现才可继续发送。")
+            Text("重试将按正常流程发送输入框中的内容；忽略将关闭此提示。")
                 .font(.caption).fixedSize(horizontal: false, vertical: true)
             Text(refusal.message).font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-            Button("重新核对发送结果") { core.resolveAgentSend(token: refusal.token, delivered: false) }
-                .buttonStyle(.bordered).controlSize(.small).disabled(busy)
-            Button("已在 Mac 确认送达，不重发") { confirmationToken = refusal.token; confirmDelivery = true }
-                .buttonStyle(.bordered).controlSize(.small).disabled(busy)
-                .confirmationDialog("你已在 Mac 的这个对话中看到这条消息？", isPresented: $confirmDelivery, titleVisibility: .visible) {
-                    Button("确认已看到，不重发") { core.resolveAgentSend(token: confirmationToken, delivered: true) }
-                    Button("取消", role: .cancel) {}
-                } message: {
-                    Text("这会记录你的手动确认并结束等待，不会再次发送消息，也不会当作提供方回执。")
-                }
-            Button("确认未送达，继续发送") { send(releasing: refusal.token) }
-                .buttonStyle(.borderedProminent).tint(.orange).controlSize(.small)
-                .disabled(empty || busy)
+            HStack {
+                Button("重试") { send(releasing: refusal.token) }
+                    .buttonStyle(.borderedProminent).tint(.orange).controlSize(.small)
+                    .disabled(empty || busy)
+                Button("忽略") { core.ignoreAgentSend(token: refusal.token) }
+                    .buttonStyle(.bordered).controlSize(.small).disabled(busy)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

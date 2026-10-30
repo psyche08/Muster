@@ -134,6 +134,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0067](0067-paired-release-1-1-4.md) | Accepted; release pending | Integrate runtime recovery and publish Apple 1.1.4 |
 
+| [0068](0068-send-retry-and-ignore.md) | Accepted | Retry and ignore unconfirmed-send notices |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

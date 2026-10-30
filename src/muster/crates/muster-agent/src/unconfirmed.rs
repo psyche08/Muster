@@ -176,8 +176,8 @@ impl WriteGuard {
         }
     }
 
-    /// The user checked the desktop app and found the write `token` names
-    /// not delivered. Releases that write only, after reading its evidence
+    /// The user explicitly releases the write named by `token` before another
+    /// send. Releases that write only, after reading its evidence
     /// once more: one that did arrive meanwhile is reported, not released.
     pub fn release(&self, token: &str) -> Result<(), Error> {
         let mut state = self.state.lock().unwrap();
@@ -192,7 +192,7 @@ impl WriteGuard {
                 }
                 state.pending = None;
                 log::warn!(
-                    "unconfirmed {} released by the user as not delivered; writes to this session are admitted again",
+                    "unconfirmed {} explicitly released by the user with delivery unconfirmed; writes to this session are admitted again",
                     origin.describe()
                 );
                 Ok(())

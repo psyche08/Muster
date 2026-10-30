@@ -11107,6 +11107,9 @@ export namespace muster {
 
             /** ResolveAgentSend delivered */
             delivered?: (boolean|null);
+
+            /** ResolveAgentSend dismiss */
+            dismiss?: (boolean|null);
         }
 
         /** Represents a ResolveAgentSend. */
@@ -11123,6 +11126,9 @@ export namespace muster {
 
             /** ResolveAgentSend delivered. */
             public delivered: boolean;
+
+            /** ResolveAgentSend dismiss. */
+            public dismiss: boolean;
 
             /**
              * Creates a new ResolveAgentSend instance using the specified properties.
@@ -16650,6 +16656,9 @@ export namespace muster {
 
             /** PendingAgentSend draftId */
             draftId?: (string|null);
+
+            /** PendingAgentSend dismissedToken */
+            dismissedToken?: (string|null);
         }
 
         /** Represents a PendingAgentSend. */
@@ -16669,6 +16678,9 @@ export namespace muster {
 
             /** PendingAgentSend draftId. */
             public draftId: string;
+
+            /** PendingAgentSend dismissedToken. */
+            public dismissedToken: string;
 
             /**
              * Creates a new PendingAgentSend instance using the specified properties.

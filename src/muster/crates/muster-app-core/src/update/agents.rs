@@ -626,7 +626,7 @@ pub(super) fn intent_open_agent(state: &mut State, ctx: &Ctx, o: app::OpenAgent)
     open_agent(state, ctx, o.session);
 }
 
-pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend) {
+pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, mut s: app::AgentSend) {
     let op_id = state.op_id();
     let mut diagnostic = crate::send_diagnostics::Trace::new(
         ctx.shell.clone(),
@@ -642,6 +642,18 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
         }),
     );
     diagnostic.stage("validation");
+    if state.chat.as_ref().is_some_and(|c| c.sending) {
+        diagnostic.rejection("already_sending");
+        return;
+    }
+    match super::send_recovery::release_for_send(state, ctx, &s.release_unconfirmed) {
+        Ok(token) => s.release_unconfirmed = token,
+        Err(error) => {
+            diagnostic.rejection("stale_or_busy_release");
+            state.toast(error.to_string(), true);
+            return;
+        }
+    }
     if state.chat.as_ref().is_some_and(|c| c.session.read_only) {
         state.toast(
             "Subagent transcripts are read-only; use the parent session",
@@ -668,17 +680,6 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
         diagnostic.rejection("no_conversation");
         return;
     };
-    if chat.sending {
-        diagnostic.rejection("already_sending");
-        return;
-    }
-    // A release names the refusal this conversation shows, nothing else.
-    if !s.release_unconfirmed.is_empty()
-        && chat.unconfirmed.as_ref().map(|u| &u.token) != Some(&s.release_unconfirmed)
-    {
-        diagnostic.rejection("stale_release");
-        return;
-    }
     let (device, session) = (chat.device.clone(), chat.session.id.clone());
     let tag = format!("{}:{}", op_id, s.draft_id);
     let request = v1::AgentSendRequest {
@@ -698,8 +699,8 @@ pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, s: app::AgentSend)
     if chat.draft.text == request.text {
         state.pending_drafts.insert(tag, chat.draft.clone());
     }
-    // An explicit release means the user checked the conversation on the Mac
-    // themselves; only that drops records this conversation never accounted for.
+    // Retry/ignore releases only the explicitly dismissed host latch.
+    // Local pending presentation is separate from provider delivery evidence.
     if !request.release_unconfirmed.is_empty() {
         super::admitted::release(state);
     }

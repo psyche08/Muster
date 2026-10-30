@@ -792,8 +792,8 @@ message AgentSendRequest {
   string session = 2;
   string text = 3;
   repeated AgentAttachment attachments = 4;
-  // An OpResult.unconfirmed token: the user checked the desktop app and that
-  // earlier write was not delivered. It stops blocking, then this sends.
+  // An OpResult.unconfirmed token explicitly released by the user before
+  // this send (retry, or send after ignoring). Not proof of delivery or absence.
   string release_unconfirmed = 5;
 }
 

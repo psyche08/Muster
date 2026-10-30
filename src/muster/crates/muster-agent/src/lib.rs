@@ -67,7 +67,7 @@ pub enum Error {
     #[error("outcome unknown: {0}")]
     UnknownOutcome(String),
     /// Not sent: an earlier write to the session has no provider receipt.
-    /// `operation` names it for a release once the user checked the app.
+    /// `operation` binds an explicit user release before another send.
     #[error("conflict: {message}")]
     Unconfirmed { operation: String, message: String },
     #[error("io: {0}")]
