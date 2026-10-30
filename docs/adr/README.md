@@ -118,11 +118,21 @@ records a specific decision and does not revive code on its delete list.
 
 | [0059](0059-first-public-apple-release.md) | Accepted; iOS review pending | First public Apple release and PR-only main |
 
+| [0060](0060-multica-runtime-recovery.md) | Proposed | Recover native runtime execution after release upgrades |
+
 | [0061](0061-send-receipt-format-and-manual-resolution.md) | Accepted | Provider URL formatting and explicit send resolution |
 
 | [0062](0062-scoped-composers-and-send-preparation-outcomes.md) | Accepted | Scoped composers and complete send-preparation diagnostics |
 
 | [0063](0063-queue-receipts-use-provider-text-matching.md) | Accepted | Provider-aware queued-message confirmation and display matching |
+
+| [0064](0064-multica-native-runtime.md) | Accepted; acceptance pending | Desktop-first Multica runtime adapters (draft ADR 0055) |
+
+| [0065](0065-native-session-identity-and-warm-creation.md) | Accepted; acceptance pending | Native session identity and warm Claude creation (draft ADR 0056) |
+
+| [0066](0066-native-codex-project-identity.md) | Proposed | Selected project identity (draft ADR 0057) |
+
+| [0067](0067-paired-release-1-1-4.md) | Accepted; release pending | Integrate runtime recovery and publish Apple 1.1.4 |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

@@ -21,7 +21,10 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWrite
 use tokio::sync::{Mutex, mpsc};
 
 mod host_rpc;
+mod native_host;
+pub mod scheduler;
 pub use host_rpc::RpcHost;
+pub use native_host::{NativeHost, TaskCredential};
 
 /// What this build answers a version probe with, and what `agentInfo` carries.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

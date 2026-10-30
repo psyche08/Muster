@@ -60,7 +60,7 @@ fn access_for(req: &Req) -> Access {
         })
     };
     match req {
-        Req::Multica(_) | Req::MulticaBrowse(_) => Access::LocalOnly,
+        Req::Multica(_) | Req::MulticaBrowse(_) | Req::AgentNativeCreate(_) => Access::LocalOnly,
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -326,7 +326,7 @@ impl Handler for MusterHandler {
             // Serialize all writes against a temporary-unlock transaction.
             // A normal request cannot slip in while its console is unlocked.
             let _console_write = if (access.writes_console()
-                || matches!(request, Req::DeviceSetCover(_)))
+                || matches!(request, Req::DeviceSetCover(_) | Req::AgentNativeCreate(_)))
                 && !independent_session(&daemon, &request)
             {
                 match daemon.locked_use.writes.clone().try_read_owned() {
@@ -702,7 +702,7 @@ impl<'a> AgentVisibility<'a> {
 /// could have started, the ledger records them as rejected instead of
 /// leaving an undecidable pending row. `subject` names the target in logs;
 /// no request body is ever logged.
-async fn ledgered<F>(
+pub(crate) async fn ledgered<F>(
     daemon: &Daemon,
     op_id: &str,
     kind: &str,
@@ -1624,6 +1624,14 @@ async fn dispatch(
         }
 
         // ------------------------------------------------------------- agent
+        Req::AgentNativeCreate(r) => {
+            let cancelled = events.cancelled().clone();
+            muster_agent::control_guard::scope(
+                Arc::new(move || !cancelled.is_cancelled()),
+                crate::native_create::create(daemon, r),
+            )
+            .await?
+        }
         Req::OrcaCreate(r) => {
             use muster_proto::Message as _;
             if r.op_id.is_empty() {
@@ -2945,5 +2953,19 @@ mod setup_permission_tests {
                 Access::Need(Permission::Terminal { control: true })
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod native_create_access_tests {
+    use super::*;
+    #[test]
+    fn native_scheduler_creation_is_local_owner_only() {
+        assert!(matches!(
+            access_for(&Req::AgentNativeCreate(
+                v1::AgentNativeCreateRequest::default()
+            )),
+            Access::LocalOnly
+        ));
     }
 }

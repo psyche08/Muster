@@ -52,7 +52,7 @@ muster-net       → core                       muster-relay → core, net  must
 muster-agent     → proto, core                muster-terminal → proto, core
 muster-browser   → paths                      muster-web   → (none)
 muster-platform  → proto, agent, store, core
-musterd          → browser, web, core, net, proto, store, rpc, terminal, agent, platform, paths
+musterd          → browser, web, core, net, proto, store, rpc, terminal, agent, platform, paths, acp
 muster-acp       → proto, rpc
 muster-cli       → proto, rpc, paths, browser, acp
 muster-app-core  → agent, proto, rpc, musterd, terminal, core, net

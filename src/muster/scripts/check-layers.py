@@ -40,6 +40,7 @@ ALLOWED = {
     "muster-platform": {"muster-proto", "muster-agent", "muster-store", "muster-core"},
     # Composition: the daemon and its command line.
     "musterd": {
+        "muster-acp",  # Native scheduler framing composed by the daemon bridge.
         "muster-browser",
         "muster-web",
         "muster-core",

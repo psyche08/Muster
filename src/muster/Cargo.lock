@@ -2040,8 +2040,10 @@ dependencies = [
  "async-trait",
  "muster-proto",
  "muster-rpc",
+ "rand 0.8.8",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -2225,6 +2227,7 @@ dependencies = [
  "rand 0.8.8",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -2323,6 +2326,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "clap",
  "data-encoding",
  "env_logger",
@@ -2350,6 +2354,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

@@ -23,3 +23,5 @@ forward ended without a response after dispatch | preserve unknown mutation outc
 # 1.0.80: Claude question submit requires the verified current button and focus.
 Question Submit changed; no key sent
 Approval control changed or left the conversation; no press sent
+
+MUSTER_NATIVE_V1 | Native Multica bridge framing survives releases after recovery (ADR 0060)

@@ -20,6 +20,8 @@ name = "musterd"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
+sha2.workspace = true
 muster-acp = { path = "../muster-acp" }
 url = "2"
 muster-browser = { path = "../muster-browser" }

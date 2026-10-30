@@ -152,3 +152,31 @@ mod tests {
 }
 
 pub mod history;
+
+#[cfg(test)]
+mod native_request_wire_compatibility {
+    use super::*;
+    #[test]
+    fn installed_native_creation_and_new_confirmation_have_distinct_tags() {
+        use v1::request::Req;
+        // Deployed 1.1.3 wire field 72 (length-delimited), with an empty payload.
+        let legacy = [0xc2, 0x04, 0x00];
+        assert!(matches!(
+            v1::Request::decode(legacy.as_slice()).unwrap().req,
+            Some(Req::AgentNativeCreate(_))
+        ));
+        let create = v1::Request {
+            req: Some(Req::AgentNativeCreate(Default::default())),
+        };
+        assert_eq!(create.encode_to_vec(), legacy);
+        let confirm = v1::Request {
+            req: Some(Req::AgentConfirmDelivered(Default::default())),
+        };
+        let wire = confirm.encode_to_vec();
+        assert_eq!(wire, [0xca, 0x04, 0x00]);
+        assert!(matches!(
+            v1::Request::decode(wire.as_slice()).unwrap().req,
+            Some(Req::AgentConfirmDelivered(_))
+        ));
+    }
+}

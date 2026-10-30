@@ -178,7 +178,7 @@ impl Host for RpcHost {
 /// An operation counts as done only when the daemon applied it, or returned
 /// the result of the identical earlier one. A rejection and an undecidable
 /// outcome are both reported; neither is retried here.
-fn accept_op(result: v1::OpResult) -> Result<(), String> {
+pub(crate) fn accept_op(result: v1::OpResult) -> Result<(), String> {
     use v1::op_result::Status;
     match Status::try_from(result.status) {
         Ok(Status::Applied) | Ok(Status::Duplicate) => Ok(()),

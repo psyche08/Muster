@@ -388,7 +388,7 @@ fn scan_sidebar(
     use muster_agent::profile::SessionList;
     let sessions = profile.controls.sessions;
     let mut navigation = Vec::new();
-    let app_walk = app.walk_report(|node| {
+    let app_walk = app.walk_pruned_report(|node| {
         let id = node
             .string("AXIdentifier")
             .or_else(|| node.string("AXDOMIdentifier"))
