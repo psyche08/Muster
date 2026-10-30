@@ -293,6 +293,7 @@ struct ChatComposer: View {
             .textFieldStyle(.plain).lineLimit((style == .claude ? 1 : 3)...8)
             .frame(minHeight: style == .claude ? 28 : 60, alignment: .topLeading)
             .disabled(busy).onSubmit(send)
+            .modifier(ComposerReturnKey(send: send))
             .onPasteCommand(of: [.image, .fileURL], perform: load)
         #else
         ZStack(alignment: .topLeading) {
