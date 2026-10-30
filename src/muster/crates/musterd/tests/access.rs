@@ -228,6 +228,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         v1::multica_request::Action::Check,
         v1::multica_request::Action::Install,
         v1::multica_request::Action::Save,
+        v1::multica_request::Action::Progress,
     ] {
         assert!(unauthorized(
             &remote

@@ -8651,7 +8651,8 @@ export namespace muster {
             enum Action {
                 CHECK = 0,
                 SAVE = 1,
-                INSTALL = 2
+                INSTALL = 2,
+                PROGRESS = 3
             }
         }
 
@@ -8693,6 +8694,9 @@ export namespace muster {
 
             /** MulticaStatus busy */
             busy?: (boolean|null);
+
+            /** MulticaStatus installation */
+            installation?: (muster.v1.IMulticaInstallation|null);
         }
 
         /** Represents a MulticaStatus. */
@@ -8740,6 +8744,9 @@ export namespace muster {
             /** MulticaStatus busy. */
             public busy: boolean;
 
+            /** MulticaStatus installation. */
+            public installation?: (muster.v1.IMulticaInstallation|null);
+
             /**
              * Creates a new MulticaStatus instance using the specified properties.
              * @param [properties] Properties to set
@@ -8767,6 +8774,82 @@ export namespace muster {
 
             /**
              * Gets the default type url for MulticaStatus
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaInstallation. */
+        interface IMulticaInstallation {
+
+            /** MulticaInstallation busy */
+            busy?: (boolean|null);
+
+            /** MulticaInstallation finished */
+            finished?: (boolean|null);
+
+            /** MulticaInstallation succeeded */
+            succeeded?: (boolean|null);
+
+            /** MulticaInstallation stage */
+            stage?: (string|null);
+
+            /** MulticaInstallation log */
+            log?: (string|null);
+        }
+
+        /** Represents a MulticaInstallation. */
+        class MulticaInstallation implements IMulticaInstallation {
+
+            /**
+             * Constructs a new MulticaInstallation.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaInstallation);
+
+            /** MulticaInstallation busy. */
+            public busy: boolean;
+
+            /** MulticaInstallation finished. */
+            public finished: boolean;
+
+            /** MulticaInstallation succeeded. */
+            public succeeded: boolean;
+
+            /** MulticaInstallation stage. */
+            public stage: string;
+
+            /** MulticaInstallation log. */
+            public log: string;
+
+            /**
+             * Creates a new MulticaInstallation instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaInstallation instance
+             */
+            public static create(properties?: muster.v1.IMulticaInstallation): muster.v1.MulticaInstallation;
+
+            /**
+             * Encodes the specified MulticaInstallation message. Does not implicitly {@link muster.v1.MulticaInstallation.verify|verify} messages.
+             * @param message MulticaInstallation message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaInstallation, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaInstallation message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaInstallation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaInstallation;
+
+            /**
+             * Gets the default type url for MulticaInstallation
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

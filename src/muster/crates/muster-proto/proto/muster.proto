@@ -1009,7 +1009,7 @@ message PresenceInfo {
 
 // Container administration and local deployment configuration are local-owner only.
 message MulticaRequest {
-  enum Action { CHECK = 0; SAVE = 1; INSTALL = 2; }
+  enum Action { CHECK = 0; SAVE = 1; INSTALL = 2; PROGRESS = 3; }
   Action action = 1;
   string data_dir = 2;
   string installer_url = 3;
@@ -1031,6 +1031,15 @@ message MulticaStatus {
   string message = 10;
   string login_command = 11;
   bool busy = 12;
+  MulticaInstallation installation = 13;
+}
+// Transient local-owner installation diagnostics; never an authorization receipt.
+message MulticaInstallation {
+  bool busy = 1;
+  bool finished = 2;
+  bool succeeded = 3;
+  string stage = 4;
+  string log = 5;
 }
 
 // Local-owner read-only projection; never contains login or custom environment.

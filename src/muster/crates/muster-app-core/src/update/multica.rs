@@ -4,17 +4,101 @@ pub(super) fn request(state: &mut State, ctx: &Ctx, request: v1::MulticaRequest)
         return;
     }
     state.multica.busy = true;
+    let installing = request.action == v1::multica_request::Action::Install as i32;
+    if installing {
+        state.multica.installation = Some(v1::MulticaInstallation {
+            busy: true,
+            stage: "正在连接安装服务…".into(),
+            ..Default::default()
+        });
+    }
     let client = ctx.backend.local().clone();
+    let tx = ctx.tx.clone();
     spawn(ctx, async move {
         let result = async {
-            match unary(&client, Req::Multica(request)).await? {
-                Resp::Multica(status) => Ok(status),
-                _ => Err(unexpected()),
+            let pending = unary(&client, Req::Multica(request));
+            tokio::pin!(pending);
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut status = loop {
+                tokio::select! {
+                    result = &mut pending => break match result? {
+                        Resp::Multica(status) => status,
+                        _ => return Err(unexpected()),
+                    },
+                    _ = interval.tick(), if installing => {
+                        if let Ok(status) = progress(&client).await {
+                            if let Some(progress) = status.installation.filter(|p| p.busy) {
+                                let _ = tx.send(loop_message(Msg::MulticaProgress(progress)));
+                            }
+                        }
+                    }
+                }
+            };
+            // Publish the full projection so Settings is visible during recovery.
+            if status.installation.as_ref().is_some_and(|p| p.busy) {
+                let _ = tx.send(loop_message(Msg::Multica(Ok(status.clone()))));
             }
+            // Recover a daemon-owned installation after the app reconnects.
+            while status.installation.as_ref().is_some_and(|p| p.busy) {
+                if let Some(progress) = status.installation.take() {
+                    let _ = tx.send(loop_message(Msg::MulticaProgress(progress)));
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                status = progress(&client).await?;
+                if !status.installation.as_ref().is_some_and(|p| p.busy) {
+                    status =
+                        match unary(&client, Req::Multica(v1::MulticaRequest::default())).await? {
+                            Resp::Multica(status) => status,
+                            _ => return Err(unexpected()),
+                        };
+                }
+            }
+            Ok(status)
         }
         .await;
         Msg::Multica(result)
     });
+}
+
+async fn progress(client: &Client) -> Result<v1::MulticaStatus, Error> {
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        unary(
+            client,
+            Req::Multica(v1::MulticaRequest {
+                action: v1::multica_request::Action::Progress as i32,
+                ..Default::default()
+            }),
+        ),
+    )
+    .await
+    .map_err(|_| Error::Rpc("Multica progress query timed out".into()))??
+    {
+        Resp::Multica(status) => Ok(status),
+        _ => Err(unexpected()),
+    }
+}
+
+pub(super) fn apply_result(state: &mut State, result: Result<v1::MulticaStatus, Error>) {
+    state.multica.busy = false;
+    match result {
+        Ok(status) => state.multica = status,
+        Err(error) => {
+            state.multica.message = error.to_string();
+            if let Some(progress) = &mut state.multica.installation {
+                if progress.busy {
+                    progress.busy = false;
+                    progress.finished = true;
+                    progress.succeeded = false;
+                    progress.stage = "连接中断，安装结果尚未确认；请刷新状态，不要重复安装".into();
+                    progress
+                        .log
+                        .push_str(&format!("\n{}\n", state.multica.message));
+                }
+            }
+        }
+    }
 }
 
 pub(super) fn browse(state: &mut State, ctx: &Ctx, request: v1::MulticaBrowseRequest) {
@@ -75,6 +159,23 @@ pub(super) fn apply_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interrupted_install_keeps_logs_and_requires_status_check() {
+        let mut state = State::new(false, Some("local".into()));
+        state.multica.busy = true;
+        state.multica.installation = Some(v1::MulticaInstallation {
+            busy: true,
+            log: "Downloading package\n".into(),
+            ..Default::default()
+        });
+        apply_result(&mut state, Err(Error::Rpc("connection closed".into())));
+        assert!(!state.multica.busy);
+        let progress = state.multica.installation.unwrap();
+        assert!(!progress.busy && !progress.succeeded && progress.finished);
+        assert!(progress.log.contains("Downloading package"));
+        assert!(progress.stage.contains("尚未确认"));
+    }
+
     #[test]
     fn late_workspace_and_detail_responses_cannot_replace_the_current_selection() {
         let mut state = State::new(false, Some("local".into()));

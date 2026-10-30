@@ -3828,6 +3828,7 @@ public nonisolated struct Muster_V1_MulticaRequest: Sendable {
     case check // = 0
     case save // = 1
     case install // = 2
+    case progress // = 3
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -3839,6 +3840,7 @@ public nonisolated struct Muster_V1_MulticaRequest: Sendable {
       case 0: self = .check
       case 1: self = .save
       case 2: self = .install
+      case 3: self = .progress
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -3848,6 +3850,7 @@ public nonisolated struct Muster_V1_MulticaRequest: Sendable {
       case .check: return 0
       case .save: return 1
       case .install: return 2
+      case .progress: return 3
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -3857,6 +3860,7 @@ public nonisolated struct Muster_V1_MulticaRequest: Sendable {
       .check,
       .save,
       .install,
+      .progress,
     ]
 
   }
@@ -3864,34 +3868,102 @@ public nonisolated struct Muster_V1_MulticaRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Muster_V1_MulticaStatus: Sendable {
+public nonisolated struct Muster_V1_MulticaStatus: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var supported: Bool = false
+  public var supported: Bool {
+    get {_storage._supported}
+    set {_uniqueStorage()._supported = newValue}
+  }
 
-  public var installed: Bool = false
+  public var installed: Bool {
+    get {_storage._installed}
+    set {_uniqueStorage()._installed = newValue}
+  }
 
-  public var running: Bool = false
+  public var running: Bool {
+    get {_storage._running}
+    set {_uniqueStorage()._running = newValue}
+  }
 
-  public var dataDir: String = String()
+  public var dataDir: String {
+    get {_storage._dataDir}
+    set {_uniqueStorage()._dataDir = newValue}
+  }
 
-  public var installerURL: String = String()
+  public var installerURL: String {
+    get {_storage._installerURL}
+    set {_uniqueStorage()._installerURL = newValue}
+  }
 
-  public var serverURL: String = String()
+  public var serverURL: String {
+    get {_storage._serverURL}
+    set {_uniqueStorage()._serverURL = newValue}
+  }
 
-  public var appURL: String = String()
+  public var appURL: String {
+    get {_storage._appURL}
+    set {_uniqueStorage()._appURL = newValue}
+  }
 
-  public var keepAlive: Bool = false
+  public var keepAlive: Bool {
+    get {_storage._keepAlive}
+    set {_uniqueStorage()._keepAlive = newValue}
+  }
 
-  public var containerName: String = String()
+  public var containerName: String {
+    get {_storage._containerName}
+    set {_uniqueStorage()._containerName = newValue}
+  }
 
-  public var message: String = String()
+  public var message: String {
+    get {_storage._message}
+    set {_uniqueStorage()._message = newValue}
+  }
 
-  public var loginCommand: String = String()
+  public var loginCommand: String {
+    get {_storage._loginCommand}
+    set {_uniqueStorage()._loginCommand = newValue}
+  }
+
+  public var busy: Bool {
+    get {_storage._busy}
+    set {_uniqueStorage()._busy = newValue}
+  }
+
+  public var installation: Muster_V1_MulticaInstallation {
+    get {_storage._installation ?? Muster_V1_MulticaInstallation()}
+    set {_uniqueStorage()._installation = newValue}
+  }
+  /// Returns true if `installation` has been explicitly set.
+  public var hasInstallation: Bool {_storage._installation != nil}
+  /// Clears the value of `installation`. Subsequent reads from it will return its default value.
+  public mutating func clearInstallation() {_uniqueStorage()._installation = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// Transient local-owner installation diagnostics; never an authorization receipt.
+public nonisolated struct Muster_V1_MulticaInstallation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
 
   public var busy: Bool = false
+
+  public var finished: Bool = false
+
+  public var succeeded: Bool = false
+
+  public var stage: String = String()
+
+  public var log: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -11410,12 +11482,166 @@ nonisolated extension Muster_V1_MulticaRequest: SwiftProtobuf.Message, SwiftProt
 }
 
 nonisolated extension Muster_V1_MulticaRequest.Action: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHECK\0\u{1}SAVE\0\u{1}INSTALL\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHECK\0\u{1}SAVE\0\u{1}INSTALL\0\u{1}PROGRESS\0")
 }
 
 nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}installed\0\u{1}running\0\u{3}data_dir\0\u{3}installer_url\0\u{3}server_url\0\u{3}app_url\0\u{3}keep_alive\0\u{3}container_name\0\u{1}message\0\u{3}login_command\0\u{1}busy\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}installed\0\u{1}running\0\u{3}data_dir\0\u{3}installer_url\0\u{3}server_url\0\u{3}app_url\0\u{3}keep_alive\0\u{3}container_name\0\u{1}message\0\u{3}login_command\0\u{1}busy\0\u{1}installation\0")
+
+  fileprivate class _StorageClass {
+    var _supported: Bool = false
+    var _installed: Bool = false
+    var _running: Bool = false
+    var _dataDir: String = String()
+    var _installerURL: String = String()
+    var _serverURL: String = String()
+    var _appURL: String = String()
+    var _keepAlive: Bool = false
+    var _containerName: String = String()
+    var _message: String = String()
+    var _loginCommand: String = String()
+    var _busy: Bool = false
+    var _installation: Muster_V1_MulticaInstallation? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _supported = source._supported
+      _installed = source._installed
+      _running = source._running
+      _dataDir = source._dataDir
+      _installerURL = source._installerURL
+      _serverURL = source._serverURL
+      _appURL = source._appURL
+      _keepAlive = source._keepAlive
+      _containerName = source._containerName
+      _message = source._message
+      _loginCommand = source._loginCommand
+      _busy = source._busy
+      _installation = source._installation
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularBoolField(value: &_storage._supported) }()
+        case 2: try { try decoder.decodeSingularBoolField(value: &_storage._installed) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._running) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._dataDir) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._installerURL) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._serverURL) }()
+        case 7: try { try decoder.decodeSingularStringField(value: &_storage._appURL) }()
+        case 8: try { try decoder.decodeSingularBoolField(value: &_storage._keepAlive) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._containerName) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._message) }()
+        case 11: try { try decoder.decodeSingularStringField(value: &_storage._loginCommand) }()
+        case 12: try { try decoder.decodeSingularBoolField(value: &_storage._busy) }()
+        case 13: try { try decoder.decodeSingularMessageField(value: &_storage._installation) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._supported != false {
+        try visitor.visitSingularBoolField(value: _storage._supported, fieldNumber: 1)
+      }
+      if _storage._installed != false {
+        try visitor.visitSingularBoolField(value: _storage._installed, fieldNumber: 2)
+      }
+      if _storage._running != false {
+        try visitor.visitSingularBoolField(value: _storage._running, fieldNumber: 3)
+      }
+      if !_storage._dataDir.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._dataDir, fieldNumber: 4)
+      }
+      if !_storage._installerURL.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._installerURL, fieldNumber: 5)
+      }
+      if !_storage._serverURL.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._serverURL, fieldNumber: 6)
+      }
+      if !_storage._appURL.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._appURL, fieldNumber: 7)
+      }
+      if _storage._keepAlive != false {
+        try visitor.visitSingularBoolField(value: _storage._keepAlive, fieldNumber: 8)
+      }
+      if !_storage._containerName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._containerName, fieldNumber: 9)
+      }
+      if !_storage._message.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._message, fieldNumber: 10)
+      }
+      if !_storage._loginCommand.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._loginCommand, fieldNumber: 11)
+      }
+      if _storage._busy != false {
+        try visitor.visitSingularBoolField(value: _storage._busy, fieldNumber: 12)
+      }
+      try { if let v = _storage._installation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaStatus, rhs: Muster_V1_MulticaStatus) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._supported != rhs_storage._supported {return false}
+        if _storage._installed != rhs_storage._installed {return false}
+        if _storage._running != rhs_storage._running {return false}
+        if _storage._dataDir != rhs_storage._dataDir {return false}
+        if _storage._installerURL != rhs_storage._installerURL {return false}
+        if _storage._serverURL != rhs_storage._serverURL {return false}
+        if _storage._appURL != rhs_storage._appURL {return false}
+        if _storage._keepAlive != rhs_storage._keepAlive {return false}
+        if _storage._containerName != rhs_storage._containerName {return false}
+        if _storage._message != rhs_storage._message {return false}
+        if _storage._loginCommand != rhs_storage._loginCommand {return false}
+        if _storage._busy != rhs_storage._busy {return false}
+        if _storage._installation != rhs_storage._installation {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaInstallation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaInstallation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}busy\0\u{1}finished\0\u{1}succeeded\0\u{1}stage\0\u{1}log\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -11423,76 +11649,41 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self.supported) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self.installed) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.running) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.dataDir) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.installerURL) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.serverURL) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.appURL) }()
-      case 8: try { try decoder.decodeSingularBoolField(value: &self.keepAlive) }()
-      case 9: try { try decoder.decodeSingularStringField(value: &self.containerName) }()
-      case 10: try { try decoder.decodeSingularStringField(value: &self.message) }()
-      case 11: try { try decoder.decodeSingularStringField(value: &self.loginCommand) }()
-      case 12: try { try decoder.decodeSingularBoolField(value: &self.busy) }()
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.busy) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.finished) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.succeeded) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.stage) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.log) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.supported != false {
-      try visitor.visitSingularBoolField(value: self.supported, fieldNumber: 1)
-    }
-    if self.installed != false {
-      try visitor.visitSingularBoolField(value: self.installed, fieldNumber: 2)
-    }
-    if self.running != false {
-      try visitor.visitSingularBoolField(value: self.running, fieldNumber: 3)
-    }
-    if !self.dataDir.isEmpty {
-      try visitor.visitSingularStringField(value: self.dataDir, fieldNumber: 4)
-    }
-    if !self.installerURL.isEmpty {
-      try visitor.visitSingularStringField(value: self.installerURL, fieldNumber: 5)
-    }
-    if !self.serverURL.isEmpty {
-      try visitor.visitSingularStringField(value: self.serverURL, fieldNumber: 6)
-    }
-    if !self.appURL.isEmpty {
-      try visitor.visitSingularStringField(value: self.appURL, fieldNumber: 7)
-    }
-    if self.keepAlive != false {
-      try visitor.visitSingularBoolField(value: self.keepAlive, fieldNumber: 8)
-    }
-    if !self.containerName.isEmpty {
-      try visitor.visitSingularStringField(value: self.containerName, fieldNumber: 9)
-    }
-    if !self.message.isEmpty {
-      try visitor.visitSingularStringField(value: self.message, fieldNumber: 10)
-    }
-    if !self.loginCommand.isEmpty {
-      try visitor.visitSingularStringField(value: self.loginCommand, fieldNumber: 11)
-    }
     if self.busy != false {
-      try visitor.visitSingularBoolField(value: self.busy, fieldNumber: 12)
+      try visitor.visitSingularBoolField(value: self.busy, fieldNumber: 1)
+    }
+    if self.finished != false {
+      try visitor.visitSingularBoolField(value: self.finished, fieldNumber: 2)
+    }
+    if self.succeeded != false {
+      try visitor.visitSingularBoolField(value: self.succeeded, fieldNumber: 3)
+    }
+    if !self.stage.isEmpty {
+      try visitor.visitSingularStringField(value: self.stage, fieldNumber: 4)
+    }
+    if !self.log.isEmpty {
+      try visitor.visitSingularStringField(value: self.log, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Muster_V1_MulticaStatus, rhs: Muster_V1_MulticaStatus) -> Bool {
-    if lhs.supported != rhs.supported {return false}
-    if lhs.installed != rhs.installed {return false}
-    if lhs.running != rhs.running {return false}
-    if lhs.dataDir != rhs.dataDir {return false}
-    if lhs.installerURL != rhs.installerURL {return false}
-    if lhs.serverURL != rhs.serverURL {return false}
-    if lhs.appURL != rhs.appURL {return false}
-    if lhs.keepAlive != rhs.keepAlive {return false}
-    if lhs.containerName != rhs.containerName {return false}
-    if lhs.message != rhs.message {return false}
-    if lhs.loginCommand != rhs.loginCommand {return false}
+  public static func ==(lhs: Muster_V1_MulticaInstallation, rhs: Muster_V1_MulticaInstallation) -> Bool {
     if lhs.busy != rhs.busy {return false}
+    if lhs.finished != rhs.finished {return false}
+    if lhs.succeeded != rhs.succeeded {return false}
+    if lhs.stage != rhs.stage {return false}
+    if lhs.log != rhs.log {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

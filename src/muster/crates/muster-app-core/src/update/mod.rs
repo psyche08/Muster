@@ -127,6 +127,7 @@ pub enum Msg {
         message: Vec<u8>,
     },
     Multica(Result<v1::MulticaStatus, Error>),
+    MulticaProgress(v1::MulticaInstallation),
     MulticaPage {
         generation: u64,
         result: Result<v1::MulticaPage, Error>,
@@ -586,11 +587,10 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             message,
         ),
         Msg::MulticaPage { generation, result } => multica::apply_page(state, generation, result),
-        Msg::Multica(result) => {
-            state.multica.busy = false;
-            match result {
-                Ok(status) => state.multica = status,
-                Err(error) => state.multica.message = error.to_string(),
+        Msg::Multica(result) => multica::apply_result(state, result),
+        Msg::MulticaProgress(progress) => {
+            if state.multica.busy {
+                state.multica.installation = Some(progress);
             }
         }
         Msg::DiagnosticsUploaded { name, result } => {
