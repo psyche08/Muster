@@ -109,6 +109,15 @@ pub(crate) fn outcome(state: &mut State, op_id: &str, unknown: bool, error: &str
     bump(state);
 }
 
+/// Remove only this operation's local placeholder, never a provider record.
+pub(crate) fn dismiss(state: &mut State, op: &str) {
+    let Some(chat) = &state.chat else { return };
+    if let Some(records) = state.admitted.get_mut(&key(&chat.device, &chat.session.id)) {
+        records.retain(|r| r.op_id != op);
+        bump(state);
+    }
+}
+
 pub(crate) fn user_confirmed(state: &mut State, device: &str, session: &str, op: &str) {
     if let Some(records) = state.admitted.get_mut(&key(device, session)) {
         if let Some(record) = records.iter_mut().find(|r| r.op_id == op) {

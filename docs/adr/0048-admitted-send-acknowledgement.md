@@ -114,3 +114,9 @@ transcript carries it. ADR 0047 records the release evidence for both.
 ### Subsequent decision
 
 [ADR 0061](0061-send-receipt-format-and-manual-resolution.md) supersedes exact-text-only matching for Codex URL formatting and adds separately recorded user confirmation without replay.
+
+### Retry and ignore follow-up
+
+[ADR 0068](0068-send-retry-and-ignore.md) supersedes the visible recovery actions
+and inspect-before-explicit-release UI policy. Explicit dismissal does not assert
+delivery; read-only reconciliation and host receipt checks remain in place.

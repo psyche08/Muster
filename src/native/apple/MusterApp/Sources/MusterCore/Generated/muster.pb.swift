@@ -3145,8 +3145,8 @@ public nonisolated struct Muster_V1_AgentSendRequest: Sendable {
 
   public var attachments: [Muster_V1_AgentAttachment] = []
 
-  /// An OpResult.unconfirmed token: the user checked the desktop app and that
-  /// earlier write was not delivered. It stops blocking, then this sends.
+  /// An OpResult.unconfirmed token explicitly released by the user before
+  /// this send (retry, or send after ignoring). Not proof of delivery or absence.
   public var releaseUnconfirmed: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

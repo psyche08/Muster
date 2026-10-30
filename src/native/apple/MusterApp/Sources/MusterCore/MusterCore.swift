@@ -182,8 +182,8 @@ public final class MusterCore: MusterShell {
         send(.chatSetOptions(Muster_App_ChatSetOptions.with { $0.model = model; $0.effort = effort }))
     }
 
-    /// `releaseUnconfirmed`: the token of `ChatView.unconfirmed`, once the
-    /// user has checked on the Mac that the earlier send never arrived.
+    /// `releaseUnconfirmed`: the visible notice token for an explicit retry.
+    /// Shared Rust validates and consumes it through the ordinary send path.
     public func agentSend(_ text: String, attachments: [Muster_V1_AgentAttachment] = [], draftID: String = "",
                           releaseUnconfirmed: String = "") {
         send(.agentSend(Muster_App_AgentSend.with {
@@ -213,6 +213,10 @@ public final class MusterCore: MusterShell {
     }
 
     public func cancelLockedUse() { send(.cancelLockedUse(Muster_App_CancelLockedUse())) }
+    public func ignoreAgentSend(token: String) {
+        send(.resolveAgentSend(Muster_App_ResolveAgentSend.with { $0.token = token; $0.dismiss = true }))
+    }
+
     public func resolveAgentSend(token: String, delivered: Bool) {
         send(.resolveAgentSend(Muster_App_ResolveAgentSend.with { $0.token = token; $0.delivered = delivered }))
     }

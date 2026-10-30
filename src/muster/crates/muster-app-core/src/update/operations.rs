@@ -467,6 +467,13 @@ pub(super) fn msg_op_done(
     response_origin: Option<(String, String)>,
     result: Result<v1::OpResult, Error>,
 ) {
+    // Capture presentation dismissal before terminal settlement clears its journal.
+    let dismissed_notice = what == "send"
+        && response_origin.as_ref().is_some_and(|(session, _)| {
+            result.as_ref().is_ok_and(|r| {
+                super::send_recovery::is_dismissed(state, ctx, &device, session, &r.unconfirmed)
+            })
+        });
     let mut draft_saved = true;
     // A late success clears only the exact submitted revision, even
     // after navigation. Failure/unknown and subsequent edits survive.
@@ -529,7 +536,9 @@ pub(super) fn msg_op_done(
     // A send refused behind an unconfirmed earlier one: the conversation
     // offers its release instead of a toast.
     let unconfirmed = match &result {
-        Ok(r) if what == "send" && same_origin && !r.unconfirmed.is_empty() => {
+        Ok(r)
+            if what == "send" && same_origin && !r.unconfirmed.is_empty() && !dismissed_notice =>
+        {
             Some(app::UnconfirmedSend {
                 token: r.unconfirmed.clone(),
                 message: r.message.clone(),

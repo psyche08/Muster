@@ -1120,6 +1120,9 @@ public nonisolated struct Muster_App_ResolveAgentSend: Sendable {
   /// False: recheck only. True: the user explicitly saw the message on the Mac.
   public var delivered: Bool = false
 
+  /// Hide this notice without asserting delivery or dispatching a send.
+  public var dismiss: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3307,6 +3310,9 @@ public nonisolated struct Muster_App_PendingAgentSend: Sendable {
 
   public var draftID: String = String()
 
+  /// Consumed by the next explicit send; not evidence of delivery.
+  public var dismissedToken: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -5132,7 +5138,7 @@ nonisolated extension Muster_App_OpenAgent: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Muster_App_ResolveAgentSend: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ResolveAgentSend"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}delivered\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}delivered\0\u{1}dismiss\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5142,6 +5148,7 @@ nonisolated extension Muster_App_ResolveAgentSend: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.delivered) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.dismiss) }()
       default: break
       }
     }
@@ -5154,12 +5161,16 @@ nonisolated extension Muster_App_ResolveAgentSend: SwiftProtobuf.Message, SwiftP
     if self.delivered != false {
       try visitor.visitSingularBoolField(value: self.delivered, fieldNumber: 2)
     }
+    if self.dismiss != false {
+      try visitor.visitSingularBoolField(value: self.dismiss, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_App_ResolveAgentSend, rhs: Muster_App_ResolveAgentSend) -> Bool {
     if lhs.token != rhs.token {return false}
     if lhs.delivered != rhs.delivered {return false}
+    if lhs.dismiss != rhs.dismiss {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9221,7 +9232,7 @@ nonisolated extension Muster_App_CodeRunView: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_App_PendingAgentSend: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingAgentSend"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}draft\0\u{3}draft_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}draft\0\u{3}draft_id\0\u{3}dismissed_token\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9232,6 +9243,7 @@ nonisolated extension Muster_App_PendingAgentSend: SwiftProtobuf.Message, SwiftP
       case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._draft) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.draftID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.dismissedToken) }()
       default: break
       }
     }
@@ -9251,6 +9263,9 @@ nonisolated extension Muster_App_PendingAgentSend: SwiftProtobuf.Message, SwiftP
     if !self.draftID.isEmpty {
       try visitor.visitSingularStringField(value: self.draftID, fieldNumber: 3)
     }
+    if !self.dismissedToken.isEmpty {
+      try visitor.visitSingularStringField(value: self.dismissedToken, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9258,6 +9273,7 @@ nonisolated extension Muster_App_PendingAgentSend: SwiftProtobuf.Message, SwiftP
     if lhs._request != rhs._request {return false}
     if lhs._draft != rhs._draft {return false}
     if lhs.draftID != rhs.draftID {return false}
+    if lhs.dismissedToken != rhs.dismissedToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

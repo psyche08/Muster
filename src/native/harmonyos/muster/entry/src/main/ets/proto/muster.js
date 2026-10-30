@@ -28572,6 +28572,7 @@ export const muster = $root.muster = (() => {
              * @interface IResolveAgentSend
              * @property {string|null} [token] ResolveAgentSend token
              * @property {boolean|null} [delivered] ResolveAgentSend delivered
+             * @property {boolean|null} [dismiss] ResolveAgentSend dismiss
              */
 
             /**
@@ -28606,6 +28607,14 @@ export const muster = $root.muster = (() => {
             ResolveAgentSend.prototype.delivered = false;
 
             /**
+             * ResolveAgentSend dismiss.
+             * @member {boolean} dismiss
+             * @memberof muster.app.ResolveAgentSend
+             * @instance
+             */
+            ResolveAgentSend.prototype.dismiss = false;
+
+            /**
              * Creates a new ResolveAgentSend instance using the specified properties.
              * @function create
              * @memberof muster.app.ResolveAgentSend
@@ -28637,6 +28646,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.token);
                 if (message.delivered != null && Object.hasOwnProperty.call(message, "delivered"))
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.delivered);
+                if (message.dismiss != null && Object.hasOwnProperty.call(message, "dismiss"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dismiss);
                 return writer;
             };
 
@@ -28680,6 +28691,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 2: {
                             message.delivered = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.dismiss = reader.bool();
                             break;
                         }
                     default:
@@ -42850,6 +42865,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentSendRequest|null} [request] PendingAgentSend request
              * @property {muster.app.IChatDraft|null} [draft] PendingAgentSend draft
              * @property {string|null} [draftId] PendingAgentSend draftId
+             * @property {string|null} [dismissedToken] PendingAgentSend dismissedToken
              */
 
             /**
@@ -42892,6 +42908,14 @@ export const muster = $root.muster = (() => {
             PendingAgentSend.prototype.draftId = "";
 
             /**
+             * PendingAgentSend dismissedToken.
+             * @member {string} dismissedToken
+             * @memberof muster.app.PendingAgentSend
+             * @instance
+             */
+            PendingAgentSend.prototype.dismissedToken = "";
+
+            /**
              * Creates a new PendingAgentSend instance using the specified properties.
              * @function create
              * @memberof muster.app.PendingAgentSend
@@ -42925,6 +42949,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.ChatDraft.encode(message.draft, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                 if (message.draftId != null && Object.hasOwnProperty.call(message, "draftId"))
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.draftId);
+                if (message.dismissedToken != null && Object.hasOwnProperty.call(message, "dismissedToken"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.dismissedToken);
                 return writer;
             };
 
@@ -42972,6 +42998,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 3: {
                             message.draftId = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.dismissedToken = reader.string();
                             break;
                         }
                     default:

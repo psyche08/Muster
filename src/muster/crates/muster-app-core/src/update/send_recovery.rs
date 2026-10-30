@@ -1,4 +1,4 @@
-//! Durable investigation of an original send. This module never dispatches a send.
+//! Durable investigation and dismissal of an original send; no send dispatch here.
 use super::*;
 use crate::state::Watch;
 
@@ -9,6 +9,74 @@ fn load(ctx: &Ctx, key: &str) -> Option<app::PendingAgentSend> {
     ctx.cache
         .get::<app::PendingAgentSend>(key)
         .filter(|p| p.request.is_some())
+}
+
+fn dismissed_token(state: &State, ctx: &Ctx, device: &str, session: &str) -> String {
+    ctx.cache
+        .get::<app::PendingAgentSend>(&key(state, device, session))
+        .map_or_else(String::new, |p| p.dismissed_token)
+}
+
+pub(super) fn is_dismissed(
+    state: &State,
+    ctx: &Ctx,
+    device: &str,
+    session: &str,
+    token: &str,
+) -> bool {
+    !token.is_empty() && dismissed_token(state, ctx, device, session) == token
+}
+
+/// Hiding an unknown result is not an assertion of delivery. Persist together
+/// with the request so the next normal send replaces both in one durable write.
+fn dismiss(state: &mut State, ctx: &Ctx, token: &str) -> Result<(), Error> {
+    let Some(chat) = &state.chat else {
+        return Err(Error::Invalid("No conversation".into()));
+    };
+    if chat.sending || chat.unconfirmed.as_ref().map(|u| u.token.as_str()) != Some(token) {
+        return Err(Error::Invalid("发送提示已更新，请使用当前提示".into()));
+    }
+    let notice_op = super::admitted::op_of(&chat.pending_draft_id).to_owned();
+    let key = key(state, &chat.device, &chat.session.id);
+    let mut pending = ctx
+        .cache
+        .get::<app::PendingAgentSend>(&key)
+        .unwrap_or_default();
+    pending.dismissed_token = token.to_owned();
+    ctx.cache
+        .put_durable(key, &pending)
+        .map_err(|e| Error::Unavailable(format!("无法关闭发送提示：{e}")))?;
+    state.chat.as_mut().expect("checked").unconfirmed = None;
+    super::admitted::dismiss(state, token);
+    if notice_op != token {
+        super::admitted::dismiss(state, &notice_op);
+    }
+    Ok(())
+}
+
+/// Both the retry button and subsequent ordinary sends use the normal send
+/// reducer. A dismissed token only authorizes that reducer's next explicit send.
+pub(super) fn release_for_send(
+    state: &mut State,
+    ctx: &Ctx,
+    explicit: &str,
+) -> Result<String, Error> {
+    let Some(chat) = &state.chat else {
+        return Ok(String::new());
+    };
+    if chat.sending {
+        return Err(Error::Busy("消息正在发送".into()));
+    }
+    let dismissed = dismissed_token(state, ctx, &chat.device, &chat.session.id);
+    if explicit.is_empty() {
+        return Ok(dismissed);
+    }
+    if chat.unconfirmed.as_ref().map(|u| u.token.as_str()) == Some(explicit) {
+        dismiss(state, ctx, explicit)?;
+    } else if dismissed != explicit {
+        return Err(Error::Invalid("发送提示已更新，请使用当前提示".into()));
+    }
+    Ok(explicit.to_owned())
 }
 
 pub(super) fn prepare(
@@ -36,6 +104,7 @@ pub(super) fn prepare(
             .filter(|c| c.draft.text == request.text)
             .map(|c| c.draft.clone()),
         draft_id: draft_id.to_owned(),
+        dismissed_token: String::new(),
     };
     ctx.cache
         .put_durable(key.clone(), &pending)
@@ -129,14 +198,20 @@ pub(super) fn restore(state: &mut State, ctx: &Ctx) {
         {
             chat.draft = draft.clone();
         }
-        if let Some(chat) = &mut state.chat {
-            chat.pending_draft_id = pending.draft_id.clone();
-            chat.unconfirmed = Some(app::UnconfirmedSend {
-                token: pending.request.as_ref().expect("loaded").op_id.clone(),
+        let request = pending.request.as_ref().expect("loaded");
+        let notice = if pending.dismissed_token == request.op_id {
+            None
+        } else {
+            Some(app::UnconfirmedSend {
+                token: request.op_id.clone(),
                 message:
                     "消息结果待确认，正在只读查询；不会自动重发。若长期未确认，请先检查桌面会话。"
                         .into(),
-            });
+            })
+        };
+        if let Some(chat) = &mut state.chat {
+            chat.pending_draft_id = pending.draft_id.clone();
+            chat.unconfirmed = notice;
         }
         if let Some(draft) = &pending.draft {
             state
@@ -225,6 +300,12 @@ pub(super) fn resolve(state: &mut State, ctx: &Ctx, action: app::ResolveAgentSen
     if chat.sending || chat.unconfirmed.as_ref().map(|u| &u.token) != Some(&action.token) {
         return;
     }
+    if action.dismiss {
+        if let Err(error) = dismiss(state, ctx, &action.token) {
+            state.toast(error.to_string(), true);
+        }
+        return;
+    }
     let device = chat.device.clone();
     let key = key(state, &device, &chat.session.id);
     let Some(pending) =
@@ -291,9 +372,16 @@ pub(super) fn recovered(
     result: Result<v1::OpResult, Error>,
 ) {
     // A former request cannot settle a newer operation, even with the same draft text.
-    if load(ctx, &key).as_ref() != Some(&pending) {
+    let Some(current) = load(ctx, &key) else {
+        return;
+    };
+    if current.request != pending.request
+        || current.draft != pending.draft
+        || current.draft_id != pending.draft_id
+    {
         return;
     }
+    let pending = current;
     let Some(request) = &pending.request else {
         return;
     };
@@ -329,10 +417,12 @@ pub(super) fn recovered(
             );
         }
         result => {
-            if let Some(chat) = state
-                .chat
-                .as_mut()
-                .filter(|c| c.device == device && c.session.id == request.session)
+            let dismissed = is_dismissed(state, ctx, &device, &request.session, &request.op_id);
+            if !dismissed
+                && let Some(chat) = state
+                    .chat
+                    .as_mut()
+                    .filter(|c| c.device == device && c.session.id == request.session)
             {
                 chat.unconfirmed = Some(app::UnconfirmedSend {
                     token: request.op_id.clone(),
@@ -417,6 +507,313 @@ mod tests {
             ..Default::default()
         }
     }
+    #[tokio::test]
+    async fn ignore_survives_restart_and_unknown_callbacks_without_asserting_delivery() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut state, mut ctx) = fixture(dir.path()).await;
+        super::super::admitted::admit(&mut state, "first", "original");
+        prepare(&mut state, &ctx, "mac", &request("first"), "first:ui").unwrap();
+        restore(&mut state, &ctx);
+        let journal = key(&state, "mac", "session");
+        let original = load(&ctx, &journal).unwrap();
+        let newer = app::ChatDraft {
+            key: "draft".into(),
+            revision: "2".into(),
+            text: "new edit".into(),
+        };
+        ctx.cache.put_durable(newer.key.clone(), &newer).unwrap();
+        state.chat.as_mut().unwrap().draft = newer.clone();
+        resolve(
+            &mut state,
+            &ctx,
+            app::ResolveAgentSend {
+                token: "first".into(),
+                dismiss: true,
+                ..Default::default()
+            },
+        );
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+        assert!(super::super::admitted::open(&state).is_empty());
+        assert_eq!(load(&ctx, &journal).unwrap().request, original.request);
+        assert_eq!(state.chat.as_ref().unwrap().draft, newer);
+        ctx.cache = Arc::new(crate::cache::Cache::new(dir.path().join("cache")));
+        restore(&mut state, &ctx);
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+        for result in [
+            Ok(v1::OpResult {
+                status: v1::op_result::Status::Unknown as i32,
+                ..Default::default()
+            }),
+            Err(Error::Unavailable("offline".into())),
+        ] {
+            recovered(
+                &mut state,
+                &ctx,
+                "mac".into(),
+                journal.clone(),
+                original.clone(),
+                result,
+            );
+            assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+            assert!(load(&ctx, &journal).is_some());
+        }
+        // A real receipt still settles the original request, preserving newer input.
+        recovered(
+            &mut state,
+            &ctx,
+            "mac".into(),
+            journal.clone(),
+            original,
+            Ok(v1::OpResult {
+                result_id: "session".into(),
+                ..Default::default()
+            }),
+        );
+        assert!(load(&ctx, &journal).is_none());
+        assert_eq!(state.chat.as_ref().unwrap().draft, newer);
+        assert_eq!(release_for_send(&mut state, &ctx, "").unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn dismissed_notice_stays_hidden_when_terminal_callback_clears_journal() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut state, ctx) = fixture(dir.path()).await;
+        prepare(&mut state, &ctx, "mac", &request("first"), "first:ui").unwrap();
+        restore(&mut state, &ctx);
+        dismiss(&mut state, &ctx, "first").unwrap();
+        super::super::operations::msg_op_done(
+            &mut state,
+            &ctx,
+            "send",
+            "mac".into(),
+            None,
+            Some(("session".into(), "first:ui".into())),
+            Ok(v1::OpResult {
+                status: v1::op_result::Status::Rejected as i32,
+                unconfirmed: "first".into(),
+                ..Default::default()
+            }),
+        );
+        assert!(load(&ctx, &key(&state, "mac", "session")).is_none());
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+    }
+
+    #[tokio::test]
+    async fn retry_closes_notice_before_validation_and_does_not_accept_stale_tokens() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut state, ctx) = fixture(dir.path()).await;
+        prepare(&mut state, &ctx, "mac", &request("first"), "first:ui").unwrap();
+        restore(&mut state, &ctx);
+        assert!(release_for_send(&mut state, &ctx, "stale").is_err());
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_some());
+        super::super::agents::intent_agent_send(
+            &mut state,
+            &ctx,
+            app::AgentSend {
+                text: String::new(),
+                release_unconfirmed: "first".into(),
+                ..Default::default()
+            },
+        );
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+        assert!(!state.chat.as_ref().unwrap().sending);
+        assert_eq!(
+            load(&ctx, &key(&state, "mac", "session")).unwrap().request,
+            Some(request("first"))
+        );
+        assert_eq!(release_for_send(&mut state, &ctx, "").unwrap(), "first");
+        state.chat.as_mut().unwrap().session.id = "another-session".into();
+        assert_eq!(release_for_send(&mut state, &ctx, "").unwrap(), "");
+        assert!(release_for_send(&mut state, &ctx, "first").is_err());
+    }
+
+    #[tokio::test]
+    async fn ignore_host_only_refusal_preserves_draft_and_releases_only_on_explicit_send() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut state, mut ctx) = fixture(dir.path()).await;
+        super::super::admitted::admit(&mut state, "blocked-attempt", "original");
+        state.chat.as_mut().unwrap().pending_draft_id = "blocked-attempt:ui".into();
+        state.chat.as_mut().unwrap().unconfirmed = Some(app::UnconfirmedSend {
+            token: "host-only".into(),
+            message: "unknown".into(),
+        });
+        resolve(
+            &mut state,
+            &ctx,
+            app::ResolveAgentSend {
+                token: "host-only".into(),
+                dismiss: true,
+                ..Default::default()
+            },
+        );
+        assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+        assert!(super::super::admitted::open(&state).is_empty());
+        assert_eq!(state.chat.as_ref().unwrap().draft.text, "original");
+        ctx.cache = Arc::new(crate::cache::Cache::new(dir.path().join("cache")));
+        restore(&mut state, &ctx);
+        assert!(load(&ctx, &key(&state, "mac", "session")).is_none());
+        assert_eq!(release_for_send(&mut state, &ctx, "").unwrap(), "host-only");
+        let mut next = request("next");
+        next.release_unconfirmed = "host-only".into();
+        prepare(&mut state, &ctx, "mac", &next, "next:ui").unwrap();
+        assert_eq!(release_for_send(&mut state, &ctx, "").unwrap(), "");
+        restore(&mut state, &ctx);
+        assert_eq!(
+            state
+                .chat
+                .as_ref()
+                .unwrap()
+                .unconfirmed
+                .as_ref()
+                .unwrap()
+                .token,
+            "next"
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_and_send_after_ignore_dispatch_normal_send_with_current_input_once() {
+        struct Server {
+            sends: std::sync::Mutex<Vec<v1::AgentSendRequest>>,
+        }
+        impl muster_rpc::Handler for Server {
+            fn call(
+                &self,
+                _: muster_rpc::Context,
+                req: Req,
+                _: muster_rpc::EventSink,
+            ) -> muster_rpc::HandlerFuture<'_> {
+                Box::pin(async move {
+                    match req {
+                        Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                            services: vec!["agent.attachments".into()],
+                            ..Default::default()
+                        }),
+                        Req::AgentSend(r) => {
+                            self.sends.lock().unwrap().push(r);
+                            Resp::OpResult(v1::OpResult {
+                                result_id: "session".into(),
+                                ..Default::default()
+                            })
+                        }
+                        _ => panic!("unexpected RPC: {req:?}"),
+                    }
+                })
+            }
+        }
+        for ignore in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let socket = dir.path().join("rpc.sock");
+            let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+            let server = Arc::new(Server {
+                sends: Default::default(),
+            });
+            let handler = server.clone();
+            let accept = tokio::spawn(async move {
+                while let Ok((stream, _)) = listener.accept().await {
+                    tokio::spawn(muster_rpc::serve(
+                        stream,
+                        muster_rpc::Principal::Local,
+                        handler.clone(),
+                    ));
+                }
+            });
+            let shell = Arc::new(Shell);
+            let backend = Arc::new(
+                crate::backend::Backend::connect(
+                    &crate::AppConfig {
+                        dir: dir.path().into(),
+                        mode: crate::Mode::Socket { path: socket },
+                        allow_loopback: true,
+                    },
+                    shell.clone(),
+                )
+                .await
+                .unwrap(),
+            );
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            let ctx = Ctx {
+                shell,
+                backend,
+                tx,
+                cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+            };
+            let mut state = State::new(false, Some("mac".into()));
+            state.foreground = false;
+            state.chat = Some(Chat {
+                device: "mac".into(),
+                session: v1::AgentSession {
+                    id: "session".into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            prepare(&mut state, &ctx, "mac", &request("first"), "first:old-ui").unwrap();
+            restore(&mut state, &ctx);
+            if ignore {
+                resolve(
+                    &mut state,
+                    &ctx,
+                    app::ResolveAgentSend {
+                        token: "first".into(),
+                        dismiss: true,
+                        ..Default::default()
+                    },
+                );
+                assert!(server.sends.lock().unwrap().is_empty());
+            }
+            let attachment = v1::AgentAttachment {
+                name: "sample.txt".into(),
+                media_type: "text/plain".into(),
+                data: b"sample".to_vec(),
+            };
+            super::super::agents::intent_agent_send(
+                &mut state,
+                &ctx,
+                app::AgentSend {
+                    text: "current composer".into(),
+                    attachments: vec![attachment.clone()],
+                    draft_id: "new-ui".into(),
+                    release_unconfirmed: if ignore {
+                        String::new()
+                    } else {
+                        "first".into()
+                    },
+                },
+            );
+            assert!(state.chat.as_ref().unwrap().unconfirmed.is_none());
+            assert!(state.chat.as_ref().unwrap().sending);
+            let pending = load(&ctx, &key(&state, "mac", "session")).unwrap();
+            assert!(pending.dismissed_token.is_empty());
+            assert!(pending.draft_id.ends_with(":new-ui"));
+            // The ordinary busy guard prevents double clicking from dispatching twice.
+            super::super::agents::intent_agent_send(
+                &mut state,
+                &ctx,
+                app::AgentSend {
+                    text: "duplicate click".into(),
+                    ..Default::default()
+                },
+            );
+            let Loop::Msg(message) = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            else {
+                panic!()
+            };
+            assert!(matches!(*message, Msg::OpDone { result: Ok(_), .. }));
+            let sends = server.sends.lock().unwrap();
+            assert_eq!(sends.len(), 1);
+            assert_ne!(sends[0].op_id, "first");
+            assert_eq!(sends[0].session, "session");
+            assert_eq!(sends[0].text, "current composer");
+            assert_eq!(sends[0].attachments, vec![attachment]);
+            assert_eq!(sends[0].release_unconfirmed, "first");
+            accept.abort();
+        }
+    }
+
     #[tokio::test]
     async fn manual_confirmation_settles_original_and_preserves_newer_composer() {
         let dir = tempfile::tempdir().unwrap();
@@ -703,6 +1100,7 @@ mod tests {
                     app::ResolveAgentSend {
                         token: "original".into(),
                         delivered: true,
+                        ..Default::default()
                     },
                 );
             }
