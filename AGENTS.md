@@ -14,6 +14,16 @@ capabilities to code on the delete list. Superseded documents live in
 - Platform code must not duplicate, reconstruct, or independently infer Shared Rust business state from JSON, booleans, HTTP success, cached metadata, or other serializable projections. Trust-bearing state and transitions must remain Rust-owned and use opaque handles or narrowly scoped platform callbacks.
 - When a product capability is missing from the Shared Rust ABI, extend Shared Rust and its ABI first. Do not implement a platform-specific business-logic fallback.
 
+## Small-change execution defaults
+
+- Treat bounded edits (such as wording, styling or a localized input behavior) as small changes by default. Make the smallest coherent fix; do not add unrelated refactors, dependencies or a new test framework.
+- Keep context narrow: search for the relevant symbols, read only needed files and ADRs, and batch independent reads/checks. Reuse verified findings instead of repeatedly rereading broad documentation or dumping large files and logs.
+- Choose focused verification before editing. Prefer existing checks and meaningful regression tests for changed behavior. Documentation-only edits need documentation checks, not application builds. After checks pass, broaden or repeat them only for new changes, failures or an unresolved risk.
+- Use completion notifications or bounded waits for builds and CI. Avoid repeated short polls with no new information; keep progress updates concise and batch status checks.
+- Explain any material scope expansion before undertaking it, including the evidence and necessary extra verification. Security, authorization, protocol, concurrency and data-integrity risks can require deeper work even for a small diff. Continue already-authorized work; ask only when a decision or permission is actually missing.
+- Prefer a short, focused chat and a lighter model/lower reasoning effort when adequate, but do not create a chat, change model settings or delegate without authorization. In an existing long chat, keep new context and tool output minimal; do not claim that shorter replies alone remove prior context costs.
+- These defaults do not waive architecture, ADR, public-content, commit, PR, CI or landing requirements. Group the required work efficiently and report verification limits honestly.
+
 ## Architecture Decision Records (ADR)
 
 - Every future repository change must add or update a numbered ADR in `docs/adr/` in the same pull request. This includes behavior, protocol, UI, tests, build/release, configuration, and documentation changes; there is no small-change exemption. Read-only investigation with no repository changes needs no ADR.
