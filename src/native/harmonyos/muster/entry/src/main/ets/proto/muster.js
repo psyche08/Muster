@@ -22283,12 +22283,14 @@ export const muster = $root.muster = (() => {
              * @property {number} CHECK=0 CHECK value
              * @property {number} SAVE=1 SAVE value
              * @property {number} INSTALL=2 INSTALL value
+             * @property {number} PROGRESS=3 PROGRESS value
              */
             MulticaRequest.Action = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
                 values[valuesById[0] = "CHECK"] = 0;
                 values[valuesById[1] = "SAVE"] = 1;
                 values[valuesById[2] = "INSTALL"] = 2;
+                values[valuesById[3] = "PROGRESS"] = 3;
                 return values;
             })();
 
@@ -22313,6 +22315,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [message] MulticaStatus message
              * @property {string|null} [loginCommand] MulticaStatus loginCommand
              * @property {boolean|null} [busy] MulticaStatus busy
+             * @property {muster.v1.IMulticaInstallation|null} [installation] MulticaStatus installation
              */
 
             /**
@@ -22427,6 +22430,14 @@ export const muster = $root.muster = (() => {
             MulticaStatus.prototype.busy = false;
 
             /**
+             * MulticaStatus installation.
+             * @member {muster.v1.IMulticaInstallation|null|undefined} installation
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.installation = null;
+
+            /**
              * Creates a new MulticaStatus instance using the specified properties.
              * @function create
              * @memberof muster.v1.MulticaStatus
@@ -22478,6 +22489,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 11, wireType 2 =*/90).string(message.loginCommand);
                 if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
                     writer.uint32(/* id 12, wireType 0 =*/96).bool(message.busy);
+                if (message.installation != null && Object.hasOwnProperty.call(message, "installation"))
+                    $root.muster.v1.MulticaInstallation.encode(message.installation, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -22563,6 +22576,10 @@ export const muster = $root.muster = (() => {
                             message.busy = reader.bool();
                             break;
                         }
+                    case 13: {
+                            message.installation = $root.muster.v1.MulticaInstallation.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -22592,6 +22609,200 @@ export const muster = $root.muster = (() => {
             };
 
             return MulticaStatus;
+        })();
+
+        v1.MulticaInstallation = (function() {
+
+            /**
+             * Properties of a MulticaInstallation.
+             * @memberof muster.v1
+             * @interface IMulticaInstallation
+             * @property {boolean|null} [busy] MulticaInstallation busy
+             * @property {boolean|null} [finished] MulticaInstallation finished
+             * @property {boolean|null} [succeeded] MulticaInstallation succeeded
+             * @property {string|null} [stage] MulticaInstallation stage
+             * @property {string|null} [log] MulticaInstallation log
+             */
+
+            /**
+             * Constructs a new MulticaInstallation.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaInstallation.
+             * @implements IMulticaInstallation
+             * @constructor
+             * @param {muster.v1.IMulticaInstallation=} [properties] Properties to set
+             */
+            function MulticaInstallation(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaInstallation busy.
+             * @member {boolean} busy
+             * @memberof muster.v1.MulticaInstallation
+             * @instance
+             */
+            MulticaInstallation.prototype.busy = false;
+
+            /**
+             * MulticaInstallation finished.
+             * @member {boolean} finished
+             * @memberof muster.v1.MulticaInstallation
+             * @instance
+             */
+            MulticaInstallation.prototype.finished = false;
+
+            /**
+             * MulticaInstallation succeeded.
+             * @member {boolean} succeeded
+             * @memberof muster.v1.MulticaInstallation
+             * @instance
+             */
+            MulticaInstallation.prototype.succeeded = false;
+
+            /**
+             * MulticaInstallation stage.
+             * @member {string} stage
+             * @memberof muster.v1.MulticaInstallation
+             * @instance
+             */
+            MulticaInstallation.prototype.stage = "";
+
+            /**
+             * MulticaInstallation log.
+             * @member {string} log
+             * @memberof muster.v1.MulticaInstallation
+             * @instance
+             */
+            MulticaInstallation.prototype.log = "";
+
+            /**
+             * Creates a new MulticaInstallation instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaInstallation
+             * @static
+             * @param {muster.v1.IMulticaInstallation=} [properties] Properties to set
+             * @returns {muster.v1.MulticaInstallation} MulticaInstallation instance
+             */
+            MulticaInstallation.create = function create(properties) {
+                return new MulticaInstallation(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaInstallation message. Does not implicitly {@link muster.v1.MulticaInstallation.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaInstallation
+             * @static
+             * @param {muster.v1.IMulticaInstallation} message MulticaInstallation message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaInstallation.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.busy);
+                if (message.finished != null && Object.hasOwnProperty.call(message, "finished"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.finished);
+                if (message.succeeded != null && Object.hasOwnProperty.call(message, "succeeded"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.succeeded);
+                if (message.stage != null && Object.hasOwnProperty.call(message, "stage"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.stage);
+                if (message.log != null && Object.hasOwnProperty.call(message, "log"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.log);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaInstallation message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaInstallation
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaInstallation} MulticaInstallation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaInstallation.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaInstallation();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.busy = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            message.finished = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.succeeded = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.stage = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.log = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaInstallation
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaInstallation
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaInstallation.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaInstallation";
+            };
+
+            return MulticaInstallation;
         })();
 
         v1.MulticaBrowseRequest = (function() {

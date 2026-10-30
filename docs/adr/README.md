@@ -142,6 +142,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0071](0071-small-change-execution.md) | Accepted | Bound the execution cost of small changes |
 
+| [0072](0072-multica-install-dialog.md) | Accepted; device acceptance pending | Guided Multica installation with live logs |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

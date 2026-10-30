@@ -8,6 +8,7 @@ use std::{
 };
 mod bridge;
 mod browse;
+mod installation;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -25,6 +26,7 @@ struct Config {
     mount_dir: String,
 }
 pub struct Manager {
+    installation: installation::Installation,
     path: PathBuf,
     executable: Option<PathBuf>,
     gate: tokio::sync::Mutex<()>,
@@ -42,6 +44,7 @@ impl Drop for Manager {
 impl Manager {
     pub fn new(root: &Path) -> Self {
         Self {
+            installation: Default::default(),
             path: root.join("multica.json"),
             executable: None,
             gate: tokio::sync::Mutex::new(()),
@@ -53,6 +56,12 @@ impl Manager {
     async fn command(&self, args: &[&str], seconds: u64) -> Result<Vec<u8>, Error> {
         let executable = self.executable.clone().map(Ok).unwrap_or_else(binary)?;
         run(&executable, args, seconds).await
+    }
+    async fn install_command(&self, args: &[&str], seconds: u64) -> Result<(), Error> {
+        let executable = self.executable.clone().map(Ok).unwrap_or_else(binary)?;
+        self.installation
+            .run(tokio::process::Command::new(executable).args(args), seconds)
+            .await
     }
     fn load(&self) -> Result<Config, Error> {
         match std::fs::read(&self.path) {
@@ -145,12 +154,55 @@ impl Manager {
         if !cfg!(target_os = "macos") {
             return Ok(v1::MulticaStatus::default());
         }
+        let action = v1::multica_request::Action::try_from(r.action)
+            .map_err(|_| Error::Invalid("Unknown Multica action".into()))?;
+        if action == v1::multica_request::Action::Progress {
+            return Ok(v1::MulticaStatus {
+                installation: Some(self.installation.snapshot()),
+                ..Default::default()
+            });
+        }
+        // CHECK may recover an in-flight installation without waiting on its gate.
+        if action == v1::multica_request::Action::Check {
+            return self.status().await;
+        }
         let _guard = self
             .gate
             .try_lock()
             .map_err(|_| Error::Busy("Multica setup is already running".into()))?;
-        let action = v1::multica_request::Action::try_from(r.action)
-            .map_err(|_| Error::Invalid("Unknown Multica action".into()))?;
+        let installing = action == v1::multica_request::Action::Install;
+        let _attempt = installing.then(|| self.installation.begin());
+        let mut result = self.request_inner(r, socket, action).await;
+        if installing {
+            let error = match &result {
+                Err(error) => Some(error.to_string()),
+                Ok(_) => {
+                    let error = self.last_error.lock().unwrap().clone();
+                    (!error.is_empty()).then_some(error)
+                }
+            };
+            self.installation.finish(error.as_deref());
+            // Even validation failures return their completed diagnostics to the UI.
+            if result.is_err() {
+                result = self.status().await;
+            }
+            if let Ok(status) = &mut result {
+                status.installation = Some(self.installation.snapshot());
+                status.busy = false;
+                if let Some(error) = error {
+                    status.message = error;
+                }
+            }
+        }
+        result
+    }
+    async fn request_inner(
+        &self,
+        r: v1::MulticaRequest,
+        socket: &Path,
+        action: v1::multica_request::Action,
+    ) -> Result<v1::MulticaStatus, Error> {
+        *self.last_error.lock().unwrap() = String::new();
         if action != v1::multica_request::Action::Check {
             let current = self.load()?;
             // Install/opt-in may start Apple's runtime. A read-only CHECK never does.
@@ -246,13 +298,17 @@ impl Manager {
                 }
             }
             if action == v1::multica_request::Action::Install && !c.managed {
-                self.command(&["exec", &c.container_name, "sh", "-c",
+                self.installation.stage("检查已有容器依赖");
+                self.install_command(&["exec", &c.container_name, "sh", "-c",
                     "set -eu; command -v git >/dev/null && command -v ssh >/dev/null && command -v socat >/dev/null || { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git openssh-client socat; }"], 300).await?;
             }
             if action == v1::multica_request::Action::Install
                 && !Path::new(&c.data_dir).join("bin/multica").is_file()
             {
-                install_host(&c).await?;
+                install_host(self, &c).await?;
+            }
+            if action == v1::multica_request::Action::Install {
+                self.installation.stage("检查容器与服务状态");
             }
             *self.last_error.lock().unwrap() = if c.keep_alive {
                 self.ensure(&c, socket)
@@ -318,6 +374,7 @@ impl Manager {
             quote(&executable.to_string_lossy()),
             quote(&c.container_name)
         );
+        let progress = self.installation.snapshot();
         Ok(v1::MulticaStatus {
             supported: true,
             installed,
@@ -330,7 +387,8 @@ impl Manager {
             container_name: c.container_name,
             message,
             login_command,
-            busy: false,
+            busy: progress.busy,
+            installation: (progress.busy || progress.finished).then_some(progress),
         })
     }
     pub async fn maintain(&self, socket: &Path) {
@@ -597,6 +655,7 @@ async fn daemon_running(manager: &Manager, c: &Config) -> bool {
     manager.command(&["exec", &c.container_name, "sh", "-c", "p=$(cat /root/.multica/daemon.pid 2>/dev/null) || exit 1; case $p in ''|*[!0-9]*) exit 1;; esac; tr '\\0' ' ' < /proc/$p/cmdline | grep -q 'multica.*daemon'"], 5).await.is_ok()
 }
 async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Error> {
+    manager.installation.stage("准备数据目录与工作区");
     let root = Path::new(&c.data_dir);
     let marker = root.join(".muster-owned");
     if root.exists()
@@ -623,7 +682,10 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
     )?;
     if create {
         manager
-            .command(
+            .installation
+            .stage("下载容器镜像并创建容器（可能需要几分钟）");
+        manager
+            .install_command(
                 &[
                     "run",
                     "--detach",
@@ -647,9 +709,13 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
             )
             .await?;
     }
-    manager.command(&["exec", &c.container_name, "sh", "-c",
+    manager
+        .installation
+        .stage("安装容器依赖与 Multica CLI（可能需要几分钟）");
+    manager.install_command(&["exec", &c.container_name, "sh", "-c",
         "set -eu; apt-get update -qq; apt-get install -y -qq curl ca-certificates socat git openssh-client; curl --proto '=https' --proto-redir '=https' -fsSL \"$1\" -o /tmp/multica-install.sh; bash /tmp/multica-install.sh; test -x /usr/local/bin/multica",
         "setup", &c.installer_url], 300).await?;
+    manager.installation.stage("写入 Multica 服务配置");
     for (key, value) in [("server_url", &c.server_url), ("app_url", &c.app_url)] {
         if !value.is_empty() {
             manager
@@ -668,11 +734,12 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
                 .await?;
         }
     }
-    install_host(c).await
+    install_host(manager, c).await
 }
 
-async fn install_host(c: &Config) -> Result<(), Error> {
+async fn install_host(manager: &Manager, c: &Config) -> Result<(), Error> {
     let root = Path::new(&c.data_dir);
+    manager.installation.stage("安装本机 Multica CLI");
     let mut candidates = Vec::new();
     if let Some(home) = std::env::var_os("HOME") {
         candidates.push(PathBuf::from(home).join(".local/bin/multica"));
@@ -707,40 +774,33 @@ async fn install_host(c: &Config) -> Result<(), Error> {
         ));
     }
     let installer = root.join("install.sh");
-    let download = tokio::process::Command::new("/usr/bin/curl")
-        .args([
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "-fsSL",
-            &c.installer_url,
-            "-o",
-        ])
-        .arg(&installer)
-        .kill_on_drop(true)
-        .output();
-    let out = tokio::time::timeout(Duration::from_secs(60), download)
-        .await
-        .map_err(|_| Error::Unavailable("Installer download timed out".into()))?
-        .map_err(io)?;
-    if !out.status.success() {
-        return Err(Error::Unavailable(
-            "Host Multica installer download failed".into(),
-        ));
-    }
-    let out = tokio::time::timeout(
-        Duration::from_secs(120),
-        tokio::process::Command::new("/bin/bash")
-            .arg(&installer)
-            .env("MULTICA_BIN_DIR", root.join("bin"))
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .map_err(|_| Error::Unavailable("Host Multica installation timed out".into()))?
-    .map_err(io)?;
-    if !out.status.success() || !root.join("bin/multica").is_file() {
+    manager
+        .installation
+        .run(
+            tokio::process::Command::new("/usr/bin/curl")
+                .args([
+                    "--proto",
+                    "=https",
+                    "--proto-redir",
+                    "=https",
+                    "-fsSL",
+                    &c.installer_url,
+                    "-o",
+                ])
+                .arg(&installer),
+            60,
+        )
+        .await?;
+    manager
+        .installation
+        .run(
+            tokio::process::Command::new("/bin/bash")
+                .arg(&installer)
+                .env("MULTICA_BIN_DIR", root.join("bin")),
+            120,
+        )
+        .await?;
+    if !root.join("bin/multica").is_file() {
         return Err(Error::Unavailable(
             "Host Multica CLI installation failed".into(),
         ));
@@ -885,6 +945,40 @@ mod tests {
 #[cfg(all(test, unix))]
 mod lifecycle_tests {
     use super::*;
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn progress_is_available_while_mutations_remain_exclusive() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = Manager::new(dir.path());
+        let _gate = manager.gate.lock().await;
+        let _attempt = manager.installation.begin();
+        let progress = manager
+            .request(
+                v1::MulticaRequest {
+                    action: v1::multica_request::Action::Progress as i32,
+                    ..Default::default()
+                },
+                Path::new("unused"),
+            )
+            .await
+            .unwrap();
+        assert!(progress.installation.unwrap().busy);
+        assert!(
+            manager
+                .request(
+                    v1::MulticaRequest {
+                        action: v1::multica_request::Action::Install as i32,
+                        ..Default::default()
+                    },
+                    Path::new("unused")
+                )
+                .await
+                .is_err()
+        );
+        assert!(manager.installation.snapshot().busy);
+        manager.installation.finish(None);
+    }
+
     #[tokio::test]
     async fn supervision_restarts_only_stopped_services_and_is_opt_in() {
         use std::os::unix::fs::PermissionsExt;
