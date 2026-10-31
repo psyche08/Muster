@@ -1,7 +1,9 @@
 # ADR 0073: View DeepSeek Harness sessions; do not drive the app yet
 
 - Date: 2026-10-31
-- Status: Accepted; viewing implemented, device acceptance and control pending
+- Status: Accepted; viewing implemented, device acceptance pending. Its
+  "do not drive the app yet" part is superseded by
+  [ADR 0074](0074-deepseek-harness-plugin-control.md)
 - Related: ARCHITECTURE §3.6.2 and §3.6.4 (step 5, "the next app as a
   profile"), [APP_PROFILES.md](../APP_PROFILES.md)
 

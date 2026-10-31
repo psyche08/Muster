@@ -1,0 +1,5 @@
+# Mounts the bridge into the profile that installs this bundle
+# (`dsh plugin --profile desktop add file:<this directory>`).
+- insert:
+    - id: muster-bridge
+      name: muster-dsh-bridge

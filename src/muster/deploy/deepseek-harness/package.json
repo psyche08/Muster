@@ -1,0 +1,26 @@
+{
+  "name": "muster-dsh-bridge",
+  "version": "0.1.0",
+  "description": "Lets the Muster daemon on this Mac follow and drive DeepSeek Harness sessions over an owner-only socket.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

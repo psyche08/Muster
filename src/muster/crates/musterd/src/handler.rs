@@ -2164,9 +2164,13 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         return create_native_terminal(daemon, r).await;
     }
 
+    // A session driven through its app's plugin (DeepSeek Harness, ADR
+    // 0074) needs no Accessibility, input quiet or navigation; the queue,
+    // the desktop lock, Locked Use and the ledger apply as to any session.
+    let plugin = plugin_session(daemon, &request);
     // Fail before the operation ledger or attachment writes: missing OS
     // permission is a setup prerequisite, not an ambiguous attempted send.
-    if daemon.platform().accessibility() == Some(false) {
+    if !plugin && daemon.platform().accessibility() == Some(false) {
         return Err(Error::Unavailable(format!(
             "{}: Accessibility is not granted to musterd. On that Mac enable /Applications/Muster.app/Contents/MacOS/musterd in System Settings > Privacy & Security > Accessibility, then open this session in its desktop app and retry.",
             daemon.name()
@@ -2185,6 +2189,11 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
     let session = native_session(daemon, &request)?;
     require_capability(agent, &session, &request)?;
     agent.require_desktop_input(&session)?;
+    if plugin && !agent.has_controller(&session) {
+        return Err(Error::Unavailable(
+            "DeepSeek Harness is not running with Muster's plugin on this Mac; install it (deploy/deepseek-harness) and restart the app. Nothing was sent.".into(),
+        ));
+    }
     let what = match &request {
         Req::AgentSend(_) => "send",
         Req::AgentRespond(_) => "respond",
@@ -2215,7 +2224,8 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         preparation_started.elapsed().as_millis()
     );
     #[cfg(target_os = "macos")]
-    if what == "send" && crate::agent_bridge::drives_desktop(daemon.platform().as_ref()) {
+    if what == "send" && !plugin && crate::agent_bridge::drives_desktop(daemon.platform().as_ref())
+    {
         muster_agent::control_guard::wait_for_quiet(
             muster_platform::macos::input::user_input_idle,
             Duration::from_millis(250),
@@ -2225,13 +2235,15 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
             log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger phase=quiet_input elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
         })?;
     }
-    crate::agent_bridge::ensure_native(daemon.platform().as_ref(), agent.clone(), &session)
-        .await
-        .inspect_err(|error| {
-            // Pre-ledger failures used to leave only “operation finished” in
-            // Locked Use logs. Record the stage and reason, never the request.
-            log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
-        })?;
+    if !plugin {
+        crate::agent_bridge::ensure_native(daemon.platform().as_ref(), agent.clone(), &session)
+            .await
+            .inspect_err(|error| {
+                // Pre-ledger failures used to leave only “operation finished” in
+                // Locked Use logs. Record the stage and reason, never the request.
+                log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
+            })?;
+    }
     log::info!(
         "Agent {what} op={op_id:?} target={session:?}: native preparation ready elapsed_ms={}",
         preparation_started.elapsed().as_millis()
@@ -2507,6 +2519,19 @@ pub(crate) fn native_provider(daemon: &Daemon, request: &Req) -> Result<String, 
     Ok(provider)
 }
 
+/// Whether the request acts on a session its app's plugin drives (an app
+/// whose profile declares `[plugin]`: DeepSeek Harness).
+fn plugin_session(daemon: &Daemon, request: &Req) -> bool {
+    let Ok(session) = native_session(daemon, request) else {
+        return false;
+    };
+    agent_of(daemon)
+        .ok()
+        .and_then(|agent| agent.session(&session))
+        .and_then(|info| muster_agent::profile::app(&info.provider))
+        .is_some_and(|app| app.plugin.is_some())
+}
+
 pub(crate) fn native_session(daemon: &Daemon, request: &Req) -> Result<String, Error> {
     let agent = agent_of(daemon)?;
     match request {
@@ -2587,7 +2612,7 @@ pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result
         ));
     }
     if info.as_ref().is_some_and(|info| {
-        info.read_only || !matches!(info.controller.as_str(), "native_app" | "none")
+        info.read_only || !matches!(info.controller.as_str(), "native_app" | "plugin" | "none")
     }) {
         return Err(Error::Invalid(
             "Locked Use only controls a native desktop app".into(),
@@ -2911,38 +2936,26 @@ mod setup_permission_tests {
             undeclared(&none, &respond("approval:1", 0)),
             Some("answering prompts")
         );
-        // DeepSeek Harness is viewed only: every operation that drives it is
-        // refused by name before any queue or lock; reading is not gated.
+        // DeepSeek Harness is driven through its plugin: prompts,
+        // interrupts, approvals and question cards; never queued messages
+        // or model choices, which stay with the app.
         let deepseek = &DEEPSEEK_APP.capabilities;
+        for request in [
+            Req::AgentSend(v1::AgentSendRequest::default()),
+            Req::AgentInterrupt(v1::AgentInterruptRequest::default()),
+            respond("dsh-approval:a1", 0),
+            respond("dsh-question:q1", 1),
+            Req::AgentInspect(v1::AgentInspectRequest::default()),
+        ] {
+            assert_eq!(undeclared(deepseek, &request), None);
+        }
         assert_eq!(
-            undeclared(deepseek, &Req::AgentSend(v1::AgentSendRequest::default())),
-            Some("sending prompts")
-        );
-        assert_eq!(
-            undeclared(
-                deepseek,
-                &Req::AgentInterrupt(v1::AgentInterruptRequest::default())
-            ),
-            Some("interrupting a turn")
-        );
-        assert_eq!(
-            undeclared(deepseek, &respond("approval:1", 0)),
-            Some("answering prompts")
-        );
-        assert_eq!(
-            undeclared(deepseek, &respond("question:1", 1)),
-            Some("question cards")
+            undeclared(deepseek, &respond("queued:1", 0)),
+            Some("queued messages")
         );
         assert_eq!(
             undeclared(deepseek, &Req::AgentChatOptions(Default::default())),
             Some("model or effort choices")
-        );
-        assert_eq!(
-            undeclared(
-                deepseek,
-                &Req::AgentInspect(v1::AgentInspectRequest::default())
-            ),
-            None
         );
     }
     #[test]

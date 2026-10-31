@@ -2,26 +2,35 @@
 # Compiled by build.rs into `muster_agent::profile::DEEPSEEK_APP`.
 # The record grammar is DeepSeek Harness 0.2.1's session format 4, as its
 # bundled `dsh-session` and `dsh-session-persistence-jsonl` packages declare
-# it (ADR 0073).
+# it (ADR 0073). Its sessions are driven through Muster's own plugin inside
+# the app, `deploy/deepseek-harness` (ADR 0074), never through Accessibility.
 
 [app]
 provider = "deepseek"
-doc = "DeepSeek Harness: sessions read from its per-session event logs; not driven."
+doc = "DeepSeek Harness: sessions read from its per-session event logs and driven through Muster's plugin inside the app."
 executable = "DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness"
 # One append-only event log per session under ~/.dsh/sessions, written as
 # Zstandard frames.
 source = "jsonl-zstd"
 lock = "DeepSeek Harness"
 # No gui or session_key: nothing here finds its windows. Its desktop host
-# process runs the same executable as Node, and no Accessibility recording
-# of its window exists yet.
+# process runs the same executable as Node, and its window exposes no web
+# content to Accessibility.
 
-# Viewing only. The session's working directory can be browsed.
 [capabilities]
-send = false
-respond = false
-interrupt = false
+send = true
+respond = true
+interrupt = true
 files = true
+
+# The `muster-dsh-bridge` plugin, installed into the app's desktop profile,
+# serves live state, prompts, interrupts, approvals and question cards on
+# this owner-only socket. Prompts go through the app's own session
+# controller; queued messages and model choices stay with the app.
+[plugin]
+socket = "muster/bridge.sock"
+protocol = 1
+questions = true
 
 [source]
 home = { env = "DSH_HOME", dir = ".dsh" }

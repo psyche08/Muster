@@ -3,8 +3,10 @@
 Status: the profile form decided in ARCHITECTURE.md §3.6.4 (pending decision
 6, "yes"), in use since 2026-10-04 for Codex, Claude Code and CatDesk,
 including the record grammar of the two JSONL sources (step 3). Since
-2026-10-31 DeepSeek Harness is the first app added as a profile (step 5); it
-is viewed, not driven ([ADR 0073](adr/0073-deepseek-harness-session-viewing.md)).
+2026-10-31 DeepSeek Harness is the first app added as a profile (step 5),
+viewed ([ADR 0073](adr/0073-deepseek-harness-session-viewing.md)) and driven
+through Muster's plugin inside it rather than Accessibility
+([ADR 0074](adr/0074-deepseek-harness-plugin-control.md)).
 
 A profile describes one desktop app whose sessions Muster views and
 controls: who it is, how its windows and sessions are found, what its
@@ -62,10 +64,11 @@ given. Wherever `labels` appears it is either a list of strings or
 | `files` | The session's working tree, files and git history can be browsed |
 | `model_options` | Native agent and Chat modes offer model and effort choices |
 
-Without a `[controls]` table, `send`, `respond`, `interrupt` and
-`model_options` must be false and there is no `[chat]`: an app is driven
-only through controls its profile records. Three more capabilities follow
-from the tables present and cannot be declared separately: `questions` (a `[controls.questions]` table), `queue`
+Without a `[controls]` table, `model_options` must be false and there is
+no `[chat]`; `send`, `respond` and `interrupt` then need a `[plugin]` table:
+an app is driven only through controls its profile records or through
+Muster's plugin inside it, never both. Three more capabilities follow
+from the tables present and cannot be declared separately: `questions` (a `[controls.questions]` table, or `[plugin]` with `questions = true`), `queue`
 (`[controls.queue]`) and `chat` (`[chat]`). The daemon rejects an operation
 the profile does not declare before any queue, lock, unlock or ledger entry
 ("CatDesk does not offer queued messages"), and `muster-app-core` projects
@@ -171,13 +174,29 @@ session. Approvals, interrupts, question cards, queues and files are never
 offered by a cloud session: the daemon refuses them by name and
 `muster-app-core` projects `can_interrupt` and `can_browse_files` as false.
 
+### `[plugin]`: Muster's plugin inside the app (optional)
+
+The app's sessions are driven through a plugin Muster ships for it, which
+serves an owner-only socket under the source's home
+(`muster_agent::deepseek_app`; DeepSeek Harness's
+`deploy/deepseek-harness`). It needs a `[source]` table and excludes
+`[controls]`; the app's windows are never scanned. Every exchange is bound
+to the serving process, verified against the app's signing requirement.
+The daemon's rules (queue, desktop lock, Locked Use, ledger) apply as to an
+Accessibility-driven session; only the Accessibility steps are skipped.
+
+| Field | Values | Meaning |
+|---|---|---|
+| `socket` | relative path | The socket under the source's home (`muster/bridge.sock`) |
+| `protocol` | 1 or more | The wire protocol the plugin speaks; a plugin reporting another is not used |
+| `questions` | bool | Question cards are answered through it (the `questions` capability) |
+
 ### `[controls]`: the agent conversation
 
-Optional. Without it the app's sessions are viewed, never driven: the
-daemon never scans its windows (`App::driven()` is false), its capabilities
-exclude everything that needs controls, and `App::controls()` answers with
-`Controls::UNRECORDED`, whose selectors match nothing. DeepSeek Harness has
-no `[controls]` until its window's Accessibility tree is recorded.
+Optional. Without it the app's windows are never driven: the daemon never
+scans them (`App::driven()` is false) and `App::controls()` answers with
+`Controls::UNRECORDED`, whose selectors match nothing. Its sessions are then
+viewed, or driven through its `[plugin]` (DeepSeek Harness).
 
 | Field | Values | Meaning |
 |---|---|---|

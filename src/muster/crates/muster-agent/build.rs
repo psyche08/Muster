@@ -29,10 +29,22 @@ struct AppFile {
     capabilities: CapabilitiesSection,
     source: Option<SourceSection>,
     /// Absent for an app whose controls are not recorded: its sessions are
-    /// viewed, never driven.
+    /// viewed, never driven through Accessibility.
     controls: Option<ControlsSection>,
+    /// The app's sessions are driven through Muster's own plugin inside it.
+    plugin: Option<PluginSection>,
     chat: Option<ChatSection>,
     cloud: Option<CloudSection>,
+}
+
+/// `[plugin]`: Muster's plugin inside the app serves its sessions over a
+/// local socket (DeepSeek Harness, ADR 0074).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PluginSection {
+    socket: String,
+    protocol: u32,
+    questions: bool,
 }
 
 /// `[cloud]`: the app's cloud sessions, read and written through the
@@ -910,25 +922,53 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             None => "None".into(),
         };
         let caps = &file.capabilities;
-        // An app is driven only through controls its profile records; one
-        // without them is viewed and declares nothing that needs them.
+        // An app is driven through controls its profile records, or through
+        // Muster's plugin inside it; one with neither is viewed and declares
+        // nothing that drives it.
+        if file.controls.is_some() && file.plugin.is_some() {
+            root.fail("an app is driven through [controls] or through [plugin], not both");
+        }
         if file.controls.is_none() {
             if app.gui.is_some() || app.session_key.is_some() {
                 at.in_table("app").fail(
                     "gui and session_key find windows to drive: they need a [controls] table",
                 );
             }
-            if caps.send
-                || caps.respond
-                || caps.interrupt
-                || caps.model_options
-                || file.chat.is_some()
-            {
-                at.in_table("capabilities").fail(
-                    "send, respond, interrupt, model options and Chat mode need a [controls] table",
-                );
+            if caps.model_options || file.chat.is_some() {
+                at.in_table("capabilities")
+                    .fail("model options and Chat mode need a [controls] table");
+            }
+            if file.plugin.is_none() && (caps.send || caps.respond || caps.interrupt) {
+                at.in_table("capabilities")
+                    .fail("send, respond and interrupt need a [controls] or [plugin] table");
             }
         }
+        let plugin = match &file.plugin {
+            Some(plugin) => {
+                if file.source.is_none() {
+                    root.fail(
+                        "a [plugin] table needs a [source] table: its socket lives under the source's home",
+                    );
+                }
+                if plugin.socket.is_empty()
+                    || plugin.socket.starts_with('/')
+                    || plugin.socket.contains("..")
+                {
+                    root.in_table("plugin")
+                        .fail("socket is a relative path under the source's home");
+                }
+                if plugin.protocol == 0 {
+                    root.in_table("plugin").fail("protocol starts at 1");
+                }
+                format!(
+                    "Some(&Plugin {{ socket: {}, protocol: {}, questions: {} }})",
+                    lit(&plugin.socket),
+                    plugin.protocol,
+                    plugin.questions
+                )
+            }
+            None => "None".into(),
+        };
         let at = at.in_table("app");
         let gui = match (app.gui.as_deref(), &file.controls) {
             (Some("executable"), _) => "Some(Gui::Executable)",
@@ -976,12 +1016,13 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         let questions = file
             .controls
             .as_ref()
-            .is_some_and(|c| c.questions.is_some());
+            .is_some_and(|c| c.questions.is_some())
+            || file.plugin.as_ref().is_some_and(|p| p.questions);
         let queue = file.controls.as_ref().is_some_and(|c| c.queue.is_some());
         let app_name = format!("{name}_APP");
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n    }},\n    controls: {controls},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
+            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n    }},\n    controls: {controls},\n    plugin: {plugin},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
             lit(&app.executable),
             lit(&app.lock),
             caps.send,

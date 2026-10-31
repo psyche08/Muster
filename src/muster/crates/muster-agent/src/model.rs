@@ -109,6 +109,9 @@ pub enum ControllerKind {
     NativeApp,
     /// The provider's cloud API drives the session (`crate::cloud`).
     Cloud,
+    /// Muster's plugin inside the desktop app drives the session
+    /// (`crate::deepseek_app`).
+    Plugin,
 }
 
 impl ControllerKind {
@@ -117,6 +120,7 @@ impl ControllerKind {
             ControllerKind::None => "none",
             ControllerKind::NativeApp => "native_app",
             ControllerKind::Cloud => "cloud",
+            ControllerKind::Plugin => "plugin",
         }
     }
 }

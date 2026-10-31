@@ -18,6 +18,7 @@ pub mod cloud;
 pub mod codex;
 pub mod controller;
 pub mod deepseek;
+pub mod deepseek_app;
 pub mod desktop_chat;
 pub mod desktop_lock;
 pub mod files;
@@ -49,7 +50,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use tokio::sync::{broadcast, mpsc};
 
-use crate::controller::{Controller, ControllerEvent, ProcessState};
+use crate::controller::{Controller, ControllerEvent, ProcessIdentity, ProcessState};
 use crate::desktop_chat::{ChatApp, ChatKey, ChatLine, ChatTranscript};
 pub use crate::model::{AgentMessage, AgentSession, PendingInteraction};
 use crate::model::{ControllerKind, Message, MessageKind, Provider, Role, SessionState};
@@ -255,6 +256,8 @@ pub struct AgentService {
     /// Wakes the cloud loop after a send or a newly opened session watch.
     cloud_wake: tokio::sync::Notify,
     orca: Option<Arc<orca::Source>>,
+    /// DeepSeek Harness's Muster plugin, when the app's home is known.
+    deepseek: Option<Arc<deepseek_app::Link>>,
     /// Sessions whose suggestion may be due; `None` without a predictor.
     predict: Option<mpsc::UnboundedSender<String>>,
 }
@@ -342,6 +345,11 @@ impl AgentService {
             }
             None => (None, None),
         };
+        let deepseek = config
+            .deepseek_home
+            .as_deref()
+            .and_then(deepseek_app::socket)
+            .map(deepseek_app::Link::new);
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
@@ -366,6 +374,7 @@ impl AgentService {
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
             orca,
+            deepseek,
             predict,
         });
         let (wake_tx, wake_rx) = mpsc::channel(1);
@@ -2272,6 +2281,25 @@ impl AgentService {
             let _ = self.events.send(Event::State(s));
         }
         true
+    }
+
+    /// The sessions a controller of `kind` drives, with the app launch
+    /// each is bound to.
+    pub fn controllers_of(&self, kind: ControllerKind) -> Vec<(String, ProcessIdentity)> {
+        self.inner
+            .lock()
+            .unwrap()
+            .controllers
+            .iter()
+            .filter(|(_, c)| c.kind() == kind)
+            .map(|(id, c)| (id.clone(), c.process_identity()))
+            .collect()
+    }
+
+    /// DeepSeek Harness's Muster plugin, which musterd reads to drive the
+    /// app's sessions (`deepseek_app::refresh`).
+    pub fn deepseek_link(&self) -> Option<Arc<deepseek_app::Link>> {
+        self.deepseek.clone()
     }
 
     /// Whether a controller is attached to this session id.

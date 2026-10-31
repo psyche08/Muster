@@ -247,3 +247,187 @@ async fn lists_reads_and_follows_deepseek_sessions() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
+
+/// A stand-in for the `muster-dsh-bridge` plugin on a real socket: the
+/// state it reports, and every request it was sent.
+struct FakePlugin {
+    state: std::sync::Arc<std::sync::Mutex<Value>>,
+    requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+}
+
+impl FakePlugin {
+    fn serve(socket: &Path, state: Value) -> Self {
+        use std::io::{BufRead, BufReader};
+        std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        let listener = std::os::unix::net::UnixListener::bind(socket).unwrap();
+        let state = std::sync::Arc::new(std::sync::Mutex::new(state));
+        let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (shown, seen) = (state.clone(), requests.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { return };
+                let mut line = String::new();
+                if BufReader::new(&stream).read_line(&mut line).is_err() {
+                    continue;
+                }
+                let request: Value = serde_json::from_str(&line).unwrap();
+                let result = if request["op"] == "state" {
+                    shown.lock().unwrap().clone()
+                } else {
+                    seen.lock().unwrap().push(request);
+                    json!({"accepted": true})
+                };
+                let reply = json!({"id": null, "ok": true, "result": result});
+                let _ = (&stream).write_all(format!("{reply}\n").as_bytes());
+            }
+        });
+        Self { state, requests }
+    }
+
+    fn sent(&self, op: &str) -> Vec<Value> {
+        let requests = self.requests.lock().unwrap();
+        requests.iter().filter(|r| r["op"] == op).cloned().collect()
+    }
+}
+
+/// This test process serves the socket; it stands for the signed app.
+struct ThisProcess(std::sync::atomic::AtomicBool);
+
+impl muster_agent::deepseek_app::Host for ThisProcess {
+    fn verify(&self, pid: u32) -> Option<muster_agent::controller::ProcessIdentity> {
+        (pid == std::process::id())
+            .then_some(muster_agent::controller::ProcessIdentity { pid, start: 7 })
+    }
+    fn exited(&self, _: muster_agent::controller::ProcessIdentity) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+async fn refresh(service: &std::sync::Arc<AgentService>, host: &std::sync::Arc<ThisProcess>) {
+    let (service, host) = (service.clone(), host.clone());
+    tokio::task::spawn_blocking(move || {
+        let link = service.deepseek_link().expect("the plugin's link");
+        muster_agent::deepseek_app::refresh(&service, &link, host.as_ref());
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn drives_a_session_through_the_plugin() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    std::fs::write(
+        log(home, SESSION, "session.v4.jsonl.zstd"),
+        frame(&[header(SESSION, home, json!({}))]),
+    )
+    .unwrap();
+    let service = AgentService::start(AgentConfig {
+        codex_home: None,
+        claude_home: None,
+        claude_desktop: None,
+        catdesk_home: None,
+        deepseek_home: Some(home.into()),
+        poll: Duration::from_millis(50),
+        rescan: Duration::from_millis(200),
+        ..Default::default()
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while service.session(SESSION).is_none() {
+        assert!(Instant::now() < deadline, "the log was not listed");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let host = std::sync::Arc::new(ThisProcess(Default::default()));
+    // Without the plugin nothing drives the session.
+    refresh(&service, &host).await;
+    assert_eq!(service.session(SESSION).unwrap().controller, "none");
+
+    let plugin = FakePlugin::serve(
+        &home.join("muster/bridge.sock"),
+        json!({"protocol": 1, "pid": 1, "sessions": [{"id": SESSION, "running": true}],
+            "approvals": [{"id": "a1", "sessionId": SESSION, "toolName": "bash", "reason": "rm -rf build"}],
+            "questions": [{"id": "q1", "sessionId": SESSION, "questions": [
+                {"id": "x", "question": "Which?", "options": [{"label": "A"}, {"label": "B"}], "multiSelect": false}]}]}),
+    );
+    refresh(&service, &host).await;
+    let session = service.session(SESSION).unwrap();
+    assert_eq!(session.controller, "plugin");
+    assert_eq!(session.process_state, "running");
+    assert_eq!(session.state, "waiting_approval");
+    let pending = service.pending(SESSION);
+    assert_eq!(pending.len(), 2);
+    assert_eq!(pending[0].prompt, "bash: rm -rf build");
+
+    // An approval, once the service has it.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while let Err(error) = service
+        .respond_in_session(SESSION, "dsh-approval:a1", "Allow once", "")
+        .await
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the approval was not offered: {error}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(
+        plugin.sent("approve"),
+        [json!({"op": "approve", "approvalId": "a1", "outcome": "allowed-once"})]
+    );
+    assert!(
+        service
+            .respond_in_session(SESSION, "dsh-approval:a1", "Always", "")
+            .await
+            .is_err(),
+        "only the offered options"
+    );
+    // A question card answers with the app's own labels.
+    service
+        .answer_questions(
+            SESSION,
+            "dsh-question:q1",
+            &[muster_proto::v1::QuestionAnswer {
+                question_id: "x".into(),
+                option_ids: vec!["1".into()],
+                text: String::new(),
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        plugin.sent("answer"),
+        [json!({"op": "answer", "questionId": "q1", "answers": [{"id": "x", "selected": ["B"]}]})]
+    );
+    // A prompt and an interrupt go through the app's session controller.
+    service.send_to(SESSION, "run the tests").await.unwrap();
+    let [prompt] = &plugin.sent("prompt")[..] else {
+        panic!("one prompt")
+    };
+    assert_eq!(prompt["sessionId"], SESSION);
+    assert_eq!(prompt["text"], "run the tests");
+    assert_eq!(prompt["mode"], "queue");
+    assert_eq!(prompt["requestId"].as_str().unwrap().len(), 36);
+    service.interrupt(SESSION).await.unwrap();
+    assert_eq!(
+        plugin.sent("cancel"),
+        [json!({"op": "cancel", "sessionId": SESSION})]
+    );
+
+    // Answered in the app: nothing waits any more.
+    *plugin.state.lock().unwrap() = json!({"protocol": 1, "pid": 1, "sessions": [{"id": SESSION, "running": true}],
+            "approvals": [], "questions": []});
+    refresh(&service, &host).await;
+    assert!(service.pending(SESSION).is_empty());
+    assert_eq!(service.session(SESSION).unwrap().state, "running");
+
+    // The app quits: its controllers go with it.
+    host.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    std::fs::remove_file(home.join("muster/bridge.sock")).unwrap();
+    refresh(&service, &host).await;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while service.session(SESSION).unwrap().process_state != "ended" {
+        assert!(Instant::now() < deadline, "the exit was not seen");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(service.send_to(SESSION, "again").await.is_err());
+}

@@ -436,6 +436,8 @@ impl Daemon {
                 daemon.agent_operations.clone(),
             ));
             daemon.tasks.lock().unwrap().push(bridge);
+            let plugin = tokio::spawn(agent_bridge::deepseek_plugin(agent.clone()));
+            daemon.tasks.lock().unwrap().push(plugin);
         }
         log::info!(
             "musterd {} ({}) as {} [{}], socket {}; {BUILD_STAMP}",

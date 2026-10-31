@@ -632,6 +632,18 @@ pub struct Cloud {
     pub capabilities: CloudCapabilities,
 }
 
+/// Muster's plugin inside an app: it serves the app's live state and its
+/// session operations on an owner-only socket (`deepseek_app`).
+#[derive(Debug, PartialEq, Eq)]
+pub struct Plugin {
+    /// The socket, under the source's home.
+    pub socket: &'static str,
+    /// The wire protocol the plugin speaks; another is refused.
+    pub protocol: u32,
+    /// Question cards are answered through it.
+    pub questions: bool,
+}
+
 /// One desktop app, as compiled from `profiles/<provider>.toml`.
 #[derive(Debug)]
 pub struct App {
@@ -652,8 +664,11 @@ pub struct App {
     pub lock: &'static str,
     pub capabilities: Capabilities,
     /// The agent conversation's controls; `None` when the profile records
-    /// none (DeepSeek Harness), whose sessions are viewed, never driven.
+    /// none (DeepSeek Harness), whose windows are never driven.
     pub controls: Option<&'static Controls>,
+    /// Muster's plugin inside the app, through which its sessions are
+    /// driven instead (DeepSeek Harness).
+    pub plugin: Option<&'static Plugin>,
     /// The Chat mode's controls, if the app has one.
     pub chat: Option<&'static ChatControls>,
     /// The app's cloud sessions, if the profile declares them.
@@ -668,7 +683,8 @@ impl App {
 
     /// Whether the engine drives the app through Accessibility: its profile
     /// records its controls, its GUI process and its session key. Only such
-    /// an app is scanned for windows; the others are viewed.
+    /// an app is scanned for windows; the others are viewed, or driven
+    /// through their [`Plugin`].
     pub fn driven(&self) -> bool {
         self.controls.is_some()
     }
@@ -1322,7 +1338,10 @@ mod tests {
                 a.app.chat.as_ref().map(|c| c.provider)
             );
             assert_eq!(a.capabilities.chat, a.chat.is_some());
-            assert_eq!(a.capabilities.questions, a.controls().questions.is_some());
+            assert_eq!(
+                a.capabilities.questions,
+                a.controls().questions.is_some() || a.plugin.is_some_and(|p| p.questions)
+            );
             assert_eq!(a.capabilities.queue, a.controls().queue.is_some());
             assert!(!a.executable.is_empty() && !a.lock.is_empty());
             // What finds and drives windows comes together, or not at all.
@@ -1350,17 +1369,27 @@ mod tests {
         assert!(!CATDESK_APP.capabilities.model_options && CLAUDE_APP.capabilities.model_options);
     }
 
-    /// DeepSeek Harness is viewed, not driven: its profile records no
-    /// controls, so it declares nothing that needs them and every selector
-    /// it answers with matches nothing.
+    /// DeepSeek Harness is driven through Muster's plugin inside it, never
+    /// through Accessibility: its profile records no controls, so every
+    /// selector it answers with matches nothing, and what it offers is what
+    /// the plugin serves.
     #[test]
-    fn deepseek_is_viewed_not_driven() {
+    fn deepseek_is_driven_through_its_plugin() {
         let app = &DEEPSEEK_APP;
         assert!(!app.driven() && app.gui.is_none() && app.session_key.is_none());
         assert!(CLAUDE_APP.driven() && CODEX_APP.driven() && CATDESK_APP.driven());
+        assert!(APPS.iter().all(|a| a.plugin.is_none() || !a.driven()));
+        assert_eq!(
+            app.plugin,
+            Some(&Plugin {
+                socket: "muster/bridge.sock",
+                protocol: 1,
+                questions: true,
+            })
+        );
         let c = app.capabilities;
-        assert!(!c.send && !c.respond && !c.interrupt && !c.questions && !c.queue);
-        assert!(!c.chat && !c.model_options && c.files);
+        assert!(c.send && c.respond && c.interrupt && c.questions && c.files);
+        assert!(!c.queue && !c.chat && !c.model_options);
         assert_eq!(app.source, Source::JsonlZstd);
         assert!(app.records.is_some() && app.cloud.is_none());
         for role in ["AXTextArea", "AXButton"] {
