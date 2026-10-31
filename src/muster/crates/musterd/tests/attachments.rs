@@ -67,6 +67,7 @@ async fn attachment_rpc_preserves_bytes_and_duplicate_does_not_upload_or_send_ag
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -141,6 +142,7 @@ async fn missing_accessibility_is_actionable_and_does_not_stage_attachments() {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -185,6 +187,7 @@ async fn platform_without_desktop_control_never_selects_through_accessibility() 
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -261,6 +264,7 @@ async fn coding_options_rpc_uses_the_attached_session_controller() {
         claude_home: None,
         claude_desktop: None,
         catdesk_home: None,
+        deepseek_home: None,
         ..Default::default()
     });
     config.terminal = None;

@@ -73,6 +73,7 @@ fn config(dir: &std::path::Path, relay: Option<String>, name: &str) -> DaemonCon
         codex_home: Some(dir.join("codex")),
         claude_home: Some(dir.join("claude")),
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

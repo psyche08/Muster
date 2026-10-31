@@ -2852,7 +2852,7 @@ mod setup_permission_tests {
     /// Codex profile declares both. Inspection is never gated.
     #[test]
     fn undeclared_capabilities_are_named() {
-        use muster_agent::profile::{CATDESK_APP, CODEX_APP};
+        use muster_agent::profile::{CATDESK_APP, CODEX_APP, DEEPSEEK_APP};
         let respond = |interaction: &str, answers: usize| {
             Req::AgentRespond(v1::AgentRespondRequest {
                 interaction: interaction.into(),
@@ -2910,6 +2910,39 @@ mod setup_permission_tests {
         assert_eq!(
             undeclared(&none, &respond("approval:1", 0)),
             Some("answering prompts")
+        );
+        // DeepSeek Harness is viewed only: every operation that drives it is
+        // refused by name before any queue or lock; reading is not gated.
+        let deepseek = &DEEPSEEK_APP.capabilities;
+        assert_eq!(
+            undeclared(deepseek, &Req::AgentSend(v1::AgentSendRequest::default())),
+            Some("sending prompts")
+        );
+        assert_eq!(
+            undeclared(
+                deepseek,
+                &Req::AgentInterrupt(v1::AgentInterruptRequest::default())
+            ),
+            Some("interrupting a turn")
+        );
+        assert_eq!(
+            undeclared(deepseek, &respond("approval:1", 0)),
+            Some("answering prompts")
+        );
+        assert_eq!(
+            undeclared(deepseek, &respond("question:1", 1)),
+            Some("question cards")
+        );
+        assert_eq!(
+            undeclared(deepseek, &Req::AgentChatOptions(Default::default())),
+            Some("model or effort choices")
+        );
+        assert_eq!(
+            undeclared(
+                deepseek,
+                &Req::AgentInspect(v1::AgentInspectRequest::default())
+            ),
+            None
         );
     }
     #[test]

@@ -144,6 +144,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0072](0072-multica-install-dialog.md) | Accepted; device acceptance pending | Guided Multica installation with live logs |
 
+| [0073](0073-deepseek-harness-session-viewing.md) | Accepted; device acceptance and control pending | View DeepSeek Harness sessions; do not drive the app yet |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

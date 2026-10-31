@@ -15,6 +15,7 @@ const JOIN_DEFAULTS: &[&str] = &[
     "agents:codex",
     "agents:claude",
     "agents:catdesk",
+    "agents:deepseek",
     "terminals",
 ];
 
@@ -316,7 +317,7 @@ mod tests {
         assert_eq!(section(&view, "chats").summary, "ChatGPT, Claude");
         assert_eq!(
             section(&view, "agents").summary,
-            "Codex, Claude Code, CatDesk"
+            "Codex, Claude Code, CatDesk, DeepSeek Harness"
         );
         assert_eq!(section(&view, "terminals").summary, "On");
         assert_eq!(section(&view, "other").summary, "None");

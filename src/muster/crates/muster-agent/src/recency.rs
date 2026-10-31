@@ -94,7 +94,7 @@ fn activity_at_scope(
         } else if turn.started.as_ref().is_some_and(|m| m.matches(r)) {
             S::Running
         } else if records.message.when.matches(r) {
-            let envelope = field(r, records.message.envelope);
+            let envelope = records.message.envelope(r);
             let final_phase = turn.final_phase.is_some_and(|phase| {
                 records
                     .message

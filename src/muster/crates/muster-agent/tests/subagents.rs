@@ -66,6 +66,7 @@ fn config(codex: Option<&Path>, claude: Option<&Path>) -> AgentConfig {
         claude_home: claude.map(Path::to_owned),
         claude_desktop: None,
         catdesk_home: None,
+        deepseek_home: None,
         poll: Duration::from_secs(3600),
         rescan: Duration::from_secs(3600),
         ..Default::default()

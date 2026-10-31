@@ -349,6 +349,7 @@ async fn start_fixture(
         codex_home: Some(dir.path().join("codex")),
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

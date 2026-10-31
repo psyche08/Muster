@@ -28,8 +28,8 @@ impl ChatApp {
         match Provider::parse(provider)? {
             Provider::Claude => Some(ChatApp::Claude),
             Provider::Codex => Some(ChatApp::ChatGpt),
-            // CatDesk has no separate Chat mode.
-            Provider::Catdesk => None,
+            // CatDesk and DeepSeek Harness have no separate Chat mode.
+            Provider::Catdesk | Provider::Deepseek => None,
         }
     }
 

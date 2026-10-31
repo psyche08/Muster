@@ -73,6 +73,7 @@ async fn lists_reads_and_follows_a_catdesk_session() {
         codex_home: None,
         claude_home: None,
         catdesk_home: Some(dir.path().into()),
+        deepseek_home: None,
         claude_desktop: None,
         poll: Duration::from_millis(50),
         rescan: Duration::from_millis(200),

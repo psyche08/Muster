@@ -1,0 +1,64 @@
+# DeepSeek Harness (bundle com.deepseek.dsh). Schema: docs/APP_PROFILES.md.
+# Compiled by build.rs into `muster_agent::profile::DEEPSEEK_APP`.
+# The record grammar is DeepSeek Harness 0.2.1's session format 4, as its
+# bundled `dsh-session` and `dsh-session-persistence-jsonl` packages declare
+# it (ADR 0073).
+
+[app]
+provider = "deepseek"
+doc = "DeepSeek Harness: sessions read from its per-session event logs; not driven."
+executable = "DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness"
+# One append-only event log per session under ~/.dsh/sessions, written as
+# Zstandard frames.
+source = "jsonl-zstd"
+lock = "DeepSeek Harness"
+# No gui or session_key: nothing here finds its windows. Its desktop host
+# process runs the same executable as Node, and no Accessibility recording
+# of its window exists yet.
+
+# Viewing only. The session's working directory can be browsed.
+[capabilities]
+send = false
+respond = false
+interrupt = false
+files = true
+
+[source]
+home = { env = "DSH_HOME", dir = ".dsh" }
+# Milliseconds since the epoch.
+timestamp = "time"
+# The log's header names the session's directory; a later change of
+# directory is its own event.
+cwd = ["cwd", "data.cwd"]
+# A user message the person did not write: runtime context, time context,
+# skill reminders, messages between agents.
+skip = [{ type = "user/message", "data.source.kind" = { not = "user" } }]
+
+[source.message]
+when = { type = ["user/message", "assistant/message"] }
+# A person's message is the event's data; an assistant's is nested in it.
+envelope = ["data.message", "data"]
+role = "role"
+other_roles = "skip"
+content = "content"
+text_blocks = ["text"]
+media_blocks = ["image"]
+# Tool calls are blocks of the assistant's message.
+block_ids = "all"
+
+[source.tool_call]
+block = "tool-call"
+name = "name"
+id = "id"
+arguments = ["arguments"]
+
+[source.tool_result]
+record = { type = "tool/result" }
+id = "toolCallId"
+output = "content"
+error = "isError"
+interaction_tools = ["ask_user_question"]
+
+[source.turn]
+started = { type = "turn/start" }
+ended = { type = "turn/end" }
