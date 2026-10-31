@@ -114,6 +114,51 @@ pub(crate) async fn native_apps(agent: Arc<AgentService>, queues: ProviderQueues
     }
 }
 
+/// DeepSeek Harness's sessions, driven through Muster's plugin inside the
+/// app (ADR 0074): read it every second and keep the service's controllers
+/// bound to the app launch that serves it. No Accessibility is involved.
+#[cfg(target_os = "macos")]
+pub(crate) async fn deepseek_plugin(agent: Arc<AgentService>) {
+    let Some(link) = agent.deepseek_link() else {
+        return;
+    };
+    let mut tick = tokio::time::interval(Duration::from_secs(1));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tick.tick().await;
+        let (agent, link) = (agent.clone(), link.clone());
+        let _ = tokio::task::spawn_blocking(move || {
+            muster_agent::deepseek_app::refresh(&agent, &link, &SignedDeepseek);
+        })
+        .await;
+    }
+}
+
+/// The process serving the plugin socket is DeepSeek Harness when it
+/// satisfies the app's code signing requirement; its launch time, read on
+/// both sides of that check, binds a pid that is not reused meanwhile.
+#[cfg(target_os = "macos")]
+struct SignedDeepseek;
+
+#[cfg(target_os = "macos")]
+impl muster_agent::deepseek_app::Host for SignedDeepseek {
+    fn verify(&self, pid: u32) -> Option<muster_agent::controller::ProcessIdentity> {
+        use muster_platform::macos::codesign;
+        let start = codesign::process_start(pid)?;
+        if !codesign::process_satisfies(pid, &muster_core::apps::DEEPSEEK.requirement())
+            || codesign::process_start(pid) != Some(start)
+        {
+            return None;
+        }
+        Some(muster_agent::controller::ProcessIdentity { pid, start })
+    }
+    fn exited(&self, process: muster_agent::controller::ProcessIdentity) -> bool {
+        let current =
+            muster_platform::macos::codesign::observe_process_start(process.pid).map_err(|_| ());
+        process.observe(current) == muster_agent::controller::ProcessState::Ended
+    }
+}
+
 /// How a desktop app's web areas map to the session ids the service knows:
 /// the engine's implementation of the profile's `SessionKey` strategy.
 #[cfg(target_os = "macos")]
@@ -121,9 +166,11 @@ fn resolver(profile: &App, agent: &Arc<AgentService>) -> Resolver {
     use muster_agent::profile::SessionKey;
     use muster_platform::macos::native_app::{catdesk_resolver, claude_resolver};
     match profile.session_key {
-        SessionKey::Url => claude_resolver(),
-        SessionKey::Runtime => catdesk_resolver(),
-        SessionKey::Title => {
+        Some(SessionKey::Url) => claude_resolver(),
+        Some(SessionKey::Runtime) => catdesk_resolver(),
+        // An app that is not driven names no session in any window.
+        None => Arc::new(|_| None),
+        Some(SessionKey::Title) => {
             let agent = agent.clone();
             let provider = profile.provider();
             Arc::new(move |key| {

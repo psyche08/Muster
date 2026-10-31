@@ -165,6 +165,12 @@ impl Changes {
         *self = Self::default();
     }
 
+    /// The source records no file changes Muster reads (DeepSeek Harness):
+    /// what a turn changed is unknown, not nothing.
+    pub fn untracked(&mut self) {
+        self.incomplete = true;
+    }
+
     fn record(&mut self, changes: Vec<TurnFileChange>) {
         for mut c in changes {
             if c.path.is_empty() || c.path.len() > 4096 {

@@ -2062,6 +2062,7 @@ dependencies = [
  "rand 0.8.8",
  "regex",
  "rusqlite",
+ "ruzstd",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3517,6 +3518,12 @@ dependencies = [
  "tempfile",
  "wait-timeout",
 ]
+
+[[package]]
+name = "ruzstd"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ff0cc5e135c8870a775d3320910cd9b564ec036b4dc0b8741629020be63f01"
 
 [[package]]
 name = "ryu"

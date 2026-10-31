@@ -85,7 +85,7 @@ authorization decision to live in Shared Rust. This is where each one is:
 | Link paths, carriers, health, hysteresis | `muster-net::magicsock`, `secure_relay`, `node` | Phones use the lighter relay-only profile |
 | Pairing, gossip, forwarding, vnet filtering | `muster-net::pair`, `gossip`, `forward`, `vnet` | |
 | Operation idempotency | `muster-store` OperationLedger, `musterd::handler::ledgered` | Applied / duplicate / conflict / unknown |
-| Agent session catalog, viewers, change push | `muster-agent` (`lib.rs` service; `jsonl` engine over the profiles' record grammar with `codex` / `claude` hooks; `catdesk` store reader) | |
+| Agent session catalog, viewers, change push | `muster-agent` (`lib.rs` service; `jsonl` engine over the profiles' record grammar with `codex` / `claude` / `deepseek` hooks, reading DeepSeek Harness's Zstandard-framed logs through `transcript`; `catdesk` store reader; `deepseek_app`, DeepSeek Harness driven through Muster's plugin, `deploy/deepseek-harness`) | |
 | Session control through Accessibility | `muster-agent::controller` trait; `muster-platform::macos::native_app`, `native_chat` | Engine checks: process signature and start time, input generation, exact echo, one press per attempt, receipts |
 | Desktop Chat mode parsing | `muster-agent::desktop_chat` | Interprets AX snapshots; the platform presses what it is given |
 | Question cards, queued prompts, send receipts | `muster-agent::questions`, `queue`, `receipt`, `unconfirmed` | |
@@ -113,7 +113,7 @@ is shared; a profile can only narrow what it allows.
 | `vocabulary.toml` | Label lists shared by profiles (`$stop`, `$approve`, …) | Every profile |
 
 What is still code per app (architecture §3.6.4): session discovery and
-head metadata (`codex.rs`, `claude.rs`), the four named hooks of each JSONL
+head metadata (`codex.rs`, `claude.rs`, `deepseek.rs`), the four named hooks of each JSONL
 source (text cleaning, title records, usage, Claude's prompt queue), the
 CatDesk store reader (`catdesk.rs`), question-card protocols
 (`questions.rs`), Chat mode's model and effort pickers, and the two resolver

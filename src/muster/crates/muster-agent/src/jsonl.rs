@@ -62,7 +62,7 @@ pub fn skipped(records: &Records, record: &Value) -> bool {
 /// not skipped.
 pub fn message<'a>(records: &Records, record: &'a Value) -> Option<&'a Value> {
     (!skipped(records, record) && records.message.when.matches(record))
-        .then(|| field(record, records.message.envelope))
+        .then(|| records.message.envelope(record))
 }
 
 /// The text of a content value's blocks of the given types, in order.
@@ -110,12 +110,14 @@ fn first<'a>(value: &'a Value, paths: &[&str]) -> &'a Value {
         .unwrap_or(&Value::Null)
 }
 
-/// A session's record timestamp, in Unix seconds (0 when absent).
+/// A session's record timestamp, in Unix seconds (0 when absent): an
+/// RFC 3339 string, or a number of milliseconds since the epoch.
 pub fn timestamp(records: &Records, record: &Value) -> u64 {
-    field(record, records.timestamp)
-        .as_str()
-        .map(parse_ts)
-        .unwrap_or(0)
+    let value = field(record, records.timestamp);
+    match value.as_str() {
+        Some(text) => parse_ts(text),
+        None => value.as_u64().map_or(0, |ms| ms / 1000),
+    }
 }
 
 /// Whether the record ends a turn.
@@ -188,9 +190,15 @@ impl JsonlViewer {
         // A mixed parent transcript must keep filtering its embedded sidechains.
         reader.sidechain =
             discovered.provider == Provider::Claude && discovered.parent_id.is_some();
+        // A log of Zstandard frames is decoded as it is read.
+        let tail = if discovered.path.extension().is_some_and(|e| e == "zstd") {
+            Tail::zstd(&discovered.path)
+        } else {
+            Tail::new(&discovered.path)
+        };
         Self {
             reader,
-            tail: Tail::new(&discovered.path),
+            tail,
             subagent: discovered.hidden,
             encrypted_history: false,
             readable: false,
@@ -405,7 +413,7 @@ impl Reader {
             .message
             .phase
             .map(|p| {
-                field(field(record, records.message.envelope), p)
+                field(records.message.envelope(record), p)
                     .as_str()
                     .unwrap_or("")
                     .to_string()
@@ -423,7 +431,7 @@ impl Reader {
         let mut messages: Vec<Message> = Vec::new();
         let mut user_sent = false;
         if records.message.when.matches(record) {
-            let envelope = field(record, records.message.envelope);
+            let envelope = records.message.envelope(record);
             let rule = &records.message;
             let role = field(envelope, rule.role)
                 .as_str()
@@ -518,13 +526,13 @@ impl Reader {
         } else if let Where::Record(m) = &records.tool_call.at
             && m.matches(record)
         {
-            let envelope = field(record, records.message.envelope);
+            let envelope = records.message.envelope(record);
             let message = self.tool_call(envelope, id.clone(), &at);
             messages.push(message);
         } else if let Where::Record(m) = &records.tool_result.at
             && m.matches(record)
         {
-            let envelope = field(record, records.message.envelope);
+            let envelope = records.message.envelope(record);
             if let Some(message) = self.tool_result(envelope, &Value::Null, id.clone(), &at) {
                 messages.push(message);
             }

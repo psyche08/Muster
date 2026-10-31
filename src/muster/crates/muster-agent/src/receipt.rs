@@ -44,6 +44,13 @@ impl Receipt {
             return crate::catdesk::Receipt::new(&session.path, &session.id, text)
                 .map(|r| Self(Inner::Catdesk(r)));
         }
+        if session.provider == Provider::Deepseek {
+            // Its profile declares no send; its log is not a raw transcript.
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "DeepSeek Harness sessions take no prompts",
+            ));
+        }
         Self::new(&session.path, session.provider, text)
     }
     /// The transcript was rewritten after the press: its offsets, and so any

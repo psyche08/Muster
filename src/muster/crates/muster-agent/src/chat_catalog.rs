@@ -390,6 +390,7 @@ mod tests {
             codex_home: Some(dir.path().into()),
             claude_home: None,
             catdesk_home: None,
+            deepseek_home: None,
             claude_desktop: None,
             ..Default::default()
         });

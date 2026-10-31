@@ -499,10 +499,114 @@ impl Tracker {
     }
 }
 
+impl Tracker {
+    /// DeepSeek Harness: `turn/start` and `turn/end` bound a turn; each
+    /// `assistant/message` is one request, whose `usage` counts uncached
+    /// input apart from cache reads and writes. It records neither a cache
+    /// lifetime nor file changes Muster reads.
+    pub fn deepseek(&mut self, offset: u64, record: &Value) -> Option<Message> {
+        let data = &record["data"];
+        let ts = record["time"].as_u64().map_or(0, |ms| ms / 1000);
+        if let Some(cwd) = record["cwd"].as_str().or_else(|| data["cwd"].as_str()) {
+            self.cwd = cwd.into();
+        }
+        match record["type"].as_str()? {
+            "turn/start" => {
+                // A turn the log never closed (the app stopped mid-turn).
+                let interrupted = if self.active {
+                    self.unknown_requests
+                        .insert("missing_turn_completion".into());
+                    self.finish(offset, 0)
+                } else {
+                    None
+                };
+                self.start();
+                self.changes.untracked();
+                interrupted
+            }
+            "assistant/message" => {
+                if !self.active {
+                    self.start();
+                    self.changes.untracked();
+                }
+                let message = &data["message"];
+                if let Some(model) = message["source"]["model"].as_str() {
+                    self.model = model.into();
+                }
+                let key = message["id"]
+                    .as_str()
+                    .map_or_else(|| offset.to_string(), str::to_owned);
+                let usage = &data["usage"];
+                if usage["inputTokens"].as_u64().is_some()
+                    && usage["outputTokens"].as_u64().is_some()
+                {
+                    let read = count(usage, "cacheReadTokens");
+                    let write = count(usage, "cacheWriteTokens");
+                    let input = count(usage, "inputTokens") + read + write;
+                    let next =
+                        self.sample([input, count(usage, "outputTokens"), read, write], 0, None);
+                    let expiry =
+                        crate::cache::unknown("DeepSeek Harness records no cache lifetime.");
+                    self.record_request(key, next, ts, expiry);
+                } else if !self.requests.contains_key(&key) {
+                    self.unknown_requests.insert(key);
+                }
+                None
+            }
+            "turn/end" => self.finish(offset, ts),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// A DeepSeek Harness turn sums its requests; cache reads count as
+    /// input, no price is guessed, and file changes stay unknown.
+    #[test]
+    fn deepseek_turns_sum_requests_without_a_price() {
+        let mut t = Tracker::default();
+        assert!(
+            t.deepseek(
+                0,
+                &json!({"type":"turn/start","time":1_000,"data":{"turn":1}})
+            )
+            .is_none()
+        );
+        let reply = |id: &str, input: u64, read: u64| {
+            json!({"type":"assistant/message","time":2_000,"data":{"turn":1,"step":1,
+                "message":{"role":"assistant","id":id,"content":[],
+                    "source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4.1-flash"}},
+                "usage":{"inputTokens":input,"outputTokens":2,"cacheReadTokens":read,"cacheWriteTokens":0}}})
+        };
+        assert!(t.deepseek(1, &reply("m1", 7779, 1152)).is_none());
+        assert!(t.deepseek(2, &reply("m2", 100, 0)).is_none());
+        let summary = t
+            .deepseek(3, &json!({"type":"turn/end","time":3_000,"data":{"turn":1,"reason":{"kind":"completed"}}}))
+            .expect("turn summary");
+        assert_eq!(summary.id, "3:usage");
+        assert_eq!(summary.ts_unix, 3);
+        let usage = summary.usage.unwrap();
+        assert_eq!(usage.model, "deepseek-v4.1-flash");
+        assert_eq!(
+            (usage.input_tokens, usage.cache_read_tokens),
+            (7779 + 1152 + 100, 1152)
+        );
+        assert_eq!((usage.output_tokens, usage.request_count), (4, 2));
+        assert!(usage.tokens_known && !usage.cost_known);
+        assert_eq!(usage.cost_source, "unavailable");
+        assert!(usage.changes.is_empty() && usage.changes_incomplete);
+        // A turn the log never ended is closed, partial, by the next start.
+        t.deepseek(4, &json!({"type":"turn/start","time":4_000}));
+        t.deepseek(5, &reply("m3", 10, 0));
+        let partial = t
+            .deepseek(6, &json!({"type":"turn/start","time":5_000}))
+            .unwrap();
+        assert!(!partial.usage.unwrap().tokens_known);
+    }
     #[test]
     fn codex_turns_deduplicate_cumulative_events_and_do_not_double_count_cache() {
         let mut t = Tracker::default();

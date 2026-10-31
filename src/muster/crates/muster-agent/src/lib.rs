@@ -17,6 +17,8 @@ pub mod claude_runtime;
 pub mod cloud;
 pub mod codex;
 pub mod controller;
+pub mod deepseek;
+pub mod deepseek_app;
 pub mod desktop_chat;
 pub mod desktop_lock;
 pub mod files;
@@ -48,7 +50,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use tokio::sync::{broadcast, mpsc};
 
-use crate::controller::{Controller, ControllerEvent, ProcessState};
+use crate::controller::{Controller, ControllerEvent, ProcessIdentity, ProcessState};
 use crate::desktop_chat::{ChatApp, ChatKey, ChatLine, ChatTranscript};
 pub use crate::model::{AgentMessage, AgentSession, PendingInteraction};
 use crate::model::{ControllerKind, Message, MessageKind, Provider, Role, SessionState};
@@ -83,6 +85,8 @@ pub struct AgentConfig {
     pub claude_desktop: Option<PathBuf>,
     /// CatDesk's data directory (its SQLite store lives there).
     pub catdesk_home: Option<PathBuf>,
+    /// DeepSeek Harness's state directory (`~/.dsh`, its session logs).
+    pub deepseek_home: Option<PathBuf>,
     pub poll: Duration,
     pub rescan: Duration,
     /// Parsed sessions nobody asked about for this long are dropped.
@@ -104,6 +108,7 @@ impl std::fmt::Debug for AgentConfig {
             .field("claude_home", &self.claude_home)
             .field("claude_desktop", &self.claude_desktop)
             .field("catdesk_home", &self.catdesk_home)
+            .field("deepseek_home", &self.deepseek_home)
             .field("poll", &self.poll)
             .field("rescan", &self.rescan)
             .field("idle_evict", &self.idle_evict)
@@ -120,6 +125,7 @@ impl Default for AgentConfig {
             claude_home: claude::home(),
             claude_desktop: claude::desktop_registry(),
             catdesk_home: catdesk::home(),
+            deepseek_home: deepseek::home(),
             poll: Duration::from_millis(500),
             rescan: Duration::from_secs(5),
             idle_evict: Duration::from_secs(30 * 60),
@@ -250,6 +256,8 @@ pub struct AgentService {
     /// Wakes the cloud loop after a send or a newly opened session watch.
     cloud_wake: tokio::sync::Notify,
     orca: Option<Arc<orca::Source>>,
+    /// DeepSeek Harness's Muster plugin, when the app's home is known.
+    deepseek: Option<Arc<deepseek_app::Link>>,
     /// Sessions whose suggestion may be due; `None` without a predictor.
     predict: Option<mpsc::UnboundedSender<String>>,
 }
@@ -294,6 +302,15 @@ fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::R
         ),
         (config.claude_desktop.clone(), RecursiveMode::Recursive),
         (config.catdesk_home.clone(), RecursiveMode::Recursive),
+        // Not all of ~/.dsh: its profiles hold installed packages.
+        (
+            config.deepseek_home.as_ref().map(|h| h.join("sessions")),
+            RecursiveMode::Recursive,
+        ),
+        (
+            config.deepseek_home.as_ref().map(|h| h.join("storages")),
+            RecursiveMode::Recursive,
+        ),
     ];
     let mut watching = 0;
     for (root, mode) in roots {
@@ -328,6 +345,11 @@ impl AgentService {
             }
             None => (None, None),
         };
+        let deepseek = config
+            .deepseek_home
+            .as_deref()
+            .and_then(deepseek_app::socket)
+            .map(deepseek_app::Link::new);
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
@@ -352,6 +374,7 @@ impl AgentService {
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
             orca,
+            deepseek,
             predict,
         });
         let (wake_tx, wake_rx) = mpsc::channel(1);
@@ -415,7 +438,7 @@ impl AgentService {
                 let home = match provider {
                     Provider::Codex => config.codex_home.clone(),
                     Provider::Claude => config.claude_home.clone(),
-                    Provider::Catdesk => None,
+                    Provider::Catdesk | Provider::Deepseek => None,
                 }?;
                 Some(Arc::new(cloud::Source::new(
                     *provider,
@@ -902,14 +925,24 @@ impl AgentService {
         if let Some(home) = &config.catdesk_home {
             out.extend(catdesk::scan(home));
         }
+        if let Some(home) = &config.deepseek_home {
+            out.extend(deepseek::scan(home));
+        }
         for d in &mut out {
             if !d.provider.file_transcripts() {
                 // The store reports its own titles and message times; no file
-                // to scan. Keep a project directory the running app reported.
-                if let Some(known) = cache.get(&d.id)
-                    && d.meta.cwd.as_os_str().is_empty()
-                {
-                    d.meta.cwd = known.meta.cwd.clone();
+                // to scan. Keep a project directory the running app reported,
+                // and a title a viewer read when the app keeps none.
+                if let Some(known) = cache.get(&d.id) {
+                    if d.meta.cwd.as_os_str().is_empty() {
+                        d.meta.cwd = known.meta.cwd.clone();
+                    }
+                    if d.meta.title.starts_with("session ")
+                        && !known.meta.title.starts_with("session ")
+                    {
+                        d.meta.title = known.meta.title.clone();
+                        d.custom_title = known.custom_title;
+                    }
                 }
                 continue;
             }
@@ -948,7 +981,7 @@ impl AgentService {
                     }
                     (d.meta.title, d.custom_title) = claude::refreshed_title(&d.path, prior);
                 }
-                Provider::Catdesk => {}
+                Provider::Catdesk | Provider::Deepseek => {}
             }
         }
         out
@@ -2248,6 +2281,25 @@ impl AgentService {
             let _ = self.events.send(Event::State(s));
         }
         true
+    }
+
+    /// The sessions a controller of `kind` drives, with the app launch
+    /// each is bound to.
+    pub fn controllers_of(&self, kind: ControllerKind) -> Vec<(String, ProcessIdentity)> {
+        self.inner
+            .lock()
+            .unwrap()
+            .controllers
+            .iter()
+            .filter(|(_, c)| c.kind() == kind)
+            .map(|(id, c)| (id.clone(), c.process_identity()))
+            .collect()
+    }
+
+    /// DeepSeek Harness's Muster plugin, which musterd reads to drive the
+    /// app's sessions (`deepseek_app::refresh`).
+    pub fn deepseek_link(&self) -> Option<Arc<deepseek_app::Link>> {
+        self.deepseek.clone()
     }
 
     /// Whether a controller is attached to this session id.

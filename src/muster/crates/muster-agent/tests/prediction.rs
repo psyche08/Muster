@@ -89,6 +89,7 @@ async fn a_watched_codex_session_gets_one_suggestion_per_completed_turn() {
         codex_home: Some(dir.path().into()),
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         poll: Duration::from_millis(50),
         rescan: Duration::from_secs(60),

@@ -12,16 +12,25 @@ pub enum Provider {
     /// CatDesk (bundle com.catpaw.cowork): sessions live in the app's own
     /// SQLite store, not in a transcript file per session.
     Catdesk,
+    /// DeepSeek Harness (bundle com.deepseek.dsh): one event log per
+    /// session, written as Zstandard frames; viewed, not driven.
+    Deepseek,
 }
 
 impl Provider {
-    pub const ALL: [Provider; 3] = [Provider::Codex, Provider::Claude, Provider::Catdesk];
+    pub const ALL: [Provider; 4] = [
+        Provider::Codex,
+        Provider::Claude,
+        Provider::Catdesk,
+        Provider::Deepseek,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Provider::Codex => "codex",
             Provider::Claude => "claude",
             Provider::Catdesk => "catdesk",
+            Provider::Deepseek => "deepseek",
         }
     }
 
@@ -30,6 +39,7 @@ impl Provider {
             "codex" => Some(Provider::Codex),
             "claude" => Some(Provider::Claude),
             "catdesk" => Some(Provider::Catdesk),
+            "deepseek" => Some(Provider::Deepseek),
             _ => None,
         }
     }
@@ -53,6 +63,7 @@ impl Provider {
         let hooks: &'static dyn crate::jsonl::Hooks = match self {
             Provider::Codex => &crate::codex::HOOKS,
             Provider::Claude => &crate::claude::HOOKS,
+            Provider::Deepseek => &crate::deepseek::HOOKS,
             Provider::Catdesk => return None,
         };
         Some((self.profile().records?, hooks))
@@ -64,6 +75,7 @@ impl Provider {
             Provider::Codex => &crate::profile::CODEX_APP,
             Provider::Claude => &crate::profile::CLAUDE_APP,
             Provider::Catdesk => &crate::profile::CATDESK_APP,
+            Provider::Deepseek => &crate::profile::DEEPSEEK_APP,
         }
     }
 }
@@ -97,6 +109,9 @@ pub enum ControllerKind {
     NativeApp,
     /// The provider's cloud API drives the session (`crate::cloud`).
     Cloud,
+    /// Muster's plugin inside the desktop app drives the session
+    /// (`crate::deepseek_app`).
+    Plugin,
 }
 
 impl ControllerKind {
@@ -105,6 +120,7 @@ impl ControllerKind {
             ControllerKind::None => "none",
             ControllerKind::NativeApp => "native_app",
             ControllerKind::Cloud => "cloud",
+            ControllerKind::Plugin => "plugin",
         }
     }
 }

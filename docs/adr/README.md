@@ -144,6 +144,10 @@ records a specific decision and does not revive code on its delete list.
 
 | [0072](0072-multica-install-dialog.md) | Accepted; device acceptance pending | Guided Multica installation with live logs |
 
+| [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074 | View DeepSeek Harness sessions; do not drive the app yet |
+
+| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; plugin verified live; daemon, phone and Locked Use acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
+
 | [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix not yet installed | A Claude conversation without a CLI session hides no other |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
