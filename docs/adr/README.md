@@ -150,7 +150,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix not yet installed | A Claude conversation without a CLI session hides no other |
 
-| [0076](0076-paired-release-1-1-6.md) | Accepted; publication and installation pending | Publish Apple 1.1.6 to the OTA page and this Mac |
+| [0076](0076-paired-release-1-1-6.md) | Accepted; published and installed on one Mac | Publish Apple 1.1.6 to the OTA page and this Mac |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
