@@ -146,7 +146,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074 | View DeepSeek Harness sessions; do not drive the app yet |
 
-| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; installed-plugin and device acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
+| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; plugin verified live; daemon, phone and Locked Use acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

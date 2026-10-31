@@ -1,7 +1,7 @@
 # ADR 0074: Drive DeepSeek Harness through a Muster plugin inside the app
 
 - Date: 2026-10-31
-- Status: Accepted; installed-plugin and device acceptance pending
+- Status: Accepted; plugin verified live in the owner's app; daemon, phone and Locked Use acceptance pending
 - Related: [ADR 0073](0073-deepseek-harness-session-viewing.md), whose
   "do not drive the app yet" part this supersedes; ARCHITECTURE §3.6.2 and
   §3.6.4; [APP_PROFILES.md](../APP_PROFILES.md);
@@ -198,8 +198,32 @@ attachments.
   `ctx.effect`. The effect is needed because Cordis runs a plugin's `apply`
   as a constructor and drops its return value. The default
   `~/.dsh/muster/bridge.sock` is far below the limit.
-- **Not done:** installing the plugin into the owner's own DeepSeek Harness
-  profile. Approvals and question cards were not raised by a real model,
-  because that needs model credentials. A Locked Use transaction executing a
-  plugin send on a device, an installed daemon built from this branch,
-  signing and publication were also not done.
+- **Owner's own app, live (2026-10-31).** The owner installed the plugin
+  into their DeepSeek Harness desktop profile with the README's command.
+  The running app hot-reloaded it without a restart. The socket appeared at
+  0600 in a 0700 directory, served by the app's desktop host. That process,
+  and its GUI process, satisfy the code signing requirement musterd checks,
+  and `codesign` refuses a wrong requirement. In the owner's scratch
+  session, which is `workspace-write` with approval policy `ask`, driven
+  through the plugin:
+  - **Approval.** The agent's write outside its workspace was denied by the
+    sandbox. Its escalation then raised an approval with the tool, call id
+    and the agent's reason. Rejecting it through the plugin was recorded as
+    `approval/decided: rejected`, the tool reported the rejection, the agent
+    stopped, and no file was written.
+  - **Question card.** An `ask_user_question` card arrived with its header
+    and options. Answering "蓝色" through the plugin reached the tool as
+    `{"answers":[{"id":"color","selected":["蓝色"]}]}`, and the agent
+    replied "蓝色".
+  - **Interrupt.** A running turn was cancelled through the plugin and ended
+    as `aborted` by the user.
+  - **The branch's Rust code.** It ran against the real socket in a
+    throwaway, uncommitted example. `deepseek_app::refresh` attached a
+    `plugin` controller (process `running`, state `idle`), checking the
+    serving process with the same requirement. `AgentService::send_to` sent
+    a prompt, and the transcript read back the prompt, the reply "OK" and
+    the turn summary.
+- **Not done:** an installed Muster daemon built from this branch (the
+  owner's installed Muster is older), phone control end to end, a Locked
+  Use transaction executing a plugin send on a device, signing and
+  publication.
