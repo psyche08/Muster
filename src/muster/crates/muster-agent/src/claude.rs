@@ -411,7 +411,10 @@ pub fn desktop_navigation_id(root: &Path, session: &str) -> Option<String> {
                 if v["isArchived"].as_bool().unwrap_or(false) {
                     continue;
                 }
-                let id = v["cliSessionId"].as_str().filter(|id| is_uuid(id))?;
+                // A conversation no CLI session drives (yet) is not this one.
+                let Some(id) = v["cliSessionId"].as_str().filter(|id| is_uuid(id)) else {
+                    continue;
+                };
                 if !id.eq_ignore_ascii_case(session) {
                     continue;
                 }
@@ -435,6 +438,9 @@ pub fn desktop_navigation_id(root: &Path, session: &str) -> Option<String> {
 /// partial evidence cannot establish that no other visible conversation has
 /// the same title. Ambiguous desktop mappings fall back to the conservative
 /// transcript lookup at the caller; the opened session ID is always verified.
+/// A conversation no CLI session drives still shows its title in the
+/// sidebar, so it counts against uniqueness without being a candidate; an
+/// untitled one can collide with no title.
 pub fn desktop_navigation_title(root: &Path, session: &str) -> Option<(String, bool)> {
     let mut entries = Vec::new();
     let mut seen = 0;
@@ -469,17 +475,21 @@ pub fn desktop_navigation_title(root: &Path, session: &str) -> Option<(String, b
                 if v["isArchived"].as_bool().unwrap_or(false) {
                     continue;
                 }
-                let id = v["cliSessionId"].as_str().filter(|id| is_uuid(id))?;
-                let title = v["title"]
+                let Some(title) = v["title"].as_str().filter(|title| !title.trim().is_empty())
+                else {
+                    continue;
+                };
+                let id = v["cliSessionId"]
                     .as_str()
-                    .filter(|title| !title.trim().is_empty())?;
-                entries.push((id.to_ascii_lowercase(), title.to_owned()));
+                    .filter(|id| is_uuid(id))
+                    .map(str::to_ascii_lowercase);
+                entries.push((id, title.to_owned()));
             }
         }
     }
     let titles: HashSet<_> = entries
         .iter()
-        .filter(|(id, _)| id == session)
+        .filter(|(id, _)| id.as_deref() == Some(session))
         .map(|(_, title)| title)
         .collect();
     if titles.len() != 1 {
@@ -488,7 +498,7 @@ pub fn desktop_navigation_title(root: &Path, session: &str) -> Option<(String, b
     let title = (*titles.into_iter().next()?).clone();
     let unique = entries
         .iter()
-        .all(|(id, other)| other != &title || id == session);
+        .all(|(id, other)| other != &title || id.as_deref() == Some(session));
     Some((title, unique))
 }
 
@@ -932,5 +942,56 @@ mod navigation_identity_tests {
             desktop_navigation_id(&dir.path().join("missing"), CLI),
             None
         );
+    }
+
+    /// A desktop conversation no CLI session drives (observed 2026-10-31:
+    /// one active entry without `cliSessionId`) is another sidebar row, not
+    /// an unreadable registry: it must not hide every other session's
+    /// desktop title and identity, yet its title still counts against
+    /// uniqueness.
+    #[test]
+    fn a_conversation_without_a_cli_session_hides_no_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = dir.path().join("org/user");
+        std::fs::create_dir_all(&user).unwrap();
+        std::fs::write(
+            user.join(format!("{DESKTOP}.json")),
+            serde_json::json!({"sessionId":DESKTOP,"cliSessionId":CLI,"isArchived":false,
+                "title":"DeepSeek harness 支持"})
+            .to_string(),
+        )
+        .unwrap();
+        let other = "local_44444444-4444-4444-8444-444444444444";
+        let write_other = |value: serde_json::Value| {
+            std::fs::write(user.join(format!("{other}.json")), value.to_string()).unwrap()
+        };
+        write_other(serde_json::json!({"sessionId":other,"isArchived":false,"title":"Handover"}));
+        assert_eq!(
+            desktop_navigation_id(dir.path(), CLI).as_deref(),
+            Some(DESKTOP)
+        );
+        assert_eq!(
+            desktop_navigation_title(dir.path(), CLI),
+            Some(("DeepSeek harness 支持".into(), true))
+        );
+        // Its title is a sidebar row like any other.
+        write_other(
+            serde_json::json!({"sessionId":other,"isArchived":false,"title":"DeepSeek harness 支持"}),
+        );
+        assert_eq!(
+            desktop_navigation_title(dir.path(), CLI),
+            Some(("DeepSeek harness 支持".into(), false))
+        );
+        // An untitled conversation collides with no title.
+        write_other(serde_json::json!({"sessionId":other,"isArchived":false}));
+        assert_eq!(
+            desktop_navigation_title(dir.path(), CLI),
+            Some(("DeepSeek harness 支持".into(), true))
+        );
+        // A malformed entry still withholds the title.
+        write_other(serde_json::json!(null));
+        std::fs::write(user.join(format!("{other}.json")), "{").unwrap();
+        assert_eq!(desktop_navigation_title(dir.path(), CLI), None);
+        assert_eq!(desktop_navigation_id(dir.path(), CLI), None);
     }
 }
