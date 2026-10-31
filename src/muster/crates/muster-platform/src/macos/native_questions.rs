@@ -103,7 +103,7 @@ fn cards(profile: &AppProfile) -> &'static muster_agent::profile::Questions {
         button_choices: false,
         immediate_suggestions: false,
     };
-    profile.controls.questions.as_ref().unwrap_or(&NONE)
+    profile.controls().questions.as_ref().unwrap_or(&NONE)
 }
 
 struct Node {
@@ -167,7 +167,7 @@ impl Tree {
             nodes.push(Node {
                 role: element.role(),
                 enabled: element.bool("AXEnabled").unwrap_or(false),
-                composer: profile.controls.composer.matches(&element),
+                composer: profile.controls().composer.matches(&element),
                 collapsed: element.bool("AXExpanded") == Some(false),
                 element,
                 parent,

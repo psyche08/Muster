@@ -173,7 +173,8 @@ async fn settled_windows(
         if require_renderer {
             ready &= !previous.is_empty();
             for window in &previous {
-                ready &= unique(window, |n| guard.profile.controls.composer.matches(n))?.is_some();
+                ready &=
+                    unique(window, |n| guard.profile.controls().composer.matches(n))?.is_some();
             }
         }
         if !ready {
@@ -202,7 +203,7 @@ async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Resu
         if !windows(root).contains(window) {
             return Err(conflict("Native startup window was replaced"));
         }
-        let ready = unique(window, |n| guard.profile.controls.composer.matches(n))?.is_some();
+        let ready = unique(window, |n| guard.profile.controls().composer.matches(n))?.is_some();
         if ready {
             let since = ready_since.get_or_insert_with(Instant::now);
             if since.elapsed() >= Duration::from_millis(700) {
@@ -373,7 +374,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
     // not exhaust one form's node budget. Never navigate over a nonempty draft
     // if the provider ignores raise; missing/ambiguous editors fail closed.
     for window in &before {
-        let composer = unique(window, |n| profile.controls.composer.matches(n))?
+        let composer = unique(window, |n| profile.controls().composer.matches(n))?
             .ok_or_else(|| unavailable("Existing native composer is unavailable"))?;
         if composer
             .string("AXValue")
@@ -504,7 +505,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         if let Some(page) = unique(&window, |n| new_page(provider, n))?
             && (!reuses_main || empty_session_marker(&page)?)
             && let Some(project) = selection_matches(provider, &page, cwd)?
-            && let Some(composer) = unique(&page, |n| profile.controls.composer.matches(n))?
+            && let Some(composer) = unique(&page, |n| profile.controls().composer.matches(n))?
         {
             break (page, composer, project);
         }
@@ -556,7 +557,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     let send = wait(&guard, &page, |n| {
-        profile.controls.send.matches(n) && n.bool("AXEnabled") == Some(true)
+        profile.controls().send.matches(n) && n.bool("AXEnabled") == Some(true)
     })
     .await?;
     form()?;

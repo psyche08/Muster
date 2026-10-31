@@ -130,7 +130,12 @@ fn tab_completion_is_available_for_native_claude_and_codex_only() {
         },
         ..Default::default()
     });
-    for (provider, allowed) in [("claude", true), ("codex", true), ("catdesk", false)] {
+    for (provider, allowed) in [
+        ("claude", true),
+        ("codex", true),
+        ("catdesk", false),
+        ("deepseek", false),
+    ] {
         state.chat.as_mut().unwrap().session.provider = provider.into();
         assert_eq!(
             crate::render::view_model(&state).chat.unwrap().can_complete,

@@ -17,6 +17,7 @@ pub mod claude_runtime;
 pub mod cloud;
 pub mod codex;
 pub mod controller;
+pub mod deepseek;
 pub mod desktop_chat;
 pub mod desktop_lock;
 pub mod files;
@@ -83,6 +84,8 @@ pub struct AgentConfig {
     pub claude_desktop: Option<PathBuf>,
     /// CatDesk's data directory (its SQLite store lives there).
     pub catdesk_home: Option<PathBuf>,
+    /// DeepSeek Harness's state directory (`~/.dsh`, its session logs).
+    pub deepseek_home: Option<PathBuf>,
     pub poll: Duration,
     pub rescan: Duration,
     /// Parsed sessions nobody asked about for this long are dropped.
@@ -104,6 +107,7 @@ impl std::fmt::Debug for AgentConfig {
             .field("claude_home", &self.claude_home)
             .field("claude_desktop", &self.claude_desktop)
             .field("catdesk_home", &self.catdesk_home)
+            .field("deepseek_home", &self.deepseek_home)
             .field("poll", &self.poll)
             .field("rescan", &self.rescan)
             .field("idle_evict", &self.idle_evict)
@@ -120,6 +124,7 @@ impl Default for AgentConfig {
             claude_home: claude::home(),
             claude_desktop: claude::desktop_registry(),
             catdesk_home: catdesk::home(),
+            deepseek_home: deepseek::home(),
             poll: Duration::from_millis(500),
             rescan: Duration::from_secs(5),
             idle_evict: Duration::from_secs(30 * 60),
@@ -294,6 +299,15 @@ fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::R
         ),
         (config.claude_desktop.clone(), RecursiveMode::Recursive),
         (config.catdesk_home.clone(), RecursiveMode::Recursive),
+        // Not all of ~/.dsh: its profiles hold installed packages.
+        (
+            config.deepseek_home.as_ref().map(|h| h.join("sessions")),
+            RecursiveMode::Recursive,
+        ),
+        (
+            config.deepseek_home.as_ref().map(|h| h.join("storages")),
+            RecursiveMode::Recursive,
+        ),
     ];
     let mut watching = 0;
     for (root, mode) in roots {
@@ -415,7 +429,7 @@ impl AgentService {
                 let home = match provider {
                     Provider::Codex => config.codex_home.clone(),
                     Provider::Claude => config.claude_home.clone(),
-                    Provider::Catdesk => None,
+                    Provider::Catdesk | Provider::Deepseek => None,
                 }?;
                 Some(Arc::new(cloud::Source::new(
                     *provider,
@@ -902,14 +916,24 @@ impl AgentService {
         if let Some(home) = &config.catdesk_home {
             out.extend(catdesk::scan(home));
         }
+        if let Some(home) = &config.deepseek_home {
+            out.extend(deepseek::scan(home));
+        }
         for d in &mut out {
             if !d.provider.file_transcripts() {
                 // The store reports its own titles and message times; no file
-                // to scan. Keep a project directory the running app reported.
-                if let Some(known) = cache.get(&d.id)
-                    && d.meta.cwd.as_os_str().is_empty()
-                {
-                    d.meta.cwd = known.meta.cwd.clone();
+                // to scan. Keep a project directory the running app reported,
+                // and a title a viewer read when the app keeps none.
+                if let Some(known) = cache.get(&d.id) {
+                    if d.meta.cwd.as_os_str().is_empty() {
+                        d.meta.cwd = known.meta.cwd.clone();
+                    }
+                    if d.meta.title.starts_with("session ")
+                        && !known.meta.title.starts_with("session ")
+                    {
+                        d.meta.title = known.meta.title.clone();
+                        d.custom_title = known.custom_title;
+                    }
                 }
                 continue;
             }
@@ -948,7 +972,7 @@ impl AgentService {
                     }
                     (d.meta.title, d.custom_title) = claude::refreshed_title(&d.path, prior);
                 }
-                Provider::Catdesk => {}
+                Provider::Catdesk | Provider::Deepseek => {}
             }
         }
         out

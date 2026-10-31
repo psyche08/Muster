@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 /// The apps, in the order `profile::APPS` lists them: the order the daemon
 /// scans them in.
-const APPS: [&str; 3] = ["claude", "codex", "catdesk"];
+const APPS: [&str; 4] = ["claude", "codex", "catdesk", "deepseek"];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,7 +28,9 @@ struct AppFile {
     app: AppSection,
     capabilities: CapabilitiesSection,
     source: Option<SourceSection>,
-    controls: ControlsSection,
+    /// Absent for an app whose controls are not recorded: its sessions are
+    /// viewed, never driven.
+    controls: Option<ControlsSection>,
     chat: Option<ChatSection>,
     cloud: Option<CloudSection>,
 }
@@ -62,9 +64,26 @@ struct CloudCapabilitiesSpec {
     send: bool,
 }
 
-/// A record condition: `path = "value"`, `path = ["a", "b"]` or
-/// `path = true`.
+/// A record condition: `path = "value"`, `path = ["a", "b"]`,
+/// `path = true` or `path = { not = … }`.
 type MatchSpec = BTreeMap<String, toml::Value>;
+
+/// One path, or several of which the first present wins.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Paths {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Paths {
+    fn list(&self) -> Vec<String> {
+        match self {
+            Paths::One(path) => vec![path.clone()],
+            Paths::Many(paths) => paths.clone(),
+        }
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -93,7 +112,7 @@ struct HomeSpec {
 #[serde(deny_unknown_fields)]
 struct MessageSpec {
     when: MatchSpec,
-    envelope: String,
+    envelope: Paths,
     role: String,
     role_fallback: Option<String>,
     other_roles: String,
@@ -149,8 +168,8 @@ struct AppSection {
     provider: String,
     doc: Option<String>,
     executable: String,
-    gui: String,
-    session_key: String,
+    gui: Option<String>,
+    session_key: Option<String>,
     source: String,
     lock: String,
 }
@@ -425,8 +444,25 @@ impl Generator<'_> {
                         format!("Cond::In({})", list(&strings))
                     }
                     toml::Value::Boolean(true) => "Cond::True".to_string(),
+                    toml::Value::Table(table) if table.len() == 1 && table.contains_key("not") => {
+                        let strings: Vec<String> = match &table["not"] {
+                            toml::Value::String(s) => vec![s.clone()],
+                            toml::Value::Array(items) => items
+                                .iter()
+                                .map(|v| match v {
+                                    toml::Value::String(s) => s.clone(),
+                                    _ => at.fail(format!("match {path}: not holds strings only")),
+                                })
+                                .collect(),
+                            _ => at.fail(format!("match {path}: not takes a string or a list")),
+                        };
+                        if strings.is_empty() {
+                            at.fail(format!("match {path}: an empty not matches everything"));
+                        }
+                        format!("Cond::Not({})", list(&strings))
+                    }
                     _ => at.fail(format!(
-                        "match {path}: expected a string, a list of strings or true"
+                        "match {path}: expected a string, a list of strings, true or {{ not = … }}"
                     )),
                 };
                 format!("Field {{ path: {}, cond: {cond} }}", lit(path))
@@ -456,7 +492,12 @@ impl Generator<'_> {
             at.fail("timestamp and cwd are required");
         }
         let m = &spec.message;
-        if m.envelope.is_empty() || m.role.is_empty() || m.content.is_empty() {
+        let envelope = m.envelope.list();
+        if envelope.is_empty()
+            || envelope.iter().any(String::is_empty)
+            || m.role.is_empty()
+            || m.content.is_empty()
+        {
             at.fail("message.envelope, message.role and message.content are required");
         }
         if m.text_blocks.is_empty() {
@@ -493,7 +534,7 @@ impl Generator<'_> {
             self.option_match(&at, &spec.bootstrap_until),
             self.option_match(&at, &spec.summary_before),
             self.matcher(&at, &m.when),
-            lit(&m.envelope),
+            list(&envelope),
             lit(&m.role),
             string_option(&m.role_fallback),
             lit(&m.content),
@@ -844,7 +885,9 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             .doc
             .clone()
             .unwrap_or_else(|| format!("The {} desktop app.", app.provider));
-        self.controls(at, &name, &doc, &file.controls);
+        if let Some(controls) = &file.controls {
+            self.controls(at, &name, &doc, controls);
+        }
         let chat = match &file.chat {
             Some(chat) => {
                 let chat_name = format!("{}_CHAT", ident(&at.in_table("chat"), &chat.provider));
@@ -866,51 +909,86 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             }
             None => "None".into(),
         };
+        let caps = &file.capabilities;
+        // An app is driven only through controls its profile records; one
+        // without them is viewed and declares nothing that needs them.
+        if file.controls.is_none() {
+            if app.gui.is_some() || app.session_key.is_some() {
+                at.in_table("app").fail(
+                    "gui and session_key find windows to drive: they need a [controls] table",
+                );
+            }
+            if caps.send
+                || caps.respond
+                || caps.interrupt
+                || caps.model_options
+                || file.chat.is_some()
+            {
+                at.in_table("capabilities").fail(
+                    "send, respond, interrupt, model options and Chat mode need a [controls] table",
+                );
+            }
+        }
         let at = at.in_table("app");
-        let gui = match app.gui.as_str() {
-            "executable" => "Gui::Executable",
-            "command-socket" => "Gui::CommandSocket",
-            other => at.fail(format!(
+        let gui = match (app.gui.as_deref(), &file.controls) {
+            (Some("executable"), _) => "Some(Gui::Executable)",
+            (Some("command-socket"), _) => "Some(Gui::CommandSocket)",
+            (Some(other), _) => at.fail(format!(
                 "gui {other:?}: expected executable or command-socket"
             )),
+            (None, Some(_)) => at.fail("gui is required with a [controls] table"),
+            (None, None) => "None",
         };
-        let session_key = match app.session_key.as_str() {
-            "url" => "SessionKey::Url",
-            "title" => "SessionKey::Title",
-            "runtime" => "SessionKey::Runtime",
-            other => at.fail(format!(
+        let session_key = match (app.session_key.as_deref(), &file.controls) {
+            (Some("url"), _) => "Some(SessionKey::Url)",
+            (Some("title"), _) => "Some(SessionKey::Title)",
+            (Some("runtime"), _) => "Some(SessionKey::Runtime)",
+            (Some(other), _) => at.fail(format!(
                 "session_key {other:?}: expected url, title or runtime"
             )),
+            (None, Some(_)) => at.fail("session_key is required with a [controls] table"),
+            (None, None) => "None",
         };
         let source = match app.source.as_str() {
             "jsonl" => "Source::Jsonl",
+            "jsonl-zstd" => "Source::JsonlZstd",
             "sqlite" => "Source::Sqlite",
-            other => at.fail(format!("source {other:?}: expected jsonl or sqlite")),
+            other => at.fail(format!(
+                "source {other:?}: expected jsonl, jsonl-zstd or sqlite"
+            )),
         };
         let records = match (&file.source, app.source.as_str()) {
-            (Some(spec), "jsonl") => {
+            (Some(spec), "jsonl" | "jsonl-zstd") => {
                 self.records(&root, &name, spec);
                 format!("Some(&{name}_RECORDS)")
             }
-            (None, "jsonl") => at.fail("a jsonl source needs a [source] table"),
-            (Some(_), _) => at.fail("only a jsonl source takes a [source] table"),
+            (None, "jsonl" | "jsonl-zstd") => at.fail("a JSONL source needs a [source] table"),
+            (Some(_), _) => at.fail("only a JSONL source takes a [source] table"),
             (None, _) => "None".into(),
         };
         if app.executable.is_empty() || app.lock.is_empty() {
             at.fail("executable and lock are required");
         }
-        let caps = &file.capabilities;
+        let controls = match &file.controls {
+            Some(_) => format!("Some(&{name})"),
+            None => "None".into(),
+        };
+        let questions = file
+            .controls
+            .as_ref()
+            .is_some_and(|c| c.questions.is_some());
+        let queue = file.controls.as_ref().is_some_and(|c| c.queue.is_some());
         let app_name = format!("{name}_APP");
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n    }},\n    controls: &{name},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
+            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n    }},\n    controls: {controls},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
             lit(&app.executable),
             lit(&app.lock),
             caps.send,
             caps.respond,
             caps.interrupt,
-            file.controls.questions.is_some(),
-            file.controls.queue.is_some(),
+            questions,
+            queue,
             caps.files,
             file.chat.is_some(),
             caps.model_options,

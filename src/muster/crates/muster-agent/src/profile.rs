@@ -64,6 +64,13 @@ pub struct Selector {
 }
 
 impl Selector {
+    /// Matches nothing: no role.
+    pub const NONE: Selector = Selector {
+        roles: &[],
+        attrs: &[],
+        labels: &[],
+    };
+
     pub fn matches(&self, node: &impl AxQuery) -> bool {
         self.roles.contains(&node.role().as_str())
             && self.attrs.iter().any(|&attr| {
@@ -347,6 +354,11 @@ pub enum Source {
     /// One append-only JSONL transcript per session (Codex rollouts, Claude
     /// projects): file offsets, tails and backwards scans mean something.
     Jsonl,
+    /// One append-only JSONL log per session, written as a stream of
+    /// Zstandard frames (DeepSeek Harness; a log it keeps uncompressed is
+    /// read as is). Offsets are positions in the decoded stream, so the file
+    /// itself is never tailed raw or scanned backwards.
+    JsonlZstd,
     /// The app's own SQLite store, read only (CatDesk).
     Sqlite,
 }
@@ -385,6 +397,8 @@ pub enum Cond {
     In(&'static [&'static str]),
     /// The field is `true`.
     True,
+    /// The field is not one of these strings (an absent field is not).
+    Not(&'static [&'static str]),
 }
 
 /// One field a record must satisfy.
@@ -406,6 +420,9 @@ impl Match {
                 .as_str()
                 .is_some_and(|s| list.contains(&s)),
             Cond::True => field(record, f.path).as_bool() == Some(true),
+            Cond::Not(list) => field(record, f.path)
+                .as_str()
+                .is_none_or(|s| !list.contains(&s)),
         })
     }
 }
@@ -456,8 +473,10 @@ pub enum Where {
 #[derive(Debug, PartialEq, Eq)]
 pub struct MessageRule {
     pub when: Match,
-    /// The object holding role and content (`payload`, `message`).
-    pub envelope: &'static str,
+    /// The object holding role and content (`payload`, `message`); of
+    /// several, the first present (DeepSeek Harness nests an assistant's
+    /// message one level deeper than a person's).
+    pub envelope: &'static [&'static str],
     /// The role, within the envelope.
     pub role: &'static str,
     /// A record field that names the role when the envelope has none.
@@ -472,6 +491,17 @@ pub struct MessageRule {
     pub block_ids: BlockIds,
     /// The turn phase of the message, within the envelope (`final_answer`).
     pub phase: Option<&'static str>,
+}
+
+impl MessageRule {
+    /// The record's message envelope: the first of the paths present.
+    pub fn envelope<'a>(&self, record: &'a Value) -> &'a Value {
+        self.envelope
+            .iter()
+            .map(|path| field(record, path))
+            .find(|value| !value.is_null())
+            .unwrap_or(&Value::Null)
+    }
 }
 
 /// Where a tool call is and how it is named.
@@ -610,8 +640,10 @@ pub struct App {
     /// The main executable's path suffix (libproc), e.g.
     /// `Claude.app/Contents/MacOS/Claude`.
     pub executable: &'static str,
-    pub gui: Gui,
-    pub session_key: SessionKey,
+    /// Which process shows windows; `None` for an app not driven.
+    pub gui: Option<Gui>,
+    /// How a window names its session; `None` for an app not driven.
+    pub session_key: Option<SessionKey>,
     pub source: Source,
     /// The record grammar of a JSONL source; `None` for a store.
     pub records: Option<&'static Records>,
@@ -619,8 +651,9 @@ pub struct App {
     /// shares for the app; fixed across releases.
     pub lock: &'static str,
     pub capabilities: Capabilities,
-    /// The agent conversation's controls.
-    pub controls: &'static Controls,
+    /// The agent conversation's controls; `None` when the profile records
+    /// none (DeepSeek Harness), whose sessions are viewed, never driven.
+    pub controls: Option<&'static Controls>,
     /// The Chat mode's controls, if the app has one.
     pub chat: Option<&'static ChatControls>,
     /// The app's cloud sessions, if the profile declares them.
@@ -628,14 +661,28 @@ pub struct App {
 }
 
 impl App {
-    /// The agent provider (`claude`, `codex`, `catdesk`).
+    /// The agent provider (`claude`, `codex`, `catdesk`, `deepseek`).
     pub fn provider(&self) -> &'static str {
         self.app.provider
     }
 
+    /// Whether the engine drives the app through Accessibility: its profile
+    /// records its controls, its GUI process and its session key. Only such
+    /// an app is scanned for windows; the others are viewed.
+    pub fn driven(&self) -> bool {
+        self.controls.is_some()
+    }
+
+    /// The agent conversation's controls; [`Controls::UNRECORDED`] for an
+    /// app that is not [`driven`](Self::driven), so nothing is ever found
+    /// in its windows.
+    pub fn controls(&self) -> &'static Controls {
+        self.controls.unwrap_or(&Controls::UNRECORDED)
+    }
+
     /// Whether the composer's value means "nothing typed".
     pub fn is_empty(&self, value: &str) -> bool {
-        !self.controls.is_draft(value)
+        !self.controls().is_draft(value)
     }
 }
 
@@ -664,6 +711,22 @@ pub fn cloud(provider: &str) -> Option<&'static Cloud> {
 }
 
 impl Controls {
+    /// What an app without recorded controls answers with: no selector
+    /// matches anything, there is no queue and no question card.
+    pub const UNRECORDED: Controls = Controls {
+        composer: Selector::NONE,
+        composer_scope: crate::native_scan::ComposerScope::WebArea,
+        placeholders: &[],
+        draft: Draft::Value,
+        send: Selector::NONE,
+        stop: Selector::NONE,
+        approve: Selector::NONE,
+        approval_scope: ApprovalScope::WebArea,
+        sessions: SessionList::PageRows,
+        queue: None,
+        questions: None,
+    };
+
     /// Whether the composer's value is a draft: neither blank nor the
     /// placeholder an empty composer reports as its value.
     pub fn is_draft(&self, value: &str) -> bool {
@@ -1259,9 +1322,12 @@ mod tests {
                 a.app.chat.as_ref().map(|c| c.provider)
             );
             assert_eq!(a.capabilities.chat, a.chat.is_some());
-            assert_eq!(a.capabilities.questions, a.controls.questions.is_some());
-            assert_eq!(a.capabilities.queue, a.controls.queue.is_some());
+            assert_eq!(a.capabilities.questions, a.controls().questions.is_some());
+            assert_eq!(a.capabilities.queue, a.controls().queue.is_some());
             assert!(!a.executable.is_empty() && !a.lock.is_empty());
+            // What finds and drives windows comes together, or not at all.
+            assert_eq!(a.driven(), a.gui.is_some());
+            assert_eq!(a.driven(), a.session_key.is_some());
         }
         assert_eq!(chat_app("chatgpt").map(App::provider), Some("codex"));
         assert_eq!(chat_app("claude").map(App::provider), Some("claude"));
@@ -1272,16 +1338,43 @@ mod tests {
     /// The strategies each app was accepted with on devices.
     #[test]
     fn strategies_are_the_accepted_ones() {
-        assert_eq!(CLAUDE_APP.session_key, SessionKey::Url);
-        assert_eq!(CODEX_APP.session_key, SessionKey::Title);
-        assert_eq!(CATDESK_APP.session_key, SessionKey::Runtime);
-        assert_eq!(CATDESK_APP.gui, Gui::CommandSocket);
+        assert_eq!(CLAUDE_APP.session_key, Some(SessionKey::Url));
+        assert_eq!(CODEX_APP.session_key, Some(SessionKey::Title));
+        assert_eq!(CATDESK_APP.session_key, Some(SessionKey::Runtime));
+        assert_eq!(CATDESK_APP.gui, Some(Gui::CommandSocket));
         assert_eq!(CATDESK_APP.source, Source::Sqlite);
-        assert_eq!(CATDESK_APP.controls.draft, Draft::Selection);
+        assert_eq!(CATDESK_APP.controls().draft, Draft::Selection);
         assert!(CLAUDE_APP.source == Source::Jsonl && CODEX_APP.source == Source::Jsonl);
         assert!(!CATDESK_APP.capabilities.queue && !CATDESK_APP.capabilities.questions);
         assert!(CODEX_APP.capabilities.queue && CLAUDE_APP.capabilities.questions);
         assert!(!CATDESK_APP.capabilities.model_options && CLAUDE_APP.capabilities.model_options);
+    }
+
+    /// DeepSeek Harness is viewed, not driven: its profile records no
+    /// controls, so it declares nothing that needs them and every selector
+    /// it answers with matches nothing.
+    #[test]
+    fn deepseek_is_viewed_not_driven() {
+        let app = &DEEPSEEK_APP;
+        assert!(!app.driven() && app.gui.is_none() && app.session_key.is_none());
+        assert!(CLAUDE_APP.driven() && CODEX_APP.driven() && CATDESK_APP.driven());
+        let c = app.capabilities;
+        assert!(!c.send && !c.respond && !c.interrupt && !c.questions && !c.queue);
+        assert!(!c.chat && !c.model_options && c.files);
+        assert_eq!(app.source, Source::JsonlZstd);
+        assert!(app.records.is_some() && app.cloud.is_none());
+        for role in ["AXTextArea", "AXButton"] {
+            let node = AxNode {
+                role: role.into(),
+                title: "Send".into(),
+                description: "Send".into(),
+                ..Default::default()
+            };
+            let controls = app.controls();
+            assert!(!controls.composer.matches(&node) && !controls.send.matches(&node));
+            assert!(!controls.stop.matches(&node) && !controls.approve.matches(&node));
+        }
+        assert!(app.is_empty("  ") && !app.is_empty("draft"));
     }
 
     /// A record grammar comes with every JSONL source and with no store;
@@ -1305,6 +1398,14 @@ mod tests {
         assert!(field(&ended, "payload.missing.deeper").is_null());
         assert_eq!(codex.home.env, "CODEX_HOME");
         assert_eq!(claude.home.dir, ".claude");
+        // A negated field holds for any other string and for an absent one.
+        let cond = Match(&[Field {
+            path: "data.source.kind",
+            cond: Cond::Not(&["user"]),
+        }]);
+        assert!(!cond.matches(&serde_json::json!({"data":{"source":{"kind":"user"}}})));
+        assert!(cond.matches(&serde_json::json!({"data":{"source":{"kind":"runtime-context"}}})));
+        assert!(cond.matches(&serde_json::json!({"data":{}})));
     }
 
     /// Cloud sessions follow the CLI logins: Claude Code's OAuth token (file
@@ -1339,5 +1440,6 @@ mod tests {
         assert_eq!(CLAUDE_APP.lock, "Claude");
         assert_eq!(CODEX_APP.lock, "ChatGPT");
         assert_eq!(CATDESK_APP.lock, "CatDesk");
+        assert_eq!(DEEPSEEK_APP.lock, "DeepSeek Harness");
     }
 }

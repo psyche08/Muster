@@ -79,6 +79,7 @@ async fn independent_clients(cancel_first: bool) {
         claude_home: None,
         claude_desktop: None,
         catdesk_home: None,
+        deepseek_home: None,
         ..Default::default()
     });
     config.terminal = None;

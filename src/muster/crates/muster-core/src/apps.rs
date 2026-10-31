@@ -61,8 +61,17 @@ pub const CATDESK: DesktopApp = DesktopApp {
     team_id: "BHWTW6L8X6",
 };
 
+/// DeepSeek Harness; it has no separate Chat mode.
+pub const DEEPSEEK: DesktopApp = DesktopApp {
+    provider: "deepseek",
+    agent_label: "DeepSeek Harness",
+    chat: None,
+    bundle_id: "com.deepseek.dsh",
+    team_id: "NAN929V4UM",
+};
+
 /// Every app, in the order lists show them.
-pub static APPS: [&DesktopApp; 3] = [&CODEX, &CLAUDE, &CATDESK];
+pub static APPS: [&DesktopApp; 4] = [&CODEX, &CLAUDE, &CATDESK, &DEEPSEEK];
 
 /// The app whose agent provider is `provider`.
 pub fn app(provider: &str) -> Option<&'static DesktopApp> {
@@ -124,7 +133,14 @@ mod tests {
         assert_eq!(chat_app("codex").unwrap().provider, "codex");
         assert_eq!(chat_app("Claude").unwrap().provider, "claude");
         assert!(chat_app("catdesk").is_none(), "CatDesk has no Chat mode");
-        assert_eq!(agent_providers(), ["codex", "claude", "catdesk", "orca"]);
+        assert!(
+            chat_app("deepseek").is_none(),
+            "DeepSeek Harness has no Chat mode"
+        );
+        assert_eq!(
+            agent_providers(),
+            ["codex", "claude", "catdesk", "deepseek", "orca"]
+        );
         assert_eq!(chat_providers(), ["chatgpt", "claude"]);
         assert_eq!(chat_label("chatgpt"), Some("ChatGPT"));
         assert_eq!(chat_label("codex"), None);
@@ -144,6 +160,11 @@ mod tests {
         assert_eq!(
             app("catdesk").unwrap().requirement(),
             "identifier \"com.catpaw.cowork\" and anchor apple generic and certificate leaf[subject.OU] = \"BHWTW6L8X6\""
+        );
+        // The installed DeepSeek Harness 0.2.1-rc.5's signature (codesign -dv).
+        assert_eq!(
+            app("deepseek").unwrap().requirement(),
+            "identifier \"com.deepseek.dsh\" and anchor apple generic and certificate leaf[subject.OU] = \"NAN929V4UM\""
         );
     }
 }

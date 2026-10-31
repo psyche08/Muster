@@ -121,9 +121,11 @@ fn resolver(profile: &App, agent: &Arc<AgentService>) -> Resolver {
     use muster_agent::profile::SessionKey;
     use muster_platform::macos::native_app::{catdesk_resolver, claude_resolver};
     match profile.session_key {
-        SessionKey::Url => claude_resolver(),
-        SessionKey::Runtime => catdesk_resolver(),
-        SessionKey::Title => {
+        Some(SessionKey::Url) => claude_resolver(),
+        Some(SessionKey::Runtime) => catdesk_resolver(),
+        // An app that is not driven names no session in any window.
+        None => Arc::new(|_| None),
+        Some(SessionKey::Title) => {
             let agent = agent.clone();
             let provider = profile.provider();
             Arc::new(move |key| {

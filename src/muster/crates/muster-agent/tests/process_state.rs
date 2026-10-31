@@ -56,6 +56,7 @@ async fn a_native_attach_never_replaces_a_controller_of_a_live_app() {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -105,6 +106,7 @@ async fn runtime_overrides_stale_transcript_and_late_exit_cannot_detach_new_laun
         codex_home: Some(dir.path().into()),
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -205,6 +207,7 @@ async fn worker_file_evidence_tracks_background_turn_without_granting_control() 
         codex_home: Some(dir.path().into()),
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -263,6 +266,7 @@ async fn resumed_rollout_is_selected_by_message_time_not_directory_order() {
         codex_home: Some(dir.path().into()),
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -293,6 +297,7 @@ async fn claude_reply_end_does_not_end_a_busy_worker_or_its_stop_hooks() {
         codex_home: None,
         claude_home: Some(dir.path().into()),
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

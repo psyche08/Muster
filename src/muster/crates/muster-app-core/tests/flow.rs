@@ -336,6 +336,7 @@ async fn desktop_invites_phone_joins_and_administers_with_presence() {
         codex_home: Some(dir_a.path().join("codex")),
         claude_home: Some(dir_a.path().join("claude")),
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

@@ -69,7 +69,7 @@ pub(super) fn draft(
     composer: &Element,
     text: &str,
 ) -> Result<(), ax::AXError> {
-    match profile.controls.draft {
+    match profile.controls().draft {
         muster_agent::profile::Draft::Value => draft_value(composer, text),
         muster_agent::profile::Draft::Selection => draft_selection(profile, composer, text),
     }
@@ -200,10 +200,10 @@ fn holds_draft(profile: &AppProfile, node: &Element, role: String) -> bool {
         placeholder: text(node, "AXPlaceholderValue"),
         ..Default::default()
     };
-    profile.controls.composer.matches(&field)
+    profile.controls().composer.matches(&field)
         && node
             .string("AXValue")
-            .is_some_and(|value| profile.controls.is_draft(&value))
+            .is_some_and(|value| profile.controls().is_draft(&value))
 }
 
 fn text(node: &Element, attr: &str) -> String {
@@ -250,7 +250,7 @@ fn approval_in_scope(profile: &AppProfile, web_area: &Element, button: &Element)
     let mut ancestry = Vec::new();
     for _ in 0..64 {
         if node == *web_area {
-            return profile.controls.approval_scope.admits(&ancestry, true);
+            return profile.controls().approval_scope.admits(&ancestry, true);
         }
         if seen.contains(&node) || started.elapsed() > Duration::from_millis(250) {
             break;
@@ -262,20 +262,26 @@ fn approval_in_scope(profile: &AppProfile, web_area: &Element, button: &Element)
         };
         node = parent;
     }
-    profile.controls.approval_scope.admits(&ancestry, false)
+    profile.controls().approval_scope.admits(&ancestry, false)
 }
 
-/// Every profiled app, in scan order.
-pub fn profiles() -> [&'static AppProfile; 3] {
-    APPS
+/// Every app the engine drives, in scan order. An app whose profile
+/// records no controls (DeepSeek Harness) is viewed only: its windows are
+/// never scanned.
+pub fn profiles() -> Vec<&'static AppProfile> {
+    APPS.into_iter().filter(|app| app.driven()).collect()
 }
 
 /// The app's GUI processes. With [`Gui::CommandSocket`], only the process
 /// the socket names (and that passes the signature check later) shows
 /// windows.
 pub fn app_pids(profile: &AppProfile) -> Vec<u32> {
+    // An app that is not driven shows no window Muster looks at.
+    if profile.gui.is_none() {
+        return Vec::new();
+    }
     let pids = super::procs::pids_by_executable_suffix(profile.executable);
-    if profile.gui == Gui::Executable {
+    if profile.gui == Some(Gui::Executable) {
         return pids;
     }
     let Some(gui) = muster_agent::catdesk_app::socket()
@@ -386,7 +392,7 @@ fn scan_sidebar(
     log_rows: usize,
 ) -> SidebarScan {
     use muster_agent::profile::SessionList;
-    let sessions = profile.controls.sessions;
+    let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
     let app_walk = app.walk_pruned_report(|node| {
         let id = node
@@ -1240,12 +1246,12 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
             stop = Some(ScanStop::NodeRead(None));
             break;
         };
-        let is_composer = profile.controls.composer.matches(&field);
-        let is_send = !is_composer && profile.controls.send.matches(&field);
+        let is_composer = profile.controls().composer.matches(&field);
+        let is_send = !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
         let queued_delete = is_button
             && profile
-                .controls
+                .controls()
                 .queue
                 .as_ref()
                 .is_some_and(|queue| queue.row.matches(&field));
@@ -1281,7 +1287,7 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
             // Always report semantic submit/Stop controls, even after unrelated
             // toolbar buttons have exhausted the small generic sample budget.
             if is_send
-                || (is_button && profile.controls.stop.matches(&field))
+                || (is_button && profile.controls().stop.matches(&field))
                 || ((is_composer || is_button)
                     && diagnostics.len() < 16
                     && started.elapsed() < Duration::from_millis(150))
@@ -1301,10 +1307,10 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     }
     let complete = stop.is_none();
     if complete {
-        let selected = choose_composer(profile.controls.composer_scope, &nodes, &subroles);
+        let selected = choose_composer(profile.controls().composer_scope, &nodes, &subroles);
         diagnostics.push(format!(
             "composer_scope={:?} candidates={} selected={selected:?}",
-            profile.controls.composer_scope,
+            profile.controls().composer_scope,
             composer.len()
         ));
         if let Some(index) = selected {
@@ -1317,7 +1323,7 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         }
         // Queued rows carry their own submit controls: only those in the
         // composer's branch send.
-        if profile.controls.queue.is_some() {
+        if profile.controls().queue.is_some() {
             send = selected
                 .map(|index| composer_submits_for(&nodes, index))
                 .unwrap_or_default()
@@ -1529,7 +1535,7 @@ impl NativeAppController {
         });
         let mut stops = 0usize;
         fresh.web_area.walk(|node| {
-            if self.profile.controls.stop.matches(node) {
+            if self.profile.controls().stop.matches(node) {
                 stops += 1;
             }
             true
@@ -1633,7 +1639,7 @@ impl NativeAppController {
     /// enabled approval options mean a decision is pending.
     async fn observe(&self) {
         let web_area = self.surface.lock().unwrap().web_area.clone();
-        let controls = self.profile.controls;
+        let controls = self.profile.controls();
         let mut stop = false;
         let mut draft = false;
         let mut options: Vec<(String, Element)> = Vec::new();
@@ -2143,7 +2149,7 @@ impl NativeAppController {
         // a draft, not an unknown submission. Never automatically press again.
         trace.stage("prepare_receipt");
         let receipt = (self.send_receipt_source)(text)?;
-        let admission = if self.profile.controls.queue.is_some() {
+        let admission = if self.profile.controls().queue.is_some() {
             muster_agent::queue::Admission::new(
                 self.queue_source.clone(),
                 self.profile.app.provider,
@@ -2337,7 +2343,7 @@ impl Controller for NativeAppController {
             .any(|button| button.bool("AXEnabled") != Some(false));
         let original = muster_agent::native_send::completion_baseline(
             original.as_deref(),
-            self.profile.controls.placeholders,
+            self.profile.controls().placeholders,
             may_submit,
         )?
         .to_owned();
@@ -2424,7 +2430,7 @@ impl Controller for NativeAppController {
         let web_area = self.surface.lock().unwrap().web_area.clone();
         if button.bool("AXEnabled") != Some(true)
             || names(&button, button.role()).label() != option
-            || !self.profile.controls.approve.matches(&button)
+            || !self.profile.controls().approve.matches(&button)
             || !approval_in_scope(self.profile, &web_area, &button)
         {
             return Err(Error::Unavailable(
@@ -2444,7 +2450,7 @@ impl Controller for NativeAppController {
     }
 
     fn question_diagnostic(&self) -> Result<String, Error> {
-        if self.profile.controls.questions.is_none() {
+        if self.profile.controls().questions.is_none() {
             return self.surface_diagnostic();
         }
         // With no card waiting there is no form to read, but the composer and
@@ -2515,7 +2521,7 @@ impl Controller for NativeAppController {
         let web_area = self.surface.lock().unwrap().web_area.clone();
         let mut stop = None;
         web_area.walk(|node| {
-            if self.profile.controls.stop.matches(node) {
+            if self.profile.controls().stop.matches(node) {
                 stop = Some(node.clone());
                 return false;
             }
@@ -2566,13 +2572,13 @@ mod send_tests {
         };
         for profile in [&CODEX_APP, &CLAUDE_APP] {
             let send = metadata("AXButton", "", "Send", "");
-            assert!(profile.controls.send.matches(&send));
+            assert!(profile.controls().send.matches(&send));
             let stop = metadata("AXButton", "", "Stop", "");
-            assert!(!profile.controls.send.matches(&stop));
-            assert!(profile.controls.stop.matches(&stop));
+            assert!(!profile.controls().send.matches(&stop));
+            assert!(profile.controls().stop.matches(&stop));
         }
         let catdesk = metadata("AXTextArea", "", "聊天输入框", "");
-        assert!(CATDESK_APP.controls.composer.matches(&catdesk));
+        assert!(CATDESK_APP.controls().composer.matches(&catdesk));
         // A missing optional label must not erase a present description.
         let values = [
             Some(CFString::new("AXButton").as_CFType()),
@@ -2582,7 +2588,7 @@ mod send_tests {
         ];
         assert!(
             CODEX_APP
-                .controls
+                .controls()
                 .send
                 .matches(&control_metadata(&values).unwrap())
         );

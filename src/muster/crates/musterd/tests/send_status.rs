@@ -33,6 +33,7 @@ async fn locked_receipt_lookup_requires_current_grants_and_exact_original_body()
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

@@ -2,7 +2,9 @@
 
 Status: the profile form decided in ARCHITECTURE.md §3.6.4 (pending decision
 6, "yes"), in use since 2026-10-04 for Codex, Claude Code and CatDesk,
-including the record grammar of the two JSONL sources (step 3).
+including the record grammar of the two JSONL sources (step 3). Since
+2026-10-31 DeepSeek Harness is the first app added as a profile (step 5); it
+is viewed, not driven ([ADR 0073](adr/0073-deepseek-harness-session-viewing.md)).
 
 A profile describes one desktop app whose sessions Muster views and
 controls: who it is, how its windows and sessions are found, what its
@@ -25,7 +27,7 @@ target's local Accessibility allowlist.
 | File | Content |
 |---|---|
 | `vocabulary.toml` | `[labels]`: named label lists shared by profiles, referred to as `"$name"` |
-| `claude.toml`, `codex.toml`, `catdesk.toml` | One app each; the file name is its agent provider |
+| `claude.toml`, `codex.toml`, `catdesk.toml`, `deepseek.toml` | One app each; the file name is its agent provider |
 | `build.rs` | Lists the apps in scan order (`APPS`), validates every file, writes `$OUT_DIR/profiles.rs`: the `Controls`, `ChatControls`, `Records`, `Cloud` and `App` statics |
 
 The build fails with the file and table named when a field is unknown, a
@@ -42,12 +44,12 @@ given. Wherever `labels` appears it is either a list of strings or
 
 | Field | Values | Meaning |
 |---|---|---|
-| `provider` | `[a-z0-9-]+` | The agent provider; must equal the file name and a `muster_core::apps` entry (`CLAUDE`, `CODEX`, `CATDESK`), which holds labels, bundle id and signing team |
+| `provider` | `[a-z0-9-]+` | The agent provider; must equal the file name and a `muster_core::apps` entry (`CLAUDE`, `CODEX`, `CATDESK`, `DEEPSEEK`), which holds labels, bundle id and signing team |
 | `doc` | text | The generated static's documentation |
 | `executable` | path suffix | The main executable, e.g. `Claude.app/Contents/MacOS/Claude` (libproc lookup) |
-| `gui` | `executable`, `command-socket` | Which processes show windows: every process running the executable, or only the one the app's owner-only command socket reports (CatDesk's helpers run the same binary) |
-| `session_key` | `url`, `title`, `runtime` | How a web area names its session: the page URL (Claude's `/epitaxy/<desktop id>` → CLI session), the web area's title (a Codex thread, only while unique), or a popout URL with the main window showing the runtime's current session (CatDesk) |
-| `source` | `jsonl`, `sqlite` | Where history is read: one append-only transcript per session, or the app's own SQLite store |
+| `gui` | `executable`, `command-socket` | Which processes show windows: every process running the executable, or only the one the app's owner-only command socket reports (CatDesk's helpers run the same binary). Required with `[controls]`, forbidden without |
+| `session_key` | `url`, `title`, `runtime` | How a web area names its session: the page URL (Claude's `/epitaxy/<desktop id>` → CLI session), the web area's title (a Codex thread, only while unique), or a popout URL with the main window showing the runtime's current session (CatDesk). Required with `[controls]`, forbidden without |
+| `source` | `jsonl`, `jsonl-zstd`, `sqlite` | Where history is read: one append-only transcript per session; one append-only event log per session written as Zstandard frames (DeepSeek Harness; message ids are positions in the decoded stream, so the file is never tailed raw or scanned backwards, and a log the app keeps uncompressed is read as is); or the app's own SQLite store |
 | `lock` | text | The cross-process desktop lock's name (`Claude`, `ChatGPT`, `CatDesk`); every daemon of the user keys the lock file by it, so it never changes between releases |
 
 ### `[capabilities]`
@@ -60,8 +62,10 @@ given. Wherever `labels` appears it is either a list of strings or
 | `files` | The session's working tree, files and git history can be browsed |
 | `model_options` | Native agent and Chat modes offer model and effort choices |
 
-Three more capabilities follow from the tables present and cannot be
-declared separately: `questions` (a `[controls.questions]` table), `queue`
+Without a `[controls]` table, `send`, `respond`, `interrupt` and
+`model_options` must be false and there is no `[chat]`: an app is driven
+only through controls its profile records. Three more capabilities follow
+from the tables present and cannot be declared separately: `questions` (a `[controls.questions]` table), `queue`
 (`[controls.queue]`) and `chat` (`[chat]`). The daemon rejects an operation
 the profile does not declare before any queue, lock, unlock or ledger entry
 ("CatDesk does not offer queued messages"), and `muster-app-core` projects
@@ -70,18 +74,19 @@ the declared set into `ChatView.can_interrupt`, `can_choose_model` and
 
 ### `[source]`: the record grammar of a JSONL source
 
-Required when `app.source = "jsonl"`, forbidden otherwise. It tells the one
-JSONL engine (`muster-agent/src/jsonl.rs`) which records are messages,
-tool calls, tool results and turn boundaries, and where their fields are.
-A record condition (a *match*) is an inline table whose keys are dotted
-field paths and whose values are a string (the field is that string), a
-list of strings (one of them) or `true` (the field is `true`); every key
-must hold.
+Required when `app.source` is `jsonl` or `jsonl-zstd`, forbidden otherwise.
+It tells the one JSONL engine (`muster-agent/src/jsonl.rs`) which records
+are messages, tool calls, tool results and turn boundaries, and where their
+fields are. A record condition (a *match*) is an inline table whose keys are
+dotted field paths and whose values are a string (the field is that string),
+a list of strings (one of them), `true` (the field is `true`) or
+`{ not = "a" }` / `{ not = ["a", "b"] }` (the field is none of them; an
+absent field is none of them); every key must hold.
 
 | Field | Values | Meaning |
 |---|---|---|
 | `home` | `{ env, dir }` | The state directory: the environment variable when set, else `dir` under `$HOME` |
-| `timestamp` | path | The record field holding an RFC 3339 time |
+| `timestamp` | path | The record field holding the time: an RFC 3339 string, or a number of milliseconds since the epoch |
 | `cwd` | list of paths | Fields naming the working directory; the first present wins |
 | `skip` | list of matches | Records to ignore entirely (Claude's sidechains and meta records) |
 | `bootstrap_until` | match, optional | Everything before the first such record is the app's own bootstrap and is never shown (Codex's `turn_context`) |
@@ -92,7 +97,7 @@ must hold.
 | Field | Values | Meaning |
 |---|---|---|
 | `when` | match | The record is a message |
-| `envelope` | path | The object holding role and content (`payload`, `message`) |
+| `envelope` | path, or list of paths | The object holding role and content (`payload`, `message`); of several, the first present (DeepSeek Harness: `["data.message", "data"]`) |
 | `role` | path in the envelope | The role; `role_fallback` (optional, a record path) names it when the envelope has none |
 | `other_roles` | `skip`, `assistant` | What a role that is neither `user` nor `assistant` is |
 | `content` | path in the envelope | A string, or a list of blocks |
@@ -122,7 +127,7 @@ are the agent asking the person something).
 | `final_phase` | A message in this phase ends the turn (recency) |
 
 What the grammar cannot say is a named hook per source (`jsonl::Hooks`,
-implemented in `codex.rs` and `claude.rs`): how a text block is cleaned
+implemented in `codex.rs`, `claude.rs` and `deepseek.rs`): how a text block is cleaned
 (reminders, memory citations, pasted content, command wrappers), which
 records rename a session, the turn usage accounting, and a prompt the app
 queued for a running turn. The engine keeps every rule the readers kept
@@ -167,6 +172,12 @@ offered by a cloud session: the daemon refuses them by name and
 `muster-app-core` projects `can_interrupt` and `can_browse_files` as false.
 
 ### `[controls]`: the agent conversation
+
+Optional. Without it the app's sessions are viewed, never driven: the
+daemon never scans its windows (`App::driven()` is false), its capabilities
+exclude everything that needs controls, and `App::controls()` answers with
+`Controls::UNRECORDED`, whose selectors match nothing. DeepSeek Harness has
+no `[controls]` until its window's Accessibility tree is recorded.
 
 | Field | Values | Meaning |
 |---|---|---|
@@ -336,8 +347,9 @@ Per app, outside the profiles, until a later step of architecture §3.6.4:
 - Session discovery and head metadata: where a source lists its sessions
   and what their first records say (Codex's `session_index.jsonl`, Claude's
   `sessions-index.json`, title records and the desktop registry;
-  `codex.rs`, `claude.rs`), the CatDesk store reader (`catdesk.rs`), and
-  the hooks named above.
+  `codex.rs`, `claude.rs`; DeepSeek Harness's session directories, log
+  generations, title cache and archive list, `deepseek.rs`), the CatDesk
+  store reader (`catdesk.rs`), and the hooks named above.
 - Question cards: each app's own protocol for asking and answering
   (`questions.rs`).
 - The two resolver implementations the `session_key` strategies name

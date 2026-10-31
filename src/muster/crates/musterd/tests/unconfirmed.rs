@@ -80,6 +80,7 @@ async fn a_refusal_names_the_unconfirmed_write_and_only_that_one_is_released() {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -225,6 +226,7 @@ async fn late_native_receipt_updates_original_rpc_ledger_without_resending() {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });
@@ -341,6 +343,7 @@ async fn manual_resolution_clears_native_latch_without_resubmission() {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         ..Default::default()
     });

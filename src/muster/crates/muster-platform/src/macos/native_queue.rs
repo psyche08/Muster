@@ -163,7 +163,7 @@ impl NativeAppController {
             .write
             .try_lock()
             .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
-        let Some(controls) = self.profile.controls.queue.as_ref() else {
+        let Some(controls) = self.profile.controls().queue.as_ref() else {
             return Err(Error::Unavailable(
                 "Native message queue unavailable".into(),
             ));

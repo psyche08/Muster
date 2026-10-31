@@ -14,6 +14,7 @@ fn service() -> std::sync::Arc<AgentService> {
         codex_home: None,
         claude_home: None,
         catdesk_home: None,
+        deepseek_home: None,
         claude_desktop: None,
         poll: Duration::from_secs(60),
         rescan: Duration::from_secs(60),
