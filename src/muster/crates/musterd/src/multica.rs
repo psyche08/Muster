@@ -33,6 +33,10 @@ pub struct Manager {
     browse_gate: tokio::sync::Semaphore,
     bridge: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     last_error: std::sync::Mutex<String>,
+    // Tests supply the host Multica CLI so installation can be exercised
+    // without touching an operator's ~/.local/bin.
+    #[cfg(test)]
+    host_cli_candidates: Option<Vec<PathBuf>>,
 }
 impl Drop for Manager {
     fn drop(&mut self) {
@@ -51,6 +55,8 @@ impl Manager {
             browse_gate: tokio::sync::Semaphore::new(2),
             bridge: tokio::sync::Mutex::new(None),
             last_error: std::sync::Mutex::new(String::new()),
+            #[cfg(test)]
+            host_cli_candidates: None,
         }
     }
     async fn command(&self, args: &[&str], seconds: u64) -> Result<Vec<u8>, Error> {
@@ -352,6 +358,15 @@ impl Manager {
         };
         let installed = installed && (!c.managed || c.installed);
         let daemon = running && installed && daemon_running(self, &c).await;
+        // A saved root whose installed container still mounts another path needs
+        // the attended offline migration before Settings may accept it.
+        let migration_required =
+            self.path.is_file() && row.as_ref().is_some_and(|r| !mounts_match(&c, r));
+        let version = if installed && running {
+            self.guest_version(&c).await
+        } else {
+            String::new()
+        };
         let message = inventory_error.unwrap_or_else(|| {
             let error = self.last_error.lock().unwrap().clone();
             if !error.is_empty() {
@@ -389,7 +404,30 @@ impl Manager {
             login_command,
             busy: progress.busy,
             installation: (progress.busy || progress.finished).then_some(progress),
+            migration_required,
+            version,
         })
+    }
+    /// Remove task-scoped launchers left by a previous bridge process. The bridge
+    /// listener does not exist yet at daemon startup, so no active turn owns them.
+    pub async fn startup(&self) {
+        if !cfg!(target_os = "macos") {
+            return;
+        }
+        let Ok(c) = self.load() else { return };
+        if c.data_dir.is_empty() || (!c.keep_alive && !c.runtime_bridge) {
+            return;
+        }
+        if let Err(error) = bridge::revoke_stale(&c) {
+            log::warn!("Multica task credential cleanup failed: {error}");
+        }
+    }
+    async fn guest_version(&self, c: &Config) -> String {
+        self.command(&["exec", &c.container_name, "multica", "--version"], 5)
+            .await
+            .ok()
+            .map(|bytes| version_text(&bytes))
+            .unwrap_or_default()
     }
     pub async fn maintain(&self, socket: &Path) {
         let Ok(_guard) = self.gate.try_lock() else {
@@ -397,16 +435,45 @@ impl Manager {
         };
         let result = async {
             let c = self.load()?;
-            if !c.keep_alive {
+            if !c.keep_alive && !c.runtime_bridge {
                 return Ok(());
             }
-            self.ensure(&c, socket).await
+            if c.keep_alive {
+                return self.ensure(&c, socket).await;
+            }
+            // Opted into the runtime bridge but not supervision: reconcile only an
+            // already running container, never start one, its daemon or a task.
+            self.reconcile_runtime(&c, socket).await
         }
         .await;
         *self.last_error.lock().unwrap() = result
             .err()
             .map(|e: Error| e.to_string())
             .unwrap_or_default();
+    }
+    async fn reconcile_runtime(&self, c: &Config, socket: &Path) -> Result<(), Error> {
+        let (_, row) = self.observed(c.clone()).await?;
+        let Some(row) = row else { return Ok(()) };
+        if row["status"]["state"] != "running" {
+            return Ok(());
+        }
+        self.ensure_bridge(c, socket, &row).await
+    }
+    async fn ensure_bridge(
+        &self,
+        c: &Config,
+        socket: &Path,
+        row: &serde_json::Value,
+    ) -> Result<(), Error> {
+        if !(c.managed || c.runtime_bridge) {
+            return Ok(());
+        }
+        let gateway = row["status"]["networks"]
+            .as_array()
+            .and_then(|ns| ns.first())
+            .and_then(|n| n["ipv4Gateway"].as_str())
+            .ok_or_else(|| Error::Unavailable("Container bridge address is unavailable".into()))?;
+        bridge::ensure(self, c, socket, gateway).await
     }
     async fn ensure(&self, c: &Config, socket: &Path) -> Result<(), Error> {
         let (_, row) = match self.observed(c.clone()).await {
@@ -426,15 +493,10 @@ impl Manager {
         }
         if c.managed || c.runtime_bridge {
             let (_, row) = self.observed(c.clone()).await?;
-            let gateway = row
-                .as_ref()
-                .and_then(|r| r["status"]["networks"].as_array())
-                .and_then(|ns| ns.first())
-                .and_then(|n| n["ipv4Gateway"].as_str())
-                .ok_or_else(|| {
-                    Error::Unavailable("Container bridge address is unavailable".into())
-                })?;
-            bridge::ensure(self, c, socket, gateway).await?;
+            let row = row.ok_or_else(|| {
+                Error::Unavailable("Multica container is missing; use Install".into())
+            })?;
+            self.ensure_bridge(c, socket, &row).await?;
         }
         if !daemon_running(self, c).await {
             let args = daemon_start_args(c);
@@ -573,37 +635,58 @@ fn accept_migrated_root(old: &Config, new: &Config, row: &serde_json::Value) -> 
             "Complete the offline data migration and remove the old path before saving; no compatibility link is created".into(),
         ));
     }
-    let mounts = row["configuration"]["mounts"].as_array();
-    let mounted = |source: &Path, destination: &Path| {
-        mounts.is_some_and(|mounts| {
+    let retains_old = row["configuration"]["mounts"]
+        .as_array()
+        .is_some_and(|mounts| {
             mounts.iter().any(|mount| {
-                mount["source"].as_str() == source.to_str()
-                    && mount["destination"].as_str() == destination.to_str()
+                ["source", "destination"].iter().any(|key| {
+                    mount[key]
+                        .as_str()
+                        .is_some_and(|path| Path::new(path).starts_with(old_path))
+                })
             })
-        })
-    };
-    let matches = if new.managed {
-        mounted(new_path, Path::new("/muster"))
-            && mounted(&new_path.join("config"), Path::new("/root/.multica"))
-            && mounted(&new_path.join("workspaces"), &new_path.join("workspaces"))
-    } else {
-        mounted(new_path, new_path)
-    };
-    let retains_old = mounts.is_some_and(|mounts| {
-        mounts.iter().any(|mount| {
-            ["source", "destination"].iter().any(|key| {
-                mount[key]
-                    .as_str()
-                    .is_some_and(|path| Path::new(path).starts_with(old_path))
-            })
-        })
-    });
-    if !matches || retains_old {
+        });
+    if !mounts_match(new, row) || retains_old {
         return Err(Error::Conflict(
             "Update the stopped container's bind mounts to the new data root before saving".into(),
         ));
     }
     Ok(())
+}
+/// Whether the installed container already serves `c`'s data root. A managed
+/// install mounts the root, its config and its workspaces; an adopted container
+/// mounts the root at the same path on host and guest.
+fn mounts_match(c: &Config, row: &serde_json::Value) -> bool {
+    let Some(mounts) = row["configuration"]["mounts"].as_array() else {
+        return false;
+    };
+    let data = Path::new(&c.data_dir);
+    let mounted = |source: &Path, destination: &Path| {
+        mounts.iter().any(|mount| {
+            mount["source"].as_str() == source.to_str()
+                && mount["destination"].as_str() == destination.to_str()
+        })
+    };
+    if c.managed {
+        mounted(data, Path::new("/muster"))
+            && mounted(&data.join("config"), Path::new("/root/.multica"))
+            && mounted(&data.join("workspaces"), &data.join("workspaces"))
+    } else {
+        mounted(data, data)
+    }
+}
+/// The first line of a guest `multica --version` probe, bounded and printable.
+fn version_text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|ch| !ch.is_control())
+        .take(120)
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 fn private_write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     use std::io::Write;
@@ -740,14 +823,19 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
 async fn install_host(manager: &Manager, c: &Config) -> Result<(), Error> {
     let root = Path::new(&c.data_dir);
     manager.installation.stage("安装本机 Multica CLI");
+    #[cfg(test)]
+    let mut candidates = manager.host_cli_candidates.clone().unwrap_or_default();
+    #[cfg(not(test))]
     let mut candidates = Vec::new();
-    if let Some(home) = std::env::var_os("HOME") {
-        candidates.push(PathBuf::from(home).join(".local/bin/multica"));
+    if candidates.is_empty() {
+        if let Some(home) = std::env::var_os("HOME") {
+            candidates.push(PathBuf::from(home).join(".local/bin/multica"));
+        }
+        candidates.extend([
+            PathBuf::from("/opt/homebrew/bin/multica"),
+            PathBuf::from("/usr/local/bin/multica"),
+        ]);
     }
-    candidates.extend([
-        PathBuf::from("/opt/homebrew/bin/multica"),
-        PathBuf::from("/usr/local/bin/multica"),
-    ]);
     for candidate in candidates {
         if let Ok(version) = run(&candidate, &["--version"], 5).await
             && String::from_utf8_lossy(&version)
@@ -945,6 +1033,7 @@ mod tests {
 #[cfg(all(test, unix))]
 mod lifecycle_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn progress_is_available_while_mutations_remain_exclusive() {
@@ -1050,5 +1139,175 @@ esac
         manager.maintain(Path::new("unused.sock")).await;
         assert!(dir.path().join("daemon").exists());
         assert!(manager.last_error.lock().unwrap().is_empty());
+    }
+
+    fn fake_container(root: &Path, fail_run: bool) -> PathBuf {
+        let script = root.join("container");
+        std::fs::write(
+            &script,
+            format!(
+                r#"#!/bin/sh
+printf '%s\n' "$*" >> "{calls}"
+case "$1" in
+  run) exit {run} ;;
+  exec) exit 0 ;;
+  list) echo '[]'; exit 0 ;;
+  *) exit 0 ;;
+esac
+"#,
+                calls = root.join("calls").display(),
+                run = if fail_run { 7 } else { 0 }
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        script
+    }
+
+    fn fake_host_cli(root: &Path) -> PathBuf {
+        let script = root.join("multica-fixture");
+        std::fs::write(&script, "#!/bin/sh\nprintf 'multica 0.6.5\\n'\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    #[tokio::test]
+    async fn install_creates_the_root_container_and_host_cli_in_stages() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(fake_container(dir.path(), false));
+        manager.host_cli_candidates = Some(vec![fake_host_cli(dir.path())]);
+        let data = dir.path().join("Multica");
+        let c = Config {
+            data_dir: data.to_string_lossy().into_owned(),
+            container_name: "muster-multica".into(),
+            installer_url: "https://installer.example.invalid/multica.sh".into(),
+            ..Default::default()
+        };
+        install(&manager, &c, true).await.unwrap();
+        assert_eq!(
+            std::fs::read(data.join(".muster-owned")).unwrap(),
+            b"muster-multica-v1"
+        );
+        for child in ["config", "workspaces", "bin"] {
+            assert!(data.join(child).is_dir(), "{child}");
+        }
+        assert!(data.join("runtime-command").is_file());
+        let host_cli = data.join("bin/multica");
+        assert!(host_cli.is_file());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&host_cli).unwrap().permissions().mode() & 0o777,
+                0o755
+            );
+        }
+        let calls = std::fs::read_to_string(dir.path().join("calls")).unwrap();
+        assert!(calls.contains("run --detach --name muster-multica"));
+        assert!(calls.contains(&format!("{}:/muster", data.display())));
+        assert!(calls.contains("bash /tmp/multica-install.sh"));
+        let log = manager.installation.snapshot().log;
+        for stage in [
+            "准备数据目录与工作区",
+            "下载容器镜像并创建容器",
+            "安装容器依赖与 Multica CLI",
+            "写入 Multica 服务配置",
+            "安装本机 Multica CLI",
+        ] {
+            assert!(log.contains(stage), "{stage}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_container_run_keeps_the_partial_root_and_reports_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(fake_container(dir.path(), true));
+        manager.host_cli_candidates = Some(vec![fake_host_cli(dir.path())]);
+        let data = dir.path().join("Multica");
+        let c = Config {
+            data_dir: data.to_string_lossy().into_owned(),
+            container_name: "muster-multica".into(),
+            installer_url: "https://installer.example.invalid/multica.sh".into(),
+            ..Default::default()
+        };
+        let error = install(&manager, &c, true).await.unwrap_err().to_string();
+        assert!(
+            error.contains("Installation command failed") && error.contains("7"),
+            "{error}"
+        );
+        // No automatic rollback: a retry starts from this explicit partial state.
+        assert!(data.join(".muster-owned").is_file());
+        assert!(!manager.installation.snapshot().succeeded);
+    }
+
+    #[test]
+    fn version_probe_is_one_printable_bounded_line() {
+        assert_eq!(version_text(b"multica 0.6.5\nsecond\n"), "multica 0.6.5");
+        assert_eq!(version_text(b"\n\n"), "");
+        let noisy = version_text(b"multica\x1b[31m 0.6.5\r\n");
+        assert!(!noisy.chars().any(char::is_control), "{noisy:?}");
+        assert_eq!(version_text(&[b'x'; 400]).chars().count(), 120);
+    }
+
+    #[test]
+    fn migration_is_required_only_when_the_mounts_do_not_serve_the_saved_root() {
+        let data = "/Volumes/Fixture/Documents/Multica";
+        let legacy = |source: &str, destination: &str| serde_json::json!({"configuration": {"mounts": [{"source": source, "destination": destination}]}});
+        let mut c = Config {
+            data_dir: data.into(),
+            ..Default::default()
+        };
+        assert!(mounts_match(&c, &legacy(data, data)));
+        assert!(!mounts_match(&c, &legacy("/tmp/other", "/tmp/other")));
+        assert!(!mounts_match(&c, &serde_json::json!({})));
+        c.managed = true;
+        let managed = serde_json::json!({"configuration": {"mounts": [
+            {"source": data, "destination": "/muster"},
+            {"source": format!("{data}/config"), "destination": "/root/.multica"},
+            {"source": format!("{data}/workspaces"), "destination": format!("{data}/workspaces")},
+        ]}});
+        assert!(mounts_match(&c, &managed));
+        let mut missing = managed.clone();
+        missing["configuration"]["mounts"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        assert!(!mounts_match(&c, &missing));
+    }
+
+    #[tokio::test]
+    async fn status_reports_migration_need_and_the_guest_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("container");
+        std::fs::write(
+            &script,
+            r#"#!/bin/sh
+case "$*" in
+  'list --all --format json') echo '[{"id":"mlt","status":{"state":"running"},"configuration":{"mounts":[{"source":"/tmp/elsewhere","destination":"/tmp/elsewhere"}]}}]' ;;
+  *'--version'*) printf 'multica 0.6.5\n' ;;
+  *'test -x /usr/local/bin/multica'*) exit 0 ;;
+  *) exit 0 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(script);
+        let data = dir.path().join("Multica");
+        std::fs::create_dir_all(&data).unwrap();
+        manager
+            .save(&Config {
+                data_dir: data.to_string_lossy().into_owned(),
+                container_name: "mlt".into(),
+                installed: true,
+                ..Default::default()
+            })
+            .unwrap();
+        let status = manager.status().await.unwrap();
+        assert!(status.migration_required);
+        assert_eq!(status.version, "multica 0.6.5");
     }
 }

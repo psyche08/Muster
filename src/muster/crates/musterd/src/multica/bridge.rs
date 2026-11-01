@@ -1,6 +1,6 @@
 use super::*;
 use muster_agent::native_runtime::{self, Destination};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
 fn destination(provider: &str) -> Result<Destination, Error> {
@@ -80,6 +80,29 @@ struct Launch {
     args: Vec<String>,
     env: HashMap<String, String>,
 }
+
+/// The launch shapes `muster_acp::scheduler::codex` answers `initialize` for.
+///
+/// Keep this list identical to that adapter's `launch_supported`: a wider gate
+/// would hand the adapter a launch it refuses, and a narrower one would refuse
+/// a launch the adapter serves (for example a scheduler that starts the
+/// wrapper with no arguments at all).
+fn codex_launch_supported(args: &[String]) -> bool {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    matches!(
+        args.as_slice(),
+        [] | ["app-server"] | ["app-server", "--listen", "stdio://"]
+    )
+}
+
+/// Claude Code emits the newline-delimited JSON the adapter reads only when it
+/// runs with stream-json input. A launch without it can never speak this
+/// protocol, so the bridge refuses it instead of forwarding a dead stream.
+fn claude_stream_json(args: &[String]) -> bool {
+    args.iter()
+        .any(|a| a == "--input-format" || a == "--input-format=stream-json")
+}
+
 async fn handshake<R: tokio::io::AsyncBufRead + Unpin>(
     r: &mut R,
     token: &str,
@@ -106,10 +129,10 @@ async fn handshake<R: tokio::io::AsyncBufRead + Unpin>(
     for _ in 0..count {
         args.push(decode(&line(r).await?)?)
     }
-    if provider == "codex" && args.first().map(String::as_str) != Some("app-server") {
+    if provider == "codex" && !codex_launch_supported(&args) {
         return None;
     }
-    if provider == "claude" && !args.iter().any(|a| a == "--input-format") {
+    if provider == "claude" && !claude_stream_json(&args) {
         return None;
     }
     let mut env = HashMap::new();
@@ -135,6 +158,113 @@ async fn handshake<R: tokio::io::AsyncBufRead + Unpin>(
     }
     None
 }
+
+/// One task's session root, keyed by provider, directory and task identity.
+///
+/// The task identity is required. Without it two scheduler tasks that share a
+/// directory would land on the same binding and a resume could continue the
+/// wrong conversation, so the connection is refused before any session state
+/// is created.
+fn session_key(provider: &str, cwd: &Path, task_id: Option<&str>) -> Result<String, Error> {
+    let task = task_id
+        .map(str::trim)
+        .filter(|task| !task.is_empty())
+        .ok_or_else(|| Error::Unavailable("Task identity is missing".into()))?;
+    use sha2::{Digest, Sha256};
+    Ok(hex::encode(Sha256::digest(format!(
+        "{}\0{}\0{}",
+        provider,
+        cwd.display(),
+        task
+    ))))
+}
+
+/// The host data root and the same root as the container sees it.
+fn bridge_roots(c: &Config) -> (PathBuf, PathBuf) {
+    let root = Path::new(&c.data_dir).to_path_buf();
+    let shared = if c.managed {
+        PathBuf::from("/muster")
+    } else {
+        root.clone()
+    };
+    (root, shared)
+}
+
+/// Production accepts only the container bridge's private address. Test builds
+/// additionally accept loopback so the listener can be exercised on an
+/// ordinary host; shipped builds compile `cfg!(test)` to false and keep the
+/// strict rule.
+fn gateway_address(gateway: &str) -> Result<Ipv4Addr, Error> {
+    let address: Ipv4Addr = gateway
+        .parse()
+        .map_err(|_| Error::Invalid("Invalid container gateway".into()))?;
+    if !address.is_private() && !(cfg!(test) && address.is_loopback()) {
+        return Err(Error::Invalid("Container gateway must be private".into()));
+    }
+    Ok(address)
+}
+
+fn bridge_token() -> Result<String, Error> {
+    let mut random = [0u8; 32];
+    std::io::Read::read_exact(
+        &mut std::fs::File::open("/dev/urandom").map_err(io)?,
+        &mut random,
+    )
+    .map_err(io)?;
+    Ok(hex::encode(random))
+}
+
+/// Bind the private bridge listener and mint this bridge process's token.
+async fn bind_bridge(gateway: &str) -> Result<(tokio::net::TcpListener, u16, String), Error> {
+    let listener = tokio::net::TcpListener::bind((gateway_address(gateway)?, 0))
+        .await
+        .map_err(io)?;
+    let port = listener.local_addr().map_err(io)?.port();
+    Ok((listener, port, bridge_token()?))
+}
+
+/// Write the token, the framing command and the provider wrappers the container
+/// executes. The wrappers carry no credential; they read the token file at
+/// launch, and the runtime command authenticates the connection with it.
+fn write_bridge_files(c: &Config, gateway: &str, port: u16, token: &str) -> Result<(), Error> {
+    let (root, shared) = bridge_roots(c);
+    private_write(&root.join("bridge-token"), token.as_bytes())?;
+    private_write(
+        &root.join("runtime-command"),
+        include_bytes!("../../../../deploy/multica/runtime-command"),
+    )?;
+    for provider in ["codex", "claude"] {
+        let wrapper = format!(
+            "#!/bin/sh\n# Muster runtime bridge\nexport MUSTER_RUNTIME_PROVIDER={} MUSTER_BRIDGE_HOST={} MUSTER_BRIDGE_PORT={} MUSTER_BRIDGE_VERSION_FILE={}\nMUSTER_BRIDGE_TOKEN=$(cat {})\nexport MUSTER_BRIDGE_TOKEN\nexec /bin/sh {} \"$@\"\n",
+            quote(provider),
+            quote(gateway),
+            port,
+            quote(&shared.join(format!("version-{provider}")).to_string_lossy()),
+            quote(&shared.join("bridge-token").to_string_lossy()),
+            quote(&shared.join("runtime-command").to_string_lossy())
+        );
+        private_write(
+            &root.join(format!("runtime-{provider}")),
+            wrapper.as_bytes(),
+        )?;
+    }
+    Ok(())
+}
+
+/// Delete task-scoped launchers left by a previous bridge process. The bridge
+/// calls this before it serves; `Manager` also calls it at daemon startup so a
+/// crashed bridge leaves no usable credential behind.
+pub(super) fn revoke_stale(c: &Config) -> Result<(), Error> {
+    muster_acp::TaskCredential::revoke_stale(&Path::new(&c.data_dir).join(".runtime-credentials"))
+        .map_err(Error::Unavailable)
+}
+
+/// Remove the retired kiro-cli compatibility alias, and only when it is ours.
+async fn remove_legacy_alias(manager: &Manager, c: &Config) -> Result<(), Error> {
+    manager.command(&["exec",&c.container_name,"sh","-c","if [ -f /usr/local/bin/kiro-cli ] && grep -q 'MUSTER_BRIDGE' /usr/local/bin/kiro-cli; then rm /usr/local/bin/kiro-cli; fi"],10).await?;
+    Ok(())
+}
+
 async fn refresh_wrappers(manager: &Manager, c: &Config) -> Result<(), Error> {
     let root = Path::new(&c.data_dir);
     let shared = if c.managed {
@@ -204,57 +334,33 @@ pub(super) async fn ensure(
     if bridge.as_ref().is_some_and(|t| !t.is_finished()) {
         return refresh_wrappers(manager, c).await;
     }
-    let address: std::net::Ipv4Addr = gateway
-        .parse()
-        .map_err(|_| Error::Invalid("Invalid container gateway".into()))?;
-    if !address.is_private() {
-        return Err(Error::Invalid("Container gateway must be private".into()));
-    }
-    let listener = tokio::net::TcpListener::bind((address, 0))
-        .await
-        .map_err(io)?;
-    let port = listener.local_addr().map_err(io)?.port();
-    let mut random = [0u8; 32];
-    std::io::Read::read_exact(
-        &mut std::fs::File::open("/dev/urandom").map_err(io)?,
-        &mut random,
-    )
-    .map_err(io)?;
-    let token = hex::encode(random);
-    let root = Path::new(&c.data_dir);
-    muster_acp::TaskCredential::revoke_stale(&root.join(".runtime-credentials"))
-        .map_err(Error::Unavailable)?;
-    let shared = if c.managed {
-        PathBuf::from("/muster")
-    } else {
-        root.to_path_buf()
-    };
-    private_write(&root.join("bridge-token"), token.as_bytes())?;
-    private_write(
-        &root.join("runtime-command"),
-        include_bytes!("../../../../deploy/multica/runtime-command"),
-    )?;
-    for provider in ["codex", "claude"] {
-        let wrapper = format!(
-            "#!/bin/sh\n# Muster runtime bridge\nexport MUSTER_RUNTIME_PROVIDER={} MUSTER_BRIDGE_HOST={} MUSTER_BRIDGE_PORT={} MUSTER_BRIDGE_VERSION_FILE={}\nMUSTER_BRIDGE_TOKEN=$(cat {})\nexport MUSTER_BRIDGE_TOKEN\nexec /bin/sh {} \"$@\"\n",
-            quote(provider),
-            quote(gateway),
-            port,
-            quote(&shared.join(format!("version-{provider}")).to_string_lossy()),
-            quote(&shared.join("bridge-token").to_string_lossy()),
-            quote(&shared.join("runtime-command").to_string_lossy())
-        );
-        private_write(
-            &root.join(format!("runtime-{provider}")),
-            wrapper.as_bytes(),
-        )?;
-    }
+    let (listener, port, token) = bind_bridge(gateway).await?;
+    revoke_stale(c)?;
+    write_bridge_files(c, gateway, port, &token)?;
     refresh_wrappers(manager, c).await?;
-    manager.command(&["exec",&c.container_name,"sh","-c","if [ -f /usr/local/bin/kiro-cli ] && grep -q 'MUSTER_BRIDGE' /usr/local/bin/kiro-cli; then rm /usr/local/bin/kiro-cli; fi"],10).await?;
-    let socket = socket.to_path_buf();
-    let root = root.to_path_buf();
+    remove_legacy_alias(manager, c).await?;
     let allowed = PathBuf::from(workspaces(c));
-    *bridge = Some(tokio::spawn(async move {
+    *bridge = Some(spawn_bridge(
+        listener,
+        token,
+        socket.to_path_buf(),
+        Path::new(&c.data_dir).to_path_buf(),
+        allowed,
+    ));
+    Ok(())
+}
+
+/// Serve one listener for this process's lifetime. Each connection is one
+/// scheduler task: a connection that cannot prove a task identity is dropped
+/// before any provider process or session directory is created.
+fn spawn_bridge(
+    listener: tokio::net::TcpListener,
+    token: String,
+    socket: PathBuf,
+    root: PathBuf,
+    allowed: PathBuf,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
         let permits = Arc::new(tokio::sync::Semaphore::new(8));
         let mut clients = tokio::task::JoinSet::new();
         loop {
@@ -266,10 +372,12 @@ pub(super) async fn ensure(
                     clients.spawn(async move {
                         let _permit=permit;let (read,mut write)=stream.into_split();let mut reader=BufReader::new(read);
                         let Ok(Some(launch))=tokio::time::timeout(Duration::from_secs(5),handshake(&mut reader,&token,&allowed)).await else{return};
+                        let Ok(key)=session_key(&launch.provider,&launch.cwd,launch.env.get("MULTICA_TASK_ID").map(String::as_str)) else {
+                            log::warn!("Multica runtime connection has no task identity; not launching");
+                            return;
+                        };
+                        let session_root=root.join(".runtime-sessions").join(key);
                         let result:Result<(),String>=async {
-                            use sha2::{Digest,Sha256};
-                            let key=hex::encode(Sha256::digest(format!("{}\0{}\0{}",launch.provider,launch.cwd.display(),launch.env.get("MULTICA_TASK_ID").map(String::as_str).unwrap_or_default())));
-                            let session_root=root.join(".runtime-sessions").join(key);
                             match pinned_destination(&session_root,&launch.provider).map_err(|e|e.to_string())? {
                                 Destination::Unavailable=>Err("Provider is unavailable".into()),
                                 Destination::Cli(program)=>{
@@ -291,8 +399,7 @@ pub(super) async fn ensure(
                 }
             }
         }
-    }));
-    Ok(())
+    })
 }
 #[cfg(unix)]
 struct CliGroup(u32);
@@ -429,5 +536,275 @@ mod tests {
                 .is_none()
             );
         }
+    }
+
+    /// Build one complete bridge handshake for the given provider, directory,
+    /// argv and task environment.
+    #[cfg(unix)]
+    fn handshake_payload(
+        token: &str,
+        provider: &str,
+        cwd: &Path,
+        args: &[&str],
+        env: &[(&str, &str)],
+    ) -> Vec<u8> {
+        let mut text = format!(
+            "{token}\nMUSTER_NATIVE_V1\n{provider}\n{}\n{}\n",
+            encoded(&cwd.to_string_lossy()),
+            args.len()
+        );
+        for arg in args {
+            text.push_str(&encoded(arg));
+            text.push('\n');
+        }
+        for (name, value) in env {
+            text.push_str(&format!("{name}={value}\n"));
+        }
+        text.push('\n');
+        text.into_bytes()
+    }
+
+    #[cfg(unix)]
+    async fn handshake_with(
+        root: &Path,
+        provider: &str,
+        args: &[&str],
+        env: &[(&str, &str)],
+    ) -> Option<Launch> {
+        let payload = handshake_payload("fixture-token", provider, root, args, env);
+        handshake(
+            &mut BufReader::new(payload.as_slice()),
+            "fixture-token",
+            root,
+        )
+        .await
+    }
+
+    /// The bridge gate must equal what `muster_acp::scheduler::codex` serves, so
+    /// the adapter never receives a launch it refuses and the bridge never
+    /// refuses one the adapter would accept.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn handshake_accepts_exactly_the_adapter_launch_shapes() {
+        let root = tempfile::tempdir().unwrap();
+        for args in [
+            &[][..],
+            &["app-server"][..],
+            &["app-server", "--listen", "stdio://"][..],
+        ] {
+            assert!(
+                handshake_with(root.path(), "codex", args, &[])
+                    .await
+                    .is_some(),
+                "{args:?}"
+            );
+        }
+        for args in [
+            &["app-server", "--listen", "tcp://0.0.0.0:1"][..],
+            &["--full-auto"][..],
+            &["exec"][..],
+        ] {
+            assert!(
+                handshake_with(root.path(), "codex", args, &[])
+                    .await
+                    .is_none(),
+                "{args:?}"
+            );
+        }
+        // Claude needs stream-json input to speak this protocol at all.
+        assert!(
+            handshake_with(
+                root.path(),
+                "claude",
+                &["--input-format", "stream-json"],
+                &[]
+            )
+            .await
+            .is_some()
+        );
+        assert!(
+            handshake_with(
+                root.path(),
+                "claude",
+                &["--output-format", "stream-json"],
+                &[]
+            )
+            .await
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn session_keys_require_a_task_identity_and_separate_tasks() {
+        let cwd = Path::new("/tmp/workspaces/task");
+        let first = session_key("codex", cwd, Some("task-a")).unwrap();
+        assert_eq!(first.len(), 64);
+        assert!(first.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_ne!(first, session_key("codex", cwd, Some("task-b")).unwrap());
+        assert_ne!(first, session_key("claude", cwd, Some("task-a")).unwrap());
+        assert_ne!(
+            first,
+            session_key("codex", Path::new("/tmp/workspaces/other"), Some("task-a")).unwrap()
+        );
+        for missing in [None, Some(""), Some("   ")] {
+            assert!(matches!(
+                session_key("codex", cwd, missing),
+                Err(Error::Unavailable(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn gateway_must_be_a_private_container_address() {
+        assert!(gateway_address("192.168.64.1").is_ok());
+        assert!(gateway_address("10.1.2.3").is_ok());
+        // Test builds accept loopback so the listener runs on an ordinary host;
+        // shipped builds keep the private-only rule (see `gateway_address`).
+        assert!(gateway_address("127.0.0.1").is_ok());
+        for rejected in ["8.8.8.8", "0.0.0.0", "::1", "container", ""] {
+            assert!(gateway_address(rejected).is_err(), "{rejected}");
+        }
+    }
+
+    /// Wait until the bridge drops a connection, or report that it stayed open.
+    #[cfg(unix)]
+    async fn closes_without_launch(port: u16, payload: Vec<u8>) -> bool {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("connect to the bridge listener");
+        stream.write_all(&payload).await.expect("send handshake");
+        let mut byte = [0u8; 1];
+        match tokio::time::timeout(Duration::from_secs(3), stream.read(&mut byte)).await {
+            Ok(Ok(0)) | Ok(Err(_)) => true,
+            Ok(Ok(_)) | Err(_) => false,
+        }
+    }
+
+    /// Full bridge path: listener on loopback, private token/wrapper files,
+    /// the fake container's retired-alias cleanup, and rejected handshakes.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bridge_publishes_private_files_and_refuses_unbound_task_connections() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let host = dir.path();
+        let data = host.join("data");
+        let task_dir = data.join("workspaces/task-a");
+        std::fs::create_dir_all(&task_dir).unwrap();
+        std::fs::create_dir_all(data.join("bin")).unwrap();
+        std::fs::write(data.join("bin/multica"), "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(
+            data.join("bin/multica"),
+            std::fs::Permissions::from_mode(0o700),
+        )
+        .unwrap();
+        let calls = host.join("container-calls");
+        let container = host.join("container-fixture");
+        std::fs::write(
+            &container,
+            format!(
+                "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" >> {}\n",
+                quote(&calls.to_string_lossy())
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&container, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut manager = Manager::new(host);
+        manager.executable = Some(container);
+        let c = Config {
+            data_dir: data.to_string_lossy().into_owned(),
+            container_name: "mlt".into(),
+            ..Default::default()
+        };
+
+        // A crashed bridge's launcher is revoked by the helper the daemon calls
+        // at startup.
+        let credentials = data.join(".runtime-credentials");
+        std::fs::create_dir_all(&credentials).unwrap();
+        let stale = credentials.join(format!("multica-{}", "a".repeat(32)));
+        std::fs::write(&stale, "#!/bin/sh\n").unwrap();
+        revoke_stale(&c).unwrap();
+        assert!(!stale.exists());
+
+        let (listener, port, token) = bind_bridge("127.0.0.1").await.unwrap();
+        write_bridge_files(&c, "127.0.0.1", port, &token).unwrap();
+        for name in ["bridge-token", "runtime-codex", "runtime-claude"] {
+            let mode = std::fs::metadata(data.join(name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "{name} must stay private");
+        }
+        let codex = std::fs::read_to_string(data.join("runtime-codex")).unwrap();
+        for needle in [
+            format!("MUSTER_RUNTIME_PROVIDER={}", quote("codex")),
+            format!("MUSTER_BRIDGE_HOST={}", quote("127.0.0.1")),
+            format!("MUSTER_BRIDGE_PORT={port}"),
+            "version-codex".into(),
+            "bridge-token".into(),
+            "runtime-command".into(),
+        ] {
+            assert!(
+                codex.contains(&needle),
+                "runtime-codex is missing {needle}: {codex}"
+            );
+        }
+        let claude = std::fs::read_to_string(data.join("runtime-claude")).unwrap();
+        assert!(claude.contains(&format!("MUSTER_RUNTIME_PROVIDER={}", quote("claude"))));
+        assert!(
+            std::fs::read_to_string(data.join("runtime-command"))
+                .unwrap()
+                .contains("MUSTER_NATIVE_V1")
+        );
+
+        // The fake container returns success and records the cleanup command.
+        remove_legacy_alias(&manager, &c).await.unwrap();
+        let recorded = std::fs::read_to_string(&calls).unwrap();
+        assert!(
+            recorded.contains("kiro-cli") && recorded.contains("MUSTER_BRIDGE"),
+            "{recorded}"
+        );
+
+        let server = spawn_bridge(
+            listener,
+            token.clone(),
+            host.join("musterd.sock"),
+            data.clone(),
+            data.clone(),
+        );
+        let task = [("MULTICA_TASK_ID", "task-a")];
+        let in_root = task_dir.canonicalize().unwrap();
+        let handshake = |provider: &str, cwd: &Path, env: &[(&str, &str)]| {
+            handshake_payload(&token, provider, cwd, &["app-server"], env)
+        };
+
+        assert!(
+            closes_without_launch(
+                port,
+                handshake_payload("wrong-token", "codex", &in_root, &["app-server"], &task)
+            )
+            .await
+        );
+        assert!(closes_without_launch(port, handshake("kiro", &in_root, &task)).await);
+        assert!(closes_without_launch(port, handshake("codex", Path::new("/etc"), &task)).await);
+        assert!(
+            closes_without_launch(port, handshake("codex", &in_root, &[("PATH", "/tmp")])).await
+        );
+        assert!(closes_without_launch(port, handshake("codex", &in_root, &[])).await);
+        assert!(
+            closes_without_launch(
+                port,
+                handshake("codex", &in_root, &[("MULTICA_TASK_ID", "")])
+            )
+            .await
+        );
+        assert!(
+            !data.join(".runtime-sessions").exists(),
+            "a connection without a task identity must not create a session"
+        );
+
+        server.abort();
     }
 }

@@ -1032,6 +1032,12 @@ message MulticaStatus {
   string login_command = 11;
   bool busy = 12;
   MulticaInstallation installation = 13;
+  // An installed container's bind mounts no longer match the saved data root.
+  // Saving a changed root is refused until the attended offline migration is done.
+  bool migration_required = 14;
+  // Guest Multica CLI version, read-only (`multica --version`); empty when unknown.
+  // Muster never upgrades Multica in place; see ADR 0077.
+  string version = 15;
 }
 // Transient local-owner installation diagnostics; never an authorization receipt.
 message MulticaInstallation {

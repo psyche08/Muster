@@ -1,146 +1,171 @@
-# Multica runtime bridge
+# Multica runtime bridge: current managed setup
 
-Run the scheduler's daemon in a container while Muster stays on the host, and
-forward only the Agent Client Protocol stream between them (ADR 0009).
+This directory contains the pieces a local Muster desktop uses to run the
+Multica scheduler daemon in an Apple container while provider work stays on the
+Mac. The supported path is the **managed bridge**: Muster installs and
+supervises the container, starts the daemon with the provider wrappers this
+directory ships, and forwards only an authenticated task handshake to
+`musterd`. The historical ACP stdio shim is kept only as a record (see
+"Legacy path" at the end) and is not the current setup.
+
+Decision records: [ADR 0009](../../../../docs/adr/0009-task-contract-and-runtime-manifest.md)
+is the historical shim proposal; [ADR 0051](../../../../docs/adr/0051-multica-management-and-live-catalog.md),
+[0053](../../../../docs/adr/0053-multica-native-workbench-and-runtime-routing.md),
+[0054](../../../../docs/adr/0054-native-multica-targeted-installation.md),
+[0060](../../../../docs/adr/0060-multica-runtime-recovery.md),
+[0064](../../../../docs/adr/0064-multica-native-runtime.md) and
+[0077](../../../../docs/adr/0077-multica-runtime-state-and-manual-upgrade.md)
+describe the current state, recovery rules and acceptance limits.
+
+## Geometry
 
 ```text
-container                                   host
-┌──────────────────────────────┐            ┌────────────────────────────────┐
-│ multica daemon               │            │ acp-bridge.py                  │
-│   └─ spawns runtime-command ─┼── TCP ────▶│   └─ spawns `muster acp`       │
-│      (named as a detected    │  :8799     │        └─ UDS ─▶ musterd       │
-│       agent CLI, see below)  │            │              └─ codex / claude │
-└──────────────────────────────┘            └────────────────────────────────┘
+Apple container (guest)                         host (macOS)
+┌──────────────────────────────────────┐        ┌──────────────────────────────┐
+│ multica daemon                       │        │ musterd::multica::bridge      │
+│   └─ spawns provider wrapper ────────┼─ TCP ─▶│   token + MUSTER_NATIVE_V1    │
+│      (/usr/local/bin/codex,          │ private│   handshake                   │
+│       /usr/local/bin/muster-native-  │ gateway│   └─ native app or CLI        │
+│       claude)                        │  port  │        └─ task-scoped creds   │
+│                                      │        │ musterd local UDS (never      │
+│ data root: /muster, workspaces also  │        │ bridged)                      │
+│ mounted at the same host path        │        └──────────────────────────────┘
+└──────────────────────────────────────┘
 ```
 
-Only the ACP stream crosses. `musterd`'s own socket never leaves the host,
-which matters because the daemon authenticates the local principal by the
-socket's peer uid — bridging that socket to TCP would hand every reachable
-process the local owner's authority.
+- The daemon runs inside the container, so scheduler state and its login stay
+  there. Provider processes run on the Mac, where the desktop applications and
+  CLIs are.
+- Only the scheduler runtime stream crosses. `musterd`'s own Unix socket never
+  leaves the host: it authenticates the local principal by peer uid, so
+  bridging it would hand every reachable container the local owner's
+  authority.
+- The host bridge binds the container gateway address (a private address);
+  binding `0.0.0.0` is rejected. The guest connects to that address and port.
 
-## Host
+## What Muster installs
 
-```sh
-TOKEN=$(openssl rand -hex 16)
-python3 deploy/multica/acp-bridge.py 192.168.64.1 8799 "$TOKEN" "$(command -v muster)" codex "$HOME/.local/bin"
-```
+Muster's managed install (`musterd::multica`) creates the container from the
+Apple `container` runtime and provisions both sides:
 
-The container side forwards the task's own `MULTICA_*` variables (including the
-task-scoped `MULTICA_TOKEN`) after the token line; the bridge accepts only
-names starting with `MULTICA_` and puts them on the `muster acp` process, and
-prepends the last argument to its `PATH`. The task token therefore crosses the
-hop — another reason the bridge is token-gated, bound to the container
-interface, and run only while needed.
+- Data root (default `~/Documents/Multica`): `config/` is mounted at
+  `/root/.multica`, `workspaces/` is mounted at the **same absolute path** on
+  host and guest, and `bin/` holds the host-side Multica CLI. The root carries
+  a `muster-owned` marker and is created mode `0700`; files Muster writes there
+  are mode `0600`.
+- Guest: a Multica CLI installation from the operator-supplied trusted HTTPS
+  installer, plus `curl`, `ca-certificates`, `socat`, `git` and
+  `openssh-client`.
+- Host: the same installer (or an already installed `multica` CLI) copied into
+  `bin/multica`. Settings shows the terminal login command; login is never done
+  by the app.
+- Wrappers: `runtime-command` and `runtime-codex` / `runtime-claude` are written
+  under the data root, then installed in the container as
+  `/usr/local/bin/codex` and `/usr/local/bin/muster-native-claude`. When the
+  runtime bridge is managed or adopted, the daemon is started with
+  `MULTICA_CODEX_PATH` and `MULTICA_NATIVE_CLAUDE_PATH` pointing at them. Each
+  task's wrapper hands its own environment (`MULTICA_*` names only), provider,
+  working directory and arguments to the host bridge.
+- Credentials: Muster generates a random bridge token per listener, writes it
+  mode `0600` inside the data root, and the wrapper reads that file at launch.
+  A connection without a task identity is rejected before any provider process
+  starts, so anonymous connections cannot share a task's session key. Task
+  credentials are created per task by `muster-acp` and revoked when the turn
+  ends; a daemon restart revokes launchers left behind by a previous run.
 
-For those variables to reach the agent, `muster acp` has to be told which ones
-may cross into a session, because `musterd` spawns the provider child and the
-session carries the environment for it (ADR 0009 §7b). The bridge passes
-`--forward-env MULTICA_ --forward-path` for exactly that; both are off in
-`muster acp` by default, so which variables cross is the operator's choice
-rather than a scheduler's name baked into Muster. Edit `FORWARD_ARGS` in
-`acp-bridge.py` to change it.
+An existing container is adopted without changing it: Muster reads its id,
+configured mounts and `app_url` / `server_url`, and keeps its tools and login.
+Adoption only adds supervision and, if the host CLI is missing, the host CLI.
 
-The scheduler's CLI also has to be installed on the host, since that is where
-the turn runs. Obtain `MULTICA_INSTALLER_URL` from your deployment operator
-and verify it before running the installer:
+## keep-alive, version and status
 
-```sh
-curl -fsSL "${MULTICA_INSTALLER_URL:?set the trusted installer URL}" | MULTICA_BIN_DIR="$HOME/.local/bin" bash
-```
+- Keep-alive opts the container and daemon into `musterd`'s supervisor. The
+  daemon then starts the container runtime and container when stopped,
+  reconciles the bridge listener, token and provider wrappers, and starts the
+  Multica daemon. Closing the app does not stop any of it.
+- With keep-alive off, Muster does not start stopped services; it still
+  reconciles the runtime-bridge listener and wrappers without starting them, so
+  a running container's next task uses the current bridge instead of a stale
+  one.
+- The Multica tab and Settings show a read-only guest `multica --version`
+  report. It is diagnostic; it does not install or upgrade anything.
+- A stopped container, an installed-but-stopped daemon and missing login are
+  reported as distinct states. Login itself remains a terminal operation.
 
-A session's environment lives in memory for as long as the daemon runs and is
-never journaled, so a session resumed after a daemon restart starts without it
-and the scheduler's next task supplies it again.
+## Manual upgrade (no in-app upgrade)
 
-Bind to the container bridge address, not `0.0.0.0`. The first line a client
-sends must be `$TOKEN`, so reaching the port is not by itself enough to drive
-Muster. That is a guard, not isolation: every container on that bridge can
-reach the port, so run it only while it is needed, and treat the token as a
-credential.
+This Muster release has **no in-app Multica upgrade or stop action**. Upgrading
+the guest CLI, the host CLI or the container base is an operator operation:
 
-## Container
+1. Note the current version and finish or cancel scheduler work; do not upgrade
+   while a task is running.
+2. Turn keep-alive off and stop the container with Apple
+   `container stop <name>`. Do not delete the data root.
+3. Run the trusted installer for the desired Multica CLI version inside the
+   container and on the host (the host copy goes to the data root's `bin/`,
+   with `MULTICA_BIN_DIR` pointing there), or install the CLI by your normal
+   package path. Keep the existing mounts and login configuration.
+4. Start the container and the daemon (re-enable keep-alive to let Muster
+   supervise them), then verify the reported version, that the workspace and
+   task lists load, and that a task can run.
+5. If a bridge wrapper is missing or stale after an upgrade, save the Multica
+   settings once (or re-enable keep-alive) so Muster reconciles them.
 
-Install the CLI, `socat`, and the bridge command:
+Do not expect Muster to pull a new container image, upgrade a CLI, or roll an
+upgrade back. There is no in-app rollback either; keep your own backup of the
+data root before changing it.
 
-```sh
-curl -fsSL "${MULTICA_INSTALLER_URL:?set the trusted installer URL}" | bash
-```
+## Migration of the data root
 
-```sh
-apt-get install -y socat
-```
+Changing the data root is attended and offline, never automatic:
 
-Then place `runtime-command` on `PATH` under the name of an agent CLI the
-daemon detects, because the internal build (0.3.54) has no custom runtime
-profiles — detection is by command name only:
+1. Disable keep-alive and stop the container; finish running tasks.
+2. Move the data on the same filesystem and update **every** bind mount
+   (including the guest workspace path and the daemon workspace configuration).
+3. Remove the old path. Muster never creates or keeps a compatibility symlink.
+4. Save the new root in Settings. Muster accepts it only when the old path is
+   absent, the new root is a real directory (not a symlink), and the stopped
+   container inventory confirms the required mounts. It never moves data and
+   never rewrites Apple's private container metadata.
 
-```sh
-install -m 0755 deploy/multica/runtime-command /usr/local/bin/kiro-cli
-```
+Cross-volume moves and version-specific container metadata changes remain
+manual. The repository does not record operator hosts, ports, tokens or roots;
+obtain any installer URL from your deployment operator and verify it before
+running it.
 
-`kiro-cli`, `hermes`, `kimi` and `dsh` are the ACP families in that build's
-detection list, so they match what `muster acp` speaks. This substitution is
-deliberate and worth stating plainly: the daemon will drive this command with
-that family's launch arguments and quirks, so pick the family whose dialect
-Muster actually implements and keep the reported version honest.
+## Legacy path (historical, not supported)
 
-Configuration, all through the environment:
+The first Multica integration (ADR 0009) selected a "kiro-cli"-style ACP
+command in the container and forwarded ACP stdio to a Python host process,
+`acp-bridge.py`, which spawned `muster acp` on the Mac:
 
-| Variable | Meaning |
-| --- | --- |
-| `MUSTER_BRIDGE_TOKEN` | required; the host bridge's token |
-| `MUSTER_BRIDGE_HOST` | host address on the container bridge (default `192.168.64.1`) |
-| `MUSTER_BRIDGE_PORT` | default `8799` |
-| `MUSTER_BRIDGE_VERSION` | what the daemon's probe reads (default `0.1.0`) |
+- `acp-bridge.py` listens on the container bridge, requires the shared token as
+  the first line, then spawns `muster acp` with
+  `--forward-env MULTICA_ --forward-path`; the file remains in this directory
+  as a record.
+- `runtime-command` still exists but is installed by the managed bridge path;
+  the old manual `install -m 0755 runtime-command /usr/local/bin/kiro-cli`
+  instruction is historical.
+- The kiro-cli compatibility alias was removed by the current install: a stale
+  `/usr/local/bin/kiro-cli` written by the old bridge is deleted, because it
+  misrepresented a Codex CLI bridge as a Kiro runtime.
 
-## The working directory has to exist on both sides
+Do not use `acp-bridge.py`, `muster acp` or the kiro-cli alias as a current
+setup path. They are retained for reading the history in ADR 0009 and the
+validation record
+[MULTICA-DAEMON-2026-10-21](../../../../docs/validation/MULTICA-DAEMON-2026-10-21.md);
+they are not a supported configuration and should not be wired into a new
+container.
 
-The daemon prepares a task directory **in the container** and passes it as the
-ACP session's `cwd`; `musterd` then opens the session at that path **on the
-host**. A path that exists only in the container fails there. Mount one
-directory at the same path on both sides and point the daemon at it:
+## Tests and verification
 
-```sh
-container run --volume "$HOME/Documents/Multica/workspaces:$HOME/Documents/Multica/workspaces" …
-```
-
-and set `MULTICA_WORKSPACES_ROOT` to that path. Nothing here works around a
-mismatch: the session simply fails to open, which is the honest outcome.
-
-## What is verified
-
-A container-side command reached the host's `musterd` through this bridge,
-opened a real session, and ran a Codex turn that executed a tool call and
-settled `end_turn`. No scheduler drove it — the frames were sent by hand. See
-`docs/validation/MULTICA-DAEMON-2026-10-21.md`.
-
-## Managed desktop setup
-
-Muster Settings now provides the local Multica installation entry (ADR 0051).
-Install Apple `container` first, then supply the trusted operator installer URL
-and server/application HTTPS URLs. New installations use `~/Documents/Multica`:
-`config/` persists the guest CLI configuration, `workspaces/` is mounted at the
-same absolute path on host and guest, and `bin/` holds the host CLI needed by
-provider tasks. The installer runs inside the container and on the host with
-`MULTICA_BIN_DIR` set to that private `bin/` directory. Complete Multica login
-using the terminal command shown in Settings. Enabling keep-alive opts the
-container and daemon into musterd's supervisor; closing the UI does not stop it.
-
-An existing `mlt` container is discovered without changing it. Save its settings
-to opt into supervision; its tools and credentials are preserved. The installed
-container makes the Multica tab visible after Agents and Terminals. The native
-page lists workspaces, issues, agents and runtime status using the logged-in
-container CLI. Workspace selection affects only that query, not the daemon
-profile. Issue and agent details are read-only; no browser login or remote proxy
-is involved. The configured application URL remains part of container setup.
-See ADR 0053 for the separate, still-unimplemented desktop execution mapping.
-
-To move existing data, disable keep-alive and save first, finish running tasks,
-then stop the selected container using Apple `container stop`. Complete an
-attended offline migration of its data and all bind mounts, including the guest
-workspace path and daemon workspace configuration. Remove the old path; do not
-retain a compatibility symlink. Settings accepts the new root only after the
-old path is absent and the stopped container inventory confirms the required
-mounts. It never moves data or rewrites Apple's private container metadata.
-See ADRs 0052/0054 for the migration and verification boundary. Re-enable
-keep-alive only after saving the verified new root.
+- Rust: `musterd::multica::installation` (bounded/redacted output, timeout,
+  exclusivity), `musterd::multica` (config validation, migration acceptance,
+  supervision with a fake `container` executable), `musterd::multica::bridge`
+  (handshake, session key, wrapper installation) and the app-core install
+  progress/reconnect tests under `muster-app-core/tests/multica_install.rs`.
+- Python: `tests/test_runtime_command.py` drives the wrapper with a fake
+  `socat` to prove an open stdin cannot keep a failed transport alive.
+- These tests use fake executables and temporary directories. A real container,
+  real installer, terminal login, reboot/app-upgrade recovery and a real
+  scheduler task remain device/e2e acceptance and are not claimed here.

@@ -347,6 +347,32 @@ mod tests {
             .unwrap();
         serde_json::from_str(&s).unwrap()
     }
+    async fn next_opt(
+        r: &mut BufReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>,
+    ) -> Option<Value> {
+        let mut s = String::new();
+        let n = tokio::time::timeout(std::time::Duration::from_secs(2), r.read_line(&mut s))
+            .await
+            .unwrap()
+            .unwrap();
+        if n == 0 {
+            return None;
+        }
+        serde_json::from_str(&s).ok()
+    }
+    async fn claude_terminal(
+        host: Arc<dyn Host>,
+    ) -> (
+        BufReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>,
+        tokio::io::WriteHalf<tokio::io::DuplexStream>,
+        tokio::task::JoinHandle<anyhow::Result<()>>,
+    ) {
+        let (a, b) = tokio::io::duplex(8192);
+        let (r, w) = tokio::io::split(a);
+        let (r2, w2) = tokio::io::split(b);
+        let server = tokio::spawn(claude(r, w, host, "/tmp/fixture".into(), &[]));
+        (BufReader::new(r2), w2, server)
+    }
     #[tokio::test]
     async fn codex_failed_resume_cannot_fall_through_to_fresh_thread() {
         let host = Arc::new(Fake {
@@ -432,6 +458,179 @@ mod tests {
             drop(r2);
             server.await.unwrap().unwrap();
         }
+    }
+    #[tokio::test]
+    async fn claude_terminal_result_never_turns_failure_or_cancellation_into_success() {
+        for (stop, reject, subtype, is_error, result, answers) in [
+            (
+                StopReason::EndTurn,
+                false,
+                "success",
+                false,
+                "fixture reply",
+                1usize,
+            ),
+            (
+                StopReason::Error("fixture failure".into()),
+                false,
+                "error_during_execution",
+                true,
+                "fixture failure",
+                1,
+            ),
+            (
+                StopReason::Cancelled,
+                false,
+                "error_during_execution",
+                true,
+                "fixture reply",
+                1,
+            ),
+            (
+                StopReason::EndTurn,
+                true,
+                "error_during_execution",
+                true,
+                "fixture submission rejected",
+                0,
+            ),
+        ] {
+            let host = Arc::new(Fake {
+                creates: AtomicUsize::new(0),
+                stop,
+                reject,
+            });
+            let (mut r2, mut w2, server) = claude_terminal(host).await;
+            let init = next(&mut r2).await;
+            assert_eq!(init["type"], "system");
+            assert_eq!(init["subtype"], "init");
+            assert_eq!(init["session_id"], "fixture-session");
+            send(
+                &mut w2,
+                json!({"type":"user","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}),
+            )
+            .await;
+            let mut assistant_frames = 0;
+            let result_frame = loop {
+                let frame = next(&mut r2).await;
+                match frame["type"].as_str() {
+                    Some("assistant") => {
+                        assert_eq!(
+                            frame["message"]["content"][0]["text"], "fixture reply",
+                            "assistant text must be streamed as provider text"
+                        );
+                        assistant_frames += 1;
+                    }
+                    Some("result") => break frame,
+                    _ => {}
+                }
+            };
+            assert_eq!(result_frame["subtype"], subtype);
+            assert_eq!(result_frame["is_error"], is_error);
+            assert_eq!(result_frame["result"], result);
+            assert_eq!(result_frame["session_id"], "fixture-session");
+            assert_eq!(result_frame["num_turns"], 1);
+            assert_eq!(assistant_frames, answers);
+            assert!(
+                !is_error || result_frame["subtype"] != "success",
+                "a failed or cancelled turn must never report success"
+            );
+            drop(w2);
+            drop(r2);
+            tokio::time::timeout(std::time::Duration::from_secs(2), server)
+                .await
+                .expect("the adapter must return after its terminal result")
+                .unwrap()
+                .unwrap();
+        }
+    }
+    /// A provider interrupt closes the turn's event stream before any
+    /// completion receipt, so the turn is an explicit terminal error.
+    struct Interruptible {
+        turn: std::sync::Mutex<Option<mpsc::Sender<TurnEvent>>>,
+    }
+    #[async_trait::async_trait]
+    impl Host for Interruptible {
+        async fn create(&self, _: &str) -> Result<String, String> {
+            Ok("fixture-session".into())
+        }
+        async fn resume(&self, _: &str) -> Result<String, String> {
+            Err("unconfirmed".into())
+        }
+        async fn prompt(&self, _: &str, _: &str) -> Result<mpsc::Receiver<TurnEvent>, String> {
+            let (tx, rx) = mpsc::channel(4);
+            tx.send(TurnEvent::Text("partial reply".into()))
+                .await
+                .unwrap();
+            *self.turn.lock().unwrap() = Some(tx);
+            Ok(rx)
+        }
+        async fn interject(&self, _: &str, _: &str) -> Result<(), String> {
+            Err("unsupported".into())
+        }
+        async fn interrupt(&self, _: &str) -> Result<(), String> {
+            // Dropping the sender is what a provider interrupt looks like here.
+            self.turn.lock().unwrap().take();
+            Ok(())
+        }
+    }
+    #[tokio::test]
+    async fn claude_interrupt_control_request_never_yields_a_successful_result() {
+        let host = Arc::new(Interruptible {
+            turn: std::sync::Mutex::new(None),
+        });
+        let (mut r2, mut w2, server) = claude_terminal(host).await;
+        assert_eq!(next(&mut r2).await["type"], "system");
+        send(
+            &mut w2,
+            json!({"type":"user","message":{"role":"user","content":"hello"}}),
+        )
+        .await;
+        let streamed = next(&mut r2).await;
+        assert_eq!(streamed["type"], "assistant");
+        assert_eq!(streamed["message"]["content"][0]["text"], "partial reply");
+        send(
+            &mut w2,
+            json!({"type":"control_request","request_id":"fixture-interrupt","request":{"subtype":"interrupt"}}),
+        )
+        .await;
+        let mut acknowledged = false;
+        let mut result_frame = None;
+        for _ in 0..4 {
+            let Some(frame) = next_opt(&mut r2).await else {
+                break;
+            };
+            match frame["type"].as_str() {
+                Some("control_response") => {
+                    assert_eq!(frame["response"]["subtype"], "success");
+                    assert_eq!(frame["response"]["request_id"], "fixture-interrupt");
+                    acknowledged = true;
+                }
+                Some("result") => result_frame = Some(frame),
+                _ => {}
+            }
+            if acknowledged && result_frame.is_some() {
+                break;
+            }
+        }
+        assert!(acknowledged, "interrupt was not acknowledged");
+        let result_frame =
+            result_frame.expect("an interrupted turn must still emit a terminal result");
+        assert_eq!(result_frame["subtype"], "error_during_execution");
+        assert_eq!(result_frame["is_error"], true);
+        assert!(
+            result_frame["result"]
+                .as_str()
+                .is_some_and(|message| !message.is_empty()),
+            "a terminal error result must carry a message"
+        );
+        drop(w2);
+        drop(r2);
+        tokio::time::timeout(std::time::Duration::from_secs(2), server)
+            .await
+            .expect("the adapter must return after its terminal result")
+            .unwrap()
+            .unwrap();
     }
     #[test]
     fn native_settings_and_nontext_requests_are_not_silently_accepted() {

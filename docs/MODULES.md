@@ -91,6 +91,9 @@ authorization decision to live in Shared Rust. This is where each one is:
 | Question cards, queued prompts, send receipts | `muster-agent::questions`, `queue`, `receipt`, `unconfirmed` | |
 | Terminal rows, deltas, VT state, SSH | `muster-terminal` | iTerm2 and SSH sessions share the grid |
 | Request admission (scope × policy × presence) | `musterd::handler` (`access_for`, `authorize_request`, `admit`) | Local principal by socket uid, remote by roster DeviceId |
+| Multica container lifecycle, install and migration | `musterd::multica` (`mod.rs` manager, `installation.rs` bounded installer output, `browse.rs` read-only catalog) | Shared Rust owns config validation, guided-install stages/log limits, keep-alive supervision, data-root acceptance and the local-owner-only administration ABI; shells render the projection |
+| Multica runtime bridge and provider routing | `musterd::multica::bridge`, `muster-acp::native_host`, `muster-acp::scheduler`; `muster-agent::native_runtime` for destination choice | Provider wrapper handshake over the container's private gateway (token + `MUSTER_NATIVE_V1`); session key requires `MULTICA_TASK_ID`; native app preferred, CLI fallback; task credentials revoked when a turn ends and stale launchers at daemon startup |
+| Multica install progress and client state | `muster-app-core::update::multica` and the `update/mod.rs` dispatch | Polls progress only while an installation is outstanding, recovers a daemon-owned installation after reconnect, never replays an install; the shell only renders status/version/migration flags |
 | Client state, retries, merging, ViewModels | `muster-app-core::state`, `update/*`, `render` | One module per feature in `update/`; shells never retry or merge |
 
 ## 4. Product Knowledge as Data (the Upper Layer's DSL)
