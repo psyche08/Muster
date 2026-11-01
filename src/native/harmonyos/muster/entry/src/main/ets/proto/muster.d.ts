@@ -8697,6 +8697,12 @@ export namespace muster {
 
             /** MulticaStatus installation */
             installation?: (muster.v1.IMulticaInstallation|null);
+
+            /** MulticaStatus migrationRequired */
+            migrationRequired?: (boolean|null);
+
+            /** MulticaStatus version */
+            version?: (string|null);
         }
 
         /** Represents a MulticaStatus. */
@@ -8746,6 +8752,12 @@ export namespace muster {
 
             /** MulticaStatus installation. */
             public installation?: (muster.v1.IMulticaInstallation|null);
+
+            /** MulticaStatus migrationRequired. */
+            public migrationRequired: boolean;
+
+            /** MulticaStatus version. */
+            public version: string;
 
             /**
              * Creates a new MulticaStatus instance using the specified properties.

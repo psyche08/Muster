@@ -22316,6 +22316,8 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [loginCommand] MulticaStatus loginCommand
              * @property {boolean|null} [busy] MulticaStatus busy
              * @property {muster.v1.IMulticaInstallation|null} [installation] MulticaStatus installation
+             * @property {boolean|null} [migrationRequired] MulticaStatus migrationRequired
+             * @property {string|null} [version] MulticaStatus version
              */
 
             /**
@@ -22438,6 +22440,22 @@ export const muster = $root.muster = (() => {
             MulticaStatus.prototype.installation = null;
 
             /**
+             * MulticaStatus migrationRequired.
+             * @member {boolean} migrationRequired
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.migrationRequired = false;
+
+            /**
+             * MulticaStatus version.
+             * @member {string} version
+             * @memberof muster.v1.MulticaStatus
+             * @instance
+             */
+            MulticaStatus.prototype.version = "";
+
+            /**
              * Creates a new MulticaStatus instance using the specified properties.
              * @function create
              * @memberof muster.v1.MulticaStatus
@@ -22491,6 +22509,10 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 12, wireType 0 =*/96).bool(message.busy);
                 if (message.installation != null && Object.hasOwnProperty.call(message, "installation"))
                     $root.muster.v1.MulticaInstallation.encode(message.installation, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
+                if (message.migrationRequired != null && Object.hasOwnProperty.call(message, "migrationRequired"))
+                    writer.uint32(/* id 14, wireType 0 =*/112).bool(message.migrationRequired);
+                if (message.version != null && Object.hasOwnProperty.call(message, "version"))
+                    writer.uint32(/* id 15, wireType 2 =*/122).string(message.version);
                 return writer;
             };
 
@@ -22578,6 +22600,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 13: {
                             message.installation = $root.muster.v1.MulticaInstallation.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 14: {
+                            message.migrationRequired = reader.bool();
+                            break;
+                        }
+                    case 15: {
+                            message.version = reader.string();
                             break;
                         }
                     default:

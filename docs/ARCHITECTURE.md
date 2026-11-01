@@ -694,6 +694,38 @@ Form: data compiled into the binary and never read from disk at runtime, so the 
 
 Migration, each step behavior-preserving and started after the Catdesk slice landed: (1) one app registry for identity, replacing the string branches (done 2026-10-03: `muster_core::apps` holds each app's provider, labels, Chat mode, bundle id and signing team; signing requirements, Locked Use provider checks, the default AX allowlist and access labels read it); (2) selectors as data, proven against recorded AX fixtures (2026-10-03: `muster_agent::profile` describes, as data matched by one `Selector` over live elements and recorded trees, each app's agent-conversation composer, send, stop and approval controls, and the Claude and ChatGPT Chat mode's send, stop, new chat, dialog close and settings exit; the profiles also choose strategies (drafting, session list, Chat-mode page, conversation URL, mode switch, history rows) and declare the queue and question cards, so muster-platform and `desktop_chat` no longer branch on the provider for them; fixtures recorded on Mac-B are in `muster-agent/tests/fixtures/ax`, redacted by `scripts/redact-ax-dump.py`. Done 2026-10-04: the profiles moved to TOML compiled by `build.rs`, and the daemon's per-app enums (`DesktopApp`, three queue fields, the resolver branch, the three `AppProfile` statics in muster-platform) became lookups over `profile::APPS` keyed by the profile's `session_key`, `gui` and `lock`); (3) session-source rules plus hooks (done 2026-10-04 for the two JSONL sources: `[source]` in `claude.toml` and `codex.toml` is the record grammar, which records are messages, tool calls, tool results and turn boundaries and where their fields are, compiled into `profile::Records`; one engine, `muster_agent::jsonl`, reads both transcripts over it and replaces `CodexViewer` and `ClaudeViewer`, and receipts and recency classify records through the same grammar; the named hooks per source are text cleaning, title records, turn usage and Claude's prompt queue. Still code: discovery and head metadata, the CatDesk store reader, question-card protocols, Chat mode's model and effort pickers, the two resolver implementations); (4) declared capabilities (done 2026-10-04: `[capabilities]` in each profile; `musterd::handler` rejects an undeclared send, respond, interrupt, question-card or queued-message operation before any lock or ledger entry, and `AgentChatOptions` without `model_options`; `muster-app-core` projects `can_interrupt`, `can_choose_model` and `can_browse_files` from them, keeping a provider this build has no profile for visible); (5) the next app as a profile only (2026-10-31: DeepSeek Harness, `profiles/deepseek.toml`, viewed and not driven; it needed a `jsonl-zstd` source, a first-present envelope list, a negated match condition and epoch-millisecond timestamps in the grammar, and a profile may now omit `[controls]`, `gui` and `session_key`, which keeps the app out of the Accessibility scan; [ADR 0073](adr/0073-deepseek-harness-session-viewing.md)). Any step that changes how a control is found is re-accepted on devices per [LOCKED_USE.md](LOCKED_USE.md); a profile does not replace investigating a new app's data sources and controls.
 
+#### 3.6.5 Multica Management and the Native Runtime Bridge
+
+The deployed Multica path is a **managed Apple container** running the Multica
+daemon and CLI, plus a **native provider runtime on the Mac** behind a private
+bridge (`MUSTER_NATIVE_V1`). It replaces ADR 0009's ACP shim (Proposed and now
+historical; `deploy/multica/acp-bridge.py`, `muster acp` and the kiro-cli
+compatibility alias are records only) and it supersedes ADR 0053's status
+statement that desktop execution is unimplemented: the read-only workbench of
+ADR 0053 remains, and scheduling through native provider runtimes exists as
+recorded in ADR 0060/0064, whose Codex creation acceptance is still blocked.
+ADR 0077 records the current state, the read-only version projection and the
+manual upgrade boundary.
+
+State machine ownership is entirely Shared Rust; the platform shells render a
+projection and perform only OS lifecycle work:
+
+| Concern | Owner | Invariant |
+|---|---|---|
+| Container install/adopt, config validation, keep-alive, stopped/installed/unauthenticated classification, data-root acceptance | `musterd::multica` (`mod.rs` manager) | Local-owner-only administration ABI; never silently replaces an existing container or erases its files; a changed root is adopted only after an attended offline migration with the old path absent |
+| Guided install stages, bounded/redacted output, timeout, exclusivity | `musterd::multica::installation` | 64 KiB retained, 4096-byte lines, control sequences removed, credential-bearing lines suppressed; one install at a time; an uncertain outcome is reported, never retried |
+| Private gateway listener, token handshake, session key, provider dispatch | `musterd::multica::bridge` | Binds only the container's private gateway; host UDS never bridged; handshake requires the bridge token and a task-scoped key that includes `MULTICA_TASK_ID`; wrapper environment accepts only `MULTICA_*` names |
+| Provider protocol translation, pending-session binding, task credentials | `muster-acp::native_host`, `muster-acp::scheduler`; destination choice in `muster-agent::native_runtime` | Native application preferred, CLI only when the application is absent; pinned destination per session; task credentials revoked at turn end and stale launchers at daemon startup; no replay of an ambiguous outcome |
+| Install progress, reconnect recovery, status/version/migration projection | `muster-app-core::update::multica` and the `update/` dispatch | Polls only during an outstanding install; recovers a daemon-owned installation after reconnect; never replays; the shell never infers success from logs |
+
+Read-only status carries the guest `multica --version` and a
+`migration_required` flag from the daemon, so the shells display state without
+deciding it. Keep-alive opts container and daemon into supervision; with
+keep-alive off a running container's bridge and wrappers are still reconciled
+without starting stopped services. **There is no in-app Multica upgrade, image
+pull, stop or rollback**: those remain manual operator steps documented in
+[DESKTOP_UPDATES.md](DESKTOP_UPDATES.md) and `deploy/multica/README.md`.
+
 ### 3.7 Rust ↔ Native Boundary: Message-Based ABI + ViewModel
 
 Follow Crux (Red Badger)'s core/shell pattern. Platforms are shells doing only three things:
@@ -1014,6 +1046,47 @@ The agent service gained the providers' cloud sessions (§3.6.2 revision, decisi
 - `muster_agent::cloud` is the engine's two strategies over an `Http` trait the daemon implements (`musterd::cloud_http`: reqwest, WebPKI roots, no redirects) and tests fake. Claude: the session list (sessions bridged from a machine, archived and pooled ones left out), its events read incrementally by sequence number through the one JSONL engine, whose record reader was separated from the file tail for that (`jsonl::Reader`), and a prompt posted as a user record. Codex: the task list and the task details (prompt, replies, the latest diff as a `diff` tool pair, a failed turn's error), re-read whole and replaced when changed. Credentials are read per request and never refreshed: an expired or refused token reads as signed out, logged once, and the listing stays empty until the CLI signs in again.
 - `AgentService` keeps cloud sessions in their own catalog, lists each source at the profile's cadence while watched (a quarter as often otherwise), reads the sessions someone opened, sends through the source and refuses interrupts, answers, question cards and files for them; `musterd::handler` routes a cloud session's operations past the desktop locks, Accessibility and Locked Use to the source, still under the roster's `agents:<provider>` scope, the profile's cloud capabilities and the idempotency ledger; `muster-app-core` projects the cloud label and withholds `can_interrupt` and `can_browse_files`. `musterd --no-cloud` (`DaemonConfig::cloud`) keeps a device to local sessions; phones, which embed the daemon without the agent service, never speak to the clouds.
 - Verified on Linux: the profile, cloud, handler and render unit tests and a service test over a fake transport (list, read, send, refusals), with `cargo fmt`, `check-layers.py`, clippy and the workspace tests. The request and reply shapes were taken from the open-source Codex CLI (`codex-rs/cloud-tasks-client`, `backend-client`) and from the calls the Claude Code CLI makes; neither API was called from here (no credentials, no device), so the first run against the live services is the next acceptance step.
+
+### 8.12 Multica Management and Runtime Bridge (2026-11-01)
+
+Documentation and read-only-projection update; no device or end-to-end
+acceptance was performed in this change.
+
+- Shared Rust owns the whole Multica management state machine: `musterd::multica`
+  (install/adopt, config validation, keep-alive supervision, offline data-root
+  acceptance, stopped/installed/unauthenticated classification),
+  `musterd::multica::installation` (guided stages, bounded/redacted output,
+  single-install exclusivity), `musterd::multica::bridge` (private gateway
+  listener, `MUSTER_NATIVE_V1` token handshake, task-scoped session key),
+  `muster-acp::native_host` / `scheduler` (provider protocol and task-credential
+  lifetime, destination choice in `muster-agent::native_runtime`), and
+  `muster-app-core::update::multica` (install progress polling, reconnect
+  recovery, no replay). Apple shells render the status projection and keep only
+  the launchd lifecycle.
+- Additive ABI: `MulticaStatus.version` (guest `multica --version`, empty when
+  unknown) and `MulticaStatus.migration_required` (installed container's bind
+  mounts no longer match the saved root; saving a changed root stays refused
+  until the attended offline migration is done). No administration action was
+  added, so the local-owner ABI still has CHECK/SAVE/INSTALL/PROGRESS only.
+- Bridge fixes in this change: a runtime-bridge session key requires
+  `MULTICA_TASK_ID` (a connection without one is rejected before launch);
+  daemon startup revokes stale task launchers; a running container's bridge and
+  provider wrappers are reconciled with keep-alive off, without starting
+  stopped services.
+- Boundaries: there is no in-app Multica upgrade, image pull, stop or rollback.
+  The manual upgrade, login and data-root migration runbooks are in
+  [DESKTOP_UPDATES.md](DESKTOP_UPDATES.md) and
+  `src/muster/deploy/multica/README.md`. ADR 0009 remains Proposed/historical;
+  ADR 0053's execution status statement is superseded by ADR 0064/0077; ADR
+  0060, 0064 and 0072 keep their own pending acceptance.
+- Verification: the change's tests cover the bridge handshake, task-scoped
+  session key and wrapper provisioning, guided-install stages/output bounds and
+  timeout, app-core busy/reconnect behavior, and Claude scheduler terminal
+  frames; they use fake executables, temporary directories, duplex streams and
+  a fake scheduler host. A real container, installer, terminal login,
+  reboot/app-upgrade recovery, real provider turn and real scheduler task remain
+  unverified. The device records in ADR 0052/0054/0060/0064/0072 are historical
+  and were not reproduced.
 
 ## 9. Risks and Open Validation Questions (P0 Must Answer)
 

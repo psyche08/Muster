@@ -3942,6 +3942,20 @@ public nonisolated struct Muster_V1_MulticaStatus: @unchecked Sendable {
   /// Clears the value of `installation`. Subsequent reads from it will return its default value.
   public mutating func clearInstallation() {_uniqueStorage()._installation = nil}
 
+  /// An installed container's bind mounts no longer match the saved data root.
+  /// Saving a changed root is refused until the attended offline migration is done.
+  public var migrationRequired: Bool {
+    get {_storage._migrationRequired}
+    set {_uniqueStorage()._migrationRequired = newValue}
+  }
+
+  /// Guest Multica CLI version, read-only (`multica --version`); empty when unknown.
+  /// Muster never upgrades Multica in place; see ADR 0077.
+  public var version: String {
+    get {_storage._version}
+    set {_uniqueStorage()._version = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -11487,7 +11501,7 @@ nonisolated extension Muster_V1_MulticaRequest.Action: SwiftProtobuf._ProtoNameP
 
 nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}installed\0\u{1}running\0\u{3}data_dir\0\u{3}installer_url\0\u{3}server_url\0\u{3}app_url\0\u{3}keep_alive\0\u{3}container_name\0\u{1}message\0\u{3}login_command\0\u{1}busy\0\u{1}installation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}installed\0\u{1}running\0\u{3}data_dir\0\u{3}installer_url\0\u{3}server_url\0\u{3}app_url\0\u{3}keep_alive\0\u{3}container_name\0\u{1}message\0\u{3}login_command\0\u{1}busy\0\u{1}installation\0\u{3}migration_required\0\u{1}version\0")
 
   fileprivate class _StorageClass {
     var _supported: Bool = false
@@ -11503,6 +11517,8 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
     var _loginCommand: String = String()
     var _busy: Bool = false
     var _installation: Muster_V1_MulticaInstallation? = nil
+    var _migrationRequired: Bool = false
+    var _version: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -11526,6 +11542,8 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
       _loginCommand = source._loginCommand
       _busy = source._busy
       _installation = source._installation
+      _migrationRequired = source._migrationRequired
+      _version = source._version
     }
   }
 
@@ -11557,6 +11575,8 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
         case 11: try { try decoder.decodeSingularStringField(value: &_storage._loginCommand) }()
         case 12: try { try decoder.decodeSingularBoolField(value: &_storage._busy) }()
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._installation) }()
+        case 14: try { try decoder.decodeSingularBoolField(value: &_storage._migrationRequired) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._version) }()
         default: break
         }
       }
@@ -11608,6 +11628,12 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
       try { if let v = _storage._installation {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
+      if _storage._migrationRequired != false {
+        try visitor.visitSingularBoolField(value: _storage._migrationRequired, fieldNumber: 14)
+      }
+      if !_storage._version.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._version, fieldNumber: 15)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -11630,6 +11656,8 @@ nonisolated extension Muster_V1_MulticaStatus: SwiftProtobuf.Message, SwiftProto
         if _storage._loginCommand != rhs_storage._loginCommand {return false}
         if _storage._busy != rhs_storage._busy {return false}
         if _storage._installation != rhs_storage._installation {return false}
+        if _storage._migrationRequired != rhs_storage._migrationRequired {return false}
+        if _storage._version != rhs_storage._version {return false}
         return true
       }
       if !storagesAreEqual {return false}

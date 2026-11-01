@@ -49,6 +49,93 @@ but stopped iTerm2 remains a distinct observation.
   it restores the service. Velopack waits for the UI to exit, replaces the
   bundle and relaunches. Startup re-registers musterd when necessary.
 
+## Multica container: install, version and manual upgrade
+
+Multica is a separate product from Muster and has its own update cycle. Muster
+manages a local Apple container that runs the Multica daemon; it does **not**
+upgrade or stop Multica through an in-app button. This section is the operator
+runbook for the desktop side. It applies to the current managed bridge (ADR
+0051/0054/0064/0077), not to the historical ACP shim of ADR 0009.
+
+### Prerequisites
+
+- Apple `container` installed on the Mac (from Apple's public releases; Muster
+  does not bundle it), and enough disk for the guest image and the data root.
+- A trusted HTTPS installer URL for the Multica CLI, and the server and
+  application HTTPS URLs, obtained from the deployment operator. Muster writes
+  none of these into the repository or its own binary; treat the installer as
+  executable code and verify its source before use.
+- A terminal for `multica login`. Login is an explicit terminal operation and
+  is never performed or proxied by Muster.
+
+### Install and status
+
+Settings → Multica supplies the data root (default `~/Documents/Multica`), the
+container name and the URLs, then starts the guided install. The daemon reports
+stages and bounded, redacted installer output (stdout and stderr, last 64 KiB).
+An existing container is adopted without changing it; its tools, mounts and
+login are preserved. The Multica tab appears after Agents and Terminals only
+when Rust observes an installed container.
+
+The status shown by Muster is read-only and comes from the daemon:
+
+- `installed` — the guest Multica CLI is present;
+- `running` — the Multica daemon is running inside the container;
+- `version` — the guest `multica --version` report;
+- `migration_required` — the installed container's bind mounts no longer match
+  the saved data root; saving a changed root is refused until the attended
+  offline migration below is done;
+- a message and the terminal login command.
+
+Stopped container, installed-but-stopped daemon and missing login are distinct
+states; do not infer success from a running container alone.
+
+### keep-alive
+
+Keep-alive opts the container and the Multica daemon into `musterd`'s
+supervisor. When it is on, `musterd` starts the Apple container runtime and the
+container if they are stopped, reconciles the bridge listener, token and
+provider wrappers, and starts the daemon. Closing the app does not stop them.
+When keep-alive is off, Muster does not start stopped services; it still
+reconciles a running container's bridge and wrappers so the next task does not
+use a stale bridge. Turning keep-alive off is not a stop operation.
+
+### Manual Multica upgrade
+
+There is no in-app Multica upgrade, image pull or rollback in this release.
+
+1. Record the current version shown in Settings and let running tasks finish;
+   do not upgrade while a task is executing.
+2. Turn keep-alive off and stop the container with Apple
+   `container stop <name>`. Do not delete or move the data root.
+3. Install the desired Multica CLI version inside the container and on the host
+   from the trusted installer (host copy under the data root's `bin/`, with
+   `MULTICA_BIN_DIR` set there). Keep the existing mounts, login configuration
+   and workspace paths unchanged.
+4. Start the container and daemon again; re-enable keep-alive to have Muster
+   supervise them, then save the Multica settings once so bridge wrappers are
+   reconciled.
+5. Verify the version, that workspaces and tasks load, and that a task runs on
+   the intended runtime. If login was invalidated, repeat `multica login` in
+   the terminal as shown by Settings.
+
+Muster does not verify an upgrade or provide a downgrade path; keep a backup of
+the data root before changing versions. Device and end-to-end acceptance of
+this runbook is pending; the recorded checks in ADR 0052/0054/0060/0064/0072
+are historical, not a repeatable test.
+
+### Data-root migration
+
+Changing the data root is attended and offline, never automatic. Disable
+keep-alive and stop the container, move the data on the same filesystem, update
+every bind mount (including the guest workspace path and the daemon workspace
+configuration), remove the old path, then save the new root. Muster accepts it
+only when the old path is absent, the new root is a real directory (not a
+symlink) and the stopped container inventory confirms the required mounts. It
+never creates a compatibility symlink, moves data itself or rewrites Apple's
+private container metadata. Cross-volume moves and version-specific container
+metadata remain manual.
+
 ## App Store Connect credentials and TestFlight
 
 On the release Mac, the existing credentials are configured in

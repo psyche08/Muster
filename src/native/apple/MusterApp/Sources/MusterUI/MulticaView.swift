@@ -2,53 +2,17 @@
 import MusterCore
 import SwiftUI
 
-struct MulticaSettings: View {
-    let core: MusterCore
-    let status: Muster_V1_MulticaStatus
-    @State private var draft = Muster_V1_MulticaRequest()
-    @State private var loaded = false
-    @State private var showInstallation = false
-    @State private var showPreparation = true
+/// The editable Multica container configuration, shared by the Settings
+/// section (an installed container) and the installation sheet (before one
+/// exists). The shell only collects text; Rust validates and owns it.
+private struct MulticaConfigurationFields: View {
+    @Binding var draft: Muster_V1_MulticaRequest
+    let containerNameDisabled: Bool
 
     var body: some View {
-        Section("Multica") {
-            Text(status.message).textSelection(.enabled)
-            if status.installed { configuration }
-            HStack {
-                Button(status.installed ? "保存设置" : "安装 Multica") {
-                    if status.installed {
-                        var request = draft
-                        request.action = .save
-                        core.multica(request)
-                    } else {
-                        showPreparation = !status.installation.busy
-                        showInstallation = true
-                    }
-                }.disabled(status.busy)
-                Button("刷新状态") { core.multica(.init()) }.disabled(status.busy)
-                if status.hasInstallation {
-                    Button("查看安装过程") {
-                        showPreparation = false
-                        showInstallation = true
-                    }
-                }
-                if status.busy { ProgressView().controlSize(.small) }
-            }
-            if !status.installed {
-                Text("通过安装向导配置容器和数据目录，查看安装步骤与实时日志。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            if status.installed { loginInstructions }
-        }
-        .onAppear { load() }
-        .onChange(of: status.dataDir) { _, _ in if !loaded { load() } }
-        .sheet(isPresented: $showInstallation) { installationDialog }
-    }
-
-    private var configuration: some View {
         Group {
             TextField("数据目录", text: $draft.dataDir)
-            TextField("容器名称", text: $draft.containerName).disabled(status.installed)
+            TextField("容器名称", text: $draft.containerName).disabled(containerNameDisabled)
             TextField("安装脚本 HTTPS 地址", text: $draft.installerURL)
             TextField("Multica 服务 HTTPS 地址", text: $draft.serverURL)
             TextField("Multica 页面 HTTPS 地址", text: $draft.appURL)
@@ -57,8 +21,14 @@ struct MulticaSettings: View {
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
+}
 
-    private var loginInstructions: some View {
+/// Login stays a separate terminal operation; the shell shows the command
+/// Rust built and never runs it.
+private struct MulticaLoginInstructions: View {
+    let status: Muster_V1_MulticaStatus
+
+    var body: some View {
         Group {
             if !status.loginCommand.isEmpty {
                 Text("下一步：在终端完成 Multica 登录，再返回此处刷新状态。安装完成不代表已登录或服务正在运行。")
@@ -67,15 +37,26 @@ struct MulticaSettings: View {
             }
         }
     }
+}
 
-    private var installationDialog: some View {
+/// The guided install sheet: preparation before the start action and the
+/// Rust-owned stage/log projection afterwards. Closing it does not cancel
+/// the daemon-owned installation.
+private struct MulticaInstallationDialog: View {
+    let core: MusterCore
+    let status: Muster_V1_MulticaStatus
+    @Binding var draft: Muster_V1_MulticaRequest
+    @Binding var showPreparation: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("安装 Multica").font(.title2.bold())
             if showPreparation {
                 Form {
                     Section("1. 准备安装") {
                         Text("请先安装 Apple container，并向部署管理员获取可信的 HTTPS 安装脚本、服务和页面地址。安装需要网络连接，下载镜像和依赖可能需要几分钟。")
-                        configuration
+                        MulticaConfigurationFields(draft: $draft, containerNameDisabled: status.installed)
                     }
                     Section("2. 安装并查看日志") {
                         Text("点击开始安装后，将准备数据目录、创建容器、安装容器和本机 Multica CLI，并检查服务状态。安装脚本将在容器及本机执行，请确认其来源可信。")
@@ -108,12 +89,12 @@ struct MulticaSettings: View {
                 }
                 if status.installation.finished {
                     Text(status.message).font(.footnote).textSelection(.enabled)
-                    if status.installed { loginInstructions }
+                    if status.installed { MulticaLoginInstructions(status: status) }
                 }
             }
             Divider()
             HStack {
-                Button(status.installation.busy ? "后台继续" : "关闭") { showInstallation = false }
+                Button(status.installation.busy ? "后台继续" : "关闭") { showPreparation = false; dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 if showPreparation {
@@ -137,6 +118,63 @@ struct MulticaSettings: View {
         .frame(minWidth: 580, idealWidth: 660, minHeight: 560, idealHeight: 640)
         .interactiveDismissDisabled(status.installation.busy)
     }
+}
+
+struct MulticaSettings: View {
+    let core: MusterCore
+    let status: Muster_V1_MulticaStatus
+    @State private var draft = Muster_V1_MulticaRequest()
+    @State private var loaded = false
+    @State private var showInstallation = false
+    @State private var showPreparation = true
+
+    var body: some View {
+        Section("Multica") {
+            Text(status.message).textSelection(.enabled)
+            if status.migrationRequired {
+                Label("数据目录与容器挂载不一致：请关闭保活、停止容器并完成离线迁移后重新保存设置。", systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(.orange)
+                    .accessibilityIdentifier("multica-migration-warning")
+            }
+            if !status.version.isEmpty {
+                LabeledContent("Multica 版本", value: status.version)
+                    .accessibilityIdentifier("multica-version-settings")
+            }
+            if status.installed {
+                MulticaConfigurationFields(draft: $draft, containerNameDisabled: status.installed)
+            }
+            HStack {
+                Button(status.installed ? "保存设置" : "安装 Multica") {
+                    if status.installed {
+                        var request = draft
+                        request.action = .save
+                        core.multica(request)
+                    } else {
+                        showPreparation = !status.installation.busy
+                        showInstallation = true
+                    }
+                }.disabled(status.busy)
+                Button("刷新状态") { core.multica(.init()) }.disabled(status.busy)
+                if status.hasInstallation {
+                    Button("查看安装过程") {
+                        showPreparation = false
+                        showInstallation = true
+                    }
+                }
+                if status.busy { ProgressView().controlSize(.small) }
+            }
+            if !status.installed {
+                Text("通过安装向导配置容器和数据目录，查看安装步骤与实时日志。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            if status.installed { MulticaLoginInstructions(status: status) }
+        }
+        .onAppear { load() }
+        .onChange(of: status.dataDir) { _, _ in if !loaded { load() } }
+        .sheet(isPresented: $showInstallation) {
+            MulticaInstallationDialog(core: core, status: status, draft: $draft, showPreparation: $showPreparation)
+        }
+    }
 
     private func load() {
         guard !loaded && !status.dataDir.isEmpty else { return }
@@ -155,6 +193,9 @@ struct MulticaView: View {
     let status: Muster_V1_MulticaStatus
     let page: Muster_V1_MulticaPage
     @State private var section = 0
+    @State private var showInstallation = false
+    @State private var installationPreparation = false
+    @State private var installationDraft = Muster_V1_MulticaRequest()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -174,6 +215,22 @@ struct MulticaView: View {
                 if page.busy { ProgressView().controlSize(.small) }
                 Button("刷新", systemImage: "arrow.clockwise") { refresh() }.disabled(page.busy)
             }
+            if !status.message.isEmpty {
+                Text(status.message)
+                    .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                    .accessibilityIdentifier("multica-status-message")
+            }
+            if status.migrationRequired {
+                Label("数据目录与容器挂载不一致：请关闭保活、停止容器并完成离线迁移后重新保存设置。", systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(.orange)
+                    .accessibilityIdentifier("multica-migration-warning-tab")
+            }
+            if !status.version.isEmpty {
+                Text("Multica 版本：" + status.version)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("multica-version")
+            }
+            installationBanner
             if !page.error.isEmpty {
                 Label(page.error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange).textSelection(.enabled)
@@ -200,6 +257,37 @@ struct MulticaView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { core.navigate(to: .settings) } label: { Label("Settings", systemImage: "gearshape") }
             }
+        }
+        .sheet(isPresented: $showInstallation) {
+            MulticaInstallationDialog(core: core, status: status, draft: $installationDraft, showPreparation: $installationPreparation)
+        }
+    }
+
+    /// Rust owns the installation projection; the tab only surfaces an
+    /// in-flight stage or a finished-but-failed outcome and can reopen the
+    /// same guided sheet.
+    @ViewBuilder private var installationBanner: some View {
+        if status.installation.busy {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(status.installation.stage.isEmpty ? "正在安装 Multica…" : status.installation.stage)
+                    .font(.callout)
+                Spacer()
+                Button("查看安装过程") { openInstallation() }
+                    .accessibilityIdentifier("multica-install-banner-open")
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("multica-install-banner")
+        } else if status.installation.finished && !status.installation.succeeded {
+            HStack(spacing: 8) {
+                Label("上次 Multica 安装未完成，请查看日志后重试。", systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(.orange)
+                Spacer()
+                Button("查看安装过程") { openInstallation() }
+                    .accessibilityIdentifier("multica-install-banner-open")
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("multica-install-banner")
         }
     }
 
@@ -284,6 +372,17 @@ struct MulticaView: View {
     private func refresh() {
         core.multica(.init())
         query(issue: page.hasIssue ? page.issue.id : "", agent: page.hasAgent ? page.agent.id : "", offset: page.offset)
+    }
+
+    private func openInstallation() {
+        installationDraft.dataDir = status.dataDir
+        installationDraft.containerName = status.containerName
+        installationDraft.installerURL = status.installerURL
+        installationDraft.serverURL = status.serverURL
+        installationDraft.appURL = status.appURL
+        installationDraft.keepAlive = status.installed ? status.keepAlive : true
+        installationPreparation = false
+        showInstallation = true
     }
 }
 #endif

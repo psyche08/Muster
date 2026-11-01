@@ -376,6 +376,9 @@ impl Daemon {
             agent_operations: crate::agent_bridge::ProviderQueues::default(),
         });
         if daemon.config.listen && cfg!(target_os = "macos") {
+            // No bridge listener exists yet, so launchers from a previous bridge
+            // process cannot belong to an active turn.
+            daemon.multica.startup().await;
             let weak = Arc::downgrade(&daemon);
             let task = tokio::spawn(async move {
                 loop {

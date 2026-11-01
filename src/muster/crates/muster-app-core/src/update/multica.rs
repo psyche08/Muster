@@ -1,9 +1,22 @@
 use super::*;
-pub(super) fn request(state: &mut State, ctx: &Ctx, request: v1::MulticaRequest) {
-    if state.embedded || state.multica.busy {
-        return;
+
+/// Claims the single in-flight Multica slot. A second intent while one is
+/// outstanding (a status check, a save or an install) must not be dropped
+/// silently: the user gets a visible notice and the running request keeps
+/// ownership of the projection.
+fn begin_request(state: &mut State) -> bool {
+    if state.multica.busy {
+        state.toast("Multica 正在处理上一个请求，请稍候", true);
+        return false;
     }
     state.multica.busy = true;
+    true
+}
+
+pub(super) fn request(state: &mut State, ctx: &Ctx, request: v1::MulticaRequest) {
+    if state.embedded || !begin_request(state) {
+        return;
+    }
     let installing = request.action == v1::multica_request::Action::Install as i32;
     if installing {
         state.multica.installation = Some(v1::MulticaInstallation {
@@ -159,6 +172,35 @@ pub(super) fn apply_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_busy_multica_request_shows_a_toast_and_keeps_the_owner() {
+        let mut state = State::new(false, Some("local".into()));
+        state.multica.busy = true;
+        state.multica.installation = Some(v1::MulticaInstallation {
+            busy: true,
+            stage: "正在安装".into(),
+            ..Default::default()
+        });
+        assert!(!begin_request(&mut state));
+        assert!(state.multica.busy, "the running request keeps the slot");
+        assert_eq!(
+            state.multica.installation.as_ref().unwrap().stage,
+            "正在安装",
+            "the in-flight projection is untouched"
+        );
+        let toast = state.toasts.last().expect("a dropped request is visible");
+        assert!(toast.error);
+        assert!(toast.text.contains("正在处理上一个请求"));
+    }
+
+    #[test]
+    fn the_first_multica_request_claims_the_slot() {
+        let mut state = State::new(false, Some("local".into()));
+        assert!(begin_request(&mut state));
+        assert!(state.multica.busy);
+        assert!(state.toasts.is_empty());
+    }
+
     #[test]
     fn interrupted_install_keeps_logs_and_requires_status_check() {
         let mut state = State::new(false, Some("local".into()));

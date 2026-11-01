@@ -152,6 +152,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0076](0076-paired-release-1-1-6.md) | Accepted; published and installed on one Mac | Publish Apple 1.1.6 to the OTA page and this Mac |
 
+| [0077](0077-multica-runtime-state-and-manual-upgrade.md) | Accepted; device and end-to-end acceptance pending | Record the managed Multica bridge, read-only version and migration state, manual upgrade boundary |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
