@@ -735,7 +735,26 @@ fn workspaces(c: &Config) -> String {
     }
 }
 async fn daemon_running(manager: &Manager, c: &Config) -> bool {
-    manager.command(&["exec", &c.container_name, "sh", "-c", "p=$(cat /root/.multica/daemon.pid 2>/dev/null) || exit 1; case $p in ''|*[!0-9]*) exit 1;; esac; tr '\\0' ' ' < /proc/$p/cmdline | grep -q 'multica.*daemon'"], 5).await.is_ok()
+    // Multica 0.3.57 can run its daemon without writing
+    // /root/.multica/daemon.pid, so the pid file is only one signal. Fall back
+    // to the guest process table and match the executable name, not this
+    // probe's own shell command line, with the whole check bounded by `run`.
+    manager
+        .command(
+            &[
+                "exec",
+                &c.container_name,
+                "sh",
+                "-c",
+                r#"p=$(cat /root/.multica/daemon.pid 2>/dev/null) || true
+case $p in ''|*[!0-9]*) ;; *) tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'multica.*daemon' && exit 0 ;; esac
+for d in /proc/[0-9]*; do case "$(readlink $d/exe 2>/dev/null)" in */multica) exit 0 ;; esac; done
+exit 1"#,
+            ],
+            5,
+        )
+        .await
+        .is_ok()
 }
 async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Error> {
     manager.installation.stage("准备数据目录与工作区");
@@ -1309,5 +1328,47 @@ esac
         let status = manager.status().await.unwrap();
         assert!(status.migration_required);
         assert_eq!(status.version, "multica 0.6.5");
+    }
+
+    #[tokio::test]
+    async fn daemon_detection_falls_back_to_the_guest_process_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("container");
+        // A guest Multica that runs without a pid file is still running: the
+        // process-table branch of the probe succeeds when the pid fast path
+        // does not.
+        std::fs::write(
+            &script,
+            r#"#!/bin/sh
+case "$*" in
+  *readlink*) exit 0 ;;
+  *) exit 1 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(script);
+        let c = Config {
+            container_name: "mlt".into(),
+            ..Default::default()
+        };
+        assert!(daemon_running(&manager, &c).await);
+    }
+
+    #[tokio::test]
+    async fn daemon_detection_is_false_when_no_guest_process_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("container");
+        std::fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(script);
+        let c = Config {
+            container_name: "mlt".into(),
+            ..Default::default()
+        };
+        assert!(!daemon_running(&manager, &c).await);
     }
 }

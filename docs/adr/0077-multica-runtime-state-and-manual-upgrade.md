@@ -163,3 +163,29 @@ This change records source and test status, not device acceptance.
   ADR does not claim working Codex desktop creation.
 - Documentation: the repository docs and the deployment README are English;
   public-content and ADR checks are reported with the change.
+
+### Device acceptance (read-only, 2026-11-01)
+
+A dedicated acceptance Mac with the adopted `mlt` container was probed
+read-only with a temporary test binary built from the merged change; no
+install, save, migration, start/stop or task was performed.
+
+- Projection: `supported=true`, `installed=true`, `migration_required=false`,
+  guest `version="multica 0.3.57 …"`. The host CLI copy in the data root
+  reports 0.3.54, so guest and host versions can differ until a manual upgrade.
+- Bridge artifacts: `bridge-token`, `runtime-codex`, `runtime-claude` and
+  `runtime-command` exist with mode 0600; the codex wrapper names the private
+  gateway and its listener port.
+- Daemon state: the guest daemon was running while the pid-file probe reported
+  stopped; [ADR 0078](0078-multica-daemon-detection-without-pid-file.md)
+  records the detection fix and the post-fix `running=true`.
+- Workbench query: **not accepted.** The guest CLI cannot resolve the Multica
+  server host because the container's configured DNS (`192.168.64.1:53`)
+  refuses UDP queries, so `multica workspace list` fails with a server-address
+  error. This is a container-network condition; no Muster code change is
+  claimed to fix it.
+- Not performed: terminal login, real provider turn, scheduler task, reboot or
+  app-upgrade recovery, installation/upgrade, and any signed/notarized build.
+  "Other devices on the same network can reach Multica" was reported for the
+  host/browser path; it was not exercised through Muster's ABI, which remains
+  local-owner-only.
