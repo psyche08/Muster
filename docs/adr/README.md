@@ -167,7 +167,7 @@ records a specific decision and does not revive code on its delete list.
 | [0089](0089-paired-release-1-1-10.md) | Accepted; published, on GitHub and installed on three Macs | Publish Apple 1.1.10 (100) and install it on the three Macs |
 | [0090](0090-reuse-transcript-heads-between-rescans.md) | Accepted; implementation verified, installed acceptance pending | Reuse parsed transcript heads between catalog rescans, so the session list updates without a 2 s scan |
 | [0091](0091-prune-conversation-views-only-where-separate.md) | Accepted; source verified, device acceptance pending | Prune conversation views only in apps that expose them apart |
-| [0092](0092-paired-release-1-1-11.md) | Accepted; published; installation via the signed feed and per-Mac verification pending | Publish Apple 1.1.11 (101) and install it on the three Macs |
+| [0092](0092-paired-release-1-1-11.md) | Accepted; published, installed on two Macs; third-Mac delivery via signed feed pending | Publish Apple 1.1.11 (101) and install it on the three Macs |
 
 | [0093](0093-app-and-cli-capability-control-design.md) | Proposed; design only | Separate App and CLI sessions, route typed capabilities through plugins or AX, and recover operations without replay |
 

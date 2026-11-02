@@ -1,7 +1,7 @@
 # ADR 0092: Publish Apple 1.1.11 (101) and install it on the three Macs
 
 - Date: 2026-11-02
-- Status: Accepted; published; installation via the signed feed and per-Mac verification pending
+- Status: Accepted; published and installed on two Macs; third-Mac delivery via the signed feed and ADR 0091 live-send acceptance pending
 - Related: [ADR 0091](0091-prune-conversation-views-only-where-separate.md),
   [ADR 0089](0089-paired-release-1-1-10.md),
   [ADR 0088](0088-unattended-desktop-updates.md),
@@ -132,3 +132,18 @@ unattended when idle. Per-Mac version/build/identity confirmation after that
 remains open, and a reachable Mac is still installed and verified the normal
 way. Not verified: installation/identity on the three Macs, ADR 0091's live
 send acceptance, physical iPhone installation, and the server prune.
+
+### Installation — two Macs, 2026-11-02 17:0x CST
+
+- After publication, two Macs became reachable again and were installed with
+  the same verified portable through the guarded Rust-update-lease installer,
+  one at a time, detached from the SSH/session that started it.
+- Both report desktop **1.1.11 (101)**, commit prefix `d2246e48`, the packaged
+  daemon SHA-256 above, and unchanged device identity, fingerprint and Secure
+  Enclave backend; each kept a previous-bundle copy and reports Accessibility
+  granted, relay registered and Vnet up.
+- The third Mac stayed unreachable (offline/asleep) at this check. It runs
+  1.1.10 and trusts the ADR 0088 feed, so the signed 1.1.11 update remains its
+  delivery path; no manual installation or identity check is claimed for it.
+- Still open: installation confirmation on the third Mac, ADR 0091's live send
+  acceptance, physical iPhone installation and the server prune.
