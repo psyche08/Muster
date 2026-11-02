@@ -2,7 +2,7 @@
 
 | Document | Purpose |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | **The sole target architecture**: Codex / Claude / Catdesk Desktop → Agent Halo; iTerm2 / Ghostty → independent adapters; all share Muster Networking + Hardware Security. Includes historical diagnosis, migration inventory, implementation status, and decisions. All new work follows this document. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **The sole target architecture**: Codex / Claude / Catdesk Desktop → Agent Halo; iTerm2 / Ghostty → independent adapters; all share Muster Networking + Hardware Security. A short entry page (overview, requirements, principles) with a map to its parts in [architecture/](architecture/): runtime, identity and trust, network, services, Agent Halo, Multica, migration, decisions, status and the legacy baseline. All new work follows it. |
 | [MODULES.md](MODULES.md) | The module map: crate layers, the dependency rules CI enforces, where each product state machine lives, and which product knowledge is data. |
 | [APP_PROFILES.md](APP_PROFILES.md) | The desktop app profile DSL: one TOML file per app (Codex, Claude Code, CatDesk) compiled into `muster_agent::profile`; schema, strategies, capabilities, how profiles are proven. |
 | [PROTOCOL.md](PROTOCOL.md) | Wire formats: roster, pairing, links, relay transports, forwarding, vnet, muster-rpc. |
@@ -22,6 +22,7 @@
 
 Documentation conventions:
 
-- Update `ARCHITECTURE.md` directly when the target architecture changes; do not create another "v2" file. Record decisions in section 7.
+- Update the architecture part that owns a topic when the target architecture changes; do not create another "v2" file. Record decisions in section 7 (`architecture/decisions.md`).
+- Keep documents progressively disclosed: a short entry page first, detail in parts linked from it, so a reader loads only what a change needs.
 - Put one-off verification and field-investigation records in `history/`, with a date in the filename.
-- Do not add more acceptance-gate documents; record each phase's exit criteria in the table in section 5 of `ARCHITECTURE.md`.
+- Do not add more acceptance-gate documents; record each phase's exit criteria in the table in section 5 (`architecture/migration.md`).

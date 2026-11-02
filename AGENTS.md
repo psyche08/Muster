@@ -2,8 +2,10 @@
 
 These rules apply to the entire repository.
 
-The target architecture is `docs/ARCHITECTURE.md`; its §4 says which existing
-code is kept, ported or deleted, and §5 gives the migration phases. Do not add
+The target architecture is `docs/ARCHITECTURE.md`, an entry page that links to
+its parts in `docs/architecture/`; read the page, then only the parts a change
+touches. Its §4 and §5 (`docs/architecture/migration.md`) say which existing
+code is kept, ported or deleted, and give the migration phases. Do not add
 capabilities to code on the delete list. Superseded documents live in
 `docs/history/` and are records, not requirements.
 

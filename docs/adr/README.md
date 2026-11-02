@@ -157,6 +157,7 @@ records a specific decision and does not revive code on its delete list.
 | [0079](0079-install-multica-daemon-detection-fix.md) | Accepted; installed on one Mac, publication pending | Install the Multica daemon-detection fix as desktop 1.1.7 (97) |
 | [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; source verified, device acceptance pending | The desktop session-list scan prunes conversation views |
 | [0081](0081-paired-release-1-1-8.md) | Accepted; publication and installation pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
+| [0082](0082-progressive-architecture-documentation.md) | Accepted | Split ARCHITECTURE.md into an entry page and parts under docs/architecture/ |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

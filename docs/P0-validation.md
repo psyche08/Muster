@@ -2,7 +2,7 @@
 
 > Privacy note: operational identities in this record are anonymized examples; see [public content policy](PUBLIC_CONTENT.md). Technical outcomes and acceptance limits are unchanged.
 
-Covers phase P0 in section 5 of [ARCHITECTURE.md](ARCHITECTURE.md). Each of four checks answers one feasibility question about the new architecture, ends with **pass / partial pass / fail**, and records the chosen fallback. At the end of P0, update any content in ARCHITECTURE section 3 invalidated by the results.
+Covers phase P0 in section 5 of the architecture ([migration.md](architecture/migration.md)). Each of four checks answers one feasibility question about the new architecture, ends with **pass / partial pass / fail**, and records the chosen fallback. At the end of P0, update any content in ARCHITECTURE section 3 invalidated by the results.
 
 > **2026-10-02:** The four POC tools named below (`axprobe`, `hwquic`, `relaypoc`, `itermrs`) were deleted from `src/poc/`. Their proven code lives in production crates (`muster-platform`, `MusterMacShim`, `muster-net`, `muster-terminal`). The original sources remain in Git history: `git show acf23be7:src/poc/<name>/…`. Later acceptance is recorded in [LOCKED_USE.md](LOCKED_USE.md), [AGENT_INTERFACE.md](AGENT_INTERFACE.md), and [NETWORK_DIAGNOSTICS.md](NETWORK_DIAGNOSTICS.md), not in the empty results table below.
 
