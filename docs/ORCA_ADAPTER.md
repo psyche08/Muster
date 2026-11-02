@@ -16,6 +16,13 @@ orchestration, browser, SSH, mobile or Desktop app features.
 
 ## Use
 
+The proposed [Agent control design](AGENT_CONTROL_DESIGN.md) preserves this
+adapter as the owner of **CLI sessions**, separate from App sessions even when
+they use the same provider or project directory. A plugin inside a desktop App
+controls that App's session; it does not turn it into an Orca session. The
+proposal shares capability/result contracts without sharing session identity,
+authorization or automatic fallback. No runtime behavior changes with the design.
+
 In Muster's Agents view, choose **New CLI session**, a device, Codex or Claude,
 and an existing absolute directory on that device. The session works in that
 directory; creation does not create a Git branch/worktree or run setup scripts.

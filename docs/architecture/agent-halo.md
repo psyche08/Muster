@@ -4,6 +4,16 @@ Part of the [Muster architecture](../ARCHITECTURE.md). Section numbers are share
 
 ## 3.6.2 Agent Halo：Accessibility + Locked Use（R4）
 
+**Proposed redesign (2026-11-02, not implemented):**
+[ADR 0093](../adr/0093-app-and-cli-capability-control-design.md) and the
+[technical design](../AGENT_CONTROL_DESIGN.md) distinguish App-owned sessions
+from independently owned CLI sessions and propose per-capability App routing
+through verified plugins, supported APIs, AX and read sources. One logical
+App controller retains one executor per operation; an uncertain mutation never
+switches routes or becomes a CLI session. The proposal covers the existing
+feature set, operation recovery and acceptance gates. It does not yet replace
+the runtime/profile rules below or the current Locked Use authorization policy.
+
 The three Desktop targets share Agent Halo's service contract, with independent process-signature identity, session location, AX surface, and approval-control profiles per application. Catdesk is not treated as Codex or Claude merely because it supports a model protocol; its session-reading source, stable IDs, controls, and operations require separate implementation and validation. Read sources may be local transcripts or trusted application interfaces; AX writability does not imply readable history.
 
 **2026-09-28 revision: Codex / Claude session operations are Accessibility-only.** Remove Owned provider CLI, app-server, stdio process launchers, and iTerm2 Agent CLI bridges; no automatic takeover, recovery, or fallback. Historical transcripts remain read-only observations; sessions without an AX controller are unwritable. CLI session-creation RPC / App Intent entries were removed with field numbers reserved, and all platforms remove their corresponding UI entries; sessions must first be opened in the desktop application. The independent terminal service retains terminal capabilities under terminal scopes and is not projected as an Agent session controller.

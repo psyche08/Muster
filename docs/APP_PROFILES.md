@@ -56,6 +56,13 @@ given. Wherever `labels` appears it is either a list of strings or
 
 ### `[capabilities]`
 
+The rules here describe the current implementation.
+[ADR 0093](adr/0093-app-and-cli-capability-control-design.md) proposes separating
+typed capabilities from their execution routes, allowing a verified App session
+to use plugins and AX for different capabilities. That proposal is not active:
+the exclusivity and capability derivation below still apply. Independent CLI
+sessions retain their own identity and capabilities, not these App profiles.
+
 | Field | Meaning when `true` |
 |---|---|
 | `send` | Prompts can be sent to a session shown in the app |
