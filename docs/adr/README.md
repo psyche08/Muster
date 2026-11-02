@@ -170,6 +170,7 @@ records a specific decision and does not revive code on its delete list.
 | [0092](0092-paired-release-1-1-11.md) | Accepted; published; installation via the signed feed and per-Mac verification pending | Publish Apple 1.1.11 (101) and install it on the three Macs |
 
 | [0093](0093-app-and-cli-capability-control-design.md) | Proposed; design only | Separate App and CLI sessions, route typed capabilities through plugins or AX, and recover operations without replay |
+| [0094](0094-local-plugin-contract-and-receipt-recovery.md) | Accepted; local App host verified | Bind local App plugin operations and recover native send receipts without changing device interfaces |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

@@ -32,6 +32,7 @@ pub mod native_sidebar;
 pub mod native_step;
 pub mod native_tree;
 pub mod orca;
+pub mod plugin_control;
 pub mod prediction;
 pub mod profile;
 pub mod questions;
@@ -2398,6 +2399,15 @@ impl AgentService {
 
     pub async fn send(&self, id: &str, text: &str) -> Result<(), Error> {
         self.send_to(id, text).await.map(|_| ())
+    }
+
+    /// Existing controller only: no navigation, unlock, CLI fallback or send.
+    pub async fn lookup_send(&self, id: &str, operation: &str) -> Result<bool, Error> {
+        let controller = self.inner.lock().unwrap().controllers.get(id).cloned();
+        match controller {
+            Some(controller) => controller.lookup_send(operation).await,
+            None => Ok(false),
+        }
     }
 
     /// Sends and returns the session the text landed in: `id`, or the

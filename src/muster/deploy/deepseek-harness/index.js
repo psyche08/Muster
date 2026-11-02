@@ -38,6 +38,11 @@ export const inject = ['agents', 'sessionController']
 /** The wire protocol; Muster refuses a bridge that speaks another. */
 export const PROTOCOL = 1
 
+// Additive local contract. The outer protocol and legacy methods remain stable.
+export const CONTROL_VERSION = 1
+const CAPABILITIES = ['prompt', 'cancel', 'approve', 'answer', 'prompt.lookup']
+const MAX_EVIDENCE = 4096
+
 /** A request line longer than this closes the connection. */
 const MAX_LINE = 1 << 20
 
@@ -65,6 +70,7 @@ export function socketPath(env = process.env) {
 export class Bridge {
   constructor(ctx) {
     this.ctx = ctx
+    this.epoch = randomUUID()
     /** Waiting approvals and question cards by their bridge id. */
     this.approvals = new Map()
     this.questions = new Map()
@@ -76,6 +82,52 @@ export class Bridge {
     return now - this.lastSeen < PRESENCE_MS
   }
 
+  contract() {
+    return { version: CONTROL_VERSION, domain: 'app', provider: 'deepseek',
+      epoch: this.epoch, capabilities: [...CAPABILITIES] }
+  }
+
+  // Read host-owned facts only. Never resume a cold session or call prompt.
+  lookup(sessionId, requestId) {
+    if (typeof sessionId !== 'string' || !sessionId ||
+        typeof requestId !== 'string' || !requestId || requestId.length > 128) {
+      throw new Error('lookup needs a sessionId and requestId')
+    }
+    const agent = this.ctx.agents.get?.(sessionId)
+    const records = []
+    const add = (message, location) => {
+      if (message?.source?.kind === 'user' && message.source.rpcId === requestId) {
+        records.push({ source: { kind: 'user', rpcId: requestId }, location })
+      }
+    }
+    for (const message of (agent?.inbox?.nextTurn ?? []).slice(-MAX_EVIDENCE)) add(message, 'next-turn')
+    for (const message of (agent?.inbox?.nextStep ?? []).slice(-MAX_EVIDENCE)) add(message, 'next-step')
+    const events = agent?.session?.snapshotEvents?.() ?? []
+    for (const event of events.slice(-MAX_EVIDENCE)) {
+      if (event.type === 'user/message') add(event.data, 'session-event')
+    }
+    return { sessionId, requestId, records: records.slice(0, 16) }
+  }
+
+  validateControl(request) {
+    const control = request.control
+    if (control === undefined) return // Existing daemon's local protocol.
+    if (control?.version !== CONTROL_VERSION || control.domain !== 'app' ||
+        control.epoch !== this.epoch || typeof control.operationId !== 'string' ||
+        !control.operationId || control.operationId.length > 256 ||
+        typeof control.sessionId !== 'string' || !control.sessionId ||
+        control.sessionId.length > 128) throw new Error('invalid or expired App operation binding')
+    if (!CAPABILITIES.includes(request.op)) throw new Error('capability is not offered')
+    if (request.sessionId !== undefined && request.sessionId !== control.sessionId) {
+      throw new Error('operation addresses another session')
+    }
+    const interaction = request.op === 'approve' ? this.approvals.get(request.approvalId)
+      : request.op === 'answer' ? this.questions.get(request.questionId) : undefined
+    if (interaction !== undefined && interaction.sessionId !== control.sessionId) {
+      throw new Error('interaction belongs to another session')
+    }
+  }
+
   state() {
     const sessions = this.ctx.agents
       .list()
@@ -84,6 +136,7 @@ export class Bridge {
     return {
       protocol: PROTOCOL,
       pid: process.pid,
+      control: this.contract(),
       sessions,
       approvals: pending(this.approvals),
       questions: pending(this.questions),
@@ -91,10 +144,16 @@ export class Bridge {
   }
 
   async handle(request) {
+    if (request === null || typeof request !== 'object' || Array.isArray(request)) {
+      throw new Error('request must be an object')
+    }
+    this.validateControl(request)
     this.lastSeen = Date.now()
     switch (request.op) {
       case 'hello':
-        return { protocol: PROTOCOL, pid: process.pid }
+        return { protocol: PROTOCOL, pid: process.pid, control: this.contract() }
+      case 'prompt.lookup':
+        return this.lookup(request.sessionId, request.requestId)
       case 'state':
         return this.state()
       case 'prompt': {
@@ -105,19 +164,20 @@ export class Bridge {
         }
         if (typeof text !== 'string' || !text.trim()) throw new Error('prompt needs text')
         if (mode !== 'queue' && mode !== 'steer') throw new Error(`unknown prompt mode ${mode}`)
-        return await this.ctx.sessionController.prompt(
+        return await hostCall(() => this.ctx.sessionController.prompt(
           { requestId, sessionId, mode, content: [{ type: 'text', text }] },
           AbortSignal.timeout(PROMPT_TIMEOUT_MS),
-        )
+        ))
       }
       case 'cancel': {
         if (typeof request.sessionId !== 'string') throw new Error('cancel needs a sessionId')
-        return await this.ctx.sessionController.cancel({ sessionId: request.sessionId })
+        return await hostCall(() => this.ctx.sessionController.cancel({ sessionId: request.sessionId }))
       }
       case 'approve': {
         const approval = this.approvals.get(request.approvalId)
         if (approval === undefined) throw new Error('no such approval is waiting')
         if (!OUTCOMES.has(request.outcome)) throw new Error(`unknown outcome ${request.outcome}`)
+        this.approvals.delete(request.approvalId)
         approval.settle(request.outcome)
         return { accepted: true }
       }
@@ -125,6 +185,7 @@ export class Bridge {
         const question = this.questions.get(request.questionId)
         if (question === undefined) throw new Error('no such question is waiting')
         const answers = parseAnswers(question.questions, request.answers)
+        this.questions.delete(request.questionId)
         question.settle({ answers })
         return { accepted: true }
       }
@@ -198,6 +259,16 @@ export class Bridge {
   }
 }
 
+// A host exception may follow acceptance. Only Rust decides whether receipt
+// evidence settles it; validation failures before entering the host are separate.
+async function hostCall(call) {
+  try { return await call() } catch (cause) {
+    const error = new Error(String(cause?.message ?? cause))
+    error.delivery = 'unknown'
+    throw error
+  }
+}
+
 /** Muster's answers, checked against the questions they answer. */
 export function parseAnswers(questions, answers) {
   if (!Array.isArray(answers)) throw new Error('answers must be a list')
@@ -244,7 +315,7 @@ export function serve(bridge, socket, log = () => {}) {
     connection.setEncoding('utf8')
     connection.on('data', (chunk) => {
       buffer += chunk
-      if (buffer.length > MAX_LINE) {
+      if (Buffer.byteLength(buffer) > MAX_LINE) {
         connection.destroy()
         return
       }
@@ -284,9 +355,12 @@ async function respond(bridge, line) {
     return { id: null, ok: false, error: 'not JSON' }
   }
   try {
-    return { id: request.id ?? null, ok: true, result: await bridge.handle(request) }
+    return { id: request?.id ?? null, ok: true, result: await bridge.handle(request),
+      ...(request?.control === undefined ? {} : { control: request.control }) }
   } catch (error) {
-    return { id: request.id ?? null, ok: false, error: String(error?.message ?? error) }
+    return { id: request?.id ?? null, ok: false, error: String(error?.message ?? error),
+      delivery: error?.delivery ?? 'not_started',
+      ...(request?.control === undefined ? {} : { control: request.control }) }
   }
 }
 

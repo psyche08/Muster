@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 
-import { Bridge, PROTOCOL, apply, parseAnswers, serve, socketPath } from '../index.js'
+import { Bridge, PROTOCOL, CONTROL_VERSION, apply, parseAnswers, serve, socketPath } from '../index.js'
 
 function host() {
   const calls = []
@@ -42,6 +42,82 @@ const approval = (signal) => ({
 })
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5))
+
+function bound(bridge, op, extra = {}) {
+  return { id: 'call-1', op, ...extra, control: { version: CONTROL_VERSION,
+    domain: 'app', epoch: bridge.epoch, operationId: 'operation-a', sessionId: 'session-a' } }
+}
+
+test('the local contract binds App capabilities, epoch and session before host calls', async () => {
+  const ctx = host()
+  const bridge = new Bridge(ctx)
+  const hello = await bridge.handle({ op: 'hello' })
+  assert.equal(hello.protocol, 1, 'legacy protocol stays stable')
+  assert.equal(hello.control.domain, 'app')
+  assert.ok(hello.control.capabilities.includes('prompt.lookup'))
+  for (const [field, value] of [['domain', 'cli'], ['epoch', 'old'], ['version', 2]]) {
+    const req = bound(bridge, 'prompt', { sessionId: 'session-a', requestId: 'r1', text: 'hello' })
+    req.control[field] = value
+    await assert.rejects(bridge.handle(req), /binding/)
+  }
+  await assert.rejects(bridge.handle(bound(bridge, 'prompt', {
+    sessionId: 'session-b', requestId: 'r1', text: 'hello',
+  })), /another session/)
+  await assert.rejects(bridge.handle(bound(bridge, 'set-model')), /not offered/)
+  assert.equal(ctx.calls.length, 0)
+  await bridge.handle(bound(bridge, 'prompt', { sessionId: 'session-a', requestId: 'r1', text: 'hello' }))
+  assert.equal(ctx.calls.length, 1)
+})
+
+test('lookup projects only native user receipts and never resumes or prompts', async () => {
+  const ctx = host()
+  ctx.agents.get = (id) => id === 'session-a' ? {
+    inbox: { nextTurn: [{ source: { kind: 'user', rpcId: 'queued' } }], nextStep: [] },
+    session: { snapshotEvents: () => [
+      { type: 'user/message', data: { source: { kind: 'user', rpcId: 'received' } } },
+      { type: 'assistant/message', data: { source: { kind: 'user', rpcId: 'wrong' } } },
+    ] },
+  } : undefined
+  const bridge = new Bridge(ctx)
+  for (const requestId of ['queued', 'received', 'wrong', 'missing']) {
+    const result = await bridge.handle(bound(bridge, 'prompt.lookup', { sessionId: 'session-a', requestId }))
+    assert.equal(result.sessionId, 'session-a')
+    assert.equal(result.requestId, requestId)
+    assert.equal(result.records.length, ['queued', 'received'].includes(requestId) ? 1 : 0)
+  }
+  assert.deepEqual((await bridge.handle({ op: 'prompt.lookup', sessionId: 'cold', requestId: 'received' })).records, [])
+  assert.equal(ctx.calls.length, 0)
+})
+
+test('host failures retain an unknown outcome, while validation is not submitted', async () => {
+  const ctx = host()
+  ctx.sessionController.prompt = async () => { throw new Error('lost host response') }
+  const bridge = new Bridge(ctx)
+  await assert.rejects(bridge.handle(bound(bridge, 'prompt', {
+    sessionId: 'session-a', requestId: 'r1', text: 'hello',
+  })), (error) => error.delivery === 'unknown')
+  await assert.rejects(bridge.handle(bound(bridge, 'prompt', {
+    sessionId: 'session-a', requestId: 'r1', text: '',
+  })), (error) => error.delivery === undefined)
+  await assert.rejects(bridge.handle(null), /object/)
+})
+
+test('an interaction is session-bound and consumed before a concurrent second answer', async () => {
+  const bridge = new Bridge(host())
+  const outcome = bridge.offer(bridge.approvals, approval(new AbortController().signal),
+    () => new Promise(() => {}), () => ({}), () => false)
+  await tick()
+  const [id] = bridge.approvals.keys()
+  const other = bound(bridge, 'approve', { approvalId: id, outcome: 'rejected' })
+  other.control.sessionId = 'session-b'
+  await assert.rejects(bridge.handle(other), /another session/)
+  const req = bound(bridge, 'approve', { approvalId: id, outcome: 'rejected' })
+  const first = bridge.handle(req)
+  const second = bridge.handle(req)
+  await first
+  await assert.rejects(second, /no such approval/)
+  assert.equal(await outcome, 'rejected')
+})
 
 test('state lists live sessions and what waits for a person', async () => {
   const bridge = new Bridge(host())

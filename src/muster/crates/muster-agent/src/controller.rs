@@ -98,6 +98,11 @@ pub trait Controller: Send + Sync {
         ))
     }
     async fn send(&self, text: &str) -> Result<(), Error>;
+    /// Read-only host evidence for an existing, exactly ledger-bound send.
+    /// Never creates a controller, resumes a session or repeats a mutation.
+    async fn lookup_send(&self, _operation: &str) -> Result<bool, Error> {
+        Ok(false)
+    }
     /// Explicitly release the unconfirmed write named by `operation` before
     /// the next send. This is not evidence of delivery or non-delivery.
     /// Controllers without such a latch have nothing to release.
