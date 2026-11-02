@@ -7,7 +7,7 @@ Terminal. Activity contains execution traces, subagents, and related sessions.
 The iOS shell retains native navigation bars and confirmation/result sheets.
 The trace page itself is shared with the Mac: a time overview, a turn-grouped
 ledger and a record inspector, styled after DeepSeek Harness's Trajectory page;
-see [ADR 0083](adr/0083-dsh-session-chrome-and-trace.md).
+see [ADR 0086](adr/0086-dsh-session-chrome-and-trace.md).
 
 A complete top-level `sh`, `bash`, `shell`, or `zsh` Markdown fence in a user or
 assistant text message can be reviewed for execution. Rust projects the original

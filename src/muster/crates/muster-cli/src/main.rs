@@ -235,7 +235,7 @@ enum Command {
     },
     /// Ask macOS for Accessibility (drives the Claude desktop app); prints the state
     Accessibility,
-    /// A platform diagnostic: ax-dump [pid|App], ax-sessions [pid|App], ax-chat [Claude|ChatGPT], ax-chat-mode "<Claude|ChatGPT> <chat|code>", procs <suffix>, locked-use, lock, lock-field, unlock-probe, unlock-key-probe
+    /// A platform diagnostic: ax-dump [pid|App], ax-sessions [pid|App], ax-chat [Claude|ChatGPT], ax-chat-mode "<Claude|ChatGPT> <chat|code>", procs <suffix>, locked-use, lock, lock-field, unlock-probe, unlock-key-probe, idle-compact [on|off|status]
     Debug {
         what: String,
         #[arg(default_value = "")]

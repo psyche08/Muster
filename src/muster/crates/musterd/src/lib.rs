@@ -19,6 +19,7 @@ mod presence;
 pub mod web;
 
 mod diagnostics;
+mod idle_compact;
 mod inspection;
 #[cfg(target_os = "macos")]
 mod plugin_install;
@@ -441,6 +442,8 @@ impl Daemon {
             daemon.tasks.lock().unwrap().push(bridge);
             let plugin = tokio::spawn(agent_bridge::deepseek_plugin(agent.clone()));
             daemon.tasks.lock().unwrap().push(plugin);
+            let compact = tokio::spawn(idle_compact::run(Arc::downgrade(&daemon)));
+            daemon.tasks.lock().unwrap().push(compact);
         }
         log::info!(
             "musterd {} ({}) as {} [{}], socket {}; {BUILD_STAMP}",
