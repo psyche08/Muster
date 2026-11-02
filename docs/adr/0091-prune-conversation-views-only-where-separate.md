@@ -1,7 +1,7 @@
 # ADR 0091: Prune conversation views only in apps that expose them apart
 
 - Date: 2026-11-02
-- Status: Accepted; source verified; device acceptance pending
+- Status: Accepted; device acceptance passed on desktop 1.1.11
 - Related: [ADR 0080](0080-session-list-scan-prunes-conversation-views.md)
   (refined here), [ADR 0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md),
   [ADR 0089](0089-paired-release-1-1-10.md), [APP_PROFILES](../APP_PROFILES.md)
@@ -91,8 +91,20 @@ app profile cannot inherit the wrong layout silently.
   Codex declares false.
 - `cargo check -p muster-platform --all-targets` and
   `cargo clippy -p muster-platform --all-targets` pass on macOS.
-- The daemon-log evidence above is from the installed 1.1.10 build; the fix
-  needs an installed build and one remote send to a Codex session that is not
-  the open one. No real conversation is used as a release test.
+- The daemon-log evidence above is from the installed 1.1.10 build.
+- **Device acceptance (2026-11-02 17:17 CST, desktop 1.1.11 build
+  `d2246e48`).** A send to Codex session `01a19b8a` that was not the open
+  conversation: the session scan completed with one web area and
+  `target_found=false`; the sidebar scan then reported
+  `navigation_areas=1 conversation_views=0` over 101 rows with one candidate,
+  pressed that row (`select_press`, 3 ms), and the send was recorded `applied`
+  two seconds later. Two further sends in the same window (`01a18c74` at
+  17:23:42, `01a1874d` at 17:38:18) likewise selected a non-open Codex session
+  from the sidebar and applied. The same path on 1.1.10 failed with
+  `navigation_areas=0 conversation_views=1` and `desktop content is not ready`.
+  No real conversation was used as a release test beyond these owner-initiated
+  sends.
 - Build, signing, notarization, publication and installation are recorded in
-  the paired-release ADR for the version that ships this change.
+  ADR 0092. Installation is on two of the three Macs; the third runs 1.1.10 and
+  receives 1.1.11 through the signed feed, so this acceptance comes from the
+  installed builds, not from a source-only test.
