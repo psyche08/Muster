@@ -1,4 +1,4 @@
-//! Desktop Chat mode on macOS (docs/AGENT_INTERFACE.md): the Claude app's
+//! Desktop Chat mode on macOS (docs/DESKTOP_CHAT_MODE.md): the Claude app's
 //! "Claude" mode and the ChatGPT app's ChatGPT mode, driven through
 //! Accessibility only. This file reads the element tree into a snapshot and
 //! presses what Shared Rust (`muster_agent::desktop_chat`) picked from it.

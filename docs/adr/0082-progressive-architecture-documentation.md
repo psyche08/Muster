@@ -1,4 +1,4 @@
-# ADR 0082: Progressive disclosure for the architecture document
+# ADR 0082: Progressive disclosure for long reference documents
 
 - Date: 2026-11-02
 - Status: Accepted
@@ -40,6 +40,22 @@ AGENTS.md, `docs/README.md`, `P0-validation.md` and `src/muster/README.md`
 point at the new locations, and `docs/README.md` records progressive disclosure
 as a documentation convention.
 
+Three other reference documents mixed their rules with long dated records. The
+records move, unchanged, into `docs/validation/`, and each document links to
+them:
+
+| Document | Before → after | Moved to |
+|---|---|---|
+| `DESKTOP_UPDATES.md` | 3,181 → 303 lines | `validation/DESKTOP-RELEASES-2026-09-29-TO-10-26.md`: every dated release record (1.0.15–1.0.94). Later releases already live in their own ADRs, and new ones go there. |
+| `AGENT_INTERFACE.md` | 1,378 → 388 lines | 14 dated verification, diagnosis and incident sections into `validation/AGENT-INTERFACE-RECORDS-2026-09-28-TO-10-27.md`, listed by link at the end. The 325-line Desktop Chat mode specification becomes its own `DESKTOP_CHAT_MODE.md`. |
+| `LOCKED_USE.md` | 701 → 524 lines | §7, the 2026-09-28 device deployment record, into `validation/LOCKED-USE-DEPLOYMENT-2026-09-28.md`; the §7 heading stays and links to it. |
+
+Interface rules stay in place, including the dated sections that define
+behavior (conversation styles, composer attachments, user-confirmed answer
+delivery). Incoming anchor links (`CONVERSATION_WORKBENCH.md`, §8.7 in
+`architecture/status.md`) and the `native_chat.rs` module comment point at
+the new files.
+
 ## Alternatives
 
 - **Trim the file in place.** Most of its length is records that later work
@@ -56,17 +72,19 @@ as a documentation convention.
 
 - A change reads the entry page plus the parts it touches.
 - A new section goes into the part that owns its topic, with a row in the map.
-- Other long documents have the same problem and are not changed here:
-  `DESKTOP_UPDATES.md` (3,181 lines, 2,888 of them a release log under
-  "Acceptance boundaries"), `AGENT_INTERFACE.md` (1,378 lines, mostly dated
-  verification records among the interface rules) and `LOCKED_USE.md` (701
-  lines, with a 182-line deployment record).
+- Dated evidence goes into `docs/validation/` or an ADR, not into a reference
+  document.
+- `LOCKED_USE.md` §1 (246 lines of confirmed direction) is still long, but it is
+  the specification itself and was left whole.
 
 ## Verification
 
 - Documentation only; no build or runtime change.
-- The moved text was compared with the original: apart from the heading levels,
-  the `../` link prefixes and one line in the §3.9 tree, it is identical.
-- Every relative link in `docs/ARCHITECTURE.md` and `docs/architecture/` resolves
-  to an existing file.
+- For each split document, every non-blank line of the original is present in
+  the new files. Heading levels and `../` link prefixes were normalized before
+  comparing. The only exceptions are intended edits: the architecture status
+  line, the §3.2/§3.9 pointer and one line of the §3.9 tree, and the retitled
+  Desktop Chat mode heading.
+- Every relative link and every heading anchor in `docs/` (except
+  `docs/history/`), AGENTS.md and `src/muster/README.md` resolves.
 - `scripts/check-adr.sh origin/main` and `scripts/check-public-content.py`.
