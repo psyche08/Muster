@@ -277,6 +277,8 @@ struct Lease {
     /// while its requester signs each next window, ended by idleness.
     terminal: bool,
     device: bool,
+    /// This Mac's own lease (ADR 0087): nobody signed it.
+    unattended: bool,
     initial_screen: Screen,
     // A signed manual lease can cover an already unlocked console. This is
     // distinct from plugin consumption and carries its own relock obligation.
@@ -481,6 +483,62 @@ impl Gate {
         )
     }
 
+    /// This Mac's own lease for one unattended operation in one provider's app
+    /// (ADR 0087). Nobody signs it: `arm_unattended` admits it on this Mac's
+    /// local switches alone. Every other rule is unchanged: a freshly observed
+    /// locked console, one plugin consumption, an observed unlock, the cover,
+    /// the watchdog, local input, the deadline and a confirmed relock. No key
+    /// can arm it, and it never binds a provider queue.
+    #[allow(clippy::too_many_arguments)]
+    pub fn issue_unattended(
+        &mut self,
+        state: &State,
+        policy: &LocalPolicy,
+        provider: &str,
+        turn: &str,
+        operation: [u8; 32],
+        ttl: Duration,
+        now: Instant,
+        observation: Observation,
+    ) -> Result<Challenge, Error> {
+        self.issue_with_proof(
+            state,
+            policy,
+            self.target,
+            Scope::Unattended { provider },
+            turn,
+            operation,
+            ttl,
+            now,
+            observation,
+        )
+    }
+
+    pub fn is_unattended(&self) -> bool {
+        self.lease.as_ref().is_some_and(|l| l.unattended)
+    }
+
+    /// Arms the outstanding unattended lease in place of a signature, after
+    /// the same live checks `arm` makes.
+    pub fn arm_unattended(
+        &mut self,
+        state: &State,
+        policy: &LocalPolicy,
+        now: Instant,
+        observation: Observation,
+    ) -> Result<Directive, Error> {
+        if self.phase != Phase::AwaitingSignature || !self.is_unattended() {
+            return Err(reject("no unattended lease to arm"));
+        }
+        self.check(state, policy, now, observation, false)?;
+        if observation.screen != self.lease.as_ref().unwrap().initial_screen {
+            self.stop(StopReason::UnexpectedScreenState, now);
+            return Err(reject("console was unlocked outside this transaction"));
+        }
+        self.phase = Phase::Armed;
+        Ok(Directive::PrepareCoverAndWatchdog)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn issue_with_proof(
         &mut self,
@@ -500,13 +558,14 @@ impl Gate {
         validate_turn(turn)?;
         validate_ttl(ttl)?;
         let keys = authorization(state, policy, self.target, requester, scope)?;
-        let (provider, inspection, terminal, device) = match scope {
+        let (provider, inspection, terminal, device, unattended) = match scope {
             Scope::Agent {
                 provider,
                 inspection,
-            } => (provider, inspection, false, false),
-            Scope::Terminal => ("", false, true, false),
-            Scope::Device => ("", false, false, true),
+            } => (provider, inspection, false, false, false),
+            Scope::Terminal => ("", false, true, false, false),
+            Scope::Device => ("", false, false, true, false),
+            Scope::Unattended { provider } => (provider, false, false, false, true),
         };
         if !fresh(now, observation.at)
             || (observation.screen != Screen::Locked
@@ -543,6 +602,7 @@ impl Gate {
             provider: provider.to_owned(),
             terminal,
             device,
+            unattended,
             initial_screen: observation.screen,
             covered_unlocked: false,
             renewal: None,
@@ -571,7 +631,7 @@ impl Gate {
             return Err(reject("invalid provider queue scope or already armed"));
         }
         let lease = self.lease.as_mut().ok_or_else(|| reject("no challenge"))?;
-        if lease.inspection || lease.terminal || lease.device {
+        if lease.inspection || lease.terminal || lease.device || lease.unattended {
             return Err(reject(
                 "read-only inspection cannot authorize a provider queue",
             ));
@@ -1014,6 +1074,10 @@ impl Gate {
             Scope::Device
         } else if lease.terminal {
             Scope::Terminal
+        } else if lease.unattended {
+            Scope::Unattended {
+                provider: &lease.provider,
+            }
         } else {
             Scope::Agent {
                 provider: &lease.provider,
@@ -1113,6 +1177,10 @@ enum Scope<'a> {
     /// Terminal control: a session kept unlocked for one terminal.
     Terminal,
     Device,
+    /// This Mac's own unattended operation in one provider's app.
+    Unattended {
+        provider: &'a str,
+    },
 }
 
 fn authorization(
@@ -1122,6 +1190,9 @@ fn authorization(
     requester: DeviceId,
     scope: Scope,
 ) -> Result<OperationKeys, Error> {
+    if let Scope::Unattended { provider } = scope {
+        return unattended(state, policy, target, requester, provider);
+    }
     if target == requester || state.active(&target).is_none() {
         return Err(reject("target is not an active remote member"));
     }
@@ -1138,7 +1209,7 @@ fn authorization(
             inspection,
         ),
         Scope::Terminal => (Some(Permission::Terminal { control: true }), false),
-        Scope::Device => (None, false),
+        Scope::Device | Scope::Unattended { .. } => (None, false),
     };
     if authorize(
         state,
@@ -1154,7 +1225,7 @@ fn authorization(
         return Err(reject(match scope {
             Scope::Agent { .. } => "locked.control and Agents for this provider are required",
             Scope::Terminal => "locked.control and Terminal control are required",
-            Scope::Device => "locked.control is required",
+            Scope::Device | Scope::Unattended { .. } => "locked.control is required",
         }));
     }
     let record = &state
@@ -1172,6 +1243,36 @@ fn authorization(
         ));
     }
     Ok(keys)
+}
+
+/// An unattended lease has no requester to authorize: only this Mac, while
+/// it is an active member, allows Locked Use and offers agents, and lets the
+/// controller drive this provider's app. No key is enrolled for it.
+fn unattended(
+    state: &State,
+    policy: &LocalPolicy,
+    target: DeviceId,
+    requester: DeviceId,
+    provider: &str,
+) -> Result<OperationKeys, Error> {
+    if requester != target || state.active(&target).is_none() {
+        return Err(reject(
+            "an unattended lease belongs to this active Mac alone",
+        ));
+    }
+    let app = crate::apps::app(provider).ok_or_else(|| reject("unknown provider app"))?;
+    if !policy.allow_locked_control
+        || !policy.offer_agent
+        || !policy.ax_allowlist.iter().any(|id| id == app.bundle_id)
+    {
+        return Err(reject(
+            "this Mac does not allow unattended Locked Use of this app",
+        ));
+    }
+    Ok(OperationKeys {
+        presence: None,
+        phone: None,
+    })
 }
 
 fn random() -> Result<[u8; 32], Error> {

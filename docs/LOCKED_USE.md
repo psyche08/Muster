@@ -13,6 +13,25 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
+### 2026-11-02: this Mac's own unattended lease for idle compaction
+
+[ADR 0087](adr/0087-idle-compaction-on-a-locked-or-busy-mac.md) adds one
+exception to "every temporary unlock needs a person's Presence signature".
+The person chose it for idle compaction. The daemon's idle-compaction loop may
+issue a lease to its own Mac for exactly one operation: `/compact` in one idle
+Claude Code conversation.
+
+- **No key arms it.** Only this Mac's local switches admit it:
+  `allow_locked_control`, `offer_agent`, the provider's app in
+  `ax_allowlist`, and idle compaction.
+- **Checked throughout.** Every gate tick and OS call checks the switches
+  again.
+- **Closed to everyone else.** It accepts no provider queue and no remote
+  request, and no RPC can start it.
+- **Cleanup is unchanged.** It keeps the cover, the watchdog, plugin
+  consumption, the 15 s window, the local-input stop and the relock-before-
+  release order.
+
 ### 2026-10-21: desktop enrollment and console-based routing
 
 This decision supersedes the October 10 requirement that an already unlocked

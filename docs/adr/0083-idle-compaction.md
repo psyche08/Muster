@@ -1,7 +1,9 @@
 # ADR 0083: Compact idle Claude Code conversations once, opt-in
 
 - Date: 2026-11-02
-- Status: Accepted; source and tests verified, device acceptance pending
+- Status: Accepted; source and tests verified, device acceptance pending.
+  Amended by [ADR 0087](0087-idle-compaction-on-a-locked-or-busy-mac.md):
+  a locked or busy Mac now compacts too.
 - Related: [ADR 0007](0007-desktop-manual-locked-use.md),
   [ADR 0045](0045-native-send-fast-path.md),
   [ADR 0063](0063-queue-receipts-use-provider-text-matching.md),

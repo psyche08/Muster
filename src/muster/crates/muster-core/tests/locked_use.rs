@@ -1702,3 +1702,165 @@ fn manual_maintenance_cannot_revive_expired_or_uncovered_console() {
             .is_err()
     );
 }
+
+impl Fixture {
+    fn target(&self) -> DeviceId {
+        self.admin.public_key().device_id()
+    }
+
+    fn issue_unattended(&mut self, provider: &str) -> Result<Challenge, muster_core::Error> {
+        self.gate.issue_unattended(
+            self.roster.state(),
+            &self.policy,
+            provider,
+            "idle-compact-1",
+            [5; 32],
+            MAX_TTL,
+            self.now,
+            self.observation,
+        )
+    }
+
+    /// This Mac's own lease, armed without a signature, unlocked and admitted.
+    fn unattended_active(&mut self) -> Challenge {
+        let c = self.issue_unattended("claude").unwrap();
+        assert_eq!(
+            self.gate
+                .arm_unattended(
+                    self.roster.state(),
+                    &self.policy,
+                    self.now,
+                    self.observation
+                )
+                .unwrap(),
+            Directive::PrepareCoverAndWatchdog
+        );
+        self.observation.cover_nonce = Some(*c.nonce());
+        self.observation.watchdog_nonce = Some(*c.nonce());
+        self.consume(&c).unwrap();
+        self.gate
+            .plugin_finished(c.nonce(), PluginOutcome::Allowed, self.now)
+            .unwrap();
+        self.tick(1);
+        self.observation.screen = Screen::Unlocked;
+        assert_eq!(self.poll(), Directive::ReadyForAction);
+        c
+    }
+}
+
+#[test]
+fn an_unattended_lease_is_armed_by_local_switches_and_never_by_a_signature() {
+    let mut f = Fixture::new();
+    let target = f.target();
+    let c = f.issue_unattended("claude").unwrap();
+    assert!(f.gate.is_unattended());
+    // No key arms it: not the phone's, not Presence, not this Mac's own.
+    for signer in [&f.phone, &f.presence, &f.admin] {
+        let signature = signer.sign(&c.signing_message()).unwrap();
+        for requester in [target, f.peer] {
+            assert!(
+                f.gate
+                    .arm(
+                        f.roster.state(),
+                        &f.policy,
+                        requester,
+                        &c,
+                        &signature,
+                        f.now,
+                        f.observation
+                    )
+                    .is_err()
+            );
+        }
+    }
+    // It cannot become a provider queue.
+    assert!(f.gate.bind_provider_queue("claude").is_err());
+    // A signed lease cannot be armed as an unattended one.
+    let mut signed = Fixture::new();
+    signed.issue();
+    assert!(
+        signed
+            .gate
+            .arm_unattended(
+                signed.roster.state(),
+                &signed.policy,
+                signed.now,
+                signed.observation
+            )
+            .is_err()
+    );
+
+    let mut f = Fixture::new();
+    let target = f.target();
+    f.unattended_active();
+    assert!(f.action(f.peer, "idle-compact-1", &[5; 32]).is_err());
+    assert!(f.action(target, "idle-compact-1", &[6; 32]).is_err());
+    f.action(target, "idle-compact-1", &[5; 32]).unwrap();
+    assert!(f.action(target, "idle-compact-1", &[5; 32]).is_err());
+    assert!(
+        f.gate
+            .take_queued_action(
+                target,
+                "claude",
+                f.roster.state(),
+                &f.policy,
+                f.now,
+                f.observation
+            )
+            .is_err()
+    );
+    assert_eq!(
+        f.gate.stop(StopReason::Completed, f.now),
+        Directive::LockAndKeepCovered(StopReason::Completed)
+    );
+    f.tick(1);
+    f.observation.screen = Screen::Locked;
+    assert_eq!(f.poll(), Directive::ReleaseCover);
+    assert_eq!(f.gate.phase(), Phase::Idle);
+}
+
+#[test]
+fn local_switches_and_a_locked_console_gate_an_unattended_lease() {
+    type Change = fn(&mut Fixture);
+    let refused: &[Change] = &[
+        |f| f.policy.allow_locked_control = false,
+        |f| f.policy.offer_agent = false,
+        |f| f.policy.ax_allowlist.clear(),
+        |f| f.observation.screen = Screen::Unlocked,
+        |f| f.observation.input_generation = None,
+    ];
+    for change in refused {
+        let mut f = Fixture::new();
+        change(&mut f);
+        assert!(f.issue_unattended("claude").is_err());
+    }
+    assert!(Fixture::new().issue_unattended("unknown").is_err());
+
+    // Turning a switch off, or touching the Mac, stops a running lease.
+    let revoked: &[(Change, StopReason)] = &[
+        (
+            |f| f.policy.allow_locked_control = false,
+            StopReason::AuthorizationChanged,
+        ),
+        (
+            |f| f.policy.offer_agent = false,
+            StopReason::AuthorizationChanged,
+        ),
+        (
+            |f| f.observation.input_generation = Some(8),
+            StopReason::LocalInput,
+        ),
+        (
+            |f| f.observation.watchdog_nonce = None,
+            StopReason::WatchdogLost,
+        ),
+    ];
+    for (change, reason) in revoked {
+        let mut f = Fixture::new();
+        let target = f.target();
+        f.unattended_active();
+        change(&mut f);
+        assert_eq!(f.poll(), Directive::LockAndKeepCovered(*reason));
+        assert!(f.action(target, "idle-compact-1", &[5; 32]).is_err());
+    }
+}

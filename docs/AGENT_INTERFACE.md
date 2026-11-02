@@ -378,15 +378,26 @@ window the provider's prompt cache is still warm. Only conversations that are
 qualify. `off` disables it, and `status` reports it. The setting is local to
 the Mac and absent means off.
 
-- **When it runs.** One conversation per 60 s tick, never while the screen is
-  locked, without Accessibility, within 2 minutes of local keyboard or mouse
-  input, or while Locked Use holds the console. It takes the session's queue
-  and the same native navigation and write as a send.
+- **When it runs.** One conversation per 60 s tick. Only missing
+  Accessibility stops it ([ADR 0087](adr/0087-idle-compaction-on-a-locked-or-busy-mac.md)).
+  It takes the session's queue and the same native navigation and write as a
+  send.
+  - **Locked Mac.** The daemon issues its own unattended Locked Use lease.
+    Nobody signs it, and it can only type `/compact` into that one
+    conversation. It needs the Mac's Locked Use, agent-control and
+    Accessibility-allowlist switches. The lease unlocks under cover, compacts,
+    and relocks. With Locked Use off, a locked Mac waits for an unlock.
+  - **Mac in use.** A notice appears at the top right of the screen. The
+    daemon waits up to 30 s for a 1 s pause in local input, then compacts.
+    The notice closes once the transcript shows the compaction, at most
+    3 minutes later. It closes at once when nothing was pressed.
+  - **Locked Use busy.** The daemon looks again on the next tick.
 - **Drafts.** A different draft in the prompt is kept, and the attempt is
   refused as a conflict.
-- **Repeats.** Each idle period gets one attempt, and new activity opens the
-  next one. A conversation whose newest transcript record is a compaction is
-  skipped, which also holds after a daemon restart.
+- **Repeats.** Each idle period gets at most one press. An attempt that
+  ended before any press may run again, up to three times. New activity opens
+  the next period. A conversation whose newest transcript record is a
+  compaction is skipped, which also holds after a daemon restart.
 - **Receipts.** A Claude command record (`<command-name>/compact</command-name>`
   with empty `<command-args>`) now confirms a typed `/compact`. Claude writes
   it after compacting, so the attempt normally ends as an unknown outcome. The

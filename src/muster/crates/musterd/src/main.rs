@@ -63,6 +63,12 @@ fn main() -> anyhow::Result<()> {
             return muster_platform::macos::locked_use::watchdog(&args[2..])
                 .map_err(anyhow::Error::msg);
         }
+        if args
+            .get(1)
+            .is_some_and(|a| a == muster_platform::macos::notice::FLAG)
+        {
+            return muster_platform::macos::notice::run().map_err(anyhow::Error::msg);
+        }
     }
     tokio::runtime::Runtime::new()?.block_on(run())
 }

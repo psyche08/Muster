@@ -1,5 +1,6 @@
-//! Builds the macOS-only console OS shim, and (with `sep`) the Secure
-//! Enclave Swift adapter. Other hosts and targets never link these adapters.
+//! Builds the macOS-only console OS shim and notice panel, and (with `sep`)
+//! the Secure Enclave Swift adapter. Other hosts and targets never link these
+//! adapters.
 //! Module caches live under Cargo OUT_DIR, keeping builds sandbox-compatible.
 
 use std::env;
@@ -17,29 +18,38 @@ fn main() {
     }
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-    let shim = manifest.join("../../../native/apple/MusterMacShim/Sources/LockedUse/Console.m");
-    println!("cargo:rerun-if-changed={}", shim.display());
-    assert!(
-        Command::new("xcrun")
-            .args([
-                "clang",
-                "-mmacosx-version-min=14.0",
-                "-fobjc-arc",
-                "-O2",
-                "-c"
-            ])
-            .arg(&shim)
-            .arg("-o")
-            .arg(out.join("console.o"))
-            .status()
-            .unwrap()
-            .success()
-    );
+    let sources = manifest.join("../../../native/apple/MusterMacShim/Sources");
+    let mut objects = Vec::new();
+    for (source, object) in [
+        ("LockedUse/Console.m", "console.o"),
+        ("Notice/Notice.m", "notice.o"),
+    ] {
+        let shim = sources.join(source);
+        println!("cargo:rerun-if-changed={}", shim.display());
+        assert!(
+            Command::new("xcrun")
+                .args([
+                    "clang",
+                    "-mmacosx-version-min=14.0",
+                    "-fobjc-arc",
+                    "-O2",
+                    "-c"
+                ])
+                .arg(&shim)
+                .arg("-o")
+                .arg(out.join(object))
+                .status()
+                .unwrap()
+                .success()
+        );
+        objects.push(out.join(object));
+    }
+    let _ = std::fs::remove_file(out.join("libmuster_console.a"));
     assert!(
         Command::new("ar")
             .arg("rcs")
             .arg(out.join("libmuster_console.a"))
-            .arg(out.join("console.o"))
+            .args(&objects)
             .status()
             .unwrap()
             .success()
