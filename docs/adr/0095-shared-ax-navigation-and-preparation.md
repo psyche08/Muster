@@ -87,3 +87,30 @@ pending: the local console was locked during the read-only probe. Existing
 installation logs are diagnostic evidence, not acceptance of this source.
 Production build/signing/notarization results are reported separately with the
 artifact's source commit; no publication or installation is implied by tests.
+
+### Installation evidence — 2026-11-02
+
+The owner subsequently authorized installation and attended phone acceptance.
+The local Mac now runs source `700870b6609b88ac024789c1d6ce727ba02efc12` in
+desktop 1.1.11 (101). The existing Rust update lease admitted replacement;
+the installer preserved the previous bundle and verified unchanged device
+identity, fingerprint and Secure Enclave backend. Accessibility is granted,
+Locked Use setup reports ready, Vnet is up and the relay is registered. The
+console remains locked. No public feed or iOS release was published.
+
+The first installation correctly failed its version check: the notarized raw
+Xcode bundle omitted Velopack's `sq.version` and `UpdateMac`, so the daemon
+reported its crate version, 0.1.0. The same clean source was repackaged using
+the existing pinned Velopack 1.2.158 process, signed and notarized again, then
+installed through a new update lease. Runtime now reports 1.1.11. No Keychain
+unlock or credential bypass was used. The raw artifact is superseded.
+
+- Corrected notarization: `cbffb7e9-8f64-492e-b828-30f52d9c8857`, Accepted;
+  stapling, strict signature and Gatekeeper checks passed.
+- Installed daemon SHA-256:
+  `bdb54b24406f2aa7aaef2906393a95384b32f0554c3d89fe96d473acfb8c37d8`.
+- Dedicated native-App sending and repeated lock/unlock/navigation/send/relock
+  acceptance remain pending. The owner selected an enrolled phone as requester;
+  one uniquely marked send was requested, with explicit instructions not to
+  resend an unknown result. Installation and ready-state probes do not count
+  as a provider send, duplicate check or successful relock-after-send test.
