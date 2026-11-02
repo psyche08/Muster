@@ -14,7 +14,7 @@ use crate::jsonl::{Hooks, JsonlViewer};
 use crate::model::{Message, Provider, Role, SessionMeta, SessionState, title_from};
 use crate::profile::Records;
 use crate::text::{is_wrapper, strip_hidden_blocks};
-use crate::viewer::{Discovered, head_records, is_uuid};
+use crate::viewer::{Discovered, HeadCache, head_records, is_uuid};
 
 /// The transcript record grammar (`profiles/claude.toml`).
 pub fn records() -> &'static Records {
@@ -108,7 +108,17 @@ const MAX_FILES: usize = 10_000;
 mod sessions;
 pub use sessions::apply_desktop_relationships;
 
-pub fn scan(home: &Path) -> Vec<Discovered> {
+/// The heads a provider's scans have read, kept between rescans.
+#[derive(Default)]
+pub struct Heads(HeadCache<Head>);
+
+pub fn scan(home: &Path, heads: &mut Heads) -> Vec<Discovered> {
+    let found = discover(home, &mut heads.0);
+    heads.0.finish();
+    found
+}
+
+fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
     let projects = home.join("projects");
     let Ok(rd) = std::fs::read_dir(&projects) else {
         return Vec::new();
@@ -192,7 +202,7 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
             if by_id.get(&id).is_some_and(|d| d.modified >= modified) {
                 continue;
             }
-            let head = Head::read(&path);
+            let head = heads.get(&path, modified, meta.len(), Head::read);
             let title = head
                 .title
                 .clone()
@@ -594,7 +604,7 @@ pub fn refreshed_title(path: &Path, prior: (String, bool)) -> (String, bool) {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Head {
     cwd: Option<PathBuf>,
     title: Option<String>,
@@ -807,7 +817,7 @@ mod tests {
         writeln!(f, r#"{{"type":"user","uuid":"u2","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tool-1","content":"contents"}}]}}}}"#).unwrap();
         writeln!(f, r#"{{"type":"user","uuid":"side","isSidechain":true,"message":{{"role":"user","content":"hidden"}}}}"#).unwrap();
 
-        let found = scan(home);
+        let found = scan(home, &mut Heads::default());
         assert_eq!(found.len(), 2);
         let main = found.iter().find(|d| d.id == id).unwrap();
         assert_eq!(main.meta.title, "Muster migration");
@@ -872,7 +882,7 @@ mod tests {
         let mut f = std::fs::File::create(project.join(format!("{id}.jsonl"))).unwrap();
         writeln!(f, r#"{{"type":"user","uuid":"u1","cwd":"/repo","origin":{{"kind":"human"}},"entrypoint":"claude-desktop","message":{{"role":"user","content":"\n\n<pasted_content id=\"fe42\">\nAnalyze the failures.\n</pasted_content id=\"fe42\">\n"}}}}"#).unwrap();
         writeln!(f, r#"{{"type":"assistant","uuid":"a1","message":{{"role":"assistant","stop_reason":"tool_use","content":[{{"type":"text","text":"Reading the logs."}}]}}}}"#).unwrap();
-        let found = scan(dir.path());
+        let found = scan(dir.path(), &mut Heads::default());
         let session = found.iter().find(|d| d.id == id).unwrap();
         assert_eq!(session.meta.title, "Analyze the failures.");
         let mut viewer = viewer(session);

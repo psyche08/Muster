@@ -13,7 +13,7 @@ use crate::jsonl::{Hooks, JsonlViewer};
 use crate::model::{Message, Provider, Role, SessionMeta, SessionState, title_from};
 use crate::profile::Records;
 use crate::text::{is_wrapper, strip_hidden_blocks};
-use crate::viewer::{Discovered, head_records, is_uuid};
+use crate::viewer::{Discovered, HeadCache, head_records, is_uuid};
 
 /// The rollout record grammar (`profiles/codex.toml`).
 pub fn records() -> &'static Records {
@@ -64,8 +64,18 @@ pub fn viewer(discovered: &Discovered) -> JsonlViewer {
 const MAX_FILES: usize = 10_000;
 const MAX_DEPTH: usize = 12;
 
+/// The heads a provider's scans have read, kept between rescans.
+#[derive(Default)]
+pub struct Heads(HeadCache<Head>);
+
 /// Every rollout under the two roots, with head metadata.
-pub fn scan(home: &Path) -> Vec<Discovered> {
+pub fn scan(home: &Path, heads: &mut Heads) -> Vec<Discovered> {
+    let found = discover(home, &mut heads.0);
+    heads.0.finish();
+    found
+}
+
+fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
     let titles = load_index(&home.join("session_index.jsonl"));
     let mut out = Vec::new();
     for (root, archived) in [
@@ -81,7 +91,8 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
             let Ok(meta) = std::fs::metadata(&path) else {
                 continue;
             };
-            let head = Head::read(&path);
+            let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let head = heads.get(&path, modified, meta.len(), Head::read);
             // Native CLI sessions are listed by the Rust Orca source. Their
             // Codex rollout is storage, not a second desktop session.
             if head.owned_by_muster {
@@ -99,7 +110,7 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
             out.push(Discovered {
                 id,
                 provider: Provider::Codex,
-                modified: meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                modified,
                 size: meta.len(),
                 archived,
                 hidden: head.hidden,
@@ -174,7 +185,7 @@ fn load_index(path: &Path) -> HashMap<String, String> {
     out
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Head {
     id: Option<String>,
     cwd: Option<PathBuf>,
@@ -347,7 +358,7 @@ mod tests {
                 .unwrap();
             }
         }
-        let found = scan(dir.path());
+        let found = scan(dir.path(), &mut Heads::default());
         assert_eq!(found.len(), 4);
         assert_eq!(found.iter().filter(|session| session.archived).count(), 2);
         assert!(found.iter().all(|session| !session.id.ends_with('0')));
@@ -383,7 +394,7 @@ mod tests {
         )
         .unwrap();
 
-        let found = scan(home);
+        let found = scan(home, &mut Heads::default());
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].id, id);
         assert_eq!(found[0].meta.title, "Remote Coding");
@@ -449,7 +460,7 @@ mod tests {
             format!(r#"{{"type":"session_meta","payload":{{"id":"{id}","source":{{"subagent":{{"kind":"review"}}}}}}}}"#),
         )
         .unwrap();
-        let found = scan(home);
+        let found = scan(home, &mut Heads::default());
         assert_eq!(found.len(), 1);
         assert!(found[0].archived);
         assert!(found[0].hidden);
