@@ -205,6 +205,8 @@ pub struct Daemon {
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
     plugin_setup: std::sync::atomic::AtomicU8,
     pub(crate) locked_use: Arc<locked_use::Owner>,
+    /// One task's bounded scheduler grant (ADR 0095).
+    pub(crate) scheduler: scheduler::Scheduler,
     config: DaemonConfig,
     store: Arc<Store>,
     signer: SharedSigner,
@@ -340,8 +342,10 @@ impl Daemon {
                     .unwrap_or_else(|| config.dir.join("desktop-locks")),
             )
         });
+        let scheduler = scheduler::Scheduler::load(&store);
         let daemon = Arc::new(Self {
             locked_use,
+            scheduler,
             multica: multica::Manager::new(&config.dir),
             config,
             store,
@@ -1223,3 +1227,4 @@ mod relay_text_tests {
 }
 
 mod native_create;
+mod scheduler;

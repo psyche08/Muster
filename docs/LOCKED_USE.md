@@ -13,6 +13,42 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
+### 2026-11-02: a task-scoped scheduler grant
+
+[ADR 0095](adr/0095-task-scoped-scheduler-grant-for-locked-use.md) adds a
+second kind of this Mac's own lease. A local supervisor can drive one task's
+Claude Desktop work while the Mac is locked, without a Presence signature per
+operation.
+
+- **Owned by one task.** The local owner grants it with the `agent_scheduler`
+  RPC. The grant fixes:
+  - the task id and the contract's SHA-256;
+  - one provider and one directory;
+  - the model and effort.
+
+  It lasts at most 24 hours and is never extended. It can be revoked at any
+  time. Only one task is live, and an ended task id is never granted again.
+- **Bounded.** At most 2 created sessions (a producer and a reviewer), 18
+  packages of which 6 are reviews, and 72 control operations. Counts are
+  stored and survive restarts. Later operations name only sessions bound by
+  their creation receipt.
+- **One reserved operation per lease.** Only a stored reservation opens a
+  scheduled lease. Its turn is the op_id and its digest binds the scope and
+  exact request. No key arms it. It binds no provider queue and accepts no
+  remote request. It is never the `/compact` lease, and that lease's
+  `arm_unattended` refuses it.
+- **Checked throughout.** Every gate tick and OS call rechecks the ADR 0087
+  switches. Every OS call also rechecks that the grant is still live.
+  Revocation or expiry stops the operation before its next OS call.
+- **Never preempts.** A console another Locked Use transaction owns is busy,
+  and the operation is refused before anything is reserved or sent.
+- **Short.** The lease holds one UI submit. A creation looks for its receipt
+  for at most 3 s inside it. Receipts that arrive later are reconciled
+  read-only after relock. Waiting for the model never holds a lease.
+- **Cleanup is unchanged.** It keeps the cover, the watchdog, plugin
+  consumption, the 15 s window, the local-input stop and the relock-before-
+  release order.
+
 ### 2026-11-02: this Mac's own unattended lease for idle compaction
 
 [ADR 0087](adr/0087-idle-compaction-on-a-locked-or-busy-mac.md) adds one

@@ -2109,3 +2109,161 @@ async fn late_agent_receipt_returns_after_relock_without_another_submission() {
     assert_eq!(run.entered.lock().unwrap().as_slice(), ["lost"]);
     daemon.shutdown().await;
 }
+
+/// This Mac's own scheduled lease for one reserved operation of task "t1"
+/// (ADR 0095), on the fixture's daemon with a fresh console.
+async fn scheduled(
+    daemon: &Arc<Daemon>,
+    op_id: &str,
+) -> (
+    Arc<Owner>,
+    Arc<Os>,
+    crate::scheduler::Job,
+    Arc<AtomicBool>,
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+) {
+    let os = Os::new();
+    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
+    let hold = Arc::new(AtomicBool::new(false));
+    let (reservation, job) = crate::scheduler::test_reservation(daemon, "t1", op_id, hold.clone());
+    let (task_owner, task_daemon, task_job) = (owner.clone(), daemon.clone(), job.clone());
+    let reply = tokio::spawn(async move {
+        task_owner
+            .scheduled(task_daemon, reservation, task_job)
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    (owner, os, job, hold, reply)
+}
+
+async fn authorize_unlock(owner: &Owner, os: &Os) {
+    let nonce = consume(owner).await;
+    assert!(owner.writes.clone().try_read_owned().is_err());
+    let tx = owner.current.lock().unwrap().clone().unwrap();
+    tx.send(Command::Terminal {
+        nonce,
+        allowed: true,
+    })
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    os.unlocked.store(true, Ordering::SeqCst);
+}
+
+async fn relocked(owner: &Owner, os: &Os) {
+    ended(owner).await;
+    assert!(os.released.load(Ordering::SeqCst));
+    assert!(!os.unlocked.load(Ordering::SeqCst));
+    assert!(os.locks.load(Ordering::SeqCst) > 0);
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+}
+
+#[tokio::test]
+async fn a_scheduled_lease_unlocks_under_cover_runs_its_one_operation_and_relocks() {
+    let (_dir, daemon, _owner, _os, _c, _key, peer, _job) = start().await;
+    let (owner, os, job, _hold, reply) = scheduled(&daemon, "op-s1").await;
+    assert!(os.unlock_started.load(Ordering::SeqCst));
+    assert!(!job.started());
+    // A signed phone request cannot join this task's lease.
+    let queued = owner
+        .enqueue(
+            &daemon,
+            peer,
+            send_request("missing", "hello", "op-2"),
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(queued, Some(Err(_))), "{queued:?}");
+    authorize_unlock(&owner, &os).await;
+    let resp = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let Resp::OpResult(r) = resp else {
+        panic!("{resp:?}")
+    };
+    assert_eq!(r.result_id, "probe-session");
+    assert!(job.started());
+    relocked(&owner, &os).await;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_revoked_grant_stops_its_scheduled_lease_before_the_desktop() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    let (owner, os, job, _hold, reply) = scheduled(&daemon, "op-s1").await;
+    crate::scheduler::test_revoke(&daemon, "t1");
+    authorize_unlock(&owner, &os).await;
+    let outcome = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert!(!job.started());
+    relocked(&owner, &os).await;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn local_input_stops_a_running_scheduled_operation_and_the_mac_relocks() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    let (owner, os, job, hold, reply) = scheduled(&daemon, "op-s1").await;
+    hold.store(true, Ordering::SeqCst);
+    authorize_unlock(&owner, &os).await;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !job.started() {
+        assert!(Instant::now() < deadline, "the operation did not start");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    os.input.store(1, Ordering::SeqCst);
+    hold.store(false, Ordering::SeqCst);
+    // The input arrived before the submit: provably nothing was sent.
+    let resp = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let Resp::OpResult(r) = resp else {
+        panic!("{resp:?}")
+    };
+    assert_eq!(r.status, v1::op_result::Status::Rejected as i32, "{r:?}");
+    assert!(r.message.contains("LocalInput"), "{r:?}");
+    ended(&owner).await;
+    assert!(os.released.load(Ordering::SeqCst));
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_scheduled_lease_never_preempts_a_console_another_owner_holds() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    let os = Os::new();
+    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
+    let held = owner.writes.clone().try_read_owned().unwrap();
+    let hold = Arc::new(AtomicBool::new(false));
+    let (reservation, job) = crate::scheduler::test_reservation(&daemon, "t1", "op-s1", hold);
+    let error = owner
+        .scheduled(daemon.clone(), reservation, job.clone())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Conflict(_)), "{error}");
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    assert!(!job.started());
+    assert!(owner.current.lock().unwrap().is_none());
+    drop(held);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_scheduled_lease_needs_locked_use_on_this_mac() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    daemon.policy().write().unwrap().allow_locked_control = false;
+    let (owner, os, job, _hold, reply) = scheduled(&daemon, "op-s1").await;
+    assert!(reply.await.unwrap().is_err());
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    assert!(!job.started());
+    assert!(owner.current.lock().unwrap().is_none());
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+    daemon.shutdown().await;
+}

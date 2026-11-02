@@ -961,6 +961,9 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Request multicaBrowse
              * @property {muster.v1.IAgentNativeCreateRequest|null} [agentNativeCreate] Request agentNativeCreate
              * @property {muster.v1.IAgentSendRequest|null} [agentConfirmDelivered] Request agentConfirmDelivered
+             * @property {muster.v1.IVisionRequest|null} [vision] Request vision
+             * @property {muster.v1.IAgentOrganizeRequest|null} [agentOrganize] Request agentOrganize
+             * @property {muster.v1.IAgentSchedulerRequest|null} [agentScheduler] Request agentScheduler
              */
 
             /**
@@ -1482,17 +1485,41 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.agentConfirmDelivered = null;
 
+            /**
+             * Request vision.
+             * @member {muster.v1.IVisionRequest|null|undefined} vision
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.vision = null;
+
+            /**
+             * Request agentOrganize.
+             * @member {muster.v1.IAgentOrganizeRequest|null|undefined} agentOrganize
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.agentOrganize = null;
+
+            /**
+             * Request agentScheduler.
+             * @member {muster.v1.IAgentSchedulerRequest|null|undefined} agentScheduler
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.agentScheduler = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1650,6 +1677,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentNativeCreateRequest.encode(message.agentNativeCreate, writer.uint32(/* id 72, wireType 2 =*/578).fork(), q + 1).ldelim();
                 if (message.agentConfirmDelivered != null && Object.hasOwnProperty.call(message, "agentConfirmDelivered"))
                     $root.muster.v1.AgentSendRequest.encode(message.agentConfirmDelivered, writer.uint32(/* id 73, wireType 2 =*/586).fork(), q + 1).ldelim();
+                if (message.vision != null && Object.hasOwnProperty.call(message, "vision"))
+                    $root.muster.v1.VisionRequest.encode(message.vision, writer.uint32(/* id 74, wireType 2 =*/594).fork(), q + 1).ldelim();
+                if (message.agentOrganize != null && Object.hasOwnProperty.call(message, "agentOrganize"))
+                    $root.muster.v1.AgentOrganizeRequest.encode(message.agentOrganize, writer.uint32(/* id 75, wireType 2 =*/602).fork(), q + 1).ldelim();
+                if (message.agentScheduler != null && Object.hasOwnProperty.call(message, "agentScheduler"))
+                    $root.muster.v1.AgentSchedulerRequest.encode(message.agentScheduler, writer.uint32(/* id 76, wireType 2 =*/610).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -1939,6 +1972,18 @@ export const muster = $root.muster = (() => {
                             message.agentConfirmDelivered = $root.muster.v1.AgentSendRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 74: {
+                            message.vision = $root.muster.v1.VisionRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 75: {
+                            message.agentOrganize = $root.muster.v1.AgentOrganizeRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 76: {
+                            message.agentScheduler = $root.muster.v1.AgentSchedulerRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -2212,6 +2257,8 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IPresenceInfo|null} [presenceInfo] Response presenceInfo
              * @property {muster.v1.IMulticaStatus|null} [multica] Response multica
              * @property {muster.v1.IMulticaPage|null} [multicaPage] Response multicaPage
+             * @property {muster.v1.IVisionStatus|null} [vision] Response vision
+             * @property {muster.v1.IAgentSchedulerStatus|null} [agentScheduler] Response agentScheduler
              */
 
             /**
@@ -2453,17 +2500,33 @@ export const muster = $root.muster = (() => {
              */
             Response.prototype.multicaPage = null;
 
+            /**
+             * Response vision.
+             * @member {muster.v1.IVisionStatus|null|undefined} vision
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.vision = null;
+
+            /**
+             * Response agentScheduler.
+             * @member {muster.v1.IAgentSchedulerStatus|null|undefined} agentScheduler
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.agentScheduler = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Response resp.
-             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|undefined} resp
+             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"vision"|"agentScheduler"|undefined} resp
              * @memberof muster.v1.Response
              * @instance
              */
             Object.defineProperty(Response.prototype, "resp", {
-                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage"]),
+                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage", "vision", "agentScheduler"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2551,6 +2614,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.MulticaStatus.encode(message.multica, writer.uint32(/* id 70, wireType 2 =*/562).fork(), q + 1).ldelim();
                 if (message.multicaPage != null && Object.hasOwnProperty.call(message, "multicaPage"))
                     $root.muster.v1.MulticaPage.encode(message.multicaPage, writer.uint32(/* id 71, wireType 2 =*/570).fork(), q + 1).ldelim();
+                if (message.vision != null && Object.hasOwnProperty.call(message, "vision"))
+                    $root.muster.v1.VisionStatus.encode(message.vision, writer.uint32(/* id 74, wireType 2 =*/594).fork(), q + 1).ldelim();
+                if (message.agentScheduler != null && Object.hasOwnProperty.call(message, "agentScheduler"))
+                    $root.muster.v1.AgentSchedulerStatus.encode(message.agentScheduler, writer.uint32(/* id 76, wireType 2 =*/610).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2698,6 +2765,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 71: {
                             message.multicaPage = $root.muster.v1.MulticaPage.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 74: {
+                            message.vision = $root.muster.v1.VisionStatus.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 76: {
+                            message.agentScheduler = $root.muster.v1.AgentSchedulerStatus.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -5122,6 +5197,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IDeviceLeaseRequest|null} [device] LockedUseOperation device
              * @property {muster.v1.IAgentCompleteRequest|null} [complete] LockedUseOperation complete
              * @property {muster.v1.ITerminalCreateRequest|null} [terminalCreate] LockedUseOperation terminalCreate
+             * @property {muster.v1.IAgentOrganizeRequest|null} [organize] LockedUseOperation organize
              * @property {string|null} [providerQueue] LockedUseOperation providerQueue
              */
 
@@ -5237,6 +5313,14 @@ export const muster = $root.muster = (() => {
             LockedUseOperation.prototype.terminalCreate = null;
 
             /**
+             * LockedUseOperation organize.
+             * @member {muster.v1.IAgentOrganizeRequest|null|undefined} organize
+             * @memberof muster.v1.LockedUseOperation
+             * @instance
+             */
+            LockedUseOperation.prototype.organize = null;
+
+            /**
              * LockedUseOperation providerQueue.
              * @member {string} providerQueue
              * @memberof muster.v1.LockedUseOperation
@@ -5249,12 +5333,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * LockedUseOperation operation.
-             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|undefined} operation
+             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize"|undefined} operation
              * @memberof muster.v1.LockedUseOperation
              * @instance
              */
             Object.defineProperty(LockedUseOperation.prototype, "operation", {
-                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete", "terminalCreate"]),
+                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete", "terminalCreate", "organize"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -5312,6 +5396,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentCompleteRequest.encode(message.complete, writer.uint32(/* id 12, wireType 2 =*/98).fork(), q + 1).ldelim();
                 if (message.terminalCreate != null && Object.hasOwnProperty.call(message, "terminalCreate"))
                     $root.muster.v1.TerminalCreateRequest.encode(message.terminalCreate, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
+                if (message.organize != null && Object.hasOwnProperty.call(message, "organize"))
+                    $root.muster.v1.AgentOrganizeRequest.encode(message.organize, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -5395,6 +5481,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 13: {
                             message.terminalCreate = $root.muster.v1.TerminalCreateRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 14: {
+                            message.organize = $root.muster.v1.AgentOrganizeRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 4: {
@@ -12967,6 +13057,11 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [composerSuggestion] AgentSession composerSuggestion
              * @property {string|null} [descendantActivity] AgentSession descendantActivity
              * @property {string|null} [relationship] AgentSession relationship
+             * @property {string|null} [sectionId] AgentSession sectionId
+             * @property {number|Long|null} [sectionPosition] AgentSession sectionPosition
+             * @property {string|null} [parentTitle] AgentSession parentTitle
+             * @property {boolean|null} [pinned] AgentSession pinned
+             * @property {string|null} [searchSnippet] AgentSession searchSnippet
              * @property {Array.<muster.v1.IAgentSession>|null} [subsessions] AgentSession subsessions
              */
 
@@ -13148,6 +13243,46 @@ export const muster = $root.muster = (() => {
             AgentSession.prototype.relationship = "";
 
             /**
+             * AgentSession sectionId.
+             * @member {string} sectionId
+             * @memberof muster.v1.AgentSession
+             * @instance
+             */
+            AgentSession.prototype.sectionId = "";
+
+            /**
+             * AgentSession sectionPosition.
+             * @member {number|Long} sectionPosition
+             * @memberof muster.v1.AgentSession
+             * @instance
+             */
+            AgentSession.prototype.sectionPosition = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * AgentSession parentTitle.
+             * @member {string} parentTitle
+             * @memberof muster.v1.AgentSession
+             * @instance
+             */
+            AgentSession.prototype.parentTitle = "";
+
+            /**
+             * AgentSession pinned.
+             * @member {boolean} pinned
+             * @memberof muster.v1.AgentSession
+             * @instance
+             */
+            AgentSession.prototype.pinned = false;
+
+            /**
+             * AgentSession searchSnippet.
+             * @member {string} searchSnippet
+             * @memberof muster.v1.AgentSession
+             * @instance
+             */
+            AgentSession.prototype.searchSnippet = "";
+
+            /**
              * AgentSession subsessions.
              * @member {Array.<muster.v1.IAgentSession>} subsessions
              * @memberof muster.v1.AgentSession
@@ -13227,6 +13362,16 @@ export const muster = $root.muster = (() => {
                 if (message.subsessions != null && message.subsessions.length)
                     for (let i = 0; i < message.subsessions.length; ++i)
                         $root.muster.v1.AgentSession.encode(message.subsessions[i], writer.uint32(/* id 21, wireType 2 =*/170).fork(), q + 1).ldelim();
+                if (message.sectionId != null && Object.hasOwnProperty.call(message, "sectionId"))
+                    writer.uint32(/* id 22, wireType 2 =*/178).string(message.sectionId);
+                if (message.sectionPosition != null && Object.hasOwnProperty.call(message, "sectionPosition"))
+                    writer.uint32(/* id 23, wireType 0 =*/184).int64(message.sectionPosition);
+                if (message.searchSnippet != null && Object.hasOwnProperty.call(message, "searchSnippet"))
+                    writer.uint32(/* id 24, wireType 2 =*/194).string(message.searchSnippet);
+                if (message.parentTitle != null && Object.hasOwnProperty.call(message, "parentTitle"))
+                    writer.uint32(/* id 25, wireType 2 =*/202).string(message.parentTitle);
+                if (message.pinned != null && Object.hasOwnProperty.call(message, "pinned"))
+                    writer.uint32(/* id 26, wireType 0 =*/208).bool(message.pinned);
                 return writer;
             };
 
@@ -13346,6 +13491,26 @@ export const muster = $root.muster = (() => {
                             message.relationship = reader.string();
                             break;
                         }
+                    case 22: {
+                            message.sectionId = reader.string();
+                            break;
+                        }
+                    case 23: {
+                            message.sectionPosition = reader.int64();
+                            break;
+                        }
+                    case 25: {
+                            message.parentTitle = reader.string();
+                            break;
+                        }
+                    case 26: {
+                            message.pinned = reader.bool();
+                            break;
+                        }
+                    case 24: {
+                            message.searchSnippet = reader.string();
+                            break;
+                        }
                     case 21: {
                             if (!(message.subsessions && message.subsessions.length))
                                 message.subsessions = [];
@@ -13383,12 +13548,474 @@ export const muster = $root.muster = (() => {
             return AgentSession;
         })();
 
+        v1.AgentSection = (function() {
+
+            /**
+             * Properties of an AgentSection.
+             * @memberof muster.v1
+             * @interface IAgentSection
+             * @property {string|null} [kind] AgentSection kind
+             * @property {string|null} [id] AgentSection id
+             * @property {string|null} [provider] AgentSection provider
+             * @property {string|null} [title] AgentSection title
+             * @property {number|Long|null} [position] AgentSection position
+             * @property {boolean|null} [collapsed] AgentSection collapsed
+             * @property {string|null} [deviceId] AgentSection deviceId
+             * @property {string|null} [deviceName] AgentSection deviceName
+             */
+
+            /**
+             * Constructs a new AgentSection.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSection.
+             * @implements IAgentSection
+             * @constructor
+             * @param {muster.v1.IAgentSection=} [properties] Properties to set
+             */
+            function AgentSection(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSection kind.
+             * @member {string} kind
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.kind = "";
+
+            /**
+             * AgentSection id.
+             * @member {string} id
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.id = "";
+
+            /**
+             * AgentSection provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.provider = "";
+
+            /**
+             * AgentSection title.
+             * @member {string} title
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.title = "";
+
+            /**
+             * AgentSection position.
+             * @member {number|Long} position
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.position = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * AgentSection collapsed.
+             * @member {boolean} collapsed
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.collapsed = false;
+
+            /**
+             * AgentSection deviceId.
+             * @member {string} deviceId
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.deviceId = "";
+
+            /**
+             * AgentSection deviceName.
+             * @member {string} deviceName
+             * @memberof muster.v1.AgentSection
+             * @instance
+             */
+            AgentSection.prototype.deviceName = "";
+
+            /**
+             * Creates a new AgentSection instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSection
+             * @static
+             * @param {muster.v1.IAgentSection=} [properties] Properties to set
+             * @returns {muster.v1.AgentSection} AgentSection instance
+             */
+            AgentSection.create = function create(properties) {
+                return new AgentSection(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSection message. Does not implicitly {@link muster.v1.AgentSection.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSection
+             * @static
+             * @param {muster.v1.IAgentSection} message AgentSection message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSection.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.provider);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.title);
+                if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).int64(message.position);
+                if (message.collapsed != null && Object.hasOwnProperty.call(message, "collapsed"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.collapsed);
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.deviceId);
+                if (message.deviceName != null && Object.hasOwnProperty.call(message, "deviceName"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.deviceName);
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.kind);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSection message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSection
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSection} AgentSection
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSection.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSection();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 8: {
+                            message.kind = reader.string();
+                            break;
+                        }
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.position = reader.int64();
+                            break;
+                        }
+                    case 5: {
+                            message.collapsed = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.deviceName = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSection
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSection
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSection.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSection";
+            };
+
+            return AgentSection;
+        })();
+
+        v1.AgentOrganizeRequest = (function() {
+
+            /**
+             * Properties of an AgentOrganizeRequest.
+             * @memberof muster.v1
+             * @interface IAgentOrganizeRequest
+             * @property {string|null} [opId] AgentOrganizeRequest opId
+             * @property {string|null} [session] AgentOrganizeRequest session
+             * @property {muster.v1.AgentOrganizeRequest.Action|null} [action] AgentOrganizeRequest action
+             * @property {string|null} [sectionId] AgentOrganizeRequest sectionId
+             * @property {string|null} [name] AgentOrganizeRequest name
+             */
+
+            /**
+             * Constructs a new AgentOrganizeRequest.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentOrganizeRequest.
+             * @implements IAgentOrganizeRequest
+             * @constructor
+             * @param {muster.v1.IAgentOrganizeRequest=} [properties] Properties to set
+             */
+            function AgentOrganizeRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentOrganizeRequest opId.
+             * @member {string} opId
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @instance
+             */
+            AgentOrganizeRequest.prototype.opId = "";
+
+            /**
+             * AgentOrganizeRequest session.
+             * @member {string} session
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @instance
+             */
+            AgentOrganizeRequest.prototype.session = "";
+
+            /**
+             * AgentOrganizeRequest action.
+             * @member {muster.v1.AgentOrganizeRequest.Action} action
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @instance
+             */
+            AgentOrganizeRequest.prototype.action = 0;
+
+            /**
+             * AgentOrganizeRequest sectionId.
+             * @member {string} sectionId
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @instance
+             */
+            AgentOrganizeRequest.prototype.sectionId = "";
+
+            /**
+             * AgentOrganizeRequest name.
+             * @member {string} name
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @instance
+             */
+            AgentOrganizeRequest.prototype.name = "";
+
+            /**
+             * Creates a new AgentOrganizeRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @static
+             * @param {muster.v1.IAgentOrganizeRequest=} [properties] Properties to set
+             * @returns {muster.v1.AgentOrganizeRequest} AgentOrganizeRequest instance
+             */
+            AgentOrganizeRequest.create = function create(properties) {
+                return new AgentOrganizeRequest(properties);
+            };
+
+            /**
+             * Encodes the specified AgentOrganizeRequest message. Does not implicitly {@link muster.v1.AgentOrganizeRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @static
+             * @param {muster.v1.IAgentOrganizeRequest} message AgentOrganizeRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentOrganizeRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.opId);
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.session);
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).int32(message.action);
+                if (message.sectionId != null && Object.hasOwnProperty.call(message, "sectionId"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.sectionId);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.name);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentOrganizeRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentOrganizeRequest} AgentOrganizeRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentOrganizeRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentOrganizeRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.session = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 4: {
+                            message.sectionId = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentOrganizeRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentOrganizeRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentOrganizeRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentOrganizeRequest";
+            };
+
+            /**
+             * Action enum.
+             * @name muster.v1.AgentOrganizeRequest.Action
+             * @enum {number}
+             * @property {number} PIN=0 PIN value
+             * @property {number} UNPIN=1 UNPIN value
+             * @property {number} MOVE=2 MOVE value
+             * @property {number} REMOVE=3 REMOVE value
+             * @property {number} CREATE_SECTION=4 CREATE_SECTION value
+             * @property {number} DELETE_SECTION=5 DELETE_SECTION value
+             * @property {number} ARCHIVE=6 ARCHIVE value
+             */
+            AgentOrganizeRequest.Action = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "PIN"] = 0;
+                values[valuesById[1] = "UNPIN"] = 1;
+                values[valuesById[2] = "MOVE"] = 2;
+                values[valuesById[3] = "REMOVE"] = 3;
+                values[valuesById[4] = "CREATE_SECTION"] = 4;
+                values[valuesById[5] = "DELETE_SECTION"] = 5;
+                values[valuesById[6] = "ARCHIVE"] = 6;
+                return values;
+            })();
+
+            return AgentOrganizeRequest;
+        })();
+
         v1.AgentListRequest = (function() {
 
             /**
              * Properties of an AgentListRequest.
              * @memberof muster.v1
              * @interface IAgentListRequest
+             * @property {boolean|null} [grouped] AgentListRequest grouped
+             * @property {string|null} [groupKey] AgentListRequest groupKey
+             * @property {string|null} [groupCursor] AgentListRequest groupCursor
+             * @property {string|null} [searchCursor] AgentListRequest searchCursor
+             * @property {string|null} [query] AgentListRequest query
              * @property {number|null} [limit] AgentListRequest limit
              * @property {string|null} [provider] AgentListRequest provider
              */
@@ -13407,6 +14034,46 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * AgentListRequest grouped.
+             * @member {boolean} grouped
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.grouped = false;
+
+            /**
+             * AgentListRequest groupKey.
+             * @member {string} groupKey
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.groupKey = "";
+
+            /**
+             * AgentListRequest groupCursor.
+             * @member {string} groupCursor
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.groupCursor = "";
+
+            /**
+             * AgentListRequest searchCursor.
+             * @member {string} searchCursor
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.searchCursor = "";
+
+            /**
+             * AgentListRequest query.
+             * @member {string} query
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.query = "";
 
             /**
              * AgentListRequest limit.
@@ -13456,6 +14123,16 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.limit);
                 if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.provider);
+                if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.query);
+                if (message.searchCursor != null && Object.hasOwnProperty.call(message, "searchCursor"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.searchCursor);
+                if (message.grouped != null && Object.hasOwnProperty.call(message, "grouped"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.grouped);
+                if (message.groupKey != null && Object.hasOwnProperty.call(message, "groupKey"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.groupKey);
+                if (message.groupCursor != null && Object.hasOwnProperty.call(message, "groupCursor"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.groupCursor);
                 return writer;
             };
 
@@ -13493,6 +14170,26 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 5: {
+                            message.grouped = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.groupKey = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.groupCursor = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.searchCursor = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.query = reader.string();
+                            break;
+                        }
                     case 1: {
                             message.limit = reader.uint32();
                             break;
@@ -13539,6 +14236,11 @@ export const muster = $root.muster = (() => {
              * @memberof muster.v1
              * @interface IAgentSessionPage
              * @property {Array.<muster.v1.IAgentSession>|null} [sessions] AgentSessionPage sessions
+             * @property {Array.<muster.v1.IAgentSection>|null} [sections] AgentSessionPage sections
+             * @property {string|null} [notice] AgentSessionPage notice
+             * @property {Array.<muster.v1.IAgentCatalogGroup>|null} [groups] AgentSessionPage groups
+             * @property {string|null} [nextCursor] AgentSessionPage nextCursor
+             * @property {string|null} [query] AgentSessionPage query
              */
 
             /**
@@ -13551,6 +14253,8 @@ export const muster = $root.muster = (() => {
              */
             function AgentSessionPage(properties) {
                 this.sessions = [];
+                this.sections = [];
+                this.groups = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -13564,6 +14268,46 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AgentSessionPage.prototype.sessions = $util.emptyArray;
+
+            /**
+             * AgentSessionPage sections.
+             * @member {Array.<muster.v1.IAgentSection>} sections
+             * @memberof muster.v1.AgentSessionPage
+             * @instance
+             */
+            AgentSessionPage.prototype.sections = $util.emptyArray;
+
+            /**
+             * AgentSessionPage notice.
+             * @member {string} notice
+             * @memberof muster.v1.AgentSessionPage
+             * @instance
+             */
+            AgentSessionPage.prototype.notice = "";
+
+            /**
+             * AgentSessionPage groups.
+             * @member {Array.<muster.v1.IAgentCatalogGroup>} groups
+             * @memberof muster.v1.AgentSessionPage
+             * @instance
+             */
+            AgentSessionPage.prototype.groups = $util.emptyArray;
+
+            /**
+             * AgentSessionPage nextCursor.
+             * @member {string} nextCursor
+             * @memberof muster.v1.AgentSessionPage
+             * @instance
+             */
+            AgentSessionPage.prototype.nextCursor = "";
+
+            /**
+             * AgentSessionPage query.
+             * @member {string} query
+             * @memberof muster.v1.AgentSessionPage
+             * @instance
+             */
+            AgentSessionPage.prototype.query = "";
 
             /**
              * Creates a new AgentSessionPage instance using the specified properties.
@@ -13596,6 +14340,18 @@ export const muster = $root.muster = (() => {
                 if (message.sessions != null && message.sessions.length)
                     for (let i = 0; i < message.sessions.length; ++i)
                         $root.muster.v1.AgentSession.encode(message.sessions[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.sections != null && message.sections.length)
+                    for (let i = 0; i < message.sections.length; ++i)
+                        $root.muster.v1.AgentSection.encode(message.sections[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.notice != null && Object.hasOwnProperty.call(message, "notice"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.notice);
+                if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.query);
+                if (message.nextCursor != null && Object.hasOwnProperty.call(message, "nextCursor"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.nextCursor);
+                if (message.groups != null && message.groups.length)
+                    for (let i = 0; i < message.groups.length; ++i)
+                        $root.muster.v1.AgentCatalogGroup.encode(message.groups[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -13639,6 +14395,30 @@ export const muster = $root.muster = (() => {
                             message.sessions.push($root.muster.v1.AgentSession.decode(reader, reader.uint32(), undefined, long + 1));
                             break;
                         }
+                    case 2: {
+                            if (!(message.sections && message.sections.length))
+                                message.sections = [];
+                            message.sections.push($root.muster.v1.AgentSection.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 3: {
+                            message.notice = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            if (!(message.groups && message.groups.length))
+                                message.groups = [];
+                            message.groups.push($root.muster.v1.AgentCatalogGroup.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 5: {
+                            message.nextCursor = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.query = reader.string();
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -13670,12 +14450,253 @@ export const muster = $root.muster = (() => {
             return AgentSessionPage;
         })();
 
+        v1.AgentCatalogGroup = (function() {
+
+            /**
+             * Properties of an AgentCatalogGroup.
+             * @memberof muster.v1
+             * @interface IAgentCatalogGroup
+             * @property {string|null} [key] AgentCatalogGroup key
+             * @property {string|null} [kind] AgentCatalogGroup kind
+             * @property {string|null} [title] AgentCatalogGroup title
+             * @property {string|null} [provider] AgentCatalogGroup provider
+             * @property {string|null} [sectionId] AgentCatalogGroup sectionId
+             * @property {number|null} [count] AgentCatalogGroup count
+             * @property {string|null} [nextCursor] AgentCatalogGroup nextCursor
+             * @property {string|null} [deviceId] AgentCatalogGroup deviceId
+             */
+
+            /**
+             * Constructs a new AgentCatalogGroup.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentCatalogGroup.
+             * @implements IAgentCatalogGroup
+             * @constructor
+             * @param {muster.v1.IAgentCatalogGroup=} [properties] Properties to set
+             */
+            function AgentCatalogGroup(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentCatalogGroup key.
+             * @member {string} key
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.key = "";
+
+            /**
+             * AgentCatalogGroup kind.
+             * @member {string} kind
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.kind = "";
+
+            /**
+             * AgentCatalogGroup title.
+             * @member {string} title
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.title = "";
+
+            /**
+             * AgentCatalogGroup provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.provider = "";
+
+            /**
+             * AgentCatalogGroup sectionId.
+             * @member {string} sectionId
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.sectionId = "";
+
+            /**
+             * AgentCatalogGroup count.
+             * @member {number} count
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.count = 0;
+
+            /**
+             * AgentCatalogGroup nextCursor.
+             * @member {string} nextCursor
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.nextCursor = "";
+
+            /**
+             * AgentCatalogGroup deviceId.
+             * @member {string} deviceId
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.deviceId = "";
+
+            /**
+             * Creates a new AgentCatalogGroup instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentCatalogGroup
+             * @static
+             * @param {muster.v1.IAgentCatalogGroup=} [properties] Properties to set
+             * @returns {muster.v1.AgentCatalogGroup} AgentCatalogGroup instance
+             */
+            AgentCatalogGroup.create = function create(properties) {
+                return new AgentCatalogGroup(properties);
+            };
+
+            /**
+             * Encodes the specified AgentCatalogGroup message. Does not implicitly {@link muster.v1.AgentCatalogGroup.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentCatalogGroup
+             * @static
+             * @param {muster.v1.IAgentCatalogGroup} message AgentCatalogGroup message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentCatalogGroup.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.kind);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.title);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.provider);
+                if (message.sectionId != null && Object.hasOwnProperty.call(message, "sectionId"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.sectionId);
+                if (message.count != null && Object.hasOwnProperty.call(message, "count"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).uint32(message.count);
+                if (message.nextCursor != null && Object.hasOwnProperty.call(message, "nextCursor"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.nextCursor);
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.deviceId);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentCatalogGroup message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentCatalogGroup
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentCatalogGroup} AgentCatalogGroup
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentCatalogGroup.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentCatalogGroup();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.key = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.kind = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.sectionId = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.count = reader.uint32();
+                            break;
+                        }
+                    case 7: {
+                            message.nextCursor = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentCatalogGroup
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentCatalogGroup
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentCatalogGroup.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentCatalogGroup";
+            };
+
+            return AgentCatalogGroup;
+        })();
+
         v1.AgentWatchRequest = (function() {
 
             /**
              * Properties of an AgentWatchRequest.
              * @memberof muster.v1
              * @interface IAgentWatchRequest
+             * @property {boolean|null} [grouped] AgentWatchRequest grouped
+             * @property {Array.<string>|null} [visibleSessions] AgentWatchRequest visibleSessions
              * @property {string|null} [session] AgentWatchRequest session
              * @property {boolean|null} [catalogOnly] AgentWatchRequest catalogOnly
              * @property {number|null} [limit] AgentWatchRequest limit
@@ -13690,11 +14711,28 @@ export const muster = $root.muster = (() => {
              * @param {muster.v1.IAgentWatchRequest=} [properties] Properties to set
              */
             function AgentWatchRequest(properties) {
+                this.visibleSessions = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * AgentWatchRequest grouped.
+             * @member {boolean} grouped
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.grouped = false;
+
+            /**
+             * AgentWatchRequest visibleSessions.
+             * @member {Array.<string>} visibleSessions
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.visibleSessions = $util.emptyArray;
 
             /**
              * AgentWatchRequest session.
@@ -13754,6 +14792,11 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.catalogOnly);
                 if (message.limit != null && Object.hasOwnProperty.call(message, "limit"))
                     writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.limit);
+                if (message.grouped != null && Object.hasOwnProperty.call(message, "grouped"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.grouped);
+                if (message.visibleSessions != null && message.visibleSessions.length)
+                    for (let i = 0; i < message.visibleSessions.length; ++i)
+                        writer.uint32(/* id 5, wireType 2 =*/42).string(message.visibleSessions[i]);
                 return writer;
             };
 
@@ -13791,6 +14834,16 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 4: {
+                            message.grouped = reader.bool();
+                            break;
+                        }
+                    case 5: {
+                            if (!(message.visibleSessions && message.visibleSessions.length))
+                                message.visibleSessions = [];
+                            message.visibleSessions.push(reader.string());
+                            break;
+                        }
                     case 1: {
                             message.session = reader.string();
                             break;
@@ -24344,6 +25397,1954 @@ export const muster = $root.muster = (() => {
             return AgentNativeCreateRequest;
         })();
 
+        v1.VisionRequest = (function() {
+
+            /**
+             * Properties of a VisionRequest.
+             * @memberof muster.v1
+             * @interface IVisionRequest
+             * @property {muster.v1.VisionRequest.Action|null} [action] VisionRequest action
+             * @property {boolean|null} [enabled] VisionRequest enabled
+             * @property {string|null} [apiFormat] VisionRequest apiFormat
+             * @property {string|null} [baseUrl] VisionRequest baseUrl
+             * @property {string|null} [model] VisionRequest model
+             * @property {string|null} [apiKey] VisionRequest apiKey
+             */
+
+            /**
+             * Constructs a new VisionRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a VisionRequest.
+             * @implements IVisionRequest
+             * @constructor
+             * @param {muster.v1.IVisionRequest=} [properties] Properties to set
+             */
+            function VisionRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * VisionRequest action.
+             * @member {muster.v1.VisionRequest.Action} action
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.action = 0;
+
+            /**
+             * VisionRequest enabled.
+             * @member {boolean} enabled
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.enabled = false;
+
+            /**
+             * VisionRequest apiFormat.
+             * @member {string} apiFormat
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.apiFormat = "";
+
+            /**
+             * VisionRequest baseUrl.
+             * @member {string} baseUrl
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.baseUrl = "";
+
+            /**
+             * VisionRequest model.
+             * @member {string} model
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.model = "";
+
+            /**
+             * VisionRequest apiKey.
+             * @member {string} apiKey
+             * @memberof muster.v1.VisionRequest
+             * @instance
+             */
+            VisionRequest.prototype.apiKey = "";
+
+            /**
+             * Creates a new VisionRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.VisionRequest
+             * @static
+             * @param {muster.v1.IVisionRequest=} [properties] Properties to set
+             * @returns {muster.v1.VisionRequest} VisionRequest instance
+             */
+            VisionRequest.create = function create(properties) {
+                return new VisionRequest(properties);
+            };
+
+            /**
+             * Encodes the specified VisionRequest message. Does not implicitly {@link muster.v1.VisionRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.VisionRequest
+             * @static
+             * @param {muster.v1.IVisionRequest} message VisionRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            VisionRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.action);
+                if (message.enabled != null && Object.hasOwnProperty.call(message, "enabled"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.enabled);
+                if (message.apiFormat != null && Object.hasOwnProperty.call(message, "apiFormat"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.apiFormat);
+                if (message.baseUrl != null && Object.hasOwnProperty.call(message, "baseUrl"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.baseUrl);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.model);
+                if (message.apiKey != null && Object.hasOwnProperty.call(message, "apiKey"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.apiKey);
+                return writer;
+            };
+
+            /**
+             * Decodes a VisionRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.VisionRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.VisionRequest} VisionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            VisionRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.VisionRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.enabled = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.apiFormat = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.baseUrl = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.apiKey = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for VisionRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.VisionRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            VisionRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.VisionRequest";
+            };
+
+            /**
+             * Action enum.
+             * @name muster.v1.VisionRequest.Action
+             * @enum {number}
+             * @property {number} GET=0 GET value
+             * @property {number} SAVE=1 SAVE value
+             * @property {number} TEST=2 TEST value
+             * @property {number} CLEAR_KEY=3 CLEAR_KEY value
+             */
+            VisionRequest.Action = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "GET"] = 0;
+                values[valuesById[1] = "SAVE"] = 1;
+                values[valuesById[2] = "TEST"] = 2;
+                values[valuesById[3] = "CLEAR_KEY"] = 3;
+                return values;
+            })();
+
+            return VisionRequest;
+        })();
+
+        v1.VisionStatus = (function() {
+
+            /**
+             * Properties of a VisionStatus.
+             * @memberof muster.v1
+             * @interface IVisionStatus
+             * @property {boolean|null} [supported] VisionStatus supported
+             * @property {boolean|null} [enabled] VisionStatus enabled
+             * @property {string|null} [apiFormat] VisionStatus apiFormat
+             * @property {string|null} [baseUrl] VisionStatus baseUrl
+             * @property {string|null} [model] VisionStatus model
+             * @property {boolean|null} [keyStored] VisionStatus keyStored
+             * @property {boolean|null} [screenRecording] VisionStatus screenRecording
+             * @property {string|null} [message] VisionStatus message
+             * @property {boolean|null} [busy] VisionStatus busy
+             */
+
+            /**
+             * Constructs a new VisionStatus.
+             * @memberof muster.v1
+             * @classdesc Represents a VisionStatus.
+             * @implements IVisionStatus
+             * @constructor
+             * @param {muster.v1.IVisionStatus=} [properties] Properties to set
+             */
+            function VisionStatus(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * VisionStatus supported.
+             * @member {boolean} supported
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.supported = false;
+
+            /**
+             * VisionStatus enabled.
+             * @member {boolean} enabled
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.enabled = false;
+
+            /**
+             * VisionStatus apiFormat.
+             * @member {string} apiFormat
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.apiFormat = "";
+
+            /**
+             * VisionStatus baseUrl.
+             * @member {string} baseUrl
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.baseUrl = "";
+
+            /**
+             * VisionStatus model.
+             * @member {string} model
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.model = "";
+
+            /**
+             * VisionStatus keyStored.
+             * @member {boolean} keyStored
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.keyStored = false;
+
+            /**
+             * VisionStatus screenRecording.
+             * @member {boolean} screenRecording
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.screenRecording = false;
+
+            /**
+             * VisionStatus message.
+             * @member {string} message
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.message = "";
+
+            /**
+             * VisionStatus busy.
+             * @member {boolean} busy
+             * @memberof muster.v1.VisionStatus
+             * @instance
+             */
+            VisionStatus.prototype.busy = false;
+
+            /**
+             * Creates a new VisionStatus instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.VisionStatus
+             * @static
+             * @param {muster.v1.IVisionStatus=} [properties] Properties to set
+             * @returns {muster.v1.VisionStatus} VisionStatus instance
+             */
+            VisionStatus.create = function create(properties) {
+                return new VisionStatus(properties);
+            };
+
+            /**
+             * Encodes the specified VisionStatus message. Does not implicitly {@link muster.v1.VisionStatus.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.VisionStatus
+             * @static
+             * @param {muster.v1.IVisionStatus} message VisionStatus message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            VisionStatus.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.supported != null && Object.hasOwnProperty.call(message, "supported"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.supported);
+                if (message.enabled != null && Object.hasOwnProperty.call(message, "enabled"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.enabled);
+                if (message.apiFormat != null && Object.hasOwnProperty.call(message, "apiFormat"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.apiFormat);
+                if (message.baseUrl != null && Object.hasOwnProperty.call(message, "baseUrl"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.baseUrl);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.model);
+                if (message.keyStored != null && Object.hasOwnProperty.call(message, "keyStored"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.keyStored);
+                if (message.screenRecording != null && Object.hasOwnProperty.call(message, "screenRecording"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.screenRecording);
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.message);
+                if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).bool(message.busy);
+                return writer;
+            };
+
+            /**
+             * Decodes a VisionStatus message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.VisionStatus
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.VisionStatus} VisionStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            VisionStatus.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.VisionStatus();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.supported = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            message.enabled = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.apiFormat = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.baseUrl = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.keyStored = reader.bool();
+                            break;
+                        }
+                    case 7: {
+                            message.screenRecording = reader.bool();
+                            break;
+                        }
+                    case 8: {
+                            message.message = reader.string();
+                            break;
+                        }
+                    case 9: {
+                            message.busy = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for VisionStatus
+             * @function getTypeUrl
+             * @memberof muster.v1.VisionStatus
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            VisionStatus.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.VisionStatus";
+            };
+
+            return VisionStatus;
+        })();
+
+        v1.AgentSchedulerRequest = (function() {
+
+            /**
+             * Properties of an AgentSchedulerRequest.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerRequest
+             * @property {muster.v1.IAgentSchedulerGrant|null} [grant] AgentSchedulerRequest grant
+             * @property {muster.v1.IAgentSchedulerTask|null} [revoke] AgentSchedulerRequest revoke
+             * @property {muster.v1.IAgentSchedulerTask|null} [status] AgentSchedulerRequest status
+             * @property {muster.v1.IAgentSchedulerOperate|null} [operate] AgentSchedulerRequest operate
+             * @property {muster.v1.IAgentSchedulerOperate|null} [reconcile] AgentSchedulerRequest reconcile
+             */
+
+            /**
+             * Constructs a new AgentSchedulerRequest.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerRequest.
+             * @implements IAgentSchedulerRequest
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerRequest=} [properties] Properties to set
+             */
+            function AgentSchedulerRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerRequest grant.
+             * @member {muster.v1.IAgentSchedulerGrant|null|undefined} grant
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.grant = null;
+
+            /**
+             * AgentSchedulerRequest revoke.
+             * @member {muster.v1.IAgentSchedulerTask|null|undefined} revoke
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.revoke = null;
+
+            /**
+             * AgentSchedulerRequest status.
+             * @member {muster.v1.IAgentSchedulerTask|null|undefined} status
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.status = null;
+
+            /**
+             * AgentSchedulerRequest operate.
+             * @member {muster.v1.IAgentSchedulerOperate|null|undefined} operate
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.operate = null;
+
+            /**
+             * AgentSchedulerRequest reconcile.
+             * @member {muster.v1.IAgentSchedulerOperate|null|undefined} reconcile
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.reconcile = null;
+
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            /**
+             * AgentSchedulerRequest action.
+             * @member {"grant"|"revoke"|"status"|"operate"|"reconcile"|undefined} action
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            Object.defineProperty(AgentSchedulerRequest.prototype, "action", {
+                get: $util.oneOfGetter($oneOfFields = ["grant", "revoke", "status", "operate", "reconcile"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
+            /**
+             * Creates a new AgentSchedulerRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @static
+             * @param {muster.v1.IAgentSchedulerRequest=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerRequest} AgentSchedulerRequest instance
+             */
+            AgentSchedulerRequest.create = function create(properties) {
+                return new AgentSchedulerRequest(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerRequest message. Does not implicitly {@link muster.v1.AgentSchedulerRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @static
+             * @param {muster.v1.IAgentSchedulerRequest} message AgentSchedulerRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.grant != null && Object.hasOwnProperty.call(message, "grant"))
+                    $root.muster.v1.AgentSchedulerGrant.encode(message.grant, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.revoke != null && Object.hasOwnProperty.call(message, "revoke"))
+                    $root.muster.v1.AgentSchedulerTask.encode(message.revoke, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    $root.muster.v1.AgentSchedulerTask.encode(message.status, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.operate != null && Object.hasOwnProperty.call(message, "operate"))
+                    $root.muster.v1.AgentSchedulerOperate.encode(message.operate, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                if (message.reconcile != null && Object.hasOwnProperty.call(message, "reconcile"))
+                    $root.muster.v1.AgentSchedulerOperate.encode(message.reconcile, writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerRequest} AgentSchedulerRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.grant = $root.muster.v1.AgentSchedulerGrant.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 2: {
+                            message.revoke = $root.muster.v1.AgentSchedulerTask.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.status = $root.muster.v1.AgentSchedulerTask.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 4: {
+                            message.operate = $root.muster.v1.AgentSchedulerOperate.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 5: {
+                            message.reconcile = $root.muster.v1.AgentSchedulerOperate.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerRequest";
+            };
+
+            return AgentSchedulerRequest;
+        })();
+
+        v1.AgentSchedulerGrant = (function() {
+
+            /**
+             * Properties of an AgentSchedulerGrant.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerGrant
+             * @property {string|null} [taskId] AgentSchedulerGrant taskId
+             * @property {string|null} [contractSha256] AgentSchedulerGrant contractSha256
+             * @property {string|null} [provider] AgentSchedulerGrant provider
+             * @property {string|null} [directory] AgentSchedulerGrant directory
+             * @property {string|null} [model] AgentSchedulerGrant model
+             * @property {string|null} [effort] AgentSchedulerGrant effort
+             * @property {number|Long|null} [ttlSeconds] AgentSchedulerGrant ttlSeconds
+             */
+
+            /**
+             * Constructs a new AgentSchedulerGrant.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerGrant.
+             * @implements IAgentSchedulerGrant
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerGrant=} [properties] Properties to set
+             */
+            function AgentSchedulerGrant(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerGrant taskId.
+             * @member {string} taskId
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.taskId = "";
+
+            /**
+             * AgentSchedulerGrant contractSha256.
+             * @member {string} contractSha256
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.contractSha256 = "";
+
+            /**
+             * AgentSchedulerGrant provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.provider = "";
+
+            /**
+             * AgentSchedulerGrant directory.
+             * @member {string} directory
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.directory = "";
+
+            /**
+             * AgentSchedulerGrant model.
+             * @member {string} model
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.model = "";
+
+            /**
+             * AgentSchedulerGrant effort.
+             * @member {string} effort
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.effort = "";
+
+            /**
+             * AgentSchedulerGrant ttlSeconds.
+             * @member {number|Long} ttlSeconds
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @instance
+             */
+            AgentSchedulerGrant.prototype.ttlSeconds = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * Creates a new AgentSchedulerGrant instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @static
+             * @param {muster.v1.IAgentSchedulerGrant=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerGrant} AgentSchedulerGrant instance
+             */
+            AgentSchedulerGrant.create = function create(properties) {
+                return new AgentSchedulerGrant(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerGrant message. Does not implicitly {@link muster.v1.AgentSchedulerGrant.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @static
+             * @param {muster.v1.IAgentSchedulerGrant} message AgentSchedulerGrant message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerGrant.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.taskId != null && Object.hasOwnProperty.call(message, "taskId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.taskId);
+                if (message.contractSha256 != null && Object.hasOwnProperty.call(message, "contractSha256"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.contractSha256);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.directory);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.model);
+                if (message.effort != null && Object.hasOwnProperty.call(message, "effort"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.effort);
+                if (message.ttlSeconds != null && Object.hasOwnProperty.call(message, "ttlSeconds"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.ttlSeconds);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerGrant message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerGrant} AgentSchedulerGrant
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerGrant.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerGrant();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.taskId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.contractSha256 = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.effort = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.ttlSeconds = reader.uint64();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerGrant
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerGrant
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerGrant.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerGrant";
+            };
+
+            return AgentSchedulerGrant;
+        })();
+
+        v1.AgentSchedulerTask = (function() {
+
+            /**
+             * Properties of an AgentSchedulerTask.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerTask
+             * @property {string|null} [taskId] AgentSchedulerTask taskId
+             */
+
+            /**
+             * Constructs a new AgentSchedulerTask.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerTask.
+             * @implements IAgentSchedulerTask
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerTask=} [properties] Properties to set
+             */
+            function AgentSchedulerTask(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerTask taskId.
+             * @member {string} taskId
+             * @memberof muster.v1.AgentSchedulerTask
+             * @instance
+             */
+            AgentSchedulerTask.prototype.taskId = "";
+
+            /**
+             * Creates a new AgentSchedulerTask instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerTask
+             * @static
+             * @param {muster.v1.IAgentSchedulerTask=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerTask} AgentSchedulerTask instance
+             */
+            AgentSchedulerTask.create = function create(properties) {
+                return new AgentSchedulerTask(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerTask message. Does not implicitly {@link muster.v1.AgentSchedulerTask.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerTask
+             * @static
+             * @param {muster.v1.IAgentSchedulerTask} message AgentSchedulerTask message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerTask.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.taskId != null && Object.hasOwnProperty.call(message, "taskId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.taskId);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerTask message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerTask
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerTask} AgentSchedulerTask
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerTask.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerTask();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.taskId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerTask
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerTask
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerTask.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerTask";
+            };
+
+            return AgentSchedulerTask;
+        })();
+
+        v1.AgentSchedulerOperate = (function() {
+
+            /**
+             * Properties of an AgentSchedulerOperate.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerOperate
+             * @property {string|null} [taskId] AgentSchedulerOperate taskId
+             * @property {string|null} [opId] AgentSchedulerOperate opId
+             * @property {string|null} [role] AgentSchedulerOperate role
+             * @property {string|null} [kind] AgentSchedulerOperate kind
+             * @property {string|null} [provider] AgentSchedulerOperate provider
+             * @property {string|null} [directory] AgentSchedulerOperate directory
+             * @property {string|null} [session] AgentSchedulerOperate session
+             * @property {string|null} [text] AgentSchedulerOperate text
+             * @property {string|null} [model] AgentSchedulerOperate model
+             * @property {string|null} [effort] AgentSchedulerOperate effort
+             */
+
+            /**
+             * Constructs a new AgentSchedulerOperate.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerOperate.
+             * @implements IAgentSchedulerOperate
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerOperate=} [properties] Properties to set
+             */
+            function AgentSchedulerOperate(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerOperate taskId.
+             * @member {string} taskId
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.taskId = "";
+
+            /**
+             * AgentSchedulerOperate opId.
+             * @member {string} opId
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.opId = "";
+
+            /**
+             * AgentSchedulerOperate role.
+             * @member {string} role
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.role = "";
+
+            /**
+             * AgentSchedulerOperate kind.
+             * @member {string} kind
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.kind = "";
+
+            /**
+             * AgentSchedulerOperate provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.provider = "";
+
+            /**
+             * AgentSchedulerOperate directory.
+             * @member {string} directory
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.directory = "";
+
+            /**
+             * AgentSchedulerOperate session.
+             * @member {string} session
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.session = "";
+
+            /**
+             * AgentSchedulerOperate text.
+             * @member {string} text
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.text = "";
+
+            /**
+             * AgentSchedulerOperate model.
+             * @member {string} model
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.model = "";
+
+            /**
+             * AgentSchedulerOperate effort.
+             * @member {string} effort
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @instance
+             */
+            AgentSchedulerOperate.prototype.effort = "";
+
+            /**
+             * Creates a new AgentSchedulerOperate instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @static
+             * @param {muster.v1.IAgentSchedulerOperate=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerOperate} AgentSchedulerOperate instance
+             */
+            AgentSchedulerOperate.create = function create(properties) {
+                return new AgentSchedulerOperate(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerOperate message. Does not implicitly {@link muster.v1.AgentSchedulerOperate.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @static
+             * @param {muster.v1.IAgentSchedulerOperate} message AgentSchedulerOperate message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerOperate.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.taskId != null && Object.hasOwnProperty.call(message, "taskId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.taskId);
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.opId);
+                if (message.role != null && Object.hasOwnProperty.call(message, "role"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.role);
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.kind);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.directory);
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.session);
+                if (message.text != null && Object.hasOwnProperty.call(message, "text"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.text);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.model);
+                if (message.effort != null && Object.hasOwnProperty.call(message, "effort"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.effort);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerOperate message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerOperate} AgentSchedulerOperate
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerOperate.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerOperate();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.taskId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.role = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.kind = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.session = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.text = reader.string();
+                            break;
+                        }
+                    case 9: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 10: {
+                            message.effort = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerOperate
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerOperate
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerOperate.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerOperate";
+            };
+
+            return AgentSchedulerOperate;
+        })();
+
+        v1.AgentSchedulerOp = (function() {
+
+            /**
+             * Properties of an AgentSchedulerOp.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerOp
+             * @property {string|null} [opId] AgentSchedulerOp opId
+             * @property {string|null} [kind] AgentSchedulerOp kind
+             * @property {string|null} [role] AgentSchedulerOp role
+             * @property {string|null} [session] AgentSchedulerOp session
+             * @property {string|null} [state] AgentSchedulerOp state
+             * @property {string|null} [result] AgentSchedulerOp result
+             * @property {string|null} [message] AgentSchedulerOp message
+             * @property {number|Long|null} [reservedUnixMs] AgentSchedulerOp reservedUnixMs
+             */
+
+            /**
+             * Constructs a new AgentSchedulerOp.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerOp.
+             * @implements IAgentSchedulerOp
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerOp=} [properties] Properties to set
+             */
+            function AgentSchedulerOp(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerOp opId.
+             * @member {string} opId
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.opId = "";
+
+            /**
+             * AgentSchedulerOp kind.
+             * @member {string} kind
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.kind = "";
+
+            /**
+             * AgentSchedulerOp role.
+             * @member {string} role
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.role = "";
+
+            /**
+             * AgentSchedulerOp session.
+             * @member {string} session
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.session = "";
+
+            /**
+             * AgentSchedulerOp state.
+             * @member {string} state
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.state = "";
+
+            /**
+             * AgentSchedulerOp result.
+             * @member {string} result
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.result = "";
+
+            /**
+             * AgentSchedulerOp message.
+             * @member {string} message
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.message = "";
+
+            /**
+             * AgentSchedulerOp reservedUnixMs.
+             * @member {number|Long} reservedUnixMs
+             * @memberof muster.v1.AgentSchedulerOp
+             * @instance
+             */
+            AgentSchedulerOp.prototype.reservedUnixMs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * Creates a new AgentSchedulerOp instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerOp
+             * @static
+             * @param {muster.v1.IAgentSchedulerOp=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerOp} AgentSchedulerOp instance
+             */
+            AgentSchedulerOp.create = function create(properties) {
+                return new AgentSchedulerOp(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerOp message. Does not implicitly {@link muster.v1.AgentSchedulerOp.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerOp
+             * @static
+             * @param {muster.v1.IAgentSchedulerOp} message AgentSchedulerOp message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerOp.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.opId);
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.kind);
+                if (message.role != null && Object.hasOwnProperty.call(message, "role"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.role);
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.session);
+                if (message.state != null && Object.hasOwnProperty.call(message, "state"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.state);
+                if (message.result != null && Object.hasOwnProperty.call(message, "result"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.result);
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.message);
+                if (message.reservedUnixMs != null && Object.hasOwnProperty.call(message, "reservedUnixMs"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).uint64(message.reservedUnixMs);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerOp message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerOp
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerOp} AgentSchedulerOp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerOp.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerOp();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.kind = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.role = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.session = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.state = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.result = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.message = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.reservedUnixMs = reader.uint64();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerOp
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerOp
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerOp.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerOp";
+            };
+
+            return AgentSchedulerOp;
+        })();
+
+        v1.AgentSchedulerStatus = (function() {
+
+            /**
+             * Properties of an AgentSchedulerStatus.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerStatus
+             * @property {string|null} [taskId] AgentSchedulerStatus taskId
+             * @property {string|null} [contractSha256] AgentSchedulerStatus contractSha256
+             * @property {string|null} [provider] AgentSchedulerStatus provider
+             * @property {string|null} [directory] AgentSchedulerStatus directory
+             * @property {string|null} [model] AgentSchedulerStatus model
+             * @property {string|null} [effort] AgentSchedulerStatus effort
+             * @property {number|Long|null} [issuedUnixMs] AgentSchedulerStatus issuedUnixMs
+             * @property {number|Long|null} [expiresUnixMs] AgentSchedulerStatus expiresUnixMs
+             * @property {number|Long|null} [revokedUnixMs] AgentSchedulerStatus revokedUnixMs
+             * @property {boolean|null} [live] AgentSchedulerStatus live
+             * @property {string|null} [producerSession] AgentSchedulerStatus producerSession
+             * @property {string|null} [reviewerSession] AgentSchedulerStatus reviewerSession
+             * @property {number|null} [creates] AgentSchedulerStatus creates
+             * @property {number|null} [packages] AgentSchedulerStatus packages
+             * @property {number|null} [reviews] AgentSchedulerStatus reviews
+             * @property {number|null} [controls] AgentSchedulerStatus controls
+             * @property {Array.<muster.v1.IAgentSchedulerOp>|null} [ops] AgentSchedulerStatus ops
+             * @property {muster.v1.IAgentSchedulerOp|null} [op] AgentSchedulerStatus op
+             */
+
+            /**
+             * Constructs a new AgentSchedulerStatus.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerStatus.
+             * @implements IAgentSchedulerStatus
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerStatus=} [properties] Properties to set
+             */
+            function AgentSchedulerStatus(properties) {
+                this.ops = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerStatus taskId.
+             * @member {string} taskId
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.taskId = "";
+
+            /**
+             * AgentSchedulerStatus contractSha256.
+             * @member {string} contractSha256
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.contractSha256 = "";
+
+            /**
+             * AgentSchedulerStatus provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.provider = "";
+
+            /**
+             * AgentSchedulerStatus directory.
+             * @member {string} directory
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.directory = "";
+
+            /**
+             * AgentSchedulerStatus model.
+             * @member {string} model
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.model = "";
+
+            /**
+             * AgentSchedulerStatus effort.
+             * @member {string} effort
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.effort = "";
+
+            /**
+             * AgentSchedulerStatus issuedUnixMs.
+             * @member {number|Long} issuedUnixMs
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.issuedUnixMs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * AgentSchedulerStatus expiresUnixMs.
+             * @member {number|Long} expiresUnixMs
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.expiresUnixMs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * AgentSchedulerStatus revokedUnixMs.
+             * @member {number|Long} revokedUnixMs
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.revokedUnixMs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * AgentSchedulerStatus live.
+             * @member {boolean} live
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.live = false;
+
+            /**
+             * AgentSchedulerStatus producerSession.
+             * @member {string} producerSession
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.producerSession = "";
+
+            /**
+             * AgentSchedulerStatus reviewerSession.
+             * @member {string} reviewerSession
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.reviewerSession = "";
+
+            /**
+             * AgentSchedulerStatus creates.
+             * @member {number} creates
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.creates = 0;
+
+            /**
+             * AgentSchedulerStatus packages.
+             * @member {number} packages
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.packages = 0;
+
+            /**
+             * AgentSchedulerStatus reviews.
+             * @member {number} reviews
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.reviews = 0;
+
+            /**
+             * AgentSchedulerStatus controls.
+             * @member {number} controls
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.controls = 0;
+
+            /**
+             * AgentSchedulerStatus ops.
+             * @member {Array.<muster.v1.IAgentSchedulerOp>} ops
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.ops = $util.emptyArray;
+
+            /**
+             * AgentSchedulerStatus op.
+             * @member {muster.v1.IAgentSchedulerOp|null|undefined} op
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.op = null;
+
+            /**
+             * Creates a new AgentSchedulerStatus instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @static
+             * @param {muster.v1.IAgentSchedulerStatus=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerStatus} AgentSchedulerStatus instance
+             */
+            AgentSchedulerStatus.create = function create(properties) {
+                return new AgentSchedulerStatus(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerStatus message. Does not implicitly {@link muster.v1.AgentSchedulerStatus.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @static
+             * @param {muster.v1.IAgentSchedulerStatus} message AgentSchedulerStatus message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerStatus.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.taskId != null && Object.hasOwnProperty.call(message, "taskId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.taskId);
+                if (message.contractSha256 != null && Object.hasOwnProperty.call(message, "contractSha256"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.contractSha256);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.directory);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.model);
+                if (message.effort != null && Object.hasOwnProperty.call(message, "effort"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.effort);
+                if (message.issuedUnixMs != null && Object.hasOwnProperty.call(message, "issuedUnixMs"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.issuedUnixMs);
+                if (message.expiresUnixMs != null && Object.hasOwnProperty.call(message, "expiresUnixMs"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).uint64(message.expiresUnixMs);
+                if (message.revokedUnixMs != null && Object.hasOwnProperty.call(message, "revokedUnixMs"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).uint64(message.revokedUnixMs);
+                if (message.live != null && Object.hasOwnProperty.call(message, "live"))
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.live);
+                if (message.producerSession != null && Object.hasOwnProperty.call(message, "producerSession"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.producerSession);
+                if (message.reviewerSession != null && Object.hasOwnProperty.call(message, "reviewerSession"))
+                    writer.uint32(/* id 12, wireType 2 =*/98).string(message.reviewerSession);
+                if (message.creates != null && Object.hasOwnProperty.call(message, "creates"))
+                    writer.uint32(/* id 13, wireType 0 =*/104).uint32(message.creates);
+                if (message.packages != null && Object.hasOwnProperty.call(message, "packages"))
+                    writer.uint32(/* id 14, wireType 0 =*/112).uint32(message.packages);
+                if (message.reviews != null && Object.hasOwnProperty.call(message, "reviews"))
+                    writer.uint32(/* id 15, wireType 0 =*/120).uint32(message.reviews);
+                if (message.controls != null && Object.hasOwnProperty.call(message, "controls"))
+                    writer.uint32(/* id 16, wireType 0 =*/128).uint32(message.controls);
+                if (message.ops != null && message.ops.length)
+                    for (let i = 0; i < message.ops.length; ++i)
+                        $root.muster.v1.AgentSchedulerOp.encode(message.ops[i], writer.uint32(/* id 17, wireType 2 =*/138).fork(), q + 1).ldelim();
+                if (message.op != null && Object.hasOwnProperty.call(message, "op"))
+                    $root.muster.v1.AgentSchedulerOp.encode(message.op, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerStatus message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerStatus} AgentSchedulerStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerStatus.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerStatus();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.taskId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.contractSha256 = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.effort = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.issuedUnixMs = reader.uint64();
+                            break;
+                        }
+                    case 8: {
+                            message.expiresUnixMs = reader.uint64();
+                            break;
+                        }
+                    case 9: {
+                            message.revokedUnixMs = reader.uint64();
+                            break;
+                        }
+                    case 10: {
+                            message.live = reader.bool();
+                            break;
+                        }
+                    case 11: {
+                            message.producerSession = reader.string();
+                            break;
+                        }
+                    case 12: {
+                            message.reviewerSession = reader.string();
+                            break;
+                        }
+                    case 13: {
+                            message.creates = reader.uint32();
+                            break;
+                        }
+                    case 14: {
+                            message.packages = reader.uint32();
+                            break;
+                        }
+                    case 15: {
+                            message.reviews = reader.uint32();
+                            break;
+                        }
+                    case 16: {
+                            message.controls = reader.uint32();
+                            break;
+                        }
+                    case 17: {
+                            if (!(message.ops && message.ops.length))
+                                message.ops = [];
+                            message.ops.push($root.muster.v1.AgentSchedulerOp.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 18: {
+                            message.op = $root.muster.v1.AgentSchedulerOp.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerStatus
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerStatus.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerStatus";
+            };
+
+            return AgentSchedulerStatus;
+        })();
+
         return v1;
     })();
 
@@ -24385,7 +27386,10 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IDesktopUpdateAction|null} [desktopUpdateAction] Intent desktopUpdateAction
              * @property {muster.v1.IMulticaRequest|null} [multica] Intent multica
              * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Intent multicaBrowse
+             * @property {muster.v1.IVisionRequest|null} [vision] Intent vision
              * @property {muster.app.IOpenAgents|null} [openAgents] Intent openAgents
+             * @property {muster.app.IAgentCatalogAction|null} [agentCatalogAction] Intent agentCatalogAction
+             * @property {muster.app.IAgentOrganize|null} [agentOrganize] Intent agentOrganize
              * @property {muster.app.IOrcaCreate|null} [orcaCreate] Intent orcaCreate
              * @property {muster.app.IOpenAgent|null} [openAgent] Intent openAgent
              * @property {muster.app.IAgentSend|null} [agentSend] Intent agentSend
@@ -24619,12 +27623,36 @@ export const muster = $root.muster = (() => {
             Intent.prototype.multicaBrowse = null;
 
             /**
+             * Intent vision.
+             * @member {muster.v1.IVisionRequest|null|undefined} vision
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.vision = null;
+
+            /**
              * Intent openAgents.
              * @member {muster.app.IOpenAgents|null|undefined} openAgents
              * @memberof muster.app.Intent
              * @instance
              */
             Intent.prototype.openAgents = null;
+
+            /**
+             * Intent agentCatalogAction.
+             * @member {muster.app.IAgentCatalogAction|null|undefined} agentCatalogAction
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.agentCatalogAction = null;
+
+            /**
+             * Intent agentOrganize.
+             * @member {muster.app.IAgentOrganize|null|undefined} agentOrganize
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.agentOrganize = null;
 
             /**
              * Intent orcaCreate.
@@ -24879,12 +27907,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "openAgents", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -25024,6 +28052,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.MulticaBrowseRequest.encode(message.multicaBrowse, writer.uint32(/* id 90, wireType 2 =*/722).fork(), q + 1).ldelim();
                 if (message.resolveAgentSend != null && Object.hasOwnProperty.call(message, "resolveAgentSend"))
                     $root.muster.app.ResolveAgentSend.encode(message.resolveAgentSend, writer.uint32(/* id 91, wireType 2 =*/730).fork(), q + 1).ldelim();
+                if (message.agentCatalogAction != null && Object.hasOwnProperty.call(message, "agentCatalogAction"))
+                    $root.muster.app.AgentCatalogAction.encode(message.agentCatalogAction, writer.uint32(/* id 92, wireType 2 =*/738).fork(), q + 1).ldelim();
+                if (message.vision != null && Object.hasOwnProperty.call(message, "vision"))
+                    $root.muster.v1.VisionRequest.encode(message.vision, writer.uint32(/* id 93, wireType 2 =*/746).fork(), q + 1).ldelim();
+                if (message.agentOrganize != null && Object.hasOwnProperty.call(message, "agentOrganize"))
+                    $root.muster.app.AgentOrganize.encode(message.agentOrganize, writer.uint32(/* id 94, wireType 2 =*/754).fork(), q + 1).ldelim();
                 if (message.codeAction != null && Object.hasOwnProperty.call(message, "codeAction"))
                     $root.muster.app.CodeAction.encode(message.codeAction, writer.uint32(/* id 132, wireType 2 =*/1058).fork(), q + 1).ldelim();
                 return writer;
@@ -25155,8 +28189,20 @@ export const muster = $root.muster = (() => {
                             message.multicaBrowse = $root.muster.v1.MulticaBrowseRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 93: {
+                            message.vision = $root.muster.v1.VisionRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 30: {
                             message.openAgents = $root.muster.app.OpenAgents.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 92: {
+                            message.agentCatalogAction = $root.muster.app.AgentCatalogAction.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 94: {
+                            message.agentOrganize = $root.muster.app.AgentOrganize.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 87: {
@@ -25452,12 +28498,16 @@ export const muster = $root.muster = (() => {
              * @property {number} CHECK=0 CHECK value
              * @property {number} DOWNLOAD=1 DOWNLOAD value
              * @property {number} INSTALL=2 INSTALL value
+             * @property {number} AUTO_ON=3 AUTO_ON value
+             * @property {number} AUTO_OFF=4 AUTO_OFF value
              */
             DesktopUpdateAction.Action = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
                 values[valuesById[0] = "CHECK"] = 0;
                 values[valuesById[1] = "DOWNLOAD"] = 1;
                 values[valuesById[2] = "INSTALL"] = 2;
+                values[valuesById[3] = "AUTO_ON"] = 3;
+                values[valuesById[4] = "AUTO_OFF"] = 4;
                 return values;
             })();
 
@@ -25477,6 +28527,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [canCheck] DesktopUpdateView canCheck
              * @property {boolean|null} [canDownload] DesktopUpdateView canDownload
              * @property {boolean|null} [canInstall] DesktopUpdateView canInstall
+             * @property {boolean|null} [automatic] DesktopUpdateView automatic
              */
 
             /**
@@ -25551,6 +28602,14 @@ export const muster = $root.muster = (() => {
             DesktopUpdateView.prototype.canInstall = false;
 
             /**
+             * DesktopUpdateView automatic.
+             * @member {boolean} automatic
+             * @memberof muster.app.DesktopUpdateView
+             * @instance
+             */
+            DesktopUpdateView.prototype.automatic = false;
+
+            /**
              * Creates a new DesktopUpdateView instance using the specified properties.
              * @function create
              * @memberof muster.app.DesktopUpdateView
@@ -25592,6 +28651,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 6, wireType 0 =*/48).bool(message.canDownload);
                 if (message.canInstall != null && Object.hasOwnProperty.call(message, "canInstall"))
                     writer.uint32(/* id 7, wireType 0 =*/56).bool(message.canInstall);
+                if (message.automatic != null && Object.hasOwnProperty.call(message, "automatic"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.automatic);
                 return writer;
             };
 
@@ -25655,6 +28716,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 7: {
                             message.canInstall = reader.bool();
+                            break;
+                        }
+                    case 8: {
+                            message.automatic = reader.bool();
                             break;
                         }
                     default:
@@ -28520,6 +31585,1098 @@ export const muster = $root.muster = (() => {
             };
 
             return OrcaCreate;
+        })();
+
+        app.AgentCatalogAction = (function() {
+
+            /**
+             * Properties of an AgentCatalogAction.
+             * @memberof muster.app
+             * @interface IAgentCatalogAction
+             * @property {muster.app.AgentCatalogAction.Kind|null} [kind] AgentCatalogAction kind
+             * @property {string|null} [value] AgentCatalogAction value
+             */
+
+            /**
+             * Constructs a new AgentCatalogAction.
+             * @memberof muster.app
+             * @classdesc Represents an AgentCatalogAction.
+             * @implements IAgentCatalogAction
+             * @constructor
+             * @param {muster.app.IAgentCatalogAction=} [properties] Properties to set
+             */
+            function AgentCatalogAction(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentCatalogAction kind.
+             * @member {muster.app.AgentCatalogAction.Kind} kind
+             * @memberof muster.app.AgentCatalogAction
+             * @instance
+             */
+            AgentCatalogAction.prototype.kind = 0;
+
+            /**
+             * AgentCatalogAction value.
+             * @member {string} value
+             * @memberof muster.app.AgentCatalogAction
+             * @instance
+             */
+            AgentCatalogAction.prototype.value = "";
+
+            /**
+             * Creates a new AgentCatalogAction instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentCatalogAction
+             * @static
+             * @param {muster.app.IAgentCatalogAction=} [properties] Properties to set
+             * @returns {muster.app.AgentCatalogAction} AgentCatalogAction instance
+             */
+            AgentCatalogAction.create = function create(properties) {
+                return new AgentCatalogAction(properties);
+            };
+
+            /**
+             * Encodes the specified AgentCatalogAction message. Does not implicitly {@link muster.app.AgentCatalogAction.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentCatalogAction
+             * @static
+             * @param {muster.app.IAgentCatalogAction} message AgentCatalogAction message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentCatalogAction.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.kind);
+                if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.value);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentCatalogAction message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentCatalogAction
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentCatalogAction} AgentCatalogAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentCatalogAction.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentCatalogAction();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.kind = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.value = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentCatalogAction
+             * @function getTypeUrl
+             * @memberof muster.app.AgentCatalogAction
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentCatalogAction.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentCatalogAction";
+            };
+
+            /**
+             * Kind enum.
+             * @name muster.app.AgentCatalogAction.Kind
+             * @enum {number}
+             * @property {number} SEARCH=0 SEARCH value
+             * @property {number} TOGGLE_SECTION=1 TOGGLE_SECTION value
+             * @property {number} TOGGLE_FAMILY=2 TOGGLE_FAMILY value
+             * @property {number} SEARCH_MORE=3 SEARCH_MORE value
+             * @property {number} LOAD_MORE=4 LOAD_MORE value
+             */
+            AgentCatalogAction.Kind = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "SEARCH"] = 0;
+                values[valuesById[1] = "TOGGLE_SECTION"] = 1;
+                values[valuesById[2] = "TOGGLE_FAMILY"] = 2;
+                values[valuesById[3] = "SEARCH_MORE"] = 3;
+                values[valuesById[4] = "LOAD_MORE"] = 4;
+                return values;
+            })();
+
+            return AgentCatalogAction;
+        })();
+
+        app.AgentOrganize = (function() {
+
+            /**
+             * Properties of an AgentOrganize.
+             * @memberof muster.app
+             * @interface IAgentOrganize
+             * @property {string|null} [rowKey] AgentOrganize rowKey
+             * @property {muster.v1.AgentOrganizeRequest.Action|null} [action] AgentOrganize action
+             * @property {string|null} [sectionId] AgentOrganize sectionId
+             * @property {string|null} [name] AgentOrganize name
+             */
+
+            /**
+             * Constructs a new AgentOrganize.
+             * @memberof muster.app
+             * @classdesc Represents an AgentOrganize.
+             * @implements IAgentOrganize
+             * @constructor
+             * @param {muster.app.IAgentOrganize=} [properties] Properties to set
+             */
+            function AgentOrganize(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentOrganize rowKey.
+             * @member {string} rowKey
+             * @memberof muster.app.AgentOrganize
+             * @instance
+             */
+            AgentOrganize.prototype.rowKey = "";
+
+            /**
+             * AgentOrganize action.
+             * @member {muster.v1.AgentOrganizeRequest.Action} action
+             * @memberof muster.app.AgentOrganize
+             * @instance
+             */
+            AgentOrganize.prototype.action = 0;
+
+            /**
+             * AgentOrganize sectionId.
+             * @member {string} sectionId
+             * @memberof muster.app.AgentOrganize
+             * @instance
+             */
+            AgentOrganize.prototype.sectionId = "";
+
+            /**
+             * AgentOrganize name.
+             * @member {string} name
+             * @memberof muster.app.AgentOrganize
+             * @instance
+             */
+            AgentOrganize.prototype.name = "";
+
+            /**
+             * Creates a new AgentOrganize instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentOrganize
+             * @static
+             * @param {muster.app.IAgentOrganize=} [properties] Properties to set
+             * @returns {muster.app.AgentOrganize} AgentOrganize instance
+             */
+            AgentOrganize.create = function create(properties) {
+                return new AgentOrganize(properties);
+            };
+
+            /**
+             * Encodes the specified AgentOrganize message. Does not implicitly {@link muster.app.AgentOrganize.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentOrganize
+             * @static
+             * @param {muster.app.IAgentOrganize} message AgentOrganize message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentOrganize.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.rowKey != null && Object.hasOwnProperty.call(message, "rowKey"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.rowKey);
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).int32(message.action);
+                if (message.sectionId != null && Object.hasOwnProperty.call(message, "sectionId"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.sectionId);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentOrganize message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentOrganize
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentOrganize} AgentOrganize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentOrganize.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentOrganize();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.rowKey = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 3: {
+                            message.sectionId = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentOrganize
+             * @function getTypeUrl
+             * @memberof muster.app.AgentOrganize
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentOrganize.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentOrganize";
+            };
+
+            return AgentOrganize;
+        })();
+
+        app.AgentOrganizationTarget = (function() {
+
+            /**
+             * Properties of an AgentOrganizationTarget.
+             * @memberof muster.app
+             * @interface IAgentOrganizationTarget
+             * @property {string|null} [key] AgentOrganizationTarget key
+             * @property {string|null} [rowKey] AgentOrganizationTarget rowKey
+             * @property {string|null} [sectionId] AgentOrganizationTarget sectionId
+             * @property {string|null} [title] AgentOrganizationTarget title
+             */
+
+            /**
+             * Constructs a new AgentOrganizationTarget.
+             * @memberof muster.app
+             * @classdesc Represents an AgentOrganizationTarget.
+             * @implements IAgentOrganizationTarget
+             * @constructor
+             * @param {muster.app.IAgentOrganizationTarget=} [properties] Properties to set
+             */
+            function AgentOrganizationTarget(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentOrganizationTarget key.
+             * @member {string} key
+             * @memberof muster.app.AgentOrganizationTarget
+             * @instance
+             */
+            AgentOrganizationTarget.prototype.key = "";
+
+            /**
+             * AgentOrganizationTarget rowKey.
+             * @member {string} rowKey
+             * @memberof muster.app.AgentOrganizationTarget
+             * @instance
+             */
+            AgentOrganizationTarget.prototype.rowKey = "";
+
+            /**
+             * AgentOrganizationTarget sectionId.
+             * @member {string} sectionId
+             * @memberof muster.app.AgentOrganizationTarget
+             * @instance
+             */
+            AgentOrganizationTarget.prototype.sectionId = "";
+
+            /**
+             * AgentOrganizationTarget title.
+             * @member {string} title
+             * @memberof muster.app.AgentOrganizationTarget
+             * @instance
+             */
+            AgentOrganizationTarget.prototype.title = "";
+
+            /**
+             * Creates a new AgentOrganizationTarget instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentOrganizationTarget
+             * @static
+             * @param {muster.app.IAgentOrganizationTarget=} [properties] Properties to set
+             * @returns {muster.app.AgentOrganizationTarget} AgentOrganizationTarget instance
+             */
+            AgentOrganizationTarget.create = function create(properties) {
+                return new AgentOrganizationTarget(properties);
+            };
+
+            /**
+             * Encodes the specified AgentOrganizationTarget message. Does not implicitly {@link muster.app.AgentOrganizationTarget.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentOrganizationTarget
+             * @static
+             * @param {muster.app.IAgentOrganizationTarget} message AgentOrganizationTarget message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentOrganizationTarget.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.rowKey != null && Object.hasOwnProperty.call(message, "rowKey"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.rowKey);
+                if (message.sectionId != null && Object.hasOwnProperty.call(message, "sectionId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.sectionId);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.title);
+                if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.key);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentOrganizationTarget message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentOrganizationTarget
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentOrganizationTarget} AgentOrganizationTarget
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentOrganizationTarget.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentOrganizationTarget();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 4: {
+                            message.key = reader.string();
+                            break;
+                        }
+                    case 1: {
+                            message.rowKey = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.sectionId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentOrganizationTarget
+             * @function getTypeUrl
+             * @memberof muster.app.AgentOrganizationTarget
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentOrganizationTarget.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentOrganizationTarget";
+            };
+
+            return AgentOrganizationTarget;
+        })();
+
+        app.AgentCatalogRow = (function() {
+
+            /**
+             * Properties of an AgentCatalogRow.
+             * @memberof muster.app
+             * @interface IAgentCatalogRow
+             * @property {string|null} [key] AgentCatalogRow key
+             * @property {muster.v1.IAgentSession|null} [session] AgentCatalogRow session
+             * @property {number|null} [depth] AgentCatalogRow depth
+             * @property {boolean|null} [expandable] AgentCatalogRow expandable
+             * @property {boolean|null} [expanded] AgentCatalogRow expanded
+             * @property {string|null} [parentTitle] AgentCatalogRow parentTitle
+             * @property {boolean|null} [canOrganize] AgentCatalogRow canOrganize
+             * @property {boolean|null} [organizing] AgentCatalogRow organizing
+             * @property {Array.<muster.app.IAgentOrganizationTarget>|null} [destinations] AgentCatalogRow destinations
+             * @property {string|null} [removableSection] AgentCatalogRow removableSection
+             * @property {string|null} [sourceLabel] AgentCatalogRow sourceLabel
+             */
+
+            /**
+             * Constructs a new AgentCatalogRow.
+             * @memberof muster.app
+             * @classdesc Represents an AgentCatalogRow.
+             * @implements IAgentCatalogRow
+             * @constructor
+             * @param {muster.app.IAgentCatalogRow=} [properties] Properties to set
+             */
+            function AgentCatalogRow(properties) {
+                this.destinations = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentCatalogRow key.
+             * @member {string} key
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.key = "";
+
+            /**
+             * AgentCatalogRow session.
+             * @member {muster.v1.IAgentSession|null|undefined} session
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.session = null;
+
+            /**
+             * AgentCatalogRow depth.
+             * @member {number} depth
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.depth = 0;
+
+            /**
+             * AgentCatalogRow expandable.
+             * @member {boolean} expandable
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.expandable = false;
+
+            /**
+             * AgentCatalogRow expanded.
+             * @member {boolean} expanded
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.expanded = false;
+
+            /**
+             * AgentCatalogRow parentTitle.
+             * @member {string} parentTitle
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.parentTitle = "";
+
+            /**
+             * AgentCatalogRow canOrganize.
+             * @member {boolean} canOrganize
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.canOrganize = false;
+
+            /**
+             * AgentCatalogRow organizing.
+             * @member {boolean} organizing
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.organizing = false;
+
+            /**
+             * AgentCatalogRow destinations.
+             * @member {Array.<muster.app.IAgentOrganizationTarget>} destinations
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.destinations = $util.emptyArray;
+
+            /**
+             * AgentCatalogRow removableSection.
+             * @member {string} removableSection
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.removableSection = "";
+
+            /**
+             * AgentCatalogRow sourceLabel.
+             * @member {string} sourceLabel
+             * @memberof muster.app.AgentCatalogRow
+             * @instance
+             */
+            AgentCatalogRow.prototype.sourceLabel = "";
+
+            /**
+             * Creates a new AgentCatalogRow instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentCatalogRow
+             * @static
+             * @param {muster.app.IAgentCatalogRow=} [properties] Properties to set
+             * @returns {muster.app.AgentCatalogRow} AgentCatalogRow instance
+             */
+            AgentCatalogRow.create = function create(properties) {
+                return new AgentCatalogRow(properties);
+            };
+
+            /**
+             * Encodes the specified AgentCatalogRow message. Does not implicitly {@link muster.app.AgentCatalogRow.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentCatalogRow
+             * @static
+             * @param {muster.app.IAgentCatalogRow} message AgentCatalogRow message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentCatalogRow.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    $root.muster.v1.AgentSession.encode(message.session, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.depth != null && Object.hasOwnProperty.call(message, "depth"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.depth);
+                if (message.expandable != null && Object.hasOwnProperty.call(message, "expandable"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.expandable);
+                if (message.expanded != null && Object.hasOwnProperty.call(message, "expanded"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.expanded);
+                if (message.parentTitle != null && Object.hasOwnProperty.call(message, "parentTitle"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.parentTitle);
+                if (message.sourceLabel != null && Object.hasOwnProperty.call(message, "sourceLabel"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.sourceLabel);
+                if (message.canOrganize != null && Object.hasOwnProperty.call(message, "canOrganize"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.canOrganize);
+                if (message.organizing != null && Object.hasOwnProperty.call(message, "organizing"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).bool(message.organizing);
+                if (message.destinations != null && message.destinations.length)
+                    for (let i = 0; i < message.destinations.length; ++i)
+                        $root.muster.app.AgentOrganizationTarget.encode(message.destinations[i], writer.uint32(/* id 10, wireType 2 =*/82).fork(), q + 1).ldelim();
+                if (message.removableSection != null && Object.hasOwnProperty.call(message, "removableSection"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.removableSection);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentCatalogRow message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentCatalogRow
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentCatalogRow} AgentCatalogRow
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentCatalogRow.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentCatalogRow();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.key = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.session = $root.muster.v1.AgentSession.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.depth = reader.uint32();
+                            break;
+                        }
+                    case 4: {
+                            message.expandable = reader.bool();
+                            break;
+                        }
+                    case 5: {
+                            message.expanded = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.parentTitle = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.canOrganize = reader.bool();
+                            break;
+                        }
+                    case 9: {
+                            message.organizing = reader.bool();
+                            break;
+                        }
+                    case 10: {
+                            if (!(message.destinations && message.destinations.length))
+                                message.destinations = [];
+                            message.destinations.push($root.muster.app.AgentOrganizationTarget.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 11: {
+                            message.removableSection = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.sourceLabel = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentCatalogRow
+             * @function getTypeUrl
+             * @memberof muster.app.AgentCatalogRow
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentCatalogRow.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentCatalogRow";
+            };
+
+            return AgentCatalogRow;
+        })();
+
+        app.AgentCatalogSection = (function() {
+
+            /**
+             * Properties of an AgentCatalogSection.
+             * @memberof muster.app
+             * @interface IAgentCatalogSection
+             * @property {string|null} [key] AgentCatalogSection key
+             * @property {string|null} [title] AgentCatalogSection title
+             * @property {string|null} [subtitle] AgentCatalogSection subtitle
+             * @property {boolean|null} [expanded] AgentCatalogSection expanded
+             * @property {number|null} [count] AgentCatalogSection count
+             * @property {Array.<muster.app.IAgentCatalogRow>|null} [rows] AgentCatalogSection rows
+             * @property {boolean|null} [hasMore] AgentCatalogSection hasMore
+             * @property {boolean|null} [loadingMore] AgentCatalogSection loadingMore
+             * @property {string|null} [kind] AgentCatalogSection kind
+             * @property {Array.<muster.app.IAgentOrganizationTarget>|null} [nativeTargets] AgentCatalogSection nativeTargets
+             */
+
+            /**
+             * Constructs a new AgentCatalogSection.
+             * @memberof muster.app
+             * @classdesc Represents an AgentCatalogSection.
+             * @implements IAgentCatalogSection
+             * @constructor
+             * @param {muster.app.IAgentCatalogSection=} [properties] Properties to set
+             */
+            function AgentCatalogSection(properties) {
+                this.rows = [];
+                this.nativeTargets = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentCatalogSection key.
+             * @member {string} key
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.key = "";
+
+            /**
+             * AgentCatalogSection title.
+             * @member {string} title
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.title = "";
+
+            /**
+             * AgentCatalogSection subtitle.
+             * @member {string} subtitle
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.subtitle = "";
+
+            /**
+             * AgentCatalogSection expanded.
+             * @member {boolean} expanded
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.expanded = false;
+
+            /**
+             * AgentCatalogSection count.
+             * @member {number} count
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.count = 0;
+
+            /**
+             * AgentCatalogSection rows.
+             * @member {Array.<muster.app.IAgentCatalogRow>} rows
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.rows = $util.emptyArray;
+
+            /**
+             * AgentCatalogSection hasMore.
+             * @member {boolean} hasMore
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.hasMore = false;
+
+            /**
+             * AgentCatalogSection loadingMore.
+             * @member {boolean} loadingMore
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.loadingMore = false;
+
+            /**
+             * AgentCatalogSection kind.
+             * @member {string} kind
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.kind = "";
+
+            /**
+             * AgentCatalogSection nativeTargets.
+             * @member {Array.<muster.app.IAgentOrganizationTarget>} nativeTargets
+             * @memberof muster.app.AgentCatalogSection
+             * @instance
+             */
+            AgentCatalogSection.prototype.nativeTargets = $util.emptyArray;
+
+            /**
+             * Creates a new AgentCatalogSection instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentCatalogSection
+             * @static
+             * @param {muster.app.IAgentCatalogSection=} [properties] Properties to set
+             * @returns {muster.app.AgentCatalogSection} AgentCatalogSection instance
+             */
+            AgentCatalogSection.create = function create(properties) {
+                return new AgentCatalogSection(properties);
+            };
+
+            /**
+             * Encodes the specified AgentCatalogSection message. Does not implicitly {@link muster.app.AgentCatalogSection.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentCatalogSection
+             * @static
+             * @param {muster.app.IAgentCatalogSection} message AgentCatalogSection message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentCatalogSection.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.title);
+                if (message.subtitle != null && Object.hasOwnProperty.call(message, "subtitle"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.subtitle);
+                if (message.expanded != null && Object.hasOwnProperty.call(message, "expanded"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.expanded);
+                if (message.count != null && Object.hasOwnProperty.call(message, "count"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.count);
+                if (message.rows != null && message.rows.length)
+                    for (let i = 0; i < message.rows.length; ++i)
+                        $root.muster.app.AgentCatalogRow.encode(message.rows[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
+                if (message.hasMore != null && Object.hasOwnProperty.call(message, "hasMore"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.hasMore);
+                if (message.loadingMore != null && Object.hasOwnProperty.call(message, "loadingMore"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.loadingMore);
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.kind);
+                if (message.nativeTargets != null && message.nativeTargets.length)
+                    for (let i = 0; i < message.nativeTargets.length; ++i)
+                        $root.muster.app.AgentOrganizationTarget.encode(message.nativeTargets[i], writer.uint32(/* id 10, wireType 2 =*/82).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentCatalogSection message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentCatalogSection
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentCatalogSection} AgentCatalogSection
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentCatalogSection.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentCatalogSection();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.key = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.subtitle = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.expanded = reader.bool();
+                            break;
+                        }
+                    case 5: {
+                            message.count = reader.uint32();
+                            break;
+                        }
+                    case 6: {
+                            if (!(message.rows && message.rows.length))
+                                message.rows = [];
+                            message.rows.push($root.muster.app.AgentCatalogRow.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 7: {
+                            message.hasMore = reader.bool();
+                            break;
+                        }
+                    case 8: {
+                            message.loadingMore = reader.bool();
+                            break;
+                        }
+                    case 9: {
+                            message.kind = reader.string();
+                            break;
+                        }
+                    case 10: {
+                            if (!(message.nativeTargets && message.nativeTargets.length))
+                                message.nativeTargets = [];
+                            message.nativeTargets.push($root.muster.app.AgentOrganizationTarget.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentCatalogSection
+             * @function getTypeUrl
+             * @memberof muster.app.AgentCatalogSection
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentCatalogSection.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentCatalogSection";
+            };
+
+            return AgentCatalogSection;
         })();
 
         app.OpenAgents = (function() {
@@ -35080,6 +39237,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IDeviceActions|null} [deviceActions] ViewModel deviceActions
              * @property {muster.v1.IMulticaStatus|null} [multica] ViewModel multica
              * @property {muster.v1.IMulticaPage|null} [multicaPage] ViewModel multicaPage
+             * @property {muster.v1.IVisionStatus|null} [vision] ViewModel vision
              * @property {Array.<muster.app.Screen>|null} [navigationPath] ViewModel navigationPath
              */
 
@@ -35376,6 +39534,14 @@ export const muster = $root.muster = (() => {
             ViewModel.prototype.multicaPage = null;
 
             /**
+             * ViewModel vision.
+             * @member {muster.v1.IVisionStatus|null|undefined} vision
+             * @memberof muster.app.ViewModel
+             * @instance
+             */
+            ViewModel.prototype.vision = null;
+
+            /**
              * ViewModel navigationPath.
              * @member {Array.<muster.app.Screen>} navigationPath
              * @memberof muster.app.ViewModel
@@ -35489,6 +39655,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.MulticaStatus.encode(message.multica, writer.uint32(/* id 35, wireType 2 =*/282).fork(), q + 1).ldelim();
                 if (message.multicaPage != null && Object.hasOwnProperty.call(message, "multicaPage"))
                     $root.muster.v1.MulticaPage.encode(message.multicaPage, writer.uint32(/* id 36, wireType 2 =*/290).fork(), q + 1).ldelim();
+                if (message.vision != null && Object.hasOwnProperty.call(message, "vision"))
+                    $root.muster.v1.VisionStatus.encode(message.vision, writer.uint32(/* id 37, wireType 2 =*/298).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -35668,6 +39836,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 36: {
                             message.multicaPage = $root.muster.v1.MulticaPage.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 37: {
+                            message.vision = $root.muster.v1.VisionStatus.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 34: {
@@ -37631,6 +41803,12 @@ export const muster = $root.muster = (() => {
              * Properties of an AgentsView.
              * @memberof muster.app
              * @interface IAgentsView
+             * @property {Array.<muster.v1.IAgentSection>|null} [nativeSections] AgentsView nativeSections
+             * @property {Array.<muster.app.IAgentCatalogSection>|null} [sections] AgentsView sections
+             * @property {string|null} [query] AgentsView query
+             * @property {boolean|null} [searching] AgentsView searching
+             * @property {boolean|null} [searchHasMore] AgentsView searchHasMore
+             * @property {Array.<string>|null} [searchNotices] AgentsView searchNotices
              * @property {Array.<muster.v1.IMemberView>|null} [createHosts] AgentsView createHosts
              * @property {Array.<string>|null} [createAgents] AgentsView createAgents
              * @property {boolean|null} [creating] AgentsView creating
@@ -37649,6 +41827,9 @@ export const muster = $root.muster = (() => {
              * @param {muster.app.IAgentsView=} [properties] Properties to set
              */
             function AgentsView(properties) {
+                this.nativeSections = [];
+                this.sections = [];
+                this.searchNotices = [];
                 this.createHosts = [];
                 this.createAgents = [];
                 this.errors = [];
@@ -37658,6 +41839,54 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * AgentsView nativeSections.
+             * @member {Array.<muster.v1.IAgentSection>} nativeSections
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.nativeSections = $util.emptyArray;
+
+            /**
+             * AgentsView sections.
+             * @member {Array.<muster.app.IAgentCatalogSection>} sections
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.sections = $util.emptyArray;
+
+            /**
+             * AgentsView query.
+             * @member {string} query
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.query = "";
+
+            /**
+             * AgentsView searching.
+             * @member {boolean} searching
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.searching = false;
+
+            /**
+             * AgentsView searchHasMore.
+             * @member {boolean} searchHasMore
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.searchHasMore = false;
+
+            /**
+             * AgentsView searchNotices.
+             * @member {Array.<string>} searchNotices
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.searchNotices = $util.emptyArray;
 
             /**
              * AgentsView createHosts.
@@ -37761,6 +41990,21 @@ export const muster = $root.muster = (() => {
                         writer.uint32(/* id 6, wireType 2 =*/50).string(message.createAgents[i]);
                 if (message.creating != null && Object.hasOwnProperty.call(message, "creating"))
                     writer.uint32(/* id 7, wireType 0 =*/56).bool(message.creating);
+                if (message.nativeSections != null && message.nativeSections.length)
+                    for (let i = 0; i < message.nativeSections.length; ++i)
+                        $root.muster.v1.AgentSection.encode(message.nativeSections[i], writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
+                if (message.sections != null && message.sections.length)
+                    for (let i = 0; i < message.sections.length; ++i)
+                        $root.muster.app.AgentCatalogSection.encode(message.sections[i], writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
+                if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.query);
+                if (message.searching != null && Object.hasOwnProperty.call(message, "searching"))
+                    writer.uint32(/* id 11, wireType 0 =*/88).bool(message.searching);
+                if (message.searchNotices != null && message.searchNotices.length)
+                    for (let i = 0; i < message.searchNotices.length; ++i)
+                        writer.uint32(/* id 12, wireType 2 =*/98).string(message.searchNotices[i]);
+                if (message.searchHasMore != null && Object.hasOwnProperty.call(message, "searchHasMore"))
+                    writer.uint32(/* id 13, wireType 0 =*/104).bool(message.searchHasMore);
                 return writer;
             };
 
@@ -37798,6 +42042,36 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 8: {
+                            if (!(message.nativeSections && message.nativeSections.length))
+                                message.nativeSections = [];
+                            message.nativeSections.push($root.muster.v1.AgentSection.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 9: {
+                            if (!(message.sections && message.sections.length))
+                                message.sections = [];
+                            message.sections.push($root.muster.app.AgentCatalogSection.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 10: {
+                            message.query = reader.string();
+                            break;
+                        }
+                    case 11: {
+                            message.searching = reader.bool();
+                            break;
+                        }
+                    case 13: {
+                            message.searchHasMore = reader.bool();
+                            break;
+                        }
+                    case 12: {
+                            if (!(message.searchNotices && message.searchNotices.length))
+                                message.searchNotices = [];
+                            message.searchNotices.push(reader.string());
+                            break;
+                        }
                     case 5: {
                             if (!(message.createHosts && message.createHosts.length))
                                 message.createHosts = [];

@@ -60,9 +60,11 @@ fn access_for(req: &Req) -> Access {
         })
     };
     match req {
-        Req::Multica(_) | Req::MulticaBrowse(_) | Req::AgentNativeCreate(_) | Req::Vision(_) => {
-            Access::LocalOnly
-        }
+        Req::Multica(_)
+        | Req::MulticaBrowse(_)
+        | Req::AgentNativeCreate(_)
+        | Req::Vision(_)
+        | Req::AgentScheduler(_) => Access::LocalOnly,
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -1713,6 +1715,8 @@ async fn dispatch(
             )
             .await?
         }
+        // Local owner only; its operations take the console themselves.
+        Req::AgentScheduler(r) => crate::scheduler::call(daemon, r).await?,
         Req::OrcaCreate(r) => {
             use muster_proto::Message as _;
             if r.op_id.is_empty() {

@@ -67,6 +67,17 @@ impl std::ops::Deref for Current {
         &self.tx
     }
 }
+/// What this Mac's own (unsigned) lease does once the console is unlocked.
+pub(crate) enum LocalJob {
+    /// `/compact` in one conversation (ADR 0087).
+    Compact(String),
+    /// One operation a task scheduler grant reserved (ADR 0095).
+    Scheduled {
+        task_id: String,
+        job: Box<crate::scheduler::Job>,
+    },
+}
+
 struct Queued {
     request: Req,
     reply: Reply,
@@ -112,7 +123,7 @@ enum Command {
         peer: DeviceId,
     },
     /// Arm this Mac's own unattended lease. Sent only by
-    /// `Owner::unattended_compact`, never by an RPC.
+    /// `Owner::unattended_compact` or `Owner::scheduled`, never by an RPC.
     Unattended {
         reply: Reply,
     },
@@ -445,7 +456,78 @@ impl Owner {
             write,
             None,
             None,
-            Some(session.to_owned()),
+            Some(LocalJob::Compact(session.to_owned())),
+        )?;
+        self.ask(|reply| Command::Unattended { reply }).await
+    }
+
+    /// One operation of a task scheduler grant on a locked console (ADR
+    /// 0095): this Mac's own lease, opened only by the grant's reservation,
+    /// for exactly that operation. The lease, its cover, watchdog, input
+    /// takeover, one plugin consumption and relock are those of every other
+    /// Locked Use; nothing waits for the model inside it.
+    pub(crate) async fn scheduled(
+        self: &Arc<Self>,
+        daemon: Arc<Daemon>,
+        reservation: muster_core::scheduler_grant::Reservation,
+        job: crate::scheduler::Job,
+    ) -> Result<Resp, Error> {
+        let os = self.os.clone().ok_or_else(|| {
+            Error::Unavailable("Locked Use is unsupported on this platform".into())
+        })?;
+        os.available().map_err(Error::Unavailable)?;
+        // Never preempt: another owner's lease keeps the console.
+        let write = self
+            .writes
+            .clone()
+            .try_write_owned()
+            .map_err(|_| Error::Conflict("the console is busy".into()))?;
+        let me = daemon.device_id();
+        let mut gate = Gate::new(me)?;
+        let observed = observation(&*os, None, true);
+        let issued_at = Instant::now();
+        let c = gate.issue_scheduled(
+            daemon.roster().read().unwrap().state(),
+            &daemon.policy().read().unwrap(),
+            &reservation,
+            MAX_TTL,
+            issued_at,
+            observed,
+        )?;
+        log::info!(
+            "Locked Use: scheduled lease issued op={:?} kind={}",
+            reservation.op_id(),
+            reservation.kind().as_str()
+        );
+        let runtime = owner_runtime()?;
+        let (tx, rx) = mpsc::channel(16);
+        *self.current.lock().unwrap() = Some(Current {
+            receipt: None,
+            tx,
+            scope: None,
+            accepting: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            terminal: None,
+            manual: None,
+        });
+        let digest = reservation.digest();
+        self.spawn_owner(
+            runtime,
+            &daemon,
+            os,
+            gate,
+            issued_at,
+            c,
+            me,
+            None,
+            digest,
+            rx,
+            write,
+            None,
+            None,
+            Some(LocalJob::Scheduled {
+                task_id: reservation.task_id().to_owned(),
+                job: Box::new(job),
+            }),
         )?;
         self.ask(|reply| Command::Unattended { reply }).await
     }
@@ -466,7 +548,7 @@ impl Owner {
         write: OwnedRwLockWriteGuard<()>,
         provider: Option<String>,
         terminal: Option<TerminalLease>,
-        compact: Option<String>,
+        local: Option<LocalJob>,
     ) -> Result<Resp, Error> {
         let owner = self.clone();
         let weak = Arc::downgrade(daemon);
@@ -488,7 +570,7 @@ impl Owner {
                     muster_agent::control_guard::WorkQueue::default(),
                     provider,
                     terminal,
-                    compact,
+                    local,
                 )
                 .await;
             })

@@ -1,7 +1,8 @@
 //! The owner task: one console lease from challenge to relock, driven by
 //! commands and a 50 ms tick. A lease runs one operation (and its provider
 //! queue), keeps a terminal session open while its requester renews it, or
-//! runs this Mac's own unattended `/compact` (ADR 0087).
+//! runs this Mac's own unattended `/compact` (ADR 0087) or one operation its
+//! task scheduler grant reserved (ADR 0095).
 
 use super::*;
 
@@ -21,7 +22,7 @@ pub(super) async fn run(
     work: muster_agent::control_guard::WorkQueue,
     provider: Option<String>,
     terminal: Option<TerminalLease>,
-    compact: Option<String>,
+    local: Option<LocalJob>,
 ) {
     let manual = gate.is_device();
     let mut last_maintenance = Instant::now();
@@ -200,12 +201,22 @@ pub(super) async fn run(
                     armed = Some((result, reply, token));
                 }
                 Command::Unattended { reply } => {
-                    let result = gate.arm_unattended(
-                        daemon.roster().read().unwrap().state(),
-                        &daemon.policy().read().unwrap(),
-                        Instant::now(),
-                        o,
-                    );
+                    // Each local lease is armed only as what it was issued as.
+                    let result = if gate.is_scheduled() {
+                        gate.arm_scheduled(
+                            daemon.roster().read().unwrap().state(),
+                            &daemon.policy().read().unwrap(),
+                            Instant::now(),
+                            o,
+                        )
+                    } else {
+                        gate.arm_unattended(
+                            daemon.roster().read().unwrap().state(),
+                            &daemon.policy().read().unwrap(),
+                            Instant::now(),
+                            o,
+                        )
+                    };
                     match &result {
                         Ok(_) => log::info!(
                             "Locked Use: unattended lease armed; preparing display guard"
@@ -455,7 +466,23 @@ pub(super) async fn run(
                     );
                     action = Some(job);
                     action_delivery = Some(delivery);
-                } else if admitted && let Some(session) = &compact {
+                } else if admitted && let Some(LocalJob::Scheduled { task_id, job }) = &local {
+                    log::info!("Locked Use: scheduled operation admitted after OS unlock");
+                    live.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let (handle, delivery) = start_scheduled(
+                        daemon.clone(),
+                        task_id.clone(),
+                        (**job).clone(),
+                        started,
+                        os.clone(),
+                        live.clone(),
+                        o,
+                        cancel.clone(),
+                        work.clone(),
+                    );
+                    action = Some(handle);
+                    action_delivery = Some(delivery);
+                } else if admitted && let Some(LocalJob::Compact(session)) = &local {
                     log::info!("Locked Use: unattended idle compaction admitted after OS unlock");
                     live.store(true, std::sync::atomic::Ordering::SeqCst);
                     let (job, delivery) = start_compact(
@@ -907,6 +934,69 @@ pub(super) fn start_compact(
                             Err(Error::UnknownOutcome(message)) => Ok(unknown_result(message)),
                             Err(error) => Err(error),
                         },
+                    }
+                })
+                .await
+                .map_err(|error| {
+                    Error::Unavailable(format!("native operation worker failed: {error}"))
+                })?
+            })))
+            .await
+    });
+    (job, delivery)
+}
+
+/// One operation of a task scheduler grant under its scheduled lease (ADR
+/// 0095). Each OS call is admitted only while the lease is live, inside its
+/// first window, on the same console with no local input, unlocked, while
+/// this Mac still allows Locked Use and agent control of the app, and while
+/// the task's grant is neither revoked nor expired.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn start_scheduled(
+    daemon: Arc<Daemon>,
+    task_id: String,
+    job: crate::scheduler::Job,
+    started: Instant,
+    os: Arc<dyn LockedUseOs>,
+    live: Arc<std::sync::atomic::AtomicBool>,
+    observation: Observation,
+    cancel: CancellationToken,
+    work: muster_agent::control_guard::WorkQueue,
+) -> (
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+    muster_agent::control_guard::Delivery,
+) {
+    let delivery = muster_agent::control_guard::Delivery::default();
+    delivery.set_receipt_budget(Duration::from_millis(500));
+    let scoped = delivery.clone();
+    let checked = daemon.clone();
+    let provider = job.provider().to_owned();
+    let check = Arc::new(move || {
+        let sample = os.observe();
+        live.load(std::sync::atomic::Ordering::SeqCst)
+            && !cancel.is_cancelled()
+            && started.elapsed() < MAX_TTL
+            && sample.console == observation.console
+            && sample.input_generation == observation.input_generation
+            && sample.screen == muster_core::locked_use::Screen::Unlocked
+            && checked.policy().read().is_ok_and(|p| {
+                p.allow_locked_control
+                    && p.offer_agent
+                    && muster_core::apps::app(&provider)
+                        .is_some_and(|app| p.ax_allowlist.iter().any(|id| id == app.bundle_id))
+            })
+            && checked.scheduler.live(&task_id)
+    });
+    let job = tokio::spawn(async move {
+        scoped
+            .scope(work.scope(muster_agent::control_guard::scope(check, async move {
+                let (_cancel_worker, cancelled) = oneshot::channel::<()>();
+                muster_agent::control_guard::spawn_blocking_async(async move {
+                    muster_agent::control_guard::check()?;
+                    tokio::select! {
+                        biased;
+                        _ = cancelled => Err(Error::Unavailable("native operation cancelled".into())),
+                        result = job.perform(&daemon, crate::scheduler::IN_LEASE_RECEIPT) => result,
                     }
                 })
                 .await

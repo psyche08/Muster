@@ -174,6 +174,7 @@ records a specific decision and does not revive code on its delete list.
 | [0095](0095-shared-ax-navigation-and-preparation.md) | Accepted; installed Codex phone-send baseline verified; broader App acceptance pending | Share bounded AX navigation and reuse verified preparation |
 
 | [0096](0096-question-editor-preparation.md) | Accepted; source verified, installed question acceptance pending | Rebind and refresh question editors during preparation |
+| [0095](0095-task-scoped-scheduler-grant-for-locked-use.md) | Accepted; source and tests verified | Let one local task's scheduler grant run bounded desktop operations under this Mac's own Locked Use lease |
 
 | [0098](0098-focused-question-field-deletion.md) | Accepted; installed candidates failed; see 0101 | Delete a proven question-editor selection through the application |
 
