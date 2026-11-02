@@ -11,7 +11,10 @@ import SwiftUI
 
 @main
 struct MusterMacApp: App {
-    init() { MusterRuntime.desktopUpdateStartup() }
+    init() {
+        MusterRuntime.desktopUpdateStartup()
+        Caffeinate.shared.apply()
+    }
 
     @StateObject private var model = MusterModel()
 
@@ -32,7 +35,10 @@ struct MusterMacApp: App {
                     })
                 }
         }
-        .commands { MusterSettingsCommands(model: model) }
+        .commands {
+            MusterSettingsCommands(model: model)
+            KeepAwakeCommands()
+        }
     }
 
 }

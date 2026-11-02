@@ -40,7 +40,7 @@ state. It preserves per-operation grants and lock-before-uncover cleanup.
 - Retain target-App signature identity, startup generation, empty-draft, and user-input-generation checks. Temporary unlock does not relax them or let other ordinary Agent requests borrow the window.
 - If plugin/platform capabilities are unavailable, reject this control path. There is no CLI fallback, and the frozen old `macos_claude_native_input.rs` is not changed.
 - For display viewing, use VNC over vnet from another desktop; phones do not offer display viewing.
-- Power: use `IOPMAssertionCreateWithName(PreventUserIdleSystemSleep)` to keep the system awake while allowing display sleep, replacing `caffeinate -dimsu`.
+- Power: use `IOPMAssertionCreateWithName(PreventUserIdleSystemSleep)` to keep the system awake while allowing display sleep, replacing `caffeinate -dimsu`. This governs the privacy cover and locked operation. Separately, the Mac app's **Keep Awake** menu runs `caffeinate -imsu` (with **Keep Screen On**, `-dimsu`) for as long as Muster runs, by the user's own choice ([ADR 0083](../adr/0083-keep-awake-menu.md)).
 - Ordinary privacy covers suit the independent unlocked-but-covered scenario. Locked Use additionally requires all-display readiness, continuous observation, nonce binding, and locking before uncovering; ordinary `covered` state is insufficient. Cover behavior combined with VNC still requires verification.
 
 Approvals: Controllers normalize pending interactions to `PendingInteraction{id, kind, options}`; the UI renders only `options`, retaining the rule to display only provider-declared decisions.
