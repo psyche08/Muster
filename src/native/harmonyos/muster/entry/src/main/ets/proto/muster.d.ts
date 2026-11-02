@@ -10080,6 +10080,9 @@ export namespace muster {
 
             /** AgentSchedulerRequest reconcile */
             reconcile?: (muster.v1.IAgentSchedulerOperate|null);
+
+            /** AgentSchedulerRequest adopt */
+            adopt?: (muster.v1.IAgentSchedulerAdopt|null);
         }
 
         /** Represents an AgentSchedulerRequest. */
@@ -10106,8 +10109,11 @@ export namespace muster {
             /** AgentSchedulerRequest reconcile. */
             public reconcile?: (muster.v1.IAgentSchedulerOperate|null);
 
+            /** AgentSchedulerRequest adopt. */
+            public adopt?: (muster.v1.IAgentSchedulerAdopt|null);
+
             /** AgentSchedulerRequest action. */
-            public action?: ("grant"|"revoke"|"status"|"operate"|"reconcile");
+            public action?: ("grant"|"revoke"|"status"|"operate"|"reconcile"|"adopt");
 
             /**
              * Creates a new AgentSchedulerRequest instance using the specified properties.
@@ -10276,6 +10282,82 @@ export namespace muster {
 
             /**
              * Gets the default type url for AgentSchedulerTask
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerAdopt. */
+        interface IAgentSchedulerAdopt {
+
+            /** AgentSchedulerAdopt taskId */
+            taskId?: (string|null);
+
+            /** AgentSchedulerAdopt role */
+            role?: (string|null);
+
+            /** AgentSchedulerAdopt provider */
+            provider?: (string|null);
+
+            /** AgentSchedulerAdopt directory */
+            directory?: (string|null);
+
+            /** AgentSchedulerAdopt session */
+            session?: (string|null);
+        }
+
+        /** Represents an AgentSchedulerAdopt. */
+        class AgentSchedulerAdopt implements IAgentSchedulerAdopt {
+
+            /**
+             * Constructs a new AgentSchedulerAdopt.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerAdopt);
+
+            /** AgentSchedulerAdopt taskId. */
+            public taskId: string;
+
+            /** AgentSchedulerAdopt role. */
+            public role: string;
+
+            /** AgentSchedulerAdopt provider. */
+            public provider: string;
+
+            /** AgentSchedulerAdopt directory. */
+            public directory: string;
+
+            /** AgentSchedulerAdopt session. */
+            public session: string;
+
+            /**
+             * Creates a new AgentSchedulerAdopt instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerAdopt instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerAdopt): muster.v1.AgentSchedulerAdopt;
+
+            /**
+             * Encodes the specified AgentSchedulerAdopt message. Does not implicitly {@link muster.v1.AgentSchedulerAdopt.verify|verify} messages.
+             * @param message AgentSchedulerAdopt message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerAdopt, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerAdopt message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerAdopt
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerAdopt;
+
+            /**
+             * Gets the default type url for AgentSchedulerAdopt
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -10538,6 +10620,9 @@ export namespace muster {
 
             /** AgentSchedulerStatus op */
             op?: (muster.v1.IAgentSchedulerOp|null);
+
+            /** AgentSchedulerStatus adopted */
+            adopted?: (string[]|null);
         }
 
         /** Represents an AgentSchedulerStatus. */
@@ -10602,6 +10687,9 @@ export namespace muster {
 
             /** AgentSchedulerStatus op. */
             public op?: (muster.v1.IAgentSchedulerOp|null);
+
+            /** AgentSchedulerStatus adopted. */
+            public adopted: string[];
 
             /**
              * Creates a new AgentSchedulerStatus instance using the specified properties.

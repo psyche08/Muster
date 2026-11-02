@@ -25889,6 +25889,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentSchedulerTask|null} [status] AgentSchedulerRequest status
              * @property {muster.v1.IAgentSchedulerOperate|null} [operate] AgentSchedulerRequest operate
              * @property {muster.v1.IAgentSchedulerOperate|null} [reconcile] AgentSchedulerRequest reconcile
+             * @property {muster.v1.IAgentSchedulerAdopt|null} [adopt] AgentSchedulerRequest adopt
              */
 
             /**
@@ -25946,17 +25947,25 @@ export const muster = $root.muster = (() => {
              */
             AgentSchedulerRequest.prototype.reconcile = null;
 
+            /**
+             * AgentSchedulerRequest adopt.
+             * @member {muster.v1.IAgentSchedulerAdopt|null|undefined} adopt
+             * @memberof muster.v1.AgentSchedulerRequest
+             * @instance
+             */
+            AgentSchedulerRequest.prototype.adopt = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * AgentSchedulerRequest action.
-             * @member {"grant"|"revoke"|"status"|"operate"|"reconcile"|undefined} action
+             * @member {"grant"|"revoke"|"status"|"operate"|"reconcile"|"adopt"|undefined} action
              * @memberof muster.v1.AgentSchedulerRequest
              * @instance
              */
             Object.defineProperty(AgentSchedulerRequest.prototype, "action", {
-                get: $util.oneOfGetter($oneOfFields = ["grant", "revoke", "status", "operate", "reconcile"]),
+                get: $util.oneOfGetter($oneOfFields = ["grant", "revoke", "status", "operate", "reconcile", "adopt"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -25998,6 +26007,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentSchedulerOperate.encode(message.operate, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
                 if (message.reconcile != null && Object.hasOwnProperty.call(message, "reconcile"))
                     $root.muster.v1.AgentSchedulerOperate.encode(message.reconcile, writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
+                if (message.adopt != null && Object.hasOwnProperty.call(message, "adopt"))
+                    $root.muster.v1.AgentSchedulerAdopt.encode(message.adopt, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -26053,6 +26064,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 5: {
                             message.reconcile = $root.muster.v1.AgentSchedulerOperate.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 6: {
+                            message.adopt = $root.muster.v1.AgentSchedulerAdopt.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -26442,6 +26457,200 @@ export const muster = $root.muster = (() => {
             };
 
             return AgentSchedulerTask;
+        })();
+
+        v1.AgentSchedulerAdopt = (function() {
+
+            /**
+             * Properties of an AgentSchedulerAdopt.
+             * @memberof muster.v1
+             * @interface IAgentSchedulerAdopt
+             * @property {string|null} [taskId] AgentSchedulerAdopt taskId
+             * @property {string|null} [role] AgentSchedulerAdopt role
+             * @property {string|null} [provider] AgentSchedulerAdopt provider
+             * @property {string|null} [directory] AgentSchedulerAdopt directory
+             * @property {string|null} [session] AgentSchedulerAdopt session
+             */
+
+            /**
+             * Constructs a new AgentSchedulerAdopt.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSchedulerAdopt.
+             * @implements IAgentSchedulerAdopt
+             * @constructor
+             * @param {muster.v1.IAgentSchedulerAdopt=} [properties] Properties to set
+             */
+            function AgentSchedulerAdopt(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSchedulerAdopt taskId.
+             * @member {string} taskId
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @instance
+             */
+            AgentSchedulerAdopt.prototype.taskId = "";
+
+            /**
+             * AgentSchedulerAdopt role.
+             * @member {string} role
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @instance
+             */
+            AgentSchedulerAdopt.prototype.role = "";
+
+            /**
+             * AgentSchedulerAdopt provider.
+             * @member {string} provider
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @instance
+             */
+            AgentSchedulerAdopt.prototype.provider = "";
+
+            /**
+             * AgentSchedulerAdopt directory.
+             * @member {string} directory
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @instance
+             */
+            AgentSchedulerAdopt.prototype.directory = "";
+
+            /**
+             * AgentSchedulerAdopt session.
+             * @member {string} session
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @instance
+             */
+            AgentSchedulerAdopt.prototype.session = "";
+
+            /**
+             * Creates a new AgentSchedulerAdopt instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @static
+             * @param {muster.v1.IAgentSchedulerAdopt=} [properties] Properties to set
+             * @returns {muster.v1.AgentSchedulerAdopt} AgentSchedulerAdopt instance
+             */
+            AgentSchedulerAdopt.create = function create(properties) {
+                return new AgentSchedulerAdopt(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSchedulerAdopt message. Does not implicitly {@link muster.v1.AgentSchedulerAdopt.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @static
+             * @param {muster.v1.IAgentSchedulerAdopt} message AgentSchedulerAdopt message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSchedulerAdopt.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.taskId != null && Object.hasOwnProperty.call(message, "taskId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.taskId);
+                if (message.role != null && Object.hasOwnProperty.call(message, "role"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.role);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.directory);
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.session);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSchedulerAdopt message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSchedulerAdopt} AgentSchedulerAdopt
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSchedulerAdopt.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSchedulerAdopt();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.taskId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.role = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.session = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSchedulerAdopt
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSchedulerAdopt
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSchedulerAdopt.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSchedulerAdopt";
+            };
+
+            return AgentSchedulerAdopt;
         })();
 
         v1.AgentSchedulerOperate = (function() {
@@ -26976,6 +27185,7 @@ export const muster = $root.muster = (() => {
              * @property {number|null} [controls] AgentSchedulerStatus controls
              * @property {Array.<muster.v1.IAgentSchedulerOp>|null} [ops] AgentSchedulerStatus ops
              * @property {muster.v1.IAgentSchedulerOp|null} [op] AgentSchedulerStatus op
+             * @property {Array.<string>|null} [adopted] AgentSchedulerStatus adopted
              */
 
             /**
@@ -26988,6 +27198,7 @@ export const muster = $root.muster = (() => {
              */
             function AgentSchedulerStatus(properties) {
                 this.ops = [];
+                this.adopted = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -27139,6 +27350,14 @@ export const muster = $root.muster = (() => {
             AgentSchedulerStatus.prototype.op = null;
 
             /**
+             * AgentSchedulerStatus adopted.
+             * @member {Array.<string>} adopted
+             * @memberof muster.v1.AgentSchedulerStatus
+             * @instance
+             */
+            AgentSchedulerStatus.prototype.adopted = $util.emptyArray;
+
+            /**
              * Creates a new AgentSchedulerStatus instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentSchedulerStatus
@@ -27203,6 +27422,9 @@ export const muster = $root.muster = (() => {
                         $root.muster.v1.AgentSchedulerOp.encode(message.ops[i], writer.uint32(/* id 17, wireType 2 =*/138).fork(), q + 1).ldelim();
                 if (message.op != null && Object.hasOwnProperty.call(message, "op"))
                     $root.muster.v1.AgentSchedulerOp.encode(message.op, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
+                if (message.adopted != null && message.adopted.length)
+                    for (let i = 0; i < message.adopted.length; ++i)
+                        writer.uint32(/* id 19, wireType 2 =*/154).string(message.adopted[i]);
                 return writer;
             };
 
@@ -27312,6 +27534,12 @@ export const muster = $root.muster = (() => {
                         }
                     case 18: {
                             message.op = $root.muster.v1.AgentSchedulerOp.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 19: {
+                            if (!(message.adopted && message.adopted.length))
+                                message.adopted = [];
+                            message.adopted.push(reader.string());
                             break;
                         }
                     default:

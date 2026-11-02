@@ -480,3 +480,131 @@ fn the_registry_persists_counts_and_unknowns_across_restarts() {
     assert_eq!(grant.counts.packages, 1);
     assert!(matches!(grant.ops["c1"].state, OpState::Unknown { .. }));
 }
+
+#[test]
+fn an_existing_session_is_adopted_once_and_counts_as_a_session() {
+    let mut grant = Grant::new(scope("task-1"), 0, 60_000).unwrap();
+    assert_eq!(
+        grant.adopt(Role::Producer, "", 1),
+        Err(Refusal::Invalid("adoption names one session"))
+    );
+    assert_eq!(grant.adopt(Role::Producer, "session-p", 1), Ok(true));
+    // A restarted caller asking again changes nothing.
+    assert_eq!(grant.adopt(Role::Producer, "session-p", 2), Ok(false));
+    assert_eq!(grant.counts.adopted, 1);
+    assert_eq!(grant.adopted[&Role::Producer], 1);
+    // One session per role, never replaced, never shared between roles.
+    assert!(matches!(
+        grant.adopt(Role::Producer, "session-x", 2),
+        Err(Refusal::Conflict(_))
+    ));
+    assert!(matches!(
+        grant.adopt(Role::Reviewer, "session-p", 2),
+        Err(Refusal::Conflict(_))
+    ));
+    assert!(matches!(
+        grant.reserve(
+            &request("c-producer", Kind::Create, Role::Producer, ""),
+            Vec::new(),
+            2
+        ),
+        Err(Refusal::Quota(_))
+    ));
+    // The adopted session is the producer's: sends must name it.
+    fresh(
+        &mut grant,
+        &request("s1", Kind::Send, Role::Producer, "session-p"),
+        3,
+    );
+    assert!(matches!(
+        grant.reserve(
+            &request("s2", Kind::Send, Role::Producer, "session-x"),
+            Vec::new(),
+            3
+        ),
+        Err(Refusal::OutOfScope(_))
+    ));
+    // The reviewer is still created, and its receipt cannot be the adopted one.
+    fresh(
+        &mut grant,
+        &request("c-reviewer", Kind::Create, Role::Reviewer, ""),
+        4,
+    );
+    assert!(matches!(
+        grant.settle("c-reviewer", Outcome::Applied("session-p".into())),
+        Err(Refusal::Conflict(_))
+    ));
+    grant
+        .settle("c-reviewer", Outcome::Applied("session-r".into()))
+        .unwrap();
+    assert_eq!(grant.counts.creates + grant.counts.adopted, MAX_SESSIONS);
+    assert!(matches!(
+        grant.adopt(Role::Reviewer, "session-y", 5),
+        Err(Refusal::Conflict(_))
+    ));
+}
+
+#[test]
+fn adoption_needs_a_live_grant_and_a_role_without_a_creation() {
+    let mut grant = Grant::new(scope("task-1"), 0, 60_000).unwrap();
+    fresh(
+        &mut grant,
+        &request("c-producer", Kind::Create, Role::Producer, ""),
+        1,
+    );
+    // A creation in flight or of unknown outcome may still bind its receipt.
+    assert!(matches!(
+        grant.adopt(Role::Producer, "session-p", 2),
+        Err(Refusal::Conflict(_))
+    ));
+    grant
+        .settle("c-producer", Outcome::Unknown("no receipt".into()))
+        .unwrap();
+    assert!(matches!(
+        grant.adopt(Role::Producer, "session-p", 2),
+        Err(Refusal::Conflict(_))
+    ));
+    // A creation proven not started leaves the role free.
+    let mut grant = Grant::new(scope("task-1"), 0, 60_000).unwrap();
+    fresh(
+        &mut grant,
+        &request("c-producer", Kind::Create, Role::Producer, ""),
+        1,
+    );
+    grant
+        .settle("c-producer", Outcome::NotStarted("cover failed".into()))
+        .unwrap();
+    assert_eq!(grant.adopt(Role::Producer, "session-p", 2), Ok(true));
+    // Expiry and revocation end adoption, including a repeat of a done one.
+    assert_eq!(
+        grant.adopt(Role::Producer, "session-p", 60_000),
+        Err(Refusal::Expired)
+    );
+    grant.revoke(3);
+    assert_eq!(
+        grant.adopt(Role::Producer, "session-p", 4),
+        Err(Refusal::Revoked)
+    );
+    assert_eq!(
+        grant.adopt(Role::Reviewer, "session-r", 4),
+        Err(Refusal::Revoked)
+    );
+}
+
+#[test]
+fn adoptions_persist_and_older_records_read_as_none() {
+    let mut registry = Registry::default();
+    registry.grant(scope("task-1"), 0, 60_000).unwrap();
+    registry
+        .get_mut("task-1")
+        .unwrap()
+        .adopt(Role::Producer, "session-p", 1)
+        .unwrap();
+    let restored: Registry =
+        serde_json::from_slice(&serde_json::to_vec(&registry).unwrap()).unwrap();
+    assert_eq!(restored, registry);
+    let mut old = serde_json::to_value(Grant::new(scope("task-2"), 0, 60_000).unwrap()).unwrap();
+    old["counts"].as_object_mut().unwrap().remove("adopted");
+    let old: Grant = serde_json::from_value(old).unwrap();
+    assert_eq!((old.counts.adopted, old.adopted.len()), (0, 0));
+}

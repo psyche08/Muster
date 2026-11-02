@@ -332,7 +332,71 @@ pub(crate) async fn call(
         Action::Status(t) => status(daemon, &t.task_id, None),
         Action::Operate(o) => operate(daemon, o).await,
         Action::Reconcile(o) => reconcile(daemon, o).await,
+        Action::Adopt(a) => adopt(daemon, a).await,
     }
+}
+
+/// Whether `id` is, in the provider's own registry, a session the scope may
+/// adopt: this provider's code session in the granted directory, not
+/// archived, read-only or a child session.
+fn adoptable(sessions: &[v1::AgentSession], scope: &grant::Scope, id: &str) -> bool {
+    sessions.iter().any(|s| {
+        s.id == id
+            && s.provider == scope.provider
+            && s.mode == "code"
+            && std::path::Path::new(&s.cwd) == std::path::Path::new(&scope.directory)
+            && !s.archived
+            && !s.read_only
+            && s.parent_session_id.is_empty()
+    })
+}
+
+/// Binds an existing session to a role instead of creating one (ADR 0095).
+/// It reads the provider's session registry and never touches the desktop.
+async fn adopt(daemon: &Arc<Daemon>, a: v1::AgentSchedulerAdopt) -> Result<Resp, Error> {
+    let role = role_of(&a.role)?;
+    // Liveness, the role, the quota and a repeat are decided on a copy before
+    // the registry is read.
+    let (scope, fresh) = daemon.scheduler.read(|r| {
+        let g = r
+            .get(&a.task_id)
+            .ok_or_else(|| refused(Refusal::NotFound))?;
+        let fresh = g
+            .clone()
+            .adopt(role, &a.session, now_ms())
+            .map_err(refused)?;
+        Ok((g.scope.clone(), fresh))
+    })?;
+    if a.provider != scope.provider {
+        return Err(refused(Refusal::OutOfScope("provider")));
+    }
+    if a.directory != scope.directory {
+        return Err(refused(Refusal::OutOfScope("directory")));
+    }
+    if !fresh {
+        return status(daemon, &a.task_id, None);
+    }
+    let agent = daemon
+        .agent()
+        .ok_or_else(|| Error::Unavailable("Agent service unavailable".into()))?;
+    agent.rescan().await;
+    if !adoptable(&agent.list(None, usize::MAX), &scope, &a.session) {
+        return Err(refused(Refusal::OutOfScope(
+            "session is not this provider's code session in the granted directory",
+        )));
+    }
+    daemon.scheduler.update(daemon.store(), |r| {
+        r.get_mut(&a.task_id)
+            .ok_or_else(|| refused(Refusal::NotFound))?
+            .adopt(role, &a.session, now_ms())
+            .map_err(refused)
+    })?;
+    log::info!(
+        "scheduler: task {:?} adopted its {} session",
+        a.task_id,
+        role.as_str()
+    );
+    status(daemon, &a.task_id, None)
 }
 
 fn op_view(op_id: &str, op: &Op) -> v1::AgentSchedulerOp {
@@ -377,6 +441,7 @@ fn status(daemon: &Daemon, task_id: &str, op: Option<&str>) -> Result<Resp, Erro
             controls: g.counts.controls,
             ops: g.ops.iter().map(|(id, op)| op_view(id, op)).collect(),
             op: op.and_then(|id| g.ops.get(id).map(|o| op_view(id, o))),
+            adopted: g.adopted.keys().map(|r| r.as_str().into()).collect(),
         }))
     })
 }
@@ -931,6 +996,143 @@ mod tests {
         match resp {
             Resp::OpResult(r) => (r.status, r.message.clone(), r.result_id.clone()),
             other => panic!("{other:?}"),
+        }
+    }
+
+    fn adoption(
+        f: &Fixture,
+        role: &str,
+        provider: &str,
+        directory: &str,
+    ) -> v1::AgentSchedulerRequest {
+        let _ = f;
+        v1::AgentSchedulerRequest {
+            action: Some(Action::Adopt(v1::AgentSchedulerAdopt {
+                task_id: "t1".into(),
+                role: role.into(),
+                provider: provider.into(),
+                directory: directory.into(),
+                session: "s-existing".into(),
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn adoption_is_refused_outside_the_grant_and_without_the_registry() {
+        let f = fixture().await;
+        let work = f.work.clone();
+        let error = call(&f.daemon, adoption(&f, "producer", "claude", &work))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::NotFound(_)), "{error}");
+        call(&f.daemon, grant("t1", &work, 3600)).await.unwrap();
+        for (role, provider, directory) in [
+            ("producer", "codex", work.as_str()),
+            ("producer", "claude", "/private/tmp"),
+            ("owner", "claude", work.as_str()),
+        ] {
+            let error = call(&f.daemon, adoption(&f, role, provider, directory))
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(error, Error::Unauthorized(_) | Error::Invalid(_)),
+                "{error}"
+            );
+        }
+        // No provider registry to check it in: nothing is adopted.
+        let error = call(&f.daemon, adoption(&f, "producer", "claude", &work))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::Unavailable(_)), "{error}");
+        let s = state(&f);
+        assert!(s.producer_session.is_empty() && s.adopted.is_empty());
+        // A role whose creation may still bind a receipt cannot adopt.
+        record(
+            &f,
+            &op(&f, "c1", "reviewer", "create", ""),
+            Some(Outcome::Unknown("x".into())),
+        );
+        let error = call(&f.daemon, adoption(&f, "reviewer", "claude", &work))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::Conflict(_)), "{error}");
+        f.daemon.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_done_adoption_answers_again_until_the_grant_ends() {
+        let f = fixture().await;
+        let work = f.work.clone();
+        call(&f.daemon, grant("t1", &work, 3600)).await.unwrap();
+        f.daemon
+            .scheduler
+            .update(f.daemon.store(), |r| {
+                r.get_mut("t1")
+                    .unwrap()
+                    .adopt(Role::Producer, "s-existing", now_ms())
+                    .map_err(refused)
+            })
+            .unwrap();
+        // A restarted caller asking again needs no registry and changes nothing.
+        let Resp::AgentScheduler(s) = call(&f.daemon, adoption(&f, "producer", "claude", &work))
+            .await
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(
+            (s.producer_session.as_str(), s.adopted.clone()),
+            ("s-existing", vec!["producer".to_owned()])
+        );
+        assert_eq!(s.creates, 0);
+        // Sends must name it; the adoption is not an operation and costs no package.
+        let error = operate(&f, &op(&f, "p1", "producer", "send", "s-other"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("outside"), "{error}");
+        let error = call(&f.daemon, adoption(&f, "reviewer", "claude", &work))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::Conflict(_)), "{error}");
+        call(&f.daemon, task(Action::Revoke, "t1")).await.unwrap();
+        let error = call(&f.daemon, adoption(&f, "producer", "claude", &work))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("revoked"), "{error}");
+        f.daemon.shutdown().await;
+    }
+
+    #[test]
+    fn only_this_scopes_code_session_in_its_directory_is_adoptable() {
+        let scope = grant::Scope {
+            task_id: "t1".into(),
+            contract_sha256: "ab".repeat(32),
+            provider: "claude".into(),
+            directory: "/work".into(),
+            model: "Model A".into(),
+            effort: "High".into(),
+        };
+        let good = v1::AgentSession {
+            id: "s".into(),
+            provider: "claude".into(),
+            cwd: "/work".into(),
+            mode: "code".into(),
+            ..Default::default()
+        };
+        assert!(adoptable(std::slice::from_ref(&good), &scope, "s"));
+        assert!(!adoptable(std::slice::from_ref(&good), &scope, "other"));
+        let variants: [fn(&mut v1::AgentSession); 6] = [
+            |s| s.provider = "codex".into(),
+            |s| s.cwd = "/work/sub".into(),
+            |s| s.mode = "cloud".into(),
+            |s| s.archived = true,
+            |s| s.read_only = true,
+            |s| s.parent_session_id = "p".into(),
+        ];
+        for change in variants {
+            let mut session = good.clone();
+            change(&mut session);
+            assert!(!adoptable(&[session], &scope, "s"));
         }
     }
 

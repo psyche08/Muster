@@ -4618,6 +4618,16 @@ public nonisolated struct Muster_V1_AgentSchedulerRequest: Sendable {
     set {action = .reconcile(newValue)}
   }
 
+  /// Binds a session that already exists to a role instead of creating one.
+  /// musterd checks it in the provider's own session registry first.
+  public var adopt: Muster_V1_AgentSchedulerAdopt {
+    get {
+      if case .adopt(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerAdopt()
+    }
+    set {action = .adopt(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Action: Equatable, Sendable {
@@ -4629,6 +4639,9 @@ public nonisolated struct Muster_V1_AgentSchedulerRequest: Sendable {
     /// or unknown operation from provider evidence (a creation's transcript
     /// receipt, a send's confirmed ledger row). Never re-runs anything.
     case reconcile(Muster_V1_AgentSchedulerOperate)
+    /// Binds a session that already exists to a role instead of creating one.
+    /// musterd checks it in the provider's own session registry first.
+    case adopt(Muster_V1_AgentSchedulerAdopt)
 
   }
 
@@ -4670,6 +4683,31 @@ public nonisolated struct Muster_V1_AgentSchedulerTask: Sendable {
   // methods supported on all messages.
 
   public var taskID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// The session must exist now: this provider, code mode, cwd equal to the
+/// grant's directory, not archived, not read-only, not a child session. Each
+/// role binds one session once, by creation or adoption; an adoption counts
+/// as one of the two sessions. The same adoption again changes nothing.
+public nonisolated struct Muster_V1_AgentSchedulerAdopt: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String = String()
+
+  /// producer | reviewer
+  public var role: String = String()
+
+  public var provider: String = String()
+
+  public var directory: String = String()
+
+  public var session: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4844,6 +4882,12 @@ public nonisolated struct Muster_V1_AgentSchedulerStatus: @unchecked Sendable {
   public var hasOp: Bool {_storage._op != nil}
   /// Clears the value of `op`. Subsequent reads from it will return its default value.
   public mutating func clearOp() {_uniqueStorage()._op = nil}
+
+  /// roles whose session was adopted, not created
+  public var adopted: [String] {
+    get {_storage._adopted}
+    set {_uniqueStorage()._adopted = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -13347,7 +13391,7 @@ nonisolated extension Muster_V1_VisionStatus: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_V1_AgentSchedulerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}grant\0\u{1}revoke\0\u{1}status\0\u{1}operate\0\u{1}reconcile\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}grant\0\u{1}revoke\0\u{1}status\0\u{1}operate\0\u{1}reconcile\0\u{1}adopt\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -13420,6 +13464,19 @@ nonisolated extension Muster_V1_AgentSchedulerRequest: SwiftProtobuf.Message, Sw
           self.action = .reconcile(v)
         }
       }()
+      case 6: try {
+        var v: Muster_V1_AgentSchedulerAdopt?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .adopt(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .adopt(v)
+        }
+      }()
       default: break
       }
     }
@@ -13450,6 +13507,10 @@ nonisolated extension Muster_V1_AgentSchedulerRequest: SwiftProtobuf.Message, Sw
     case .reconcile?: try {
       guard case .reconcile(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case .adopt?: try {
+      guard case .adopt(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     }()
     case nil: break
     }
@@ -13548,6 +13609,56 @@ nonisolated extension Muster_V1_AgentSchedulerTask: SwiftProtobuf.Message, Swift
 
   public static func ==(lhs: Muster_V1_AgentSchedulerTask, rhs: Muster_V1_AgentSchedulerTask) -> Bool {
     if lhs.taskID != rhs.taskID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerAdopt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerAdopt"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{1}role\0\u{1}provider\0\u{1}directory\0\u{1}session\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.taskID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.directory) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.session) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.taskID.isEmpty {
+      try visitor.visitSingularStringField(value: self.taskID, fieldNumber: 1)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 3)
+    }
+    if !self.directory.isEmpty {
+      try visitor.visitSingularStringField(value: self.directory, fieldNumber: 4)
+    }
+    if !self.session.isEmpty {
+      try visitor.visitSingularStringField(value: self.session, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerAdopt, rhs: Muster_V1_AgentSchedulerAdopt) -> Bool {
+    if lhs.taskID != rhs.taskID {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.directory != rhs.directory {return false}
+    if lhs.session != rhs.session {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -13695,7 +13806,7 @@ nonisolated extension Muster_V1_AgentSchedulerOp: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{3}contract_sha256\0\u{1}provider\0\u{1}directory\0\u{1}model\0\u{1}effort\0\u{3}issued_unix_ms\0\u{3}expires_unix_ms\0\u{3}revoked_unix_ms\0\u{1}live\0\u{3}producer_session\0\u{3}reviewer_session\0\u{1}creates\0\u{1}packages\0\u{1}reviews\0\u{1}controls\0\u{1}ops\0\u{1}op\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{3}contract_sha256\0\u{1}provider\0\u{1}directory\0\u{1}model\0\u{1}effort\0\u{3}issued_unix_ms\0\u{3}expires_unix_ms\0\u{3}revoked_unix_ms\0\u{1}live\0\u{3}producer_session\0\u{3}reviewer_session\0\u{1}creates\0\u{1}packages\0\u{1}reviews\0\u{1}controls\0\u{1}ops\0\u{1}op\0\u{1}adopted\0")
 
   fileprivate class _StorageClass {
     var _taskID: String = String()
@@ -13716,6 +13827,7 @@ nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, Swi
     var _controls: UInt32 = 0
     var _ops: [Muster_V1_AgentSchedulerOp] = []
     var _op: Muster_V1_AgentSchedulerOp? = nil
+    var _adopted: [String] = []
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -13744,6 +13856,7 @@ nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, Swi
       _controls = source._controls
       _ops = source._ops
       _op = source._op
+      _adopted = source._adopted
     }
   }
 
@@ -13780,6 +13893,7 @@ nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, Swi
         case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._controls) }()
         case 17: try { try decoder.decodeRepeatedMessageField(value: &_storage._ops) }()
         case 18: try { try decoder.decodeSingularMessageField(value: &_storage._op) }()
+        case 19: try { try decoder.decodeRepeatedStringField(value: &_storage._adopted) }()
         default: break
         }
       }
@@ -13846,6 +13960,9 @@ nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, Swi
       try { if let v = _storage._op {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
       } }()
+      if !_storage._adopted.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._adopted, fieldNumber: 19)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -13873,6 +13990,7 @@ nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, Swi
         if _storage._controls != rhs_storage._controls {return false}
         if _storage._ops != rhs_storage._ops {return false}
         if _storage._op != rhs_storage._op {return false}
+        if _storage._adopted != rhs_storage._adopted {return false}
         return true
       }
       if !storagesAreEqual {return false}

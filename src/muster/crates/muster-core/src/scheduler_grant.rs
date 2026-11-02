@@ -210,6 +210,9 @@ pub struct Op {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Counts {
     pub creates: u32,
+    /// Sessions bound by adoption; with `creates`, at most `MAX_SESSIONS`.
+    #[serde(default)]
+    pub adopted: u32,
     pub packages: u32,
     pub reviews: u32,
     pub controls: u32,
@@ -221,8 +224,11 @@ pub struct Grant {
     pub issued_ms: u64,
     pub expires_ms: u64,
     pub revoked_ms: Option<u64>,
-    /// Sessions bound by creation receipts, never by recency.
+    /// Sessions bound by creation receipts or by adoption, never by recency.
     pub sessions: BTreeMap<Role, String>,
+    /// When each adopted role's session was adopted.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub adopted: BTreeMap<Role, u64>,
     pub ops: BTreeMap<String, Op>,
     pub counts: Counts,
 }
@@ -313,6 +319,7 @@ impl Grant {
             expires_ms: now_ms.saturating_add(ttl_ms),
             revoked_ms: None,
             sessions: BTreeMap::new(),
+            adopted: BTreeMap::new(),
             ops: BTreeMap::new(),
             counts: Counts::default(),
         })
@@ -396,7 +403,7 @@ impl Grant {
                 {
                     return Err(Refusal::Quota("this role already has its session"));
                 }
-                if self.counts.creates >= MAX_SESSIONS {
+                if self.counts.creates + self.counts.adopted >= MAX_SESSIONS {
                     return Err(Refusal::Quota("sessions"));
                 }
             }
@@ -547,6 +554,42 @@ impl Grant {
         Ok(())
     }
 
+    /// Binds `session`, which the caller has checked exists in the scope's
+    /// provider and directory, to `role` instead of creating one. A role binds
+    /// one session once; the same adoption again while the grant is live is
+    /// `Ok(false)` and changes nothing. It counts as one of the grant's
+    /// sessions and ends with the grant.
+    pub fn adopt(&mut self, role: Role, session: &str, now_ms: u64) -> Result<bool, Refusal> {
+        if session.is_empty() || session.len() > 256 {
+            return Err(Refusal::Invalid("adoption names one session"));
+        }
+        self.liveness(now_ms)?;
+        if self.sessions.get(&role).map(String::as_str) == Some(session)
+            && self.adopted.contains_key(&role)
+        {
+            return Ok(false);
+        }
+        if self.sessions.contains_key(&role)
+            || self.ops.values().any(|op| {
+                op.kind == Kind::Create
+                    && op.role == role
+                    && !matches!(op.state, OpState::Rejected { .. })
+            })
+        {
+            return Err(Refusal::Conflict("this role already has its session"));
+        }
+        if self.sessions.values().any(|s| s == session) {
+            return Err(Refusal::Conflict("session is bound to the other role"));
+        }
+        if self.counts.creates + self.counts.adopted >= MAX_SESSIONS {
+            return Err(Refusal::Quota("sessions"));
+        }
+        self.counts.adopted += 1;
+        self.adopted.insert(role, now_ms);
+        self.sessions.insert(role, session.to_owned());
+        Ok(true)
+    }
+
     /// After a daemon restart nothing is in flight: an operation still
     /// reserved may have been submitted, so it becomes unknown, never retried.
     pub fn recover(&mut self) {
@@ -597,7 +640,6 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// Issues a grant, or returns the identical live one unchanged.
     /// Grants `scope` once. The identical scope again (a restarted caller)
     /// answers the existing grant unchanged: its lifetime is never extended.
     pub fn grant(&mut self, scope: Scope, now_ms: u64, ttl_ms: u64) -> Result<&Grant, Refusal> {

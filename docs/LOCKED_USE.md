@@ -28,10 +28,14 @@ operation.
 
   It lasts at most 24 hours and is never extended. It can be revoked at any
   time. Only one task is live, and an ended task id is never granted again.
-- **Bounded.** At most 2 created sessions (a producer and a reviewer), 18
-  packages of which 6 are reviews, and 72 control operations. Counts are
-  stored and survive restarts. Later operations name only sessions bound by
-  their creation receipt.
+- **Bounded.** At most 2 sessions (a producer and a reviewer), 18 packages
+  of which 6 are reviews, and 72 control operations. Counts are stored and
+  survive restarts. Later operations name only the session bound to their
+  role: by its creation receipt, or by adopting a session that already exists.
+- **Adoption touches no desktop.** It binds an existing session after musterd
+  checks it in the provider's own registry: the scope's provider, code mode,
+  the granted directory, not archived, read-only or a child session. Each
+  role binds once, and an adopted session counts toward the 2.
 - **One reserved operation per lease.** Only a stored reservation opens a
   scheduled lease. Its turn is the op_id and its digest binds the scope and
   exact request. No key arms it. It binds no provider queue and accepts no

@@ -48,7 +48,8 @@ is granted:
 Its limits are constants in shared Rust:
 
 - at most 24 hours, never extended;
-- at most 2 creations, one per role: a producer and an independent reviewer;
+- at most 2 sessions, one per role: a producer and an independent reviewer,
+  each created or adopted;
 - at most 18 packages (creations and sends), of which at most 6 are reviewer
   packages;
 - at most 72 control operations (reading or setting the model options,
@@ -60,12 +61,29 @@ Its rules:
   answers the existing grant unchanged. A different scope, a second task, or
   a task id that has ended is refused. Revocation is immediate and final.
 - **Operations.** Only `create`, `send`, `read_options`, `set_options` and
-  `interrupt`. There is no input, shell or other provider.
+  `interrupt`. There is no input, shell or other provider. `adopt` is not a
+  desktop operation (below).
 - **Sessions bind only by receipt.** A creation names no session. Its applied
   outcome binds the receipt session to its role. That session must be new:
   not present before the creation, and not the other role's session. Every
   later operation must name its role's bound session. `set_options` may only
   name the scope's model and effort.
+- **Adoption binds an existing session.** A task may already have a
+  conversation open. `adopt` binds a session that exists now to a role
+  instead of creating one:
+  - the grant is live, and the request's provider and directory equal the
+    scope;
+  - the provider's own session registry lists it with this provider, code
+    mode and cwd equal to the directory, not archived, read-only or a child
+    session;
+  - the role has no session and no creation that is reserved, applied or
+    unknown, and the session is not the other role's;
+  - creations and adoptions together stay within the 2 sessions.
+
+  The same adoption again while the grant is live changes nothing. A role
+  that adopted cannot create, and a creation's receipt can never be an
+  adopted session. Adoption touches no desktop, costs no package, and ends
+  with the grant.
 - **op_id is the identity.** Each operation is recorded under its op_id with
   a SHA-256 digest of the exact request. The same op_id with the same request
   answers its record and never runs again. The same op_id with a different
@@ -121,7 +139,7 @@ Its rules:
 ### The daemon (`musterd/src/scheduler.rs`)
 
 - **One RPC, local only.** `agent_scheduler` has the actions `grant`,
-  `revoke`, `status`, `operate` and `reconcile`. Only this Mac's local socket
+  `revoke`, `status`, `operate`, `reconcile` and `adopt`. Only this Mac's local socket
   can call it. No remote device or phone can.
 - **Persistence.** The registry is stored in the daemon's key-value store
   under `scheduler.grants`. Every change is stored before it takes effect.
@@ -182,6 +200,13 @@ Its rules:
   authority into general control. Rejected.
 - **A global unattended switch.** It would have no task, directory, provider,
   quota or end. Rejected.
+- **Bind the producer by picking the latest session.** Recency is not
+  evidence, and a second conversation in the directory would be taken
+  silently. Rejected: adoption names the exact session and musterd checks it
+  in the registry.
+- **Only creations, no adoption.** The task's producer conversation already
+  existed with its context. Creating another would discard that context and
+  spend a session on a duplicate. The person chose adoption.
 - **Enforce the limits only in the supervisor or the agent's prompt.** That is
   not a program boundary inside musterd. Rejected; the supervisor and prompt
   only add checks on top of the grant.
@@ -221,7 +246,7 @@ Its rules:
     passed: 0 failures; 2 ignored in `musterd`'s unit tests and 1 in its
     `deepseek` test, as before.
   - `cargo test -p muster-cli rpc_json` passed.
-  - New tests in `muster-core`, `tests/scheduler_grant.rs` (10):
+  - New tests in `muster-core`, `tests/scheduler_grant.rs` (13):
     - scope validation;
     - one live grant, never re-granted;
     - out-of-scope directory, provider and session refusals;
@@ -231,7 +256,11 @@ Its rules:
     - no replay after restart, conflicting bodies;
     - reconciling an unknown creation;
     - the digest binding;
-    - persistence round trip.
+    - persistence round trip;
+    - adoption once per role, counted as a session, never the other role's
+      or a creation's receipt;
+    - adoption needs a live grant and a role without a creation;
+    - adoptions persist, and older records read as none.
   - New tests in `muster-core`, `tests/locked_use.rs` (2):
     - only its reservation opens a scheduled lease and no key arms it;
     - the local switches, a locked console and local input gate it.
@@ -242,7 +271,7 @@ Its rules:
     - local input before the submit stops it as not sent;
     - another owner's console is never preempted;
     - Locked Use off starts nothing.
-  - New tests in `musterd`, the RPC (9):
+  - New tests in `musterd`, the RPC (12):
     - exact single grant that is never extended;
     - out-of-scope, unknown-task and malformed refusals reserve nothing;
     - an undrivable desktop reserves nothing;
@@ -251,7 +280,11 @@ Its rules:
     - restart turns reserved into unknown and keeps counts;
     - unreadable stored grants fail closed and are not overwritten;
     - evidence-based settling for every ledger state and options;
-    - reconciliation binds an unknown creation only from its ledger receipt.
+    - reconciliation binds an unknown creation only from its ledger receipt;
+    - adoption outside the grant, without the registry, or for a role with
+      a creation is refused and binds nothing;
+    - a done adoption answers again until revocation;
+    - only the scope's code session in its directory is adoptable.
 - **Lint:** `cargo clippy --workspace --all-targets -- -D warnings` reported
   nothing, and `scripts/check-layers.py` passed. The touched files are
   rustfmt-clean with both the Homebrew 1.99.1 and rustup-stable rustfmt.

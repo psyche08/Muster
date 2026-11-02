@@ -1418,7 +1418,9 @@ mod tests {
         assert!(matches!(
             request,
             Req::AgentScheduler(muster_proto::v1::AgentSchedulerRequest {
-                action: Some(muster_proto::v1::agent_scheduler_request::Action::Operate(_))
+                action: Some(muster_proto::v1::agent_scheduler_request::Action::Operate(
+                    _
+                ))
             })
         ));
         assert!(
@@ -1427,5 +1429,15 @@ mod tests {
             )
             .is_err()
         );
+        let request: Req = serde_json::from_str(
+            r#"{"agent_scheduler":{"action":{"adopt":{"task_id":"t","role":"producer","provider":"claude","directory":"/d","session":"s"}}}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request,
+            Req::AgentScheduler(muster_proto::v1::AgentSchedulerRequest {
+                action: Some(muster_proto::v1::agent_scheduler_request::Action::Adopt(_))
+            })
+        ));
     }
 }

@@ -1199,6 +1199,9 @@ message AgentSchedulerRequest {
     // or unknown operation from provider evidence (a creation's transcript
     // receipt, a send's confirmed ledger row). Never re-runs anything.
     AgentSchedulerOperate reconcile = 5;
+    // Binds a session that already exists to a role instead of creating one.
+    // musterd checks it in the provider's own session registry first.
+    AgentSchedulerAdopt adopt = 6;
   }
 }
 
@@ -1213,6 +1216,18 @@ message AgentSchedulerGrant {
 }
 
 message AgentSchedulerTask { string task_id = 1; }
+
+// The session must exist now: this provider, code mode, cwd equal to the
+// grant's directory, not archived, not read-only, not a child session. Each
+// role binds one session once, by creation or adoption; an adoption counts
+// as one of the two sessions. The same adoption again changes nothing.
+message AgentSchedulerAdopt {
+  string task_id = 1;
+  string role = 2;       // producer | reviewer
+  string provider = 3;
+  string directory = 4;
+  string session = 5;
+}
 
 // One desktop operation. provider, directory and session state what the
 // caller intends; each must equal the grant's own binding. The session is the
@@ -1263,4 +1278,5 @@ message AgentSchedulerStatus {
   repeated AgentSchedulerOp ops = 17;
   // The operation reconcile was asked about, after reconciliation.
   AgentSchedulerOp op = 18;
+  repeated string adopted = 19;  // roles whose session was adopted, not created
 }
