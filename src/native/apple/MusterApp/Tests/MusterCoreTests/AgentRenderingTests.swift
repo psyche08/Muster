@@ -324,4 +324,158 @@ extension AgentRenderingTests {
         }
     }
 }
+
+/// Rendering of the DSH-style session chrome and trace page (ADR 0083).
+@MainActor
+final class SessionChromeRenderingTests: XCTestCase {
+    private func render<V: View>(_ view: V, size: CGSize, scheme: ColorScheme, name: String) throws {
+        let content = view
+            .environment(\.colorScheme, scheme)
+            .frame(width: size.width, height: size.height)
+        let host = NSHostingView(rootView: content)
+        host.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/private/tmp/\(name).png"))
+        window.close()
+    }
+
+    private var headerModel: SessionChromeModel {
+        var model = SessionChromeModel()
+        model.title = "Daily macOS log analysis and automatic repair"
+        model.parentTitle = "Parent session"
+        model.providerLabel = "DeepSeek"
+        model.deviceName = "Studio Mac"
+        model.state = "running"
+        model.cwd = "/Volumes/Workspace/Projects/muster-logs"
+        model.subagentCount = 3
+        model.subsessionCount = 2
+        model.canInterrupt = true
+        model.canChooseModel = true
+        model.canBrowseFiles = true
+        model.terminalAvailable = true
+        return model
+    }
+
+    private func traceFixture() -> [Muster_App_TraceSpan] {
+        func span(_ id: String, _ kind: String, _ title: String, _ detail: String, _ status: String,
+                  _ start: UInt64, duration: UInt64 = 0, known: Bool = false) -> Muster_App_TraceSpan {
+            Muster_App_TraceSpan.with {
+                $0.id = id; $0.kind = kind; $0.title = title; $0.detail = detail; $0.status = status
+                $0.startedUnix = start; $0.endedUnix = start + duration
+                $0.durationKnown = known; $0.durationSeconds = duration
+            }
+        }
+        return [
+            span("s1", "turn", "User message", "Please review last night's kernel log and fix the recurring shutdown panic.", "", 1_790_572_800),
+            span("s2", "reasoning", "Reasoning", "The panic repeats after sleep/wake. Check the GPU driver frames first.", "", 1_790_572_802),
+            span("s3", "tool", "exec_command", "log show --last 6h --predicate 'eventMessage CONTAINS \"panic\"'", "completed", 1_790_572_805, duration: 4, known: true),
+            span("s4", "tool", "read_file", "Sources/Driver/Wake.swift", "failed", 1_790_572_812, duration: 2, known: true),
+            span("s5", "turn", "Turn completed", "gpt-5 · input 8931 · output 2", "completed", 1_790_572_820, duration: 20, known: true),
+            span("s6", "turn", "User message", "Apply the fix and verify it with the synthetic sleep test.", "", 1_790_572_900),
+            span("s7", "tool", "write_file", "Sources/Driver/Wake.swift", "completed", 1_790_572_905, duration: 3, known: true),
+            span("s8", "turn", "Turn completed", "gpt-5 · input 10422 · output 180", "completed", 1_790_572_930, duration: 25, known: true),
+        ]
+    }
+
+    private func chatFixture() -> Muster_App_ChatView {
+        var chat = Muster_App_ChatView()
+        chat.session.id = "session-synthetic"
+        chat.session.provider = "deepseek"
+        chat.session.title = "Daily macOS log analysis and automatic repair"
+        chat.session.state = "running"
+        chat.session.deviceID = "studio"
+        chat.session.deviceName = "Studio Mac"
+        chat.session.cwd = "/Volumes/Workspace/Projects/muster-logs"
+        chat.providerLabel = "DeepSeek"
+        chat.hasEarlier_p = true
+        chat.trace = traceFixture()
+        return chat
+    }
+
+    func testRenderSessionChromeInBothAppearances() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let suffix = scheme == .dark ? "dark" : "light"
+            let header = SessionChromeFixture(model: headerModel)
+            let host = NSHostingView(rootView: header.environment(\.colorScheme, scheme).frame(width: 1180))
+            host.frame = NSRect(origin: .zero, size: host.fittingSize)
+            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+            XCTAssertGreaterThanOrEqual(host.bounds.height, 70, "The chrome header must keep its 76pt DSH height")
+            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/private/tmp/muster-session-chrome-\(suffix).png"))
+            window.close()
+        }
+    }
+
+    func testRenderIntegratedSessionScreen() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muster-session-chrome-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let core = try MusterCore(config: .phone(dir: dir, name: "chrome fixture"),
+                                  keys: SoftwareKeys(),
+                                  onViewModel: { _ in },
+                                  onEffect: { _, _ in })
+        defer { core.shutdown() }
+        var vm = ViewModel()
+        var chat = chatFixture()
+        chat.messageCount = 2
+        chat.timeline = [
+            Muster_App_ChatBlock.with {
+                $0.id = "user"; $0.kind = "message"
+                $0.message = Muster_V1_AgentMessage.with {
+                    $0.id = "user"; $0.role = "user"; $0.kind = "text"
+                    $0.text = "The shutdown panic repeated again last night. Please check the driver and apply the fix."
+                    $0.tsUnix = 1_790_572_800
+                }
+            },
+            Muster_App_ChatBlock.with {
+                $0.id = "assistant"; $0.kind = "message"
+                $0.message = Muster_V1_AgentMessage.with {
+                    $0.id = "assistant"; $0.role = "assistant"; $0.kind = "text"
+                    $0.text = "I checked the wake path. The GPU driver frames point at a race after sleep; the fix is queued and the synthetic sleep test is running."
+                    $0.tsUnix = 1_790_572_830
+                }
+            },
+        ]
+        vm.chat = chat
+        for scheme in [ColorScheme.light, .dark] {
+            let suffix = scheme == .dark ? "dark" : "light"
+            try render(ChatView(core: core, vm: vm).environment(\.conversationStyle, .deepseek),
+                       size: CGSize(width: 1180, height: 760), scheme: scheme,
+                       name: "muster-session-integrated-\(suffix)")
+        }
+    }
+
+    func testRenderTracePageInBothAppearances() throws {
+        let chat = chatFixture()
+        for scheme in [ColorScheme.light, .dark] {
+            let suffix = scheme == .dark ? "dark" : "light"
+            try render(SessionTraceScreen(chat: chat, loadEarlier: {}),
+                       size: CGSize(width: 1180, height: 720), scheme: scheme,
+                       name: "muster-session-trace-\(suffix)")
+        }
+    }
+}
+
+private struct SessionChromeFixture: View {
+    let model: SessionChromeModel
+    @State private var selected = "Conversation"
+
+    var body: some View {
+        SessionChromeHeader(model: model, selected: $selected, actions: SessionChromeActions())
+    }
+}
 #endif

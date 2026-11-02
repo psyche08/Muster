@@ -266,24 +266,16 @@ struct ChatView: View {
     var body: some View {
         let core = core
         VStack(spacing: 0) {
+            #if os(iOS)
             if !chat.session.parentSessionID.isEmpty {
                 Button { core.openAgent(chat.session.parentSessionID, device: chat.deviceID) } label: {
                     Label("Parent session", systemImage: "arrow.turn.up.left")
                 }.padding(8)
             }
-            #if os(iOS)
             ConversationNavigation(chat: chat, selected: $contentTab)
             Divider().opacity(0.5)
             #else
-            Picker("Session view", selection: $contentTab) {
-                Text("Conversation").tag("Conversation")
-                Text("Tracing").tag("Tracing")
-                Text("Subagents").tag("Subagents")
-                Text("Sessions").tag("Sessions")
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .accessibilityIdentifier("session-content-tabs")
+            SessionChromeHeader(model: chromeModel, selected: $contentTab, actions: chromeActions)
             #endif
             ZStack {
                 ConversationTabContent(active: contentTab == "Conversation") {
@@ -310,8 +302,8 @@ struct ChatView: View {
             core.openFileLink(url.absoluteString)
             return .handled
         })
-        .navigationTitle(chat.session.title.isEmpty ? "Chat" : chat.session.title)
         #if os(iOS)
+        .navigationTitle(chat.session.title.isEmpty ? "Chat" : chat.session.title)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .onChange(of: "\(chat.deviceID):\(chat.session.id)") { _, _ in atLatest = true; contentTab = "Conversation" }
@@ -328,8 +320,8 @@ struct ChatView: View {
         .sheet(isPresented: $showChatOptions) {
             ChatOptionsSheet(core: core, chat: chat) { showChatOptions = false }
         }
+        #if os(iOS)
         .toolbar {
-            #if os(iOS)
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Text([chat.providerLabel, chat.session.deviceName].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -346,26 +338,38 @@ struct ChatView: View {
                     }
                 } label: { Image(systemName: "ellipsis").accessibilityLabel("Conversation actions") }
             }
-            #else
-            ToolbarItemGroup(placement: .primaryAction) {
-                if chat.canInterrupt {
-                    Button { core.agentInterrupt() } label: { Label("Stop", systemImage: "stop.circle") }
-                }
-                if chat.canChooseModel {
-                    Button { showChatOptions = true } label: {
-                        Label(chat.chatOptions.models.first(where: \.selected)?.name ?? "Model", systemImage: "cpu")
-                    }
-                    .help("Model and effort in the desktop app")
-                }
-                subagentMenu
-                if chat.canBrowseFiles {
-                    Button { core.openFiles() } label: { Label("Files", systemImage: "folder") }
-                    Button { core.openGit() } label: { Label("Git", systemImage: "arrow.triangle.branch") }
-                }
-            }
-            #endif
         }
+        #endif
     }
+
+    #if os(macOS)
+    private var chromeModel: SessionChromeModel {
+        var value = SessionChromeModel()
+        value.title = chat.session.title.isEmpty ? chat.session.id : chat.session.title
+        value.parentTitle = chat.session.parentSessionID.isEmpty ? "" : "Parent session"
+        value.providerLabel = chat.providerLabel
+        value.deviceName = chat.session.deviceName
+        value.state = chat.session.state
+        value.cwd = chat.session.cwd
+        value.subagentCount = chat.session.subagents.count
+        value.subsessionCount = chat.session.subsessions.count
+        value.canInterrupt = chat.canInterrupt
+        value.canChooseModel = chat.canChooseModel
+        value.canBrowseFiles = chat.canBrowseFiles
+        value.terminalAvailable = chat.terminal.available
+        return value
+    }
+
+    private var chromeActions: SessionChromeActions {
+        SessionChromeActions(
+            openParent: { core.openAgent(chat.session.parentSessionID, device: chat.deviceID) },
+            stop: { core.agentInterrupt() },
+            modelOptions: { showChatOptions = true },
+            files: { core.openFiles() },
+            git: { core.openGit() }
+        )
+    }
+    #endif
 
     @ViewBuilder
     private func conversationPane(core: MusterCore) -> some View {
@@ -426,11 +430,12 @@ struct ChatView: View {
                     Text("Agents (\(chat.session.subagents.count))").tag("Subagents")
                     Text("Sessions").tag("Sessions")
                 }.pickerStyle(.segmented).padding(16)
-                if activityTab == "Tracing" { SessionTraceView(core: core, chat: chat) }
-                else { RelatedSessionView(core: core, device: chat.deviceID,
+                if activityTab == "Tracing" {
+                    SessionTraceScreen(chat: chat, loadEarlier: { core.agentLoadEarlier() })
+                } else { RelatedSessionView(core: core, device: chat.deviceID,
                     sessions: activityTab == "Subagents" ? chat.session.subagents : chat.session.subsessions, title: activityTab) }
             } else if contentTab == "Tracing" {
-                SessionTraceView(core: core, chat: chat)
+                SessionTraceScreen(chat: chat, loadEarlier: { core.agentLoadEarlier() })
             } else {
                 RelatedSessionView(core: core, device: chat.deviceID,
                     sessions: contentTab == "Subagents" ? chat.session.subagents : chat.session.subsessions,
@@ -834,48 +839,6 @@ struct MessageBubble: View, Equatable {
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 8)
-    }
-}
-
-private struct SessionTraceView: View {
-    let core: MusterCore
-    let chat: Muster_App_ChatView
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Execution trace").font(.headline)
-                    Spacer()
-                    StateBadge(state: chat.session.state)
-                }
-                Text("Tool calls and turn events from the loaded conversation. Durations are approximate.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if chat.hasEarlier_p {
-                    Button("Load earlier events") { core.agentLoadEarlier() }
-                }
-                if chat.trace.isEmpty { Text(chat.loading ? "Loading trace…" : "No execution events yet").foregroundStyle(.secondary) }
-                ForEach(chat.trace, id: \.id) { span in
-                    DisclosureGroup {
-                        Text(span.detail).font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(span.title).font(.callout.weight(.medium))
-                                Spacer()
-                                if span.durationKnown { Text("≈ \(span.durationSeconds) s").font(.caption).monospacedDigit() }
-                            }
-                            HStack {
-                                if span.startedUnix > 0 { Text(Date(timeIntervalSince1970: TimeInterval(span.startedUnix)), style: .time) }
-                                Text(span.status)
-                            }.font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Divider()
-                }
-            }.padding(16).frame(maxWidth: 1000)
-                .frame(maxWidth: .infinity)
-        }.accessibilityIdentifier("session-trace")
     }
 }
 

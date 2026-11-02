@@ -140,7 +140,7 @@ struct ChatComposer: View {
                     }
                 } else {
                     editor
-                    if style == .codex { controls }
+                    if style != .claude { controls }
                 }
             }
             .padding(compact ? 8 : 16)
@@ -235,7 +235,7 @@ struct ChatComposer: View {
             if style == .claude { Spacer() }
             Text(chat.providerLabel)
                 .font(.system(size: ChatStyle.secondarySize)).foregroundStyle(palette.secondary)
-            if style == .codex { Spacer() }
+            if style != .claude { Spacer() }
             if busy { ProgressView().controlSize(.small) }
             sendControl
         }
@@ -263,14 +263,14 @@ struct ChatComposer: View {
             Button { core.agentInterrupt() } label: {
                 Image(systemName: "stop.fill").font(.system(size: 13))
                     .frame(width: compact ? 44 : 32, height: compact ? 44 : 32)
-                    .foregroundStyle(.white).background(style == .claude ? palette.accent : palette.action, in: RoundedRectangle(cornerRadius: style == .claude ? 8 : 18))
+                    .foregroundStyle(.white).background(style == .claude ? palette.accent : palette.action, in: RoundedRectangle(cornerRadius: style == .claude ? 8 : (style == .deepseek ? 16 : 18)))
             }.buttonStyle(.plain).accessibilityLabel("Stop")
         } else {
             Button(action: send) {
                 Image(systemName: "arrow.up").font(.system(size: 17, weight: .semibold))
                     .frame(width: compact ? 44 : 32, height: compact ? 44 : 32)
-                    .foregroundStyle(style == .claude ? Color.white : palette.canvas)
-                    .background(palette.accent, in: RoundedRectangle(cornerRadius: style == .claude ? 8 : 18))
+                    .foregroundStyle(style == .claude || style == .deepseek ? Color.white : palette.canvas)
+                    .background(palette.accent, in: RoundedRectangle(cornerRadius: style == .claude ? 8 : (style == .deepseek ? 16 : 18)))
             }
             .buttonStyle(.plain).disabled(empty || busy)
             .opacity(empty || busy ? 0.35 : 1)

@@ -122,12 +122,12 @@ implemented in Shared Rust; no ccusage process runs on the phone.
 
 ## Conversation styles (2026-09-28)
 
-The Apple clients offer **Codex** and **Claude** in the conversation toolbar's
-paintbrush menu and Settings → Appearance → Conversation style. The selection
-defaults to Codex and is remembered locally across launches for all conversations.
-It is a shell-only rendering preference; it does not select an agent/model, send
-an intent, reload history, or change authorization. Composer identity remains
-device/session based so switching styles preserves its draft and attachments.
+The Apple clients offer **Codex**, **Claude** and **DeepSeek** in the session
+header's paintbrush menu. The selection defaults to Codex and is remembered
+locally across launches for all conversations. It is a shell-only rendering
+preference; it does not select an agent/model, send an intent, reload history, or
+change authorization. Composer identity remains device/session based so switching
+styles preserves its draft and attachments.
 
 Codex keeps neutral gray surfaces, system body text, rounded user bubbles and
 controls inside the multiline composer. Claude uses a warm paper light palette
@@ -135,9 +135,15 @@ and near-black dark palette, a larger Georgia-based reply font with system glyph
 fallback, more paragraph spacing, smaller bubble corners, and a bordered Reply
 field with controls below. Its design references the installed Claude app's
 ordinary chat UI observed on September 28; system fonts approximate its typography,
-and no Claude font or logo asset is copied. Both styles follow system light/dark
-appearance and retain Markdown, collapsed activity/compact context, file changes,
-turn accounting, attachments and preview.
+and no Claude font or logo asset is copied. DeepSeek follows the DeepSeek Harness
+0.2.1 client's alias palette (white/#151517 canvas, bluish surfaces, four label
+levels, business blue for actions and links, 20pt user bubbles and a 28pt
+composer panel), uses system typography, and is otherwise identical in behavior.
+All three styles follow system light/dark appearance and retain Markdown,
+collapsed activity/compact context, file changes, turn accounting, attachments
+and preview. The Mac session header and trace page use the DeepSeek Harness
+chrome and layout for every style; see
+[ADR 0083](adr/0083-dsh-session-chrome-and-trace.md).
 
 Verification: seven Swift regression tests passed; the native rendering fixture
 produces both palettes for both styles at a 402-point conversation width. macOS
@@ -188,10 +194,10 @@ end-to-end acceptance items; the controller in the RPC test is a capture fixture
 
 ## Visible style control and Chrome setup
 
-Codex / Claude options are hidden by default in conversations and Settings.
-The Style button reveals a single segmented control; pressing it again hides it.
-Opening a different conversation collapses the control. The selection is still
-a persistent local rendering preference and preserves the draft and provider state.
+The style options are offered by the paintbrush menu in the Mac session header
+(and by `ConversationStylePicker` where a form hosts it). The menu marks the
+current style and writes the same local preference described above; it preserves
+the draft and provider state.
 
 Settings → Chrome extension and the device's Chrome browser action open the
 Rust-owned browser view. The Mac bundle includes the extension and native host;

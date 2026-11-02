@@ -5,17 +5,60 @@ import SwiftUI
 // A local rendering preference, independent of the session's agent/provider.
 // It does not change Rust-owned messages, authorization or send state.
 enum ConversationStyle: String, CaseIterable, Identifiable {
-    case codex, claude
+    case codex, claude, deepseek
     static let preferenceKey = "conversationStyle"
     var id: String { rawValue }
-    var title: String { self == .codex ? "Codex" : "Claude" }
-    var columnWidth: CGFloat { self == .codex ? 760 : 740 }
-    var messageRadius: CGFloat { self == .codex ? 20 : 12 }
-    var composerRadius: CGFloat { self == .codex ? 24 : 16 }
-    var bodyScale: CGFloat { self == .codex ? 1 : 1.125 }
-    var lineSpacing: CGFloat { self == .codex ? 0.28 : 0.38 }
+    var title: String {
+        switch self {
+        case .codex: return "Codex"
+        case .claude: return "Claude"
+        case .deepseek: return "DeepSeek"
+        }
+    }
+    var columnWidth: CGFloat {
+        switch self {
+        case .codex: return 760
+        case .claude: return 740
+        case .deepseek: return 860
+        }
+    }
+    var messageRadius: CGFloat {
+        switch self {
+        case .codex: return 20
+        case .claude: return 12
+        case .deepseek: return 20
+        }
+    }
+    var composerRadius: CGFloat {
+        switch self {
+        case .codex: return 24
+        case .claude: return 16
+        case .deepseek: return 28
+        }
+    }
+    var bodyScale: CGFloat {
+        switch self {
+        case .codex: return 1
+        case .claude: return 1.125
+        case .deepseek: return 1
+        }
+    }
+    var lineSpacing: CGFloat {
+        switch self {
+        case .codex: return 0.28
+        case .claude: return 0.38
+        case .deepseek: return 0.30
+        }
+    }
     // Claude matches Claude.app's new-chat composer (claude.ai i18n `ye34lid+ov`).
-    var placeholder: String { self == .codex ? "Do anything" : "How can I help you today?" }
+    // DeepSeek matches DeepSeek Harness's composer hint.
+    var placeholder: String {
+        switch self {
+        case .codex: return "Do anything"
+        case .claude: return "How can I help you today?"
+        case .deepseek: return "Message or run a task"
+        }
+    }
 }
 
 private struct ConversationStyleKey: EnvironmentKey {
@@ -48,7 +91,7 @@ struct ConversationStylePicker: View {
             ForEach(ConversationStyle.allCases) { Text($0.title).tag($0) }
         }
         .pickerStyle(.segmented)
-        .frame(minWidth: 190, maxWidth: 300)
+        .frame(minWidth: 240, maxWidth: 360)
         .accessibilityIdentifier("conversation-style")
     }
 }
@@ -75,36 +118,108 @@ struct ChatPalette {
                      green: Double((value >> 8) & 255) / 255,
                      blue: Double(value & 255) / 255, opacity: 1)
     }
-    var canvas: Color { style == .codex ? color(0xffffff, 0x212121) : color(0xfaf9f5, 0x141414) }
-    var surface: Color { style == .codex ? color(0xf4f4f4, 0x303030) : color(0xf0eee6, 0x212121) }
+    var canvas: Color {
+        switch style {
+        case .codex: return color(0xffffff, 0x212121)
+        case .claude: return color(0xfaf9f5, 0x141414)
+        case .deepseek: return color(0xffffff, 0x151517)
+        }
+    }
+    var surface: Color {
+        switch style {
+        case .codex: return color(0xf4f4f4, 0x303030)
+        case .claude: return color(0xf0eee6, 0x212121)
+        case .deepseek: return color(0xf5f6f7, 0x2c2c2e)
+        }
+    }
     var userSurface: Color {
-        #if os(iOS)
-        style == .codex ? color(0xedf2ff, 0x253454) : surface
-        #else
-        surface
-        #endif
+        switch style {
+        case .codex:
+            #if os(iOS)
+            return color(0xedf2ff, 0x253454)
+            #else
+            return surface
+            #endif
+        case .claude:
+            return surface
+        case .deepseek:
+            return color(0xedf3fe, 0x2c2c2e)
+        }
     }
     var userText: Color {
-        #if os(iOS)
-        style == .codex ? color(0x3456c5, 0xb7caff) : text
-        #else
-        text
-        #endif
+        switch style {
+        case .codex:
+            #if os(iOS)
+            return color(0x3456c5, 0xb7caff)
+            #else
+            return text
+            #endif
+        case .claude, .deepseek:
+            return text
+        }
     }
-    var action: Color { color(0x3d63ed, 0x6285ff) }
+    var action: Color {
+        switch style {
+        case .codex, .claude: return color(0x3d63ed, 0x6285ff)
+        case .deepseek: return color(0x4176e6, 0x7aaaff)
+        }
+    }
     var composer: Color {
-        #if os(iOS)
-        style == .codex ? color(0xfafafa, 0x303030) : color(0xffffff, 0x212121)
-        #else
-        style == .codex ? surface : color(0xffffff, 0x212121)
-        #endif
+        switch style {
+        case .codex:
+            #if os(iOS)
+            return color(0xfafafa, 0x303030)
+            #else
+            return surface
+            #endif
+        case .claude:
+            return color(0xffffff, 0x212121)
+        case .deepseek:
+            return color(0xffffff, 0x2c2c2e)
+        }
     }
-    var text: Color { style == .codex ? color(0x171717, 0xececec) : color(0x30302e, 0xe8e6df) }
-    var secondary: Color { style == .codex ? color(0x6b6b6b, 0xa3a3a3) : color(0x73726c, 0x9d9c95) }
-    var border: Color { style == .codex ? color(0xe5e5e5, 0x424242) : color(0xd7d4cb, 0x50504e) }
-    var code: Color { style == .codex ? color(0xf7f7f7, 0x171717) : color(0xf0eee6, 0x1b1b1a) }
-    var link: Color { style == .codex ? color(0x2563eb, 0x8ab4f8) : color(0x956043, 0xdda382) }
-    var accent: Color { style == .codex ? text : color(0xb65d3d, 0xd48a6a) }
+    var text: Color {
+        switch style {
+        case .codex: return color(0x171717, 0xececec)
+        case .claude: return color(0x30302e, 0xe8e6df)
+        case .deepseek: return color(0x0f1115, 0xf9fafb)
+        }
+    }
+    var secondary: Color {
+        switch style {
+        case .codex: return color(0x6b6b6b, 0xa3a3a3)
+        case .claude: return color(0x73726c, 0x9d9c95)
+        case .deepseek: return color(0x81858c, 0xadb2b8)
+        }
+    }
+    var border: Color {
+        switch style {
+        case .codex: return color(0xe5e5e5, 0x424242)
+        case .claude: return color(0xd7d4cb, 0x50504e)
+        case .deepseek: return color(0xe6e6e6, 0x313133)
+        }
+    }
+    var code: Color {
+        switch style {
+        case .codex: return color(0xf7f7f7, 0x171717)
+        case .claude: return color(0xf0eee6, 0x1b1b1a)
+        case .deepseek: return color(0xf9fafb, 0x1b1b1c)
+        }
+    }
+    var link: Color {
+        switch style {
+        case .codex: return color(0x2563eb, 0x8ab4f8)
+        case .claude: return color(0x956043, 0xdda382)
+        case .deepseek: return color(0x4176e6, 0x7aaaff)
+        }
+    }
+    var accent: Color {
+        switch style {
+        case .codex: return text
+        case .claude: return color(0xb65d3d, 0xd48a6a)
+        case .deepseek: return color(0x4176e6, 0x7aaaff)
+        }
+    }
 }
 
 struct ChatMarkdown: View {
@@ -143,7 +258,7 @@ struct ChatMarkdown: View {
                 configuration.label
                     .fixedSize(horizontal: false, vertical: true)
                     .relativeLineSpacing(.em(style.lineSpacing))
-                    .markdownMargin(top: 0, bottom: style == .claude ? 16 : 12)
+                    .markdownMargin(top: 0, bottom: style == .claude ? 16 : (style == .deepseek ? 14 : 12))
             }
             .heading1 { configuration in
                 configuration.label
