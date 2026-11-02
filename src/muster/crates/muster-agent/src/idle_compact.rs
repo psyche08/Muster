@@ -4,8 +4,9 @@
 //! summary instead of re-reading the whole conversation. Opt-in per Mac.
 //!
 //! This module only decides. The daemon adds this Mac's facts (opt-in, screen
-//! lock, local input) and drives the same native path as a send, which keeps a
-//! person's draft and is confirmed only by the provider's own record.
+//! lock, Locked Use, local input) and drives the same native path as a send,
+//! which keeps a person's draft and is confirmed only by the provider's own
+//! record.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,12 +23,16 @@ pub const IDLE: Duration = Duration::from_secs(30 * 60);
 /// Past this the prompt cache has expired: compacting then costs a full
 /// re-read for nothing, and an old conversation is left as the person left it.
 pub const LATEST: Duration = Duration::from_secs(60 * 60);
-/// How long this Mac's own keyboard and mouse must have been idle. Selecting
-/// another conversation in a desktop app is visible; never do it to a person
-/// who is working at the Mac.
-pub const LOCAL_IDLE: Duration = Duration::from_secs(2 * 60);
 /// How often the daemon looks; at most one conversation per look.
 pub const TICK: Duration = Duration::from_secs(60);
+/// Attempts per idle period that end before anything was pressed.
+pub const ATTEMPTS: u32 = 3;
+/// While the person uses the Mac, wait for a pause in their keyboard and mouse
+/// input this long before navigating, and give up after [`QUIET_WAIT`].
+pub const QUIET: Duration = Duration::from_secs(1);
+pub const QUIET_WAIT: Duration = Duration::from_secs(30);
+/// The longest the on-screen notice waits for the compaction record.
+pub const NOTICE: Duration = Duration::from_secs(3 * 60);
 
 /// Providers whose desktop prompt runs a typed `/compact` when sent. Claude
 /// Desktop hands the text to Claude Code, which records the command. The Codex
@@ -53,27 +58,46 @@ pub fn due(session: &AgentSession, now: u64) -> bool {
         && idle <= LATEST.as_secs()
 }
 
-/// One attempt per idle period. A period is named by the session's newest
-/// message time, so new activity opens a new one; a failed or unconfirmed
-/// attempt is never repeated within the same period.
+/// At most one press per idle period. A period is named by the session's
+/// newest message time, so new activity opens a new one. Once `/compact` may
+/// have been pressed (confirmed or not) the period is done; an attempt that
+/// ended before any press may run again, up to [`ATTEMPTS`].
 #[derive(Default)]
 pub struct Tracker {
-    tried: HashMap<String, u64>,
+    /// Session id to (period, attempts that ended before a press).
+    tried: HashMap<String, (u64, u32)>,
 }
 
 impl Tracker {
     pub fn untried(&self, session: &AgentSession) -> bool {
-        self.tried.get(&session.id) != Some(&session.updated_unix)
+        match self.tried.get(&session.id) {
+            Some(&(period, attempts)) => period != session.updated_unix || attempts < ATTEMPTS,
+            None => true,
+        }
     }
 
-    pub fn tried(&mut self, session: &AgentSession) {
-        self.tried.insert(session.id.clone(), session.updated_unix);
+    /// `/compact` may have been pressed: never again in this period.
+    pub fn done(&mut self, session: &AgentSession) {
+        self.tried
+            .insert(session.id.clone(), (session.updated_unix, ATTEMPTS));
+    }
+
+    /// The attempt ended before anything was pressed.
+    pub fn failed(&mut self, session: &AgentSession) {
+        let entry = self
+            .tried
+            .entry(session.id.clone())
+            .or_insert((session.updated_unix, 0));
+        if entry.0 != session.updated_unix {
+            *entry = (session.updated_unix, 0);
+        }
+        entry.1 = entry.1.saturating_add(1);
     }
 
     /// Forget periods that can no longer be due.
     pub fn prune(&mut self, now: u64) {
         self.tried
-            .retain(|_, updated| now.saturating_sub(*updated) <= LATEST.as_secs());
+            .retain(|_, (updated, _)| now.saturating_sub(*updated) <= LATEST.as_secs());
     }
 }
 
@@ -196,11 +220,11 @@ mod tests {
     }
 
     #[test]
-    fn one_attempt_per_idle_period() {
+    fn one_press_per_idle_period() {
         let mut tracker = Tracker::default();
         let session = idle_claude(40);
         assert!(tracker.untried(&session));
-        tracker.tried(&session);
+        tracker.done(&session);
         assert!(!tracker.untried(&session));
         // New activity opens a new period.
         let later = AgentSession {
@@ -210,6 +234,28 @@ mod tests {
         assert!(tracker.untried(&later));
         tracker.prune(NOW + LATEST.as_secs());
         assert!(tracker.tried.is_empty());
+    }
+
+    #[test]
+    fn attempts_that_pressed_nothing_run_again_a_few_times() {
+        let mut tracker = Tracker::default();
+        let session = idle_claude(40);
+        for _ in 0..ATTEMPTS {
+            assert!(tracker.untried(&session));
+            tracker.failed(&session);
+        }
+        assert!(!tracker.untried(&session));
+        // A new period starts counting again.
+        let later = AgentSession {
+            updated_unix: session.updated_unix + 600,
+            ..session.clone()
+        };
+        assert!(tracker.untried(&later));
+        tracker.failed(&later);
+        assert!(tracker.untried(&later));
+        // A press ends the period at once.
+        tracker.done(&later);
+        assert!(!tracker.untried(&later));
     }
 
     fn transcript(lines: &[&str]) -> tempfile::NamedTempFile {

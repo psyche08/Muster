@@ -17,6 +17,11 @@ decides anything; it signs when asked.
   always compiles it on macOS; Rust owns every lease, authorization and
   watchdog decision. `Tests/DisplayAwakeTests.m` checks that its display
   assertions are released (build it with Console.m, see its header).
+- `Notice/Notice.m`: the top-right notice panel that
+  `muster-platform/src/macos/notice.rs` shows in its helper process
+  (`musterd --muster-notice`) while idle compaction works on a Mac in use
+  (ADR 0087). The panel never activates, takes focus or receives clicks.
+  `muster-platform/build.rs` compiles it into the same static library.
 
 `build.sh` (or `cargo build -p musterd --features sep` on a Mac) builds musterd with the signer: muster-platform's build.rs compiles
 `Sources/SepSign/SepSign.swift` with swiftc into a static archive and

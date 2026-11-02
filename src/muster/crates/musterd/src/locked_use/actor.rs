@@ -1,6 +1,7 @@
 //! The owner task: one console lease from challenge to relock, driven by
 //! commands and a 50 ms tick. A lease runs one operation (and its provider
-//! queue), or keeps a terminal session open while its requester renews it.
+//! queue), keeps a terminal session open while its requester renews it, or
+//! runs this Mac's own unattended `/compact` (ADR 0087).
 
 use super::*;
 
@@ -20,6 +21,7 @@ pub(super) async fn run(
     work: muster_agent::control_guard::WorkQueue,
     provider: Option<String>,
     terminal: Option<TerminalLease>,
+    compact: Option<String>,
 ) {
     let manual = gate.is_device();
     let mut last_maintenance = Instant::now();
@@ -154,6 +156,8 @@ pub(super) async fn run(
                 o.watchdog_nonce = Some(*challenge.nonce());
             }
         }
+        // A lease armed in this tick, by a signature or by this Mac itself.
+        let mut armed = None;
         if let Some(command) = command {
             match command {
                 Command::Enqueue(queued) => {
@@ -187,33 +191,28 @@ pub(super) async fn run(
                         Instant::now(),
                         o,
                     );
-                    match result {
-                        Ok(_) => {
-                            log::info!(
-                                "Locked Use: operation signature verified; preparing display guard"
-                            );
-                            cancel = token;
-                            pending = Some(reply);
-                            match os.guard(
-                                *challenge.nonce(),
-                                MAX_TTL.saturating_sub(started.elapsed()),
-                                o.screen,
-                            ) {
-                                Ok(g) => {
-                                    last_pulse = Instant::now();
-                                    guard = Some(g);
-                                }
-                                Err(error) => {
-                                    outcome = Some(Err(Error::Unavailable(error)));
-                                    gate.stop(StopReason::WatchdogLost, Instant::now());
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::warn!("Locked Use: operation signature rejected: {e}");
-                            let _ = reply.send(Err(e.into()));
-                        }
+                    match &result {
+                        Ok(_) => log::info!(
+                            "Locked Use: operation signature verified; preparing display guard"
+                        ),
+                        Err(e) => log::warn!("Locked Use: operation signature rejected: {e}"),
                     }
+                    armed = Some((result, reply, token));
+                }
+                Command::Unattended { reply } => {
+                    let result = gate.arm_unattended(
+                        daemon.roster().read().unwrap().state(),
+                        &daemon.policy().read().unwrap(),
+                        Instant::now(),
+                        o,
+                    );
+                    match &result {
+                        Ok(_) => log::info!(
+                            "Locked Use: unattended lease armed; preparing display guard"
+                        ),
+                        Err(e) => log::warn!("Locked Use: unattended lease refused: {e}"),
+                    }
+                    armed = Some((result, reply, CancellationToken::new()));
                 }
                 Command::Cancel {
                     peer: p,
@@ -319,6 +318,31 @@ pub(super) async fn run(
                         )
                         .is_ok();
                     log::info!("Locked Use: plugin terminal allowed={allowed} accepted={accepted}");
+                }
+            }
+        }
+        if let Some((result, reply, token)) = armed {
+            match result {
+                Ok(_) => {
+                    cancel = token;
+                    pending = Some(reply);
+                    match os.guard(
+                        *challenge.nonce(),
+                        MAX_TTL.saturating_sub(started.elapsed()),
+                        o.screen,
+                    ) {
+                        Ok(g) => {
+                            last_pulse = Instant::now();
+                            guard = Some(g);
+                        }
+                        Err(error) => {
+                            outcome = Some(Err(Error::Unavailable(error)));
+                            gate.stop(StopReason::WatchdogLost, Instant::now());
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = reply.send(Err(e.into()));
                 }
             }
         }
@@ -431,6 +455,21 @@ pub(super) async fn run(
                     );
                     action = Some(job);
                     action_delivery = Some(delivery);
+                } else if admitted && let Some(session) = &compact {
+                    log::info!("Locked Use: unattended idle compaction admitted after OS unlock");
+                    live.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let (job, delivery) = start_compact(
+                        daemon.clone(),
+                        session.clone(),
+                        started,
+                        os.clone(),
+                        live.clone(),
+                        o,
+                        cancel.clone(),
+                        work.clone(),
+                    );
+                    action = Some(job);
+                    action_delivery = Some(delivery);
                 } else if admitted && manual {
                     action_finished = true;
                     live.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -511,7 +550,7 @@ pub(super) async fn run(
                         Command::Enqueue(q) => {
                             completed.push((q.reply, Ok(not_started("Locked Use ended"))))
                         }
-                        Command::Execute { reply, .. } => {
+                        Command::Execute { reply, .. } | Command::Unattended { reply } => {
                             let _ = reply.send(Err(Error::Conflict("Locked Use ended".into())));
                         }
                         Command::Consume { reply, .. } => {
@@ -801,6 +840,73 @@ pub(super) fn start_action(
                         biased;
                         _ = cancelled => Err(Error::Unavailable("native operation cancelled".into())),
                         result = crate::handler::locked_operation(&daemon, req) => result,
+                    }
+                })
+                .await
+                .map_err(|error| {
+                    Error::Unavailable(format!("native operation worker failed: {error}"))
+                })?
+            })))
+            .await
+    });
+    (job, delivery)
+}
+
+/// This Mac's own `/compact` under its unattended lease (ADR 0087). Each OS
+/// call is admitted only while the lease is live, inside its first window,
+/// on the same console with no local input, unlocked, and while this Mac
+/// still allows Locked Use, agent control and idle compaction.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn start_compact(
+    daemon: Arc<Daemon>,
+    session: String,
+    started: Instant,
+    os: Arc<dyn LockedUseOs>,
+    live: Arc<std::sync::atomic::AtomicBool>,
+    observation: Observation,
+    cancel: CancellationToken,
+    work: muster_agent::control_guard::WorkQueue,
+) -> (
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+    muster_agent::control_guard::Delivery,
+) {
+    let delivery = muster_agent::control_guard::Delivery::default();
+    // Claude records the command only after compacting, long after relock;
+    // that late record clears the session's unconfirmed-write guard.
+    delivery.set_receipt_budget(Duration::from_millis(500));
+    let scoped = delivery.clone();
+    let checked = daemon.clone();
+    let check = Arc::new(move || {
+        let sample = os.observe();
+        live.load(std::sync::atomic::Ordering::SeqCst)
+            && !cancel.is_cancelled()
+            && started.elapsed() < MAX_TTL
+            && sample.console == observation.console
+            && sample.input_generation == observation.input_generation
+            && sample.screen == muster_core::locked_use::Screen::Unlocked
+            && checked
+                .policy()
+                .read()
+                .is_ok_and(|p| p.allow_locked_control && p.offer_agent)
+            && crate::idle_compact::enabled(&checked)
+    });
+    let job = tokio::spawn(async move {
+        scoped
+            .scope(work.scope(muster_agent::control_guard::scope(check, async move {
+                let (_cancel_worker, cancelled) = oneshot::channel::<()>();
+                muster_agent::control_guard::spawn_blocking_async(async move {
+                    muster_agent::control_guard::check()?;
+                    tokio::select! {
+                        biased;
+                        _ = cancelled => Err(Error::Unavailable("native operation cancelled".into())),
+                        result = crate::idle_compact::compact(&daemon, &session) => match result {
+                            Ok(()) => Ok(Resp::OpResult(v1::OpResult {
+                                status: v1::op_result::Status::Applied as i32,
+                                ..Default::default()
+                            })),
+                            Err(Error::UnknownOutcome(message)) => Ok(unknown_result(message)),
+                            Err(error) => Err(error),
+                        },
                     }
                 })
                 .await

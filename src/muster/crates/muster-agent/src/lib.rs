@@ -2443,6 +2443,21 @@ impl AgentService {
         entered(self.controller(id)?).compact().await
     }
 
+    /// Whether the session's newest conversation record is a compaction.
+    pub fn compacted(&self, id: &str) -> bool {
+        let Some((path, provider)) = self
+            .inner
+            .lock()
+            .unwrap()
+            .catalog
+            .get(id)
+            .map(|d| (d.path.clone(), d.provider))
+        else {
+            return false;
+        };
+        idle_compact::compacted(&path, provider)
+    }
+
     /// The sessions [`idle_compact::due`] picks at `now` whose transcript does
     /// not already end in a compaction, longest idle first. Transcripts are
     /// read outside the catalog lock.

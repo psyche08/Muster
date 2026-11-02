@@ -10,6 +10,7 @@ pub mod lock;
 pub mod native_app;
 pub mod native_chat;
 pub mod nethelper;
+pub mod notice;
 pub mod procs;
 #[cfg(feature = "sep")]
 pub mod sep;

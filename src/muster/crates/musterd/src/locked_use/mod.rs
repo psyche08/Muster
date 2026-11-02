@@ -111,6 +111,11 @@ enum Command {
     Input {
         peer: DeviceId,
     },
+    /// Arm this Mac's own unattended lease. Sent only by
+    /// `Owner::unattended_compact`, never by an RPC.
+    Unattended {
+        reply: Reply,
+    },
     Shutdown,
 }
 
@@ -310,6 +315,7 @@ impl Owner {
             write,
             provider,
             None,
+            None,
         )
     }
 
@@ -361,8 +367,87 @@ impl Owner {
             manual: manual.then(|| (peer, c.nonce().to_vec(), Arc::default())),
         });
         self.spawn_owner(
-            runtime, &daemon, os, gate, issued_at, c, peer, None, digest, rx, write, None, terminal,
+            runtime, &daemon, os, gate, issued_at, c, peer, None, digest, rx, write, None,
+            terminal, None,
         )
+    }
+
+    /// Idle compaction on a locked console (ADR 0087): this Mac's own lease
+    /// for one `/compact` in one conversation, armed by its local switches
+    /// instead of a requester's signature. The cover, watchdog, plugin
+    /// consumption, observed unlock, local-input stop and confirmed relock
+    /// are those of every Locked Use transaction.
+    pub async fn unattended_compact(
+        self: &Arc<Self>,
+        daemon: Arc<Daemon>,
+        provider: &str,
+        session: &str,
+    ) -> Result<Resp, Error> {
+        use sha2::{Digest, Sha256};
+        let os = self.os.clone().ok_or_else(|| {
+            Error::Unavailable("Locked Use is unsupported on this platform".into())
+        })?;
+        os.available().map_err(Error::Unavailable)?;
+        let write = self
+            .writes
+            .clone()
+            .try_write_owned()
+            .map_err(|_| Error::Conflict("the console is busy".into()))?;
+        let me = daemon.device_id();
+        let turn = format!(
+            "idle-compact-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+        let mut hash = Sha256::new();
+        hash.update(b"MUSTER-IDLE-COMPACT-V1\0");
+        hash.update(provider.as_bytes());
+        hash.update([0]);
+        hash.update(session.as_bytes());
+        let digest: [u8; 32] = hash.finalize().into();
+        let mut gate = Gate::new(me)?;
+        let observed = observation(&*os, None, true);
+        let issued_at = Instant::now();
+        let c = gate.issue_unattended(
+            daemon.roster().read().unwrap().state(),
+            &daemon.policy().read().unwrap(),
+            provider,
+            &turn,
+            digest,
+            MAX_TTL,
+            issued_at,
+            observed,
+        )?;
+        log::info!("Locked Use: unattended idle-compaction lease issued");
+        let runtime = owner_runtime()?;
+        let (tx, rx) = mpsc::channel(16);
+        *self.current.lock().unwrap() = Some(Current {
+            receipt: None,
+            tx,
+            scope: None,
+            accepting: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            terminal: None,
+            manual: None,
+        });
+        self.spawn_owner(
+            runtime,
+            &daemon,
+            os,
+            gate,
+            issued_at,
+            c,
+            me,
+            None,
+            digest,
+            rx,
+            write,
+            None,
+            None,
+            Some(session.to_owned()),
+        )?;
+        self.ask(|reply| Command::Unattended { reply }).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -381,6 +466,7 @@ impl Owner {
         write: OwnedRwLockWriteGuard<()>,
         provider: Option<String>,
         terminal: Option<TerminalLease>,
+        compact: Option<String>,
     ) -> Result<Resp, Error> {
         let owner = self.clone();
         let weak = Arc::downgrade(daemon);
@@ -402,6 +488,7 @@ impl Owner {
                     muster_agent::control_guard::WorkQueue::default(),
                     provider,
                     terminal,
+                    compact,
                 )
                 .await;
             })

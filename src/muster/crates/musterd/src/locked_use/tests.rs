@@ -469,6 +469,7 @@ async fn start_fixture(
         os.work.clone(),
         None,
         lease,
+        None,
     );
     let job = tokio::task::spawn_blocking(move || runtime.block_on(task));
     (dir, daemon, owner, os, c, presence, peer, job)
@@ -494,6 +495,126 @@ async fn consume(owner: &Owner) -> [u8; 32] {
     tx.send(Command::Consume { uid: 501, reply }).await.unwrap();
     result.await.unwrap().unwrap()
 }
+/// This Mac's own lease for one idle `/compact` (ADR 0087), on the fixture's
+/// daemon with a fresh console. Returns the pending reply.
+async fn unattended(
+    daemon: &Arc<Daemon>,
+) -> (
+    Arc<Owner>,
+    Arc<Os>,
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+) {
+    let os = Os::new();
+    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
+    let (task_owner, task_daemon) = (owner.clone(), daemon.clone());
+    let reply = tokio::spawn(async move {
+        task_owner
+            .unattended_compact(task_daemon, "claude", "missing")
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    (owner, os, reply)
+}
+
+/// A failure returns while the owner relocks; wait for it to finish.
+async fn ended(owner: &Owner) {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while owner.current.lock().unwrap().is_some() {
+        assert!(Instant::now() < deadline, "owner did not finish");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[tokio::test]
+async fn an_unattended_compaction_unlocks_under_cover_runs_and_relocks() {
+    let (_dir, daemon, _owner, _os, _c, key, peer, _job) = start().await;
+    crate::idle_compact::debug(&daemon, "on").unwrap();
+    let (owner, os, reply) = unattended(&daemon).await;
+    assert!(os.unlock_started.load(Ordering::SeqCst));
+    // A signed phone request cannot join this Mac's own lease.
+    let queued = owner
+        .enqueue(
+            &daemon,
+            peer,
+            send_request("missing", "hello", "op-2"),
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(queued, Some(Err(_))), "{queued:?}");
+    let nonce = consume(&owner).await;
+    assert!(owner.writes.clone().try_read_owned().is_err());
+    let tx = owner.current.lock().unwrap().clone().unwrap();
+    tx.send(Command::Terminal {
+        nonce,
+        allowed: true,
+    })
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    os.unlocked.store(true, Ordering::SeqCst);
+    // The session does not exist: the compaction itself fails after the
+    // unlock, past the console checks, and the Mac still relocks first.
+    let error = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        !error.to_string().contains("console authorization ended"),
+        "{error}"
+    );
+    ended(&owner).await;
+    assert!(os.released.load(Ordering::SeqCst));
+    assert!(!os.unlocked.load(Ordering::SeqCst));
+    assert!(os.locks.load(Ordering::SeqCst) > 0);
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+    let _ = key;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_unattended_compaction_stops_when_idle_compaction_is_turned_off() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    crate::idle_compact::debug(&daemon, "off").unwrap();
+    let (owner, os, reply) = unattended(&daemon).await;
+    let nonce = consume(&owner).await;
+    let tx = owner.current.lock().unwrap().clone().unwrap();
+    tx.send(Command::Terminal {
+        nonce,
+        allowed: true,
+    })
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    os.unlocked.store(true, Ordering::SeqCst);
+    let error = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("console authorization ended"),
+        "{error}"
+    );
+    ended(&owner).await;
+    assert!(os.released.load(Ordering::SeqCst));
+    assert!(!os.unlocked.load(Ordering::SeqCst));
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_unattended_compaction_needs_locked_use_on_this_mac() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    crate::idle_compact::debug(&daemon, "on").unwrap();
+    daemon.policy().write().unwrap().allow_locked_control = false;
+    let (owner, os, reply) = unattended(&daemon).await;
+    assert!(reply.await.unwrap().is_err());
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    assert!(owner.current.lock().unwrap().is_none());
+    assert!(owner.writes.clone().try_write_owned().is_ok());
+    daemon.shutdown().await;
+}
+
 #[tokio::test]
 async fn updater_waits_without_stopping_owner_and_fences_new_writes() {
     let (_dir, _daemon, owner, _os, _c, _key, _peer, job) = start().await;
