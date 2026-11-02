@@ -1004,25 +1004,14 @@ impl NativeAppController {
             let current = selected(&tree.nodes[other].element);
             if want && current != Some(true) || !want && current == Some(true) {
                 self.press_question(pending, generation, &tree.nodes[other].element)?;
-                tree = self.fresh_question_tree(pending, generation)?;
-                form = tree
-                    .form_for(pending, &plan.question, self.profile)
-                    .ok_or_else(|| {
-                        Error::Unavailable("Custom answer controls are no longer visible".into())
-                    })?;
             }
         }
-        if !plan.text.is_empty() {
-            let editor = form.editor.ok_or_else(|| {
-                Error::Unavailable("The question's custom answer field is not visible".into())
-            })?;
-            let element = &tree.nodes[editor].element;
-            // Start from an empty field. A value written over a draft is
-            // merged by Electron's editors, so the answer would be mixed with
-            // whatever the field already held and submitted that way.
-            self.empty_question_editor(pending, generation, element, &plan.text)
-                .await?;
-            self.check_question_control(pending, generation, element)?;
+        if !plan.text.is_empty()
+            && let Some(element) = self
+                .empty_question_editor(pending, generation, &plan.question, &plan.text)
+                .await?
+        {
+            self.check_question_control(pending, generation, &element)?;
             muster_agent::control_guard::delivery_attempt();
             self.question_writes
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -1039,65 +1028,95 @@ impl NativeAppController {
         Ok(FilledQuestion::Form(tree, form))
     }
 
-    /// Empty the question's answer field and confirm it empty before the
-    /// answer is written. Shared Rust decides each attempt and owns the
-    /// confirmation; this only reads and clears, and submits nothing. An
-    /// answer that is already exactly in the field needs no clearing.
+    /// Return a freshly bound empty editor, or None for an exact existing answer.
+    /// Never carry a proxy across a clear or asynchronous wait.
     async fn empty_question_editor(
         &self,
         pending: &PendingInteraction,
         generation: u64,
-        element: &Element,
+        question: &InteractionQuestion,
         text: &str,
-    ) -> Result<(), Error> {
-        use muster_agent::native_send::{ClearWait, Clearing};
-        let started = Instant::now();
-        let mut wait = ClearWait::default();
+    ) -> Result<Option<Element>, Error> {
+        use muster_agent::native_send::{
+            CLEAR_DEADLINE, QuestionEditor, QuestionEditorWait, QuestionPreparation,
+        };
+        let step = Step::new("question answer field preparation", CLEAR_DEADLINE);
+        let mut wait = QuestionEditorWait::default();
+        let mut previous: Option<Element> = None;
         loop {
+            step.check()?;
+            let tree = self.fresh_question_tree(pending, generation)?;
+            let form = tree
+                .form_for(pending, question, self.profile)
+                .ok_or_else(|| {
+                    Error::Unavailable(
+                        "The exact question form changed; nothing was submitted".into(),
+                    )
+                })?;
+            let editor = form.editor.ok_or_else(|| {
+                Error::Unavailable("The question's custom answer field is not visible".into())
+            })?;
+            let element = &tree.nodes[editor].element;
             self.check_question_control(pending, generation, element)?;
-            let draft = element
-                .string("AXValue")
-                .map(|value| !value.trim().is_empty() && value.trim() != text);
-            match wait.observe(started.elapsed(), draft) {
-                Clearing::Done => {
-                    if wait.attempts() > 0 {
-                        log::info!(
-                            "AX question field cleared: session={} question={} attempts={} elapsed_ms={}",
-                            self.session,
-                            pending.id,
-                            wait.attempts(),
-                            started.elapsed().as_millis()
-                        );
-                    }
-                    return Ok(());
-                }
-                Clearing::Clear(with) => {
-                    super::clear_editor(self.profile, element, with).map_err(|code| {
+            let value = element.string("AXValue");
+            let placeholder = element.string("AXPlaceholderValue");
+            let characters = element.number("AXNumberOfCharacters");
+            let decision = wait.observe(
+                step.elapsed(),
+                QuestionEditor {
+                    value: value.as_deref(),
+                    placeholder: placeholder.as_deref(),
+                    characters,
+                },
+                text,
+            );
+            let rebound = previous.as_ref().is_some_and(|old| old != element);
+            if !matches!(decision, QuestionPreparation::Wait) {
+                log::info!(
+                    "AX question editor session={} question={} decision={decision:?} value_chars={:?} characters={characters:?} placeholder_match={} rebound={rebound} attempts={} elapsed_ms={}",
+                    self.session,
+                    question.id,
+                    value.as_ref().map(|v| v.chars().count()),
+                    value.is_some() && value == placeholder,
+                    wait.attempts(),
+                    step.elapsed().as_millis()
+                );
+            }
+            previous = Some(element.clone());
+            step.check()?;
+            match decision {
+                QuestionPreparation::Ready { write } => return Ok(write.then(|| element.clone())),
+                QuestionPreparation::Clear(with) => {
+                    self.check_question_control(pending, generation, element)?;
+                    step.check()?;
+                    // Question text does not inherit the main composer's placeholder labels.
+                    super::clear_editor(None, element, with).map_err(|code| {
                         Error::Unavailable(format!(
                             "Question answer field clear failed ({code}); nothing was submitted"
                         ))
                     })?;
                 }
-                Clearing::Wait => tokio::time::sleep(Duration::from_millis(50)).await,
-                Clearing::Timeout => {
-                    log::warn!(
-                        "AX question field still held a draft: session={} question={} attempts={} elapsed_ms={}; nothing was submitted",
-                        self.session,
-                        pending.id,
-                        wait.attempts(),
-                        started.elapsed().as_millis()
-                    );
+                QuestionPreparation::Refresh => {
+                    let web = self.question_guard(pending, generation)?;
+                    step.check()?;
+                    let accepted = self.app.query_renderer(&web);
+                    log::info!("AX question editor renderer refresh accepted={accepted}");
+                }
+                QuestionPreparation::Wait => {}
+                QuestionPreparation::Timeout => {
                     return Err(Error::Unavailable(
                         "The question's answer field could not be emptied; nothing was submitted"
                             .into(),
                     ));
                 }
-                Clearing::Unreadable => {
+                QuestionPreparation::Unreadable => {
                     return Err(Error::Unavailable(
                         "The question's answer field cannot be read; nothing was submitted".into(),
                     ));
                 }
             }
+            step.check()?;
+            tokio::time::sleep(Duration::from_millis(50).min(step.remaining())).await;
         }
     }
 

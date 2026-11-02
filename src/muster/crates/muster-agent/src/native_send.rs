@@ -305,6 +305,209 @@ pub struct ClearWait {
     last: Option<Duration>,
 }
 
+/// Facts from one freshly resolved question editor. Character count is useful
+/// only as corroboration of its own placeholder, never a substitute for value.
+pub struct QuestionEditor<'a> {
+    pub value: Option<&'a str>,
+    pub placeholder: Option<&'a str>,
+    pub characters: Option<i64>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum QuestionPreparation {
+    Ready { write: bool },
+    Clear(ClearWith),
+    Refresh,
+    Wait,
+    Timeout,
+    Unreadable,
+}
+
+#[derive(Default)]
+pub struct QuestionEditorWait {
+    clear: ClearWait,
+    refresh_due: bool,
+}
+impl QuestionEditorWait {
+    pub fn observe(
+        &mut self,
+        elapsed: Duration,
+        editor: QuestionEditor<'_>,
+        answer: &str,
+    ) -> QuestionPreparation {
+        use QuestionPreparation::*;
+        if elapsed >= CLEAR_DEADLINE {
+            return Timeout;
+        }
+        let Some(value) = editor.value else {
+            return Unreadable;
+        };
+        let placeholder =
+            !value.is_empty() && editor.placeholder == Some(value) && editor.characters == Some(0);
+        if placeholder || value.trim().is_empty() && editor.characters.is_none_or(|n| n == 0) {
+            return Ready { write: true };
+        }
+        if value == answer
+            && editor.characters.is_none_or(|n| n > 0)
+            && (editor.placeholder != Some(value) || editor.characters.is_some_and(|n| n > 0))
+        {
+            return Ready { write: false };
+        }
+        // Read-only cache refresh is useful even when the clear's settling
+        // interval has elapsed. It neither resets time nor authorizes a press.
+        if self.refresh_due {
+            self.refresh_due = false;
+            return Refresh;
+        }
+        match self.clear.observe(elapsed, Some(true)) {
+            Clearing::Clear(with) => {
+                self.refresh_due = true;
+                Clear(with)
+            }
+            Clearing::Wait => Wait,
+            Clearing::Timeout => Timeout,
+            Clearing::Unreadable => Unreadable,
+            Clearing::Done => unreachable!("the observation above contains a draft"),
+        }
+    }
+
+    pub fn attempts(&self) -> usize {
+        self.clear.attempts()
+    }
+}
+
+#[cfg(test)]
+mod question_editor_tests {
+    use super::*;
+    fn field(value: Option<&str>) -> QuestionEditor<'_> {
+        QuestionEditor {
+            value,
+            placeholder: None,
+            characters: None,
+        }
+    }
+    #[test]
+    fn stale_draft_refreshes_then_admits_one_write_from_empty() {
+        let mut wait = QuestionEditorWait::default();
+        assert_eq!(
+            wait.observe(Duration::ZERO, field(Some("old")), "new"),
+            QuestionPreparation::Clear(ClearWith::Selection)
+        );
+        assert_eq!(
+            wait.observe(Duration::from_millis(50), field(Some("old")), "new"),
+            QuestionPreparation::Refresh
+        );
+        assert_eq!(
+            wait.observe(Duration::from_millis(100), field(Some("")), "new"),
+            QuestionPreparation::Ready { write: true }
+        );
+        assert_eq!(wait.attempts(), 1);
+    }
+    #[test]
+    fn exact_answer_is_not_written_twice_or_trimmed_into_a_match() {
+        let mut wait = QuestionEditorWait::default();
+        assert_eq!(
+            wait.observe(Duration::ZERO, field(Some("answer")), "answer"),
+            QuestionPreparation::Ready { write: false }
+        );
+        assert_eq!(wait.attempts(), 0);
+        assert_eq!(
+            wait.observe(Duration::ZERO, field(Some(" answer ")), "answer"),
+            QuestionPreparation::Clear(ClearWith::Selection)
+        );
+    }
+    #[test]
+    fn placeholder_requires_same_field_zero_character_evidence() {
+        for (characters, placeholder, empty) in [
+            (Some(0), Some("hint"), true),
+            (None, Some("hint"), false),
+            (Some(4), Some("hint"), false),
+            (Some(0), Some("different"), false),
+            (Some(-1), Some("hint"), false),
+        ] {
+            let result = QuestionEditorWait::default().observe(
+                Duration::ZERO,
+                QuestionEditor {
+                    value: Some("hint"),
+                    placeholder,
+                    characters,
+                },
+                "answer",
+            );
+            assert_eq!(result == QuestionPreparation::Ready { write: true }, empty);
+        }
+        // Wanting the placeholder literally still requires a write into an empty field.
+        assert_eq!(
+            QuestionEditorWait::default().observe(
+                Duration::ZERO,
+                QuestionEditor {
+                    value: Some("hint"),
+                    placeholder: Some("hint"),
+                    characters: Some(0)
+                },
+                "hint"
+            ),
+            QuestionPreparation::Ready { write: true }
+        );
+    }
+    #[test]
+    fn unreadable_or_contradictory_empty_fields_are_not_ready() {
+        assert_eq!(
+            QuestionEditorWait::default().observe(
+                Duration::ZERO,
+                QuestionEditor {
+                    value: None,
+                    placeholder: None,
+                    characters: Some(0)
+                },
+                "answer"
+            ),
+            QuestionPreparation::Unreadable
+        );
+        assert_eq!(
+            QuestionEditorWait::default().observe(
+                Duration::ZERO,
+                QuestionEditor {
+                    value: Some(""),
+                    placeholder: None,
+                    characters: Some(6)
+                },
+                "answer"
+            ),
+            QuestionPreparation::Clear(ClearWith::Selection)
+        );
+        for characters in [Some(0), None, Some(-1)] {
+            assert_ne!(
+                QuestionEditorWait::default().observe(
+                    Duration::ZERO,
+                    QuestionEditor {
+                        value: Some("hint"),
+                        placeholder: Some("hint"),
+                        characters
+                    },
+                    "hint"
+                ),
+                QuestionPreparation::Ready { write: false }
+            );
+        }
+    }
+    #[test]
+    fn refresh_never_extends_deadline_or_admits_a_late_empty_result() {
+        let mut wait = QuestionEditorWait::default();
+        wait.observe(Duration::ZERO, field(Some("old")), "answer");
+        assert_eq!(
+            wait.observe(Duration::from_millis(1900), field(Some("old")), "answer"),
+            QuestionPreparation::Refresh
+        );
+        for value in ["", "answer", "old"] {
+            assert_eq!(
+                wait.observe(CLEAR_DEADLINE, field(Some(value)), "answer"),
+                QuestionPreparation::Timeout
+            );
+        }
+    }
+}
+
 impl ClearWait {
     /// `draft` is whether the editor's value is a draft; `None` is unreadable.
     pub fn observe(&mut self, elapsed: Duration, draft: Option<bool>) -> Clearing {
