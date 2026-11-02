@@ -1,7 +1,7 @@
 # ADR 0080: The desktop session-list scan prunes conversation views
 
 - Date: 2026-11-02
-- Status: Accepted; source verified, device acceptance pending
+- Status: Accepted; shipped in desktop 1.1.8 (98) on three Macs; device send acceptance pending
 - Related: [ADR 0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md),
   [ADR 0040](0040-desktop-navigation-identity.md),
   [ADR 0075](0075-claude-registry-entries-without-cli-session.md),
@@ -99,9 +99,11 @@ send refuses with the existing readiness error. The AX trace now records a
   Context. `session selection: desktop content is not ready` appears 13 times
   on M4Mini only (`1.1.4` 4, `1.1.5` 6, `1.1.6` 3); the other two Macs' send
   refusals predate the fixes on `main` and are not claimed here.
+- **Shipped:** desktop 1.1.8 (98) contains this change and was published and
+  installed on the three Macs (ADR 0081). The build and signing states are
+  recorded there.
 - **Not done:** a live send into a real conversation was not used as a test,
-  and no post-install acceptance exists yet. Acceptance is an owner send to a
+  so no post-install acceptance exists yet. Acceptance is an owner send to a
   session that is not the open one, with the installed build, while the same
   AX diagnostic shows `navigation_areas > 0` and no `unreadable_children`
-  stop. Build, signing, notarization, publication and installation are
-  recorded in the paired-release ADR for 1.1.8.
+  stop.

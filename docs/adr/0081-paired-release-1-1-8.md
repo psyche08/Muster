@@ -1,7 +1,7 @@
 # ADR 0081: Publish Apple 1.1.8 (98) and install it on the three Macs
 
 - Date: 2026-11-02
-- Status: Accepted; publication and installation pending
+- Status: Accepted; published and installed on three Macs; provider send acceptance pending
 - Related: [ADR 0080](0080-session-list-scan-prunes-conversation-views.md),
   [ADR 0076](0076-paired-release-1-1-6.md),
   [ADR 0079](0079-install-multica-daemon-detection-fix.md),
@@ -111,3 +111,72 @@ profile, published pages/manifest/hashes/cache headers read back over HTTPS,
 per-Mac version/build/commit/daemon hash/identity/backup, relay/Vnet/
 Accessibility, six RPC directions and 24 ping directions, and the open
 acceptance limits. No real conversation is used as a release test.
+
+### Source, build and signing — 2026-11-02
+
+- The only built source was the merge commit of PR 81,
+  `8c79329d4d0464bcfef05bfea7e8c95407d9b76d`; the release worktree was a clean
+  detached checkout of it. `cargo build --release` for the daemon, CLI, relay
+  and browser host, the Apple FFI archive and the Xcode Release app all
+  succeeded.
+- The built daemon carried exactly one `MUSTER-BUILD-COMMIT:8c79329d…` stamp;
+  `verify-release.sh` reported the release ancestry and shipped fingerprints
+  verified, and presence signing verified for `89LGY6BD53.dev.linsheng.muster`.
+- The packed bundle passed strict `codesign --verify --deep`, `spctl` reported
+  `accepted, source=Notarized Developer ID`, and `xcrun stapler validate`
+  passed after notarization `9b8a05a6-86c2-465d-8aff-b5777b83193f` returned
+  `Accepted`.
+- Desktop portable ZIP SHA-256:
+  `252bbede03f9676deb6dd583d713a1d548a738427bc8d8638f051f2b34aff30b`.
+  Packaged daemon SHA-256:
+  `a0ca38b5912262e9529367aea5f8ea6b5458bb32e1eca0a9ee1bd4b029ca883b`.
+  The bundle's `sq.version` reports 1.1.8.
+- The paired iOS archive built as 1.1.8 (98), team `89LGY6BD53`,
+  development-signed for three registered devices with a profile that expires
+  2027-09-30 and permits `get-task-allow`. No App Store export and no
+  TestFlight upload were made. OTA IPA SHA-256:
+  `fbc068d40f5aaee1159282eeee4a2d75b8a87856f9fc2815602bd5dc42eb5275`.
+
+### Publication and public read-back — 2026-11-02
+
+- The publisher accepted all 11 staged files and verified their hashes on the
+  server (`{"published_files":11,"mac_version":"1.1.8","ios_version":"1.1.8","build":"98","hashes_verified":true}`).
+- Read back over HTTPS: the root, `ios/` and `desktop/` pages equal the
+  generated page; the Mac portable and the IPA match their SHA-256 values; the
+  manifest names build 98 and the hash-named IPA; the previous 1.1.6 manifest
+  URL redirects to the current manifest; the pages, manifest, packages and
+  `SHA256SUMS` carry
+  `no-store, no-cache, must-revalidate, max-age=0`.
+- No signed Velopack update feed was published, for the reason in Decision.
+  Superseded releases were **not** pruned; the server-side prune still needs
+  explicit owner authorization.
+
+### Installation and runtime — three Macs, 2026-11-02
+
+- One identical notarized portable was installed on the three Macs, one at a
+  time, over routes that do not depend on the device's own daemon: the local
+  Mac, a physical Thunderbolt/LAN route, and a temporary reverse tunnel that
+  was removed after acceptance. The installer kept a previous-bundle copy on
+  each Mac.
+- All three report desktop **1.1.8 (98)**, commit prefix `8c79329d`, the
+  packaged daemon SHA-256 above, and unchanged device identity, fingerprint and
+  Secure Enclave backend. Accessibility is granted, the relay is registered and
+  Vnet is up on each; strict signature, notarized-DM status and stapling pass
+  on the installed bundle.
+- Six cross-device RPC directions succeeded and 24 of 24 virtual-IP ping
+  packets were received with no loss. The managed task scheduler on one Mac was
+  suspended and restored around the replacement; its own installer window saw
+  the scheduler still recovering, and an immediate direct re-check reported it
+  `running`. That is delayed success, not a failed install, and nothing was
+  reinstalled.
+- Not verified: no real conversation was used as a send test, so ADR 0080's
+  device acceptance (a send to a session that is not the open one) remains
+  open; physical iPhone installation, GitHub Release, TestFlight, App Store
+  submission and the server prune were not performed.
+
+## Verification status
+
+Published and installed. The macOS and iOS artifacts are public on the unified
+OTA page; the three Macs are on the same notarized build with their identities
+preserved. Provider-level send acceptance and physical iPhone installation
+remain owner-side steps.
