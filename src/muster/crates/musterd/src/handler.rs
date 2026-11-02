@@ -1156,6 +1156,7 @@ async fn dispatch(
                     return crate::inspection::inspect(daemon, &r.arg, events.cancelled()).await;
                 }
                 "ax-question" => agent_of(daemon)?.question_diagnostic(&r.arg)?,
+                "idle-compact" => crate::idle_compact::debug(daemon, &r.arg)?,
                 "ax-chat-options" => {
                     let _write =
                         daemon

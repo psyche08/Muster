@@ -225,17 +225,29 @@ enum DraftAction {
     Reuse,
 }
 
+/// What a write may do to a differing draft already in the native prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Draft {
+    /// An explicit send replaces it with Muster's text.
+    Replace,
+    /// An automatic write (idle compaction) leaves it and sends nothing.
+    Keep,
+}
+
 fn draft_action(
     profile: &AppProfile,
     value: Option<&str>,
     text: &str,
+    draft: Draft,
 ) -> Result<DraftAction, Error> {
     match value {
         Some(value) if profile.is_empty(value) => Ok(DraftAction::Write),
-        // Explicit sends replace differing native drafts with Muster's text.
         // Matching drafts need no rewrite. Unknown presses still cannot replay.
         Some(value) if value.trim_end() == text.trim_end() => Ok(DraftAction::Reuse),
-        Some(_) => Ok(DraftAction::Write),
+        Some(_) if draft == Draft::Replace => Ok(DraftAction::Write),
+        Some(_) => Err(Error::Conflict(
+            "the native prompt holds a draft; it was preserved, not sent".into(),
+        )),
         None => Err(Error::Unavailable(
             "the prompt cannot be read; not sent".into(),
         )),
@@ -1885,6 +1897,7 @@ impl NativeAppController {
         &self,
         text: &str,
         expected: Option<&PendingInteraction>,
+        on_draft: Draft,
     ) -> Result<(), Error> {
         let mut trace = Trace::new("send", self.profile.app.provider, &self.session);
         let _write = self
@@ -1937,8 +1950,12 @@ impl NativeAppController {
                     .composer
                     .clone()
                     .ok_or_else(|| Error::Unavailable("The native prompt is not visible".into()))?;
-                let action =
-                    draft_action(self.profile, composer.string("AXValue").as_deref(), text)?;
+                let action = draft_action(
+                    self.profile,
+                    composer.string("AXValue").as_deref(),
+                    text,
+                    on_draft,
+                )?;
                 self.check_write_surface(&fresh.web_area, &composer)?;
                 *self.surface.lock().unwrap() = fresh;
                 Ok((action, composer))
@@ -1962,7 +1979,12 @@ impl NativeAppController {
                 Error::Unavailable("The native prompt is not visible after focus; not sent".into())
             })?;
             self.check_write_surface(&fresh.web_area, &current)?;
-            action = draft_action(self.profile, current.string("AXValue").as_deref(), text)?;
+            action = draft_action(
+                self.profile,
+                current.string("AXValue").as_deref(),
+                text,
+                on_draft,
+            )?;
             *self.surface.lock().unwrap() = fresh;
             muster_agent::control_guard::check()?;
             if user_input_generation() != generation {
@@ -2309,7 +2331,18 @@ impl Controller for NativeAppController {
     }
 
     async fn send(&self, text: &str) -> Result<(), Error> {
-        self.send_prompt(text, None).await
+        self.send_prompt(text, None, Draft::Replace).await
+    }
+
+    async fn compact(&self) -> Result<(), Error> {
+        if !muster_agent::idle_compact::typed_command(self.profile.app.provider) {
+            return Err(Error::Unavailable(
+                "This app runs /compact only from its prompt's command menu; nothing was sent"
+                    .into(),
+            ));
+        }
+        self.send_prompt(muster_agent::idle_compact::COMMAND, None, Draft::Keep)
+            .await
     }
 
     async fn complete(&self) -> Result<String, Error> {
@@ -2486,7 +2519,9 @@ impl Controller for NativeAppController {
                 && plans.len() == 1
                 && !plans[0].text.is_empty()
             {
-                return self.send_prompt(&plans[0].text, Some(&pending)).await;
+                return self
+                    .send_prompt(&plans[0].text, Some(&pending), Draft::Replace)
+                    .await;
             }
         }
         let _write = self
@@ -2611,24 +2646,49 @@ mod send_tests {
 
     #[test]
     fn explicit_send_reuses_matching_drafts_and_replaces_different_drafts() {
+        let replace = Draft::Replace;
         assert_eq!(
-            draft_action(&CODEX_APP, Some("先本地安装测试"), "先本地安装测试").unwrap(),
+            draft_action(
+                &CODEX_APP,
+                Some("先本地安装测试"),
+                "先本地安装测试",
+                replace
+            )
+            .unwrap(),
             DraftAction::Reuse
         );
         assert_eq!(
-            draft_action(&CODEX_APP, Some("\nDo anything"), "hello").unwrap(),
+            draft_action(&CODEX_APP, Some("\nDo anything"), "hello", replace).unwrap(),
             DraftAction::Write
         );
         assert_eq!(
-            draft_action(&CLAUDE_APP, Some(""), "hello").unwrap(),
+            draft_action(&CLAUDE_APP, Some(""), "hello", replace).unwrap(),
             DraftAction::Write
         );
         for profile in [&CODEX_APP, &CLAUDE_APP] {
             assert_eq!(
-                draft_action(profile, Some("old draft"), "hello").unwrap(),
+                draft_action(profile, Some("old draft"), "hello", replace).unwrap(),
                 DraftAction::Write
             );
         }
-        assert!(draft_action(&CODEX_APP, None, "hello").is_err());
+        assert!(draft_action(&CODEX_APP, None, "hello", replace).is_err());
+    }
+
+    #[test]
+    fn an_automatic_write_keeps_a_differing_draft() {
+        let keep = Draft::Keep;
+        assert_eq!(
+            draft_action(&CLAUDE_APP, Some(""), "/compact", keep).unwrap(),
+            DraftAction::Write
+        );
+        assert_eq!(
+            draft_action(&CLAUDE_APP, Some("/compact"), "/compact", keep).unwrap(),
+            DraftAction::Reuse
+        );
+        assert!(matches!(
+            draft_action(&CLAUDE_APP, Some("half a thought"), "/compact", keep),
+            Err(Error::Conflict(_))
+        ));
+        assert!(draft_action(&CLAUDE_APP, None, "/compact", keep).is_err());
     }
 }

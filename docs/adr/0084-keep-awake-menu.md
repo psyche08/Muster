@@ -1,4 +1,4 @@
-# ADR 0083: Keep Awake and Keep Screen On in the Mac app menu
+# ADR 0084: Keep Awake and Keep Screen On in the Mac app menu
 
 - Date: 2026-11-02
 - Status: Accepted; local dev build verified, release pending

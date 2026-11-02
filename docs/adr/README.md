@@ -146,7 +146,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074 | View DeepSeek Harness sessions; do not drive the app yet |
 
-| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; plugin verified live; daemon, phone and Locked Use acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
+| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; installed daemon and phone remote control accepted on 1.1.8; locked-screen transaction pending | Drive DeepSeek Harness through a Muster plugin inside the app |
 
 | [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix installed in 1.1.8 on three Macs; phone send acceptance pending | A Claude conversation without a CLI session hides no other |
 
@@ -158,7 +158,8 @@ records a specific decision and does not revive code on its delete list.
 | [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; shipped in 1.1.8 on three Macs, device send acceptance pending | The desktop session-list scan prunes conversation views |
 | [0081](0081-paired-release-1-1-8.md) | Accepted; published and installed on three Macs; provider send acceptance pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
 | [0082](0082-progressive-architecture-documentation.md) | Accepted | Progressive disclosure: ARCHITECTURE.md split into parts; release, field and deployment records moved to docs/validation/ |
-| [0083](0083-keep-awake-menu.md) | Accepted; local dev build verified, release pending | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
+| [0083](0083-idle-compaction.md) | Accepted; device acceptance pending | Opt-in `/compact` for Claude Code conversations idle 30-60 minutes |
+| [0084](0084-keep-awake-menu.md) | Accepted; local dev build verified, release pending | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

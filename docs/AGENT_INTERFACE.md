@@ -362,6 +362,36 @@ or inability to locate a later question remain explicit; earlier clicks are
 not automatically replayed. Readiness lookup refreshes the exact session surface
 rather than assuming that a retained composer implies a current question tree.
 
+## Idle compaction (2026-11-02)
+
+[ADR 0083](adr/0083-idle-compaction.md). On a Mac where the local owner ran
+`muster debug idle-compact on`, the daemon types `/compact` into a Claude Code
+conversation once its newest message is 30 to 60 minutes old. Within that
+window the provider's prompt cache is still warm. Only conversations that are
+`idle`, `running`, writable, unarchived and without descendant activity
+qualify. `off` disables it, and `status` reports it. The setting is local to
+the Mac and absent means off.
+
+- **When it runs.** One conversation per 60 s tick, never while the screen is
+  locked, without Accessibility, within 2 minutes of local keyboard or mouse
+  input, or while Locked Use holds the console. It takes the session's queue
+  and the same native navigation and write as a send.
+- **Drafts.** A different draft in the prompt is kept, and the attempt is
+  refused as a conflict.
+- **Repeats.** Each idle period gets one attempt, and new activity opens the
+  next one. A conversation whose newest transcript record is a compaction is
+  skipped, which also holds after a daemon restart.
+- **Receipts.** A Claude command record (`<command-name>/compact</command-name>`
+  with empty `<command-args>`) now confirms a typed `/compact`. Claude writes
+  it after compacting, so the attempt normally ends as an unknown outcome. The
+  unconfirmed-write latch clears when the record appears.
+- **Codex.** Codex desktop runs Compact only from its slash suggestion menu,
+  and a sent `/compact` would be an ordinary prompt. Codex conversations are
+  therefore refused and nothing is sent.
+
+Rust tests, targeted Clippy and builds passed. Device acceptance with a live
+Claude Desktop conversation has not been run.
+
 ## Desktop Chat mode
 
 The Claude and ChatGPT apps' ordinary conversations, read and driven through
