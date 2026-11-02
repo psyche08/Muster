@@ -294,6 +294,13 @@ where
             wait_for_quiet = true;
             continue;
         }
+        // A slow synchronous AX read may return a valid-looking snapshot after
+        // its budget. Do not let that late read admit a navigation or write.
+        if tokio::time::Instant::now() >= deadline {
+            return Err(crate::Error::Unavailable(format!(
+                "{name}: observation exceeded its preparation budget; nothing was written or sent"
+            )));
+        }
         if let Some(prepared) = prepared {
             return Ok((prepared, after));
         }

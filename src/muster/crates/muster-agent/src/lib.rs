@@ -25,6 +25,7 @@ pub mod files;
 pub mod idle_compact;
 pub mod jsonl;
 pub mod model;
+pub mod native_navigation;
 pub mod native_options;
 pub mod native_scan;
 pub mod native_send;

@@ -63,6 +63,13 @@ to use plugins and AX for different capabilities. That proposal is not active:
 the exclusivity and capability derivation below still apply. Independent CLI
 sessions retain their own identity and capabilities, not these App profiles.
 
+[ADR 0095](adr/0095-shared-ax-navigation-and-preparation.md) implements shared
+bounded AX session navigation without changing these capability rules. Codex
+thread IDs and uniquely mapped Claude desktop IDs can navigate directly; fresh
+exact-session AX evidence is still required. Selection hands its opaque verified
+surface to attachment, while each write retains current-control/draft checks.
+ChatGPT and Claude remain AX-controlled Apps, with no event-only Hook plugin.
+
 | Field | Meaning when `true` |
 |---|---|
 | `send` | Prompts can be sent to a session shown in the app |

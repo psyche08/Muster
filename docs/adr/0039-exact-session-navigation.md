@@ -1,7 +1,7 @@
 # ADR 0039: Recover absent Claude sidebar rows by exact session navigation
 
 - Date: 2026-10-23
-- Status: Superseded in navigation identity by ADR 0040
+- Status: Superseded in navigation identity by ADR 0040; sidebar-first ordering superseded by [ADR 0095](0095-shared-ax-navigation-and-preparation.md)
 - Related: ADR 0010; ADR 0027; ARCHITECTURE.md §3.6.2
 
 ## Context

@@ -1,20 +1,15 @@
 //! Exact title matching for native Agent sidebar controls. A match only
 //! selects a candidate; the controller must still verify the opened session ID.
 
-/// A complete sidebar can omit a known older Claude Code session. This route
+/// Native session IDs avoid sidebar pagination and generated titles. This route
 /// only requests navigation: callers must guard the OS action and resolve the
 /// resulting surface to the exact catalog ID before any mutation.
-pub fn absent_session_route(
-    provider: &str,
-    session: &str,
-    navigation_areas: usize,
-    scan_complete: bool,
-    candidates: usize,
-) -> Option<String> {
-    if provider != "claude" || navigation_areas == 0 || !scan_complete || candidates != 0 {
-        return None;
-    }
-    let uuid = session.strip_prefix("local_")?;
+pub fn exact_session_route(provider: &str, session: &str) -> Option<String> {
+    let uuid = match provider {
+        "claude" => session.strip_prefix("local_")?,
+        "codex" => session,
+        _ => return None,
+    };
     let canonical_uuid = uuid.len() == 36
         && uuid.bytes().enumerate().all(|(i, b)| {
             if matches!(i, 8 | 13 | 18 | 23) {
@@ -23,7 +18,23 @@ pub fn absent_session_route(
                 b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
             }
         });
-    canonical_uuid.then(|| format!("claude://code/continue?session={session}"))
+    canonical_uuid.then(|| match provider {
+        "claude" => format!("claude://code/continue?session={session}"),
+        _ => format!("codex://threads/{session}"),
+    })
+}
+
+/// Resolve provider-native App identity without starting or resuming a CLI.
+/// A missing/ambiguous Claude registry mapping withholds the exact route.
+pub fn catalog_session_route(provider: &str, session: &str) -> Option<String> {
+    let native = match provider {
+        "claude" => {
+            crate::claude::desktop_navigation_id(&crate::claude::desktop_registry()?, session)?
+        }
+        "codex" => session.to_owned(),
+        _ => return None,
+    };
+    exact_session_route(provider, &native)
 }
 
 /// OS adapters expose only the attributes needed to read a button's label.
@@ -693,29 +704,27 @@ mod tests {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::absent_session_route;
+    use super::exact_session_route;
     const SESSION: &str = "local_12345678-1234-4234-8234-123456789abc";
 
     #[test]
     fn absent_row_uses_exact_id_without_a_title_or_last_selector() {
         assert_eq!(
-            absent_session_route("claude", SESSION, 2, true, 0),
+            exact_session_route("claude", SESSION),
             Some(format!("claude://code/continue?session={SESSION}"))
         );
     }
 
     #[test]
-    fn visible_ambiguous_incomplete_and_other_provider_scans_cannot_fallback() {
-        for (provider, areas, complete, candidates) in [
-            ("claude", 2, true, 1),
-            ("claude", 2, true, 2),
-            ("claude", 0, true, 0),
-            ("claude", 2, false, 0),
-            ("codex", 2, true, 0),
-            ("catdesk", 2, true, 0),
-        ] {
-            assert!(absent_session_route(provider, SESSION, areas, complete, candidates).is_none());
-        }
+    fn exact_routes_keep_provider_and_native_identity_separate() {
+        let uuid = SESSION.strip_prefix("local_").unwrap();
+        assert_eq!(
+            exact_session_route("codex", uuid),
+            Some(format!("codex://threads/{uuid}"))
+        );
+        assert!(exact_session_route("codex", SESSION).is_none());
+        assert!(exact_session_route("claude", uuid).is_none());
+        assert!(exact_session_route("catdesk", uuid).is_none());
     }
 
     #[test]
@@ -736,10 +745,7 @@ mod navigation_tests {
             "12345678-1234-4234-8234-123456789abc#fragment",
             "12345678-1234-4234-8234-123456789abé",
         ] {
-            assert!(
-                absent_session_route("claude", id, 2, true, 0).is_none(),
-                "{id}"
-            );
+            assert!(exact_session_route("claude", id).is_none(), "{id}");
         }
     }
 }

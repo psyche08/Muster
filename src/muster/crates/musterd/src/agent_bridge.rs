@@ -507,7 +507,17 @@ pub async fn ensure_native(
     #[cfg(target_os = "macos")]
     let preparation_started = std::time::Instant::now();
     #[cfg(target_os = "macos")]
-    if agent.native_surface_ready(session)? {
+    let visible = {
+        let agent = agent.clone();
+        let session = session.to_owned();
+        muster_agent::control_guard::spawn_blocking(move || agent.native_surface_ready(&session))
+            .await
+            .map_err(|e| {
+                crate::Error::Unavailable(format!("AX preparation worker failed: {e}"))
+            })??
+    };
+    #[cfg(target_os = "macos")]
+    if visible {
         log::info!(
             "native preparation target={session:?} path=visible_controller ready elapsed_ms={}",
             preparation_started.elapsed().as_millis()
@@ -521,6 +531,8 @@ pub async fn ensure_native(
         .session(session)
         .and_then(|s| muster_agent::desktop_chat::ChatApp::from_provider(&s.provider))
         && muster_platform::macos::ax::trusted()
+        && muster_agent::native_sidebar::catalog_session_route(app.profile().provider(), session)
+            .is_none()
     {
         log::info!("native preparation target={session:?} phase=return_to_code begin");
         muster_platform::macos::native_chat::return_to_code(app).await?;
@@ -531,9 +543,7 @@ pub async fn ensure_native(
     }
     #[cfg(target_os = "macos")]
     {
-        use muster_platform::macos::native_app::{
-            NativeAppController, app_pids, discover, profiles,
-        };
+        use muster_platform::macos::native_app::{NativeAppController, app_pids, profiles};
         if !muster_platform::macos::ax::trusted() {
             return Err(crate::Error::Unavailable(
                 "Accessibility is not granted to musterd on the target Mac".into(),
@@ -550,12 +560,12 @@ pub async fn ensure_native(
                 continue;
             }
             let resolver = resolver(profile, &agent);
-            for pid in app_pids(profile) {
+            if let Some(pid) = app_pids(profile).into_iter().next() {
                 log::info!(
                     "native preparation target={session:?} phase=select begin elapsed_ms={}",
                     preparation_started.elapsed().as_millis()
                 );
-                muster_platform::macos::native_app::select_session(
+                let prepared = muster_platform::macos::native_app::select_session(
                     profile,
                     pid,
                     session,
@@ -564,39 +574,30 @@ pub async fn ensure_native(
                     &resolver,
                 )
                 .await?;
-                log::info!(
-                    "native preparation target={session:?} phase=discover begin elapsed_ms={}",
-                    preparation_started.elapsed().as_millis()
-                );
-                if discover(pid, &resolver).iter().any(|s| s == session) {
-                    if agent.retains_native_controller(session) {
-                        return Ok(());
-                    }
-                    muster_agent::control_guard::check()?;
-                    log::info!(
-                        "native preparation target={session:?} phase=attach begin elapsed_ms={}",
-                        preparation_started.elapsed().as_millis()
-                    );
-                    let controller = NativeAppController::attach(
-                        profile,
-                        pid,
-                        session,
-                        resolver.clone(),
-                        agent.controller_events(),
-                        agent.question_source(session),
-                        agent.send_receipt_source(session),
-                        agent.queue_source(session),
-                        agent.controller_runtime(),
-                    )
-                    .await?;
-                    // A background scan may have attached one meanwhile; keep it.
-                    agent.attach_native(controller as Arc<dyn Controller>);
-                    log::info!(
-                        "native preparation target={session:?} phase=attach ready elapsed_ms={}",
-                        preparation_started.elapsed().as_millis()
-                    );
+                if agent.retains_native_controller(session) {
                     return Ok(());
                 }
+                muster_agent::control_guard::check()?;
+                log::info!(
+                    "native preparation target={session:?} phase=attach begin elapsed_ms={}",
+                    preparation_started.elapsed().as_millis()
+                );
+                let controller = NativeAppController::attach_prepared(
+                    prepared,
+                    resolver.clone(),
+                    agent.controller_events(),
+                    agent.question_source(session),
+                    agent.send_receipt_source(session),
+                    agent.queue_source(session),
+                    agent.controller_runtime(),
+                )?;
+                // A background scan may have attached one meanwhile; keep it.
+                agent.attach_native(controller as Arc<dyn Controller>);
+                log::info!(
+                    "native preparation target={session:?} phase=attach ready elapsed_ms={}",
+                    preparation_started.elapsed().as_millis()
+                );
+                return Ok(());
             }
         }
     }

@@ -1,0 +1,477 @@
+//! Shared AX navigation workflow. Host handles are opaque observations, never
+//! authority to submit. A navigation is dispatched once and verified by identity.
+use crate::{Error, control_guard, native_step::Step};
+use std::time::Duration;
+
+pub struct Sidebar<C> {
+    pub candidates: Vec<C>,
+    pub more: Option<C>,
+    pub rows: usize,
+    pub navigation: usize,
+    pub complete: bool,
+}
+
+#[async_trait::async_trait]
+pub trait Host: Send + Sync {
+    type Surface: Send;
+    type Control: Clone + Send + Sync;
+    fn check(&self) -> Result<(), Error>;
+    fn generation(&self) -> u64;
+    fn surface(&self) -> Result<Option<Self::Surface>, Error>;
+    fn sidebar(&self) -> Result<Sidebar<Self::Control>, Error>;
+    fn exact_route(&self) -> Option<String>;
+    fn press(&self, control: &Self::Control, permit: &ActionPermit) -> Result<(), Error>;
+    async fn navigate(&self, route: &str, permit: &ActionPermit) -> Result<(), Error>;
+    fn refresh_renderer(&self, budget: Duration) -> Result<(), Error>;
+}
+
+/// Limits belong to one navigation, not to the length of the whole user task.
+/// The live console guard remains authoritative even before these clocks expire.
+#[derive(Clone, Copy)]
+pub struct Budget {
+    pub total: Duration,
+    pub ready: Duration,
+    pub expansion: Duration,
+    pub verify: Duration,
+    pub poll: Duration,
+    pub expansions: usize,
+}
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            total: Duration::from_secs(10),
+            ready: Duration::from_secs(3),
+            expansion: Duration::from_secs(2),
+            verify: Duration::from_secs(3),
+            poll: Duration::from_millis(100),
+            expansions: 5,
+        }
+    }
+}
+
+enum Ready<S, C> {
+    Visible(S),
+    Exact(String),
+    Sidebar(Sidebar<C>),
+}
+
+/// Recheck immediately before the OS action, after potentially slow identity IPC.
+pub fn check_generation(expected: u64, current: u64) -> Result<(), Error> {
+    control_guard::check()?;
+    if expected != current {
+        return Err(Error::Conflict(
+            "local input changed during session navigation; nothing more was pressed".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// A non-serializable deadline/input binding. OS adapters must recheck it after
+/// identity IPC and immediately before dispatch; it cannot renew authorization.
+pub struct ActionPermit {
+    generation: u64,
+    deadline: tokio::time::Instant,
+}
+impl ActionPermit {
+    pub fn check(&self, current: u64) -> Result<(), Error> {
+        check_generation(self.generation, current)?;
+        if self.remaining().is_zero() {
+            return Err(Error::Unavailable(
+                "session navigation budget expired before OS action".into(),
+            ));
+        }
+        Ok(())
+    }
+    pub fn remaining(&self) -> Duration {
+        self.deadline
+            .saturating_duration_since(tokio::time::Instant::now())
+    }
+    fn bounded(&self, budget: Duration) -> Self {
+        Self {
+            generation: self.generation,
+            deadline: self.deadline.min(tokio::time::Instant::now() + budget),
+        }
+    }
+}
+
+pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u64), Error> {
+    let chain = Step::new("session navigation", budget.total);
+    let (ready, generation) = control_guard::prepare_readonly(
+        "session selection",
+        budget.ready.min(chain.remaining()),
+        || host.generation(),
+        || async {
+            chain.check()?;
+            host.check()?;
+            if let Some(surface) = host.surface()? {
+                return Ok(Some(Ready::Visible(surface)));
+            }
+            // A native ID makes sidebar titles and pagination irrelevant. It
+            // does not make the future destination or its composer trusted.
+            if let Some(route) = host.exact_route() {
+                return Ok(Some(Ready::Exact(route)));
+            }
+            let sidebar = host.sidebar()?;
+            Ok((sidebar.navigation > 0).then_some(Ready::Sidebar(sidebar)))
+        },
+    )
+    .await?;
+    let permit = ActionPermit {
+        generation,
+        deadline: chain.deadline(),
+    };
+    let check = || {
+        chain.check()?;
+        host.check()?;
+        check_generation(generation, host.generation())
+    };
+    check()?;
+    match ready {
+        Ready::Visible(surface) => return Ok((surface, generation)),
+        Ready::Exact(route) => {
+            log::info!("AX navigation phase=dispatch route=exact_id");
+            check()?;
+            host.navigate(&route, &permit.bounded(Duration::from_secs(2)))
+                .await?;
+            check()?;
+        }
+        Ready::Sidebar(mut sidebar) => {
+            for _ in 0..budget.expansions {
+                if !sidebar.complete || !sidebar.candidates.is_empty() {
+                    break;
+                }
+                let Some(more) = sidebar.more.take() else {
+                    break;
+                };
+                check()?;
+                host.press(&more, &permit)?;
+                let before = sidebar.rows;
+                let step = Step::new(
+                    "expanded sidebar rows",
+                    budget.expansion.min(chain.remaining()),
+                );
+                loop {
+                    tokio::time::sleep(budget.poll.min(step.remaining())).await;
+                    check()?;
+                    // Expiration is final even if the OS read returns late.
+                    step.check()?;
+                    sidebar = host.sidebar()?;
+                    check()?;
+                    step.check()?;
+                    if !sidebar.complete || sidebar.rows > before || !sidebar.candidates.is_empty()
+                    {
+                        break;
+                    }
+                }
+                if sidebar.rows <= before {
+                    break;
+                }
+            }
+            if !sidebar.complete || sidebar.candidates.len() != 1 {
+                return Err(Error::Unavailable(format!(
+                    "cannot uniquely select the session ({} matches; complete={})",
+                    sidebar.candidates.len(),
+                    sidebar.complete
+                )));
+            }
+            check()?;
+            log::info!("AX navigation phase=dispatch route=sidebar");
+            host.press(&sidebar.candidates[0], &permit)?;
+            check()?;
+        }
+    }
+    let verify = Step::new(
+        "selected session surface",
+        budget.verify.min(chain.remaining()),
+    );
+    let mut refreshes = 0;
+    loop {
+        check()?;
+        verify.check()?;
+        let surface = host.surface()?;
+        check()?;
+        verify.check()?;
+        if let Some(surface) = surface {
+            log::info!(
+                "AX navigation phase=verified elapsed_ms={}",
+                chain.elapsed().as_millis()
+            );
+            return Ok((surface, generation));
+        }
+        if refreshes < 3 && verify.elapsed() >= Duration::from_secs(refreshes) {
+            host.refresh_renderer(verify.remaining().min(chain.remaining()))?;
+            check()?;
+            verify.check()?;
+            refreshes += 1;
+        }
+        tokio::time::sleep(budget.poll.min(verify.remaining()).min(chain.remaining())).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::SeqCst};
+
+    #[derive(Default)]
+    struct Fixture {
+        visible: AtomicBool,
+        generation: AtomicU64,
+        dispatches: AtomicUsize,
+        presses: AtomicUsize,
+        reads: AtomicUsize,
+        exact: bool,
+        missing: bool,
+        ambiguous: bool,
+        incomplete: bool,
+        input_on_dispatch: bool,
+        slow_surface: bool,
+        slow_verification: bool,
+        slow_expansion: bool,
+        action_delay: Duration,
+        pages: usize,
+    }
+    #[async_trait::async_trait]
+    impl Host for Fixture {
+        type Surface = &'static str;
+        type Control = bool; // true = exact target row; false = expand
+        fn check(&self) -> Result<(), Error> {
+            control_guard::check()
+        }
+        fn generation(&self) -> u64 {
+            self.generation.load(SeqCst)
+        }
+        fn surface(&self) -> Result<Option<Self::Surface>, Error> {
+            if self.slow_surface || (self.slow_verification && self.visible.load(SeqCst)) {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            if self.ambiguous {
+                return Err(Error::Conflict("ambiguous views".into()));
+            }
+            Ok(self.visible.load(SeqCst).then_some("verified-target"))
+        }
+        fn sidebar(&self) -> Result<Sidebar<bool>, Error> {
+            self.reads.fetch_add(1, SeqCst);
+            let page = self.presses.load(SeqCst);
+            if self.slow_expansion && page > 0 {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(Sidebar {
+                candidates: if page >= self.pages {
+                    vec![true]
+                } else {
+                    vec![]
+                },
+                more: (page < self.pages).then_some(false),
+                rows: page + 1,
+                navigation: 1,
+                complete: !self.incomplete,
+            })
+        }
+        fn exact_route(&self) -> Option<String> {
+            self.exact.then(|| "exact-test-route".into())
+        }
+        fn press(&self, target: &bool, permit: &ActionPermit) -> Result<(), Error> {
+            permit.check(self.generation())?;
+            self.presses.fetch_add(1, SeqCst);
+            if *target {
+                self.visible.store(true, SeqCst);
+            }
+            Ok(())
+        }
+        async fn navigate(&self, _: &str, permit: &ActionPermit) -> Result<(), Error> {
+            tokio::time::sleep(self.action_delay).await;
+            permit.check(self.generation())?;
+            self.dispatches.fetch_add(1, SeqCst);
+            if self.input_on_dispatch {
+                self.generation.fetch_add(1, SeqCst);
+            }
+            self.visible.store(!self.missing, SeqCst);
+            Ok(())
+        }
+        fn refresh_renderer(&self, _: Duration) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+    fn budget() -> Budget {
+        Budget {
+            total: Duration::from_secs(1),
+            ready: Duration::from_millis(200),
+            expansion: Duration::from_millis(100),
+            verify: Duration::from_millis(20),
+            poll: Duration::from_millis(1),
+            expansions: 5,
+        }
+    }
+    #[tokio::test]
+    async fn visible_target_needs_no_navigation_or_sidebar() {
+        let h = Fixture {
+            visible: AtomicBool::new(true),
+            exact: true,
+            ..Default::default()
+        };
+        assert_eq!(select(&h, budget()).await.unwrap().0, "verified-target");
+        assert_eq!(
+            h.dispatches.load(SeqCst) + h.reads.load(SeqCst) + h.presses.load(SeqCst),
+            0
+        );
+    }
+    #[tokio::test]
+    async fn exact_identity_skips_a_long_sidebar_and_requires_destination_evidence() {
+        let h = Fixture {
+            exact: true,
+            pages: 1000,
+            ..Default::default()
+        };
+        assert_eq!(select(&h, budget()).await.unwrap().0, "verified-target");
+        assert_eq!(h.dispatches.load(SeqCst), 1);
+        assert_eq!(h.reads.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn missing_destination_never_replays_or_falls_back_to_sidebar() {
+        let h = Fixture {
+            exact: true,
+            missing: true,
+            ..Default::default()
+        };
+        assert!(select(&h, budget()).await.is_err());
+        assert_eq!(h.dispatches.load(SeqCst), 1);
+        assert_eq!(h.reads.load(SeqCst) + h.presses.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn ambiguous_surface_is_not_permission_to_navigate() {
+        let h = Fixture {
+            exact: true,
+            ambiguous: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            select(&h, budget()).await,
+            Err(Error::Conflict(_))
+        ));
+        assert_eq!(h.dispatches.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn input_change_after_dispatch_stops_the_chain() {
+        let h = Fixture {
+            exact: true,
+            input_on_dispatch: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            select(&h, budget()).await,
+            Err(Error::Conflict(_))
+        ));
+        assert_eq!(h.dispatches.load(SeqCst), 1);
+    }
+    #[tokio::test]
+    async fn known_sidebar_progress_continues_but_incomplete_reads_never_press() {
+        let h = Fixture {
+            pages: 4,
+            ..Default::default()
+        };
+        assert!(select(&h, budget()).await.is_ok());
+        assert_eq!(h.presses.load(SeqCst), 5);
+        let h = Fixture {
+            incomplete: true,
+            ..Default::default()
+        };
+        assert!(select(&h, budget()).await.is_err());
+        assert_eq!(h.presses.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn late_read_cannot_admit_a_dispatch() {
+        let h = Fixture {
+            exact: true,
+            slow_surface: true,
+            ..Default::default()
+        };
+        let b = Budget {
+            ready: Duration::from_millis(5),
+            ..budget()
+        };
+        assert!(
+            select(&h, b)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("preparation budget")
+        );
+        assert_eq!(h.dispatches.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn late_destination_evidence_does_not_complete_or_replay_navigation() {
+        let h = Fixture {
+            exact: true,
+            slow_verification: true,
+            ..Default::default()
+        };
+        assert!(select(&h, budget()).await.is_err());
+        assert_eq!(h.dispatches.load(SeqCst), 1);
+        assert_eq!(h.reads.load(SeqCst) + h.presses.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn slow_identity_check_cannot_dispatch_after_total_budget() {
+        let h = Fixture {
+            exact: true,
+            action_delay: Duration::from_millis(25),
+            ..Default::default()
+        };
+        assert!(
+            select(
+                &h,
+                Budget {
+                    total: Duration::from_millis(10),
+                    ..budget()
+                }
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(h.dispatches.load(SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn sidebar_progress_does_not_extend_total_budget() {
+        let h = Fixture {
+            pages: 4,
+            slow_expansion: true,
+            ..Default::default()
+        };
+        assert!(
+            select(
+                &h,
+                Budget {
+                    total: Duration::from_millis(10),
+                    ..budget()
+                }
+            )
+            .await
+            .is_err()
+        );
+        assert!(h.presses.load(SeqCst) <= 1);
+        assert!(!h.visible.load(SeqCst));
+    }
+    #[tokio::test]
+    async fn cancelled_authority_and_zero_total_budget_allow_no_actions() {
+        let h = Fixture {
+            exact: true,
+            ..Default::default()
+        };
+        control_guard::scope(std::sync::Arc::new(|| false), async {
+            assert!(select(&h, budget()).await.is_err());
+        })
+        .await;
+        assert!(
+            select(
+                &h,
+                Budget {
+                    total: Duration::ZERO,
+                    ..budget()
+                }
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(h.dispatches.load(SeqCst), 0);
+    }
+}
