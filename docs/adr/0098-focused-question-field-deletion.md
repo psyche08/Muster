@@ -1,7 +1,7 @@
 # ADR 0098: Delete a proven question-editor selection through the application
 
 - Date: 2026-11-02
-- Status: Accepted; source verified, device acceptance pending
+- Status: Accepted; first installed candidate failed; bounded selection settling pending
 - Related: ADR 0020, ADR 0055, ADR 0096
 - Partially supersedes: ADR 0096's repeated attribute-based clearing for Codex question fields
 
@@ -75,3 +75,45 @@ passed after the final read-only-field rejection case. Strict Clippy for the
 three affected crates, targeted formatting, layer and public-content checks
 passed. This is source verification; the installed question path remains failed
 on the prior build until the repaired artifact completes attended acceptance.
+
+### Installed failure and bounded selection settling (2026-11-02)
+
+The local integration c11b9dc0 retained the installed scheduler changes and
+passed 470 library tests (six ignored), local macOS build, signing and Apple
+notarization. Installation preserved identity, permissions and connectivity.
+Three attended attempts on that build still failed before deletion: the editor
+and application both reported matching focus, the value remained unchanged and
+settable, but the immediate selection read returned `(0, 0)`. No delete or final
+Submit was dispatched; every attempt drained, relocked and released the cover.
+These are failed device results, not successful acceptance.
+
+The implementation reads selection only once immediately after its single range
+write. Unlike focus acquisition, it cannot accommodate delayed selection
+publication. This is a confirmed readiness gap, but existing logs do not prove
+that this provider eventually honors the range write.
+
+Retain the same deletion proof and single selection write. Shared Rust permits
+read-only polling for at most 250 ms, within the original two-second preparation
+budget, only while the range still equals the valid range observed before the
+write. Every sample requires unchanged text, settable value and proven focus.
+A complete range permits deletion; unreadable, out-of-bounds or newly different
+partial ranges, text/focus changes and expiry reject without a key. Recheck live
+authorization and input generation around every sample and before deletion.
+Log sample and elapsed time to distinguish delayed publication from a persistent
+no-op. No extra key route, selection retry or timeout expansion is introduced.
+
+Alternatives: ignoring the range could delete the wrong content; another shortcut
+would add a new mutation before establishing whether the existing selection is
+merely delayed. Immediate refusal cannot distinguish delay from no-op. Verify
+old-range-to-complete transitions, persistent old range, changed partial range,
+missing/out-of-bounds baseline, Unicode lengths, text/focus changes and deadline
+boundaries. Run affected local suites and checks; build, notarize and install a
+compatible descendant. Device acceptance remains pending until a phone answer
+and cleanup are observed; a persistent unchanged range will remain an explicit
+failure, not a reason to dispatch an unproven deletion.
+
+Local follow-up source verification passed 302 agent, 38 platform and 97 daemon
+library tests (six existing ignored), including both new selection-settling
+regressions. Strict Clippy for all targets of the three crates, formatting,
+layer and public-content checks passed. These tests validate the readiness
+policy; they do not prove that the installed provider eventually selects text.

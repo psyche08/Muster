@@ -1215,6 +1215,13 @@ impl NativeAppController {
             std::thread::sleep(Duration::from_millis(25));
         }
         live()?;
+        let before = editor.range("AXSelectedTextRange");
+        if before.is_none() {
+            return Err(Error::Conflict(
+                "Question selection is unreadable; no selection or delete sent".into(),
+            ));
+        }
+        let selection_started = Instant::now();
         editor
             .set_range("AXSelectedTextRange", 0, expected.encode_utf16().count())
             .map_err(|code| {
@@ -1222,28 +1229,41 @@ impl NativeAppController {
                     "Cannot select question answer ({code}); no delete key sent"
                 ))
             })?;
-        let value = editor.string("AXValue");
-        let range = editor.range("AXSelectedTextRange");
-        let value_settable = editor.settable("AXValue");
-        let (enabled, focused, application, same_window) = focus();
-        let admission = muster_agent::native_send::admit_question_delete(
-            expected,
-            QuestionDeleteProof {
-                value: value.as_deref(),
-                selected_range: range,
-                value_settable,
-                enabled,
-                focused,
-                application,
-                same_focused_window: same_window,
-            },
-        );
-        log::info!(
-            "AX question delete proof admitted={} range={range:?} value_unchanged={} value_settable={value_settable} enabled={enabled:?} focused={focused:?} application={application:?} same_window={same_window}",
-            admission.is_ok(),
-            value.as_deref() == Some(expected)
-        );
-        admission?;
+        let mut sample = 0;
+        loop {
+            live()?;
+            let value = editor.string("AXValue");
+            let range = editor.range("AXSelectedTextRange");
+            let value_settable = editor.settable("AXValue");
+            let (enabled, focused, application, same_window) = focus();
+            let elapsed = selection_started.elapsed();
+            let admission = muster_agent::native_send::poll_question_selection(
+                expected,
+                before,
+                elapsed,
+                QuestionDeleteProof {
+                    value: value.as_deref(),
+                    selected_range: range,
+                    value_settable,
+                    enabled,
+                    focused,
+                    application,
+                    same_focused_window: same_window,
+                },
+            );
+            log::info!(
+                "AX question selection sample={sample} elapsed_ms={} ready={:?} before={before:?} range={range:?} value_unchanged={} value_settable={value_settable} enabled={enabled:?} focused={focused:?} application={application:?} same_window={same_window}",
+                elapsed.as_millis(),
+                admission.as_ref().ok(),
+                value.as_deref() == Some(expected)
+            );
+            live()?;
+            if admission? {
+                break;
+            }
+            sample += 1;
+            std::thread::sleep(Duration::from_millis(25));
+        }
         live()?;
         // This edits a proven selection only. No Return or final Submit, and
         // no automatic second key even if dispatch reports an error.
