@@ -159,6 +159,7 @@ records a specific decision and does not revive code on its delete list.
 | [0081](0081-paired-release-1-1-8.md) | Accepted; published and installed on three Macs; provider send acceptance pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
 | [0082](0082-progressive-architecture-documentation.md) | Accepted | Progressive disclosure: ARCHITECTURE.md split into parts; release, field and deployment records moved to docs/validation/ |
 | [0083](0083-idle-compaction.md) | Accepted; device acceptance pending | Opt-in `/compact` for Claude Code conversations idle 30-60 minutes |
+| [0084](0084-keep-awake-menu.md) | Accepted; local dev build verified, release pending | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
