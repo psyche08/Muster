@@ -317,6 +317,7 @@ pub struct QuestionEditor<'a> {
 pub enum QuestionPreparation {
     Ready { write: bool },
     Clear(ClearWith),
+    DeleteSelection,
     Refresh,
     Wait,
     Timeout,
@@ -327,8 +328,18 @@ pub enum QuestionPreparation {
 pub struct QuestionEditorWait {
     clear: ClearWait,
     refresh_due: bool,
+    focused_delete: bool,
+    delete_dispatched: bool,
 }
 impl QuestionEditorWait {
+    /// Codex's native question field ignores the two attribute-based clears
+    /// observed in ADR 0098. Other editors retain their existing strategy.
+    pub fn for_provider(provider: &str) -> Self {
+        Self {
+            focused_delete: provider == "codex",
+            ..Self::default()
+        }
+    }
     pub fn observe(
         &mut self,
         elapsed: Duration,
@@ -359,6 +370,14 @@ impl QuestionEditorWait {
             self.refresh_due = false;
             return Refresh;
         }
+        if self.focused_delete {
+            if self.delete_dispatched {
+                return Wait;
+            }
+            self.delete_dispatched = true;
+            self.refresh_due = true;
+            return DeleteSelection;
+        }
         match self.clear.observe(elapsed, Some(true)) {
             Clearing::Clear(with) => {
                 self.refresh_due = true;
@@ -372,8 +391,44 @@ impl QuestionEditorWait {
     }
 
     pub fn attempts(&self) -> usize {
-        self.clear.attempts()
+        self.clear.attempts() + usize::from(self.delete_dispatched)
     }
+}
+
+/// Proof for one app-directed deletion; a successful focus/range write alone
+/// is never evidence that the current editor owns that selection.
+pub struct QuestionDeleteProof<'a> {
+    pub value: Option<&'a str>,
+    pub selected_range: Option<(usize, usize)>,
+    pub value_settable: bool,
+    pub enabled: Option<bool>,
+    pub focused: Option<bool>,
+    pub application: crate::questions::SubmitApplicationFocus,
+    pub same_focused_window: bool,
+}
+
+pub fn admit_question_delete(
+    expected: &str,
+    proof: QuestionDeleteProof<'_>,
+) -> Result<(), crate::Error> {
+    if expected.is_empty()
+        || !proof.value_settable
+        || proof.value != Some(expected)
+        || proof.selected_range != Some((0, expected.encode_utf16().count()))
+    {
+        return Err(crate::Error::Conflict(
+            "Question answer selection changed; no delete key sent".into(),
+        ));
+    }
+    crate::questions::admit_focused_submit(
+        proof.enabled,
+        proof.focused,
+        proof.application,
+        proof.same_focused_window,
+    )
+    .map_err(|_| {
+        crate::Error::Conflict("Question answer focus is unproven; no delete key sent".into())
+    })
 }
 
 #[cfg(test)]
@@ -384,6 +439,130 @@ mod question_editor_tests {
             value,
             placeholder: None,
             characters: None,
+        }
+    }
+    #[test]
+    fn codex_deletes_once_then_only_observes_within_original_budget() {
+        let mut wait = QuestionEditorWait::for_provider("codex");
+        assert_eq!(
+            wait.observe(Duration::ZERO, field(Some("draft")), "answer"),
+            QuestionPreparation::DeleteSelection
+        );
+        assert_eq!(
+            wait.observe(Duration::from_millis(100), field(Some("draft")), "answer"),
+            QuestionPreparation::Refresh
+        );
+        for ms in [200, 500, 1000, 1900] {
+            assert_eq!(
+                wait.observe(Duration::from_millis(ms), field(Some("draft")), "answer"),
+                QuestionPreparation::Wait
+            );
+        }
+        assert_eq!(wait.attempts(), 1);
+        assert_eq!(
+            wait.observe(CLEAR_DEADLINE, field(Some("")), "answer"),
+            QuestionPreparation::Timeout
+        );
+        let mut wait = QuestionEditorWait::for_provider("codex");
+        wait.observe(Duration::ZERO, field(Some("draft")), "answer");
+        assert_eq!(
+            wait.observe(Duration::from_millis(500), field(Some("")), "answer"),
+            QuestionPreparation::Ready { write: true }
+        );
+        assert_eq!(
+            QuestionEditorWait::for_provider("claude").observe(
+                Duration::ZERO,
+                field(Some("draft")),
+                "answer"
+            ),
+            QuestionPreparation::Clear(ClearWith::Selection)
+        );
+    }
+    #[test]
+    fn deletion_needs_unchanged_full_utf16_selection_and_focus() {
+        use crate::questions::SubmitApplicationFocus::*;
+        let expected = "示例🦀";
+        let proof = || QuestionDeleteProof {
+            value: Some(expected),
+            selected_range: Some((0, 4)),
+            value_settable: true,
+            enabled: Some(true),
+            focused: Some(true),
+            application: Matching,
+            same_focused_window: false,
+        };
+        assert!(admit_question_delete(expected, proof()).is_ok());
+        assert!(
+            admit_question_delete(
+                expected,
+                QuestionDeleteProof {
+                    value_settable: false,
+                    ..proof()
+                }
+            )
+            .is_err()
+        );
+        for range in [None, Some((1, 3)), Some((0, 3)), Some((0, 5))] {
+            assert!(
+                admit_question_delete(
+                    expected,
+                    QuestionDeleteProof {
+                        selected_range: range,
+                        ..proof()
+                    }
+                )
+                .is_err()
+            );
+        }
+        for value in [None, Some("changed")] {
+            assert!(
+                admit_question_delete(expected, QuestionDeleteProof { value, ..proof() }).is_err()
+            );
+        }
+        for application in [Different, Failed, NotSupplied] {
+            assert!(
+                admit_question_delete(
+                    expected,
+                    QuestionDeleteProof {
+                        application,
+                        ..proof()
+                    }
+                )
+                .is_err()
+            );
+        }
+        assert!(
+            admit_question_delete(
+                expected,
+                QuestionDeleteProof {
+                    application: NotSupplied,
+                    same_focused_window: true,
+                    ..proof()
+                }
+            )
+            .is_ok()
+        );
+        for observed in [None, Some(false)] {
+            assert!(
+                admit_question_delete(
+                    expected,
+                    QuestionDeleteProof {
+                        focused: observed,
+                        ..proof()
+                    }
+                )
+                .is_err()
+            );
+            assert!(
+                admit_question_delete(
+                    expected,
+                    QuestionDeleteProof {
+                        enabled: observed,
+                        ..proof()
+                    }
+                )
+                .is_err()
+            );
         }
     }
     #[test]

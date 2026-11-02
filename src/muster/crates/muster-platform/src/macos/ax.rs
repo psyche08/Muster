@@ -148,6 +148,11 @@ impl Element {
         self.keyboard_pair(49)
     }
 
+    /// Delete only after the caller proves the exact focused editor's full range.
+    pub fn backspace(&self) -> Result<(), AXError> {
+        self.keyboard_pair(51) // kVK_Delete; application-directed, never Return.
+    }
+
     fn keyboard_pair(&self, virtual_key: u16) -> Result<(), AXError> {
         unsafe extern "C" {
             fn AXUIElementPostKeyboardEvent(
@@ -430,6 +435,33 @@ impl Element {
         // SAFETY: value is a valid +1 CF object.
         let value = unsafe { CFType::wrap_under_create_rule(value) };
         value.downcast::<CFString>().map(|s| s.to_string())
+    }
+
+    /// Reads a text range attribute (`AXSelectedTextRange`), in UTF-16 units.
+    pub fn range(&self, name: &str) -> Option<(usize, usize)> {
+        #[repr(C)]
+        struct CFRange {
+            location: isize,
+            length: isize,
+        }
+        let value = self.attribute(name)?;
+        // SAFETY: type-ID query has no preconditions; verify before decoding.
+        if value.type_of() != unsafe { AXValueGetTypeID() } {
+            return None;
+        }
+        let mut range = CFRange {
+            location: 0,
+            length: 0,
+        };
+        // SAFETY: a verified AXValue and correctly sized CFRange out parameter.
+        if !unsafe { AXValueGetValue(value.as_CFTypeRef(), 4, (&mut range as *mut CFRange).cast()) }
+        {
+            return None;
+        }
+        Some((
+            usize::try_from(range.location).ok()?,
+            usize::try_from(range.length).ok()?,
+        ))
     }
 
     /// Sets a text range attribute (`AXSelectedTextRange`), in UTF-16 units.
