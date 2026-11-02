@@ -17,6 +17,7 @@ on one owner-only socket, `$DSH_HOME/muster/bridge.sock` (by default under
 | `prompt` | `sessionController.prompt`, the path the app's own window uses; the request id becomes the message's `rpcId` |
 | `cancel` | `sessionController.cancel`: stops the running turn and keeps queued prompts |
 | `approve`, `answer` | Answers a waiting approval or question card |
+| `prompt.lookup` | Reads an existing inbox/event receipt by session and native request ID, without resuming or sending |
 
 Approvals and question cards still appear in the app's window. Whichever
 side answers first wins, and an answer from Muster withdraws the window's
@@ -77,3 +78,64 @@ node --test test/*.test.js
 ```
 
 The tests run on Node 22 or newer, including the app's own runtime.
+
+### Local contract and receipt recovery (0.2)
+
+Protocol 1 remains available to existing daemons. `hello` and `state` now also
+advertise `control`: version 1, domain `app`, provider `deepseek`, a random
+per-instance epoch and the supported operation names. A new daemon binds each
+request to that epoch, session and ledger operation; replies echo that binding.
+Malformed or unsupported contracts are refused rather than silently downgraded.
+An old plugin without `control` retains its previous behavior.
+
+Shared Rust derives the native prompt request ID from the session and ledger
+operation. After a lost reply it can read matching host `source.rpcId` evidence
+from the inbox or session events. Empty evidence stays unknown; a status query
+never resends. Explicit host acceptance means the prompt was accepted, not that
+the model completed its work. Host exceptions after invocation stay unknown.
+Only errors before invocation declare `delivery: not_started`.
+
+This is an App adapter. Launching its host with the bundled launcher does not
+turn its sessions into Muster CLI sessions. Device RPCs, protobufs, scopes and
+the Apple ABI are unchanged. Model selection, queue editing and native
+attachments remain unavailable unless separately implemented and verified.
+See [ADR 0094](../../../../docs/adr/0094-local-plugin-contract-and-receipt-recovery.md).
+
+### Installed App acceptance on macOS
+
+Use the installed App's host with an isolated temporary profile. Do not copy
+production credentials or restart an active desktop session. From this plugin
+directory, in a dedicated terminal:
+
+```sh
+plugin_dir="$PWD"
+acceptance_home=$(mktemp -d /private/tmp/muster-dsh-XXXXXX)
+cat > "$acceptance_home/acceptance.yml" <<EOF
+- insert:
+    - id: muster-bridge-acceptance
+      name: "$plugin_dir/index.js"
+    - id: muster-local-acceptance
+      name: "$plugin_dir/test/host-acceptance.mjs"
+EOF
+DSH_HOME="$acceptance_home" "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
+  --profile web --patch "$acceptance_home/acceptance.yml" \
+  --no-open --host 127.0.0.1 --port 0 > "$acceptance_home/host.log" 2>&1 &
+acceptance_pid=$!
+```
+
+Wait for `acceptance-session.json` in that directory, then from `src/muster`
+in the same terminal run:
+
+```sh
+MUSTER_DSH_ACCEPTANCE_HOME="$acceptance_home" cargo test -p musterd --test deepseek \
+  installed_app_plugin -- --ignored --nocapture
+kill -TERM "$acceptance_pid"
+```
+
+This explicit test verifies the host's code signature and launch identity,
+sends one synthetic prompt through authenticated existing device RPCs, waits
+for its native receipt, checks duplicate/status responses and interrupts the
+session. It requires no model credentials and does not verify a model answer.
+The host log can contain a local UI token; keep it private. Separate regular
+integration tests simulate a lost reply and reconstruct the plugin link to
+verify recovery with exactly one host send. This is not a physical phone test.

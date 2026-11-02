@@ -1835,7 +1835,37 @@ async fn dispatch(
             agent_of(daemon)?.confirm_delivered(&r.session, &r.op_id, &persist)?;
             send_status(daemon, &r)?
         }
-        Req::AgentSendStatus(r) => send_status(daemon, &r)?,
+        Req::AgentSendStatus(r) => {
+            // Validate the exact existing ledger row before consulting a local
+            // plugin. This uses the unchanged read-only device RPC: no console,
+            // controller creation or replay, including after daemon restart.
+            let before = send_status(daemon, &r)?;
+            if matches!(&before, Resp::OpResult(result) if result.status == Status::Unknown as i32)
+                && matches!(
+                    daemon.store().ledger().status(&r.op_id)?.as_deref(),
+                    Some("pending" | "unknown")
+                )
+            {
+                let confirmed = agent_of(daemon)?
+                    .lookup_send(&r.session, &r.op_id)
+                    .await
+                    .unwrap_or(false);
+                let query = Req::AgentSendStatus(r.clone());
+                authorize_request(daemon, ctx, &query, &access_for(&query))?;
+                if confirmed {
+                    use muster_proto::Message;
+                    daemon.store().ledger().confirm(
+                        &r.op_id,
+                        "agent.send",
+                        &muster_store::Ledger::body_hash(&r.encode_to_vec()),
+                        r.session.as_bytes(),
+                    )?;
+                }
+                send_status(daemon, &r)?
+            } else {
+                before
+            }
+        }
         Req::AgentMessages(r) => Resp::AgentMessages(agent_of(daemon)?.history_page(&r).await?),
         request @ (Req::AgentSend(_)
         | Req::AgentRespond(_)
@@ -2293,7 +2323,14 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
                     .map_err(|e| Error::Unavailable(e.to_string()))??;
                     // The user checked the Mac: the earlier write never arrived.
                     if !r.release_unconfirmed.is_empty() {
-                        agent.release_unconfirmed(&r.session, &r.release_unconfirmed)?;
+                        let agent = agent.clone();
+                        let session = r.session.clone();
+                        let operation = r.release_unconfirmed.clone();
+                        muster_agent::control_guard::spawn_blocking(move || {
+                            agent.release_unconfirmed(&session, &operation)
+                        })
+                        .await
+                        .map_err(|e| Error::Unavailable(e.to_string()))??;
                     }
                     // A new desktop chat answers with the conversation it became.
                     Ok(agent.send_to(&r.session, &text).await?)

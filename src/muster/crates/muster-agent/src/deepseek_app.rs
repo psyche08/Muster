@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 
 use crate::controller::{Controller, ControllerEvent, ProcessIdentity, ProcessState};
 use crate::model::{ControllerKind, PendingInteraction, Provider, SessionState};
+use crate::plugin_control::{self, Contract};
 use crate::{AgentService, Error};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
@@ -143,6 +144,14 @@ fn call(
             "another process serves the plugin socket now".into(),
         ));
     }
+    let mutation = matches!(
+        request["op"].as_str(),
+        Some("prompt" | "cancel" | "approve" | "answer")
+    );
+    if mutation {
+        crate::control_guard::check().map_err(|e| CallError::NotSent(e.to_string()))?;
+        crate::control_guard::delivery_attempt();
+    }
     let mut line = request.to_string().into_bytes();
     line.push(b'\n');
     // The newline goes last: a failed write leaves a line the plugin never
@@ -159,17 +168,34 @@ fn call(
     }
     let reply: Value = serde_json::from_slice(&reply)
         .map_err(|e| CallError::Unknown(format!("an unreadable reply ({e})")))?;
+    if !reply.is_object()
+        || reply["id"] != request["id"]
+        || request
+            .get("control")
+            .is_some_and(|binding| reply.get("control") != Some(binding))
+    {
+        return Err(CallError::Unknown(
+            "reply does not match the App operation".into(),
+        ));
+    }
     if reply["ok"] == true {
         Ok((peer, reply["result"].clone()))
+    } else if reply["ok"] == false {
+        let error = reply["error"]
+            .as_str()
+            .unwrap_or("no reason given")
+            .chars()
+            .take(500)
+            .collect();
+        if reply["delivery"] == "unknown"
+            || (request.get("control").is_some() && reply["delivery"] != "not_started")
+        {
+            Err(CallError::Unknown(error))
+        } else {
+            Err(CallError::Refused(error))
+        }
     } else {
-        Err(CallError::Refused(
-            reply["error"]
-                .as_str()
-                .unwrap_or("no reason given")
-                .chars()
-                .take(500)
-                .collect(),
-        ))
+        Err(CallError::Unknown("reply has no explicit result".into()))
     }
 }
 
@@ -194,6 +220,8 @@ pub struct Questions {
 /// What the running app reported.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Snapshot {
+    /// Local App-only negotiation; absent for the legacy bridge.
+    pub contract: Option<Contract>,
     /// Sessions the app holds live, and whether a turn runs in each.
     pub sessions: HashMap<String, bool>,
     pub approvals: Vec<Approval>,
@@ -259,7 +287,7 @@ fn parse_snapshot(value: &Value) -> Snapshot {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|s| Some((bridge_id(&s["id"])?, s["running"] == true)))
+        .filter_map(|s| Some((bridge_id(&s["id"])?, s["running"].as_bool()?)))
         .collect();
     let approvals = value["approvals"]
         .as_array()
@@ -287,6 +315,7 @@ fn parse_snapshot(value: &Value) -> Snapshot {
         })
         .collect();
     Snapshot {
+        contract: None,
         sessions,
         approvals,
         questions,
@@ -339,8 +368,10 @@ impl Snapshot {
             SessionState::WaitingApproval
         } else if self.sessions.get(session) == Some(&true) {
             SessionState::Running
-        } else {
+        } else if self.sessions.contains_key(session) {
             SessionState::Idle
+        } else {
+            SessionState::Unknown
         }
     }
 }
@@ -358,6 +389,14 @@ enum Status {
 pub struct Link {
     socket: PathBuf,
     status: Mutex<Status>,
+    pending: Mutex<HashMap<String, PendingSend>>,
+    confirmed: Mutex<HashMap<String, String>>,
+}
+
+#[derive(Clone)]
+struct PendingSend {
+    operation: String,
+    confirmation: Option<crate::control_guard::Confirmation>,
 }
 
 impl Link {
@@ -365,6 +404,8 @@ impl Link {
         Arc::new(Self {
             socket,
             status: Mutex::new(Status::Unreachable),
+            pending: Mutex::new(HashMap::new()),
+            confirmed: Mutex::new(HashMap::new()),
         })
     }
 
@@ -396,7 +437,15 @@ impl Link {
                     log::warn!("DeepSeek Harness plugin speaks another protocol; not driven");
                     return Status::Unreachable;
                 }
-                Status::Live(process, parse_snapshot(&state))
+                let mut snapshot = parse_snapshot(&state);
+                match Contract::parse(&state, "deepseek") {
+                    Ok(contract) => snapshot.contract = contract,
+                    Err(error) => {
+                        log::warn!("DeepSeek Harness plugin: {error}");
+                        return Status::Unreachable;
+                    }
+                }
+                Status::Live(process, snapshot)
             }
             Err(error) => {
                 log::debug!("DeepSeek Harness plugin: {error:?}");
@@ -424,6 +473,52 @@ impl Link {
         }
         call(&self.socket, Some(process.pid), request, timeout).map(|(_, result)| result)
     }
+
+    /// Read-only evidence, including after a daemon restart. A fresh verified
+    /// binding may read an old request's host record; it never repeats the send.
+    fn lookup(
+        &self,
+        process: ProcessIdentity,
+        session: &str,
+        operation: &str,
+    ) -> Result<bool, Error> {
+        let Some(contract) = self.live(process).and_then(|s| s.contract) else {
+            return Ok(false);
+        };
+        if !contract.offers("prompt.lookup") {
+            return Ok(false);
+        }
+        let request_id = plugin_control::prompt_id(session, operation);
+        let mut request = json!({"id":request_id,"op":"prompt.lookup",
+            "sessionId":session,"requestId":request_id});
+        contract.bind(session, operation, &mut request)?;
+        let Ok(result) = self.operate(process, request, TIMEOUT) else {
+            return Ok(false);
+        };
+        if !plugin_control::confirms_prompt(&result, session, &request_id) {
+            return Ok(false);
+        }
+        self.confirm_pending(session, operation)?;
+        Ok(true)
+    }
+
+    fn confirm_pending(&self, session: &str, operation: &str) -> Result<(), Error> {
+        let mut pending = self.pending.lock().unwrap();
+        if let Some(row) = pending
+            .get(session)
+            .filter(|row| row.operation == operation)
+        {
+            if let Some(confirm) = &row.confirmation {
+                confirm()?;
+            }
+            pending.remove(session);
+            self.confirmed
+                .lock()
+                .unwrap()
+                .insert(session.into(), operation.into());
+        }
+        Ok(())
+    }
 }
 
 /// One DeepSeek Harness session, driven through the plugin of one app
@@ -446,10 +541,28 @@ impl PluginController {
     async fn operate(&self, request: Value, timeout: Duration) -> Result<Value, Error> {
         let link = self.link.clone();
         let process = self.process;
-        tokio::task::spawn_blocking(move || link.operate(process, request, timeout))
+        let operation = crate::control_guard::current_operation()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(request_id);
+        let session = self.session.clone();
+        let mut request = request;
+        if let Some(contract) = link.live(process).and_then(|s| s.contract) {
+            request["id"] = json!(request_id());
+            contract.bind(&session, &operation, &mut request)?;
+        }
+        crate::control_guard::spawn_blocking(move || link.operate(process, request, timeout))
             .await
             .map_err(|e| Error::UnknownOutcome(e.to_string()))?
             .map_err(Error::from)
+            .and_then(|value| {
+                if value["accepted"] == true {
+                    Ok(value)
+                } else {
+                    Err(Error::UnknownOutcome(
+                        "App did not acknowledge acceptance".into(),
+                    ))
+                }
+            })
     }
 
     fn interaction(&self, id: &str) -> Result<PendingInteraction, Error> {
@@ -480,6 +593,9 @@ fn request_id() -> String {
 
 #[async_trait]
 impl Controller for PluginController {
+    fn reports_delivery(&self) -> bool {
+        true
+    }
     fn kind(&self) -> ControllerKind {
         ControllerKind::Plugin
     }
@@ -509,14 +625,107 @@ impl Controller for PluginController {
             .unwrap_or_default()
     }
     async fn send(&self, text: &str) -> Result<(), Error> {
-        let request = json!({
+        let operation = crate::control_guard::current_operation()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(request_id);
+        let session = self.session.clone();
+        let process = self.process;
+        let link = self.link.clone();
+        let confirmation = crate::control_guard::current_delivery().and_then(|d| d.confirmation());
+        let mut request = json!({
             "op": "prompt",
             "sessionId": self.session,
-            "requestId": request_id(),
+            "requestId": plugin_control::prompt_id(&session, &operation),
             "text": text,
             "mode": "queue",
         });
-        self.operate(request, PROMPT_TIMEOUT).await.map(|_| ())
+        if let Some(contract) = link.live(process).and_then(|s| s.contract) {
+            request["id"] = json!(request_id());
+            contract.bind(&session, &operation, &mut request)?;
+        }
+        crate::control_guard::spawn_blocking(move || {
+            let old = link.pending.lock().unwrap().get(&session).cloned();
+            if let Some(old) = old {
+                if !link.lookup(process, &session, &old.operation)? {
+                    return Err(Error::Unconfirmed {
+                        operation: old.operation,
+                        message: "The previous App send is still unconfirmed".into(),
+                    });
+                }
+                if old.operation == operation {
+                    return Ok(());
+                }
+            }
+            if link.confirmed.lock().unwrap().get(&session) == Some(&operation) {
+                return Ok(());
+            }
+            crate::control_guard::check()?;
+            link.pending.lock().unwrap().insert(
+                session.clone(),
+                PendingSend {
+                    operation: operation.clone(),
+                    confirmation,
+                },
+            );
+            let outcome = link.operate(process, request, PROMPT_TIMEOUT);
+            match outcome {
+                Ok(ref result) if result["accepted"] == true => {
+                    link.confirm_pending(&session, &operation)
+                }
+                Err(CallError::NotSent(reason) | CallError::Refused(reason)) => {
+                    link.pending.lock().unwrap().remove(&session);
+                    Err(Error::Unavailable(reason))
+                }
+                _ => {
+                    if link.lookup(process, &session, &operation)? {
+                        Ok(())
+                    } else {
+                        Err(Error::UnknownOutcome(
+                            "Waiting for the App's send receipt; no replay".into(),
+                        ))
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|e| Error::UnknownOutcome(e.to_string()))?
+    }
+
+    async fn lookup_send(&self, operation: &str) -> Result<bool, Error> {
+        let (link, process, session, operation) = (
+            self.link.clone(),
+            self.process,
+            self.session.clone(),
+            operation.to_owned(),
+        );
+        tokio::task::spawn_blocking(move || link.lookup(process, &session, &operation))
+            .await
+            .map_err(|e| Error::Unavailable(e.to_string()))?
+    }
+
+    fn release_unconfirmed(&self, operation: &str) -> Result<(), Error> {
+        if self.link.lookup(self.process, &self.session, operation)?
+            || self
+                .link
+                .confirmed
+                .lock()
+                .unwrap()
+                .get(&self.session)
+                .is_some_and(|op| op == operation)
+        {
+            return Err(Error::Conflict(
+                "The original App send was already accepted".into(),
+            ));
+        }
+        let mut pending = self.link.pending.lock().unwrap();
+        match pending.get(&self.session) {
+            Some(row) if row.operation == operation => {
+                pending.remove(&self.session);
+                Ok(())
+            }
+            Some(_) => Err(Error::Conflict("Another App send is unconfirmed".into())),
+            None => Ok(()),
+        }
     }
     async fn respond(&self, interaction: &str, option: &str, answer: &str) -> Result<(), Error> {
         let pending = self.interaction(interaction)?;
@@ -650,7 +859,7 @@ mod tests {
         }));
         assert_eq!(snapshot.state("session-a"), SessionState::WaitingApproval);
         assert_eq!(snapshot.state("session-b"), SessionState::WaitingApproval);
-        assert_eq!(snapshot.state("session-c"), SessionState::Idle);
+        assert_eq!(snapshot.state("session-c"), SessionState::Unknown);
         let [approval] = &snapshot.interactions("session-a")[..] else {
             panic!("one approval")
         };
@@ -688,6 +897,51 @@ mod tests {
             Error::from(CallError::NotSent("x".into())),
             Error::Unavailable(_)
         ));
+    }
+
+    #[test]
+    fn malformed_running_state_is_not_idle() {
+        let snapshot = parse_snapshot(&json!({"sessions":[{"id":"session-a","running":"false"}]}));
+        assert_eq!(snapshot.state("session-a"), SessionState::Unknown);
+    }
+
+    #[tokio::test]
+    async fn revoked_authority_reaches_the_socket_worker_before_any_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("bridge.sock");
+        let server = serve_once(&socket, None);
+        let result = crate::control_guard::scope(Arc::new(|| false), async move {
+            crate::control_guard::spawn_blocking(move || {
+                call(&socket, None, json!({"op":"prompt"}), TIMEOUT)
+            })
+            .await
+            .unwrap()
+        })
+        .await;
+        assert!(matches!(result, Err(CallError::NotSent(_))));
+        assert!(server.join().unwrap().is_empty());
+    }
+
+    #[test]
+    fn unmatched_or_ambiguous_bound_replies_never_confirm_or_release_a_send() {
+        for reply in [
+            "{\"id\":\"other\",\"ok\":true,\"result\":{\"accepted\":true}}\n",
+            "{\"id\":\"request\",\"ok\":true,\"control\":{\"epoch\":\"old\"},\"result\":{\"accepted\":true}}\n",
+            "{\"id\":\"request\",\"ok\":false,\"control\":{\"epoch\":\"current\"},\"error\":\"host failed\"}\n",
+            "{\"id\":\"request\",\"control\":{\"epoch\":\"current\"}}\n",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let socket = dir.path().join("bridge.sock");
+            let server = serve_once(&socket, Some(reply));
+            let result = call(
+                &socket,
+                None,
+                json!({"id":"request","op":"prompt","control":{"epoch":"current"}}),
+                TIMEOUT,
+            );
+            assert!(matches!(result, Err(CallError::Unknown(_))));
+            assert!(!server.join().unwrap().is_empty());
+        }
     }
 
     /// A one-shot plugin stand-in on a real socket: the reply it gives, and
