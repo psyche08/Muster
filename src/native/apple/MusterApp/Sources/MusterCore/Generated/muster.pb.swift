@@ -830,7 +830,7 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .agentOrganize(newValue)}
   }
 
-  /// Local owner only: one task's bounded scheduler grant (ADR 0095).
+  /// Local owner only: one task's bounded scheduler grant (ADR 0097).
   /// Field 74 was this request on the branch this change comes from;
   /// `vision` and `agent_organize` landed on `main` with 74 and 75
   /// first, so the grant takes the next one. No released build ever
@@ -919,7 +919,7 @@ public nonisolated struct Muster_V1_Request: Sendable {
     /// and that OTA build speak the old number, and they are replaced by the
     /// next release.
     case agentOrganize(Muster_V1_AgentOrganizeRequest)
-    /// Local owner only: one task's bounded scheduler grant (ADR 0095).
+    /// Local owner only: one task's bounded scheduler grant (ADR 0097).
     /// Field 74 was this request on the branch this change comes from;
     /// `vision` and `agent_organize` landed on `main` with 74 and 75
     /// first, so the grant takes the next one. No released build ever
@@ -4564,7 +4564,7 @@ public nonisolated struct Muster_V1_VisionStatus: Sendable {
   public init() {}
 }
 
-/// Local owner only (ADR 0095). One task's scheduler grant: at most a producer
+/// Local owner only (ADR 0097). One task's scheduler grant: at most a producer
 /// and a reviewer session of one provider in one directory, bounded quotas and
 /// lifetime, its desktop operations under Locked Use while the console is
 /// locked. Status, revoke and reconcile never touch the desktop.

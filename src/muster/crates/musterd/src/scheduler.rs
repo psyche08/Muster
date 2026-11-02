@@ -1,4 +1,4 @@
-//! One task's scheduler grant on this Mac (ADR 0095): its persistence, the
+//! One task's scheduler grant on this Mac (ADR 0097): its persistence, the
 //! local `agent_scheduler` RPC, and each reserved desktop operation, run
 //! under a scheduled Locked Use lease while the console is locked or on a
 //! quiet unlocked console. The grant's rules are `muster_core::scheduler_grant`;
@@ -351,7 +351,7 @@ fn adoptable(sessions: &[v1::AgentSession], scope: &grant::Scope, id: &str) -> b
     })
 }
 
-/// Binds an existing session to a role instead of creating one (ADR 0095).
+/// Binds an existing session to a role instead of creating one (ADR 0097).
 /// It reads the provider's session registry and never touches the desktop.
 async fn adopt(daemon: &Arc<Daemon>, a: v1::AgentSchedulerAdopt) -> Result<Resp, Error> {
     let role = role_of(&a.role)?;

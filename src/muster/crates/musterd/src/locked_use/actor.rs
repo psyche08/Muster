@@ -2,7 +2,7 @@
 //! commands and a 50 ms tick. A lease runs one operation (and its provider
 //! queue), keeps a terminal session open while its requester renews it, or
 //! runs this Mac's own unattended `/compact` (ADR 0087) or one operation its
-//! task scheduler grant reserved (ADR 0095).
+//! task scheduler grant reserved (ADR 0097).
 
 use super::*;
 
@@ -947,7 +947,7 @@ pub(super) fn start_compact(
 }
 
 /// One operation of a task scheduler grant under its scheduled lease (ADR
-/// 0095). Each OS call is admitted only while the lease is live, inside its
+/// 0097). Each OS call is admitted only while the lease is live, inside its
 /// first window, on the same console with no local input, unlocked, while
 /// this Mac still allows Locked Use and agent control of the app, and while
 /// the task's grant is neither revoked nor expired.

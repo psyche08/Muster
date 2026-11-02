@@ -1,8 +1,10 @@
-# ADR 0095: Task-scoped scheduler grant for Locked Use
+# ADR 0097: Task-scoped scheduler grant for Locked Use
 
 - Date: 2026-11-02
 - Status: Accepted; source and tests verified, local installation and device
   acceptance recorded below.
+- Numbered 0097: ADR 0095 and 0096 on `main` are the shared AX navigation
+  and question editor decisions.
 - Related: [ADR 0007](0007-desktop-manual-locked-use.md),
   [ADR 0087](0087-idle-compaction-on-a-locked-or-busy-mac.md),
   [ADR 0094](0094-local-plugin-contract-and-receipt-recovery.md);
@@ -236,8 +238,7 @@ Its rules:
   generator. The Harmony bindings were regenerated with the pinned
   `protobufjs-cli` 1.3.3. That output also picks up schema changes already on
   `main` that earlier commits had not regenerated for Harmony: the
-  `agent_create` request, the desktop-update `AUTO_ON`/`AUTO_OFF` actions and
-  `automatic` field.
+  desktop-update `AUTO_ON`/`AUTO_OFF` actions and `automatic` field.
 
 ## Verification
 

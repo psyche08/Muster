@@ -1,4 +1,4 @@
-//! A task-scoped scheduler grant (ADR 0095). This Mac's local owner lets one
+//! A task-scoped scheduler grant (ADR 0097). This Mac's local owner lets one
 //! named task drive at most two desktop sessions of one provider app in one
 //! directory, within fixed quotas and a deadline, including under Locked Use
 //! while the console is locked. Pure state: the daemon persists it, reserves

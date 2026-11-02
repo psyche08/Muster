@@ -71,7 +71,7 @@ impl std::ops::Deref for Current {
 pub(crate) enum LocalJob {
     /// `/compact` in one conversation (ADR 0087).
     Compact(String),
-    /// One operation a task scheduler grant reserved (ADR 0095).
+    /// One operation a task scheduler grant reserved (ADR 0097).
     Scheduled {
         task_id: String,
         job: Box<crate::scheduler::Job>,
@@ -462,7 +462,7 @@ impl Owner {
     }
 
     /// One operation of a task scheduler grant on a locked console (ADR
-    /// 0095): this Mac's own lease, opened only by the grant's reservation,
+    /// 0097): this Mac's own lease, opened only by the grant's reservation,
     /// for exactly that operation. The lease, its cover, watchdog, input
     /// takeover, one plugin consumption and relock are those of every other
     /// Locked Use; nothing waits for the model inside it.

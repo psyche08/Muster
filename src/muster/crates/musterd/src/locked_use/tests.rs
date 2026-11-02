@@ -2111,7 +2111,7 @@ async fn late_agent_receipt_returns_after_relock_without_another_submission() {
 }
 
 /// This Mac's own scheduled lease for one reserved operation of task "t1"
-/// (ADR 0095), on the fixture's daemon with a fresh console.
+/// (ADR 0097), on the fixture's daemon with a fresh console.
 async fn scheduled(
     daemon: &Arc<Daemon>,
     op_id: &str,

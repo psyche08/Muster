@@ -412,7 +412,7 @@ Claude Desktop conversation has not been run.
 
 ## Scheduler grant (2026-11-02)
 
-[ADR 0095](adr/0095-task-scoped-scheduler-grant-for-locked-use.md). A local
+[ADR 0097](adr/0097-task-scoped-scheduler-grant-for-locked-use.md). A local
 supervisor drives one task's desktop conversations through
 `muster rpc --request -`. JSON names one action:
 `{"agent_scheduler":{"action":{"<action>":{...}}}}`.

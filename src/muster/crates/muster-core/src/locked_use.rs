@@ -280,7 +280,7 @@ struct Lease {
     /// This Mac's own lease (ADR 0087): nobody signed it.
     unattended: bool,
     /// This Mac's own lease for one operation a task grant reserved (ADR
-    /// 0095): nobody signed it either, and it is not an unattended one.
+    /// 0097): nobody signed it either, and it is not an unattended one.
     scheduled: bool,
     initial_screen: Screen,
     // A signed manual lease can cover an already unlocked console. This is
@@ -522,7 +522,7 @@ impl Gate {
     }
 
     /// This Mac's own lease for one operation its task scheduler grant
-    /// reserved (ADR 0095). Only a `Reservation` opens it: its provider, op_id
+    /// reserved (ADR 0097). Only a `Reservation` opens it: its provider, op_id
     /// (the turn) and digest come from the grant, so no other operation can
     /// be taken under it. Like an unattended lease it is admitted on this
     /// Mac's local switches, keeps every other Locked Use rule, can never be

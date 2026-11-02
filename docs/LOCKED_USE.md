@@ -15,7 +15,7 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ### 2026-11-02: a task-scoped scheduler grant
 
-[ADR 0095](adr/0095-task-scoped-scheduler-grant-for-locked-use.md) adds a
+[ADR 0097](adr/0097-task-scoped-scheduler-grant-for-locked-use.md) adds a
 second kind of this Mac's own lease. A local supervisor can drive one task's
 Claude Desktop work while the Mac is locked, without a Presence signature per
 operation.

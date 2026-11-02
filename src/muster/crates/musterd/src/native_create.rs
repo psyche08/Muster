@@ -2,7 +2,7 @@
 //! One UI submission happens while the console is owned; its receipt is the
 //! unique new session whose transcript shows the exact prompt. When that
 //! receipt is not seen while the console is owned, `receipt` looks for it
-//! later from transcripts alone, never touching the desktop (ADR 0095).
+//! later from transcripts alone, never touching the desktop (ADR 0097).
 use crate::{Daemon, Error};
 use muster_proto::v1::{self, response::Resp};
 use std::sync::Arc;
