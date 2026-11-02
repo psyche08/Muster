@@ -22,6 +22,7 @@ pub mod deepseek_app;
 pub mod desktop_chat;
 pub mod desktop_lock;
 pub mod files;
+pub mod idle_compact;
 pub mod jsonl;
 pub mod model;
 pub mod native_options;
@@ -2433,6 +2434,44 @@ impl AgentService {
             .send_to(text)
             .await?
             .unwrap_or_else(|| id.to_string()))
+    }
+
+    /// Runs the provider's own `/compact` in an idle desktop session, under the
+    /// same checks as a send, without replacing a draft (ADR 0083).
+    pub async fn compact(&self, id: &str) -> Result<(), Error> {
+        self.require_desktop_input(id)?;
+        entered(self.controller(id)?).compact().await
+    }
+
+    /// The sessions [`idle_compact::due`] picks at `now` whose transcript does
+    /// not already end in a compaction, longest idle first. Transcripts are
+    /// read outside the catalog lock.
+    pub fn idle_compact_due(&self, now: u64) -> Vec<AgentSession> {
+        let candidates: Vec<(AgentSession, PathBuf, Provider)> = {
+            let inner = self.inner.lock().unwrap();
+            let activity = Self::descendant_activity(&inner);
+            inner
+                .catalog
+                .iter()
+                .filter(|(_, d)| !d.hidden && !d.archived && d.provider.file_transcripts())
+                .filter_map(|(id, d)| {
+                    let mut session = Self::project_summary(&inner, id)?;
+                    session.descendant_activity = activity.get(id).cloned().unwrap_or_default();
+                    idle_compact::due(&session, now).then(|| (session, d.path.clone(), d.provider))
+                })
+                .collect()
+        };
+        let mut due: Vec<AgentSession> = candidates
+            .into_iter()
+            .filter(|(_, path, provider)| !idle_compact::compacted(path, *provider))
+            .map(|(session, _, _)| session)
+            .collect();
+        due.sort_by(|a, b| {
+            a.updated_unix
+                .cmp(&b.updated_unix)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        due
     }
 
     /// Whether anyone follows agent events now (an open watch).
