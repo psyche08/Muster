@@ -83,6 +83,53 @@ pub fn is_uuid(s: &str) -> bool {
 }
 
 /// Reads at most `limit` lines from the head of a file as JSON records.
+/// What a scan read from each transcript's head, reused while the file
+/// keeps its size and modification time. Heads are the costly part of a
+/// scan (up to 128 records parsed per file), and a rescan follows every
+/// write, so only files that changed are read again. A pass keeps just
+/// the files it saw.
+pub struct HeadCache<T> {
+    last: std::collections::HashMap<PathBuf, (SystemTime, u64, T)>,
+    this: std::collections::HashMap<PathBuf, (SystemTime, u64, T)>,
+}
+
+impl<T> Default for HeadCache<T> {
+    fn default() -> Self {
+        Self {
+            last: Default::default(),
+            this: Default::default(),
+        }
+    }
+}
+
+impl<T: Clone> HeadCache<T> {
+    pub fn get(
+        &mut self,
+        path: &std::path::Path,
+        modified: SystemTime,
+        size: u64,
+        read: impl FnOnce(&std::path::Path) -> T,
+    ) -> T {
+        let known = self
+            .this
+            .remove(path)
+            .or_else(|| self.last.remove(path))
+            .filter(|(m, s, _)| *m == modified && *s == size);
+        let head = match known {
+            Some((_, _, head)) => head,
+            None => read(path),
+        };
+        self.this
+            .insert(path.to_owned(), (modified, size, head.clone()));
+        head
+    }
+
+    /// Ends a pass: files it did not see are forgotten.
+    pub fn finish(&mut self) {
+        self.last = std::mem::take(&mut self.this);
+    }
+}
+
 pub fn head_records(path: &std::path::Path, limit: usize) -> Vec<serde_json::Value> {
     use std::io::BufRead;
     let Ok(file) = std::fs::File::open(path) else {
@@ -100,4 +147,40 @@ pub fn head_records(path: &std::path::Path, limit: usize) -> Vec<serde_json::Val
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HeadCache;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn a_head_is_read_again_only_when_its_file_changed() {
+        let mut heads = HeadCache::default();
+        let (a, b) = (std::path::Path::new("/a"), std::path::Path::new("/b"));
+        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+        let reads = std::cell::Cell::new(0);
+        let read = |n: u32| {
+            let reads = &reads;
+            move |_: &std::path::Path| {
+                reads.set(reads.get() + 1);
+                n
+            }
+        };
+        assert_eq!(heads.get(a, t, 10, read(1)), 1);
+        assert_eq!(heads.get(b, t, 10, read(2)), 2);
+        heads.finish();
+        assert_eq!(reads.get(), 2);
+        // Unchanged: the head from the last pass, nothing read.
+        assert_eq!(heads.get(a, t, 10, read(9)), 1);
+        // Grown or touched: read again.
+        assert_eq!(heads.get(b, t, 11, read(3)), 3);
+        heads.finish();
+        assert_eq!(reads.get(), 3);
+        assert_eq!(heads.get(b, t + Duration::from_secs(1), 11, read(4)), 4);
+        heads.finish();
+        // `a` went unseen in the last pass, so it is forgotten.
+        assert_eq!(heads.get(a, t, 10, read(5)), 5);
+        assert_eq!(reads.get(), 5);
+    }
 }

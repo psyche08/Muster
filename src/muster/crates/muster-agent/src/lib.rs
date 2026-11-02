@@ -256,6 +256,8 @@ pub struct AgentService {
     cloud: Vec<Arc<cloud::Source>>,
     /// Wakes the cloud loop after a send or a newly opened session watch.
     cloud_wake: tokio::sync::Notify,
+    /// Transcript heads the catalog scans have read, by provider.
+    heads: Arc<Mutex<(codex::Heads, claude::Heads)>>,
     orca: Option<Arc<orca::Source>>,
     /// DeepSeek Harness's Muster plugin, when the app's home is known.
     deepseek: Option<Arc<deepseek_app::Link>>,
@@ -374,6 +376,7 @@ impl AgentService {
             controller_events: ctl_tx,
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
+            heads: Default::default(),
             orca,
             deepseek,
             predict,
@@ -904,13 +907,18 @@ impl AgentService {
         self.events.subscribe()
     }
 
-    fn scan_all(config: &AgentConfig, cache: &HashMap<String, Discovered>) -> Vec<Discovered> {
+    fn scan_all(
+        config: &AgentConfig,
+        cache: &HashMap<String, Discovered>,
+        heads: &Mutex<(codex::Heads, claude::Heads)>,
+    ) -> Vec<Discovered> {
         let mut out = Vec::new();
+        let mut heads = heads.lock().unwrap();
         if let Some(home) = &config.codex_home {
-            out.extend(codex::scan(home));
+            out.extend(codex::scan(home, &mut heads.0));
         }
         if let Some(home) = &config.claude_home {
-            let mut found = claude::scan(home);
+            let mut found = claude::scan(home, &mut heads.1);
             // Claude.app archives conversations in its own registry and then
             // lists none of their sessions.
             if let Some(root) = &config.claude_desktop {
@@ -992,7 +1000,8 @@ impl AgentService {
     pub async fn rescan(&self) {
         let config = self.config.clone();
         let cache = self.inner.lock().unwrap().catalog.clone();
-        let found = tokio::task::spawn_blocking(move || Self::scan_all(&config, &cache))
+        let heads = self.heads.clone();
+        let found = tokio::task::spawn_blocking(move || Self::scan_all(&config, &cache, &heads))
             .await
             .unwrap_or_default();
         let (changed, replaced) = {
