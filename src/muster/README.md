@@ -90,7 +90,7 @@ HarmonyOS); see `src/native/README.md`.
   (`cargo build -p musterd --features sep` on macOS). Without the feature a macOS musterd keeps a software
   key, which is what CI's macOS job builds and tests.
 - The NativeApp (Accessibility) controller and locked-screen operation are
-  scoped by [architecture §5](../../docs/ARCHITECTURE.md#5-migration-roadmap-strangler-pattern-delete-code-every-phase) and
+  scoped by [architecture §5](../../docs/architecture/migration.md#5-migration-roadmap-strangler-pattern-delete-code-every-phase) and
   [P0-validation.md](../../docs/P0-validation.md). No provider CLI process or
   terminal-agent fallback exists; open the session in the desktop app first.
 - Encryption at rest for the store (D3) is deferred.

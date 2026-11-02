@@ -64,5 +64,5 @@ Mac-C 1.0.72 acceptance exercised the same Shared Rust intents against an
 installed daemon and a dedicated independent Codex CLI conversation. Both normal
 completion and a deliberately still-generating provider returned exactly one
 result and received an acknowledgement; the latter visibly waited before sending.
-See [release evidence](DESKTOP_UPDATES.md#2026-10-20-mobile-conversation-workbench-and-mac-c-acceptance-1072--build-63)
+See [release evidence](validation/DESKTOP-RELEASES-2026-09-29-TO-10-26.md#2026-10-20-mobile-conversation-workbench-and-mac-c-acceptance-1072--build-63)
 for installation, publication, and untested native/physical-device boundaries.
