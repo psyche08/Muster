@@ -115,6 +115,9 @@ labels = "$approve"
 kind = "sidebar"
 landmarks = true
 standalone_title = true
+# Each conversation is its own web area beside the app shell, so the
+# sidebar walk may skip a conversation view (ADR 0080).
+separate_conversation_views = true
 
 # Recents hide older sessions behind "Show <count> more in Recents".
 [controls.sessions.more]

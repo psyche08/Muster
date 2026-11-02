@@ -114,6 +114,9 @@ labels = "$codex_approve"
 kind = "sidebar"
 landmarks = false
 standalone_title = false
+# ChatGPT.app exposes the sidebar inside the open conversation's single web
+# area, so the sidebar walk must not skip that view (ADR 0091).
+separate_conversation_views = false
 
 # Prompts sent while a turn runs are queued; a queued row carries its own
 # delete control, so a submit control beside it belongs to the row.

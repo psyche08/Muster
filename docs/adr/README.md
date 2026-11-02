@@ -155,7 +155,7 @@ records a specific decision and does not revive code on its delete list.
 | [0077](0077-multica-runtime-state-and-manual-upgrade.md) | Accepted; device and end-to-end acceptance pending | Record the managed Multica bridge, read-only version and migration state, manual upgrade boundary |
 | [0078](0078-multica-daemon-detection-without-pid-file.md) | Accepted; device probe passed, end-to-end acceptance pending | Detect the Multica guest daemon without a pid file |
 | [0079](0079-install-multica-daemon-detection-fix.md) | Accepted; installed on one Mac, publication pending | Install the Multica daemon-detection fix as desktop 1.1.7 (97) |
-| [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; shipped in 1.1.8 on three Macs, device send acceptance pending | The desktop session-list scan prunes conversation views |
+| [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; shipped in 1.1.8; refined by 0091 for apps whose sidebar shares the conversation view | The desktop session-list scan prunes conversation views |
 | [0081](0081-paired-release-1-1-8.md) | Accepted; published and installed on three Macs; provider send acceptance pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
 | [0082](0082-progressive-architecture-documentation.md) | Accepted | Progressive disclosure: ARCHITECTURE.md split into parts; release, field and deployment records moved to docs/validation/ |
 | [0083](0083-idle-compaction.md) | Accepted, amended by [0087](0087-idle-compaction-on-a-locked-or-busy-mac.md); device acceptance pending | Opt-in `/compact` for Claude Code conversations idle 30-60 minutes |
@@ -166,6 +166,7 @@ records a specific decision and does not revive code on its delete list.
 | [0088](0088-unattended-desktop-updates.md) | Accepted; signed feed published with 1.1.10, unattended update pending | Unattended desktop updates through the signed Velopack feed, with a new feed signing key |
 | [0089](0089-paired-release-1-1-10.md) | Accepted; published, on GitHub and installed on three Macs | Publish Apple 1.1.10 (100) and install it on the three Macs |
 | [0090](0090-reuse-transcript-heads-between-rescans.md) | Accepted; implementation verified, installed acceptance pending | Reuse parsed transcript heads between catalog rescans, so the session list updates without a 2 s scan |
+| [0091](0091-prune-conversation-views-only-where-separate.md) | Accepted; source verified, device acceptance pending | Prune conversation views only in apps that expose them apart |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
