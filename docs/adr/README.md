@@ -164,6 +164,7 @@ records a specific decision and does not revive code on its delete list.
 | [0086](0086-dsh-session-chrome-and-trace.md) | Accepted; macOS/iOS builds and synthetic rendering verified, device interaction pending | DSH-style session header/tabs, a turn-grouped trace page with time overview and inspector, and a third DeepSeek conversation style |
 | [0087](0087-idle-compaction-on-a-locked-or-busy-mac.md) | Accepted; device acceptance pending | Idle compaction on a locked Mac through an unattended Locked Use lease, and with a top-right notice while the Mac is in use |
 | [0088](0088-unattended-desktop-updates.md) | Accepted; implementation verified, device acceptance pending | Unattended desktop updates through the signed Velopack feed, with a new feed signing key |
+| [0089](0089-paired-release-1-1-10.md) | Accepted; publication and installation pending | Publish Apple 1.1.10 (100) and install it on the three Macs |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
