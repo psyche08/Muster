@@ -159,8 +159,8 @@ records a specific decision and does not revive code on its delete list.
 | [0081](0081-paired-release-1-1-8.md) | Accepted; published and installed on three Macs; provider send acceptance pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
 | [0082](0082-progressive-architecture-documentation.md) | Accepted | Progressive disclosure: ARCHITECTURE.md split into parts; release, field and deployment records moved to docs/validation/ |
 | [0083](0083-idle-compaction.md) | Accepted, amended by [0087](0087-idle-compaction-on-a-locked-or-busy-mac.md); device acceptance pending | Opt-in `/compact` for Claude Code conversations idle 30-60 minutes |
-| [0084](0084-keep-awake-menu.md) | Accepted; local dev build verified, release pending | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
-| [0085](0085-paired-release-1-1-9.md) | Accepted; release pending | Publish Apple 1.1.9 (99) and install it on the three Macs |
+| [0084](0084-keep-awake-menu.md) | Accepted; released in 1.1.9 (99) and running on three Macs | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
+| [0085](0085-paired-release-1-1-9.md) | Accepted; published and installed on three Macs | Publish Apple 1.1.9 (99) and install it on the three Macs |
 | [0086](0086-dsh-session-chrome-and-trace.md) | Accepted; macOS/iOS builds and synthetic rendering verified, device interaction pending | DSH-style session header/tabs, a turn-grouped trace page with time overview and inspector, and a third DeepSeek conversation style |
 | [0087](0087-idle-compaction-on-a-locked-or-busy-mac.md) | Accepted; device acceptance pending | Idle compaction on a locked Mac through an unattended Locked Use lease, and with a top-right notice while the Mac is in use |
 

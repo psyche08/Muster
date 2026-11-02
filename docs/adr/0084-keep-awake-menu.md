@@ -1,7 +1,7 @@
 # ADR 0084: Keep Awake and Keep Screen On in the Mac app menu
 
 - Date: 2026-11-02
-- Status: Accepted; local dev build verified, release pending
+- Status: Accepted; released in 1.1.9 (99) and running on three Macs; lid-close and battery behavior not verified
 - Related: [architecture §3.6.2](../architecture/agent-halo.md) (power);
   [ADR 0082](0082-progressive-architecture-documentation.md)
 
@@ -90,5 +90,10 @@ operation (§3.6.2).
   - `kill -9` of the app ended its child through `-w`.
   - The test's keys were removed from the `dev.linsheng.muster` defaults
     afterwards.
-- **Not done.** A signed, notarized release, installation on the Macs, and
-  behavior across a lid close or on battery.
+- **Release, 2026-11-02.** Shipped in the notarized Apple 1.1.9 (99)
+  ([ADR 0085](0085-paired-release-1-1-9.md)). On each of M4Mini, M1Max and M4Pro
+  the installed app started `/usr/bin/caffeinate -imsu -w <Muster pid>` with no
+  stored preference, the default. On M4Mini `pmset -g assertions` showed the
+  child's `PreventUserIdleSystemSleep` on behalf of Muster.
+- **Not done.** The menu switches on the installed release, and behavior across
+  a lid close or on battery.
