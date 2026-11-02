@@ -411,13 +411,22 @@ pub fn admit_question_delete(
     expected: &str,
     proof: QuestionDeleteProof<'_>,
 ) -> Result<(), crate::Error> {
-    if expected.is_empty()
-        || !proof.value_settable
-        || proof.value != Some(expected)
-        || proof.selected_range != Some((0, expected.encode_utf16().count()))
-    {
+    admit_question_editor(expected, &proof)?;
+    if proof.selected_range != Some((0, expected.encode_utf16().count())) {
         return Err(crate::Error::Conflict(
             "Question answer selection changed; no delete key sent".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn admit_question_editor(
+    expected: &str,
+    proof: &QuestionDeleteProof<'_>,
+) -> Result<(), crate::Error> {
+    if expected.is_empty() || !proof.value_settable || proof.value != Some(expected) {
+        return Err(crate::Error::Conflict(
+            "Question answer value changed; no delete key sent".into(),
         ));
     }
     crate::questions::admit_focused_submit(
@@ -431,9 +440,159 @@ pub fn admit_question_delete(
     })
 }
 
+pub const QUESTION_SELECTION_DEADLINE: Duration = Duration::from_millis(250);
+
+/// Observe after one selection write. Only the unchanged pre-write range may
+/// settle; a new partial range or lost value/focus proof rejects immediately.
+/// The caller also enforces the original preparation and authorization budget.
+pub fn poll_question_selection(
+    expected: &str,
+    before: Option<(usize, usize)>,
+    elapsed: Duration,
+    proof: QuestionDeleteProof<'_>,
+) -> Result<bool, crate::Error> {
+    admit_question_editor(expected, &proof)?;
+    let length = expected.encode_utf16().count();
+    if elapsed >= QUESTION_SELECTION_DEADLINE
+        || !before.is_some_and(|(start, count)| start <= length && count <= length - start)
+    {
+        return Err(crate::Error::Conflict(
+            "Question selection is unavailable or did not settle; no delete key sent".into(),
+        ));
+    }
+    if proof.selected_range == Some((0, length)) {
+        admit_question_delete(expected, proof)?;
+        return Ok(true);
+    }
+    if proof.selected_range == before {
+        return Ok(false);
+    }
+    Err(crate::Error::Conflict(
+        "Question answer selection changed; no delete key sent".into(),
+    ))
+}
+
 #[cfg(test)]
 mod question_editor_tests {
     use super::*;
+    #[test]
+    fn selection_can_settle_without_another_write() {
+        let expected = "示例🦀"; // Four UTF-16 units, three Unicode scalars.
+        let proof = |range| QuestionDeleteProof {
+            value: Some(expected),
+            selected_range: range,
+            value_settable: true,
+            enabled: Some(true),
+            focused: Some(true),
+            application: crate::questions::SubmitApplicationFocus::Matching,
+            same_focused_window: false,
+        };
+        for before in [Some((0, 0)), Some((1, 2)), Some((4, 0))] {
+            for millis in [0, 25, 100, 249] {
+                assert!(
+                    !poll_question_selection(
+                        expected,
+                        before,
+                        Duration::from_millis(millis),
+                        proof(before)
+                    )
+                    .unwrap()
+                );
+            }
+            assert!(
+                poll_question_selection(
+                    expected,
+                    before,
+                    Duration::from_millis(249),
+                    proof(Some((0, 4)))
+                )
+                .unwrap()
+            );
+            // A late complete range, like a persistent old one, authorizes no key.
+            for range in [before, Some((0, 4))] {
+                assert!(
+                    poll_question_selection(
+                        expected,
+                        before,
+                        QUESTION_SELECTION_DEADLINE,
+                        proof(range)
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pending_selection_requires_unchanged_valid_field_and_range() {
+        use crate::questions::SubmitApplicationFocus;
+        let expected = "draft";
+        let proof = || QuestionDeleteProof {
+            value: Some(expected),
+            selected_range: Some((0, 0)),
+            value_settable: true,
+            enabled: Some(true),
+            focused: Some(true),
+            application: SubmitApplicationFocus::Matching,
+            same_focused_window: false,
+        };
+        for before in [
+            None,
+            Some((6, 0)),
+            Some((0, 6)),
+            Some((usize::MAX, 1)),
+            Some((4, usize::MAX)),
+        ] {
+            assert!(poll_question_selection(expected, before, Duration::ZERO, proof()).is_err());
+        }
+        for range in [None, Some((1, 0)), Some((0, 2)), Some((0, 6))] {
+            assert!(
+                poll_question_selection(
+                    expected,
+                    Some((0, 0)),
+                    Duration::ZERO,
+                    QuestionDeleteProof {
+                        selected_range: range,
+                        ..proof()
+                    }
+                )
+                .is_err()
+            );
+        }
+        for p in [
+            QuestionDeleteProof {
+                value: None,
+                ..proof()
+            },
+            QuestionDeleteProof {
+                value: Some("new draft"),
+                ..proof()
+            },
+            QuestionDeleteProof {
+                value_settable: false,
+                ..proof()
+            },
+            QuestionDeleteProof {
+                enabled: Some(false),
+                ..proof()
+            },
+            QuestionDeleteProof {
+                focused: Some(false),
+                ..proof()
+            },
+            QuestionDeleteProof {
+                application: SubmitApplicationFocus::Different,
+                ..proof()
+            },
+            QuestionDeleteProof {
+                application: SubmitApplicationFocus::Failed,
+                ..proof()
+            },
+        ] {
+            assert!(poll_question_selection(expected, Some((0, 0)), Duration::ZERO, p).is_err());
+        }
+    }
+
     fn field(value: Option<&str>) -> QuestionEditor<'_> {
         QuestionEditor {
             value,
