@@ -375,10 +375,6 @@ pub fn discover(pid: u32, resolver: &Resolver) -> Vec<String> {
         .collect()
 }
 
-/// Sidebar expansions ("Show 20 more in Recents") tried before giving up:
-/// up to a hundred more sessions in the Claude app.
-const SIDEBAR_EXPANSIONS: usize = 5;
-
 /// What one look at the session list found: rows naming the session, the
 /// rows seen, the navigation areas searched and the list's "more" control.
 struct SidebarScan {
@@ -568,31 +564,38 @@ fn scan_sidebar(
 
 /// Select only a uniquely identified navigation control, then resolve the
 /// resulting web area again. Never write to whichever composer is focused.
-pub async fn select_session(
-    profile: &AppProfile,
+/// A verified selection, usable only for controller attachment. Its AX handles
+/// are never submission authority; the controller revalidates before writing.
+pub struct PreparedSession {
+    profile: &'static AppProfile,
     pid: u32,
-    session: &str,
-    title: &str,
+    start: u64,
+    session: String,
+    generation: u64,
+    app: Element,
+    surface: Surface,
+}
+
+struct NavigationHost<'a> {
+    profile: &'static AppProfile,
+    pid: u32,
+    start: u64,
+    app: Element,
+    session: &'a str,
+    title: &'a str,
     title_is_unique: bool,
-    resolver: &Resolver,
-) -> Result<(), Error> {
-    let mut trace = Trace::new("select", profile.app.provider, session);
-    trace.record(format_args!(
-        "pid={pid} target_title={:?} unique_title={title_is_unique}",
-        label(title)
-    ));
-    let start =
-        codesign::process_start(pid).ok_or_else(|| Error::NotFound(format!("pid {pid}")))?;
-    if !ax::trusted() || !codesign::process_satisfies(pid, &profile.app.requirement()) {
-        return Err(Error::Unavailable(
-            "desktop Accessibility identity check failed".into(),
-        ));
-    }
-    let app = Element::application(pid);
-    app.enable_manual_accessibility();
-    let identity_check = || -> Result<(), Error> {
+    resolver: &'a Resolver,
+    trace: &'a Trace,
+}
+
+#[async_trait]
+impl muster_agent::native_navigation::Host for NavigationHost<'_> {
+    type Surface = Surface;
+    type Control = Element;
+
+    fn check(&self) -> Result<(), Error> {
         muster_agent::control_guard::check()?;
-        if codesign::process_start(pid) != Some(start)
+        if codesign::process_start(self.pid) != Some(self.start)
             || super::lock::session_state()
                 .is_none_or(|s| s.screen_locked || !s.login_done || !s.on_console)
         {
@@ -601,131 +604,72 @@ pub async fn select_session(
             ));
         }
         Ok(())
-    };
-    trace.stage("selection_preparation");
-    let (prepared, generation) = muster_agent::control_guard::prepare_readonly(
-        "session selection",
-        Duration::from_secs(3),
-        user_input_generation,
-        || async {
-            identity_check()?;
-            match find_surface_traced(profile, &app, session, resolver, Some(&trace)) {
-                Ok(_) => return Ok(Some(None)),
-                Err(Error::NotFound(_)) => {}
-                // Ambiguity is not an unready renderer and cannot be retried
-                // into a convenient choice of composer.
-                Err(error) => return Err(error),
-            }
-            let scan = scan_sidebar(
-                profile,
-                &app,
-                session,
-                title,
-                title_is_unique,
-                resolver,
-                &trace,
-                24,
-            );
-            // Zero navigation areas is an unready or unsupported UI, not proof
-            // that this session is absent. Bounded reads may observe it later.
-            Ok((scan.navigation > 0).then_some(Some(scan)))
-        },
-    )
-    .await?;
-    let check = || -> Result<(), Error> {
-        identity_check()?;
-        let current = user_input_generation();
-        if current != generation {
-            log::info!("session selection input generation changed {generation} -> {current}");
-            return Err(Error::Conflict(
-                "local input changed during session selection; nothing more was pressed".into(),
-            ));
-        }
-        Ok(())
-    };
-    check()?;
-    let Some(mut scan) = prepared else {
-        trace.record(format_args!("target_already_visible=true"));
-        trace.finish();
-        return Ok(());
-    };
-    // A session older than the rows shown is behind the list's "more"
-    // control: press it (a navigation, under the same guard as a row) and
-    // look again, a bounded number of times.
-    let mut expansions = 0;
-    while scan.candidates.is_empty() && expansions < SIDEBAR_EXPANSIONS {
-        let Some(more) = scan.more.take() else {
-            break;
-        };
-        check()?;
-        trace.stage("sidebar_more");
-        more.press()
-            .map_err(|code| Error::Unavailable(format!("AX sidebar expansion failed ({code})")))?;
-        expansions += 1;
-        let before = scan.rows;
-        let step = Step::new("expanded sidebar rows", Duration::from_secs(2));
-        loop {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            check()?;
-            scan = scan_sidebar(
-                profile,
-                &app,
-                session,
-                title,
-                title_is_unique,
-                resolver,
-                &trace,
-                0,
-            );
-            if scan.rows > before || !scan.candidates.is_empty() || step.expired() {
-                break;
-            }
-        }
-        trace.record(format_args!(
-            "expansion={expansions} rows {before} -> {}",
-            scan.rows
-        ));
-        // A press that listed nothing more is not repeated.
-        if scan.rows <= before {
-            break;
+    }
+    fn generation(&self) -> u64 {
+        user_input_generation()
+    }
+    fn surface(&self) -> Result<Option<Surface>, Error> {
+        match find_surface_traced(
+            self.profile,
+            &self.app,
+            self.session,
+            self.resolver,
+            Some(self.trace),
+        ) {
+            Ok(surface) => Ok(Some(surface)),
+            Err(Error::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
         }
     }
-    let desktop_id =
-        (profile.app.provider == "claude" && scan.candidates.is_empty() && scan.complete)
-            .then(|| {
-                let root = muster_agent::claude::desktop_registry()?;
-                muster_agent::claude::desktop_navigation_id(&root, session)
-            })
-            .flatten();
-    let route = muster_agent::native_sidebar::absent_session_route(
-        profile.app.provider,
-        desktop_id.as_deref().unwrap_or(""),
-        scan.navigation,
-        scan.complete,
-        scan.candidates.len(),
-    );
-    let candidates = scan.candidates;
-    if candidates.len() == 1 {
-        check()?;
-        trace.stage("select_press");
-        candidates[0]
-            .press()
-            .map_err(|code| Error::Unavailable(format!("AX session selection failed ({code})")))?;
-    } else if let Some(route) = route {
-        let bundle = super::procs::process_bundle(pid)
+    fn sidebar(&self) -> Result<muster_agent::native_navigation::Sidebar<Element>, Error> {
+        let scan = scan_sidebar(
+            self.profile,
+            &self.app,
+            self.session,
+            self.title,
+            self.title_is_unique,
+            self.resolver,
+            self.trace,
+            0,
+        );
+        Ok(muster_agent::native_navigation::Sidebar {
+            candidates: scan.candidates,
+            more: scan.more,
+            rows: scan.rows,
+            navigation: scan.navigation,
+            complete: scan.complete,
+        })
+    }
+    fn exact_route(&self) -> Option<String> {
+        muster_agent::native_sidebar::catalog_session_route(self.profile.app.provider, self.session)
+    }
+    fn press(
+        &self,
+        control: &Element,
+        permit: &muster_agent::native_navigation::ActionPermit,
+    ) -> Result<(), Error> {
+        self.check()?;
+        permit.check(user_input_generation())?;
+        control.press().map_err(|code| {
+            Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
+        })
+    }
+    async fn navigate(
+        &self,
+        route: &str,
+        permit: &muster_agent::native_navigation::ActionPermit,
+    ) -> Result<(), Error> {
+        let bundle = super::procs::process_bundle(self.pid)
             .ok_or_else(|| Error::Unavailable("desktop bundle identity unavailable".into()))?;
-        check()?;
-        if !codesign::process_satisfies(pid, &profile.app.requirement()) {
+        if !codesign::process_satisfies(self.pid, &self.profile.app.requirement()) {
             return Err(Error::Unavailable(
                 "desktop signature changed before navigation".into(),
             ));
         }
-        check()?;
-        trace.stage("select_exact_id");
-        // No shell, default scheme handler, prompt, or title. Dispatch once to
-        // the observed signed bundle. Command success is NOT selection proof.
+        self.check()?;
+        permit.check(user_input_generation())?;
         let dispatched = tokio::time::timeout(
-            Duration::from_secs(2),
+            permit.remaining(),
             tokio::process::Command::new("/usr/bin/open")
                 .arg("-a")
                 .arg(bundle)
@@ -737,85 +681,91 @@ pub async fn select_session(
                 .status(),
         )
         .await;
-        check()?;
+        self.check()?;
         if !matches!(dispatched, Ok(Ok(status)) if status.success()) {
             return Err(Error::Unavailable(
                 "exact-session navigation dispatch failed or timed out; not retried".into(),
             ));
         }
-        trace.record(format_args!(
-            "exact_id_dispatched=true surface_verified=false"
-        ));
-    } else {
-        return Err(Error::Unavailable(format!(
-            "cannot uniquely select the session in the desktop sidebar ({} matches, {} navigation areas, unique title={title_is_unique}, {expansions} expansions, complete={})",
-            candidates.len(),
-            scan.navigation,
-            scan.complete
-        )));
+        Ok(())
     }
-    let step = Step::new("selected session surface", Duration::from_secs(3));
-    trace.stage("verify_selected_surface");
-    let mut renderer_queries = 0u32;
-    loop {
-        check()?;
-        match find_surface(profile, &app, session, resolver) {
-            Ok(_) => {
-                log::info!(
-                    "AX selected {} session {}",
-                    profile.app.provider,
-                    &session[..8.min(session.len())]
-                );
-                trace.finish();
-                return Ok(());
+    fn refresh_renderer(&self, budget: Duration) -> Result<(), Error> {
+        let started = std::time::Instant::now();
+        let mut areas = Vec::new();
+        self.app.walk_pruned(|node| {
+            if started.elapsed() >= budget {
+                return ax::Visit::Stop;
             }
-            Err(Error::NotFound(_)) => {}
-            // Ambiguity cannot become authority by polling until one view vanishes.
-            Err(error) => return Err(error),
-        }
-        // Read-only cache refresh after the one navigation press. Hit-test
-        // results are discarded; only a fresh exact-session resolution admits
-        // later writes. At most three rounds, within the original deadline.
-        if !step.expired()
-            && renderer_queries < 3
-            && step.elapsed() >= Duration::from_secs(u64::from(renderer_queries))
-        {
-            let mut areas = Vec::new();
-            app.walk(|node| {
-                if node.role() == "AXWebArea" {
-                    areas.push(node.clone());
-                }
-                areas.len() < 8
-            });
-            for area in &areas {
-                check()?;
-                if step.expired() {
-                    break;
-                }
-                let accepted = app.query_renderer(area);
-                trace.record(format_args!(
-                    "selection_renderer_query round={} accepted={accepted}",
-                    renderer_queries + 1
-                ));
+            if node.role() == "AXWebArea" {
+                areas.push(node.clone());
+                return if areas.len() >= 8 {
+                    ax::Visit::Stop
+                } else {
+                    ax::Visit::Skip
+                };
             }
-            renderer_queries += 1;
-        }
-        if step.expired() {
-            // Content-free evidence for an ignored or slow selection: whether
-            // the pressed row survived and reports itself selected. Never
-            // press it again; a second press is not admitted here.
-            trace.record(format_args!(
-                "pressed_row_present={} pressed_row_selected={:?} last_surface_error={:?}",
-                candidates.first().is_some_and(|row| app.contains(row)),
-                candidates.first().and_then(|row| row.bool("AXSelected")),
-                find_surface_traced(profile, &app, session, resolver, Some(&trace)).err()
+            ax::Visit::Descend
+        });
+        for area in areas {
+            self.check()?;
+            if started.elapsed() >= budget {
+                break;
+            }
+            self.trace.record(format_args!(
+                "selection_renderer_query accepted={}",
+                self.app.query_renderer(&area)
             ));
+        }
+        Ok(())
+    }
+}
+
+pub async fn select_session(
+    profile: &'static AppProfile,
+    pid: u32,
+    session: &str,
+    title: &str,
+    title_is_unique: bool,
+    resolver: &Resolver,
+) -> Result<PreparedSession, Error> {
+    let (session, title, resolver) = (session.to_owned(), title.to_owned(), resolver.clone());
+    muster_agent::control_guard::spawn_blocking_async(async move {
+        let mut trace = Trace::new("select", profile.app.provider, &session);
+        let start =
+            codesign::process_start(pid).ok_or_else(|| Error::NotFound(format!("pid {pid}")))?;
+        if !ax::trusted() || !codesign::process_satisfies(pid, &profile.app.requirement()) {
             return Err(Error::Unavailable(
-                "desktop did not show the selected session within 3s".into(),
+                "desktop Accessibility identity check failed".into(),
             ));
         }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
+        let app = Element::application(pid);
+        app.enable_manual_accessibility();
+        let host = NavigationHost {
+            profile,
+            pid,
+            start,
+            app: app.clone(),
+            session: &session,
+            title: &title,
+            title_is_unique,
+            resolver: &resolver,
+            trace: &trace,
+        };
+        let (surface, generation) =
+            muster_agent::native_navigation::select(&host, Default::default()).await?;
+        trace.finish();
+        Ok(PreparedSession {
+            profile,
+            pid,
+            start,
+            session,
+            generation,
+            app,
+            surface,
+        })
+    })
+    .await
+    .map_err(|e| Error::Unavailable(format!("AX selection worker failed: {e}")))?
 }
 
 /// CatDesk sidebar rows naming `title`. Its rows are plain pressable groups
@@ -1458,7 +1408,52 @@ impl NativeAppController {
             codesign::process_start(pid).ok_or_else(|| Error::NotFound(format!("pid {pid}")))?;
         let app = Element::application(pid);
         app.enable_manual_accessibility();
+        let generation = user_input_generation();
         let surface = find_surface(profile, &app, session, &resolver)?;
+        Self::attach_prepared(
+            PreparedSession {
+                profile,
+                pid,
+                start,
+                session: session.to_owned(),
+                generation,
+                app,
+                surface,
+            },
+            resolver,
+            events,
+            question_source,
+            send_receipt_source,
+            queue_source,
+            runtime,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn attach_prepared(
+        prepared: PreparedSession,
+        resolver: Resolver,
+        events: ControllerEvents,
+        question_source: muster_agent::questions::Source,
+        send_receipt_source: muster_agent::receipt::Source,
+        queue_source: muster_agent::queue::Source,
+        runtime: tokio::runtime::Handle,
+    ) -> Result<Arc<Self>, Error> {
+        let PreparedSession {
+            profile,
+            pid,
+            start,
+            session,
+            generation,
+            app,
+            surface,
+        } = prepared;
+        muster_agent::control_guard::check()?;
+        if codesign::process_start(pid) != Some(start) || user_input_generation() != generation {
+            return Err(Error::Conflict(
+                "desktop changed after session preparation".into(),
+            ));
+        }
         let controller = Arc::new(Self {
             profile,
             resolver,

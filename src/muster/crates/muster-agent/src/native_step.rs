@@ -29,6 +29,14 @@ impl Step {
         self.started.elapsed()
     }
 
+    pub fn remaining(&self) -> Duration {
+        self.budget.saturating_sub(self.elapsed())
+    }
+
+    pub fn deadline(&self) -> Instant {
+        self.started + self.budget
+    }
+
     pub fn expired(&self) -> bool {
         self.expired_at(Instant::now())
     }
