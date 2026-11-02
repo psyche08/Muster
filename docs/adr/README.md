@@ -148,15 +148,15 @@ records a specific decision and does not revive code on its delete list.
 
 | [0074](0074-deepseek-harness-plugin-control.md) | Accepted; plugin verified live; daemon, phone and Locked Use acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
 
-| [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix not yet installed | A Claude conversation without a CLI session hides no other |
+| [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix installed in 1.1.8 on three Macs; phone send acceptance pending | A Claude conversation without a CLI session hides no other |
 
 | [0076](0076-paired-release-1-1-6.md) | Accepted; published and installed on one Mac | Publish Apple 1.1.6 to the OTA page and this Mac |
 
 | [0077](0077-multica-runtime-state-and-manual-upgrade.md) | Accepted; device and end-to-end acceptance pending | Record the managed Multica bridge, read-only version and migration state, manual upgrade boundary |
 | [0078](0078-multica-daemon-detection-without-pid-file.md) | Accepted; device probe passed, end-to-end acceptance pending | Detect the Multica guest daemon without a pid file |
 | [0079](0079-install-multica-daemon-detection-fix.md) | Accepted; installed on one Mac, publication pending | Install the Multica daemon-detection fix as desktop 1.1.7 (97) |
-| [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; source verified, device acceptance pending | The desktop session-list scan prunes conversation views |
-| [0081](0081-paired-release-1-1-8.md) | Accepted; publication and installation pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
+| [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; shipped in 1.1.8 on three Macs, device send acceptance pending | The desktop session-list scan prunes conversation views |
+| [0081](0081-paired-release-1-1-8.md) | Accepted; published and installed on three Macs; provider send acceptance pending | Publish Apple 1.1.8 (98) and install it on the three Macs |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

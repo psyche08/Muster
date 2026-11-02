@@ -1,7 +1,7 @@
 # ADR 0075: A Claude conversation without a CLI session hides no other
 
 - Date: 2026-10-31
-- Status: Accepted; fix not yet installed on the affected Mac
+- Status: Accepted; fix installed on three Macs in desktop 1.1.8 (98); phone send acceptance pending
 - Related: [ADR 0039](0039-exact-session-navigation.md),
   [ADR 0040](0040-desktop-navigation-identity.md), ARCHITECTURE §3.6.2
 
@@ -76,5 +76,6 @@ failing until a build with this fix is installed there.
 - Against the owner's real registry (read only), this build resolves the
   failing session to `("DeepSeek harness 支持", unique)` and to its desktop
   identity `local_9b086275…`. Both were `None` before the change.
-- Not done: installing this build on the affected Mac and repeating a phone
-  send.
+- Not done: repeating a phone send on an installed build. Desktop 1.1.8 (98)
+  contains this change and was installed on all three Macs on 2026-11-02
+  (ADR 0081), including the Mac that held the failing registry entry.
