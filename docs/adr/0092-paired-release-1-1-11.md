@@ -1,7 +1,7 @@
 # ADR 0092: Publish Apple 1.1.11 (101) and install it on the three Macs
 
 - Date: 2026-11-02
-- Status: Accepted; publication and installation pending
+- Status: Accepted; published; installation via the signed feed and per-Mac verification pending
 - Related: [ADR 0091](0091-prune-conversation-views-only-where-separate.md),
   [ADR 0089](0089-paired-release-1-1-10.md),
   [ADR 0088](0088-unattended-desktop-updates.md),
@@ -76,3 +76,59 @@ hashes and signature, iOS archive and profile, published pages/manifest/feed
 read back over HTTPS with cache headers, and per-Mac installation state (manual
 or unattended) with unchanged identity. Unverified items are stated as such; no
 real conversation is used as a release test.
+
+### Source, build and signing — 2026-11-02
+
+- The only built source was the merge commit of PR 95,
+  `d2246e4841cc0332a955f759b74044aeed98625a`; the release worktree was a clean
+  detached checkout of it. The Cargo release build (daemon, CLI, relay, browser
+  host), the Apple FFI archive (macOS, iOS device, iOS simulator) and the Xcode
+  Release app all succeeded.
+- The built daemon carried exactly one `MUSTER-BUILD-COMMIT:d2246e48…` stamp;
+  `verify-release.sh` reported the release ancestry and shipped fingerprints
+  verified, and presence signing verified for `89LGY6BD53.dev.linsheng.muster`.
+- Notarization `4dae3ad1-562b-4cff-a220-8a2d7ea63f25` returned `Accepted`;
+  stapling, strict `codesign --verify --deep`, and `spctl` (`accepted,
+  source=Notarized Developer ID`) passed on the packed bundle.
+- Desktop portable ZIP SHA-256:
+  `b86abd77cb91640e06561bb22a7d434d5be1625f993bb7181097964be4135426`.
+  Packaged daemon SHA-256:
+  `79a03ef8ab03163f410fd1089992d12dc1e2c8a00dae7b9bf9d281982c5abf8f`.
+  The bundle's `sq.version` reports 1.1.11.
+- The paired iOS archive built as 1.1.11 (101), team `89LGY6BD53`,
+  development-signed for three registered devices (profile expires 2027-09-30,
+  `get-task-allow`). No App Store export and no TestFlight upload were made.
+  OTA IPA SHA-256:
+  `7d55887e25c262ca6473760ac072eeb234d1e2ae84707e7d5f1bd82e9484f31b`.
+
+### Signed feed and publication — 2026-11-02
+
+- Velopack produced the portable and the full package
+  (`Muster-1.1.11-osx-arm64-full.nupkg`, SHA-256
+  `02c491d671ac9c597939b65abda95f3593ff8b7c21f2154574512a58127a3a1e`).
+  `sign-feed.py` signed `releases.osx-arm64.json` (SHA-256
+  `3dc72c79ef1717017c20a4976a8a3245e5064481cd88a7668bf08af16cd9a745`)
+  with the ADR 0088 key and reported `Verified OK`.
+- The publisher accepted 14 files and verified their hashes on the server
+  (`{"published_files":14,"mac_version":"1.1.11","ios_version":"1.1.11","build":"101","feed":"releases.osx-arm64.json","hashes_verified":true}`).
+  The package was published before the feed and its signature.
+- Read back over HTTPS: the root, `ios/` and `desktop/` pages equal the
+  generated page; the Mac portable and IPA match their SHA-256 values; the
+  manifest names build 101 and the hash-named IPA; the previous 1.1.10 manifest
+  resolves to the current one; the published feed signature verifies against
+  the public key compiled into the app, and the published full package matches
+  the feed's SHA-256 and size; pages, manifest, packages, feed and `SHA256SUMS`
+  carry `no-store, no-cache, must-revalidate, max-age=0`.
+- The OTA page now offers macOS 1.1.11 and the paired iOS build. No GitHub
+  Release, TestFlight upload or server prune was performed.
+
+### Installation — pending
+
+At publication time all three Macs were offline (they had installed 1.1.10
+unattended and were asleep), so no manual installation, daemon-hash check or
+identity verification was performed. They run 1.1.10, which trusts the ADR 0088
+feed, so the signed 1.1.11 update is the delivery path: each Mac installs it
+unattended when idle. Per-Mac version/build/identity confirmation after that
+remains open, and a reachable Mac is still installed and verified the normal
+way. Not verified: installation/identity on the three Macs, ADR 0091's live
+send acceptance, physical iPhone installation, and the server prune.
