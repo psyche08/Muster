@@ -1,7 +1,7 @@
 # ADR 0088: Unattended desktop updates and a new feed signing key
 
 - Date: 2026-11-02
-- Status: Accepted; implementation verified, device acceptance pending
+- Status: Accepted; signed feed published with 1.1.10, unattended update pending
 - Related: [DESKTOP_UPDATES](../DESKTOP_UPDATES.md),
   [ADR 0085](0085-paired-release-1-1-9.md),
   [ADR 0084](0084-keep-awake-menu.md)
@@ -106,7 +106,13 @@ lets Velopack replace the bundle. Two things kept it from ever running:
   package's app has the notarized portable's CDHash
   (`717848ca727340952e7a967bd7e5cff22a56fd9c`).
 
+### First signed feed — 2026-11-02
+
+[ADR 0089](0089-paired-release-1-1-10.md) published 1.1.10 (100) with the
+first feed signed by the new key; its public signature verifies against the
+committed public key and its package holds the notarized app. 1.1.10 was
+installed by hand on the three Macs.
+
 ### Not yet verified
 
-A published 1.1.10 with a signed feed, its manual installation, and an
-unattended update from 1.1.10 to a later release on the three Macs.
+An unattended update from 1.1.10 to a later release on the three Macs.

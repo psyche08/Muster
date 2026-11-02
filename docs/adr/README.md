@@ -163,8 +163,8 @@ records a specific decision and does not revive code on its delete list.
 | [0085](0085-paired-release-1-1-9.md) | Accepted; published and installed on three Macs | Publish Apple 1.1.9 (99) and install it on the three Macs |
 | [0086](0086-dsh-session-chrome-and-trace.md) | Accepted; macOS/iOS builds and synthetic rendering verified, device interaction pending | DSH-style session header/tabs, a turn-grouped trace page with time overview and inspector, and a third DeepSeek conversation style |
 | [0087](0087-idle-compaction-on-a-locked-or-busy-mac.md) | Accepted; device acceptance pending | Idle compaction on a locked Mac through an unattended Locked Use lease, and with a top-right notice while the Mac is in use |
-| [0088](0088-unattended-desktop-updates.md) | Accepted; implementation verified, device acceptance pending | Unattended desktop updates through the signed Velopack feed, with a new feed signing key |
-| [0089](0089-paired-release-1-1-10.md) | Accepted; publication and installation pending | Publish Apple 1.1.10 (100) and install it on the three Macs |
+| [0088](0088-unattended-desktop-updates.md) | Accepted; signed feed published with 1.1.10, unattended update pending | Unattended desktop updates through the signed Velopack feed, with a new feed signing key |
+| [0089](0089-paired-release-1-1-10.md) | Accepted; published, on GitHub and installed on three Macs | Publish Apple 1.1.10 (100) and install it on the three Macs |
 | [0090](0090-reuse-transcript-heads-between-rescans.md) | Accepted; implementation verified, installed acceptance pending | Reuse parsed transcript heads between catalog rescans, so the session list updates without a 2 s scan |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
