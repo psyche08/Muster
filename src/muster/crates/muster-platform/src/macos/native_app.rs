@@ -394,6 +394,7 @@ fn scan_sidebar(
     use muster_agent::profile::SessionList;
     let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
+    let mut conversation_views = 0usize;
     let app_walk = app.walk_pruned_report(|node| {
         let id = node
             .string("AXIdentifier")
@@ -415,6 +416,18 @@ fn scan_sidebar(
             }
             return true;
         };
+        // The session list is chrome, never a conversation's transcript, and
+        // the same rule already keeps the session scan out of those views
+        // (ADR 0056). A transcript read can fail while the app rebuilds it,
+        // which stops `walk_pruned_report` at that node before the sidebar is
+        // reached; pruning the view keeps the sidebar walk on the chrome.
+        if node.role() == "AXWebArea" {
+            let key = WebAreaKey::of(node);
+            if !muster_agent::native_scan::descend_web_area(resolver(&key).is_some()) {
+                conversation_views += 1;
+                return false;
+            }
+        }
         if id == "app-shell-sidebar"
             || (landmarks
                 && matches!(
@@ -434,7 +447,7 @@ fn scan_sidebar(
     let mut complete = app_walk.1 == "complete";
     let navigation_count = navigation.len();
     trace.record(format_args!(
-        "navigation_areas={navigation_count} app_walk={app_walk:?} (nodes, stop, ms)"
+        "navigation_areas={navigation_count} conversation_views={conversation_views} app_walk={app_walk:?} (nodes, stop, ms)"
     ));
     let mut candidates = Vec::new();
     let mut rows = 0usize;
