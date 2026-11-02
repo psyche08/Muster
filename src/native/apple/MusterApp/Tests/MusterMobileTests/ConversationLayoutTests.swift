@@ -62,7 +62,7 @@ final class ConversationLayoutTests: XCTestCase {
             for attachmentLimit in [UInt32(0), 4] {
                 var chat = vm.chat
                 chat.attachmentCountLimit = attachmentLimit
-                for style in [ConversationStyle.codex, .claude] {
+                for style in ConversationStyle.allCases {
                     let composer = UIHostingController(rootView: ChatComposer(core: core, chat: chat)
                         .environment(\.conversationStyle, style))
                     let size = composer.sizeThatFits(in: CGSize(width: width - 24, height: 500))

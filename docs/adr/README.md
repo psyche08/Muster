@@ -161,6 +161,7 @@ records a specific decision and does not revive code on its delete list.
 | [0083](0083-idle-compaction.md) | Accepted; device acceptance pending | Opt-in `/compact` for Claude Code conversations idle 30-60 minutes |
 | [0084](0084-keep-awake-menu.md) | Accepted; local dev build verified, release pending | Keep Awake and Keep Screen On in the Mac app menu, through `caffeinate` |
 | [0085](0085-paired-release-1-1-9.md) | Accepted; release pending | Publish Apple 1.1.9 (99) and install it on the three Macs |
+| [0086](0086-dsh-session-chrome-and-trace.md) | Accepted; macOS/iOS builds and synthetic rendering verified, device interaction pending | DSH-style session header/tabs, a turn-grouped trace page with time overview and inspector, and a third DeepSeek conversation style |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

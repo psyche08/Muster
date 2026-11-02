@@ -451,6 +451,13 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                ConversationStylePicker()
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Conversation rendering style. It is a local display preference: it does not select an agent or change authorization.")
+            }
             #if os(iOS)
             Section {
                 LayoutPicker()
