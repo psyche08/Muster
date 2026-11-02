@@ -103,6 +103,11 @@ pub enum SessionList {
         /// A row's name can carry its status ("Idle"); its one standalone
         /// text is then its title.
         standalone_title: bool,
+        /// Whether a conversation is its own web area beside the app shell,
+        /// so the sidebar walk can skip those views (ADR 0080). False for an
+        /// app whose one web area holds both the session list and the open
+        /// conversation (ADR 0091): skipping it would hide the sidebar too.
+        separate_conversation_views: bool,
         /// The control that lists older sessions, pressed when the session
         /// is not among the rows shown.
         more: Option<More>,
@@ -1075,6 +1080,34 @@ mod tests {
         ] {
             assert!(!more.matches(name), "{name}");
         }
+    }
+
+    /// Only an app whose conversation is a separate web area may have that
+    /// view skipped while the session list is looked up (ADR 0080/0091).
+    #[test]
+    fn only_separate_conversation_views_are_pruned() {
+        let SessionList::Sidebar {
+            separate_conversation_views: claude,
+            ..
+        } = CLAUDE.sessions
+        else {
+            unreachable!()
+        };
+        assert!(
+            claude,
+            "Claude.app keeps the shell and each conversation apart"
+        );
+        let SessionList::Sidebar {
+            separate_conversation_views: codex,
+            ..
+        } = CODEX.sessions
+        else {
+            unreachable!()
+        };
+        assert!(
+            !codex,
+            "ChatGPT.app exposes the sidebar inside the conversation's web area"
+        );
     }
 
     /// A placeholder echo or blank value is no draft.

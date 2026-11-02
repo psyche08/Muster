@@ -413,7 +413,12 @@ fn scan_sidebar(
             .or_else(|| node.string("AXDOMIdentifier"))
             .unwrap_or_default();
         let subrole = text(node, "AXSubrole");
-        let SessionList::Sidebar { landmarks, .. } = sessions else {
+        let SessionList::Sidebar {
+            landmarks,
+            separate_conversation_views,
+            ..
+        } = sessions
+        else {
             // No landmark: rows are found from their title text inside the
             // main window's page.
             let main = node.role() == "AXWebArea"
@@ -433,7 +438,11 @@ fn scan_sidebar(
         // (ADR 0056). A transcript read can fail while the app rebuilds it,
         // which stops `walk_pruned_report` at that node before the sidebar is
         // reached; pruning the view keeps the sidebar walk on the chrome.
-        if node.role() == "AXWebArea" {
+        // Only an app whose conversation views are separate web areas may be
+        // pruned: in ChatGPT.app the session list lives inside the open
+        // conversation's single web area, so pruning it hides the sidebar
+        // (ADR 0091).
+        if separate_conversation_views && node.role() == "AXWebArea" {
             let key = WebAreaKey::of(node);
             if !muster_agent::native_scan::descend_web_area(resolver(&key).is_some()) {
                 conversation_views += 1;

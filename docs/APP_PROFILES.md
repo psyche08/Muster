@@ -220,7 +220,7 @@ else the description, which finds a Chromium button labelled only by
 
 | `kind` | Fields | Meaning |
 |---|---|---|
-| `sidebar` | `landmarks` (navigation and complementary landmarks list sessions too), `standalone_title` (one exact title with recognized status/delegation metadata; incomplete or ambiguous labels refuse selection), `more` (`prefix`, `suffix`: the control that lists older sessions, named `<prefix><count><suffix>`) | Rows in the app shell's sidebar |
+| `sidebar` | `landmarks` (navigation and complementary landmarks list sessions too), `standalone_title` (one exact title with recognized status/delegation metadata; incomplete or ambiguous labels refuse selection), `separate_conversation_views` (each conversation is its own web area beside the app shell, so the sidebar walk may skip those views; false when one web area holds both the list and the conversation), `more` (`prefix`, `suffix`: the control that lists older sessions, named `<prefix><count><suffix>`) | Rows in the app shell's sidebar |
 | `page-rows` | none | Pressable rows of the main window's page, found from the text reading the title |
 
 ### `[chat]`: the app's Chat mode (optional)

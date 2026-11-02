@@ -238,6 +238,7 @@ struct SessionsSpec {
     kind: String,
     landmarks: Option<bool>,
     standalone_title: Option<bool>,
+    separate_conversation_views: Option<bool>,
     more: Option<MoreSpec>,
 }
 
@@ -676,21 +677,27 @@ pub static {name}_CLOUD: Cloud = Cloud {{
                     None => "None".into(),
                 };
                 format!(
-                    "SessionList::Sidebar {{ landmarks: {}, standalone_title: {}, more: {more} }}",
+                    "SessionList::Sidebar {{ landmarks: {}, standalone_title: {}, separate_conversation_views: {}, more: {more} }}",
                     spec.sessions
                         .landmarks
                         .unwrap_or_else(|| at.fail("sessions.landmarks is required for a sidebar")),
                     spec.sessions.standalone_title.unwrap_or_else(
                         || at.fail("sessions.standalone_title is required for a sidebar")
                     ),
+                    spec.sessions
+                        .separate_conversation_views
+                        .unwrap_or_else(|| at.fail(
+                            "sessions.separate_conversation_views is required for a sidebar"
+                        )),
                 )
             }
             "page-rows" => {
                 if spec.sessions.landmarks.is_some()
                     || spec.sessions.standalone_title.is_some()
+                    || spec.sessions.separate_conversation_views.is_some()
                     || spec.sessions.more.is_some()
                 {
-                    at.fail("page-rows sessions take no landmarks, standalone_title or more");
+                    at.fail("page-rows sessions take no landmarks, standalone_title, separate_conversation_views or more");
                 }
                 "SessionList::PageRows".into()
             }

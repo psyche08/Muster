@@ -1,8 +1,11 @@
 # ADR 0080: The desktop session-list scan prunes conversation views
 
 - Date: 2026-11-02
-- Status: Accepted; shipped in desktop 1.1.8 (98) on three Macs; device send acceptance pending
-- Related: [ADR 0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md),
+- Status: Accepted; shipped in desktop 1.1.8 (98) on three Macs; refined by
+  [ADR 0091](0091-prune-conversation-views-only-where-separate.md) (pruning is
+  per-profile data: Claude yes, ChatGPT no); device send acceptance pending
+- Related: [ADR 0091](0091-prune-conversation-views-only-where-separate.md),
+  [ADR 0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md),
   [ADR 0040](0040-desktop-navigation-identity.md),
   [ADR 0075](0075-claude-registry-entries-without-cli-session.md),
   [ADR 0076](0076-paired-release-1-1-6.md),
