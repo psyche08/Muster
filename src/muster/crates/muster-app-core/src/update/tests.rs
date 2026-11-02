@@ -2447,3 +2447,51 @@ fn formatted_queue_accounting_keeps_old_occurrences_and_unknown_outcomes_separat
     admitted::settle(&mut state);
     assert!(admitted_rows(&state).is_empty());
 }
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[tokio::test]
+async fn automatic_updates_follow_the_shell_choice_and_ignore_stale_ticks() {
+    use app::desktop_update_action::Action;
+    let (_dir, ctx, mut state) = phone().await;
+    state.desktop_update.supported = true;
+    let act = |action: Action| app::DesktopUpdateAction {
+        action: action as i32,
+    };
+    network::desktop_update_intent(&mut state, &ctx, act(Action::AutoOn));
+    assert!(state.desktop_update.automatic);
+    let first = state.auto_update.generation;
+    assert!(state.auto_update.next_check.is_some());
+    // Repeating the stored choice at launch does not start a second loop.
+    network::desktop_update_intent(&mut state, &ctx, act(Action::AutoOn));
+    assert_eq!(state.auto_update.generation, first);
+    network::desktop_update_intent(&mut state, &ctx, act(Action::AutoOff));
+    assert!(!state.desktop_update.automatic);
+    assert!(state.auto_update.next_check.is_none());
+    // A tick from the earlier loop finds nothing to do.
+    network::msg_update_tick(&mut state, &ctx, first);
+    assert_eq!(state.desktop_update.status, "idle");
+    assert!(state.desktop_update.can_check);
+}
+
+#[test]
+fn an_unattended_update_may_restart_behind_a_locked_screen_but_not_the_cover() {
+    let mut state = State::new(false, Some("local".into()));
+    let info = |locked, covered| v1::DeviceInfo {
+        state: Some(v1::DeviceState {
+            locked,
+            covered,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    state.self_info = Some(info(true, false));
+    assert!(state.can_update_unattended());
+    assert!(!state.can_restart_desktop());
+    state.self_info = Some(info(false, false));
+    assert!(state.can_restart_desktop());
+    state.self_info = Some(info(false, true));
+    assert!(!state.can_update_unattended());
+    state.self_info = Some(info(true, false));
+    state.busy = 1;
+    assert!(!state.can_update_unattended());
+}

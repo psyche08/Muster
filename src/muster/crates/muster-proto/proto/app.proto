@@ -85,7 +85,9 @@ message Intent {
 }
 
 message DesktopUpdateAction {
-  enum Action { CHECK = 0; DOWNLOAD = 1; INSTALL = 2; }
+  // AUTO_ON/AUTO_OFF carry the shell's stored preference for unattended
+  // updates; Shared Rust owns when to check, download and install.
+  enum Action { CHECK = 0; DOWNLOAD = 1; INSTALL = 2; AUTO_ON = 3; AUTO_OFF = 4; }
   Action action = 1;
 }
 message DesktopUpdateView {
@@ -96,6 +98,7 @@ message DesktopUpdateView {
   bool can_check = 5;
   bool can_download = 6;
   bool can_install = 7;
+  bool automatic = 8;
 }
 message DesktopSetupAction {
   enum Action { SHOW = 0; DISMISS = 1; INSTALL = 2; ITERM = 3; CHECK = 4; RESTART = 5; }

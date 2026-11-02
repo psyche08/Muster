@@ -25,13 +25,27 @@ but stopped iTerm2 remains a distinct observation.
 
 ## Upgrade protocol
 
-- Settings → Muster Updates: check, download, install and restart explicitly.
+- Settings → Muster Updates: check, download, install and restart explicitly,
+  or leave **Automatic updates** on (the default; ADR 0088). The shell stores
+  only that choice and sends it to Shared Rust, which then checks two minutes
+  after launch and every six hours, downloads an available update at once, and
+  installs it through the same lease when nobody has used this Mac's keyboard
+  or pointer for 15 minutes and no send, terminal, Locked Use or privacy cover
+  is active. A locked screen does not block it. An unattended install that
+  fails after stopping the service waits for the next check.
 - Fixed source: `https://linsheng.dev:8443/muster/desktop/`.
 - Separate `osx-arm64`, `osx-x64`, `win-arm64`, `win-x64` channels.
 - `releases.CHANNEL.json` and `.json.sig`: P-256/SHA-256 signature over
   `UTF8(filename) + LF + exact JSON bytes`. Public key is compiled in
   `muster-app-core/src/desktop_update/release-public.pem`. The private release
-  key stays on the publisher; it must never be uploaded with artifacts.
+  key stays on the release Mac, outside the repository, at
+  `~/.config/muster-release/desktop-feed-key.pem` (mode 0600); it must never be
+  uploaded with artifacts. Sign with
+  `src/muster/deploy/desktop/sign-feed.py <velopack-out>/releases.osx-arm64.json
+  --key ~/.config/muster-release/desktop-feed-key.pem`, which checks every
+  listed package and verifies the result against the compiled public key. The
+  key was replaced on 2026-11-02 (ADR 0088): builds before 1.1.10 trust the
+  previous key and can only be updated by installing a portable.
 - DoH only, verified HTTPS, no system DNS fallback/proxy/redirect, 3-second
   connect deadline, bounded feed/signature/package size. Full packages only.
 - Require package ID Muster, a plain filename, SHA256 and exact byte size.
@@ -249,8 +263,14 @@ daemon, so a cross-device send is not reachable this way.
 Release destination (confirmed 2026-09-30): connect as `${MUSTER_RELEASE_HOST}`
 over SSH port `${MUSTER_RELEASE_SSH_PORT}` and publish to `${MUSTER_RELEASE_ROOT}/desktop/`, served at
 the fixed HTTPS source above. Subsequent Mac releases use this distribution
-path. The publisher keeps only the latest installable release. Verify public
-downloads and any current feed signatures after publishing. The separate iOS OTA directory is
+path. The publisher keeps only the latest installable release. Each notarized
+Mac release also publishes its Velopack update: first the
+`Muster-<version>-osx-arm64-full.nupkg` from the same `vpk pack` run as the
+portable (its app must have the notarized portable's CDHash, so the bytes it
+installs are the notarized ones even though the ticket is stapled only to the
+portable), then
+`releases.osx-arm64.json` and its `.sig`. Verify public downloads and the feed
+signature after publishing. The separate iOS OTA directory is
 `${MUSTER_RELEASE_ROOT}/ios/`; it must not be overwritten by desktop packaging.
 The unified download page is `https://linsheng.dev:8443/muster/`. Its source is
 `package-ota.py`'s generated `index.html`, which includes both the Apple-silicon

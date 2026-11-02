@@ -211,17 +211,90 @@ pub(super) fn desktop_update_intent(
                     "请先结束当前发送、终端连接或 Locked Use，再安装更新。".into();
                 return;
             }
-            state.desktop_update.error.clear();
-            state.desktop_update.status = "waiting".into();
-            state.desktop_update.can_check = false;
-            state.desktop_update.can_install = false;
-            let client = ctx.backend.local();
-            spawn(ctx, async move {
-                Msg::UpdateLease(crate::desktop_update::Lease::acquire(client).await)
-            });
+            begin_update_install(state, ctx);
+        }
+        Ok(Action::AutoOn) if !state.desktop_update.automatic => {
+            state.desktop_update.automatic = true;
+            let schedule = &mut state.auto_update;
+            schedule.generation += 1;
+            schedule.install_failed = false;
+            let first = crate::desktop_update::auto::FIRST_CHECK;
+            schedule.next_check = Some(std::time::Instant::now() + first);
+            schedule_update_tick(ctx, schedule.generation, first);
+        }
+        Ok(Action::AutoOff) if state.desktop_update.automatic => {
+            state.desktop_update.automatic = false;
+            state.auto_update.generation += 1;
+            state.auto_update.next_check = None;
         }
         _ => {}
     }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn begin_update_install(state: &mut State, ctx: &Ctx) {
+    state.desktop_update.error.clear();
+    state.desktop_update.status = "waiting".into();
+    state.desktop_update.can_check = false;
+    state.desktop_update.can_install = false;
+    let client = ctx.backend.local();
+    spawn(ctx, async move {
+        Msg::UpdateLease(crate::desktop_update::Lease::acquire(client).await)
+    });
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn schedule_update_tick(ctx: &Ctx, generation: u64, after: std::time::Duration) {
+    spawn(ctx, async move {
+        tokio::time::sleep(after).await;
+        Msg::UpdateTick(generation)
+    });
+}
+
+/// Takes the next unattended step, if one is due, through the same actions
+/// as the Settings buttons.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn advance_auto_update(state: &mut State, ctx: &Ctx) {
+    use crate::desktop_update::auto;
+    use app::desktop_update_action::Action;
+    if !state.desktop_update.supported || !state.desktop_update.automatic {
+        return;
+    }
+    let now = std::time::Instant::now();
+    let seen = auto::Observed {
+        can_check: state.desktop_update.can_check,
+        can_download: state.desktop_update.can_download && state.update_candidate.is_some(),
+        can_install: state.desktop_update.can_install && state.update_prepared.is_some(),
+        quiet: state.can_update_unattended(),
+        idle: auto::user_idle(),
+    };
+    match auto::step(&state.auto_update, now, &seen) {
+        auto::Step::Check => {
+            state.auto_update.next_check = Some(now + auto::CHECK_EVERY);
+            state.auto_update.install_failed = false;
+            desktop_update_intent(state, ctx, action(Action::Check));
+        }
+        auto::Step::Download => desktop_update_intent(state, ctx, action(Action::Download)),
+        auto::Step::Install => {
+            log::info!("installing the downloaded update unattended");
+            begin_update_install(state, ctx);
+        }
+        auto::Step::Wait => {}
+    }
+    fn action(action: Action) -> app::DesktopUpdateAction {
+        app::DesktopUpdateAction {
+            action: action as i32,
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub(super) fn msg_update_tick(state: &mut State, ctx: &Ctx, generation: u64) {
+    if generation != state.auto_update.generation || !state.desktop_update.automatic {
+        return;
+    }
+    advance_auto_update(state, ctx);
+    schedule_update_tick(ctx, generation, crate::desktop_update::auto::TICK);
 }
 
 pub(super) fn intent_open_browser(state: &mut State, ctx: &Ctx, open: app::OpenBrowser) {
@@ -674,6 +747,7 @@ pub(super) fn intent_set_push_token(state: &mut State, ctx: &Ctx, t: app::SetPus
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(super) fn msg_update_checked(
     state: &mut State,
+    ctx: &Ctx,
     result: Result<Option<crate::desktop_update::Candidate>, String>,
 ) {
     state.desktop_update.can_check = true;
@@ -690,11 +764,13 @@ pub(super) fn msg_update_checked(
             state.desktop_update.error = e;
         }
     }
+    advance_auto_update(state, ctx);
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(super) fn msg_update_downloaded(
     state: &mut State,
+    ctx: &Ctx,
     result: Result<crate::desktop_update::Prepared, String>,
 ) {
     state.desktop_update.can_check = true;
@@ -709,6 +785,7 @@ pub(super) fn msg_update_downloaded(
             state.desktop_update.error = e;
         }
     }
+    advance_auto_update(state, ctx);
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -742,6 +819,7 @@ pub(super) fn msg_update_applied(state: &mut State, ctx: &Ctx, result: Result<()
     state.update_lease = None;
     let exit = result.is_ok();
     if let Err(e) = result {
+        state.auto_update.install_failed = true;
         state.desktop_update.error = e;
         state.desktop_update.status = "error".into();
         state.desktop_update.can_check = true;
