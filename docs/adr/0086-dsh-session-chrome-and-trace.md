@@ -121,8 +121,9 @@ Separate source/tests, build, rendering and device acceptance states:
   `libmuster_ffi.a`) succeeds with the new chrome, trace page and third style.
   The trace model is pure Foundation + MusterCore, so tests can run without
   SwiftUI.
-- Tests: the macOS `MusterCoreTests` suite ran on 2026-11-02 with 103 tests and
-  0 failures, including the new `TraceModelTests` (20 cases: turn grouping,
+- Tests: the macOS `MusterCoreTests` suite ran on 2026-11-02 with 107 tests and
+  0 failures after merging current main, including the new `TraceModelTests`
+  (20 cases: turn grouping,
   before-first-turn section, search/filtering, sequence and timed timeline
   layout, missing/duplicate timings, turn boundaries, error/running flags and
   duration/start-time formatting) and `SessionChromeRenderingTests` (renders the
