@@ -62,6 +62,8 @@ pub enum Msg {
     UpdateApplied(Result<(), String>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     UpdateLease(Result<crate::desktop_update::Lease, String>),
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    UpdateTick(u64),
     BrowserStatus {
         device: String,
         result: Result<v1::BrowserStatus, Error>,
@@ -471,9 +473,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             result,
         } => code_runs::received(state, ctx, device, session, provider, result),
         #[cfg(any(target_os = "macos", target_os = "windows"))]
-        Msg::UpdateChecked(result) => network::msg_update_checked(state, result),
+        Msg::UpdateChecked(result) => network::msg_update_checked(state, ctx, result),
         #[cfg(any(target_os = "macos", target_os = "windows"))]
-        Msg::UpdateDownloaded(result) => network::msg_update_downloaded(state, result),
+        Msg::UpdateDownloaded(result) => network::msg_update_downloaded(state, ctx, result),
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        Msg::UpdateTick(generation) => network::msg_update_tick(state, ctx, generation),
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         Msg::UpdateLease(result) => network::msg_update_lease(state, ctx, result),
         #[cfg(any(target_os = "macos", target_os = "windows"))]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Sign a Velopack feed with an offline P-256 release key; never copy the key."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -14,14 +15,23 @@ if args.feed.name not in {f'releases.{p}.json' for p in ('osx-arm64', 'osx-x64',
     parser.error('expected a platform/architecture release feed')
 data = args.feed.read_bytes()
 feed = json.loads(data)
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as f:
+        for block in iter(lambda: f.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 # Only full packages are allowed by the updater. Publish packages before feed.
-import hashlib
 for asset in feed['Assets']:
     name = asset['FileName']
     if Path(name).name != name or '/' in name or '\\' in name or asset['PackageId'] != 'Muster' or asset['Type'] != 'Full':
         parser.error('unexpected update asset')
     package = args.feed.parent / name
-    if package.stat().st_size != asset['Size'] or hashlib.file_digest(package.open('rb'), 'sha256').hexdigest().lower() != asset['SHA256'].lower():
+    if package.stat().st_size != asset['Size'] or sha256(package) != asset['SHA256'].lower():
         parser.error('package size/checksum mismatch')
 with tempfile.TemporaryDirectory(prefix='muster-feed-') as directory:
     payload = Path(directory) / 'payload'

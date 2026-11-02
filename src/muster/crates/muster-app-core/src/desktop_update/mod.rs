@@ -1,5 +1,6 @@
 //! Shared desktop updater. Velopack owns bundle replacement; Muster owns
 //! network policy, signed-feed validation, downgrade policy and UI state.
+pub mod auto;
 use p256::{
     ecdsa::{Signature, VerifyingKey, signature::Verifier},
     pkcs8::DecodePublicKey,

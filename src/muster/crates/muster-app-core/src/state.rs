@@ -246,6 +246,8 @@ pub struct State {
     pub update_prepared: Option<std::sync::Arc<crate::desktop_update::Prepared>>,
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub update_lease: Option<crate::desktop_update::Lease>,
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    pub auto_update: crate::desktop_update::auto::Schedule,
     pub desktop_restart_required: bool,
     pub desktop_permissions: Option<[Option<bool>; 3]>,
     pub desktop_setup_dismissed: bool,
@@ -356,6 +358,8 @@ impl State {
             update_prepared: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             update_lease: None,
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            auto_update: Default::default(),
             desktop_restart_required: false,
             desktop_permissions: None,
             desktop_setup_dismissed: false,
@@ -459,6 +463,18 @@ impl State {
     }
 
     pub fn can_restart_desktop(&self) -> bool {
+        self.can_update_unattended()
+            && self
+                .self_info
+                .as_ref()
+                .and_then(|i| i.state.as_ref())
+                .is_some_and(|s| !s.locked)
+    }
+
+    /// The restart guards without the screen-lock condition: an unattended
+    /// update may restart Muster behind a locked screen, never under the
+    /// privacy cover or during a send, terminal or Locked Use.
+    pub fn can_update_unattended(&self) -> bool {
         !self.embedded
             && self.busy == 0
             && self.presence.is_none()
@@ -472,7 +488,7 @@ impl State {
                 .self_info
                 .as_ref()
                 .and_then(|i| i.state.as_ref())
-                .is_some_and(|s| !s.locked && !s.covered)
+                .is_some_and(|s| !s.covered)
     }
 
     pub fn has_network(&self) -> bool {

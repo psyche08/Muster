@@ -481,13 +481,26 @@ struct SettingsView: View {
             }
             #endif
             if vm.desktopUpdate.supported {
-                Section("Muster 更新") {
+                Section {
+                    Toggle("自动更新", isOn: Binding(
+                        get: { vm.desktopUpdate.automatic },
+                        set: { on in
+                            UserDefaults.standard.set(on, forKey: AutoUpdatePreference.key)
+                            core.desktopUpdate(on ? .autoOn : .autoOff)
+                        }
+                    ))
                     Text(updateStatus(vm.desktopUpdate.status))
                     if !vm.desktopUpdate.version.isEmpty { Text("新版本：\(vm.desktopUpdate.version)") }
                     if !vm.desktopUpdate.error.isEmpty { Text(vm.desktopUpdate.error).foregroundStyle(.red).textSelection(.enabled) }
                     if vm.desktopUpdate.canCheck { Button("检查更新") { core.desktopUpdate(.check) } }
                     if vm.desktopUpdate.canDownload { Button("下载更新") { core.desktopUpdate(.download) } }
                     if vm.desktopUpdate.canInstall { Button("安装并重启 Muster") { core.desktopUpdate(.install) } }
+                } header: {
+                    Text("Muster 更新")
+                } footer: {
+                    if vm.desktopUpdate.automatic {
+                        Text("每 6 小时检查一次签名更新并自动下载；这台 Mac 15 分钟无人操作、没有发送、终端连接或 Locked Use 时自动安装并重启 Muster，锁屏时也会进行。")
+                    }
                 }
             }
             if vm.multica.supported && !vm.embedded {

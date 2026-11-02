@@ -687,11 +687,15 @@ public nonisolated struct Muster_App_DesktopUpdateAction: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// AUTO_ON/AUTO_OFF carry the shell's stored preference for unattended
+  /// updates; Shared Rust owns when to check, download and install.
   public nonisolated enum Action: SwiftProtobuf.Enum, Swift.CaseIterable {
     public typealias RawValue = Int
     case check // = 0
     case download // = 1
     case install // = 2
+    case autoOn // = 3
+    case autoOff // = 4
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -703,6 +707,8 @@ public nonisolated struct Muster_App_DesktopUpdateAction: Sendable {
       case 0: self = .check
       case 1: self = .download
       case 2: self = .install
+      case 3: self = .autoOn
+      case 4: self = .autoOff
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -712,6 +718,8 @@ public nonisolated struct Muster_App_DesktopUpdateAction: Sendable {
       case .check: return 0
       case .download: return 1
       case .install: return 2
+      case .autoOn: return 3
+      case .autoOff: return 4
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -721,6 +729,8 @@ public nonisolated struct Muster_App_DesktopUpdateAction: Sendable {
       .check,
       .download,
       .install,
+      .autoOn,
+      .autoOff,
     ]
 
   }
@@ -746,6 +756,8 @@ public nonisolated struct Muster_App_DesktopUpdateView: Sendable {
   public var canDownload: Bool = false
 
   public var canInstall: Bool = false
+
+  public var automatic: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4368,12 +4380,12 @@ nonisolated extension Muster_App_DesktopUpdateAction: SwiftProtobuf.Message, Swi
 }
 
 nonisolated extension Muster_App_DesktopUpdateAction.Action: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHECK\0\u{1}DOWNLOAD\0\u{1}INSTALL\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHECK\0\u{1}DOWNLOAD\0\u{1}INSTALL\0\u{1}AUTO_ON\0\u{1}AUTO_OFF\0")
 }
 
 nonisolated extension Muster_App_DesktopUpdateView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopUpdateView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}status\0\u{1}version\0\u{1}error\0\u{3}can_check\0\u{3}can_download\0\u{3}can_install\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}status\0\u{1}version\0\u{1}error\0\u{3}can_check\0\u{3}can_download\0\u{3}can_install\0\u{1}automatic\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4388,6 +4400,7 @@ nonisolated extension Muster_App_DesktopUpdateView: SwiftProtobuf.Message, Swift
       case 5: try { try decoder.decodeSingularBoolField(value: &self.canCheck) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.canDownload) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.canInstall) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.automatic) }()
       default: break
       }
     }
@@ -4415,6 +4428,9 @@ nonisolated extension Muster_App_DesktopUpdateView: SwiftProtobuf.Message, Swift
     if self.canInstall != false {
       try visitor.visitSingularBoolField(value: self.canInstall, fieldNumber: 7)
     }
+    if self.automatic != false {
+      try visitor.visitSingularBoolField(value: self.automatic, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4426,6 +4442,7 @@ nonisolated extension Muster_App_DesktopUpdateView: SwiftProtobuf.Message, Swift
     if lhs.canCheck != rhs.canCheck {return false}
     if lhs.canDownload != rhs.canDownload {return false}
     if lhs.canInstall != rhs.canInstall {return false}
+    if lhs.automatic != rhs.automatic {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

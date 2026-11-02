@@ -90,6 +90,9 @@ public final class MusterModel: ObservableObject {
                 }
             )
             started = true
+            #if os(macOS)
+            core?.desktopUpdate(AutoUpdatePreference.enabled() ? .autoOn : .autoOff)
+            #endif
         } catch {
             startError = "\(error)"
         }
