@@ -175,6 +175,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0096](0096-question-editor-preparation.md) | Accepted; source verified, installed question acceptance pending | Rebind and refresh question editors during preparation |
 
+| [0098](0098-focused-question-field-deletion.md) | Accepted; source verified, device acceptance pending | Delete a proven question-editor selection through the application |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

@@ -3,6 +3,7 @@
 - Date: 2026-11-02
 - Status: Accepted; source verified, installed question acceptance pending
 - Related: ADR 0055, ADR 0056, ADR 0095; AGENT_INTERFACE.md user-confirmed answer delivery
+- Follow-up: [ADR 0098](0098-focused-question-field-deletion.md) replaces Codex field clearing after repeated installed failures; fresh binding and exact-answer retention remain.
 
 ## Context
 

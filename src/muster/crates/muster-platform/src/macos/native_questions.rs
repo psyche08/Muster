@@ -1041,7 +1041,7 @@ impl NativeAppController {
             CLEAR_DEADLINE, QuestionEditor, QuestionEditorWait, QuestionPreparation,
         };
         let step = Step::new("question answer field preparation", CLEAR_DEADLINE);
-        let mut wait = QuestionEditorWait::default();
+        let mut wait = QuestionEditorWait::for_provider(self.profile.app.provider);
         let mut previous: Option<Element> = None;
         loop {
             step.check()?;
@@ -1086,6 +1086,16 @@ impl NativeAppController {
             step.check()?;
             match decision {
                 QuestionPreparation::Ready { write } => return Ok(write.then(|| element.clone())),
+                QuestionPreparation::DeleteSelection => {
+                    let expected = value.as_deref().ok_or_else(|| {
+                        Error::Unavailable(
+                            "Question answer value is unreadable; no delete key sent".into(),
+                        )
+                    })?;
+                    self.delete_question_selection(
+                        pending, generation, question, element, expected, &step,
+                    )?;
+                }
                 QuestionPreparation::Clear(with) => {
                     self.check_question_control(pending, generation, element)?;
                     step.check()?;
@@ -1118,6 +1128,132 @@ impl NativeAppController {
             step.check()?;
             tokio::time::sleep(Duration::from_millis(50).min(step.remaining())).await;
         }
+    }
+
+    fn delete_question_selection(
+        &self,
+        pending: &PendingInteraction,
+        generation: u64,
+        question: &InteractionQuestion,
+        editor: &Element,
+        expected: &str,
+        step: &Step,
+    ) -> Result<(), Error> {
+        use muster_agent::{native_send::QuestionDeleteProof, questions::SubmitApplicationFocus};
+        let fresh = self.fresh_question_tree(pending, generation)?;
+        let same = fresh
+            .form_for(pending, question, self.profile)
+            .and_then(|f| f.editor)
+            .is_some_and(|i| fresh.nodes[i].element == *editor);
+        if !same {
+            return Err(Error::Conflict(
+                "Question editor changed; no delete key sent".into(),
+            ));
+        }
+        self.check_question_control(pending, generation, editor)?;
+        // Avoid AX walks after focus acquisition, as for guarded Submit Space.
+        let live = || -> Result<(), Error> {
+            step.check()?;
+            if user_input_generation() != generation {
+                return Err(Error::Conflict(
+                    "Local input changed; no delete key sent".into(),
+                ));
+            }
+            if !(self.question_source)()
+                .and_then(|s| s.find(&pending.id).cloned())
+                .is_some_and(|current| remaining_matches(pending, &current))
+            {
+                return Err(Error::Conflict(
+                    "Question changed; no delete key sent".into(),
+                ));
+            }
+            Ok(())
+        };
+        let focus = || {
+            let application = submit_application_focus(
+                self.app
+                    .element_result("AXFocusedUIElement")
+                    .map(|e| e == *editor),
+            );
+            let same_window = application == SubmitApplicationFocus::NotSupplied
+                && editor
+                    .element("AXWindow")
+                    .is_some_and(|w| self.app.element("AXFocusedWindow").as_ref() == Some(&w));
+            (
+                editor.bool("AXEnabled"),
+                editor.bool("AXFocused"),
+                application,
+                same_window,
+            )
+        };
+        live()?;
+        editor.set_bool("AXFocused", true).map_err(|code| {
+            Error::Unavailable(format!(
+                "Cannot focus question editor ({code}); no delete key sent"
+            ))
+        })?;
+        let started = Instant::now();
+        let mut sample = 0;
+        loop {
+            live()?;
+            let (enabled, focused, application, same_window) = focus();
+            let ready = muster_agent::questions::poll_focused_submit(
+                enabled,
+                focused,
+                application,
+                same_window,
+                sample,
+                started.elapsed(),
+            )
+            .map_err(|_| {
+                Error::Conflict("Question editor focus is unproven; no delete key sent".into())
+            })?;
+            if ready {
+                break;
+            }
+            sample += 1;
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        live()?;
+        editor
+            .set_range("AXSelectedTextRange", 0, expected.encode_utf16().count())
+            .map_err(|code| {
+                Error::Unavailable(format!(
+                    "Cannot select question answer ({code}); no delete key sent"
+                ))
+            })?;
+        let value = editor.string("AXValue");
+        let range = editor.range("AXSelectedTextRange");
+        let value_settable = editor.settable("AXValue");
+        let (enabled, focused, application, same_window) = focus();
+        let admission = muster_agent::native_send::admit_question_delete(
+            expected,
+            QuestionDeleteProof {
+                value: value.as_deref(),
+                selected_range: range,
+                value_settable,
+                enabled,
+                focused,
+                application,
+                same_focused_window: same_window,
+            },
+        );
+        log::info!(
+            "AX question delete proof admitted={} range={range:?} value_unchanged={} value_settable={value_settable} enabled={enabled:?} focused={focused:?} application={application:?} same_window={same_window}",
+            admission.is_ok(),
+            value.as_deref() == Some(expected)
+        );
+        admission?;
+        live()?;
+        // This edits a proven selection only. No Return or final Submit, and
+        // no automatic second key even if dispatch reports an error.
+        self.app.backspace().map_err(|code| {
+            Error::Unavailable(format!(
+                "Question draft deletion failed ({code}); no automatic retry"
+            ))
+        })?;
+        log::info!("AX question delete dispatched once; awaiting empty field");
+        Ok(())
     }
 
     fn submit_question_page(
