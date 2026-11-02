@@ -1,7 +1,7 @@
 # ADR 0095: Share AX navigation and reuse verified preparation
 
 - Date: 2026-11-02
-- Status: Accepted; local verification, App acceptance pending
+- Status: Accepted; installed Codex phone-send baseline verified; broader App acceptance pending
 - Related: ADR 0093, ADR 0045, ADR 0046, ADR 0062, ADR 0091
 - Partially supersedes: ADR 0039's sidebar-first restriction; exact native
   identity mapping and fresh destination verification remain required.
@@ -114,3 +114,39 @@ unlock or credential bypass was used. The raw artifact is superseded.
   one uniquely marked send was requested, with explicit instructions not to
   resend an unknown result. Installation and ready-state probes do not count
   as a provider send, duplicate check or successful relock-after-send test.
+
+### Phone send and cleanup evidence — 2026-11-02 (Asia/Shanghai)
+
+The owner sent the dedicated Codex App acceptance prompt from an enrolled
+phone on the installed `700870b6` build. At 21:26:36 the host issued and verified
+the operation's challenge/signature. At 21:26:39 it observed plugin consumption,
+Allow and unlock, then admitted the bound operation under the cover.
+
+Exact-ID navigation dispatched once and verified the target in 952 ms; native
+preparation took 1,096 ms. The trace records one successful Send press, followed
+by provider Admission and a durable `applied` ledger result at 21:26:41. A later
+read-only `agent_send_status` query, bound to the original operation/session/text,
+returned `APPLIED` with an empty unconfirmed token. No send/replay was issued by
+the verifier. History contains one marked user message and one exact expected
+assistant response (`MUSTER-AX-1102-CODEX-01-OK`), timestamped 21:26:44 and
+21:26:50 respectively. No duplicate was observed in the operation trace or
+returned history. Admission is distinguished from the later transcript reply.
+
+At 21:26:41 the owner logged provider-queue and AX-work drain, relocking under
+cover, `Relocking -> Idle` with `stop=Completed`, then display-guard release.
+A subsequent phone operation to a different Codex App session at 21:27:04–06
+also used one exact-ID navigation (840 ms), one successful Send press, an applied
+ledger result, drain, relock and cover release. These are two successive normal
+operation cycles with different sessions, not a stress or failure-injection run.
+
+The follow-up device query reports `locked=true`, `covered=false`, no active
+manual lease/owner and Locked Use setup ready. No watchdog process belonging to
+the installed bundle remains. Together with the operation's terminal-state
+ordering, this verifies cleanup for this run rather than merely observing an
+already locked console. The read-only evidence collection changed no policies,
+permissions or Keychain state.
+
+This accepts the Codex App normal phone-send/navigation/relock baseline on one
+Mac. Claude App, sustained multi-round load, cancellation/local takeover and
+physical multi-display coverage still require separate acceptance. It does not
+establish that every previously reported AX failure has been eliminated.
