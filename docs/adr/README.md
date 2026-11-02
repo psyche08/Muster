@@ -155,6 +155,7 @@ records a specific decision and does not revive code on its delete list.
 | [0077](0077-multica-runtime-state-and-manual-upgrade.md) | Accepted; device and end-to-end acceptance pending | Record the managed Multica bridge, read-only version and migration state, manual upgrade boundary |
 | [0078](0078-multica-daemon-detection-without-pid-file.md) | Accepted; device probe passed, end-to-end acceptance pending | Detect the Multica guest daemon without a pid file |
 | [0079](0079-install-multica-daemon-detection-fix.md) | Accepted; installed on one Mac, publication pending | Install the Multica daemon-detection fix as desktop 1.1.7 (97) |
+| [0080](0080-session-list-scan-prunes-conversation-views.md) | Accepted; source verified, device acceptance pending | The desktop session-list scan prunes conversation views |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
