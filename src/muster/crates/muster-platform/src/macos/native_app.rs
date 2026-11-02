@@ -122,7 +122,7 @@ fn draft_selection(
 /// confirms the result; this performs the OS calls and rechecks authority and
 /// local input between them. Nothing here can submit.
 pub(super) fn clear_editor(
-    profile: &AppProfile,
+    profile: Option<&AppProfile>,
     editor: &Element,
     with: muster_agent::native_send::ClearWith,
 ) -> Result<(), ax::AXError> {
@@ -148,7 +148,7 @@ pub(super) fn clear_editor(
             let length = editor
                 .string("AXValue")
                 .map(|value| {
-                    if profile.is_empty(&value) {
+                    if profile.is_some_and(|p| p.is_empty(&value)) {
                         0
                     } else {
                         value.encode_utf16().count()
@@ -1870,7 +1870,7 @@ impl NativeAppController {
                         value.as_ref().map(|value| value.chars().count()),
                         started.elapsed().as_millis()
                     ));
-                    clear_editor(self.profile, &composer, with).map_err(|code| {
+                    clear_editor(Some(self.profile), &composer, with).map_err(|code| {
                         Error::Unavailable(format!("AX composer clear failed ({code}); not sent"))
                     })?;
                 }
