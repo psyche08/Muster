@@ -117,6 +117,13 @@ pub trait Controller: Send + Sync {
     async fn send_to(&self, text: &str) -> Result<Option<String>, Error> {
         self.send(text).await.map(|()| None)
     }
+    /// Runs the provider's own context compaction (`/compact`) only when the
+    /// native prompt is empty: an automatic write never replaces a draft.
+    async fn compact(&self) -> Result<(), Error> {
+        Err(Error::Unavailable(
+            "Compaction is unavailable for this controller".into(),
+        ))
+    }
     /// `option` is one of the interaction's options; `answer` is free text
     /// for questions.
     async fn respond(&self, interaction: &str, option: &str, answer: &str) -> Result<(), Error>;

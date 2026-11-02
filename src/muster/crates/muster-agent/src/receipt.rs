@@ -155,7 +155,7 @@ fn ends_turn(record: &Value, provider: Provider) -> bool {
 /// prompt the app queued (the source's hook). A message answering tools is
 /// not a prompt.
 fn user_text(record: &Value, provider: Provider) -> Option<String> {
-    use crate::profile::{Where, field};
+    use crate::profile::field;
     let (records, hooks) = provider.jsonl()?;
     if let Some(text) = hooks.queued_text(record) {
         return Some(text);
@@ -165,9 +165,26 @@ fn user_text(record: &Value, provider: Provider) -> Option<String> {
         return None;
     }
     let content = field(message, records.message.content);
-    if let Some(text) = content.as_str() {
-        return Some(text.into());
+    let text = match content.as_str() {
+        Some(text) => text.to_owned(),
+        None => block_prompt(content, records, record, provider)?,
+    };
+    if provider == Provider::Claude
+        && let Some(command) = slash_command(&text)
+    {
+        return Some(command);
     }
+    Some(text)
+}
+
+/// The prompt in a content block list; `None` when it answers tools.
+fn block_prompt(
+    content: &Value,
+    records: &crate::profile::Records,
+    record: &Value,
+    provider: Provider,
+) -> Option<String> {
+    use crate::profile::Where;
     let parts = content.as_array()?;
     if let Where::Block(result) = records.tool_result.at
         && parts.iter().any(|p| p["type"] == result)
@@ -194,6 +211,37 @@ fn user_text(record: &Value, provider: Provider) -> Option<String> {
         0
     };
     Some(texts[skipped..].join("\n"))
+}
+
+/// Claude records a slash command it ran as tags, not as the typed text:
+/// `<command-name>/compact</command-name>` with its message and arguments
+/// (written once the command finishes). Only a record made of nothing but
+/// those tags stands for the typed `/name args`.
+fn slash_command(text: &str) -> Option<String> {
+    let mut rest = text.trim();
+    let (mut name, mut args) = (None, "");
+    while !rest.is_empty() {
+        let inner = rest.strip_prefix('<')?;
+        let end = inner.find('>')?;
+        let tag = &inner[..end];
+        let after = &inner[end + 1..];
+        let close = format!("</{tag}>");
+        let stop = after.find(close.as_str())?;
+        let body = after[..stop].trim();
+        match tag {
+            "command-name" => name = Some(body),
+            "command-args" => args = body,
+            "command-message" => {}
+            _ => return None,
+        }
+        rest = after[stop + close.len()..].trim_start();
+    }
+    let name = name.filter(|n| n.starts_with('/') && n.len() > 1)?;
+    Some(if args.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{name} {args}")
+    })
 }
 
 #[cfg(test)]
@@ -402,5 +450,48 @@ mod tests {
         ] {
             assert!(user_text(&record, Provider::Claude).is_none());
         }
+    }
+
+    #[test]
+    fn a_claude_slash_command_record_confirms_the_typed_command() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let mut receipt = Receipt::new(file.path(), Provider::Claude, "/compact").unwrap();
+        // Claude Desktop writes the compaction first, the command record last.
+        for record in [
+            serde_json::json!({"type":"system","subtype":"compact_boundary","content":"Conversation compacted"}),
+            serde_json::json!({"type":"user","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued."}}),
+            serde_json::json!({"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Caveat.</local-command-caveat>"}}),
+        ] {
+            writeln!(file, "{record}").unwrap();
+        }
+        assert!(!receipt.confirmed());
+        writeln!(file, "{}", serde_json::json!({"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}})).unwrap();
+        assert!(receipt.confirmed());
+
+        let record = |content: &str| serde_json::json!({"type":"user","message":{"role":"user","content":content}});
+        let typed = |content: &str| user_text(&record(content), Provider::Claude);
+        assert_eq!(
+            typed("<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>42</command-args>").as_deref(),
+            Some("/review 42")
+        );
+        // Output, other tags or extra text are not the typed command.
+        assert_eq!(
+            typed("<local-command-stdout>Compacted </local-command-stdout>").as_deref(),
+            Some("<local-command-stdout>Compacted </local-command-stdout>")
+        );
+        assert_eq!(
+            typed("<command-name>/compact</command-name> please").as_deref(),
+            Some("<command-name>/compact</command-name> please")
+        );
+        assert_eq!(
+            typed("<command-name>compact</command-name>").as_deref(),
+            Some("<command-name>compact</command-name>")
+        );
+        // Codex records no such tags; its text stays literal.
+        let codex = serde_json::json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<command-name>/compact</command-name>"}]}});
+        assert_eq!(
+            user_text(&codex, Provider::Codex).as_deref(),
+            Some("<command-name>/compact</command-name>")
+        );
     }
 }
