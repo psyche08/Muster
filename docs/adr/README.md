@@ -146,7 +146,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074 | View DeepSeek Harness sessions; do not drive the app yet |
 
-| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; plugin verified live; daemon, phone and Locked Use acceptance pending | Drive DeepSeek Harness through a Muster plugin inside the app |
+| [0074](0074-deepseek-harness-plugin-control.md) | Accepted; installed daemon and phone remote control accepted on 1.1.8; locked-screen transaction pending | Drive DeepSeek Harness through a Muster plugin inside the app |
 
 | [0075](0075-claude-registry-entries-without-cli-session.md) | Accepted; fix installed in 1.1.8 on three Macs; phone send acceptance pending | A Claude conversation without a CLI session hides no other |
 

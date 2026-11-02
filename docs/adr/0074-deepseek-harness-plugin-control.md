@@ -1,7 +1,7 @@
 # ADR 0074: Drive DeepSeek Harness through a Muster plugin inside the app
 
 - Date: 2026-10-31
-- Status: Accepted; plugin verified live in the owner's app; daemon, phone and Locked Use acceptance pending
+- Status: Accepted; plugin and installed daemon verified; phone remote control accepted on desktop 1.1.8; locked-screen phone transaction pending
 - Related: [ADR 0073](0073-deepseek-harness-session-viewing.md), whose
   "do not drive the app yet" part this supersedes; ARCHITECTURE §3.6.2 and
   §3.6.4; [APP_PROFILES.md](../APP_PROFILES.md);
@@ -223,7 +223,21 @@ attachments.
     serving process with the same requirement. `AgentService::send_to` sent
     a prompt, and the transcript read back the prompt, the reply "OK" and
     the turn summary.
-- **Not done:** an installed Muster daemon built from this branch (the
-  owner's installed Muster is older), phone control end to end, a Locked
-  Use transaction executing a plugin send on a device, signing and
-  publication.
+- **Installed daemon and plugin (2026-11-02).** Desktop 1.1.8 (98) is
+  installed on the three Macs (ADR 0081). On the hosting Mac the installed
+  daemon lists its DeepSeek Harness sessions with the `plugin` controller and
+  reports their live `running`/`idle` state, and the bridge socket exists.
+  The manual prerequisite from Consequences was applied there:
+  `muster policy --allow-locked-control true --ax-allow com.deepseek.dsh`
+  leaves the allowlist at Claude, Codex and DeepSeek. The owner's phone holds
+  `agents`, `agents:deepseek` and `locked.control` in the roster.
+- **Phone acceptance (owner-confirmed, 2026-11-02 13:37 CST).** The phone
+  reconnected at 05:36:51Z; at 05:37:23Z its answer to a DeepSeek Harness
+  session (`session-4595…`) was prepared in 12 ms and the operation ledger
+  recorded `applied`. Without the allowlist prerequisite, the same phone's
+  attempts at 04:09:51Z and 04:09:53Z were refused as
+  `Locked Use prepare rejected … native app is not in this device's
+  allowlist`; that step is what changed. The console was unlocked for this
+  acceptance, so the Locked Use transaction itself was not re-exercised.
+- **Not done:** a Locked Use transaction executing a phone operation against
+  a plugin session on a locked device.
