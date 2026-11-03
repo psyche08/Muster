@@ -197,7 +197,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0108](0108-watch-l4forwarder-configuration.md) | Accepted; source verified, release pending | Watch the l4forwarder configuration instead of polling it |
 
-| [0109](0109-restore-unlanded-1-0-21-field-fixes.md) | Accepted; source verified, release pending | Restore two 1.0.21 field fixes that never landed |
+| [0114](0114-restore-unlanded-1-0-21-field-fixes.md) | Accepted; source verified, release pending | Restore two 1.0.21 field fixes that never landed |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

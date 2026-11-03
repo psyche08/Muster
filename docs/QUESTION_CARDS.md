@@ -112,7 +112,7 @@ cards retain their separate option-based protocol.
 - The real Claude/Codex multi-page flows still require a live unanswered card;
   these tests do not resubmit any of the user's already answered questions.
 
-### Explaining a missed question form (ADR 0109)
+### Explaining a missed question form (ADR 0114)
 
 - **Why this was added.** After desktop 1.0.21, question-card answers sent from
   the phone were rejected before any submit on two Macs. This affected

@@ -1,10 +1,12 @@
-# ADR 0109: Restore two 1.0.21 field fixes that never landed
+# ADR 0114: Restore two 1.0.21 field fixes that never landed
 
 - Date: 2026-11-03
 - Status: Accepted; source verified, release pending
 - Related: [PROTOCOL.md](../PROTOCOL.md) (direct-path selection),
   [QUESTION_CARDS.md](../QUESTION_CARDS.md),
   [architecture/network.md](../architecture/network.md)
+- Numbering: 0109–0113 are taken by an open pull request, so this record
+  takes the next free number rather than reusing theirs
 
 ## Context
 
