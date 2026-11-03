@@ -85,6 +85,15 @@ pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Op
     }
     match provider {
         "codex" => {
+            // The native title index contains generated/renamed labels while
+            // threads.title may still contain the original full prompt.
+            let home = config.codex_home.as_ref()?;
+            if let Some(title) = crate::codex::load_index(&home.join("session_index.jsonl"))
+                .remove(&id.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(title);
+            }
             let db = Connection::open_with_flags(
                 config.codex_home.as_ref()?.join("state_5.sqlite"),
                 OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -266,6 +275,11 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
             .flatten()
             .filter(|(id, title)| is_uuid(id) && !title.trim().is_empty())
         {
+            out.titles.insert(("codex".into(), id), title);
+        }
+    }
+    for (id, title) in crate::codex::load_index(&home.join("session_index.jsonl")) {
+        if !title.is_empty() {
             out.titles.insert(("codex".into(), id), title);
         }
     }
@@ -804,5 +818,47 @@ mod tests {
         db.delete(key).unwrap();
         db.flush().unwrap();
         assert!(local_storage(dir.path()).is_none());
+    }
+}
+
+#[cfg(test)]
+mod title_regressions {
+    use super::*;
+    #[test]
+    fn title_index_wins_over_original_prompt_and_refreshes_by_uuid() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Connection::open(dir.path().join("state_5.sqlite")).unwrap();
+        db.execute_batch("CREATE TABLE threads(id TEXT,title TEXT,archived INTEGER);")
+            .unwrap();
+        let id = "11111111-1111-4111-8111-111111111111";
+        db.execute(
+            "INSERT INTO threads VALUES(?1,'Long original prompt',0)",
+            [id],
+        )
+        .unwrap();
+        let config = AgentConfig {
+            codex_home: Some(dir.path().into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Long original prompt")
+        );
+        let index = dir.path().join("session_index.jsonl");
+        let line = |name| serde_json::json!({"id":id,"thread_name":name}).to_string() + "\n";
+        std::fs::write(&index, line("Native title")).unwrap();
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Native title")
+        );
+        std::fs::write(&index, line("Native title") + &line("Renamed")).unwrap();
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Renamed")
+        );
+        assert_eq!(
+            native_title(&config, "codex", "22222222-2222-4222-8222-222222222222"),
+            None
+        );
     }
 }

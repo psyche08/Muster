@@ -166,7 +166,7 @@ fn filename_id(path: &Path) -> Option<String> {
     is_uuid(tail).then(|| tail.to_ascii_lowercase())
 }
 
-fn load_index(path: &Path) -> HashMap<String, String> {
+pub(crate) fn load_index(path: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
     let Ok(text) = std::fs::read_to_string(path) else {
         return out;

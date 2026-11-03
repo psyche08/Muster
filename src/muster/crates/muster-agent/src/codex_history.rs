@@ -44,6 +44,7 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
     let mut q=db.prepare("SELECT id, title, cwd, updated_at, source, thread_source, originator, history_mode, attached_thread_parent_id FROM threads WHERE archived = 0 ORDER BY updated_at DESC LIMIT 10000")?;
     let mut rows = q.query([])?;
     let history_db = open(&history)?;
+    let titles = crate::codex::load_index(&home.join("session_index.jsonl"));
     let mut out = Vec::new();
     while let Some(r) = rows.next()? {
         let id: String = r.get(0)?;
@@ -69,6 +70,11 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
             .filter(|s| is_uuid(s));
         let updated = r.get::<_, i64>(3)?.max(0) as u64;
         let message_time = last_message_time_from(&history_db, &id).unwrap_or(0);
+        let title = titles
+            .get(&id)
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or(r.get(1)?);
         out.push(Discovered {
             id,
             provider: Provider::Codex,
@@ -80,7 +86,7 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
             parent_id: parent,
             relation: if hidden { "subagent" } else { "" },
             meta: SessionMeta {
-                title: r.get(1)?,
+                title,
                 cwd: PathBuf::from(r.get::<_, String>(2)?),
                 updated_unix: message_time,
                 ..Default::default()

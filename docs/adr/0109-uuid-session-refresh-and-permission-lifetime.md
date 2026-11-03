@@ -101,3 +101,10 @@ Final candidate 1.1.19 (109) retains the session/card fixes and withdraws only t
 unproven new-environment form admission. Its Apple build and three-Mac / OTA
 delivery are tracked separately from the above runtime observations. Modern
 Claude environment-based new-session creation still requires further work.
+
+Final UI acceptance also exposed a Codex title precedence defect: the native
+session_index.jsonl had the generated name, while threads.title still held the
+full original prompt. Prefer the UUID-matched latest nonempty title index record
+in targeted refresh, catalog metadata and migrated history, matching JSONL
+provider discovery. Test fallback, rename and wrong-UUID rejection. A Mac client
+visually rendered the remote permission card while its source Mac was locked.
