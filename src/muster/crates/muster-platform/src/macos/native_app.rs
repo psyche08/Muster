@@ -640,6 +640,9 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             complete: scan.complete,
         })
     }
+    fn requires_exact_route(&self) -> bool {
+        self.profile.requires_exact_navigation()
+    }
     fn exact_route(&self) -> Option<String> {
         muster_agent::native_sidebar::catalog_session_route(self.profile.app.provider, self.session)
     }
@@ -844,58 +847,18 @@ pub fn claude_resolver() -> Resolver {
 /// The desktop app's own id of the conversation a web area shows:
 /// `local_<uuid>` in current builds, a bare uuid in older ones.
 pub fn session_from_url(url: &str) -> Option<String> {
-    let rest = url.split("/epitaxy/").nth(1)?;
-    let id: String = rest
-        .chars()
-        .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .collect();
-    let uuid = id.rsplit('_').next().unwrap_or(&id);
-    (uuid.len() == 36 && uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
-        .then_some(id.to_ascii_lowercase())
+    muster_agent::claude_identity::session_from_url(url)
 }
 
-/// The CLI session behind a web area's URL.
 pub fn cli_session_from_url(url: &str) -> Option<String> {
-    session_from_url(url).and_then(|id| cli_session_for(&id))
+    cli_session_for(&session_from_url(url)?)
 }
 
-/// The Claude Code session id for the desktop app's conversation id. The
-/// desktop app records it in
-/// `~/Library/Application Support/Claude/claude-code-sessions/<org>/<user>/<id>.json`
-/// as `cliSessionId`; a bare uuid is already the CLI id. Results are
-/// read on each resolution: resuming can replace cliSessionId.
 pub fn cli_session_for(desktop_id: &str) -> Option<String> {
-    if desktop_id.len() == 36 && !desktop_id.contains('_') {
-        return Some(desktop_id.to_string());
-    }
-    desktop_session_file(desktop_id)
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .and_then(|value| {
-            value
-                .get("cliSessionId")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_ascii_lowercase())
-        })
-}
-
-fn desktop_session_file(desktop_id: &str) -> Option<std::path::PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    let root = std::path::PathBuf::from(home)
-        .join("Library/Application Support/Claude/claude-code-sessions");
-    let file = format!("{desktop_id}.json");
-    for org in std::fs::read_dir(&root).ok()?.flatten() {
-        let Ok(users) = std::fs::read_dir(org.path()) else {
-            continue;
-        };
-        for user in users.flatten() {
-            let candidate = user.path().join(&file);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
+    muster_agent::claude_identity::cli_for_desktop(
+        &muster_agent::claude::desktop_registry()?,
+        desktop_id,
+    )
 }
 
 #[derive(Clone)]
@@ -1368,6 +1331,7 @@ pub struct NativeAppController {
     /// Question presses and text writes made by the current operation.
     question_writes: std::sync::atomic::AtomicU64,
     write: tokio::sync::Mutex<()>,
+    observation: tokio::sync::Mutex<()>,
     events: ControllerEvents,
     question_source: muster_agent::questions::Source,
     send_receipt_source: muster_agent::receipt::Source,
@@ -1463,6 +1427,7 @@ impl NativeAppController {
             app,
             surface: Mutex::new(surface),
             write: tokio::sync::Mutex::new(()),
+            observation: tokio::sync::Mutex::new(()),
             shared: Mutex::new(Shared {
                 state: SessionState::Idle,
                 interaction: None,
@@ -1667,37 +1632,39 @@ impl NativeAppController {
     /// Reads the visible state: an enabled Stop control means running,
     /// enabled approval options mean a decision is pending.
     async fn observe(&self) {
+        let _observation = self.observation.lock().await;
         let web_area = self.surface.lock().unwrap().web_area.clone();
         let controls = self.profile.controls();
-        let mut stop = false;
-        let mut draft = false;
-        let mut options: Vec<(String, Element)> = Vec::new();
-        let mut disabled_options = 0;
-        web_area.walk(|node| {
-            let role = node.role();
-            if role == "AXTextArea" && !draft {
-                draft = holds_draft(self.profile, node, role);
-            } else if role == "AXButton" {
-                let button = names(node, role);
-                let enabled = || node.bool("AXEnabled").unwrap_or(false);
-                if controls.stop.matches(&button) && enabled() {
-                    stop = true;
-                } else if controls.approve.matches(&button)
-                    && approval_in_scope(self.profile, &web_area, node)
-                {
-                    if enabled() {
-                        options.push((button.label().to_owned(), node.clone()));
-                    } else {
-                        disabled_options += 1;
-                    }
-                }
-            }
-            true
-        });
+        let (tree, elements) = super::native_chat::approval_snapshot(&web_area);
+        if !tree.complete {
+            self.unobserve(SessionState::Unknown).await;
+            return;
+        }
+        let stop = tree
+            .nodes
+            .iter()
+            .any(|node| node.enabled && controls.stop.matches(node));
+        let draft = tree
+            .nodes
+            .iter()
+            .any(|node| controls.composer.matches(node) && controls.is_draft(&node.value));
+        let card = muster_agent::native_approval::observe(self.profile, &tree);
+        let prompt = card.as_ref().map(|c| c.prompt.clone());
+        let options: Vec<(String, Element)> = card
+            .as_ref()
+            .map(|card| {
+                card.options
+                    .iter()
+                    .map(|&i| (tree.nodes[i].label().to_owned(), elements[i].clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut snapshot = (self.question_source)();
         if !options.is_empty() {
             if let Some(snapshot) = &mut snapshot {
-                if snapshot.pending.as_ref().is_some_and(|q| q.optional) {
+                if snapshot.pending.as_ref().is_some_and(|q| q.optional)
+                    || card.as_ref().is_some_and(|c| c.named) && snapshot.pending.is_some()
+                {
                     let suggestion = snapshot.pending.take().unwrap();
                     snapshot.additional.insert(0, suggestion);
                 }
@@ -1727,13 +1694,20 @@ impl NativeAppController {
                     &mut to_send,
                 );
                 shared.options.clear();
-            } else if labels != previous {
+            } else if labels != previous
+                || shared.options != options
+                || shared
+                    .interaction
+                    .as_ref()
+                    .filter(|i| i.kind == "approval")
+                    .map(|i| &i.prompt)
+                    != prompt.as_ref()
+            {
                 log::info!(
-                    "AX approval options changed: session={} provider={} enabled={} disabled={} provider_receipt=not_checked",
+                    "AX approval options changed: session={} provider={} enabled={} provider_receipt=not_checked",
                     self.session,
                     self.profile.app.provider,
-                    labels.len(),
-                    disabled_options
+                    labels.len()
                 );
                 if let Some(old) = shared.interaction.take()
                     && !snapshot.as_ref().is_some_and(|s| s.find(&old.id).is_some())
@@ -1754,7 +1728,7 @@ impl NativeAppController {
                         session: self.session.clone(),
                         kind: "approval".into(),
                         optional: false,
-                        prompt: format!("{} asks for permission", self.profile.app.provider),
+                        prompt: prompt.clone().unwrap_or_default(),
                         options: labels,
                         questions: Vec::new(),
                     };
@@ -2463,6 +2437,14 @@ impl Controller for NativeAppController {
             .write
             .try_lock()
             .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
+        self.check_identity()?;
+        // Refresh request content and native controls before accepting an old
+        // interaction ID. Identical labels on a later command are not consent.
+        if self.profile.controls().permission_card_prefix.is_some() {
+            self.app
+                .query_renderer(&self.surface.lock().unwrap().web_area);
+        }
+        self.observe().await;
         let button = {
             let shared = self.shared.lock().unwrap();
             match &shared.interaction {

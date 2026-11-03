@@ -13,6 +13,7 @@ mod changes;
 pub mod chat_catalog;
 pub mod claude;
 pub mod claude_cards;
+pub mod claude_identity;
 pub mod claude_runtime;
 pub mod cloud;
 pub mod codex;
@@ -25,6 +26,7 @@ pub mod files;
 pub mod idle_compact;
 pub mod jsonl;
 pub mod model;
+pub mod native_approval;
 pub mod native_navigation;
 pub mod native_options;
 pub mod native_scan;
@@ -2014,11 +2016,10 @@ impl AgentService {
     /// unique desktop row ambiguous. This grants no write authority.
     pub fn native_navigation_title(&self, id: &str) -> Option<(String, bool)> {
         let target = self.session(id)?;
-        if target.provider == "claude"
-            && let Some(root) = &self.config.claude_desktop
-            && let Some(title) = claude::desktop_navigation_title(root, id)
-        {
-            return Some(title);
+        if target.provider == "claude" {
+            // Local Claude navigates only through UUID mapping, including when
+            // titles are duplicated, renamed, absent, or unreadable.
+            return Some((String::new(), false));
         }
         let unique = self
             .native_session_by_title(&target.provider, &target.title)

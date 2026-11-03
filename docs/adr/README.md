@@ -177,6 +177,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0098](0098-focused-question-field-deletion.md) | Accepted; source verified, device acceptance pending | Delete a proven question-editor selection through the application |
 
+| [0099](0099-local-claude-identity-and-permission-cards.md) | Accepted; device acceptance pending | Local Claude UUID mapping and fresh permission cards |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

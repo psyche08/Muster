@@ -221,6 +221,7 @@ viewed, or driven through its `[plugin]` (DeepSeek Harness).
 | `stop` | selector | The control that stops the running turn; an enabled one means a turn is running, and an interrupt presses it |
 | `approve` | selector | The options of a pending permission prompt, each offered by its name |
 | `approval_scope` | `web-area` (default) or `main-conversation` | Require complete bound ancestry; the latter requires a main landmark and excludes complementary/navigation/tab panels |
+| `permission_card_prefix` | Optional nonempty string | Named permission group; expose only its exact enabled approval controls and include its request text. Multiple cards withhold decisions |
 | `sessions` | table | How sessions are listed (below) |
 | `queue` | table, optional | The app's queue of prompts sent while a turn runs: `row` (a control only a queued row carries), `send_now`, `delete` |
 | `questions` | table, optional | Question cards: `submit`, `next`, `back`, `other` labels; `paged` (one page per question), `refresh_renderer` (ask Chromium for a fresh read), `button_choices` (a single-select card of plain buttons answers on press), `immediate_suggestions` (optional suggestion cards answer on press) |

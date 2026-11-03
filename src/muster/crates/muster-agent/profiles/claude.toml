@@ -82,6 +82,7 @@ mark_final = true
 activity_on_messages = true
 
 [controls]
+permission_card_prefix = "Permission request:"
 # ProseMirror re-reads its DOM: the prompt is set as the composer's value.
 draft = "value"
 # An empty composer reports an empty value.

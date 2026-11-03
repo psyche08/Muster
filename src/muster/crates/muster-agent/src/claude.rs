@@ -102,7 +102,7 @@ pub(crate) fn queued_text(record: &Value) -> Option<String> {
     }
 }
 
-const MAX_FILES: usize = 10_000;
+pub(crate) const MAX_FILES: usize = 10_000;
 
 #[path = "claude_sessions.rs"]
 mod sessions;
@@ -380,67 +380,7 @@ pub fn desktop_registry_knows(root: &Path, session: &str) -> bool {
 /// Inverse of the desktop-to-CLI surface identity. A complete registry scan
 /// must identify exactly one active desktop entry, never the first title match.
 pub fn desktop_navigation_id(root: &Path, session: &str) -> Option<String> {
-    if !is_uuid(session) {
-        return None;
-    }
-    let started = std::time::Instant::now();
-    let mut seen = 0usize;
-    let mut found = None;
-    for org in std::fs::read_dir(root).ok()? {
-        let org = org.ok()?;
-        if !org.file_type().ok()?.is_dir() {
-            continue;
-        }
-        for user in std::fs::read_dir(org.path()).ok()? {
-            let user = user.ok()?;
-            if !user.file_type().ok()?.is_dir() {
-                continue;
-            }
-            for file in std::fs::read_dir(user.path()).ok()? {
-                seen += 1;
-                if seen > MAX_FILES || started.elapsed() > std::time::Duration::from_millis(250) {
-                    return None;
-                }
-                let file = file.ok()?;
-                let path = file.path();
-                if path.extension().is_none_or(|e| e != "json") {
-                    continue;
-                }
-                let stem = path.file_stem()?.to_str()?;
-                let Some(uuid) = stem.strip_prefix("local_") else {
-                    continue;
-                };
-                if !is_uuid(uuid) {
-                    continue;
-                }
-                let meta = file.metadata().ok()?;
-                if !file.file_type().ok()?.is_file() || meta.len() > 4 << 20 {
-                    return None;
-                }
-                let v: Value = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
-                if v["isArchived"].as_bool().unwrap_or(false) {
-                    continue;
-                }
-                // A conversation no CLI session drives (yet) is not this one.
-                let Some(id) = v["cliSessionId"].as_str().filter(|id| is_uuid(id)) else {
-                    continue;
-                };
-                if !id.eq_ignore_ascii_case(session) {
-                    continue;
-                }
-                if v.get("sessionId")
-                    .is_some_and(|id| id.as_str() != Some(stem))
-                {
-                    return None;
-                }
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(stem.to_owned());
-            }
-        }
-    }
-    found
+    crate::claude_identity::desktop_for_cli(root, session)
 }
 
 /// The desktop's current navigation title and its uniqueness, not the title

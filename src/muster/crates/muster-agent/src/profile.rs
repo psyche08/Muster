@@ -218,6 +218,8 @@ pub struct Controls {
     /// The options of a pending permission prompt.
     pub approve: Selector,
     pub approval_scope: ApprovalScope,
+    /// Named permission group, whose text and buttons form one decision.
+    pub permission_card_prefix: Option<&'static str>,
     pub sessions: SessionList,
     /// `None`: the app has no queued send.
     pub queue: Option<Queue>,
@@ -701,6 +703,11 @@ impl App {
         self.controls.unwrap_or(&Controls::UNRECORDED)
     }
 
+    /// Local Claude identity uncertainty must not fall back to title lookup.
+    pub fn requires_exact_navigation(&self) -> bool {
+        self.app.provider == "claude"
+    }
+
     /// Whether the composer's value means "nothing typed".
     pub fn is_empty(&self, value: &str) -> bool {
         !self.controls().is_draft(value)
@@ -743,6 +750,7 @@ impl Controls {
         stop: Selector::NONE,
         approve: Selector::NONE,
         approval_scope: ApprovalScope::WebArea,
+        permission_card_prefix: None,
         sessions: SessionList::PageRows,
         queue: None,
         questions: None,
