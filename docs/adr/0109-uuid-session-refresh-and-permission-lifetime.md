@@ -146,3 +146,33 @@ distinct from the pre-restart observation, while `IOConsoleLocked` stayed `Yes`
 throughout. No command was approved or denied. This confirms the daemon-side cold
 path; the client rearm above is covered by focused reducer tests and still needs
 an installed build for device acceptance.
+
+## Modern environment selection, resolved
+
+The scratch-directory outcome above is now explained from the provider's own
+files, and it does not come from this decision's exact-directory path. A desktop
+session record carries both `startedFromEnvironmentId`, the environment entry a
+new-session form started from, and `envScopeId`, the scope that actually owns the
+directory. The two withdrawn-variant sessions hold `envScopeId` of the built-in
+local scope, whose saved form carries no target directory, so the provider placed
+them in a dated scratch workspace under its own application support directory. A
+preset's identity in the first field never supplies a directory; selecting one in
+the form records where the session started from, not where it runs.
+
+Sessions a person creates, and sessions the committed path creates, carry neither
+field and the requested directory in `cwd` and `originCwd`. Keep the exact
+directory and first-message receipt as it stands: it rejected the scratch
+placement correctly, and no directory check is relaxed. Do not treat a selected
+environment as proof of a destination.
+
+### Device evidence
+
+On an unlocked authorized Mac at Claude desktop 4.4212.0, the committed native
+creation path navigated its documented route, confirmed the workspace-trust
+dialog for the exact requested directory, matched the local environment and
+folder controls, submitted once and returned a confirmed receipt whose session id
+the provider's own worker registration and desktop session record both report in
+the requested directory, with no environment scope or starting-environment field.
+The same build on the locked Macs cannot be exercised here: native creation
+requires an unlocked active console by design, so modern-form creation on those
+two Macs stays unverified rather than unresolved.

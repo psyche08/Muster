@@ -144,3 +144,16 @@ Submenu expansion and remaining membership/archive acceptance are still pending.
 [ADR 0108](0108-pin-only-session-catalog.md) supersedes named-group presentation
 and Section/Project UI controls at the owner's request. Native data is preserved;
 Section acceptance is paused.
+
+## Archive device evidence
+
+On an unlocked authorized Mac, archiving a disposable local Claude session
+through the organize operation returned a confirmed receipt for that session id;
+the provider's own desktop session record then reported it archived and the
+catalog no longer listed it. Pin and unpin were accepted earlier in the same way.
+
+Archiving a session on a *locked* member Mac is not covered by this evidence.
+Organize is not a read-only inspection, so it needs a Presence-signed Locked Use
+operation, which the command line cannot issue; that case belongs to client
+acceptance. Section and Project operations stay paused per
+[ADR 0108](0108-pin-only-session-catalog.md).
