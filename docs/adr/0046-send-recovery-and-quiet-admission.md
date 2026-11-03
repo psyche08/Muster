@@ -1,7 +1,9 @@
 # ADR 0046: Recover send outcomes without replay and wait for quiet before navigation
 
 - Date: 2026-10-23
-- Status: Accepted
+- Status: Accepted; quiet admission amended by
+  [ADR 0115](0115-target-scoped-local-input.md) (only input that could reach
+  the target app counts)
 - Related: ADR 0045; Architecture §3.6 and §3.7
 
 ## Context

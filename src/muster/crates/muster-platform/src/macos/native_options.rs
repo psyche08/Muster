@@ -11,7 +11,7 @@ type Snapshot = (chat::AxTree, Vec<Element>);
 impl NativeAppController {
     fn options_guard(&self, generation: u64, web: &Element) -> Result<(), Error> {
         muster_agent::control_guard::check()?;
-        if screen_locked() || user_input_generation() != generation {
+        if screen_locked() || self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Unlock the Mac and leave its input idle while changing model or effort".into(),
             ));
@@ -224,7 +224,7 @@ impl NativeAppController {
             .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
         self.check_identity()?;
         let web = self.surface.lock().unwrap().web_area.clone();
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         self.options_guard(generation, &web)?;
         if let Some((model, effort)) = set {
             if !model.is_empty() {

@@ -167,7 +167,7 @@ async fn unlocked(
     session: &muster_agent::model::AgentSession,
 ) -> Option<Result<(), Error>> {
     use muster_agent::idle_compact::{NOTICE, QUIET, QUIET_WAIT};
-    use muster_platform::macos::{input::user_input_idle, notice::Notice};
+    use muster_platform::macos::notice::Notice;
     let body = if session.title.trim().is_empty() {
         "Claude Code"
     } else {
@@ -183,7 +183,8 @@ async fn unlocked(
             && enabled(&checked)
     });
     let attempt = muster_agent::control_guard::scope(check, async {
-        muster_agent::control_guard::wait_for_quiet(user_input_idle, QUIET, QUIET_WAIT).await?;
+        let idle = crate::agent_bridge::session_input_idle(agent, &session.id);
+        muster_agent::control_guard::wait_for_quiet(idle, QUIET, QUIET_WAIT).await?;
         // Ordinary writes hold this as well; Locked Use waits for it.
         let Ok(_console) = daemon.locked_use.writes.clone().try_read_owned() else {
             return Ok(None);

@@ -173,7 +173,7 @@ impl NativeAppController {
         self.unconfirmed.admit()?;
         self.check_identity()?;
         muster_agent::control_guard::check()?;
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         let queued = source()?;
         let message = queue::selected(&queued, interaction)?.clone();
         let web = self.surface.lock().unwrap().web_area.clone();
@@ -194,7 +194,7 @@ impl NativeAppController {
         }
         self.check_identity()?;
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation
+        if self.input_generation() != generation
             || !web.contains(&button)
             || !button.bool("AXEnabled").unwrap_or(false)
         {

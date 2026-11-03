@@ -388,7 +388,8 @@ the Mac and absent means off.
     Accessibility-allowlist switches. The lease unlocks under cover, compacts,
     and relocks. With Locked Use off, a locked Mac waits for an unlock.
   - **Mac in use.** A notice appears at the top right of the screen. The
-    daemon waits up to 30 s for a 1 s pause in local input, then compacts.
+    daemon waits up to 30 s for a 1 s pause in local input that could
+    reach Claude (ADR 0115), then compacts.
     The notice closes once the transcript shows the compaction, at most
     3 minutes later. It closes at once when nothing was pressed.
   - **Locked Use busy.** The daemon looks again on the next tick.
