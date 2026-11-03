@@ -587,9 +587,11 @@ async fn composer_navigation_persists_before_switch_and_does_not_resurrect_sent_
         ..first.draft.unwrap()
     };
     let cache = dir.path().join("view-cache-v1");
-    let first_path = cache.join(&first_draft.key);
+    // Durable entries are named apart from evictable ones so that bounding the
+    // cache on disk can never take the owner's own unsent text.
+    let first_path = cache.join(format!("{}.keep", first_draft.key));
     assert!(
-        !first_path.exists(),
+        !first_path.exists() && !cache.join(&first_draft.key).exists(),
         "opening/typing does not persist a draft"
     );
     core.intent(snapshot(first_draft.clone(), open("second")));

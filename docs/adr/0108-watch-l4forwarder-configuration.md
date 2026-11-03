@@ -84,5 +84,14 @@ blocked whatever else shared that executor. Merging this record's branch with th
 session-catalog branch surfaced it as three Locked Use failures — the unlock had
 not started within the fixture's window, in a test runtime with a single thread —
 although each branch passed alone. Create the watcher through a blocking task and
-keep the polling fallback when that task cannot deliver one. The supervisor's own
-tests and the full Rust workspace, Locked Use included, pass after the change.
+keep the polling fallback when that task cannot deliver one. The supervisor still
+arms the watch before its first look at the file, so a change made while the
+watch is being set up is seen by that look rather than lost.
+
+That blocking hop made this record's own watch test flaky under a full workspace
+run: it timed the first write, which measures how long arming the watch took
+rather than what the watch reports, and arming it is the slow part. The test now
+reaches the watched state first and times a removal and a rewrite from there, so
+its subject — the watch, not the five-second fallback poll — is what it measures.
+The supervisor's own tests and the full Rust workspace, Locked Use included,
+pass after the change.

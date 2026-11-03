@@ -190,13 +190,17 @@ impl Host {
             output,
             temp,
         };
-        for _ in 0..100 {
+        // Starting a debug-build child and binding its socket takes as long as
+        // the machine is busy; a second is not a budget, it is a coin toss when
+        // the whole workspace's tests run together.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while std::time::Instant::now() < deadline {
             if host.path().exists() {
                 return host;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
-        panic!("host did not bind");
+        panic!("host did not bind at {}", host.path().display());
     }
     fn path(&self) -> std::path::PathBuf {
         self.temp.path().join("browser/bridge.sock")

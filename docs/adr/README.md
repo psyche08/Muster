@@ -207,6 +207,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0113](0113-pin-only-session-catalog.md) | Accepted; verification pending | Show only Pin and the ordinary session list |
 
+| [0114](0114-bounded-view-cache-and-empty-pin.md) | Accepted; source verified, device acceptance pending | Bound the view cache on disk and drop an empty Pin |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

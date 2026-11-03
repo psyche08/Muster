@@ -357,17 +357,12 @@ mod tests {
         let (program, record) = fake_addon(dir.path());
         let config = dir.path().join(CONFIG);
         let task = tokio::spawn(supervisor(dir.path(), program).run());
-        // The watch is set up before the first look at the file.
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        let written = Instant::now();
+        // Asking the OS for the watch is itself slow, and the first look at the
+        // file is what covers a change made while it is still being set up. So
+        // reach the watched state first and time what the watch reports, not
+        // how long arming it took.
         save(&config, "{}");
         until("not started", || lines(&record, "start").len() == 1).await;
-        assert!(
-            written.elapsed() < Duration::from_secs(1),
-            "{:?}",
-            written.elapsed()
-        );
 
         let removed = Instant::now();
         std::fs::remove_file(&config).unwrap();
@@ -376,6 +371,15 @@ mod tests {
             removed.elapsed() < Duration::from_secs(1),
             "{:?}",
             removed.elapsed()
+        );
+
+        let rewritten = Instant::now();
+        save(&config, "{}");
+        until("not restarted", || lines(&record, "start").len() == 2).await;
+        assert!(
+            rewritten.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            rewritten.elapsed()
         );
         task.abort();
     }

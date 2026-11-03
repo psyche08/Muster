@@ -199,6 +199,14 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
             row.organizing = state.agent_organizing.contains(&row.key);
         }
     }
+    // Pin is the owner's own list: with nothing in it there is nothing to say,
+    // so it is left out entirely rather than shown empty. A group the daemon
+    // still counts, is still paging or is still loading stays, so the section
+    // does not flicker away before its rows arrive. Recent is the catalog
+    // itself and remains, empty or not.
+    projected.retain(|_, g| {
+        g.kind != "pin" || !g.rows.is_empty() || g.count > 0 || g.has_more || g.loading_more
+    });
     let mut out: Vec<_> = projected.into_values().collect();
     let rank = |g: &AgentCatalogSection| match g.kind.as_str() {
         "pin" => 0,
@@ -316,6 +324,10 @@ mod tests {
 mod projection_tests {
     use super::*;
     use muster_proto::v1::{AgentCatalogGroup, AgentSection};
+    /// Pin is absent whenever nothing is pinned, so find Recent by kind.
+    fn recent(groups: &[AgentCatalogSection]) -> &AgentCatalogSection {
+        groups.iter().find(|g| g.kind == "recent").expect("Recent")
+    }
     fn session(id: &str, parent: &str, device: &str) -> AgentSession {
         AgentSession {
             id: id.into(),
@@ -347,15 +359,15 @@ mod projection_tests {
         let groups = project(&state, &rows);
         assert_eq!(
             groups.iter().map(|g| g.title.as_str()).collect::<Vec<_>>(),
-            ["Pin", "Recent"]
+            ["Recent"]
         );
-        assert_eq!(groups[1].kind, "recent");
+        let shown = recent(&groups);
         assert!(groups.iter().all(|g| g.native_targets.is_empty()));
-        assert!(groups[1].rows.iter().all(|r| r.destinations.is_empty()
+        assert!(shown.rows.iter().all(|r| r.destinations.is_empty()
             && r.removable_section.is_empty()
             && !r.source_label.contains("Workspace")));
-        assert_eq!(groups[1].count, 2);
-        assert_ne!(groups[1].rows[0].key, groups[1].rows[1].key);
+        assert_eq!(shown.count, 2);
+        assert_ne!(shown.rows[0].key, shown.rows[1].key);
         assert_eq!(state.agents.native_sections.len(), 2);
     }
     #[test]
@@ -378,15 +390,16 @@ mod projection_tests {
             }
         }
         let groups = project(&state, &rows);
-        let g = &groups[1];
+        let g = recent(&groups);
         assert_eq!(g.count, 21);
         assert_eq!(g.rows.len(), 40);
         assert!(g.has_more);
         assert_eq!(g.rows.iter().filter(|r| r.depth == 0).count(), 10);
         state.agent_catalog_limits.insert(g.key.clone(), 20);
         let groups = project(&state, &rows);
-        assert_eq!(groups[1].rows.len(), 80);
-        assert_eq!(groups[1].rows.iter().filter(|r| r.depth == 0).count(), 20);
+        let g = recent(&groups);
+        assert_eq!(g.rows.len(), 80);
+        assert_eq!(g.rows.iter().filter(|r| r.depth == 0).count(), 20);
     }
     #[test]
     fn old_peer_section_pages_merge_into_recent_and_remain_fetchable() {
@@ -404,8 +417,8 @@ mod projection_tests {
             })
             .collect();
         let groups = project(&state, &[session("one", "", "host")]);
-        assert_eq!(groups.len(), 2);
-        let recent = &groups[1];
+        assert_eq!(groups.len(), 1);
+        let recent = recent(&groups);
         assert_eq!(recent.title, "Recent");
         assert_eq!(recent.count, 24);
         assert_eq!(recent.rows.len(), 1);
@@ -423,8 +436,67 @@ mod projection_tests {
         assert_eq!(state.agent_catalog_groups[0].key, "old-section");
         state.agents.query = "same".into();
         let search = project(&state, &[session("one", "", "host")]);
-        assert_eq!(search.len(), 2);
-        assert_eq!(search[1].count, 1);
+        assert_eq!(search.len(), 1);
+        assert_eq!(search[0].count, 1);
+    }
+
+    #[test]
+    fn pin_appears_only_while_it_has_something_to_show() {
+        let mut state = State::new(false, Some("host".into()));
+        let plain = session("one", "", "host");
+        let titles = |groups: &[AgentCatalogSection]| {
+            groups.iter().map(|g| g.kind.clone()).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            titles(&project(&state, std::slice::from_ref(&plain))),
+            ["recent"]
+        );
+        assert_eq!(titles(&project(&state, &[])), ["recent"]);
+
+        let mut pinned = plain.clone();
+        pinned.id = "two".into();
+        pinned.pinned = true;
+        let groups = project(&state, &[plain.clone(), pinned.clone()]);
+        assert_eq!(titles(&groups), ["pin", "recent"]);
+        assert_eq!(groups[0].rows.len(), 1);
+        assert_eq!(groups[0].rows[0].session.as_ref().unwrap().id, "two");
+
+        // Searching hides a Pin whose rows no longer match.
+        state.agents.query = "nothing matches".into();
+        assert_eq!(
+            titles(&project(&state, std::slice::from_ref(&plain))),
+            ["recent"]
+        );
+        state.agents.query.clear();
+
+        // A page the daemon still counts keeps its place until its rows land.
+        state.agent_catalog_groups = vec![AgentCatalogGroup {
+            key: "catalog:pin".into(),
+            kind: "pin".into(),
+            title: "Pin".into(),
+            device_id: "host".into(),
+            count: 3,
+            ..Default::default()
+        }];
+        let groups = project(&state, std::slice::from_ref(&plain));
+        assert_eq!(titles(&groups), ["pin", "recent"]);
+        assert!(groups[0].rows.is_empty());
+        state.agent_catalog_groups[0].count = 0;
+        state.agent_catalog_groups[0].next_cursor = "more".into();
+        assert_eq!(
+            titles(&project(&state, std::slice::from_ref(&plain))),
+            ["pin", "recent"]
+        );
+        state.agent_catalog_groups[0].next_cursor.clear();
+        assert_eq!(
+            titles(&project(&state, std::slice::from_ref(&plain))),
+            ["recent"]
+        );
+        state.agent_catalog_pending.insert("catalog:pin".into(), 1);
+        assert_eq!(
+            titles(&project(&state, std::slice::from_ref(&plain))),
+            ["pin", "recent"]
+        );
     }
 
     #[test]
