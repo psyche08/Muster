@@ -98,3 +98,7 @@ Follow-up source verification: 616 affected Rust library tests passed, with seve
 existing ignores; strict Clippy, ADR and public-content checks passed. The release
 candidate is 1.1.13 (103). Native mutation acceptance and deployed runtime results
 are recorded separately from these source checks.
+
+The unavailable-notice presentation decision is superseded by
+[ADR 0107](0107-silent-native-catalog-read-failures.md). Native read diagnostics
+and last-complete snapshot retention remain internal.

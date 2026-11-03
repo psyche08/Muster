@@ -193,6 +193,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0106](0106-native-organization-ax-and-file-confirmation.md) | Accepted; verification pending | Native organization with AX controls and file readback |
 
+| [0107](0107-silent-native-catalog-read-failures.md) | Accepted; verification pending | Ignore native catalog read failures in the interface |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

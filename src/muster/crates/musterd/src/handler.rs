@@ -681,16 +681,6 @@ impl<'a> AgentVisibility<'a> {
             .filter(|s| self.allows(Some(&s.provider)))
             .collect()
     }
-    fn section_notice(&self, agent: &muster_agent::AgentService) -> String {
-        agent
-            .section_notices()
-            .into_iter()
-            .filter(|(p, _)| self.allows(Some(p)))
-            .map(|(_, n)| n)
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
-
     fn snapshot(&self, agent: &muster_agent::AgentService) -> v1::AgentSessionPage {
         let snapshot = agent.catalog_snapshot();
         v1::AgentSessionPage {
@@ -704,13 +694,6 @@ impl<'a> AgentVisibility<'a> {
                 .into_iter()
                 .filter(|s| self.allows(Some(&s.provider)))
                 .collect(),
-            notice: snapshot
-                .notices
-                .into_iter()
-                .filter(|(p, _)| self.allows(Some(p)))
-                .map(|(_, n)| n)
-                .collect::<Vec<_>>()
-                .join("; "),
             ..Default::default()
         }
     }
@@ -724,10 +707,13 @@ impl<'a> AgentVisibility<'a> {
     ) -> Result<v1::AgentSessionPage, Error> {
         let snapshot = self.snapshot(agent);
         if grouped {
-            let mut page =
-                muster_agent::catalog::page(snapshot.sessions, snapshot.sections, "", "", visible)?;
-            page.notice = snapshot.notice;
-            Ok(page)
+            Ok(muster_agent::catalog::page(
+                snapshot.sessions,
+                snapshot.sections,
+                "",
+                "",
+                visible,
+            )?)
         } else {
             let mut page = snapshot;
             page.sessions.truncate(if limit == 0 { 200 } else { limit });
@@ -1782,7 +1768,6 @@ async fn dispatch(
                     .into_iter()
                     .filter(|s| r.provider.is_empty() || s.provider == r.provider)
                     .collect(),
-                notice: AgentVisibility::new(daemon, ctx).section_notice(agent),
                 sessions: AgentVisibility::new(daemon, ctx)
                     .list(
                         agent,

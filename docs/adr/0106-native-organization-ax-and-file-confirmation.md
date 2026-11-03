@@ -132,3 +132,11 @@ Wait for the expected value and enabled Create control under the existing UUID
 and input-generation guards; reject any different nonempty value. The failed
 attempt only filled a draft and did not create a section. Do not take over that
 pre-existing dialog in a later request.
+
+Native device follow-up confirms unpin, pin, restore-unpin and section creation
+with both applied file receipts and catalog readback. Moving into the test section
+stopped before mutation because AXPress on the submenu trigger did not expand it.
+Use AXShowMenu when exposed, otherwise focus the exact verified menu item and send
+application-directed AX Right Arrow only after exact item/window focus readback.
+No global keyboard routing, pointer event or native-store write is introduced.
+Submenu expansion and remaining membership/archive acceptance are still pending.

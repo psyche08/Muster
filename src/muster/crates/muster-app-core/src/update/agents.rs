@@ -187,8 +187,6 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             retry = 1;
                             if page.groups.is_empty() {
                                 page.sessions.truncate(AGENT_LIST_LIMIT as usize);
-                                page.notice =
-                                    "Update this device to enable native group pagination".into();
                             }
                             for session in &mut page.sessions {
                                 session.device_id = device.clone();
@@ -1007,9 +1005,8 @@ pub(super) fn msg_agents(
                     }
                     s
                 }));
-            if !page.notice.is_empty() && !state.agents_errors.contains(&page.notice) {
-                state.agents_errors.push(page.notice);
-            }
+            // Catalog notices from older peers describe optional native metadata.
+            // Keep them silent; transport and mutation failures have separate paths.
 
             state.agents.sessions.retain(|s| s.device_id != device);
             state.agents.sessions.extend(sessions);
@@ -1256,6 +1253,66 @@ pub(super) fn msg_watch_ended(
 #[cfg(test)]
 mod catalog_cache_regressions {
     use super::*;
+    #[tokio::test]
+    async fn catalog_read_notices_are_silent_but_transport_errors_remain_visible() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: muster_rpc::Client::new(socket),
+            }),
+            tx,
+        };
+        let mut state = State::new(false, Some("host".into()));
+        let epoch = state.agents_epoch;
+        for _ in 0..3 {
+            msg_agents(
+                &mut state,
+                &ctx,
+                epoch,
+                "host".into(),
+                Ok(v1::AgentSessionPage {
+                    notice: "Native Pin, Section and Project metadata unavailable".into(),
+                    sessions: vec![v1::AgentSession {
+                        id: "session".into(),
+                        provider: "claude".into(),
+                        section_id: "native-id".into(),
+                        pinned: true,
+                        ..Default::default()
+                    }],
+                    sections: vec![v1::AgentSection {
+                        id: "native-id".into(),
+                        title: "Example group".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+            );
+            assert!(state.agents.errors.is_empty());
+            assert!(state.agents_errors.is_empty());
+            assert_eq!(state.agents.native_sections[0].title, "Example group");
+            assert!(state.agents.sessions[0].pinned);
+        }
+        msg_agents(
+            &mut state,
+            &ctx,
+            epoch,
+            "host".into(),
+            Err(Error::Unavailable("device disconnected".into())),
+        );
+        assert!(
+            state
+                .agents
+                .errors
+                .iter()
+                .any(|e| e.contains("device disconnected"))
+        );
+    }
+
     #[test]
     fn restored_sessions_keep_native_names_and_page_metadata_in_same_frame() {
         let mut state = State::new(false, Some("host".into()));

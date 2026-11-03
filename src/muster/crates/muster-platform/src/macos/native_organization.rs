@@ -88,6 +88,57 @@ impl NativeAppController {
             tokio::time::sleep(ECHO_POLL).await;
         }
     }
+    async fn organization_submenu(
+        &self,
+        g: u64,
+        web: &Element,
+        window: &Element,
+        labels: &[&str],
+    ) -> Result<(), Error> {
+        let step = Step::new("native organization submenu", Duration::from_secs(2));
+        loop {
+            step.check()?;
+            let (tree, elements) = self.organization_snapshot(g, web, window).await?;
+            let item = match selectors::menu_action(&tree, labels) {
+                Ok(item) => elements[item].clone(),
+                Err(Error::Unavailable(_)) => {
+                    tokio::time::sleep(ECHO_POLL).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            self.organization_guard(g, web, window)?;
+            if !window.contains(&item) {
+                return Err(Error::Conflict("Submenu left the requested window".into()));
+            }
+            // Electron submenu triggers may expose AXPress without opening on
+            // click. Use their native menu action, or the accessible keyboard
+            // route with exact item/window focus, never pointer coordinates.
+            if item.has_action("AXShowMenu") {
+                return item
+                    .perform("AXShowMenu")
+                    .map_err(|e| Error::Unavailable(format!("Native submenu: {e}")));
+            }
+            item.set_bool("AXFocused", true)
+                .map_err(|e| Error::Unavailable(format!("Native submenu focus: {e}")))?;
+            loop {
+                step.check()?;
+                self.organization_guard(g, web, window)?;
+                if self.app.element("AXFocusedUIElement").as_ref() == Some(&item)
+                    && self.app.element("AXFocusedWindow").as_ref() == Some(window)
+                    && item.bool("AXFocused") == Some(true)
+                    && window.contains(&item)
+                {
+                    return self
+                        .app
+                        .submenu_right()
+                        .map_err(|e| Error::Unavailable(format!("Native submenu keyboard: {e}")));
+                }
+                tokio::time::sleep(ECHO_POLL).await;
+            }
+        }
+    }
+
     pub(super) async fn session_organize(&self, plan: &Plan) -> Result<(), Error> {
         let _write = self
             .write
@@ -243,8 +294,12 @@ impl NativeAppController {
                     "The selected UUID row exposes no AX context menu".into(),
                 ));
             }
-            self.organization_menu_action(g, &web, &window, labels, plan.action != Action::Move)
-                .await?;
+            if plan.action == Action::Move {
+                self.organization_submenu(g, &web, &window, labels).await?;
+            } else {
+                self.organization_menu_action(g, &web, &window, labels, true)
+                    .await?;
+            }
         }
         if plan.action == Action::Move {
             self.organization_menu_action(g, &web, &window, &[&plan.section_title], true)
