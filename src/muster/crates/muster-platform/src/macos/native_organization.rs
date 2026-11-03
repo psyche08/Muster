@@ -122,7 +122,7 @@ impl NativeAppController {
                 )
                 .await?;
             }
-            let step = Step::new("new section dialog", Duration::from_secs(2));
+            let step = Step::new("new section dialog", Duration::from_secs(5));
             loop {
                 step.check()?;
                 let (tree, elements) = self.organization_snapshot(g, &web, &window).await?;
@@ -133,9 +133,6 @@ impl NativeAppController {
                     elements[field]
                         .set_string("AXValue", &plan.request.name)
                         .map_err(|e| Error::Unavailable(format!("Section name: {e}")))?;
-                    if elements[field].string("AXValue").as_deref() != Some(&plan.request.name) {
-                        return Err(Error::Conflict("Section name readback differs".into()));
-                    }
                     // React enables Create only after the name input event.
                     // Resolve its current AX element after typing, not before.
                     loop {
@@ -145,12 +142,12 @@ impl NativeAppController {
                         let dialog = selectors::safe_dialog(&fresh)?;
                         let field =
                             selectors::unique(&fresh, dialog, &["Section name"], &["AXTextField"])?;
-                        if fresh.nodes[field].value != plan.request.name {
-                            return Err(Error::Conflict(
-                                "Section name changed before creation".into(),
-                            ));
-                        }
-                        if let Ok(create) = selectors::action(&fresh, dialog, &["Create section"]) {
+                        if selectors::section_name_ready(
+                            &fresh.nodes[field].value,
+                            &plan.request.name,
+                        )? && let Ok(create) =
+                            selectors::action(&fresh, dialog, &["Create section"])
+                        {
                             return self.organization_press(
                                 g,
                                 &web,

@@ -284,6 +284,20 @@ pub fn menu_action(tree: &AxTree, labels: &[&str]) -> Result<usize, Error> {
         )),
     }
 }
+/// AXSetValue may complete before Electron publishes the new input value.
+/// Only the empty initial value may wait; a different draft is never adopted.
+pub fn section_name_ready(value: &str, expected: &str) -> Result<bool, Error> {
+    if value == expected {
+        Ok(true)
+    } else if value.is_empty() {
+        Ok(false)
+    } else {
+        Err(Error::Conflict(
+            "Section name changed before creation".into(),
+        ))
+    }
+}
+
 pub fn safe_dialog(tree: &AxTree) -> Result<usize, Error> {
     let dialogs: Vec<_> = tree
         .preorder(0)
@@ -448,6 +462,12 @@ mod regression_tests {
         assert_eq!(menu_action(&tree, &["Example section"]).unwrap(), 8);
         tree.complete = false;
         assert!(menu_action(&tree, &["Pin"]).is_err());
+    }
+    #[test]
+    fn asynchronous_section_name_waits_only_for_empty_initial_value() {
+        assert!(!section_name_ready("", "Example").unwrap());
+        assert!(section_name_ready("Example", "Example").unwrap());
+        assert!(section_name_ready("Changed", "Example").is_err());
     }
     #[test]
     fn wrapped_popup_can_reveal_row_but_never_authorizes_it() {

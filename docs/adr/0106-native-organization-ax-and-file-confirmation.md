@@ -115,3 +115,19 @@ menus and ambiguous controls. Test nested/wrapped menu items, menu-bar exclusion
 incomplete snapshots and duplicate labels, then repeat native file-confirmed
 operations on the disposable session before archiving it. This extends the same
 AX-only decision; no provider API or store mutation is an alternative.
+
+The corrected menu selector executed Pin, but its receipt stayed unknown because
+Claude persists local pin membership as `isStarred` in the UUID-mapped registry
+file. `pinnedOrder` alone is ordering data, not current membership. Read the
+explicit registry boolean first, including false; use legacy ordering only when
+the field is absent. Invalid/unreadable registry state must not confirm unpin.
+The native UI and read-only registry confirmed the first Pin was applied, so it
+must not be replayed. Verify unpin/pin transitions on the same test UUID after
+fixing file interpretation, then restore its baseline before archive.
+
+Section creation also exposed asynchronous AXValue publication: the immediate
+read was empty, but a later AX snapshot contained exactly the requested name.
+Wait for the expected value and enabled Create control under the existing UUID
+and input-generation guards; reject any different nonempty value. The failed
+attempt only filled a draft and did not create a section. Do not take over that
+pre-existing dialog in a later request.

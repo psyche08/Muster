@@ -258,6 +258,14 @@ pub fn confirmed(config: &AgentConfig, plan: &Plan) -> Result<Option<String>, Er
             "Native account changed before organization readback".into(),
         ));
     }
+    if plan.provider == "claude" {
+        let (native, path, scope) = claude_source(config, &plan.request.session)?;
+        if native != plan.native_id || Some(&path) != plan.source.as_ref() || scope != plan.scope {
+            return Err(Error::Conflict(
+                "Claude UUID mapping changed before readback".into(),
+            ));
+        }
+    }
     let key = (plan.provider.clone(), plan.request.session.clone());
     let pinned = catalog.pinned.contains(&key);
     let member = catalog

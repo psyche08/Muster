@@ -71,12 +71,14 @@ impl Catalog {
         }
     }
 }
-fn read_title_file(path: &Path) -> Option<String> {
+fn read_registry(path: &Path) -> Option<Value> {
     if std::fs::metadata(path).ok()?.len() > 4 << 20 {
         return None;
     }
-    let value: Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
-    value["title"]
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+}
+fn read_title_file(path: &Path) -> Option<String> {
+    read_registry(path)?["title"]
         .as_str()
         .filter(|s| !s.trim().is_empty())
         .map(str::to_owned)
@@ -440,15 +442,28 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
     let mut out = Catalog::default();
     let mapping = claude_identity::mappings(root)?;
     let mut ids = HashMap::new();
+    let mut explicit_pins = HashMap::new();
     for (desktop, cli) in &mapping {
         // Reject ambiguity in either direction, and other account registries.
         if account.join(format!("{desktop}.json")).is_file()
             && mapping.iter().filter(|(d, _)| d == desktop).count() == 1
             && mapping.iter().filter(|(_, c)| c == cli).count() == 1
         {
+            let record = read_registry(&account.join(format!("{desktop}.json")))?;
+            if record["sessionId"] != *desktop || record["cliSessionId"] != *cli {
+                return None;
+            }
             ids.insert(desktop.as_str(), cli.as_str());
-            if let Some(title) = read_title_file(&account.join(format!("{desktop}.json"))) {
-                out.titles.insert(("claude".into(), cli.clone()), title);
+            if let Some(title) = record["title"].as_str().filter(|s| !s.trim().is_empty()) {
+                out.titles
+                    .insert(("claude".into(), cli.clone()), title.to_owned());
+            }
+            if let Some(starred) = record.get("isStarred") {
+                let pinned = starred.as_bool()?;
+                explicit_pins.insert(cli.as_str(), pinned);
+                if pinned {
+                    out.pinned.insert(("claude".into(), cli.clone()));
+                }
             }
         }
     }
@@ -499,8 +514,11 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             };
             if let Some(cli) = ids.get(desktop) {
                 if kind == "pinned" {
-                    // Pinning is independent of manual membership. Retain both.
-                    out.pinned.insert(("claude".into(), (*cli).into()));
+                    // Older registries lack isStarred. Ordering is only a
+                    // fallback there; explicit false must defeat stale order.
+                    if !explicit_pins.contains_key(cli) {
+                        out.pinned.insert(("claude".into(), (*cli).into()));
+                    }
                 } else if assigned.insert(*cli) {
                     out.members.insert(
                         ("claude".into(), (*cli).into()),
@@ -681,6 +699,37 @@ mod tests {
         assert!(!c.pinned.contains(&("codex".into(), B.into())));
     }
 
+    #[test]
+    fn claude_registry_star_is_authoritative_over_pinned_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let account = dir.path().join(ORG).join(USER);
+        std::fs::create_dir_all(&account).unwrap();
+        let desktop = format!("local_{A}");
+        let file = account.join(format!("{desktop}.json"));
+        let scope = format!("{ORG}/{USER}");
+        let mut state = serde_json::json!({"lastSidebarScopeKey":scope,"pinnedOrder":[],
+            "codeSidebarByScope":{&scope:{"sections":[{"id":"pinned","kind":"pinned"},{"id":"sessions","kind":"sessions"}]}}});
+        let mut record = serde_json::json!({"sessionId":desktop,"cliSessionId":B,"isStarred":true});
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
+        state["pinnedOrder"] = serde_json::json!([format!("code:{desktop}")]);
+        record["isStarred"] = serde_json::json!(false);
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            !claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
+        record["isStarred"] = serde_json::json!("invalid");
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(claude_state(dir.path(), &state).is_none());
+    }
     #[test]
     fn claude_pin_is_independent_of_custom_membership_and_visibility() {
         let dir = tempfile::tempdir().unwrap();
