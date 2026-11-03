@@ -103,24 +103,35 @@ pub fn navigation_candidate(tree: &AxTree, title: &str) -> Result<usize, Error> 
             let [popup] = popups.as_slice() else {
                 return Err(Error::Conflict("Ambiguous native sidebar rows".into()));
             };
-            let parent = tree.nodes[*popup]
-                .parent
-                .ok_or_else(|| Error::Unavailable("No containing sidebar row".into()))?;
-            let rows: Vec<_> = tree.nodes[parent]
-                .children
-                .iter()
-                .copied()
-                .filter(|&i| {
-                    let n = &tree.nodes[i];
-                    n.enabled && matches!(n.role.as_str(), "AXButton" | "AXLink" | "AXRow")
-                })
-                .collect();
-            return match rows.as_slice() {
-                [one] if tree.complete => Ok(*one),
-                _ => Err(Error::Unavailable(
-                    "No unique native row beside the title popup".into(),
-                )),
-            };
+            // Claude wraps the popup in a group beside the row button.
+            // Stop at the nearest row container, never ascend to the sidebar.
+            let mut parent = tree.nodes[*popup].parent;
+            for _ in 0..4 {
+                let Some(container) = parent.filter(|&i| i != sidebar) else {
+                    break;
+                };
+                let rows: Vec<_> = tree.nodes[container]
+                    .children
+                    .iter()
+                    .copied()
+                    .filter(|&i| {
+                        let n = &tree.nodes[i];
+                        n.enabled && matches!(n.role.as_str(), "AXButton" | "AXLink" | "AXRow")
+                    })
+                    .collect();
+                match rows.as_slice() {
+                    [one] if tree.complete => return Ok(*one),
+                    [] => parent = tree.nodes[container].parent,
+                    _ => {
+                        return Err(Error::Conflict(
+                            "Ambiguous native row beside the title popup".into(),
+                        ));
+                    }
+                }
+            }
+            return Err(Error::Unavailable(
+                "No unique native row beside the title popup".into(),
+            ));
         }
         return unique(tree, sidebar, &[title], &["AXButton", "AXLink", "AXRow"]);
     }
@@ -207,20 +218,70 @@ pub fn deletion_confirmation(tree: &AxTree) -> Result<usize, Error> {
         ],
     )
 }
-pub fn menu(tree: &AxTree) -> Result<usize, Error> {
-    let menus = crate::desktop_chat::open_menus(tree);
-    let leaves: Vec<_> = menus
-        .iter()
-        .copied()
+fn menu_item(role: &str) -> bool {
+    matches!(
+        role,
+        "AXMenuItem" | "AXMenuItemCheckBox" | "AXMenuItemRadio"
+    )
+}
+
+/// Electron renders some ARIA menus as AXGroup wrappers. Recognize only
+/// subtrees made of menu items and their presentation containers, never the
+/// surrounding sidebar, a dialog, or the application's permanent menu bar.
+pub fn open_menus(tree: &AxTree) -> Vec<usize> {
+    if !tree.complete {
+        return Vec::new();
+    }
+    let order = tree.preorder(0);
+    let mut only = vec![false; tree.nodes.len()];
+    let mut items = vec![false; tree.nodes.len()];
+    let mut menu_bar = vec![false; tree.nodes.len()];
+    for &i in &order {
+        let n = &tree.nodes[i];
+        menu_bar[i] = n.role == "AXMenuBar" || n.parent.is_some_and(|p| menu_bar[p]);
+    }
+    for &i in order.iter().rev() {
+        let n = &tree.nodes[i];
+        items[i] = menu_item(&n.role) || n.children.iter().any(|&c| items[c]);
+        only[i] = !menu_bar[i]
+            && n.subrole != "AXApplicationDialog"
+            && (menu_item(&n.role)
+                || matches!(
+                    n.role.as_str(),
+                    "AXGroup" | "AXMenu" | "AXStaticText" | "AXImage" | "AXSplitter"
+                ))
+            && n.children.iter().all(|&c| only[c]);
+    }
+    order
+        .into_iter()
         .filter(|&i| {
-            !menus
-                .iter()
-                .any(|&other| other != i && tree.preorder(i).contains(&other))
+            only[i]
+                && items[i]
+                && matches!(tree.nodes[i].role.as_str(), "AXGroup" | "AXMenu")
+                && !tree.nodes[i].parent.is_some_and(|p| only[p] && items[p])
+        })
+        .collect()
+}
+
+pub fn menu_action(tree: &AxTree, labels: &[&str]) -> Result<usize, Error> {
+    let mut matches: Vec<_> = open_menus(tree)
+        .into_iter()
+        .flat_map(|root| tree.preorder(root))
+        .filter(|&i| {
+            let n = &tree.nodes[i];
+            n.enabled && menu_item(&n.role) && labels.contains(&n.label())
         })
         .collect();
-    match leaves.as_slice() {
+    matches.sort_unstable();
+    matches.dedup();
+    match matches.as_slice() {
         [one] => Ok(*one),
-        _ => Err(Error::Unavailable("No unique native menu is open".into())),
+        [] => Err(Error::Unavailable(
+            "Native menu item is not available".into(),
+        )),
+        _ => Err(Error::Conflict(
+            "Ambiguous native menu items; nothing was changed".into(),
+        )),
     }
 }
 pub fn safe_dialog(tree: &AxTree) -> Result<usize, Error> {
@@ -361,20 +422,47 @@ mod regression_tests {
         assert_eq!(create_trigger(&tree).unwrap(), 6);
     }
     #[test]
-    fn nested_menus_select_leaf_but_unrelated_menus_fail_closed() {
+    fn wrapped_menu_items_are_supported_but_menu_bar_and_duplicates_are_rejected() {
         let mut tree = AxTree {
             complete: true,
             nodes: vec![
-                node("AXWindow", "", None, &[1]),
-                node("AXMenu", "", Some(0), &[2]),
-                node("AXMenu", "", Some(1), &[]),
+                node("AXWindow", "", None, &[1, 4]),
+                node("AXGroup", "More options for Example", Some(0), &[2]),
+                node("AXGroup", "", Some(1), &[3]),
+                node("AXMenuItem", "Pin", Some(2), &[]),
+                node("AXMenuBar", "", Some(0), &[5]),
+                node("AXMenu", "", Some(4), &[6]),
+                node("AXMenuItem", "Pin", Some(5), &[]),
             ],
         };
-        assert_eq!(menu(&tree).unwrap(), 2);
-        tree.nodes[1].children.clear();
-        tree.nodes[0].children.push(2);
-        tree.nodes[2].parent = Some(0);
-        assert!(menu(&tree).is_err());
+        assert_eq!(open_menus(&tree), vec![1]);
+        assert_eq!(menu_action(&tree, &["Pin"]).unwrap(), 3);
+        tree.nodes[0].children.push(7);
+        tree.nodes.push(node("AXGroup", "", Some(0), &[8]));
+        tree.nodes.push(node("AXMenuItem", "Pin", Some(7), &[]));
+        assert!(matches!(
+            menu_action(&tree, &["Pin"]),
+            Err(Error::Conflict(_))
+        ));
+        tree.nodes[8].title = "Example section".into();
+        assert_eq!(menu_action(&tree, &["Example section"]).unwrap(), 8);
+        tree.complete = false;
+        assert!(menu_action(&tree, &["Pin"]).is_err());
+    }
+    #[test]
+    fn wrapped_popup_can_reveal_row_but_never_authorizes_it() {
+        let tree = AxTree {
+            complete: true,
+            nodes: vec![
+                node("AXGroup", "Sidebar", None, &[1]),
+                node("AXGroup", "", Some(0), &[2, 3]),
+                node("AXButton", "Example workspace · Connected", Some(1), &[]),
+                node("AXGroup", "", Some(1), &[4]),
+                node("AXPopUpButton", "More options for Example", Some(3), &[]),
+            ],
+        };
+        assert_eq!(navigation_candidate(&tree, "Example").unwrap(), 2);
+        assert!(row(&tree, "uuid", "Example").is_err());
     }
     #[test]
     fn empty_section_delete_is_scoped_to_preserving_dialog() {

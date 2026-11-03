@@ -78,14 +78,12 @@ impl NativeAppController {
         loop {
             step.check()?;
             let (tree, elements) = self.organization_snapshot(g, web, window).await?;
-            if let Ok(menu) = selectors::menu(&tree) {
-                match selectors::action(&tree, menu, labels) {
-                    Ok(item) => {
-                        return self.organization_press(g, web, window, &elements[item], mutation);
-                    }
-                    Err(Error::Unavailable(_)) => {} // Submenu may not have mounted yet.
-                    Err(error) => return Err(error),
+            match selectors::menu_action(&tree, labels) {
+                Ok(item) => {
+                    return self.organization_press(g, web, window, &elements[item], mutation);
                 }
+                Err(Error::Unavailable(_)) => {} // The popup/submenu may still be mounting.
+                Err(error) => return Err(error),
             }
             tokio::time::sleep(ECHO_POLL).await;
         }
@@ -104,9 +102,7 @@ impl NativeAppController {
             .ok_or_else(|| Error::Unavailable("The session exposes no AX window".into()))?;
         let g = user_input_generation();
         let (tree, elements) = self.organization_snapshot(g, &web, &window).await?;
-        if !muster_agent::desktop_chat::open_menus(&tree).is_empty()
-            || selectors::safe_dialog(&tree).is_ok()
-        {
+        if !selectors::open_menus(&tree).is_empty() || selectors::safe_dialog(&tree).is_ok() {
             return Err(Error::Conflict(
                 "Close the native menu or dialog before organizing sessions".into(),
             ));

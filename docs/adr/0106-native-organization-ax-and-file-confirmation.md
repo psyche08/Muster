@@ -101,3 +101,17 @@ sessions. Nested menus resolve only a unique leaf, and duplicate sidebar rows or
 changed native account scope remain rejected. Group deletion still requires an
 exposed AXShowMenu action when no labelled popup exists; no coordinate fallback.
 These observations do not establish end-to-end Muster mutation acceptance.
+
+### Disposable-session acceptance follow-up
+
+The owner authorized creating a local Claude test conversation on the selected
+Mac. Native AX creation returned a unique local UUID receipt. The first Pin
+operation was rejected before mutation: the live menu uses AXGroup wrappers
+around AXMenuItem nodes, not AXMenu. A row popup is additionally wrapped in its
+own AXGroup beside the row button. Recognize menu-only AX subtrees outside the
+menu bar, bind actions to a unique enabled menu item, and traverse bounded row
+wrappers before the existing UUID verification. Continue refusing pre-existing
+menus and ambiguous controls. Test nested/wrapped menu items, menu-bar exclusion,
+incomplete snapshots and duplicate labels, then repeat native file-confirmed
+operations on the disposable session before archiving it. This extends the same
+AX-only decision; no provider API or store mutation is an alternative.
