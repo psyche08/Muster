@@ -3,7 +3,7 @@
 // glyph box, a 6pt gap and a chevron that follows the label, rows 6pt apart,
 // and bodies indented under the label on the code-block surface. Presentation
 // only: titles, statuses, grouping and expansion defaults arrive from Shared
-// Rust exactly as the other styles receive them. See ADR 0105.
+// Rust exactly as the other styles receive them. See ADR 0106.
 #if canImport(SwiftUI)
 import SwiftUI
 

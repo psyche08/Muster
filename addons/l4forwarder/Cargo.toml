@@ -1,0 +1,24 @@
+# A standalone TCP/UDP port forwarder (ADR 0105). Deliberately outside the
+# src/muster workspace: it depends on no Muster crate, and Muster authorizes
+# what reaches it (vnet `net:` scopes and open ports), not the other way round.
+[package]
+name = "l4forwarder"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
+
+[lints.clippy]
+all = "warn"

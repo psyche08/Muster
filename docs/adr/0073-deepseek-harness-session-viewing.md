@@ -5,7 +5,7 @@
   "do not drive the app yet" part is superseded by
   [ADR 0074](0074-deepseek-harness-plugin-control.md). Its hidden reasoning,
   bare-UUID subagent ids and `unknown` state are revised by
-  [ADR 0105](0105-deepseek-harness-session-adaptation.md)
+  [ADR 0106](0106-deepseek-harness-session-adaptation.md)
 - Related: ARCHITECTURE §3.6.2 and §3.6.4 (step 5, "the next app as a
   profile"), [APP_PROFILES.md](../APP_PROFILES.md)
 

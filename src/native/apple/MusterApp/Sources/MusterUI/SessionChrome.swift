@@ -4,7 +4,7 @@
 // the compact form under its native navigation bar, which keeps the title and
 // the actions menu. Presentation only: every value comes from the Rust-owned
 // ChatView and every control sends an Intent or a shell-only preference. See
-// ADR 0086, ADR 0103 and ADR 0105.
+// ADR 0086, ADR 0103 and ADR 0106.
 #if canImport(SwiftUI)
 import SwiftUI
 

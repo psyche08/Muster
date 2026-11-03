@@ -1,4 +1,4 @@
-# ADR 0105: DeepSeek Harness session adaptation on every surface
+# ADR 0106: DeepSeek Harness session adaptation on every surface
 
 - Date: 2026-11-03
 - Status: Accepted; source and rendering verified, device acceptance pending

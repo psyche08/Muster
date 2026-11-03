@@ -4,7 +4,7 @@
 
 Mobile conversation pages use the shared session chrome with direct tabs:
 Conversation, Trace, Subagents, Sessions and Terminal
-([ADR 0105](adr/0105-deepseek-harness-session-adaptation.md)).
+([ADR 0106](adr/0106-deepseek-harness-session-adaptation.md)).
 The iOS shell retains native navigation bars and confirmation/result sheets.
 The trace page itself is shared with the Mac: a time overview, a turn-grouped
 ledger and a record inspector, styled after DeepSeek Harness's Trajectory page;

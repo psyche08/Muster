@@ -461,7 +461,7 @@ final class SessionChromeRenderingTests: XCTestCase {
         }
     }
 
-    /// ADR 0105: the compact header keeps every view tab visible at phone
+    /// ADR 0106: the compact header keeps every view tab visible at phone
     /// width, and the DeepSeek style draws process rows as DSH's Chat does.
     func testRenderCompactHeaderAndDeepSeekProcessRows() throws {
         let reasoning = Muster_App_ChatBlock.with {

@@ -5,7 +5,7 @@
 - Related: [ADR 0073](0073-deepseek-harness-session-viewing.md), whose
   "do not drive the app yet" part this supersedes; ARCHITECTURE §3.6.2 and
   §3.6.4; [APP_PROFILES.md](../APP_PROFILES.md);
-  [LOCKED_USE.md](../LOCKED_USE.md); [ADR 0105](0105-deepseek-harness-session-adaptation.md)
+  [LOCKED_USE.md](../LOCKED_USE.md); [ADR 0106](0106-deepseek-harness-session-adaptation.md)
   reads a session missing from the full registry as `idle`
 
 ## Context
