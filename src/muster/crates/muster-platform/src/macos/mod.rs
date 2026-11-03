@@ -14,6 +14,7 @@ pub mod notice;
 pub mod procs;
 #[cfg(feature = "sep")]
 pub mod sep;
+pub mod vision;
 
 pub mod locked_use;
 

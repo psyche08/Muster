@@ -201,6 +201,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0115](0115-target-scoped-local-input.md) | Accepted; source and tests verified, device acceptance pending | Count only local input that could reach the target app |
 
+| [0116](0116-failure-screenshot-analysis.md) | Accepted; source and tests verified, device acceptance pending | Look at a failed native send with the user's own LLM |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

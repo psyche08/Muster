@@ -506,6 +506,9 @@ struct SettingsView: View {
             if vm.multica.supported && !vm.embedded {
                 MulticaSettings(core: core, status: vm.multica)
             }
+            if vm.vision.supported && !vm.embedded {
+                VisionSettings(core: core, status: vm.vision)
+            }
             Section("Network devices") {
                 ForEach(vm.pending, id: \.deviceID) { join in
                     VStack(alignment: .leading, spacing: 6) {

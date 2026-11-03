@@ -60,7 +60,9 @@ fn access_for(req: &Req) -> Access {
         })
     };
     match req {
-        Req::Multica(_) | Req::MulticaBrowse(_) | Req::AgentNativeCreate(_) => Access::LocalOnly,
+        Req::Multica(_) | Req::MulticaBrowse(_) | Req::AgentNativeCreate(_) | Req::Vision(_) => {
+            Access::LocalOnly
+        }
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -353,22 +355,50 @@ impl Handler for MusterHandler {
             // Cancellation can drop the handler while a blocking AX call runs;
             // provider permits remain held until that work has actually drained.
             let locked_prepare = matches!(request, Req::LockedUsePrepare(_));
+            let look = vision_target(&daemon, &request);
+            let cancelled = events.cancelled().clone();
             let work = muster_agent::control_guard::WorkQueue::default();
-            work.scope(async {
-                match dispatch(&daemon, &ctx, request, events).await {
-                    Ok(resp) => resp,
-                    Err(error) => {
-                        if locked_prepare {
-                            log::warn!("Locked Use prepare rejected: requester={:?} rpc_id={} reason={error}",
-                                ctx.principal, ctx.id);
+            let reply = work
+                .scope(async {
+                    match dispatch(&daemon, &ctx, request, events).await {
+                        Ok(resp) => resp,
+                        Err(error) => {
+                            if locked_prepare {
+                                log::warn!("Locked Use prepare rejected: requester={:?} rpc_id={} reason={error}",
+                                    ctx.principal, ctx.id);
+                            }
+                            fail(error)
                         }
-                        fail(error)
                     }
-                }
-            })
-            .await
+                })
+                .await;
+            // Look only after the console reservation is released, so a
+            // Locked Use transaction never waits for an LLM (ADR 0116).
+            drop(_console_write);
+            match look {
+                Some(target) => crate::vision::after_send(&daemon, target, reply, cancelled).await,
+                None => reply,
+            }
         })
     }
+}
+
+/// An ordinary native send whose failure the owner's LLM may look at
+/// (ADR 0116). Locked Use operations never reach here.
+fn vision_target(daemon: &Daemon, request: &Req) -> Option<crate::vision::Target> {
+    let Req::AgentSend(r) = request else {
+        return None;
+    };
+    if independent_session(daemon, request)
+        || plugin_session(daemon, request)
+        || !crate::vision::config(daemon).enabled
+    {
+        return None;
+    }
+    Some(crate::vision::Target {
+        session: r.session.clone(),
+        text: r.text.clone(),
+    })
 }
 
 /// The Ghostty terminal a request reads or writes. Listing works without
@@ -1050,6 +1080,7 @@ async fn dispatch(
         }
         Req::MulticaBrowse(r) => Resp::MulticaPage(daemon.multica.browse(r).await?),
         Req::Multica(r) => Resp::Multica(daemon.multica.request(r, &daemon.socket_path()).await?),
+        Req::Vision(r) => Resp::Vision(crate::vision::request(daemon, r).await?),
         Req::BrowserSetup(r) => {
             Resp::BrowserStatus(crate::browser::setup(daemon, r.install).await?)
         }

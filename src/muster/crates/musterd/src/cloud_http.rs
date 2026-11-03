@@ -20,23 +20,29 @@ pub struct Client {
 impl Client {
     /// A shared client for the agent service.
     pub fn connect() -> anyhow::Result<Arc<dyn Http>> {
-        let builder = client_builder();
-        // Scope OS trust to provider Cloud HTTPS. Relay, device identity,
-        // DoH and update clients retain their independently configured trust.
-        #[cfg(target_os = "macos")]
-        let builder = {
-            use rustls_platform_verifier::BuilderVerifierExt;
-            let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_safe_default_protocol_versions()?
-            .with_platform_verifier()?
-            .with_no_client_auth();
-            builder.use_preconfigured_tls(tls)
-        };
-        let client = builder.build()?;
+        let client = with_platform_trust(client_builder())?.build()?;
         Ok(Arc::new(Self { client }))
     }
+}
+
+/// OS trust on macOS. It is scoped to provider Cloud HTTPS and the owner's
+/// vision LLM (ADR 0116); relay, device identity, DoH and update clients
+/// retain their independently configured trust.
+pub(crate) fn with_platform_trust(
+    builder: reqwest::ClientBuilder,
+) -> anyhow::Result<reqwest::ClientBuilder> {
+    #[cfg(target_os = "macos")]
+    let builder = {
+        use rustls_platform_verifier::BuilderVerifierExt;
+        let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()?
+        .with_platform_verifier()?
+        .with_no_client_auth();
+        builder.use_preconfigured_tls(tls)
+    };
+    Ok(builder)
 }
 
 fn client_builder() -> reqwest::ClientBuilder {
@@ -81,6 +87,11 @@ impl Http for Client {
 /// Do not format reqwest/source errors: their URLs can carry cursors or secrets.
 /// Preserve typed causes instead of losing them behind "error sending request".
 fn transport_error(phase: &str, error: &reqwest::Error) -> String {
+    format!("Cloud HTTPS {phase} failed: {}", transport_cause(error))
+}
+
+/// The typed cause of a transport error, never its text.
+pub(crate) fn transport_cause(error: &reqwest::Error) -> &'static str {
     use std::error::Error;
     let mut source: Option<&(dyn Error + 'static)> = Some(error);
     let mut cause = None;
@@ -104,7 +115,7 @@ fn transport_error(phase: &str, error: &reqwest::Error) -> String {
             .map(|inner| inner as &(dyn Error + 'static))
             .or_else(|| current.source());
     }
-    let cause = cause.unwrap_or_else(|| {
+    cause.unwrap_or_else(|| {
         if error.is_timeout() {
             "timeout"
         } else if error.is_connect() {
@@ -118,8 +129,7 @@ fn transport_error(phase: &str, error: &reqwest::Error) -> String {
         } else {
             "transport"
         }
-    });
-    format!("Cloud HTTPS {phase} failed: {cause}")
+    })
 }
 
 #[cfg(test)]
