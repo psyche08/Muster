@@ -62,6 +62,15 @@ fn profile(app: ChatApp) -> &'static AppProfile {
 /// The app's element tree in document order, bounded by nodes and time.
 /// The menu bar is included only when asked (mode and menu fallbacks).
 pub fn snapshot(root: &Element, menu_bar: bool) -> (AxTree, Vec<Element>) {
+    snapshot_impl(root, menu_bar, false)
+}
+
+/// Permission controls require an explicit enabled flag; absent is unavailable.
+pub fn approval_snapshot(root: &Element) -> (AxTree, Vec<Element>) {
+    snapshot_impl(root, false, true)
+}
+
+fn snapshot_impl(root: &Element, menu_bar: bool, strict: bool) -> (AxTree, Vec<Element>) {
     let started = Instant::now();
     let mut tree = AxTree {
         nodes: Vec::new(),
@@ -74,7 +83,17 @@ pub fn snapshot(root: &Element, menu_bar: bool) -> (AxTree, Vec<Element>) {
             tree.complete = false;
             break;
         }
-        let values = element.attributes(&ATTRIBUTES);
+        let values = if strict {
+            match element.try_attributes(&ATTRIBUTES) {
+                Ok(values) => values,
+                Err(_) => {
+                    tree.complete = false;
+                    break;
+                }
+            }
+        } else {
+            element.attributes(&ATTRIBUTES)
+        };
         let text = |i: usize| {
             values[i]
                 .as_ref()
@@ -107,7 +126,7 @@ pub fn snapshot(root: &Element, menu_bar: bool) -> (AxTree, Vec<Element>) {
             url: text(5),
             identifier,
             placeholder,
-            enabled: flag(9).unwrap_or(true),
+            enabled: flag(9).unwrap_or(!strict),
             selected: flag(10).unwrap_or(false)
                 || (checkable && flag(4) == Some(true))
                 || !matches!(text(13).as_str(), "" | "false" | "0"),
@@ -120,6 +139,9 @@ pub fn snapshot(root: &Element, menu_bar: bool) -> (AxTree, Vec<Element>) {
         }
         elements.push(element);
         let descend = depth < MAX_DEPTH && (menu_bar || tree.nodes[index].role != "AXMenuBar");
+        if strict && depth >= MAX_DEPTH {
+            tree.complete = false;
+        }
         if descend && let Some(children) = values[11].as_ref() {
             for child in Element::elements_of(children).into_iter().rev() {
                 stack.push((child, Some(index), depth + 1));

@@ -20,6 +20,9 @@ pub trait Host: Send + Sync {
     fn surface(&self) -> Result<Option<Self::Surface>, Error>;
     fn sidebar(&self) -> Result<Sidebar<Self::Control>, Error>;
     fn exact_route(&self) -> Option<String>;
+    fn requires_exact_route(&self) -> bool {
+        false
+    }
     fn press(&self, control: &Self::Control, permit: &ActionPermit) -> Result<(), Error>;
     async fn navigate(&self, route: &str, permit: &ActionPermit) -> Result<(), Error>;
     fn refresh_renderer(&self, budget: Duration) -> Result<(), Error>;
@@ -110,6 +113,9 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             // does not make the future destination or its composer trusted.
             if let Some(route) = host.exact_route() {
                 return Ok(Some(Ready::Exact(route)));
+            }
+            if host.requires_exact_route() {
+                return Err(Error::Unavailable("local session UUID mapping is missing or ambiguous; no title lookup or navigation attempted".into()));
             }
             let sidebar = host.sidebar()?;
             Ok((sidebar.navigation > 0).then_some(Ready::Sidebar(sidebar)))
@@ -221,6 +227,7 @@ mod tests {
         presses: AtomicUsize,
         reads: AtomicUsize,
         exact: bool,
+        require_exact: bool,
         missing: bool,
         ambiguous: bool,
         incomplete: bool,
@@ -268,6 +275,9 @@ mod tests {
                 complete: !self.incomplete,
             })
         }
+        fn requires_exact_route(&self) -> bool {
+            self.require_exact
+        }
         fn exact_route(&self) -> Option<String> {
             self.exact.then(|| "exact-test-route".into())
         }
@@ -303,6 +313,18 @@ mod tests {
             expansions: 5,
         }
     }
+    #[tokio::test]
+    async fn missing_local_uuid_mapping_never_queries_or_presses_a_title() {
+        let host = Fixture {
+            require_exact: true,
+            ..Default::default()
+        };
+        assert!(select(&host, budget()).await.is_err());
+        assert_eq!(host.reads.load(SeqCst), 0);
+        assert_eq!(host.presses.load(SeqCst), 0);
+        assert_eq!(host.dispatches.load(SeqCst), 0);
+    }
+
     #[tokio::test]
     async fn visible_target_needs_no_navigation_or_sidebar() {
         let h = Fixture {

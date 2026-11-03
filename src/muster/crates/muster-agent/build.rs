@@ -209,6 +209,7 @@ struct ControlsSection {
     approve: SelectorSpec,
     #[serde(default)]
     approval_scope: Option<String>,
+    permission_card_prefix: Option<String>,
     #[serde(default)]
     composer_scope: Option<String>,
     sessions: SessionsSpec,
@@ -741,6 +742,11 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             Some("main-conversation") => "crate::native_scan::ComposerScope::MainConversation",
             Some(other) => at.fail(format!("invalid composer_scope {other:?}")),
         };
+        let permission_card_prefix = match &spec.permission_card_prefix {
+            Some(prefix) if !prefix.trim().is_empty() => format!("Some({prefix:?})"),
+            Some(_) => at.fail("permission_card_prefix must not be empty"),
+            None => "None".into(),
+        };
         let approval_scope = match spec.approval_scope.as_deref() {
             None | Some("web-area") => "ApprovalScope::WebArea",
             Some("main-conversation") => "ApprovalScope::MainConversation",
@@ -748,7 +754,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
+            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
             list(&spec.placeholders),
         );
     }

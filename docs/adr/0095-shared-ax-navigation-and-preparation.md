@@ -3,6 +3,7 @@
 - Date: 2026-11-02
 - Status: Accepted; installed Codex phone-send baseline verified; broader App acceptance pending
 - Related: ADR 0093, ADR 0045, ADR 0046, ADR 0062, ADR 0091
+- Local Claude title fallback superseded by [ADR 0099](0099-local-claude-identity-and-permission-cards.md); exact-route dispatch and fresh destination verification retained.
 - Partially supersedes: ADR 0039's sidebar-first restriction; exact native
   identity mapping and fresh destination verification remain required.
 
