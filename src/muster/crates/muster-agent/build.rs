@@ -261,6 +261,7 @@ struct QueueSpec {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct QuestionsSpec {
+    editor_placeholders: Option<Labels>,
     open: Option<Labels>,
     submit: Labels,
     #[serde(default)]
@@ -717,7 +718,10 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let questions = match &spec.questions {
             Some(q) => format!(
-                "Some(Questions {{ open: {}, submit: {}, submit_via_focused_space: {}, next: {}, back: {}, other: {}, paged: {}, refresh_renderer: {}, button_choices: {}, immediate_suggestions: {} }})",
+                "Some(Questions {{ editor_placeholders: {}, open: {}, submit: {}, submit_via_focused_space: {}, next: {}, back: {}, other: {}, paged: {}, refresh_renderer: {}, button_choices: {}, immediate_suggestions: {} }})",
+                q.editor_placeholders
+                    .as_ref()
+                    .map_or_else(|| "&[]".into(), |labels| self.labels(&at, labels)),
                 q.open
                     .as_ref()
                     .map_or_else(|| "&[]".into(), |labels| self.labels(&at, labels)),

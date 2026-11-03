@@ -145,6 +145,7 @@ labels = ["Delete queued message", "删除排队消息", "删除待发消息"]
 # Question cards (request_user_input): all questions on one card; optional
 # single-select suggestion cards answer on press.
 [controls.questions]
+editor_placeholders = ["Reply…", "Reply..."]
 open = "$answer_question"
 submit = "$submit"
 next = "$next"

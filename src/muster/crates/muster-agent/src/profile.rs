@@ -149,6 +149,8 @@ pub struct Queue {
 /// on a control or the text inside it (Claude's cards).
 #[derive(Debug)]
 pub struct Questions {
+    /// Known empty free-text reply hints; never sufficient without field/card evidence.
+    pub editor_placeholders: &'static [&'static str],
     /// Reopen a collapsed optional question reply panel.
     pub open: &'static [&'static str],
     pub submit: &'static [&'static str],

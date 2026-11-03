@@ -92,6 +92,7 @@ pub(super) fn update_additional(
 /// source either, so its empty sets are never consulted.
 fn cards(profile: &AppProfile) -> &'static muster_agent::profile::Questions {
     const NONE: muster_agent::profile::Questions = muster_agent::profile::Questions {
+        editor_placeholders: &[],
         open: &[],
         submit: &[],
         submit_via_focused_space: false,
@@ -538,14 +539,20 @@ impl Tree {
             {
                 return None;
             }
-            let mut found: Vec<_> = labels
-                .iter()
-                .filter_map(|label| self.unique_control(root, label, enabled_only))
+            // A disabled local command still establishes this card's boundary.
+            // Never walk outward to borrow an enabled command from a neighbour.
+            let found: Vec<_> = (0..self.nodes.len())
+                .filter(|&i| {
+                    self.inside(i, root)
+                        && self.control(i, false)
+                        && labels.iter().any(|label| self.named(i, label))
+                })
                 .collect();
-            found.sort_unstable();
-            found.dedup();
-            if found.len() == 1 {
-                return Some(found[0]);
+            if found.len() > 1 {
+                return None;
+            }
+            if let Some(&id) = found.first() {
+                return (!enabled_only || self.nodes[id].enabled).then_some(id);
             }
             parent = self.nodes[root].parent;
         }
@@ -1041,7 +1048,7 @@ impl NativeAppController {
             CLEAR_DEADLINE, QuestionEditor, QuestionEditorWait, QuestionPreparation,
         };
         let step = Step::new("question answer field preparation", CLEAR_DEADLINE);
-        let mut wait = QuestionEditorWait::for_provider(self.profile.app.provider);
+        let mut wait = QuestionEditorWait::for_question(self.profile, pending, question);
         let mut previous: Option<Element> = None;
         loop {
             step.check()?;
@@ -1061,7 +1068,11 @@ impl NativeAppController {
             let value = element.string("AXValue");
             let placeholder = element.string("AXPlaceholderValue");
             let characters = element.number("AXNumberOfCharacters");
-            let decision = wait.observe(
+            let submit_enabled = tree
+                .command_control(&form, self.profile, cards(self.profile).submit, false)
+                .and_then(|i| tree.nodes[i].element.bool("AXEnabled"));
+            let selected_range = element.range("AXSelectedTextRange");
+            let decision = wait.observe_question(
                 step.elapsed(),
                 QuestionEditor {
                     value: value.as_deref(),
@@ -1069,15 +1080,20 @@ impl NativeAppController {
                     characters,
                 },
                 text,
+                submit_enabled,
+                selected_range,
             );
             let rebound = previous.as_ref().is_some_and(|old| old != element);
             if !matches!(decision, QuestionPreparation::Wait) {
                 log::info!(
-                    "AX question editor session={} question={} decision={decision:?} value_chars={:?} characters={characters:?} placeholder_match={} rebound={rebound} attempts={} elapsed_ms={}",
+                    "AX question editor session={} question={} decision={decision:?} value_chars={:?} characters={characters:?} placeholder_match={} submit_enabled={submit_enabled:?} selection={selected_range:?} profile_hint={} rebound={rebound} attempts={} elapsed_ms={}",
                     self.session,
                     question.id,
                     value.as_ref().map(|v| v.chars().count()),
                     value.is_some() && value == placeholder,
+                    value.as_deref().is_some_and(|v| cards(self.profile)
+                        .editor_placeholders
+                        .contains(&v.trim())),
                     wait.attempts(),
                     step.elapsed().as_millis()
                 );
@@ -1715,6 +1731,45 @@ mod tests {
         tree.nodes[8].enabled = true;
         tree.nodes[3].labels = vec!["Unrelated question".into()];
         assert!(tree.form(&q, &CLAUDE_APP).is_none());
+    }
+
+    #[test]
+    fn disabled_reply_submit_is_not_borrowed_from_another_card() {
+        let mut q = question("0", "Reply to this question?");
+        q.options.clear();
+        q.allow_text = true;
+        let mut tree = Tree {
+            nodes: vec![
+                node(None, "AXWebArea", ""),
+                node(Some(0), "AXGroup", ""),
+                node(Some(1), "AXStaticText", "Reply to this question?"),
+                node(Some(1), "AXTextArea", "Reply…"),
+                node(Some(1), "AXButton", "Send"),
+                node(Some(0), "AXGroup", ""),
+                node(Some(5), "AXStaticText", "Different question?"),
+                node(Some(5), "AXButton", "Send"),
+            ],
+        };
+        tree.nodes[4].enabled = false;
+        let form = tree.form(&q, &CODEX_APP).unwrap();
+        assert_eq!(
+            tree.command_control(&form, &CODEX_APP, cards(&CODEX_APP).submit, false),
+            Some(4)
+        );
+        assert_eq!(
+            tree.command(&form, &CODEX_APP, cards(&CODEX_APP).submit),
+            None
+        );
+        tree.nodes[4].enabled = true;
+        assert_eq!(
+            tree.command(&form, &CODEX_APP, cards(&CODEX_APP).submit),
+            Some(4)
+        );
+        tree.nodes.push(node(Some(1), "AXButton", "Send"));
+        assert_eq!(
+            tree.command_control(&form, &CODEX_APP, cards(&CODEX_APP).submit, false),
+            None
+        );
     }
 
     #[test]
