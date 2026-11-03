@@ -1722,6 +1722,16 @@ impl AgentService {
         activity
     }
 
+    /// Newest first: conversation time, then the change stamp, then the id
+    /// descending so the whole key can be compared in one direction.
+    fn child_recency(d: &Discovered) -> (u64, std::time::SystemTime, std::cmp::Reverse<&str>) {
+        (
+            d.meta.updated_unix,
+            d.modified,
+            std::cmp::Reverse(d.id.as_str()),
+        )
+    }
+
     fn project_locked(inner: &Inner, id: &str) -> Option<AgentSession> {
         let mut session = Self::project_summary(inner, id)?;
         let activity = Self::descendant_activity(inner);
@@ -1736,12 +1746,10 @@ impl AgentService {
                     && d.id != id
             })
             .collect();
-        children.sort_by(|a, b| {
-            b.meta
-                .updated_unix
-                .cmp(&a.meta.updated_unix)
-                .then_with(|| a.id.cmp(&b.id))
-        });
+        // Conversation time orders these; a child with none is not therefore
+        // the oldest, so fall back to the change stamp before the id. The
+        // stamp only breaks that tie: it is never shown as a message time.
+        children.sort_by(|a, b| Self::child_recency(b).cmp(&Self::child_recency(a)));
         session.subagents = children
             .into_iter()
             .take(200)
@@ -1758,12 +1766,7 @@ impl AgentService {
                     && d.id != id
             })
             .collect();
-        subsessions.sort_by(|a, b| {
-            b.meta
-                .updated_unix
-                .cmp(&a.meta.updated_unix)
-                .then_with(|| a.id.cmp(&b.id))
-        });
+        subsessions.sort_by(|a, b| Self::child_recency(b).cmp(&Self::child_recency(a)));
         session.subsessions = subsessions
             .into_iter()
             .take(200)

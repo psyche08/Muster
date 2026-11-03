@@ -108,3 +108,12 @@ and last-complete snapshot retention remain internal.
 [ADR 0108](0108-pin-only-session-catalog.md) supersedes named-group presentation
 and Section/Project UI controls at the owner's request. Native data is preserved;
 Section acceptance is paused.
+
+## Catch-up with the paged catalog and the longer snapshot deadline
+
+Two client integration expectations still described the state before this
+decision and were failing: the catalog watch now asks for one page of main
+sessions rather than a thousand rows, and the chat history snapshot deadline is
+fifteen seconds rather than three. Assert the page size from its own constant,
+and give the stalled-history test patience past the client's deadline instead of
+shortening that deadline to suit the test.

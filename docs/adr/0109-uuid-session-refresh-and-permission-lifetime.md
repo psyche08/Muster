@@ -176,3 +176,16 @@ the requested directory, with no environment scope or starting-environment field
 The same build on the locked Macs cannot be exercised here: native creation
 requires an unlocked active console by design, so modern-form creation on those
 two Macs stays unverified rather than unresolved.
+
+## Child summaries when conversation time is unknown
+
+Moving recency onto conversation messages left one consequence unhandled. A
+parent's bounded child summaries were ordered by last conversation time alone,
+with the id as the only tiebreaker, so children with no readable conversation
+message all compared equal and the bound kept the lowest ids rather than the
+newest work. Order these by last conversation time, then the file change stamp,
+then the id. The stamp only separates children that conversation time cannot,
+exactly as duplicate-source ranking already uses it; it is still never reported
+as a last-message time, and a child with no readable message is not treated as
+the oldest. Regression coverage is the existing bounded-summary test, which this
+restores.
