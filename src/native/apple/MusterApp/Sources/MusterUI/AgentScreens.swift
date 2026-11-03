@@ -57,7 +57,9 @@ struct AgentsView: View {
                             Image(systemName: section.expanded ? "chevron.down" : "chevron.right").font(.caption2)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(section.title).font(.subheadline.weight(.semibold))
-                                Text(section.subtitle).font(.caption2).foregroundStyle(.secondary)
+                                if !section.subtitle.isEmpty {
+                                    Text(section.subtitle).font(.caption2).foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             Text("\(section.count)").font(.caption).foregroundStyle(.secondary)

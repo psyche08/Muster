@@ -2692,6 +2692,12 @@ public nonisolated struct Muster_V1_AgentSession: @unchecked Sendable {
     set {_uniqueStorage()._parentTitle = newValue}
   }
 
+  /// native provider metadata; display only
+  public var pinned: Bool {
+    get {_storage._pinned}
+    set {_uniqueStorage()._pinned = newValue}
+  }
+
   /// read-only title/body match, never input authority
   public var searchSnippet: String {
     get {_storage._searchSnippet}
@@ -2715,6 +2721,9 @@ public nonisolated struct Muster_V1_AgentSection: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  /// pin | section | recent; native semantics, never inferred from titles
+  public var kind: String = String()
 
   public var id: String = String()
 
@@ -8972,7 +8981,7 @@ nonisolated extension Muster_V1_TerminalLines: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSession"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0\u{3}section_id\0\u{3}section_position\0\u{3}search_snippet\0\u{3}parent_title\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0\u{3}section_id\0\u{3}section_position\0\u{3}search_snippet\0\u{3}parent_title\0\u{1}pinned\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -8998,6 +9007,7 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
     var _sectionID: String = String()
     var _sectionPosition: Int64 = 0
     var _parentTitle: String = String()
+    var _pinned: Bool = false
     var _searchSnippet: String = String()
     var _subsessions: [Muster_V1_AgentSession] = []
 
@@ -9033,6 +9043,7 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       _sectionID = source._sectionID
       _sectionPosition = source._sectionPosition
       _parentTitle = source._parentTitle
+      _pinned = source._pinned
       _searchSnippet = source._searchSnippet
       _subsessions = source._subsessions
     }
@@ -9078,6 +9089,7 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         case 23: try { try decoder.decodeSingularInt64Field(value: &_storage._sectionPosition) }()
         case 24: try { try decoder.decodeSingularStringField(value: &_storage._searchSnippet) }()
         case 25: try { try decoder.decodeSingularStringField(value: &_storage._parentTitle) }()
+        case 26: try { try decoder.decodeSingularBoolField(value: &_storage._pinned) }()
         default: break
         }
       }
@@ -9161,6 +9173,9 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       if !_storage._parentTitle.isEmpty {
         try visitor.visitSingularStringField(value: _storage._parentTitle, fieldNumber: 25)
       }
+      if _storage._pinned != false {
+        try visitor.visitSingularBoolField(value: _storage._pinned, fieldNumber: 26)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9193,6 +9208,7 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         if _storage._sectionID != rhs_storage._sectionID {return false}
         if _storage._sectionPosition != rhs_storage._sectionPosition {return false}
         if _storage._parentTitle != rhs_storage._parentTitle {return false}
+        if _storage._pinned != rhs_storage._pinned {return false}
         if _storage._searchSnippet != rhs_storage._searchSnippet {return false}
         if _storage._subsessions != rhs_storage._subsessions {return false}
         return true
@@ -9206,7 +9222,7 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_V1_AgentSection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSection"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}position\0\u{1}collapsed\0\u{3}device_id\0\u{3}device_name\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}position\0\u{1}collapsed\0\u{3}device_id\0\u{3}device_name\0\u{1}kind\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9221,6 +9237,7 @@ nonisolated extension Muster_V1_AgentSection: SwiftProtobuf.Message, SwiftProtob
       case 5: try { try decoder.decodeSingularBoolField(value: &self.collapsed) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.kind) }()
       default: break
       }
     }
@@ -9248,10 +9265,14 @@ nonisolated extension Muster_V1_AgentSection: SwiftProtobuf.Message, SwiftProtob
     if !self.deviceName.isEmpty {
       try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 7)
     }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentSection, rhs: Muster_V1_AgentSection) -> Bool {
+    if lhs.kind != rhs.kind {return false}
     if lhs.id != rhs.id {return false}
     if lhs.provider != rhs.provider {return false}
     if lhs.title != rhs.title {return false}

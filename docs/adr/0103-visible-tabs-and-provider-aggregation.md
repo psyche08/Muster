@@ -57,3 +57,9 @@ signing/notarization, installation and physical acceptance distinct.
   content checks pass; the ADR gate runs after committing.
 - Signed device installation and physical interaction acceptance are separate
   delivery steps, not implied by these build/rendering results.
+
+### Subsequent catalog decision
+
+[ADR 0104](0104-three-category-session-catalog.md) supersedes provider and
+single-device native-section grouping with Pin, Section and Recent. The visible
+scrolling tab strip remains unchanged.
