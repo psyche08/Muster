@@ -164,7 +164,7 @@ pub enum Msg {
         epoch: u64,
         device: String,
         display: String,
-        group: String,
+        group: v1::AgentCatalogGroup,
         result: Result<v1::AgentSessionPage, Error>,
     },
     Agents {

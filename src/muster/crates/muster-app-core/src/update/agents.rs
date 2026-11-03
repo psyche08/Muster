@@ -97,6 +97,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         .sessions
         .retain(|s| filter == "*" || s.device_id == filter);
     state.catalog_watches.clear();
+    state.agent_catalog_pending.clear();
+    state.agent_catalog_pages.clear();
     state.agents_epoch += 1;
     let epoch = state.agents_epoch;
     // An offline Mac is neither asked nor shown (its cache stays on disk);
@@ -121,7 +123,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                 .cache
                 .get::<v1::AgentSessionPage>(&cache_key(state, "agents", &device, ""))
         {
-            state.agents.sessions.extend(visible_agents(page.sessions));
+            restore_catalog_cache(state, &device, &name, page);
         }
         // Network state can arrive before DeviceInfo. Route an explicitly
         // local member through the local socket even before self_id is loaded.
@@ -924,6 +926,43 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     });
 }
 
+fn restore_catalog_cache(
+    state: &mut State,
+    device: &str,
+    name: &str,
+    mut page: v1::AgentSessionPage,
+) {
+    // Old cache entries stored only rows. Do not render UUIDs as group names
+    // while waiting for the first complete native snapshot after upgrade.
+    if page.sections.is_empty() && page.sessions.iter().any(|s| !s.section_id.is_empty()) {
+        return;
+    }
+    for session in &mut page.sessions {
+        session.device_id = device.into();
+        session.device_name = name.into();
+    }
+    state.agents.sessions.extend(visible_agents(page.sessions));
+    state
+        .agents
+        .native_sections
+        .retain(|s| s.device_id != device);
+    state
+        .agents
+        .native_sections
+        .extend(page.sections.into_iter().map(|mut s| {
+            s.device_id = device.into();
+            s.device_name = name.into();
+            s
+        }));
+    state.agent_catalog_groups.retain(|g| g.device_id != device);
+    state
+        .agent_catalog_groups
+        .extend(page.groups.into_iter().map(|mut g| {
+            g.device_id = device.into();
+            g
+        }));
+}
+
 pub(super) fn msg_agents(
     state: &mut State,
     ctx: &Ctx,
@@ -941,6 +980,8 @@ pub(super) fn msg_agents(
     match result {
         _ if state.offline(&device) => {}
         Ok(page) => {
+            ctx.cache
+                .put(cache_key(state, "agents", &device, ""), &page);
             state.agent_catalog_groups.retain(|g| g.device_id != device);
             state
                 .agent_catalog_groups
@@ -970,13 +1011,6 @@ pub(super) fn msg_agents(
                 state.agents_errors.push(page.notice);
             }
 
-            ctx.cache.put(
-                cache_key(state, "agents", &device, ""),
-                &v1::AgentSessionPage {
-                    sessions: sessions.clone(),
-                    ..Default::default()
-                },
-            );
             state.agents.sessions.retain(|s| s.device_id != device);
             state.agents.sessions.extend(sessions);
             state.agents.sessions.sort_by(|a, b| {
@@ -1216,5 +1250,43 @@ pub(super) fn msg_watch_ended(
                 terminal.status = error.unwrap_or_else(|| "detached".into());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod catalog_cache_regressions {
+    use super::*;
+    #[test]
+    fn restored_sessions_keep_native_names_and_page_metadata_in_same_frame() {
+        let mut state = State::new(false, Some("host".into()));
+        restore_catalog_cache(
+            &mut state,
+            "host",
+            "Example Mac",
+            v1::AgentSessionPage {
+                sessions: vec![v1::AgentSession {
+                    id: "session".into(),
+                    section_id: "native-id".into(),
+                    ..Default::default()
+                }],
+                sections: vec![v1::AgentSection {
+                    id: "native-id".into(),
+                    title: "Example group".into(),
+                    ..Default::default()
+                }],
+                groups: vec![v1::AgentCatalogGroup {
+                    key: "native-id".into(),
+                    count: 21,
+                    next_cursor: "next".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        );
+        assert_eq!(state.agents.sessions[0].device_id, "host");
+        assert_eq!(state.agents.native_sections[0].title, "Example group");
+        assert_eq!(state.agents.native_sections[0].device_id, "host");
+        assert_eq!(state.agent_catalog_groups[0].count, 21);
+        assert_eq!(state.agent_catalog_groups[0].device_id, "host");
     }
 }

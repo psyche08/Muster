@@ -20,6 +20,41 @@ pub(crate) struct Catalog {
     pub titles: HashMap<(String, String), String>,
 }
 impl Catalog {
+    /// A failed read is not a new empty native state. Retain only that provider's
+    /// last complete display snapshot; mutation preparation reads afresh.
+    pub fn retain_unavailable(&mut self, previous: &Self) {
+        for (provider, _) in &self.notices {
+            self.sections.extend(
+                previous
+                    .sections
+                    .iter()
+                    .filter(|s| &s.provider == provider)
+                    .cloned(),
+            );
+            self.members.extend(
+                previous
+                    .members
+                    .iter()
+                    .filter(|((p, _), _)| p == provider)
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+            self.pinned.extend(
+                previous
+                    .pinned
+                    .iter()
+                    .filter(|(p, _)| p == provider)
+                    .cloned(),
+            );
+            self.titles.extend(
+                previous
+                    .titles
+                    .iter()
+                    .filter(|((p, _), _)| p == provider)
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+        }
+    }
+
     pub fn apply(&self, session: &mut AgentSession) {
         session.pinned = self
             .pinned
@@ -30,6 +65,9 @@ impl Catalog {
         {
             session.section_id = id.clone();
             session.section_position = *position;
+        } else {
+            session.section_id.clear();
+            session.section_position = 0;
         }
     }
 }
@@ -95,7 +133,7 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             Ok(c) => merge(&mut out, c),
             Err(_) => out.notices.push((
                 "codex".into(),
-                "Codex native sections unavailable; showing ungrouped sessions".into(),
+                "Codex native sections temporarily unavailable".into(),
             )),
         }
     }
@@ -104,7 +142,7 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             Some(c) => merge(&mut out, c),
             None => out.notices.push((
                 "claude".into(),
-                "Claude native sections unavailable; showing ungrouped sessions".into(),
+                "Claude native sections temporarily unavailable".into(),
             )),
         }
     }
@@ -492,6 +530,42 @@ mod tests {
     const B: &str = "22222222-2222-4222-8222-222222222222";
     const USER: &str = "33333333-3333-4333-8333-333333333333";
     const ORG: &str = "44444444-4444-4444-8444-444444444444";
+    #[test]
+    fn unavailable_provider_keeps_display_snapshot_but_successful_removal_clears_membership() {
+        let key = ("claude".into(), A.into());
+        let previous = Catalog {
+            sections: vec![section(
+                "claude",
+                "group".into(),
+                "Example".into(),
+                0,
+                false,
+            )],
+            members: HashMap::from([(key.clone(), ("group".into(), 3))]),
+            pinned: HashSet::from([key]),
+            ..Default::default()
+        };
+        let mut failed = Catalog {
+            notices: vec![("claude".into(), "unavailable".into())],
+            ..Default::default()
+        };
+        failed.retain_unavailable(&previous);
+        assert_eq!(failed.sections, previous.sections);
+        let mut session = AgentSession {
+            id: A.into(),
+            provider: "claude".into(),
+            ..Default::default()
+        };
+        failed.apply(&mut session);
+        assert_eq!(session.section_id, "group");
+        assert!(session.pinned);
+        let mut successful = Catalog::default();
+        successful.retain_unavailable(&previous);
+        successful.apply(&mut session);
+        assert!(session.section_id.is_empty());
+        assert!(!session.pinned);
+        assert_eq!(session.section_position, 0);
+    }
     #[test]
     fn codex_membership_is_by_uuid_and_keeps_duplicate_section_labels() {
         let dir = tempfile::tempdir().unwrap();

@@ -203,6 +203,13 @@ struct CloudEntry {
     error: Option<String>,
 }
 
+/// A single committed native catalog, before caller visibility filtering.
+pub struct CatalogSnapshot {
+    pub sessions: Vec<AgentSession>,
+    pub sections: Vec<muster_proto::v1::AgentSection>,
+    pub notices: Vec<(String, String)>,
+}
+
 struct Inner {
     sections: sections::Catalog,
     catalog: HashMap<String, Discovered>,
@@ -269,6 +276,7 @@ pub struct AgentService {
     cloud_wake: tokio::sync::Notify,
     /// Transcript heads the catalog scans have read, by provider.
     heads: Arc<Mutex<(codex::Heads, claude::Heads)>>,
+    scan_lock: tokio::sync::Mutex<()>,
     orca: Option<Arc<orca::Source>>,
     /// DeepSeek Harness's Muster plugin, when the app's home is known.
     deepseek: Option<Arc<deepseek_app::Link>>,
@@ -389,6 +397,7 @@ impl AgentService {
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
             heads: Default::default(),
+            scan_lock: Default::default(),
             orca,
             deepseek,
             predict,
@@ -1037,17 +1046,21 @@ impl AgentService {
 
     /// Rescans the transcript roots now.
     pub async fn rescan(&self) {
+        // An older filesystem scan must never overwrite a newer native change.
+        let _scan = self.scan_lock.lock().await;
         let config = self.config.clone();
         let cache = self.inner.lock().unwrap().catalog.clone();
         let heads = self.heads.clone();
-        let (found, mut sections) = tokio::task::spawn_blocking(move || {
+        let Ok((found, mut sections)) = tokio::task::spawn_blocking(move || {
             (
                 Self::scan_all(&config, &cache, &heads),
                 sections::read(&config),
             )
         })
         .await
-        .unwrap_or_default();
+        else {
+            return;
+        };
         let (changed, replaced) = {
             let mut inner = self.inner.lock().unwrap();
             // Desktop resumes may create multiple rollout files for one ID.
@@ -1069,6 +1082,7 @@ impl AgentService {
                     d.meta.cwd = project.clone();
                 }
             }
+            sections.retain_unavailable(&inner.sections);
             // A sidebar can expose only the active Claude account. Retain a
             // UUID title refreshed on entry until that source supplies a newer
             // label; never replace it with a transcript's first user message.
@@ -2107,14 +2121,33 @@ impl AgentService {
     /// Visible sessions, newest first.
     pub fn list(&self, provider: Option<Provider>, limit: usize) -> Vec<AgentSession> {
         let inner = self.inner.lock().unwrap();
-        let mut activity = Self::descendant_activity(&inner);
+        self.list_locked(&inner, provider, limit)
+    }
+
+    /// Membership and native names from the same committed discovery snapshot.
+    pub fn catalog_snapshot(&self) -> CatalogSnapshot {
+        let inner = self.inner.lock().unwrap();
+        CatalogSnapshot {
+            sessions: self.list_locked(&inner, None, usize::MAX),
+            sections: inner.sections.sections.clone(),
+            notices: inner.sections.notices.clone(),
+        }
+    }
+
+    fn list_locked(
+        &self,
+        inner: &Inner,
+        provider: Option<Provider>,
+        limit: usize,
+    ) -> Vec<AgentSession> {
+        let mut activity = Self::descendant_activity(inner);
         let mut sessions: Vec<AgentSession> = inner
             .catalog
             .iter()
             .filter(|(_, d)| !d.hidden && !d.archived)
             .filter(|(_, d)| provider.is_none_or(|p| d.provider == p))
             .filter_map(|(id, _)| {
-                let mut session = Self::project_summary(&inner, id)?;
+                let mut session = Self::project_summary(inner, id)?;
                 session.descendant_activity = activity.remove(id).unwrap_or_default();
                 Some(session)
             })
@@ -2124,7 +2157,7 @@ impl AgentService {
                     .iter()
                     .filter(|(_, e)| !e.remote.archived)
                     .filter(|(_, e)| provider.is_none_or(|p| e.provider == p))
-                    .filter_map(|(id, _)| Self::project_cloud(&inner, id)),
+                    .filter_map(|(id, _)| Self::project_cloud(inner, id)),
             )
             .collect();
         if provider.is_none() {

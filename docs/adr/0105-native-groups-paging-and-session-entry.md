@@ -73,3 +73,28 @@ release steps and are not established by the source checks.
 The final owner-selected distribution is signed macOS installation over SSH and
 iOS OTA only. Do not push this turn to GitHub or upload to TestFlight. Apple
 notarization is explicitly omitted for the Mac installation.
+
+### Native catalog consistency follow-up
+
+Native file reads can fail during provider writes. Preserve the last complete
+provider grouping on a failed read, with its unavailable notice, instead of
+flashing all sessions into Recent. A successful empty snapshot still removes
+old groups. Keep session rows, native sections and group continuations together
+in the client cache. Publish one atomic native catalog projection so membership
+and section names cannot come from different rescans. Refresh generations cancel
+pending pagination; delayed pages from a previous native group revision must not
+restore stale memberships. Tests will cover transient reads, empty successful
+snapshots, cache restoration and watch/page ordering. Native mutations continue
+to require fresh source readback and never trust a retained display snapshot.
+
+Serialize filesystem rescans so an older result cannot replace a newer snapshot;
+a failed scan worker preserves the last committed catalog. The daemon projects
+sessions, sections and notices under one catalog lock and filters provider grants
+before paging. Cache native group descriptors with their sessions, and stage all
+continuations until the pending batch finishes. Reject continuations whose base
+group changed in the live watch; restart the watch with all newly visible UUIDs.
+
+Follow-up source verification: 616 affected Rust library tests passed, with seven
+existing ignores; strict Clippy, ADR and public-content checks passed. The release
+candidate is 1.1.13 (103). Native mutation acceptance and deployed runtime results
+are recorded separately from these source checks.

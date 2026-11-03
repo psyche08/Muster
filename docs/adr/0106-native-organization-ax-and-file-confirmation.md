@@ -79,3 +79,25 @@ notarization is explicitly omitted for the Mac installation.
 Final source checks: 580 affected Rust library tests passed (7 existing ignores),
 one native-title entry/rescan integration test passed, Clippy with warnings denied
 and the shared SwiftUI target passed. Real native mutations remain manual acceptance.
+
+### Native AX selector follow-up
+
+Observed Claude sidebar row buttons append directory and connection status to
+the title, while the sibling popup has the exact `More options for <title>`
+label. Resolve a unique popup within the sidebar and its single sibling row as
+a navigation candidate, then verify the session UUID again before mutation.
+Do not confuse it with the identically named conversation-header popup. Also
+check actual native menu roles, submenu transitions and removal confirmation.
+Use disposable native fixtures where the UI is available; do not archive user
+work or bypass the protected Codex UI inspection restriction for acceptance.
+
+Native follow-up inspection created and removed an empty disposable Claude section
+through the native UI. The create button is disabled before the name is entered;
+resolve it only after AXValue readback and a new snapshot. Section headings expose
+a context menu, and the empty removal confirmation uses `Delete` plus `Nothing is
+in it`. Match that button only inside the preserving dialog. Native menus expose
+`Pin`, `Move to section`, and `Archive`; inspect these without changing work
+sessions. Nested menus resolve only a unique leaf, and duplicate sidebar rows or
+changed native account scope remain rejected. Group deletion still requires an
+exposed AXShowMenu action when no labelled popup exists; no coordinate fallback.
+These observations do not establish end-to-end Muster mutation acceptance.

@@ -29,7 +29,13 @@ pub fn action(tree: &AxTree, root: usize, labels: &[&str]) -> Result<usize, Erro
         tree,
         root,
         labels,
-        &["AXButton", "AXPopUpButton", "AXMenuItem"],
+        &[
+            "AXButton",
+            "AXPopUpButton",
+            "AXMenuItem",
+            "AXMenuItemCheckBox",
+            "AXMenuItemRadio",
+        ],
     )
 }
 fn token(value: &str, id: &str) -> bool {
@@ -86,7 +92,75 @@ pub fn navigation_candidate(tree: &AxTree, title: &str) -> Result<usize, Error> 
     if title.is_empty() {
         return Err(Error::Unavailable("No native navigation label".into()));
     }
+    if let Ok(sidebar) = sidebar(tree) {
+        let label = format!("More options for {title}");
+        let popups: Vec<_> = tree
+            .preorder(sidebar)
+            .into_iter()
+            .filter(|&i| tree.nodes[i].role == "AXPopUpButton" && tree.nodes[i].label() == label)
+            .collect();
+        if !popups.is_empty() {
+            let [popup] = popups.as_slice() else {
+                return Err(Error::Conflict("Ambiguous native sidebar rows".into()));
+            };
+            let parent = tree.nodes[*popup]
+                .parent
+                .ok_or_else(|| Error::Unavailable("No containing sidebar row".into()))?;
+            let rows: Vec<_> = tree.nodes[parent]
+                .children
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    let n = &tree.nodes[i];
+                    n.enabled && matches!(n.role.as_str(), "AXButton" | "AXLink" | "AXRow")
+                })
+                .collect();
+            return match rows.as_slice() {
+                [one] if tree.complete => Ok(*one),
+                _ => Err(Error::Unavailable(
+                    "No unique native row beside the title popup".into(),
+                )),
+            };
+        }
+        return unique(tree, sidebar, &[title], &["AXButton", "AXLink", "AXRow"]);
+    }
     unique(tree, 0, &[title], &["AXButton", "AXLink", "AXRow"])
+}
+
+pub fn sidebar(tree: &AxTree) -> Result<usize, Error> {
+    unique(tree, 0, &["Sidebar"], &["AXGroup", "AXOutline"])
+}
+
+/// Group controls have their own heading context, not the session header.
+pub fn section_heading(tree: &AxTree, title: &str) -> Result<usize, Error> {
+    let sidebar = sidebar(tree)?;
+    let heading = unique(tree, sidebar, &[title], &["AXHeading"])?;
+    action(tree, heading, &[title])
+}
+
+/// Claude repeats Group and sort on every section. The Recents heading's
+/// sibling is the global creation control; never arbitrarily pick a group.
+pub fn create_trigger(tree: &AxTree) -> Result<usize, Error> {
+    let sidebar = sidebar(tree)?;
+    let heading = unique(tree, sidebar, &["Recents"], &["AXHeading"])?;
+    let parent = tree.nodes[heading]
+        .parent
+        .ok_or_else(|| Error::Unavailable("No Recents group".into()))?;
+    let controls: Vec<_> = tree.nodes[parent]
+        .children
+        .iter()
+        .copied()
+        .filter(|&i| {
+            let n = &tree.nodes[i];
+            n.enabled && n.role == "AXPopUpButton" && n.label() == "Group and sort"
+        })
+        .collect();
+    match controls.as_slice() {
+        [one] => Ok(*one),
+        _ => Err(Error::Unavailable(
+            "No unique Recents grouping control".into(),
+        )),
+    }
 }
 pub fn deletion_confirmation(tree: &AxTree) -> Result<usize, Error> {
     let dialogs: Vec<_> = tree
@@ -111,7 +185,8 @@ pub fn deletion_confirmation(tree: &AxTree) -> Result<usize, Error> {
         && (text.contains("recent") || text.contains("ungrouped")))
         || text.contains("won't delete")
         || text.contains("won’t delete")
-        || text.contains("will not delete");
+        || text.contains("will not delete")
+        || text.contains("nothing is in it");
     if !preserves
         || ["delete files", "discard", "worktree", "permanently"]
             .iter()
@@ -124,12 +199,26 @@ pub fn deletion_confirmation(tree: &AxTree) -> Result<usize, Error> {
     action(
         tree,
         *dialog,
-        &["Delete section", "Remove section", "Remove project"],
+        &[
+            "Delete section",
+            "Remove section",
+            "Remove project",
+            "Delete",
+        ],
     )
 }
 pub fn menu(tree: &AxTree) -> Result<usize, Error> {
     let menus = crate::desktop_chat::open_menus(tree);
-    match menus.as_slice() {
+    let leaves: Vec<_> = menus
+        .iter()
+        .copied()
+        .filter(|&i| {
+            !menus
+                .iter()
+                .any(|&other| other != i && tree.preorder(i).contains(&other))
+        })
+        .collect();
+    match leaves.as_slice() {
         [one] => Ok(*one),
         _ => Err(Error::Unavailable("No unique native menu is open".into())),
     }
@@ -210,5 +299,100 @@ mod tests {
         assert!(row(&t, "uuid", "").is_ok());
         t.complete = false;
         assert!(row(&t, "uuid", "").is_err());
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    use crate::desktop_chat::AxNode;
+    fn node(role: &str, title: &str, parent: Option<usize>, children: &[usize]) -> AxNode {
+        AxNode {
+            role: role.into(),
+            title: title.into(),
+            parent,
+            children: children.into(),
+            enabled: true,
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn sidebar_popup_disambiguates_header_and_status_suffix_without_binding_identity() {
+        let mut tree = AxTree {
+            complete: true,
+            nodes: vec![
+                node("AXWindow", "", None, &[1, 5]),
+                node("AXGroup", "Sidebar", Some(0), &[2]),
+                node("AXGroup", "", Some(1), &[3, 4]),
+                node("AXButton", "Example workspace · Connected", Some(2), &[]),
+                node("AXPopUpButton", "More options for Example", Some(2), &[]),
+                node("AXPopUpButton", "More options for Example", Some(0), &[]),
+            ],
+        };
+        assert_eq!(navigation_candidate(&tree, "Example").unwrap(), 3);
+        assert!(row(&tree, "uuid", "Example").is_err());
+        tree.nodes[2].children.push(6);
+        tree.nodes.push(node(
+            "AXPopUpButton",
+            "More options for Example",
+            Some(2),
+            &[],
+        ));
+        assert!(navigation_candidate(&tree, "Example").is_err());
+        tree.nodes.pop();
+        tree.nodes[2].children.pop();
+        tree.complete = false;
+        assert!(navigation_candidate(&tree, "Example").is_err());
+    }
+    #[test]
+    fn create_uses_recents_sibling_not_nested_section_control() {
+        let tree = AxTree {
+            complete: true,
+            nodes: vec![
+                node("AXGroup", "Sidebar", None, &[1]),
+                node("AXGroup", "", Some(0), &[2, 5, 6]),
+                node("AXGroup", "", Some(1), &[3, 4]),
+                node("AXHeading", "Example", Some(2), &[]),
+                node("AXPopUpButton", "Group and sort", Some(2), &[]),
+                node("AXHeading", "Recents", Some(1), &[]),
+                node("AXPopUpButton", "Group and sort", Some(1), &[]),
+            ],
+        };
+        assert_eq!(create_trigger(&tree).unwrap(), 6);
+    }
+    #[test]
+    fn nested_menus_select_leaf_but_unrelated_menus_fail_closed() {
+        let mut tree = AxTree {
+            complete: true,
+            nodes: vec![
+                node("AXWindow", "", None, &[1]),
+                node("AXMenu", "", Some(0), &[2]),
+                node("AXMenu", "", Some(1), &[]),
+            ],
+        };
+        assert_eq!(menu(&tree).unwrap(), 2);
+        tree.nodes[1].children.clear();
+        tree.nodes[0].children.push(2);
+        tree.nodes[2].parent = Some(0);
+        assert!(menu(&tree).is_err());
+    }
+    #[test]
+    fn empty_section_delete_is_scoped_to_preserving_dialog() {
+        let mut tree = AxTree {
+            complete: true,
+            nodes: vec![
+                node("AXDialog", "Delete section?", None, &[1, 2]),
+                node(
+                    "AXStaticText",
+                    "Example will be removed. Nothing is in it.",
+                    Some(0),
+                    &[],
+                ),
+                node("AXButton", "Delete", Some(0), &[]),
+            ],
+        };
+        assert_eq!(deletion_confirmation(&tree).unwrap(), 2);
+        tree.nodes[1].title = "Delete files permanently".into();
+        assert!(deletion_confirmation(&tree).is_err());
     }
 }

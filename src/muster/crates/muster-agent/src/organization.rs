@@ -248,6 +248,16 @@ pub fn confirmed(config: &AgentConfig, plan: &Plan) -> Result<Option<String>, Er
             "Native organization readback is unavailable".into(),
         ));
     }
+    if !plan.scope.is_empty()
+        && !catalog
+            .sections
+            .iter()
+            .any(|g| g.provider == plan.provider && g.id.starts_with(&format!("{}:", plan.scope)))
+    {
+        return Err(Error::Conflict(
+            "Native account changed before organization readback".into(),
+        ));
+    }
     let key = (plan.provider.clone(), plan.request.session.clone());
     let pinned = catalog.pinned.contains(&key);
     let member = catalog
@@ -370,6 +380,16 @@ mod tests {
             action: action as i32,
             ..Default::default()
         }
+    }
+    #[test]
+    fn missing_original_account_never_confirms_unpin_or_removal() {
+        let (_dir, config, session, _db) = fixture();
+        let mut plan = prepare(&config, &session, &request(Action::Unpin)).unwrap();
+        plan.provider = "claude".into();
+        plan.scope = "original-org/original-user".into();
+        assert!(matches!(confirmed(&config, &plan), Err(Error::Conflict(_))));
+        plan.action = Action::Remove;
+        assert!(matches!(confirmed(&config, &plan), Err(Error::Conflict(_))));
     }
     #[test]
     fn plans_use_native_uuid_and_title_and_do_not_write_provider_files() {

@@ -691,6 +691,30 @@ impl<'a> AgentVisibility<'a> {
             .join("; ")
     }
 
+    fn snapshot(&self, agent: &muster_agent::AgentService) -> v1::AgentSessionPage {
+        let snapshot = agent.catalog_snapshot();
+        v1::AgentSessionPage {
+            sessions: snapshot
+                .sessions
+                .into_iter()
+                .filter(|s| self.allows(Some(&s.provider)))
+                .collect(),
+            sections: snapshot
+                .sections
+                .into_iter()
+                .filter(|s| self.allows(Some(&s.provider)))
+                .collect(),
+            notice: snapshot
+                .notices
+                .into_iter()
+                .filter(|(p, _)| self.allows(Some(p)))
+                .map(|(_, n)| n)
+                .collect::<Vec<_>>()
+                .join("; "),
+            ..Default::default()
+        }
+    }
+
     fn catalog_page(
         &self,
         agent: &muster_agent::AgentService,
@@ -698,23 +722,17 @@ impl<'a> AgentVisibility<'a> {
         limit: usize,
         visible: &[String],
     ) -> Result<v1::AgentSessionPage, Error> {
-        let mut page = if grouped {
-            muster_agent::catalog::page(
-                self.list(agent, None, usize::MAX),
-                self.sections(agent),
-                "",
-                "",
-                visible,
-            )?
+        let snapshot = self.snapshot(agent);
+        if grouped {
+            let mut page =
+                muster_agent::catalog::page(snapshot.sessions, snapshot.sections, "", "", visible)?;
+            page.notice = snapshot.notice;
+            Ok(page)
         } else {
-            v1::AgentSessionPage {
-                sessions: self.list(agent, None, limit),
-                sections: self.sections(agent),
-                ..Default::default()
-            }
-        };
-        page.notice = self.section_notice(agent);
-        Ok(page)
+            let mut page = snapshot;
+            page.sessions.truncate(if limit == 0 { 200 } else { limit });
+            Ok(page)
+        }
     }
 
     /// Newest sessions first, as `AgentService::list` pages them, from the
@@ -1717,13 +1735,14 @@ async fn dispatch(
             };
             if r.grouped && r.query.trim().is_empty() {
                 let visible = AgentVisibility::new(daemon, ctx);
-                let sessions = visible
-                    .list(agent, provider, usize::MAX)
+                let snapshot = visible.snapshot(agent);
+                let sessions = snapshot
+                    .sessions
                     .into_iter()
                     .filter(|s| r.provider.is_empty() || s.provider == r.provider)
                     .collect();
-                let sections = visible
-                    .sections(agent)
+                let sections = snapshot
+                    .sections
                     .into_iter()
                     .filter(|s| r.provider.is_empty() || s.provider == r.provider)
                     .collect();
@@ -1734,7 +1753,7 @@ async fn dispatch(
                     &r.group_cursor,
                     &[],
                 )?;
-                page.notice = visible.section_notice(agent);
+                page.notice = snapshot.notice;
                 return Ok(Resp::AgentSessions(page));
             }
             if !r.query.trim().is_empty() {

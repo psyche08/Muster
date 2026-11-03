@@ -79,8 +79,13 @@ impl NativeAppController {
             step.check()?;
             let (tree, elements) = self.organization_snapshot(g, web, window).await?;
             if let Ok(menu) = selectors::menu(&tree) {
-                let item = selectors::action(&tree, menu, labels)?;
-                return self.organization_press(g, web, window, &elements[item], mutation);
+                match selectors::action(&tree, menu, labels) {
+                    Ok(item) => {
+                        return self.organization_press(g, web, window, &elements[item], mutation);
+                    }
+                    Err(Error::Unavailable(_)) => {} // Submenu may not have mounted yet.
+                    Err(error) => return Err(error),
+                }
             }
             tokio::time::sleep(ECHO_POLL).await;
         }
@@ -110,7 +115,7 @@ impl NativeAppController {
             if let Ok(trigger) = selectors::action(&tree, 0, &["New section", "Add section"]) {
                 self.organization_press(g, &web, &window, &elements[trigger], false)?;
             } else {
-                let trigger = selectors::action(&tree, 0, &["Group and sort"])?;
+                let trigger = selectors::create_trigger(&tree)?;
                 self.organization_press(g, &web, &window, &elements[trigger], false)?;
                 self.organization_menu_action(
                     g,
@@ -128,7 +133,6 @@ impl NativeAppController {
                 if let Ok(dialog) = selectors::safe_dialog(&tree) {
                     let field =
                         selectors::unique(&tree, dialog, &["Section name"], &["AXTextField"])?;
-                    let create = selectors::action(&tree, dialog, &["Create section"])?;
                     self.organization_guard(g, &web, &window)?;
                     elements[field]
                         .set_string("AXValue", &plan.request.name)
@@ -136,7 +140,31 @@ impl NativeAppController {
                     if elements[field].string("AXValue").as_deref() != Some(&plan.request.name) {
                         return Err(Error::Conflict("Section name readback differs".into()));
                     }
-                    return self.organization_press(g, &web, &window, &elements[create], true);
+                    // React enables Create only after the name input event.
+                    // Resolve its current AX element after typing, not before.
+                    loop {
+                        step.check()?;
+                        let (fresh, controls) =
+                            self.organization_snapshot(g, &web, &window).await?;
+                        let dialog = selectors::safe_dialog(&fresh)?;
+                        let field =
+                            selectors::unique(&fresh, dialog, &["Section name"], &["AXTextField"])?;
+                        if fresh.nodes[field].value != plan.request.name {
+                            return Err(Error::Conflict(
+                                "Section name changed before creation".into(),
+                            ));
+                        }
+                        if let Ok(create) = selectors::action(&fresh, dialog, &["Create section"]) {
+                            return self.organization_press(
+                                g,
+                                &web,
+                                &window,
+                                &controls[create],
+                                true,
+                            );
+                        }
+                        tokio::time::sleep(ECHO_POLL).await;
+                    }
                 }
                 tokio::time::sleep(ECHO_POLL).await;
             }
@@ -144,8 +172,21 @@ impl NativeAppController {
         if plan.action == Action::DeleteSection {
             // Only an explicitly labelled group popup, never the session's Delete.
             let label = format!("More options for {}", plan.section_title);
-            let trigger = selectors::unique(&tree, 0, &[&label], &["AXPopUpButton"])?;
-            self.organization_press(g, &web, &window, &elements[trigger], false)?;
+            let sidebar = selectors::sidebar(&tree)?;
+            if let Ok(trigger) = selectors::unique(&tree, sidebar, &[&label], &["AXPopUpButton"]) {
+                self.organization_press(g, &web, &window, &elements[trigger], false)?;
+            } else {
+                let heading = selectors::section_heading(&tree, &plan.section_title)?;
+                self.organization_guard(g, &web, &window)?;
+                if !elements[heading].has_action("AXShowMenu") {
+                    return Err(Error::Unavailable(
+                        "The native section exposes no AX context menu".into(),
+                    ));
+                }
+                elements[heading]
+                    .perform("AXShowMenu")
+                    .map_err(|e| Error::Unavailable(format!("Native section menu: {e}")))?;
+            }
             let labels: &[&str] = if plan.section_kind == "project" {
                 &["Remove project"]
             } else {

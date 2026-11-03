@@ -16,8 +16,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "1.1.12"
-    CURRENT_PROJECT_VERSION: "102"
+    MARKETING_VERSION: "1.1.13"
+    CURRENT_PROJECT_VERSION: "103"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
 targets:
   MusterMac:
