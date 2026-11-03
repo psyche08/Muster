@@ -2,12 +2,12 @@
 
 - Date: 2026-11-03
 - Status: Accepted; verification pending
-- Related: [ADR 0105](0105-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md), [ADR 0107](0107-silent-native-catalog-read-failures.md)
+- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md), [ADR 0107](0107-silent-native-catalog-read-failures.md)
 
 ## Context
 
 The owner finds Section and Project grouping unclear and requests disabling both,
-keeping only Pin. This supersedes ADR 0105's named-group presentation and ADR
+keeping only Pin. This supersedes ADR 0110's named-group presentation and ADR
 0106's Section/Project user controls, without deleting native data.
 
 ## Decision

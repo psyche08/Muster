@@ -2,7 +2,7 @@
 
 - Date: 2026-11-03
 - Status: Accepted; implemented, native menu acceptance pending
-- Related: [ADR 0099](0099-local-claude-identity-and-permission-cards.md), [ADR 0105](0105-native-groups-paging-and-session-entry.md), ARCHITECTURE.md §3.6.2
+- Related: [ADR 0099](0099-local-claude-identity-and-permission-cards.md), [ADR 0110](0110-native-groups-paging-and-session-entry.md), ARCHITECTURE.md §3.6.2
 
 ## Context
 

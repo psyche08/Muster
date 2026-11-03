@@ -2,7 +2,7 @@
 
 - Date: 2026-11-03
 - Status: Accepted; verification pending
-- Related: ADR 0099, ADR 0100, ADR 0105, ADR 0107, ADR 0108
+- Related: ADR 0099, ADR 0100, ADR 0107, ADR 0108, ADR 0110
 
 ## Context
 

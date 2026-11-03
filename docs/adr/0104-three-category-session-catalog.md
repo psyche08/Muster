@@ -68,5 +68,5 @@ tracked separately from this source verification.
 
 ### Subsequent group decision
 
-[ADR 0105](0105-native-groups-paging-and-session-entry.md) supersedes the combined
+[ADR 0110](0110-native-groups-paging-and-session-entry.md) supersedes the combined
 Section bucket with individual native Section and Project groups and paged reads.

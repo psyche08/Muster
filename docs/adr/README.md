@@ -189,7 +189,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0104](0104-three-category-session-catalog.md) | Accepted; source verified, device acceptance pending | Aggregate sessions into Pin, Section and Recent only |
 
-| [0105](0105-native-groups-paging-and-session-entry.md) | Accepted; verification pending | Native group pages of ten main sessions and immediate session metadata |
+| [0105](0105-l4forwarder-addon.md) | Accepted; source verified, device acceptance pending | Forward loopback-only member services with the l4forwarder addon |
 
 | [0106](0106-native-organization-ax-and-file-confirmation.md) | Accepted; verification pending | Native organization with AX controls and file readback |
 
@@ -198,6 +198,8 @@ records a specific decision and does not revive code on its delete list.
 | [0108](0108-pin-only-session-catalog.md) | Accepted; verification pending | Show only Pin and the ordinary session list |
 
 | [0109](0109-uuid-session-refresh-and-permission-lifetime.md) | Accepted; verification pending | UUID metadata reconciliation, message recency and permission lifetime |
+
+| [0110](0110-native-groups-paging-and-session-entry.md) | Accepted; verification pending | Native group pages of ten main sessions and immediate session metadata |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

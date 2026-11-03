@@ -1,8 +1,10 @@
-# ADR 0105: Native groups, incremental catalog pages and fresh session entry
+# ADR 0110: Native groups, incremental catalog pages and fresh session entry
 
 - Date: 2026-11-03
 - Status: Accepted; implemented, device acceptance pending
 - Related: [ADR 0104](0104-three-category-session-catalog.md), [ADR 0102](0102-session-sections-hierarchy-search.md)
+- Renumbered from 0105 when [ADR 0105](0105-l4forwarder-addon.md) landed on
+  `main` first; the decision and its evidence are unchanged.
 
 ## Context
 

@@ -2,13 +2,13 @@
 
 - Date: 2026-11-03
 - Status: Accepted; verification pending
-- Related: [ADR 0105](0105-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md)
+- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md)
 
 ## Context
 
 Transient native Pin, Section and Project metadata read failures repeatedly appear
 in the session list. The owner requests that these reads be silently ignored.
-This supersedes only ADR 0105's unavailable-notice presentation decision.
+This supersedes only ADR 0110's unavailable-notice presentation decision.
 
 ## Decision
 
