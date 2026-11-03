@@ -1,7 +1,8 @@
 # ADR 0105: Forward loopback-only member services with the l4forwarder addon
 
 - Date: 2026-11-03
-- Status: Accepted
+- Status: Accepted; decision 6 (deployment) superseded by
+  [ADR 0107](0107-l4forwarder-in-muster-app.md)
 - Related: [architecture/network.md](../architecture/network.md) (forwarding
   streams, vnet), PROTOCOL.md §10–11,
   [addons/l4forwarder](../../addons/l4forwarder/README.md)
@@ -108,3 +109,44 @@ Several options were weighed and decided by the owner:
   - behaviour across a musterd restart, when the interface disappears briefly;
   - macOS Local Network privacy prompts, if any, for the agent;
   - UDP through vnet end to end.
+
+### Device acceptance (2026-11-03, after the change merged)
+
+This section adds evidence; the implementation-time limits above stay as
+recorded. Mac-A is the accessing member and the network admin. Mac-B runs the
+loopback-only proxy (TCP and UDP on `127.0.0.1:7897`). Both run Muster 1.1.20.
+At the time of the test, their PeerLink was on a relay path, at about 88 ms RTT.
+
+- **Installation, Mac-B.** `deploy/install.sh` built the release binary from
+  merge commit `81030705` (Homebrew Rust 1.99.1) and loaded the user agent
+  with two rules: TCP and UDP from Mac-B's vnet address, port 7897, to
+  `127.0.0.1:7897`. The agent ran and both sockets were bound to the vnet
+  address. No Local Network approval was given for it; whether macOS showed a
+  prompt was not observed.
+- **Grants.** The admin replaced Mac-A's scopes with its existing ones plus
+  `net:tcp/7897` and `net:udp/7897`, keeping its role. Mac-B's open ports were
+  replaced with its existing ones plus `tcp/7897` and `udp/7897`. All other
+  policy fields were unchanged. Mac-B's roster showed the new scopes.
+- **TCP through vnet: passed.**
+  - Before the grants, an HTTP-proxy request from Mac-A timed out after 6 s.
+    The route to Mac-B's vnet address was the Muster interface, so the packet
+    filter dropped it rather than a local proxy answering.
+  - After the grants, the same request through `http://<Mac-B vip>:7897`
+    returned 204 three times in a row, and a SOCKS5 request returned 204 once.
+  - While a `CONNECT` tunnel was held open, Mac-B showed the client connection
+    from Mac-A's vnet address accepted by l4forwarder, its upstream connection
+    to `127.0.0.1:7897`, and the proxy's `200 Connection established`.
+  - The total request time matched a direct request from Mac-A (about 2.8 s),
+    so the forwarder did not dominate it.
+- **UDP through vnet: partly verified.** A datagram from Mac-A reached
+  l4forwarder over vnet, which opened a session socket to `127.0.0.1:7897`. No
+  reply through the proxy was checked.
+  - A SOCKS5 UDP ASSOCIATE through the forwarder depends on the client: the
+    proxy may name its loopback address as the relay, which a remote client
+    cannot use.
+- **Still open:**
+  - the agent starting before the vnet interface exists, after a reboot or
+    login;
+  - behaviour across a musterd restart;
+  - a full UDP round trip through vnet;
+  - hosted CI (Actions remain disabled).

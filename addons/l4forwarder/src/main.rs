@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Parser;
 use l4forwarder::Config;
+use tokio::io::AsyncReadExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "l4forwarder", about = "TCP/UDP port forwarder")]
@@ -15,6 +16,10 @@ struct Args {
     /// Check the configuration and exit
     #[arg(long)]
     check: bool,
+    /// Exit when standard input closes: the supervisor (musterd) is gone,
+    /// even if it could not stop this process itself (ADR 0107)
+    #[arg(long)]
+    supervised: bool,
 }
 
 #[tokio::main]
@@ -36,6 +41,14 @@ async fn main() -> anyhow::Result<()> {
         _ = l4forwarder::run(config) => {}
         _ = tokio::signal::ctrl_c() => {}
         _ = terminate.recv() => {}
+        _ = stdin_closed(), if args.supervised => {}
     }
     Ok(())
+}
+
+/// Completes when standard input reaches its end or fails.
+async fn stdin_closed() {
+    let mut stdin = tokio::io::stdin();
+    let mut buf = [0u8; 64];
+    while matches!(stdin.read(&mut buf).await, Ok(n) if n > 0) {}
 }
