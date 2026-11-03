@@ -42,11 +42,13 @@ inspect again. Locked retention remains display-only. Responding still requires 
 AX observation and existing Presence/Locked Use controls; no cached card grants
 authority, no provider command is approved as part of read-only acceptance.
 
-The disposable device test exposed a new Claude saved-environment form. Accept
-that form only with a unique AX environment name and full path in its recent
-selection group, backed by an active-account preset with a UUID, local target and
-exact requested directory. Revalidate the opaque identity before drafting and
-submission. Reject duplicate labels, remote targets and account/path changes.
+The disposable device test exposed a changed Claude saved-environment form.
+An experimental account/preset/name/full-path join permitted test submission,
+but Claude created it in a scratch directory despite the selected preset. The
+existing exact-directory receipt correctly remained unknown; it was not replayed.
+Withdraw this experimental form admission from the final candidate: a saved
+preset alone does not prove the actual destination. Keep existing form guards
+and report modern preset creation as unresolved; do not weaken directory checks.
 
 ## Alternatives
 
@@ -83,3 +85,19 @@ and the added slow-poll/replaced-viewer regression passed. Strict Clippy passed
 for agent, platform, daemon and app-core targets. Public-content and diff checks
 passed. These are source checks; Apple builds, installation, new-session AX
 acceptance and locked permission display remain pending at this commit.
+
+## Device evidence and final scope
+
+The 1.1.18 test candidate on one authorized Mac produced a real disposable local
+Claude command-permission card through AX. A fresh subscription while the OS was
+confirmed locked returned the same interaction ID, prompt and Deny/Allow once
+options. No command was approved. Two UUID-bound sessions matched native titles
+and last user/assistant message timestamps; first state took 15–17 ms, targeted
+refresh 17–18 ms, and recent history 14–24 ms on the host (not phone latency).
+Platform tests also passed (39). These measurements do not prove cold discovery
+of a never-observed card while locked, nor iPhone visual acceptance.
+
+Final candidate 1.1.19 (109) retains the session/card fixes and withdraws only the
+unproven new-environment form admission. Its Apple build and three-Mac / OTA
+delivery are tracked separately from the above runtime observations. Modern
+Claude environment-based new-session creation still requires further work.
