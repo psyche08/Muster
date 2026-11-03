@@ -214,6 +214,9 @@ pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
         app::Lifecycle::Background => {
             state.foreground = false;
             state.catalog_watches.clear();
+            state.agents_search = None;
+            state.agents_search_epoch += 1;
+            state.agents.searching = false;
             state.send_recoveries.clear();
             // Suspended links fail by design: no evidence about anyone.
             ctx.backend.suspend(true);

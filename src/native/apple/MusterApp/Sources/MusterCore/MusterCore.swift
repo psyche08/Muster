@@ -154,6 +154,10 @@ public final class MusterCore: MusterShell {
 
     public func openAgents(device: String = "") { send(.openAgents(Muster_App_OpenAgents.with { $0.deviceID = device })) }
 
+    public func agentCatalogAction(_ kind: Muster_App_AgentCatalogAction.Kind, value: String) {
+        send(.agentCatalogAction(Muster_App_AgentCatalogAction.with { $0.kind = kind; $0.value = value }))
+    }
+
     public func createOrcaSession(device: String, directory: String, agent: String) {
         send(.orcaCreate(Muster_App_OrcaCreate.with { $0.deviceID = device; $0.directory = directory; $0.agent = agent }))
     }

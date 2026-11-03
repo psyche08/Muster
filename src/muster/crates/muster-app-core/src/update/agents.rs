@@ -71,7 +71,7 @@ pub(super) fn cache_chat(ctx: &Ctx, chat: &Chat) {
 /// Ended sessions remain history; only explicitly archived sessions are hidden.
 /// Sessions listed per device, newest first: the list refreshes every few
 /// seconds while visible, and a phone does not need a device's whole history.
-const AGENT_LIST_LIMIT: u32 = 200;
+const AGENT_LIST_LIMIT: u32 = 1000;
 
 pub(super) fn visible_agents(mut sessions: Vec<v1::AgentSession>) -> Vec<v1::AgentSession> {
     sessions.retain(|session| !session.archived);
@@ -90,6 +90,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         state.agents.device_id.clone()
     };
     state.agents.device_id = filter.clone();
+    super::catalog::restart_search(state, ctx);
     state.agents_errors.clear();
     state
         .agents
@@ -180,7 +181,13 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             let _ = tx.send(loop_message(Msg::Agents {
                                 epoch,
                                 device: device.clone(),
-                                result: Ok(page.sessions),
+                                result: Ok({
+                                    for section in &mut page.sections {
+                                        section.device_id = device.clone();
+                                        section.device_name = name.clone();
+                                    }
+                                    page
+                                }),
                             }));
                         }
                     }
@@ -205,7 +212,13 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                         let _ = tx.send(loop_message(Msg::Agents {
                             epoch,
                             device: device.clone(),
-                            result: Ok(page.sessions),
+                            result: Ok({
+                                for section in &mut page.sections {
+                                    section.device_id = device.clone();
+                                    section.device_name = name.clone();
+                                }
+                                page
+                            }),
                         }));
                         retry = 3;
                         return Ok(());
@@ -245,6 +258,7 @@ pub(super) fn open_agent(state: &mut State, ctx: &Ctx, session_id: String) {
         .agents
         .sessions
         .iter()
+        .chain(state.agents_search_sessions.iter())
         .find(|s| s.id == session_id && (s.device_id.is_empty() || s.device_id == device))
         .cloned()
         .unwrap_or_else(|| v1::AgentSession {
@@ -868,7 +882,7 @@ pub(super) fn msg_agents(
     ctx: &Ctx,
     epoch: u64,
     device: String,
-    result: Result<Vec<v1::AgentSession>, Error>,
+    result: Result<v1::AgentSessionPage, Error>,
 ) {
     if epoch != state.agents_epoch {
         return;
@@ -879,12 +893,34 @@ pub(super) fn msg_agents(
     // its sessions back, nor overwrite its cache.
     match result {
         _ if state.offline(&device) => {}
-        Ok(sessions) => {
-            let sessions = visible_agents(sessions);
+        Ok(page) => {
+            let sessions = visible_agents(page.sessions);
+            state
+                .agents
+                .native_sections
+                .retain(|s| s.device_id != device);
+            state
+                .agents
+                .native_sections
+                .extend(page.sections.into_iter().map(|mut s| {
+                    s.device_id = device.clone();
+                    if s.device_name.is_empty() {
+                        s.device_name = sessions
+                            .first()
+                            .map(|s| s.device_name.clone())
+                            .unwrap_or_else(|| device.clone());
+                    }
+                    s
+                }));
+            if !page.notice.is_empty() && !state.agents_errors.contains(&page.notice) {
+                state.agents_errors.push(page.notice);
+            }
+
             ctx.cache.put(
                 cache_key(state, "agents", &device, ""),
                 &v1::AgentSessionPage {
                     sessions: sessions.clone(),
+                    ..Default::default()
                 },
             );
             state.agents.sessions.retain(|s| s.device_id != device);

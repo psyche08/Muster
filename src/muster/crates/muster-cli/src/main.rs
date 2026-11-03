@@ -1033,7 +1033,11 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Agents { provider } => {
             if let Resp::AgentSessions(page) = client
-                .call(Req::AgentList(v1::AgentListRequest { limit: 0, provider }))
+                .call(Req::AgentList(v1::AgentListRequest {
+                    limit: 0,
+                    provider,
+                    ..Default::default()
+                }))
                 .await?
             {
                 for s in page.sessions {

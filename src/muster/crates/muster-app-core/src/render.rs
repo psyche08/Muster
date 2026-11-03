@@ -115,6 +115,18 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         }),
         // Presence may have changed since the list loaded.
         agents: Some(app::AgentsView {
+            sections: crate::catalog::project(
+                state,
+                &if state.agents.query.trim().is_empty() {
+                    &state.agents.sessions
+                } else {
+                    &state.agents_search_sessions
+                }
+                .iter()
+                .filter(|s| !state.offline(&s.device_id))
+                .map(session_row)
+                .collect::<Vec<_>>(),
+            ),
             create_hosts: state
                 .reachable_service_devices()
                 .into_iter()

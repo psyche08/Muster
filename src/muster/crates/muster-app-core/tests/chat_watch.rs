@@ -75,6 +75,7 @@ impl Handler for CatalogServer {
                                     ..Default::default()
                                 },
                             ],
+                            ..Default::default()
                         })
                     }
                 }
@@ -608,7 +609,7 @@ impl Handler for PushCatalog {
                 }
                 Req::AgentWatch(r) => {
                     assert!(r.catalog_only);
-                    assert_eq!(r.limit, 200);
+                    assert_eq!(r.limit, 1000);
                     assert!(r.session.is_empty());
                     self.watches.fetch_add(1, Ordering::SeqCst);
                     loop {
@@ -625,6 +626,7 @@ impl Handler for PushCatalog {
                                             ..Default::default()
                                         }]
                                     },
+                                    ..Default::default()
                                 })),
                             }))
                             .await

@@ -672,6 +672,23 @@ impl<'a> AgentVisibility<'a> {
                 .is_some_and(|info| self.allows(Some(&info.provider)))
     }
 
+    fn sections(&self, agent: &muster_agent::AgentService) -> Vec<v1::AgentSection> {
+        agent
+            .sections()
+            .into_iter()
+            .filter(|s| self.allows(Some(&s.provider)))
+            .collect()
+    }
+    fn section_notice(&self, agent: &muster_agent::AgentService) -> String {
+        agent
+            .section_notices()
+            .into_iter()
+            .filter(|(p, _)| self.allows(Some(p)))
+            .map(|(_, n)| n)
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
     /// Newest sessions first, as `AgentService::list` pages them, from the
     /// visible providers only.
     fn list(
@@ -1670,7 +1687,33 @@ async fn dispatch(
                     ))
                 })?)
             };
+            if !r.query.trim().is_empty() {
+                let visible = AgentVisibility::new(daemon, ctx);
+                let sessions = visible
+                    .list(agent, provider, usize::MAX)
+                    .into_iter()
+                    .filter(|s| r.provider != "orca" || s.provider == "orca")
+                    .collect();
+                let mut page = agent
+                    .search(
+                        &r.query,
+                        &r.search_cursor,
+                        sessions,
+                        if r.limit == 0 { 100 } else { r.limit as usize },
+                    )
+                    .await?;
+                // Recheck narrowed grants after blocking transcript reads.
+                page.sessions
+                    .retain(|s| AgentVisibility::new(daemon, ctx).allows(Some(&s.provider)));
+                return Ok(Resp::AgentSessions(page));
+            }
             Resp::AgentSessions(v1::AgentSessionPage {
+                sections: AgentVisibility::new(daemon, ctx)
+                    .sections(agent)
+                    .into_iter()
+                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .collect(),
+                notice: AgentVisibility::new(daemon, ctx).section_notice(agent),
                 sessions: AgentVisibility::new(daemon, ctx)
                     .list(
                         agent,
@@ -1685,6 +1728,7 @@ async fn dispatch(
                     .filter(|s| r.provider != "orca" || s.provider == "orca")
                     .take(if r.limit == 0 { 200 } else { r.limit as usize })
                     .collect(),
+                ..Default::default()
             })
         }
         Req::AgentWatch(r) => {
@@ -1711,6 +1755,9 @@ async fn dispatch(
                     .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
                         ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
                             sessions: visible.list(&agent, None, limit),
+                            sections: visible.sections(&agent),
+                            notice: visible.section_notice(&agent),
+                            ..Default::default()
                         })),
                     }))
                     .await?;
@@ -1765,6 +1812,9 @@ async fn dispatch(
                             .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
                                 ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
                                     sessions: visible.list(&agent, None, limit),
+                                    sections: visible.sections(&agent),
+                                    notice: visible.section_notice(&agent),
+                                    ..Default::default()
                                 })),
                             }))
                             .await?;
@@ -1776,6 +1826,9 @@ async fn dispatch(
                     muster_agent::Event::ListChanged if filter.is_empty() => {
                         v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
                             sessions: visible.list(&agent, None, limit),
+                            sections: visible.sections(&agent),
+                            notice: visible.section_notice(&agent),
+                            ..Default::default()
                         })
                     }
                     muster_agent::Event::ListChanged => match agent.session(&filter) {

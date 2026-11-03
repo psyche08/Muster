@@ -29,6 +29,7 @@ use crate::{Ctx, Error, Loop};
 pub(crate) mod admitted;
 mod agents;
 mod approval_cards;
+mod catalog;
 pub(crate) mod code_runs;
 mod desktop_chats;
 mod files;
@@ -150,10 +151,15 @@ pub enum Msg {
         name: String,
         result: Result<String, Error>,
     },
+    AgentSearch {
+        epoch: u64,
+        device: String,
+        result: Result<v1::AgentSessionPage, Error>,
+    },
     Agents {
         epoch: u64,
         device: String,
-        result: Result<Vec<v1::AgentSession>, Error>,
+        result: Result<v1::AgentSessionPage, Error>,
     },
     Chat {
         token: CancellationToken,
@@ -365,6 +371,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::SetDeviceLockedUse(r) => manual_locked_use::set(state, ctx, r),
         It::CancelLockedUse(_) => cancel_locked(state, ctx, CancelReason::User),
         It::OrcaCreate(o) => orca::create(state, ctx, o),
+        It::AgentCatalogAction(a) => catalog::intent(state, ctx, a),
         It::OpenAgents(o) => agents::intent_open_agents(state, ctx, o),
         It::OpenAgent(o) => agents::intent_open_agent(state, ctx, o),
         It::OpenDesktopChats(o) => open_desktop_chats(state, ctx, o.provider),
@@ -624,6 +631,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         Msg::DiagnosticsUploaded { name, result } => {
             network::msg_diagnostics_uploaded(state, name, result)
         }
+        Msg::AgentSearch {
+            epoch,
+            device,
+            result,
+        } => catalog::result(state, epoch, device, result),
         Msg::Agents {
             epoch,
             device,

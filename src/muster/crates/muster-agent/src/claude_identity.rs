@@ -46,7 +46,7 @@ fn parse(bytes: &[u8]) -> Option<Entry> {
     })
 }
 
-fn mappings(root: &Path) -> Option<Vec<(String, String)>> {
+pub(crate) fn mappings(root: &Path) -> Option<Vec<(String, String)>> {
     let started = std::time::Instant::now();
     let mut seen = 0;
     let mut result = Vec::new();

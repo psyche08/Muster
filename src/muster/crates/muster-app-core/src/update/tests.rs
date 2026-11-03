@@ -517,7 +517,13 @@ async fn archived_sessions_stay_hidden_when_restoring_a_cached_catalog() {
         })
         .collect();
     // A cache produced by an older client may still include archived rows.
-    cache.put("catalog".into(), &v1::AgentSessionPage { sessions });
+    cache.put(
+        "catalog".into(),
+        &v1::AgentSessionPage {
+            sessions,
+            ..Default::default()
+        },
+    );
     let page = cache.get::<v1::AgentSessionPage>("catalog").unwrap();
     let visible = visible_agents(page.sessions);
     assert_eq!(visible.len(), 2);
@@ -908,7 +914,13 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
     agents::msg_agents(&mut state, &ctx, 7, "mac".into(), failure());
     assert!(!state.agents.loading);
     assert_eq!(state.agents.errors, vec!["old".to_string()]);
-    agents::msg_agents(&mut state, &ctx, 7, "mini".into(), Ok(Vec::new()));
+    agents::msg_agents(
+        &mut state,
+        &ctx,
+        7,
+        "mini".into(),
+        Ok(v1::AgentSessionPage::default()),
+    );
     assert!(!state.agents.loading);
     assert_eq!(
         state.agents.errors,
@@ -919,9 +931,21 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
     state.agents_epoch = 8;
     state.agents_pending = 2;
     state.agents.loading = true;
-    agents::msg_agents(&mut state, &ctx, 8, "mac".into(), Ok(Vec::new()));
+    agents::msg_agents(
+        &mut state,
+        &ctx,
+        8,
+        "mac".into(),
+        Ok(v1::AgentSessionPage::default()),
+    );
     assert!(state.agents.loading);
-    agents::msg_agents(&mut state, &ctx, 8, "mini".into(), Ok(Vec::new()));
+    agents::msg_agents(
+        &mut state,
+        &ctx,
+        8,
+        "mini".into(),
+        Ok(v1::AgentSessionPage::default()),
+    );
     assert!(!state.agents.loading);
     assert!(state.agents.errors.is_empty());
 }
@@ -1160,6 +1184,7 @@ async fn an_offline_macs_sessions_are_neither_polled_nor_shown() {
         agents::cache_key(&state, "agents", "pro", ""),
         &v1::AgentSessionPage {
             sessions: vec![session_on("pro", "cached")],
+            ..Default::default()
         },
     );
     state.agents.sessions = vec![session_on("mini", "a"), session_on("pro", "b")];
@@ -1173,7 +1198,10 @@ async fn an_offline_macs_sessions_are_neither_polled_nor_shown() {
         &ctx,
         epoch,
         "pro".into(),
-        Ok(vec![session_on("pro", "late")]),
+        Ok(v1::AgentSessionPage {
+            sessions: vec![session_on("pro", "late")],
+            ..Default::default()
+        }),
     );
     assert!(state.agents.sessions.iter().all(|s| s.device_id == "mini"));
     // The cache was not touched.

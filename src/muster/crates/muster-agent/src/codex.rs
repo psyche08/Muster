@@ -129,6 +129,7 @@ fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
             });
         }
     }
+    crate::codex_history::merge(home, &mut out);
     out
 }
 

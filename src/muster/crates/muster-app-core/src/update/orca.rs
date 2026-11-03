@@ -63,6 +63,7 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
                 Req::AgentList(v1::AgentListRequest {
                     provider: "orca".into(),
                     limit: 1000,
+                    ..Default::default()
                 }),
             )
             .await?
