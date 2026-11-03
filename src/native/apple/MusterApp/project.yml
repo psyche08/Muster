@@ -90,7 +90,7 @@ targets:
           install -m 0755 "$BIN/muster-browser-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           # Addons ship as helpers too; musterd runs l4forwarder while
-          # l4forwarder.json is in its state directory (ADR 0106).
+          # l4forwarder.json is in its state directory (ADR 0107).
           ADDON="$SRCROOT/../../../../addons/l4forwarder/target/release/l4forwarder"
           [ -x "$ADDON" ] || { echo "error: $ADDON missing; (cd addons/l4forwarder && cargo build --release --locked)"; exit 1; }
           install -m 0755 "$ADDON" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder"

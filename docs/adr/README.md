@@ -189,11 +189,11 @@ records a specific decision and does not revive code on its delete list.
 
 | [0104](0104-three-category-session-catalog.md) | Accepted; source verified, device acceptance pending | Aggregate sessions into Pin, Section and Recent only |
 
-| [0105](0105-l4forwarder-addon.md) | Accepted; deployment superseded by 0106; TCP device acceptance passed, UDP partly verified | Forward loopback-only member services with the l4forwarder addon |
-
-| [0106](0106-l4forwarder-in-muster-app.md) | Accepted; source verified, release and device migration pending | Ship l4forwarder in Muster.app and let musterd run it |
+| [0105](0105-l4forwarder-addon.md) | Accepted; deployment superseded by 0107; TCP device acceptance passed, UDP partly verified | Forward loopback-only member services with the l4forwarder addon |
 
 | [0106](0106-deepseek-harness-session-adaptation.md) | Accepted; source and rendering verified, device acceptance pending | Adapt DeepSeek Harness sessions on every surface |
+
+| [0107](0107-l4forwarder-in-muster-app.md) | Accepted; source verified, release and device migration pending | Ship l4forwarder in Muster.app and let musterd run it |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

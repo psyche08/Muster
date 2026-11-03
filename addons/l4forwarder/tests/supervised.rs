@@ -1,4 +1,4 @@
-//! Under musterd (ADR 0106) the forwarder's standard input is a pipe from
+//! Under musterd (ADR 0107) the forwarder's standard input is a pipe from
 //! its supervisor; when that closes, the forwarder exits rather than outlive
 //! a supervisor that could not stop it.
 

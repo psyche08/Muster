@@ -1,4 +1,4 @@
-//! Runs the bundled l4forwarder addon (ADR 0106) while this machine has a
+//! Runs the bundled l4forwarder addon (ADR 0107) while this machine has a
 //! configuration for it. musterd only supervises the process: the rules and
 //! every forwarding decision belong to the addon, and who may reach its
 //! listeners stays the roster's and the local policy's say.

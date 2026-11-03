@@ -17,7 +17,7 @@ struct Args {
     #[arg(long)]
     check: bool,
     /// Exit when standard input closes: the supervisor (musterd) is gone,
-    /// even if it could not stop this process itself (ADR 0106)
+    /// even if it could not stop this process itself (ADR 0107)
     #[arg(long)]
     supervised: bool,
 }

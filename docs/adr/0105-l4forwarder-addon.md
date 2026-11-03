@@ -2,7 +2,7 @@
 
 - Date: 2026-11-03
 - Status: Accepted; decision 6 (deployment) superseded by
-  [ADR 0106](0106-l4forwarder-in-muster-app.md)
+  [ADR 0107](0107-l4forwarder-in-muster-app.md)
 - Related: [architecture/network.md](../architecture/network.md) (forwarding
   streams, vnet), PROTOCOL.md §10–11,
   [addons/l4forwarder](../../addons/l4forwarder/README.md)

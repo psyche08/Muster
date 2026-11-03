@@ -3,7 +3,7 @@
 A small TCP/UDP port forwarder, kept as an addon beside Muster
 ([ADR 0105](../../docs/adr/0105-l4forwarder-addon.md)). It ships inside the
 Muster app, and musterd runs it
-([ADR 0106](../../docs/adr/0106-l4forwarder-in-muster-app.md)). Each rule
+([ADR 0107](../../docs/adr/0107-l4forwarder-in-muster-app.md)). Each rule
 listens on one address and forwards one protocol to one upstream address: TCP
 byte for byte, UDP datagram for datagram.
 

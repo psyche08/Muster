@@ -422,7 +422,7 @@ impl Daemon {
         if daemon.config.vnet {
             daemon.maybe_start_vnet().await;
         }
-        // The bundled addon runs only where its configuration is (ADR 0106).
+        // The bundled addon runs only where its configuration is (ADR 0107).
         if daemon.kind() != DeviceKind::Phone
             && let Some(supervisor) = l4forwarder::Supervisor::for_daemon(&daemon.config.dir)
         {
