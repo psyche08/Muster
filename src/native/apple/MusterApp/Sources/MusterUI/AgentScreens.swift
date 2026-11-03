@@ -11,7 +11,6 @@ struct AgentsView: View {
     let devices: [Muster_V1_MemberView]
     let shown: String
     @State private var creating = false
-    @State private var deletingGroup: Muster_App_AgentOrganizationTarget?
 
     init(core: MusterCore, vm: ViewModel) {
         self.core = core
@@ -44,7 +43,7 @@ struct AgentsView: View {
                 }.disabled(agents.searching)
             }
             ForEach(agents.sections, id: \.key) { section in
-                CatalogSessionGroup(core: core, section: section, shown: shown, searching: !agents.query.isEmpty, deletingGroup: $deletingGroup)
+                CatalogSessionGroup(core: core, section: section, shown: shown, searching: !agents.query.isEmpty)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -59,13 +58,6 @@ struct AgentsView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .refreshable { core.openAgents(device: agents.deviceID) }
-        .alert("Remove native group?", isPresented: Binding(get: { deletingGroup != nil }, set: { if !$0 { deletingGroup = nil } })) {
-            Button("Cancel", role: .cancel) { deletingGroup = nil }
-            Button("Remove", role: .destructive) {
-                if let target = deletingGroup { core.agentOrganize(target.rowKey, action: .deleteSection, section: target.sectionID) }
-                deletingGroup = nil
-            }
-        } message: { Text("This removes the selected source group in its native app and preserves conversations and project files. Other sources with the same group name remain unchanged.") }
         .sheet(isPresented: $creating) {
             OrcaCreateSheet(core: core, hosts: agents.createHosts, agents: agents.createAgents)
         }
@@ -78,7 +70,6 @@ private struct CatalogSessionGroup: View {
     let section: Muster_App_AgentCatalogSection
     let shown: String
     let searching: Bool
-    @Binding var deletingGroup: Muster_App_AgentOrganizationTarget?
     var body: some View {
         Section {
             ForEach(section.rows, id: \.key) { row in
@@ -94,7 +85,7 @@ private struct CatalogSessionGroup: View {
                 }.disabled(section.loadingMore)
             }
             if section.expanded && section.count == 0 {
-                Text("No sessions in this section").font(.caption).foregroundStyle(.secondary)
+                Text("No sessions").font(.caption).foregroundStyle(.secondary)
             }
         } header: {
             Button { core.agentCatalogAction(.toggleSection, value: section.key) } label: {
@@ -111,11 +102,7 @@ private struct CatalogSessionGroup: View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).textCase(nil).disabled(searching)
             .accessibilityLabel("\(section.title), \(section.count) sessions, \(section.expanded ? "expanded" : "collapsed")")
-            .contextMenu {
-                ForEach(section.nativeTargets, id: \.key) { target in
-                    Button("Remove \(target.title)…", role: .destructive) { deletingGroup = target }
-                }
-            }
+
         }
     }
 }
@@ -124,12 +111,6 @@ private struct CatalogSessionRow: View {
     let core: MusterCore
     let row: Muster_App_AgentCatalogRow
     let shown: String
-    @State private var managing = false
-    @State private var naming = false
-    @State private var sectionName = ""
-    @State private var deleting = false
-    @State private var pendingName = false
-    @State private var pendingDelete = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -179,50 +160,17 @@ private struct CatalogSessionRow: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if row.canOrganize {
                 Button("Archive", role: .destructive) { perform(.archive) }.disabled(row.organizing)
-                Button("Section") { managing = true }.tint(.blue).disabled(row.organizing)
                 Button(row.session.pinned ? "Unpin" : "Pin") { perform(row.session.pinned ? .unpin : .pin) }.tint(.orange).disabled(row.organizing)
             }
         }
         #endif
-        .sheet(isPresented: $managing, onDismiss: {
-            naming = pendingName; deleting = pendingDelete
-            pendingName = false; pendingDelete = false
-        }) {
-            NavigationStack {
-                Form {
-                    Text(row.sourceLabel).font(.caption).foregroundStyle(.secondary)
-                    organizationActions
-                }.navigationTitle("Organize session")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { managing = false } } }
-            }
-        }
-        .alert("New native section", isPresented: $naming) {
-            TextField("Section name", text: $sectionName)
-            Button("Cancel", role: .cancel) { sectionName = "" }
-            Button("Create") { core.agentOrganize(row.key, action: .createSection, name: sectionName); sectionName = "" }.disabled(sectionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: { Text("Create on \(row.sourceLabel).") }
-        .alert("Remove native group?", isPresented: $deleting) {
-            Button("Cancel", role: .cancel) {}
-            Button("Remove", role: .destructive) { core.agentOrganize(row.key, action: .deleteSection, section: row.removableSection) }
-        } message: { Text("Remove this source group while preserving its conversations and project files.") }
     }
-    private func perform(_ action: Muster_V1_AgentOrganizeRequest.Action, section: String = "") {
-        core.agentOrganize(row.key, action: action, section: section)
-        managing = false
+    private func perform(_ action: Muster_V1_AgentOrganizeRequest.Action) {
+        core.agentOrganize(row.key, action: action)
     }
     @ViewBuilder private var organizationActions: some View {
         Group {
             Button(row.session.pinned ? "Unpin" : "Pin", systemImage: row.session.pinned ? "pin.slash" : "pin") { perform(row.session.pinned ? .unpin : .pin) }
-            Menu("Move to section") {
-                ForEach(row.destinations, id: \.sectionID) { target in
-                    Button(target.title) { perform(.move, section: target.sectionID) }
-                }
-            }.disabled(row.destinations.isEmpty)
-            if !row.removableSection.isEmpty {
-                Button("Remove from section") { perform(.remove) }
-                Button("Remove section…", role: .destructive) { if managing { pendingDelete = true; managing = false } else { deleting = true } }
-            }
-            Button("New section…", systemImage: "folder.badge.plus") { if managing { pendingName = true; managing = false } else { naming = true } }
             Button("Archive", systemImage: "archivebox", role: .destructive) { perform(.archive) }
         }.disabled(row.organizing)
     }

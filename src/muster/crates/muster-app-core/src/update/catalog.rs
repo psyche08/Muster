@@ -190,29 +190,8 @@ fn commit_catalog_pages(state: &mut State) -> bool {
             stale = true;
             continue;
         }
-        let normalize = |sections: Vec<v1::AgentSection>| {
-            let mut sections: Vec<_> = sections
-                .into_iter()
-                .map(|mut section| {
-                    section.device_id.clear();
-                    section.device_name.clear();
-                    section
-                })
-                .collect();
-            sections.sort_by(|a, b| (&a.provider, &a.id).cmp(&(&b.provider, &b.id)));
-            sections
-        };
-        let current = state
-            .agents
-            .native_sections
-            .iter()
-            .filter(|s| s.device_id == device)
-            .cloned()
-            .collect();
-        if normalize(current) != normalize(page.sections) {
-            stale = true;
-            continue;
-        }
+        // Section/Project metadata is not part of the visible partition. Keep
+        // the latest watch metadata; a rename must not invalidate this page.
         for session in page
             .sessions
             .into_iter()
@@ -397,20 +376,8 @@ pub(super) fn organize(state: &mut State, ctx: &Ctx, a: app::AgentOrganize) {
     let Ok(action) = Action::try_from(a.action) else {
         return;
     };
-    if matches!(action, Action::Move | Action::DeleteSection)
-        && !crate::catalog::destinations(state, &session)
-            .iter()
-            .any(|d| d.section_id == a.section_id)
-    {
-        state.toast("The native destination is no longer available", true);
-        return;
-    }
-    if action == Action::Remove
-        && !crate::catalog::destinations(state, &session)
-            .iter()
-            .any(|d| d.section_id == session.section_id)
-    {
-        return;
+    if !matches!(action, Action::Pin | Action::Unpin | Action::Archive) {
+        return; // Ignore stale Section/Project UI intents while those controls are disabled.
     }
     state.agent_organizing.insert(a.row_key.clone());
     let tx = ctx.tx.clone();
@@ -542,7 +509,7 @@ mod paging_regressions {
         assert!(state.agent_catalog_pages.is_empty());
     }
     #[test]
-    fn continuation_cannot_restore_an_old_native_section_name() {
+    fn hidden_section_rename_does_not_discard_the_next_session_page() {
         let mut state = State::new(false, Some("host".into()));
         staged(&mut state, "one", "stale");
         state.agents.native_sections.push(v1::AgentSection {
@@ -559,9 +526,9 @@ mod paging_regressions {
                 title: "Old".into(),
                 ..Default::default()
             });
-        assert!(commit_catalog_pages(&mut state));
+        assert!(!commit_catalog_pages(&mut state));
         assert_eq!(state.agents.native_sections[0].title, "Renamed");
-        assert!(state.agents.sessions.is_empty());
+        assert_eq!(state.agents.sessions.len(), 1);
     }
     #[test]
     fn changed_native_group_rejects_stale_continuation() {

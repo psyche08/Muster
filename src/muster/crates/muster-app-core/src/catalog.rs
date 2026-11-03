@@ -37,16 +37,6 @@ fn ancestors<'a>(
     }
     out
 }
-fn native_section<'a>(
-    state: &'a State,
-    s: &AgentSession,
-) -> Option<&'a muster_proto::v1::AgentSection> {
-    state
-        .agents
-        .native_sections
-        .iter()
-        .find(|g| g.device_id == s.device_id && g.provider == s.provider && g.id == s.section_id)
-}
 pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCatalogSection> {
     use muster_agent::catalog::{PAGE_SIZE, display_key, family_roots, group};
     let searching = !state.agents.query.trim().is_empty();
@@ -59,8 +49,8 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
             .entry(key.clone())
             .or_insert_with(|| AgentCatalogSection {
                 key: key.clone(),
-                title: g.title.clone(),
-                kind: g.kind.clone(),
+                title: if g.kind == "pin" { "Pin" } else { "Recent" }.into(),
+                kind: if g.kind == "pin" { "pin" } else { "recent" }.into(),
                 expanded: searching || *state.agent_disclosures.get(&key).unwrap_or(&true),
                 loading_more: state
                     .agent_catalog_pending
@@ -71,9 +61,6 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
         if remote {
             p.count += g.count;
             p.has_more |= !g.next_cursor.is_empty();
-        }
-        if p.kind != g.kind && !matches!(p.kind.as_str(), "pin" | "recent") {
-            p.kind = "mixed".into();
         }
     };
     for (kind, title) in [("pin", "Pin"), ("recent", "Recent")] {
@@ -96,28 +83,8 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
                 add(g.clone(), true);
             }
         }
-        for sec in &state.agents.native_sections {
-            if state.offline(&sec.device_id)
-                || !(state.agents.device_id.is_empty()
-                    || state.agents.device_id == "*"
-                    || state.agents.device_id == sec.device_id)
-            {
-                continue;
-            }
-            add(
-                group(
-                    &AgentSession {
-                        provider: sec.provider.clone(),
-                        section_id: sec.id.clone(),
-                        device_id: sec.device_id.clone(),
-                        ..Default::default()
-                    },
-                    &state.agents.native_sections,
-                ),
-                false,
-            );
-        }
     }
+
     let mut roots = Vec::new();
     let mut children: HashMap<String, Vec<&AgentSession>> = HashMap::new();
     for s in sessions {
@@ -178,13 +145,6 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
             g.count = available as u32;
         }
         g.has_more |= available > *state.agent_catalog_limits.get(key).unwrap_or(&PAGE_SIZE);
-        g.subtitle = match g.kind.as_str() {
-            "section" => "Section group",
-            "project" => "Project Group",
-            "mixed" => "Section group / Project Group",
-            _ => "",
-        }
-        .into();
         for row in &mut g.rows {
             let Some(s) = &row.session else {
                 continue;
@@ -198,61 +158,9 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
             if !device.is_empty() {
                 origin.push(device.clone());
             }
-            if let Some(sec) = native_section(state, s)
-                && matches!(sec.kind.as_str(), "section" | "project")
-                && !sec.title.is_empty()
-            {
-                origin.push(sec.title.clone());
-            }
             row.source_label = origin.join(" · ");
             row.can_organize = can_organize(state, s);
             row.organizing = state.agent_organizing.contains(&row.key);
-            row.destinations = destinations(state, s);
-            row.removable_section = row
-                .destinations
-                .iter()
-                .find(|d| d.section_id == s.section_id)
-                .map(|d| d.section_id.clone())
-                .unwrap_or_default();
-        }
-    }
-    for sec in &state.agents.native_sections {
-        if !matches!(sec.kind.as_str(), "section" | "project") {
-            continue;
-        }
-        let Some(anchor) = state.agents.sessions.iter().find(|s| {
-            s.device_id == sec.device_id
-                && s.provider == sec.provider
-                && can_organize(state, s)
-                && destinations(state, s)
-                    .iter()
-                    .any(|d| d.section_id == sec.id)
-        }) else {
-            continue;
-        };
-        let key = display_key(&group(
-            &AgentSession {
-                provider: sec.provider.clone(),
-                section_id: sec.id.clone(),
-                device_id: sec.device_id.clone(),
-                ..Default::default()
-            },
-            &state.agents.native_sections,
-        ));
-        if let Some(g) = projected.get_mut(&key) {
-            g.native_targets
-                .push(muster_proto::app::AgentOrganizationTarget {
-                    key: serde_json::to_string(&(&anchor.device_id, &anchor.provider, &sec.id))
-                        .unwrap(),
-                    row_key: row_key(anchor),
-                    section_id: sec.id.clone(),
-                    title: format!(
-                        "{} · {} · {}",
-                        provider_title(&sec.provider),
-                        anchor.device_name,
-                        sec.title
-                    ),
-                });
         }
     }
     let mut out: Vec<_> = projected.into_values().collect();
@@ -364,7 +272,7 @@ mod projection_tests {
         }
     }
     #[test]
-    fn equal_names_aggregate_without_collapsing_session_or_native_identity() {
+    fn native_sections_and_projects_flatten_without_losing_session_identity() {
         let mut state = State::new(false, Some("host".into()));
         state.agents.device_id = "*".into();
         state.agents.native_sections = ["host", "second"]
@@ -382,9 +290,13 @@ mod projection_tests {
         let groups = project(&state, &rows);
         assert_eq!(
             groups.iter().map(|g| g.title.as_str()).collect::<Vec<_>>(),
-            ["Pin", "Workspace", "Recent"]
+            ["Pin", "Recent"]
         );
-        assert_eq!(groups[1].kind, "mixed");
+        assert_eq!(groups[1].kind, "recent");
+        assert!(groups.iter().all(|g| g.native_targets.is_empty()));
+        assert!(groups[1].rows.iter().all(|r| r.destinations.is_empty()
+            && r.removable_section.is_empty()
+            && !r.source_label.contains("Workspace")));
         assert_eq!(groups[1].count, 2);
         assert_ne!(groups[1].rows[0].key, groups[1].rows[1].key);
         assert_eq!(state.agents.native_sections.len(), 2);
@@ -420,6 +332,45 @@ mod projection_tests {
         assert_eq!(groups[1].rows.iter().filter(|r| r.depth == 0).count(), 20);
     }
     #[test]
+    fn old_peer_section_pages_merge_into_recent_and_remain_fetchable() {
+        let mut state = State::new(false, Some("host".into()));
+        state.agent_catalog_groups = ["section", "project"]
+            .into_iter()
+            .map(|kind| AgentCatalogGroup {
+                key: format!("old-{kind}"),
+                title: "Old native name".into(),
+                kind: kind.into(),
+                device_id: "host".into(),
+                count: 12,
+                next_cursor: format!("next-{kind}"),
+                ..Default::default()
+            })
+            .collect();
+        let groups = project(&state, &[session("one", "", "host")]);
+        assert_eq!(groups.len(), 2);
+        let recent = &groups[1];
+        assert_eq!(recent.title, "Recent");
+        assert_eq!(recent.count, 24);
+        assert_eq!(recent.rows.len(), 1);
+        assert!(recent.has_more);
+        assert!(recent.native_targets.is_empty());
+        assert_eq!(
+            state
+                .agent_catalog_groups
+                .iter()
+                .filter(|g| muster_agent::catalog::display_key(g) == recent.key
+                    && !g.next_cursor.is_empty())
+                .count(),
+            2
+        );
+        assert_eq!(state.agent_catalog_groups[0].key, "old-section");
+        state.agents.query = "same".into();
+        let search = project(&state, &[session("one", "", "host")]);
+        assert_eq!(search.len(), 2);
+        assert_eq!(search[1].count, 1);
+    }
+
+    #[test]
     fn server_totals_and_continuations_include_unloaded_roots() {
         let mut state = State::new(false, Some("host".into()));
         state.agent_catalog_groups = vec![AgentCatalogGroup {
@@ -447,32 +398,4 @@ pub(crate) fn can_organize(state: &State, s: &AgentSession) -> bool {
         && muster_agent::viewer::is_uuid(&s.id)
         && matches!(s.provider.as_str(), "codex" | "claude")
         && !state.offline(&s.device_id)
-}
-pub(crate) fn destinations(
-    state: &State,
-    s: &AgentSession,
-) -> Vec<muster_proto::app::AgentOrganizationTarget> {
-    let scope = if s.provider == "claude" {
-        s.section_id.rsplit_once(':').map(|(scope, _)| scope)
-    } else {
-        None
-    };
-    state
-        .agents
-        .native_sections
-        .iter()
-        .filter(|g| {
-            g.device_id == s.device_id
-                && g.provider == s.provider
-                && matches!(g.kind.as_str(), "section" | "project")
-                && (s.provider != "claude"
-                    || scope.is_some_and(|scope| g.id.starts_with(&format!("{scope}:"))))
-        })
-        .map(|g| muster_proto::app::AgentOrganizationTarget {
-            key: serde_json::to_string(&(&s.device_id, &s.provider, &g.id)).unwrap(),
-            row_key: row_key(s),
-            section_id: g.id.clone(),
-            title: g.title.clone(),
-        })
-        .collect()
 }

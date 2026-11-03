@@ -195,6 +195,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0107](0107-silent-native-catalog-read-failures.md) | Accepted; verification pending | Ignore native catalog read failures in the interface |
 
+| [0108](0108-pin-only-session-catalog.md) | Accepted; verification pending | Show only Pin and the ordinary session list |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

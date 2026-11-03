@@ -140,3 +140,7 @@ Use AXShowMenu when exposed, otherwise focus the exact verified menu item and se
 application-directed AX Right Arrow only after exact item/window focus readback.
 No global keyboard routing, pointer event or native-store write is introduced.
 Submenu expansion and remaining membership/archive acceptance are still pending.
+
+[ADR 0108](0108-pin-only-session-catalog.md) supersedes named-group presentation
+and Section/Project UI controls at the owner's request. Native data is preserved;
+Section acceptance is paused.

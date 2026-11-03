@@ -17,57 +17,30 @@ pub fn group(s: &AgentSession, sections: &[AgentSection]) -> AgentCatalogGroup {
         .find(|g| g.device_id == s.device_id && g.provider == s.provider && g.id == s.section_id);
     let kind = native.map(|g| g.kind.as_str()).unwrap_or("");
     let legacy_claude = s.provider == "claude" && kind.is_empty();
-    let (kind, title) =
-        if s.pinned || kind == "pin" || (legacy_claude && s.section_id.ends_with(":pinned")) {
-            ("pin", "Pin")
-        } else if s.section_id.is_empty()
-            || kind == "recent"
-            || (legacy_claude && s.section_id.ends_with(":sessions"))
-        {
-            ("recent", "Recent")
-        } else {
-            (
-                if kind == "project" || s.section_id.starts_with("project:") {
-                    "project"
-                } else {
-                    "section"
-                },
-                native
-                    .map(|g| g.title.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(&s.section_id),
-            )
-        };
-    let key = if matches!(kind, "pin" | "recent") {
-        kind.to_owned()
+    let pinned = s.pinned || kind == "pin" || (legacy_claude && s.section_id.ends_with(":pinned"));
+    let (kind, title) = if pinned {
+        ("pin", "Pin")
     } else {
-        serde_json::to_string(&(&s.provider, &s.section_id)).unwrap()
+        ("recent", "Recent")
     };
     AgentCatalogGroup {
-        key,
+        key: kind.into(),
         kind: kind.into(),
         title: title.into(),
-        provider: if matches!(kind, "pin" | "recent") {
-            String::new()
-        } else {
-            s.provider.clone()
-        },
-        section_id: if matches!(kind, "pin" | "recent") {
-            String::new()
-        } else {
-            s.section_id.clone()
-        },
         device_id: s.device_id.clone(),
         ..Default::default()
     }
 }
 
+/// Older peers still send native Section/Project groups. Aggregate their display
+/// while retaining their original keys/cursors for source paging requests.
 pub fn display_key(group: &AgentCatalogGroup) -> String {
-    if matches!(group.kind.as_str(), "pin" | "recent") {
-        format!("catalog:{}", group.kind)
+    if group.kind == "pin" {
+        "catalog:pin"
     } else {
-        serde_json::to_string(&("group", &group.title)).unwrap()
+        "catalog:recent"
     }
+    .into()
 }
 
 /// Orphans are independent roots; cycles never hide conversations. Cross-device
@@ -158,18 +131,6 @@ pub fn page(
                 vec![],
             ),
         );
-    }
-    for sec in &sections {
-        let g = group(
-            &AgentSession {
-                provider: sec.provider.clone(),
-                section_id: sec.id.clone(),
-                device_id: sec.device_id.clone(),
-                ..Default::default()
-            },
-            &sections,
-        );
-        groups.entry(g.key.clone()).or_insert((g, vec![]));
     }
     for s in &sessions {
         if roots[&session_key(s)] != session_key(s) {
@@ -308,6 +269,68 @@ mod tests {
         .unwrap();
         assert_eq!(next.sessions.len(), 15);
     }
+    #[test]
+    fn native_membership_never_splits_recent_pages_or_hides_pins() {
+        let mut sessions = fixtures();
+        for (i, s) in sessions.iter_mut().enumerate() {
+            s.section_id = if i % 2 == 0 { "project:work" } else { "custom" }.into();
+            s.pinned = s.id == "root-00";
+        }
+        let sections = vec![
+            AgentSection {
+                id: "custom".into(),
+                provider: "claude".into(),
+                title: "Work".into(),
+                kind: "section".into(),
+                ..Default::default()
+            },
+            AgentSection {
+                id: "project:work".into(),
+                provider: "claude".into(),
+                title: "Work".into(),
+                kind: "project".into(),
+                ..Default::default()
+            },
+        ];
+        let first = page(sessions.clone(), sections.clone(), "", "", &[]).unwrap();
+        assert_eq!(
+            first
+                .groups
+                .iter()
+                .map(|g| g.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["pin", "recent"]
+        );
+        assert_eq!(first.groups[0].count, 1);
+        assert_eq!(first.groups[1].count, 22);
+        assert_eq!(first.sessions.len(), 55); // 11 roots plus all four children each.
+        let second = page(
+            sessions.clone(),
+            sections.clone(),
+            "recent",
+            &first.groups[1].next_cursor,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(second.sessions.len(), 50);
+        assert!(
+            second
+                .sessions
+                .iter()
+                .all(|s| !first.sessions.iter().any(|old| old.id == s.id))
+        );
+        let last = page(
+            sessions,
+            sections,
+            "recent",
+            &second.groups[0].next_cursor,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(last.sessions.len(), 10);
+        assert!(last.groups[0].next_cursor.is_empty());
+    }
+
     #[test]
     fn cycles_and_missing_parents_remain_visible() {
         let mut s = fixtures();
