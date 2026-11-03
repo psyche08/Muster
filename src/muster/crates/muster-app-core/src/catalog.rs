@@ -10,6 +10,35 @@ use std::collections::HashSet;
 pub(crate) fn row_key(s: &AgentSession) -> String {
     serde_json::to_string(&(&s.device_id, &s.provider, &s.id)).unwrap()
 }
+/// Replace a source-qualified session projection without losing search context
+/// or a detailed chat's child list when the input is a catalog summary.
+pub(crate) fn reconcile_session(
+    target: &mut AgentSession,
+    fresh: &AgentSession,
+    summary: bool,
+) -> bool {
+    if target.id != fresh.id
+        || target.provider != fresh.provider
+        || target.device_id != fresh.device_id
+    {
+        return false;
+    }
+    let snippet = std::mem::take(&mut target.search_snippet);
+    let children = summary.then(|| {
+        (
+            std::mem::take(&mut target.subagents),
+            std::mem::take(&mut target.subsessions),
+        )
+    });
+    *target = fresh.clone();
+    target.search_snippet = snippet;
+    if let Some((subagents, subsessions)) = children {
+        target.subagents = subagents;
+        target.subsessions = subsessions;
+    }
+    true
+}
+
 fn parent<'a>(
     s: &AgentSession,
     all: &'a HashMap<String, &AgentSession>,
@@ -398,4 +427,41 @@ pub(crate) fn can_organize(state: &State, s: &AgentSession) -> bool {
         && muster_agent::viewer::is_uuid(&s.id)
         && matches!(s.provider.as_str(), "codex" | "claude")
         && !state.offline(&s.device_id)
+}
+
+#[cfg(test)]
+mod reconcile_tests {
+    use super::*;
+    #[test]
+    fn metadata_joins_require_source_identity_and_keep_view_context() {
+        let mut old = AgentSession {
+            id: "same-uuid".into(),
+            provider: "claude".into(),
+            device_id: "host-a".into(),
+            title: "old".into(),
+            search_snippet: "match".into(),
+            subagents: vec![AgentSession::default()],
+            ..Default::default()
+        };
+        let mut fresh = AgentSession {
+            title: "new".into(),
+            updated_unix: 42,
+            subagents: vec![],
+            ..old.clone()
+        };
+        fresh.device_id = "host-b".into();
+        assert!(!reconcile_session(&mut old, &fresh, true));
+        fresh.device_id = "host-a".into();
+        fresh.provider = "codex".into();
+        assert!(!reconcile_session(&mut old, &fresh, true));
+        fresh.provider = "claude".into();
+        fresh.search_snippet.clear();
+        assert!(reconcile_session(&mut old, &fresh, true));
+        assert_eq!(old.title, "new");
+        assert_eq!(old.updated_unix, 42);
+        assert_eq!(old.search_snippet, "match");
+        assert_eq!(old.subagents.len(), 1);
+        assert!(reconcile_session(&mut old, &fresh, false));
+        assert!(old.subagents.is_empty());
+    }
 }

@@ -125,6 +125,11 @@ private struct CatalogSessionRow: View {
                             Text(row.session.title.isEmpty ? row.session.id : row.session.title)
                                 .font(.body).lineLimit(1).truncationMode(.tail)
                             Spacer(minLength: 4)
+                            if row.session.updatedUnix > 0 {
+                                Text(relative(row.session.updatedUnix))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityLabel("Last message \(relative(row.session.updatedUnix))")
+                            }
                             if row.session.state == "waiting_approval" || row.session.state == "running" {
                                 Circle().fill(row.session.state == "waiting_approval" ? Color.orange : Color.green)
                                     .frame(width: 6, height: 6).accessibilityLabel(row.session.state == "waiting_approval" ? "Needs you" : "Working")

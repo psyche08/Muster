@@ -77,12 +77,6 @@ fn read_registry(path: &Path) -> Option<Value> {
     }
     serde_json::from_slice(&std::fs::read(path).ok()?).ok()
 }
-fn read_title_file(path: &Path) -> Option<String> {
-    read_registry(path)?["title"]
-        .as_str()
-        .filter(|s| !s.trim().is_empty())
-        .map(str::to_owned)
-}
 
 /// One UUID's current native label, never a title-based session lookup.
 pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Option<String> {
@@ -121,7 +115,19 @@ pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Op
                 }
             }
             match matches.as_slice() {
-                [one] => read_title_file(one),
+                [one] => {
+                    let record = read_registry(one)?;
+                    if record["sessionId"] != desktop
+                        || record["cliSessionId"] != id
+                        || record["isArchived"] == true
+                    {
+                        return None;
+                    }
+                    record["title"]
+                        .as_str()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(str::to_owned)
+                }
                 _ => None,
             }
         }

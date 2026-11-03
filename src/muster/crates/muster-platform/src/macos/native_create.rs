@@ -222,6 +222,7 @@ async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Resu
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Selection {
     Claude,
+    ClaudeEnvironment(muster_agent::native_runtime::ClaudeEnvironment),
     Codex(muster_agent::native_runtime::CodexProject),
 }
 
@@ -246,7 +247,63 @@ fn selection_matches(
                     ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
                 })
         });
-        good.then_some(Selection::Claude)
+        if good {
+            Some(Selection::Claude)
+        } else {
+            let labels: Vec<_> = all
+                .iter()
+                .filter(|n| n.role() == "AXPopUpButton")
+                .filter_map(|n| n.string("AXDescription"))
+                .filter_map(|s| s.strip_prefix("Environment: ").map(str::to_owned))
+                .collect();
+            if labels.len() != 1 {
+                return Ok(None);
+            }
+            // Scope full-path evidence to the selected recent-environment group,
+            // never a similarly named sidebar conversation or another preset.
+            let mut groups = Vec::new();
+            for list in all
+                .iter()
+                .filter(|n| n.role() == "AXList" && label(n, "Recent environments"))
+            {
+                for group in nodes(list)?.into_iter().filter(|n| n.role() == "AXGroup") {
+                    let values: Vec<_> = group
+                        .children()
+                        .into_iter()
+                        .filter(|n| n.role() == "AXStaticText")
+                        .filter_map(|n| n.string("AXValue"))
+                        .collect();
+                    if values.iter().any(|v| v == &labels[0])
+                        && values.iter().any(|v| Some(v.as_str()) == cwd.to_str())
+                    {
+                        groups.push(group);
+                    }
+                }
+            }
+            if groups.len() != 1 {
+                return Ok(None);
+            }
+            let base = PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+                .join("Library/Application Support/Claude");
+            let read = |name: &str| -> Option<Vec<u8>> {
+                use std::io::Read;
+                let mut bytes = Vec::new();
+                std::fs::File::open(base.join(name))
+                    .ok()?
+                    .take(4 * 1024 * 1024 + 1)
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                Some(bytes)
+            };
+            read("config.json")
+                .zip(read("ccd-session-presets.json"))
+                .and_then(|(config, presets)| {
+                    muster_agent::native_runtime::claude_environment(
+                        &config, &presets, &labels[0], cwd,
+                    )
+                })
+                .map(Selection::ClaudeEnvironment)
+        }
     } else {
         let labels: Vec<_> = all
             .iter()

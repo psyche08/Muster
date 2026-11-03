@@ -112,6 +112,51 @@ pub fn directory_label_matches(label: &str, cwd: &Path, home: Option<&Path>) -> 
         .is_some_and(|relative| !relative.is_empty() && label == format!("~/{relative}"))
 }
 
+/// Opaque identity of an account-scoped, local saved Claude environment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClaudeEnvironment {
+    account: String,
+    id: String,
+    cwd: PathBuf,
+}
+
+pub fn claude_environment(
+    config: &[u8],
+    presets: &[u8],
+    label: &str,
+    cwd: &Path,
+) -> Option<ClaudeEnvironment> {
+    if !cwd.is_absolute() || config.len() > 4 * 1024 * 1024 || presets.len() > 4 * 1024 * 1024 {
+        return None;
+    }
+    let config: serde_json::Value = serde_json::from_slice(config).ok()?;
+    let account = config["lastKnownAccountUuid"].as_str()?;
+    if !crate::viewer::is_uuid(account) {
+        return None;
+    }
+    let data: serde_json::Value = serde_json::from_slice(presets).ok()?;
+    let mut matches = data["byAccount"][account]["presets"]
+        .as_array()?
+        .iter()
+        .filter(|p| p["name"].as_str() == Some(label));
+    let p = matches.next()?;
+    if matches.next().is_some()
+        || p["target"]["kind"].as_str() != Some("local")
+        || p["target"]["cwd"].as_str() != cwd.to_str()
+    {
+        return None;
+    }
+    let id = p["id"].as_str()?;
+    if !crate::viewer::is_uuid(id) {
+        return None;
+    }
+    Some(ClaudeEnvironment {
+        account: account.into(),
+        id: id.into(),
+        cwd: cwd.into(),
+    })
+}
+
 /// An identity proven against the provider's selected local project and exact root.
 /// Retain it across form preparation; a different selection invalidates the proof.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,6 +184,50 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProje
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn claude_saved_environment_requires_account_locality_and_exact_directory() {
+        let config = br#"{"lastKnownAccountUuid":"11111111-1111-4111-8111-111111111111"}"#;
+        let mut data = serde_json::json!({"byAccount":{"11111111-1111-4111-8111-111111111111":{"presets":[{
+            "id":"22222222-2222-4222-8222-222222222222", "name":"Example", "target":{"kind":"local", "cwd":"/tmp/example"}
+        }]}}});
+        let check = |d: &serde_json::Value| {
+            claude_environment(
+                config,
+                &serde_json::to_vec(d).unwrap(),
+                "Example",
+                Path::new("/tmp/example"),
+            )
+        };
+        assert!(check(&data).is_some());
+        let preset = &mut data["byAccount"]["11111111-1111-4111-8111-111111111111"]["presets"][0];
+        preset["target"]["kind"] = "remote".into();
+        assert!(check(&data).is_none());
+        data["byAccount"]["11111111-1111-4111-8111-111111111111"]["presets"][0]["target"]["kind"] =
+            "local".into();
+        assert!(
+            claude_environment(
+                b"{}",
+                &serde_json::to_vec(&data).unwrap(),
+                "Example",
+                Path::new("/tmp/example")
+            )
+            .is_none()
+        );
+        assert!(
+            claude_environment(
+                config,
+                &serde_json::to_vec(&data).unwrap(),
+                "Example",
+                Path::new("/tmp/other")
+            )
+            .is_none()
+        );
+        let a = data["byAccount"]["11111111-1111-4111-8111-111111111111"]["presets"]
+            .as_array_mut()
+            .unwrap();
+        a.push(a[0].clone());
+        assert!(check(&data).is_none());
+    }
     #[test]
     fn only_new_or_proved_activation_windows_are_eligible() {
         assert_eq!(

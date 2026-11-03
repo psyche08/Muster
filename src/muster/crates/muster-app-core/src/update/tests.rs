@@ -2585,7 +2585,33 @@ async fn permission_reads_are_bounded_cancelled_and_yield_to_initial_cards() {
         session.clone(),
     );
     assert!(!state.chat.as_ref().unwrap().approval_refresh_pending);
-    state.chat.as_mut().unwrap().interactions.clear();
+    // Runtime/file noise does not resolve an observed Claude permission.
+    state.chat.as_mut().unwrap().interactions[0].id = "approval-fixture".into();
+    for activity in ["idle", "unknown", "running"] {
+        let mut next = state.chat.as_ref().unwrap().session.clone();
+        next.state = activity.into();
+        agents::msg_agent_event(
+            &mut state,
+            &ctx,
+            token.clone(),
+            "mac".into(),
+            session.clone(),
+            v1::agent_event::Ev::State(next),
+        );
+        assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 1);
+    }
+    agents::msg_agent_event(
+        &mut state,
+        &ctx,
+        token.clone(),
+        "mac".into(),
+        session.clone(),
+        v1::agent_event::Ev::InteractionResolved("approval-fixture".into()),
+    );
+    assert!(state.chat.as_ref().unwrap().interactions.is_empty());
+    // Reset to the already-inspected waiting episode for the original bound test.
+    state.chat.as_mut().unwrap().session.state = "waiting_approval".into();
+    state.chat.as_mut().unwrap().approval_refresh_attempted = true;
     for _ in 0..3 {
         approval_cards::schedule(&mut state, &ctx, token.clone());
     }

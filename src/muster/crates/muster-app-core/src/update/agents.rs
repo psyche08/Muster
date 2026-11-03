@@ -988,6 +988,22 @@ pub(super) fn msg_agents(
                     g
                 }));
             let sessions = visible_agents(page.sessions);
+            for fresh in &sessions {
+                for result in &mut state.agents_search_sessions {
+                    crate::catalog::reconcile_session(result, fresh, true);
+                }
+                if let Some(chat) = &mut state.chat {
+                    crate::catalog::reconcile_session(&mut chat.session, fresh, true);
+                    for child in chat
+                        .session
+                        .subagents
+                        .iter_mut()
+                        .chain(chat.session.subsessions.iter_mut())
+                    {
+                        crate::catalog::reconcile_session(child, fresh, true);
+                    }
+                }
+            }
             state
                 .agents
                 .native_sections
@@ -1134,6 +1150,10 @@ pub(super) fn msg_agent_event(
             }
             s.device_id = device.clone();
             s.device_name = chat.session.device_name.clone();
+            for child in s.subagents.iter_mut().chain(s.subsessions.iter_mut()) {
+                child.device_id = device.clone();
+                child.device_name = s.device_name.clone();
+            }
             for listed in state
                 .agents
                 .sessions
@@ -1144,15 +1164,16 @@ pub(super) fn msg_agent_event(
                     && listed.provider == s.provider
                     && listed.id == session
                 {
-                    *listed = s.clone();
+                    crate::catalog::reconcile_session(listed, &s, false);
                 }
             }
             if !chat.approval_refresh_pending
+                && chat.session.state == "waiting_approval"
                 && matches!(s.state.as_str(), "running" | "idle" | "ended")
             {
                 chat.approval_refresh_attempted = false;
             }
-            if s.state != "waiting_approval" {
+            if s.state != "waiting_approval" && s.provider != "claude" {
                 // Question lifetime is tied to a provider result, not
                 // transient process/AX activity (including locked use).
                 chat.interactions

@@ -6,7 +6,7 @@ fn missing(chat: &Chat) -> bool {
         && chat.session.mode == "code"
         && muster_agent::claude_identity::local_id(&chat.session.id)
         && !chat.session.read_only
-        && chat.session.state == "waiting_approval"
+        && (chat.session.state == "waiting_approval" || chat.session.process_state == "running")
         && !chat
             .interactions
             .iter()
@@ -141,5 +141,15 @@ mod tests {
         c = waiting();
         c.session.state = "running".into();
         assert!(!missing(&c));
+        c.session.process_state = "running".into();
+        assert!(
+            missing(&c),
+            "a bound live worker may have an unobserved AX card"
+        );
+        c.session.state = "idle".into();
+        assert!(
+            missing(&c),
+            "idle metadata cannot prove absence of an AX card"
+        );
     }
 }
