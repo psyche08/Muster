@@ -1,9 +1,11 @@
-// The Mac session screen's chrome, styled after DeepSeek Harness's session
+// The session screen's chrome, styled after DeepSeek Harness's session
 // header: a title row with session utilities and actions, then view tabs with
-// an underline for the active view. Presentation only: every value comes from
-// the Rust-owned ChatView and every control sends an Intent or a shell-only
-// preference. See ADR 0086 and ADR 0103.
-#if os(macOS) && canImport(SwiftUI)
+// an underline for the active view. The Mac shows the full header; iOS uses
+// the compact form under its native navigation bar, which keeps the title and
+// the actions menu. Presentation only: every value comes from the Rust-owned
+// ChatView and every control sends an Intent or a shell-only preference. See
+// ADR 0086, ADR 0103 and ADR 0106.
+#if canImport(SwiftUI)
 import SwiftUI
 
 /// What the header shows for one session. Built by `ChatView` from the
@@ -36,6 +38,9 @@ struct SessionChromeHeader: View {
     let model: SessionChromeModel
     @Binding var selected: String
     let actions: SessionChromeActions
+    /// The phone and tablet form: chips only (the navigation bar shows the
+    /// title and the actions), and touch-sized tabs.
+    var compact = false
     @Environment(\.colorScheme) private var scheme
     @AppStorage(ConversationStyle.preferenceKey) private var style = ConversationStyle.codex
 
@@ -53,13 +58,13 @@ struct SessionChromeHeader: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            titleRow
+            if compact { compactTitleRow } else { titleRow }
             tabsRow
         }
-        .padding(.top, SessionChromeMetrics.headerTopPadding)
-        .padding(.leading, SessionChromeMetrics.headerLeadingPadding)
-        .padding(.trailing, SessionChromeMetrics.headerTrailingPadding)
-        .frame(minHeight: SessionChromeMetrics.headerMinHeight, alignment: .top)
+        .padding(.top, compact ? SessionChromeMetrics.compactHeaderTopPadding : SessionChromeMetrics.headerTopPadding)
+        .padding(.leading, compact ? SessionChromeMetrics.compactHeaderPadding : SessionChromeMetrics.headerLeadingPadding)
+        .padding(.trailing, compact ? 0 : SessionChromeMetrics.headerTrailingPadding)
+        .frame(minHeight: compact ? 0 : SessionChromeMetrics.headerMinHeight, alignment: .top)
         .background(palette.bgBase)
         .overlay(alignment: .bottom) {
             Rectangle().fill(palette.borderL3)
@@ -77,6 +82,28 @@ struct SessionChromeHeader: View {
             utilities
             actionsRow
         }
+        .frame(minHeight: SessionChromeMetrics.titleRowMinHeight)
+    }
+
+    /// The compact title row scrolls sideways rather than truncating chips.
+    private var compactTitleRow: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: SessionChromeMetrics.chipGap) {
+                if !model.parentTitle.isEmpty {
+                    SessionChromeChip(title: model.parentTitle, systemImage: "arrow.turn.up.left",
+                                      action: actions.openParent)
+                        .accessibilityIdentifier("session-chrome-parent")
+                }
+                utilities
+                if !model.cwd.isEmpty {
+                    SessionChromeChip(title: URL(fileURLWithPath: model.cwd).lastPathComponent,
+                                      systemImage: "folder")
+                        .help(model.cwd)
+                }
+            }
+            .padding(.trailing, SessionChromeMetrics.compactHeaderPadding)
+        }
+        .scrollIndicators(.hidden)
         .frame(minHeight: SessionChromeMetrics.titleRowMinHeight)
     }
 
@@ -196,21 +223,24 @@ struct SessionChromeHeader: View {
     private var tabsRow: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                HStack(alignment: .bottom, spacing: SessionChromeMetrics.tabGap) {
+                HStack(alignment: .bottom, spacing: compact ? SessionChromeMetrics.compactTabGap : SessionChromeMetrics.tabGap) {
                     ForEach(tabs, id: \.id) { tab in
                         tabButton(id: tab.id, title: tab.title).id(tab.id)
                     }
                 }
+                .padding(.trailing, compact ? SessionChromeMetrics.compactHeaderPadding : 0)
             }
-            .scrollIndicators(.visible)
+            .scrollIndicators(compact ? .hidden : .visible)
             .onAppear { proxy.scrollTo(selected, anchor: .center) }
             .onChange(of: selected) { _, tab in
                 withAnimation { proxy.scrollTo(tab, anchor: .center) }
             }
         }
-        .frame(height: SessionChromeMetrics.tabLineHeight + SessionChromeMetrics.tabBottomInset)
-        .padding(.leading, SessionChromeMetrics.tabsLeadingInset)
-        .padding(.top, SessionChromeMetrics.tabsTopGap)
+        .frame(height: compact
+            ? SessionChromeMetrics.compactTabTopInset + SessionChromeMetrics.compactTabLineHeight + SessionChromeMetrics.tabBottomInset
+            : SessionChromeMetrics.tabLineHeight + SessionChromeMetrics.tabBottomInset)
+        .padding(.leading, compact ? 0 : SessionChromeMetrics.tabsLeadingInset)
+        .padding(.top, compact ? 0 : SessionChromeMetrics.tabsTopGap)
         .accessibilityIdentifier("session-chrome-tabs")
     }
 
@@ -218,9 +248,11 @@ struct SessionChromeHeader: View {
         let active = selected == id
         return Button { selected = id } label: {
             Text(title)
-                .font(.system(size: SessionChromeMetrics.tabFontSize, weight: .medium))
+                .font(.system(size: compact ? SessionChromeMetrics.compactTabFontSize : SessionChromeMetrics.tabFontSize,
+                              weight: .medium))
                 .foregroundStyle(active ? palette.businessPrimary : palette.labelTertiary)
                 .fixedSize()
+                .padding(.top, compact ? SessionChromeMetrics.compactTabTopInset : 0)
                 .padding(.bottom, SessionChromeMetrics.tabBottomInset)
                 .overlay(alignment: .bottom) {
                     Rectangle()
@@ -228,6 +260,7 @@ struct SessionChromeHeader: View {
                         .frame(height: SessionChromeMetrics.tabUnderlineHeight)
                         .clipShape(RoundedRectangle(cornerRadius: SessionChromeMetrics.tabUnderlineRadius))
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(id == "Terminal" && !model.terminalAvailable)
@@ -325,7 +358,9 @@ private struct ChromeIconMenu<Content: View>: View {
                             in: RoundedRectangle(cornerRadius: 8))
                 .contentShape(Rectangle())
         }
+        #if os(macOS)
         .menuStyle(.borderlessButton)
+        #endif
         .menuIndicator(.hidden)
         .fixedSize()
         .help(help)

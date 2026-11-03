@@ -212,6 +212,64 @@ pub fn first_record(path: &Path, zstd: bool, limit: u64) -> Option<Value> {
     serde_json::from_slice(line).ok()
 }
 
+/// The decoded bytes of a stream of Zstandard frames, read a bounded chunk
+/// of the file at a time, for a reader that goes through a whole log once
+/// (search). A frame still being written ends the stream.
+pub struct FrameReader<R> {
+    input: R,
+    frames: Frames,
+    /// Compressed bytes read but not yet a complete frame.
+    pending: Vec<u8>,
+    out: Vec<u8>,
+    at: usize,
+    ended: bool,
+}
+
+impl<R: Read> FrameReader<R> {
+    const CHUNK: usize = 1 << 20;
+
+    pub fn new(input: R) -> Self {
+        Self {
+            input,
+            frames: Frames {
+                decoder: ruzstd::decoding::FrameDecoder::new(),
+                decoded: 0,
+            },
+            pending: Vec::new(),
+            out: Vec::new(),
+            at: 0,
+            ended: false,
+        }
+    }
+}
+
+impl<R: Read> Read for FrameReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        while self.at == self.out.len() {
+            if self.ended {
+                return Ok(0);
+            }
+            let start = self.pending.len();
+            self.pending.resize(start + Self::CHUNK, 0);
+            let n = self.input.read(&mut self.pending[start..])?;
+            self.pending.truncate(start + n);
+            self.ended = n == 0;
+            let (decoded, used) = self.frames.decode(&self.pending);
+            self.pending.drain(..used);
+            if self.pending.len() > MAX_RECORD * 4 {
+                // A frame this large is not one a session log writes.
+                self.ended = true;
+            }
+            self.out = decoded;
+            self.at = 0;
+        }
+        let n = buf.len().min(self.out.len() - self.at);
+        buf[..n].copy_from_slice(&self.out[self.at..self.at + n]);
+        self.at += n;
+        Ok(n)
+    }
+}
+
 pub struct Read1 {
     /// (byte offset of the record's first byte, the parsed record)
     pub records: Vec<(u64, Value)>,
@@ -287,5 +345,29 @@ mod tests {
         let r = tail.read().unwrap();
         assert!(r.truncated);
         assert_eq!((r.records[0].0, &r.records[0].1["b"]), (0, &1.into()));
+    }
+
+    /// Search reads a whole log once: the same decoded stream, frames split
+    /// across reads, and nothing from a frame still being written.
+    #[test]
+    fn frame_reader_streams_complete_frames() {
+        let mut log = frame("{\"a\":1}\n");
+        log.extend_from_slice(&[0x50, 0x2a, 0x4d, 0x18, 3, 0, 0, 0, 9, 9, 9]);
+        // Barely compressible, so its frame spans several reads.
+        let mut seed = 7_u32;
+        let body: String = (0..3 << 20)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                char::from(b"0123456789abcdef"[(seed >> 16) as usize % 16])
+            })
+            .collect();
+        log.extend(frame(&format!("{{\"a\":\"{body}\"}}\n")));
+        let last = frame("{\"a\":3}\n");
+        log.extend_from_slice(&last[..last.len() - 2]);
+        let mut text = String::new();
+        FrameReader::new(&log[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        assert_eq!(text, format!("{{\"a\":1}}\n{{\"a\":\"{body}\"}}\n"));
     }
 }

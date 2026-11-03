@@ -72,39 +72,6 @@ struct ExecutableCodeCard: View {
     }
 }
 
-struct ConversationNavigation: View {
-    let chat: Muster_App_ChatView
-    @Binding var selected: String
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 7) {
-                Circle().fill(chat.session.state == "running" ? Color.green : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
-                Text(chat.providerLabel).fontWeight(.medium)
-                Text("·")
-                Text(chat.session.deviceName).lineLimit(1)
-                Spacer(minLength: 8)
-                if !chat.session.cwd.isEmpty {
-                    Label(URL(fileURLWithPath: chat.session.cwd).lastPathComponent, systemImage: "folder")
-                        .lineLimit(1).truncationMode(.middle)
-                }
-            }.font(.caption).foregroundStyle(.secondary)
-            HStack(spacing: 4) {
-                tab("Chat", "bubble.left", "Conversation")
-                tab("Activity", "waveform.path", "Activity")
-                tab("Terminal", "terminal", "Terminal", disabled: !chat.terminal.available)
-            }.padding(4).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
-        }.padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 12)
-    }
-    private func tab(_ title: String, _ icon: String, _ value: String, disabled: Bool = false) -> some View {
-        Button { selected = value } label: {
-            Label(title, systemImage: icon).font(.subheadline.weight(selected == value ? .semibold : .regular))
-                .frame(maxWidth: .infinity).frame(height: 38)
-                .foregroundStyle(selected == value ? Color.primary : Color.secondary)
-                .background(selected == value ? Color.accentColor.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 10))
-        }.buttonStyle(.plain).disabled(disabled)
-    }
-}
-
 struct CodeExecutionPreview: View {
     let preview: Muster_App_CodePreview
     var cancel: () -> Void

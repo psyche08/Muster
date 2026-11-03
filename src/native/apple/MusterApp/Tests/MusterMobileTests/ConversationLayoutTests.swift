@@ -239,14 +239,17 @@ final class ConversationLayoutTests: XCTestCase {
         let part = Muster_App_MessagePart.fixture {
             $0.kind = "code"; $0.language = preview.language; $0.text = preview.code; $0.commandID = preview.id
         }
-        var chat = Muster_App_ChatView()
-        chat.providerLabel = "Codex"; chat.session.deviceName = "Mac-C"
-        chat.session.cwd = preview.cwd; chat.terminal.available = true
+        var chrome = SessionChromeModel()
+        chrome.title = "检查工作目录"; chrome.providerLabel = "Codex"; chrome.deviceName = "Mac-C"
+        chrome.state = "running"; chrome.cwd = preview.cwd; chrome.parentTitle = "Parent session"
+        chrome.subagentCount = 2; chrome.subsessionCount = 1; chrome.terminalAvailable = true
         for width in [CGFloat(320), 402] {
             for scheme in [ColorScheme.light, .dark] {
                 let content = NavigationStack {
                     VStack(alignment: .leading, spacing: 16) {
-                        ConversationNavigation(chat: chat, selected: .constant("Conversation"))
+                        // Every view is a direct tab, scrolling sideways on the narrowest phone.
+                        SessionChromeHeader(model: chrome, selected: .constant("Conversation"),
+                                            actions: SessionChromeActions(), compact: true)
                         ScrollView {
                             ConversationText(text: "", parts: [
                                 .fixture { $0.kind = "markdown"; $0.text = "在当前工作目录执行命令，完成后把退出码和输出返回这条会话。" }, part

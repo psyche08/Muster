@@ -6,6 +6,8 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
     let mut spans: Vec<TraceSpan> = Vec::new();
     let mut counts = HashMap::new();
     let mut pending = HashMap::new();
+    // How the current turn ended, when its record says it did not complete.
+    let mut outcome = None;
     for m in messages
         .iter()
         .filter(|m| m.kind == "tool_call" && !m.tool_call_id.is_empty())
@@ -35,6 +37,11 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
             span.detail.extend(m.text.chars().take(2000));
             continue;
         }
+        if m.kind == "turn_status" && matches!(status, "failed" | "interrupted") {
+            outcome = Some(status);
+        } else if m.role == "user" && m.kind == "text" {
+            outcome = None;
+        }
         let (kind, title) = match m.kind.as_str() {
             "tool_call" => (
                 "tool",
@@ -45,7 +52,14 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
                 },
             ),
             "tool_result" => ("tool", "Unpaired tool output"),
-            "turn_summary" => ("turn", "Turn completed"),
+            "turn_summary" => (
+                "turn",
+                match outcome {
+                    Some("failed") => "Turn failed",
+                    Some(_) => "Turn interrupted",
+                    None => "Turn completed",
+                },
+            ),
             "turn_status" => ("status", "Turn status"),
             _ if m.phase == "reasoning" => ("reasoning", "Reasoning"),
             _ if m.role == "user" && m.kind == "text" => ("turn", "User message"),
@@ -75,7 +89,7 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
                 m.text.chars().take(2000).collect()
             },
             status: if m.kind == "turn_summary" {
-                "completed".into()
+                outcome.take().unwrap_or("completed").into()
             } else {
                 status.into()
             },
@@ -98,6 +112,32 @@ mod tests {
             tool_status: status.into(),
             ..Default::default()
         }
+    }
+    #[test]
+    fn a_turn_that_did_not_complete_keeps_its_outcome() {
+        let mut end = tool("end", "turn_status", "", 20, "failed");
+        end.role = "system".into();
+        let m = vec![
+            tool("a", "tool_call", "a", 10, ""),
+            tool("r", "tool_result", "a", 12, "failed"),
+            end,
+            tool("sum", "turn_summary", "", 21, ""),
+            tool("sum2", "turn_summary", "", 30, ""),
+        ];
+        let s = spans(&m, "idle");
+        let view: Vec<_> = s
+            .iter()
+            .map(|s| (s.kind.as_str(), s.title.as_str(), s.status.as_str()))
+            .collect();
+        assert_eq!(
+            view,
+            [
+                ("tool", "Tool", "failed"),
+                ("status", "Turn status", "failed"),
+                ("turn", "Turn failed", "failed"),
+                ("turn", "Turn completed", "completed")
+            ]
+        );
     }
     #[test]
     fn parallel_calls_pair_by_id_and_keep_unknown_or_reversed_times_unknown() {

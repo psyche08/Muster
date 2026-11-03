@@ -2,8 +2,9 @@
 
 > Privacy note: operational identities in this record are anonymized examples; see [public content policy](PUBLIC_CONTENT.md). Technical outcomes and acceptance limits are unchanged.
 
-Mobile conversation pages use three primary destinations: Chat, Activity, and
-Terminal. Activity contains execution traces, subagents, and related sessions.
+Mobile conversation pages use the shared session chrome with direct tabs:
+Conversation, Trace, Subagents, Sessions and Terminal
+([ADR 0106](adr/0106-deepseek-harness-session-adaptation.md)).
 The iOS shell retains native navigation bars and confirmation/result sheets.
 The trace page itself is shared with the Mac: a time overview, a turn-grouped
 ledger and a record inspector, styled after DeepSeek Harness's Trajectory page;

@@ -224,6 +224,10 @@ pub struct Snapshot {
     pub contract: Option<Contract>,
     /// Sessions the app holds live, and whether a turn runs in each.
     pub sessions: HashMap<String, bool>,
+    /// Whether `sessions` is the app's whole registry, every entry read. A
+    /// session missing from a whole registry is one the app has not loaded,
+    /// which it shows as not running.
+    pub complete: bool,
     pub approvals: Vec<Approval>,
     pub questions: Vec<Questions>,
 }
@@ -283,12 +287,13 @@ fn parse_questions(value: &Value) -> Option<Vec<InteractionQuestion>> {
 
 /// The plugin's `state` reply; malformed entries are left out.
 fn parse_snapshot(value: &Value) -> Snapshot {
-    let sessions = value["sessions"]
-        .as_array()
+    let listed = value["sessions"].as_array();
+    let sessions: HashMap<_, _> = listed
         .into_iter()
         .flatten()
         .filter_map(|s| Some((bridge_id(&s["id"])?, s["running"].as_bool()?)))
         .collect();
+    let complete = listed.is_some_and(|l| l.len() == sessions.len());
     let approvals = value["approvals"]
         .as_array()
         .into_iter()
@@ -317,6 +322,7 @@ fn parse_snapshot(value: &Value) -> Snapshot {
     Snapshot {
         contract: None,
         sessions,
+        complete,
         approvals,
         questions,
     }
@@ -368,7 +374,7 @@ impl Snapshot {
             SessionState::WaitingApproval
         } else if self.sessions.get(session) == Some(&true) {
             SessionState::Running
-        } else if self.sessions.contains_key(session) {
+        } else if self.sessions.contains_key(session) || self.complete {
             SessionState::Idle
         } else {
             SessionState::Unknown
@@ -859,7 +865,8 @@ mod tests {
         }));
         assert_eq!(snapshot.state("session-a"), SessionState::WaitingApproval);
         assert_eq!(snapshot.state("session-b"), SessionState::WaitingApproval);
-        assert_eq!(snapshot.state("session-c"), SessionState::Unknown);
+        // The app has not loaded it: not running, as the app shows it.
+        assert_eq!(snapshot.state("session-c"), SessionState::Idle);
         let [approval] = &snapshot.interactions("session-a")[..] else {
             panic!("one approval")
         };
@@ -903,6 +910,12 @@ mod tests {
     fn malformed_running_state_is_not_idle() {
         let snapshot = parse_snapshot(&json!({"sessions":[{"id":"session-a","running":"false"}]}));
         assert_eq!(snapshot.state("session-a"), SessionState::Unknown);
+        // A registry with an unread entry says nothing of the others.
+        assert_eq!(snapshot.state("session-b"), SessionState::Unknown);
+        assert_eq!(
+            parse_snapshot(&json!({})).state("session-b"),
+            SessionState::Unknown
+        );
     }
 
     #[tokio::test]

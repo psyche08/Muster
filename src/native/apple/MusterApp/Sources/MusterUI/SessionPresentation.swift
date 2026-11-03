@@ -7,11 +7,32 @@ import MusterCore
 struct ReasoningRow: View {
     let block: Muster_App_ChatBlock
     var expanded = false
+    @Environment(\.conversationStyle) private var style
 
     private var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("reasoning", id: block.id, defaultValue: expanded) }
 
     var body: some View {
+        if style == .deepseek { deepseekBody } else { standardBody }
+    }
+
+    /// DSH's thinking row: the same quiet process row, the reasoning indented
+    /// under its label without a rail.
+    private var deepseekBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { expansion.wrappedValue.toggle() } label: {
+                DeepSeekRowTitle(systemImage: "brain", title: block.title, expanded: expansion.wrappedValue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
+            if expansion.wrappedValue {
+                ChatMarkdown(text: block.message.text)
+                    .padding(.leading, DeepSeekChat.bodyIndent).padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var standardBody: some View {
         DisclosureGroup(isExpanded: expansion) {
             ChatMarkdown(text: block.message.text)
                 .padding(.leading, 12).padding(.top, 8)
