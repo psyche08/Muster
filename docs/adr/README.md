@@ -187,6 +187,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0103](0103-visible-tabs-and-provider-aggregation.md) | Accepted; source verified, device acceptance pending | Show every session tab and aggregate All devices by provider |
 
+| [0104](0104-three-category-session-catalog.md) | Accepted; source verified, device acceptance pending | Aggregate sessions into Pin, Section and Recent only |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

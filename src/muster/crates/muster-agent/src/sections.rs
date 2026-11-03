@@ -16,9 +16,13 @@ pub(crate) struct Catalog {
     pub sections: Vec<AgentSection>,
     pub members: HashMap<(String, String), (String, i64)>,
     pub notices: Vec<(String, String)>,
+    pub pinned: HashSet<(String, String)>,
 }
 impl Catalog {
     pub fn apply(&self, session: &mut AgentSession) {
+        session.pinned = self
+            .pinned
+            .contains(&(session.provider.clone(), session.id.clone()));
         if let Some((id, position)) = self
             .members
             .get(&(session.provider.clone(), session.id.clone()))
@@ -53,6 +57,7 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
 fn merge(out: &mut Catalog, c: Catalog) {
     out.sections.extend(c.sections);
     out.members.extend(c.members);
+    out.pinned.extend(c.pinned);
 }
 fn section(
     provider: &str,
@@ -62,6 +67,7 @@ fn section(
     collapsed: bool,
 ) -> AgentSection {
     AgentSection {
+        kind: "section".into(),
         provider: provider.into(),
         id,
         title,
@@ -128,6 +134,16 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
         {
             out.members
                 .insert(("codex".into(), id), (group, pos.unwrap_or(i64::MAX)));
+        }
+    }
+    // Older provider schemas may not have this column. Missing pin metadata
+    // must not discard otherwise valid native sections.
+    if let Ok(mut q) =
+        tx.prepare("SELECT id FROM threads WHERE archived=0 AND is_pinned=1 LIMIT 100001")
+        && let Ok(rows) = q.query_map([], |r| r.get::<_, String>(0))
+    {
+        for id in rows.flatten().filter(|id| is_uuid(id)) {
+            out.pinned.insert(("codex".into(), id));
         }
     }
     codex_projects(home, &tx, &mut out);
@@ -325,7 +341,7 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             return None;
         }
         let kind = s["kind"].as_str()?;
-        if s["shown"] == false || !matches!(kind, "manual" | "pinned" | "sessions") {
+        if !matches!(kind, "manual" | "pinned" | "sessions") {
             continue;
         }
         let title = s["name"]
@@ -337,13 +353,20 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
                 "Recents"
             });
         let section_id = format!("{scope}:{id}");
-        out.sections.push(section(
+        let mut metadata = section(
             "claude",
             section_id.clone(),
             title.into(),
             s["order"].as_i64().unwrap_or(0),
             s["collapsed"] == true,
-        ));
+        );
+        metadata.kind = match kind {
+            "pinned" => "pin",
+            "sessions" => "recent",
+            _ => "section",
+        }
+        .into();
+        out.sections.push(metadata);
         let members = if kind == "pinned" {
             state["pinnedOrder"].as_array()
         } else {
@@ -356,13 +379,16 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             else {
                 continue;
             };
-            if let Some(cli) = ids.get(desktop)
-                && assigned.insert(*cli)
-            {
-                out.members.insert(
-                    ("claude".into(), (*cli).into()),
-                    (section_id.clone(), pos as i64),
-                );
+            if let Some(cli) = ids.get(desktop) {
+                if kind == "pinned" {
+                    // Pinning is independent of manual membership. Retain both.
+                    out.pinned.insert(("claude".into(), (*cli).into()));
+                } else if assigned.insert(*cli) {
+                    out.members.insert(
+                        ("claude".into(), (*cli).into()),
+                        (section_id.clone(), pos as i64),
+                    );
+                }
             }
         }
         if kind == "sessions" {
@@ -480,6 +506,71 @@ mod tests {
         .unwrap();
         assert!(claude_state(root, &state).unwrap().members.is_empty());
     }
+    #[test]
+    fn codex_pin_metadata_survives_without_section_membership() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Connection::open(dir.path().join("state_5.sqlite")).unwrap();
+        db.execute_batch("CREATE TABLE thread_sections(id TEXT,name TEXT); CREATE TABLE projects(id TEXT,name TEXT,position INTEGER); CREATE TABLE threads(id TEXT,thread_section_id TEXT,project_id TEXT,section_position INTEGER,archived INTEGER,is_pinned INTEGER);").unwrap();
+        db.execute("INSERT INTO threads VALUES(?1,NULL,NULL,NULL,0,1)", [A])
+            .unwrap();
+        db.execute("INSERT INTO threads VALUES(?1,NULL,NULL,NULL,1,1)", [B])
+            .unwrap();
+        let c = codex(dir.path()).unwrap();
+        let mut a = AgentSession {
+            id: A.into(),
+            provider: "codex".into(),
+            ..Default::default()
+        };
+        c.apply(&mut a);
+        assert!(a.pinned);
+        assert!(a.section_id.is_empty());
+        assert!(!c.pinned.contains(&("codex".into(), B.into())));
+    }
+
+    #[test]
+    fn claude_pin_is_independent_of_custom_membership_and_visibility() {
+        let dir = tempfile::tempdir().unwrap();
+        let account = dir.path().join(ORG).join(USER);
+        std::fs::create_dir_all(&account).unwrap();
+        let desktop = format!("local_{A}");
+        std::fs::write(
+            account.join(format!("{desktop}.json")),
+            serde_json::json!({"sessionId": desktop, "cliSessionId": B}).to_string(),
+        )
+        .unwrap();
+        let scope = format!("{ORG}/{USER}");
+        let state = serde_json::json!({"lastSidebarScopeKey": scope,
+        "pinnedOrder": [format!("code:{desktop}"), "code:session_remote"],
+        "codeSidebarByScope": {&scope: {"sections": [
+            {"id":"pinned","kind":"pinned","shown":false},
+            {"id":"custom","kind":"manual","name":"Recents","members":[format!("code:{desktop}")]},
+            {"id":"sessions","kind":"sessions"}
+        ]}}});
+        let c = claude_state(dir.path(), &state).unwrap();
+        let key = ("claude".into(), B.into());
+        assert_eq!(c.pinned, HashSet::from([key.clone()]));
+        assert!(c.members[&key].0.ends_with(":custom"));
+        assert_eq!(
+            c.sections
+                .iter()
+                .map(|s| s.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["pin", "section", "recent"]
+        );
+        let mut unpinned = state.clone();
+        unpinned["pinnedOrder"] = serde_json::json!([]);
+        let mut s = AgentSession {
+            id: B.into(),
+            provider: "claude".into(),
+            ..Default::default()
+        };
+        c.apply(&mut s);
+        assert!(s.pinned);
+        claude_state(dir.path(), &unpinned).unwrap().apply(&mut s);
+        assert!(!s.pinned);
+        assert!(s.section_id.ends_with(":custom"));
+    }
+
     #[test]
     fn local_storage_reads_latest_live_value_without_writing_source() {
         let dir = tempfile::tempdir().unwrap();
