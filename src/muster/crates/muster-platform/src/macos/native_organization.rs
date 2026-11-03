@@ -14,7 +14,7 @@ impl NativeAppController {
         muster_agent::control_guard::check()?;
         self.check_identity()?;
         if screen_locked()
-            || user_input_generation() != generation
+            || target_input_generation(self.pid) != generation
             || !self.app.contains(window)
             || !window.contains(web)
             || (self.resolver)(&WebAreaKey::of(web)).as_deref() != Some(self.session.as_str())
@@ -151,7 +151,7 @@ impl NativeAppController {
         let window = web
             .element("AXWindow")
             .ok_or_else(|| Error::Unavailable("The session exposes no AX window".into()))?;
-        let g = user_input_generation();
+        let g = target_input_generation(self.pid);
         let (tree, elements) = self.organization_snapshot(g, &web, &window).await?;
         if !selectors::open_menus(&tree).is_empty() || selectors::safe_dialog(&tree).is_ok() {
             return Err(Error::Conflict(

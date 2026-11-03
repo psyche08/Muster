@@ -198,6 +198,8 @@ Constants: `PING = 0x10`, `PONG = 0x11`, `CONTROL_LEN = 41`; `PING_INTERVAL 1.5 
 
 **Direct-path selection**: with candidates but no direct path, PING every candidate every 400 ms. The first PONG sets `direct`; only PONG from the current direct address refreshes `last_pong`. Ignore PONG from other addresses (do not switch while the current path lives). On a direct path, PING every 1.5 seconds; if `last_pong` exceeds 6 seconds, clear the path, fall back to Relay, and restart candidate exchange. quinn sees only virtual addresses, making path switches invisible to it.
 
+**Direct-path cooldown**: a PONG does not prove that a path carries QUIC. When a QUIC dial fails over the direct path, clear it and ignore PONGs for a cooldown of 30 seconds, doubled on each consecutive failure up to 8 minutes. QUIC received from a direct source, or a network change, resets the count. A proxy that relays probes but not QUIC (observed through a local 198.18.0.0/15 fake-IP tunnel) is therefore retried rarely instead of moving every live packet onto itself every 30 seconds. A member whose dials keep failing over both paths is logged at the first failure and then every 60 attempts.
+
 **Inbound filtering**: parse packets from the Relay address as Relay frames; otherwise check for control frames first, then check whether the source address is in `by_direct`. If so, deliver with that peer's virtual address; otherwise drop.
 
 **Virtual addresses** (local only, never transmitted): IP `10.id[0].id[1].id[2]`, port `u16(id[3], id[4]) | 0x0400`.

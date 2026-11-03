@@ -212,7 +212,7 @@ pub async fn wait_for_quiet(
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(crate::Error::Conflict(
-                "The Mac is being used locally; nothing was written or sent. Retry when it is idle"
+                "The app is being used locally; nothing was written or sent. Retry when it is idle"
                     .into(),
             ));
         }

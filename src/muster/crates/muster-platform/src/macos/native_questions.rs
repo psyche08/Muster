@@ -250,12 +250,9 @@ impl Tree {
     fn form(&self, q: &InteractionQuestion, profile: &AppProfile) -> Option<Form> {
         self.form_labels(q, profile, &[normalized(&q.prompt)], None)
     }
-    fn form_for(
-        &self,
-        pending: &PendingInteraction,
-        q: &InteractionQuestion,
-        profile: &AppProfile,
-    ) -> Option<Form> {
+    /// The prompt text a question's form is found by: its own prompt, or a
+    /// wrap-up card's prompt combined with its recap when the app shows both.
+    fn prompt_labels(&self, pending: &PendingInteraction, q: &InteractionQuestion) -> Vec<String> {
         let mut labels = vec![normalized(&q.prompt)];
         if muster_agent::claude_cards::is_wrap(pending) {
             let combined = normalized(&format!("{} {}", pending.prompt, q.prompt));
@@ -263,6 +260,15 @@ impl Tree {
                 labels = vec![combined];
             }
         }
+        labels
+    }
+    fn form_for(
+        &self,
+        pending: &PendingInteraction,
+        q: &InteractionQuestion,
+        profile: &AppProfile,
+    ) -> Option<Form> {
+        let labels = self.prompt_labels(pending, q);
         self.form_labels(
             q,
             profile,
@@ -293,26 +299,10 @@ impl Tree {
                 {
                     break;
                 }
-                if let Some(recap) = recap {
-                    // A wrap-up is a small text-and-buttons box. Never cross
-                    // unrelated transcript prose to borrow another card's buttons.
-                    let mut allowed = labels.to_vec();
-                    allowed.extend([normalized(recap), normalized(&q.prompt)]);
-                    allowed.extend(["⌘", "↵", "Next step", "下一步"].map(str::to_owned));
-                    for option in &q.options {
-                        allowed.extend(
-                            muster_agent::claude_cards::option_labels(option)
-                                .into_iter()
-                                .map(normalized),
-                        );
-                    }
-                    if self.nodes.iter().enumerate().any(|(i, n)| {
-                        self.inside(i, root)
-                            && n.role == "AXStaticText"
-                            && n.labels.iter().any(|label| !allowed.contains(label))
-                    }) {
-                        break;
-                    }
+                if let Some(recap) = recap
+                    && self.crosses_prose(root, q, labels, recap)
+                {
+                    break;
                 }
                 let choices: Option<Vec<_>> = q
                     .options
@@ -365,6 +355,137 @@ impl Tree {
             }
         }
         found
+    }
+    /// A wrap-up is a small text-and-buttons box. Whether `root` holds
+    /// unrelated transcript prose, which the form must never cross to borrow
+    /// another card's buttons.
+    fn crosses_prose(
+        &self,
+        root: usize,
+        q: &InteractionQuestion,
+        labels: &[String],
+        recap: &str,
+    ) -> bool {
+        let mut allowed = labels.to_vec();
+        allowed.extend([normalized(recap), normalized(&q.prompt)]);
+        allowed.extend(["⌘", "↵", "Next step", "下一步"].map(str::to_owned));
+        for option in &q.options {
+            allowed.extend(
+                muster_agent::claude_cards::option_labels(option)
+                    .into_iter()
+                    .map(normalized),
+            );
+        }
+        self.nodes.iter().enumerate().any(|(i, n)| {
+            self.inside(i, root)
+                && n.role == "AXStaticText"
+                && n.labels.iter().any(|label| !allowed.contains(label))
+        })
+    }
+    /// Why `form_for` found nothing, as counts and AX roles only, never any
+    /// prompt, option or answer text (ADR 0114): how the prompt appears, how
+    /// each option's labels resolve to controls anywhere (`<controls>c/
+    /// <enabled>e`), and what each ancestor of the first exact prompt offers
+    /// until the climb stops at the composer or at wrap-up prose. `u/z/m`
+    /// count options with one, no, or several matching enabled controls
+    /// there; `+editor` marks a free-text field.
+    fn form_miss(&self, pending: &PendingInteraction, q: &InteractionQuestion) -> String {
+        let labels = self.prompt_labels(pending, q);
+        let prompt = labels[0].as_str();
+        let labelled = |pred: &dyn Fn(&str) -> bool| {
+            self.nodes
+                .iter()
+                .filter(|n| n.labels.iter().any(|l| pred(l)))
+                .count()
+        };
+        let exact: Vec<usize> = (0..self.nodes.len())
+            .filter(|&i| self.nodes[i].labels.iter().any(|l| labels.contains(l)))
+            .collect();
+        let longer = labelled(&|l| l != prompt && l.contains(prompt));
+        let fragments = labelled(&|l| l != prompt && l.chars().count() >= 8 && prompt.contains(l));
+        let names: Vec<Vec<&str>> = q
+            .options
+            .iter()
+            .map(muster_agent::claude_cards::option_labels)
+            .collect();
+        let named = |i: usize, option: &[&str]| option.iter().any(|l| self.named(i, l));
+        let options: Vec<String> = names
+            .iter()
+            .map(|option| {
+                let controls = (0..self.nodes.len())
+                    .filter(|&i| self.control(i, false) && named(i, option))
+                    .count();
+                let enabled = (0..self.nodes.len())
+                    .filter(|&i| self.control(i, true) && named(i, option))
+                    .count();
+                format!("{controls}c/{enabled}e")
+            })
+            .collect();
+        let recap = muster_agent::claude_cards::is_wrap(pending).then_some(pending.prompt.as_str());
+        let mut climb = Vec::new();
+        if let Some(&first) = exact.first() {
+            let mut parent = self.nodes[first].parent.or(Some(first));
+            while let Some(root) = parent {
+                let role = &self.nodes[root].role;
+                if climb.len() >= 12 {
+                    climb.push("…".to_owned());
+                    break;
+                }
+                if (0..self.nodes.len()).any(|i| self.inside(i, root) && self.nodes[i].composer) {
+                    climb.push(format!("{role}:composer"));
+                    break;
+                }
+                if let Some(recap) = recap
+                    && self.crosses_prose(root, q, &labels, recap)
+                {
+                    climb.push(format!("{role}:prose"));
+                    break;
+                }
+                let (mut unique, mut zero, mut many) = (0, 0, 0);
+                for option in &names {
+                    let mut found: Vec<usize> =
+                        option.iter().filter_map(|l| self.unique(root, l)).collect();
+                    found.sort_unstable();
+                    found.dedup();
+                    let crowded = option.iter().any(|l| {
+                        (0..self.nodes.len())
+                            .filter(|&i| {
+                                self.inside(i, root) && self.control(i, true) && self.named(i, l)
+                            })
+                            .count()
+                            > 1
+                    });
+                    match (found.len(), crowded) {
+                        (1, _) => unique += 1,
+                        (0, false) => zero += 1,
+                        _ => many += 1,
+                    }
+                }
+                let editor = if self.editor(root).is_some() {
+                    "+editor"
+                } else {
+                    ""
+                };
+                climb.push(format!("{role}:u{unique}/z{zero}/m{many}{editor}"));
+                parent = self.nodes[root].parent;
+            }
+        }
+        let header = if q.header.is_empty() {
+            "none".to_owned()
+        } else {
+            (0..self.nodes.len())
+                .filter(|&i| self.control(i, true) && self.named(i, &q.header))
+                .count()
+                .to_string()
+        };
+        format!(
+            "nodes={} prompt_exact={} prompt_in_longer={longer} prompt_fragments={fragments} options={} [{}] header_controls={header} climb=[{}]",
+            self.nodes.len(),
+            exact.len(),
+            q.options.len(),
+            options.join(" "),
+            climb.join(" ")
+        )
     }
     /// A collapsed reply panel exposes an opener beside its question text.
     /// Start at the button and stop at its first text-bearing container: never
@@ -603,7 +724,7 @@ impl NativeAppController {
         let pending = (self.question_source)()
             .and_then(|s| s.pending)
             .ok_or_else(|| Error::NotFound("No pending native question".into()))?;
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         let mut history_pages = 0;
         if let Some(question) = pending.questions.first() {
             for _ in 0..3 {
@@ -661,7 +782,7 @@ impl NativeAppController {
                     "submit_visible": tree.command_control(&form, self.profile, cards(self.profile).submit, false).is_some(),
                     "submit_enabled": tree.command(&form, self.profile, cards(self.profile).submit).is_some()
                 }),
-                None => serde_json::json!({"question": q.id, "matched": false})
+                None => serde_json::json!({"question": q.id, "matched": false, "miss": tree.form_miss(&pending, q)})
             }
         }).collect();
         let application_focus = self.app.element("AXFocusedUIElement");
@@ -685,7 +806,7 @@ impl NativeAppController {
     ) -> Result<Element, Error> {
         muster_agent::control_guard::check()?;
         self.check_identity()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed; question submission stopped".into(),
             ));
@@ -872,8 +993,13 @@ impl NativeAppController {
                     .filter(|q| tree.form_for(pending, q, self.profile).is_some())
                     .map(|q| q.id.as_str())
                     .collect();
+                // Content-free: says why the form was not matched, never what it says.
+                let why = match tree.form_for(pending, question, self.profile) {
+                    Some(_) => "form matched; submit control not ready".to_owned(),
+                    None => tree.form_miss(pending, question),
+                };
                 log::warn!(
-                    "AX question controls timeout: session={} question={} submit={} visible={visible:?}",
+                    "AX question controls timeout: session={} question={} submit={} visible={visible:?} why={why}",
                     self.session,
                     question.id,
                     require_submit
@@ -1170,9 +1296,14 @@ impl NativeAppController {
         // Avoid AX walks after focus acquisition, as for guarded Submit Space.
         let live = || -> Result<(), Error> {
             step.check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "Local input changed; no delete key sent".into(),
+                ));
+            }
+            if modifiers_held() {
+                return Err(Error::Conflict(
+                    "A modifier key is held; no delete key sent".into(),
                 ));
             }
             if !(self.question_source)()
@@ -1329,7 +1460,7 @@ impl NativeAppController {
         let mut sample = 0;
         let (focus_source, same_window) = loop {
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "Local input changed; no submit key sent".into(),
                 ));
@@ -1383,9 +1514,16 @@ impl NativeAppController {
         // No additional AX traversal after the focus sample: recheck the
         // cheap authorization/input guards immediately before the single key.
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed; no submit key sent".into(),
+            ));
+        }
+        // The key goes to the app, not through the HID stream, so a person's
+        // held Command elsewhere could still turn Space into a shortcut.
+        if modifiers_held() {
+            return Err(Error::Conflict(
+                "A modifier key is held; no submit key sent".into(),
             ));
         }
         muster_agent::control_guard::delivery_attempt();
@@ -1417,16 +1555,18 @@ impl NativeAppController {
         self.unconfirmed.admit()?;
         // Settle brief input activity during read-only preparation. Once any
         // control is touched, retain this generation for the entire answer.
-        let ((pending, plans), generation) =
-            muster_agent::control_guard::prepare_stable(user_input_generation, || {
+        let ((pending, plans), generation) = muster_agent::control_guard::prepare_stable(
+            || self.input_generation(),
+            || {
                 self.check_identity()?;
                 let pending = (self.question_source)()
                     .and_then(|s| s.find(interaction).cloned())
                     .ok_or_else(|| Error::NotFound("This question is no longer pending".into()))?;
                 let plans = validate(&pending, answers)?;
                 Ok((pending, plans))
-            })
-            .await?;
+            },
+        )
+        .await?;
         // A draft left in the conversation's own composer breaks answering:
         // it adds a second, enabled Send to the surface and holds the app's
         // focus, so the card's Submit cannot take focus and no activation key
@@ -1606,6 +1746,51 @@ mod tests {
                 ..Default::default()
             },
         )
+    }
+    #[test]
+    fn a_missed_form_is_explained_by_counts_without_any_text() {
+        let mut q = question("0", "Which gateway should run the secret job?");
+        q.options.push(muster_proto::v1::QuestionOption {
+            id: "1".into(),
+            label: "No".into(),
+            ..Default::default()
+        });
+        q.header = "Gateway".into();
+        let pending = PendingInteraction {
+            questions: vec![q.clone()],
+            ..Default::default()
+        };
+        // The prompt sits in the transcript; its options dock beside the composer.
+        let mut tree = Tree {
+            nodes: vec![
+                node(None, "AXWebArea", ""),
+                node(Some(0), "AXGroup", ""),
+                node(
+                    Some(1),
+                    "AXStaticText",
+                    "Which gateway should run the secret job?",
+                ),
+                node(Some(0), "AXGroup", ""),
+                node(Some(3), "AXButton", "Yes"),
+                node(Some(4), "AXRadioButton", "Yes"),
+                node(Some(3), "AXButton", "No"),
+                node(Some(3), "AXTextArea", "Ask anything"),
+            ],
+        };
+        tree.nodes[7].composer = true;
+        assert!(tree.form_for(&pending, &q, &CODEX_APP).is_none());
+        let miss = tree.form_miss(&pending, &q);
+        assert!(miss.contains("prompt_exact=1"), "{miss}");
+        // The nested Yes button/radio pair is ambiguous; No is unique.
+        assert!(miss.contains("options=2 [2c/2e 1c/1e]"), "{miss}");
+        assert!(
+            miss.contains("climb=[AXGroup:u0/z2/m0 AXWebArea:composer]"),
+            "{miss}"
+        );
+        assert!(miss.contains("header_controls=0"), "{miss}");
+        for text in ["gateway", "secret", "Yes", "No ", "Gateway", "Ask"] {
+            assert!(!miss.contains(text), "{text} leaked into {miss}");
+        }
     }
     #[test]
     fn collapsed_optional_question_opens_by_exact_prompt_and_localized_button() {

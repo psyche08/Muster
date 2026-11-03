@@ -21,7 +21,7 @@ use muster_agent::native_step::Step;
 
 use super::ax::{self, Element};
 use super::codesign;
-use super::input::user_input_generation;
+use super::input::{element_input_generation, modifiers_held, target_input_generation};
 
 #[path = "native_diagnostics.rs"]
 mod diagnostics;
@@ -93,9 +93,11 @@ fn draft_selection(
     composer: &Element,
     text: &str,
 ) -> Result<(), ax::AXError> {
-    let generation = user_input_generation();
+    let generation = element_input_generation(composer);
     let check = || {
-        if user_input_generation() != generation || muster_agent::control_guard::check().is_err() {
+        if element_input_generation(composer) != generation
+            || muster_agent::control_guard::check().is_err()
+        {
             Err(-25200) // AX failure: authority/input changed between OS calls.
         } else {
             Ok(())
@@ -129,9 +131,11 @@ pub(super) fn clear_editor(
     with: muster_agent::native_send::ClearWith,
 ) -> Result<(), ax::AXError> {
     use muster_agent::native_send::ClearWith;
-    let generation = user_input_generation();
+    let generation = element_input_generation(editor);
     let check = || {
-        if user_input_generation() != generation || muster_agent::control_guard::check().is_err() {
+        if element_input_generation(editor) != generation
+            || muster_agent::control_guard::check().is_err()
+        {
             Err(-25200) // AX failure: authority/input changed between OS calls.
         } else {
             Ok(())
@@ -608,7 +612,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         Ok(())
     }
     fn generation(&self) -> u64 {
-        user_input_generation()
+        target_input_generation(self.pid)
     }
     fn surface(&self) -> Result<Option<Surface>, Error> {
         match find_surface_traced(
@@ -654,7 +658,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         permit: &muster_agent::native_navigation::ActionPermit,
     ) -> Result<(), Error> {
         self.check()?;
-        permit.check(user_input_generation())?;
+        permit.check(self.generation())?;
         control.press().map_err(|code| {
             Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
         })
@@ -672,7 +676,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             ));
         }
         self.check()?;
-        permit.check(user_input_generation())?;
+        permit.check(self.generation())?;
         let dispatched = tokio::time::timeout(
             permit.remaining(),
             tokio::process::Command::new("/usr/bin/open")
@@ -1374,7 +1378,7 @@ impl NativeAppController {
             codesign::process_start(pid).ok_or_else(|| Error::NotFound(format!("pid {pid}")))?;
         let app = Element::application(pid);
         app.enable_manual_accessibility();
-        let generation = user_input_generation();
+        let generation = target_input_generation(pid);
         let surface = find_surface(profile, &app, session, &resolver)?;
         Self::attach_prepared(
             PreparedSession {
@@ -1415,7 +1419,8 @@ impl NativeAppController {
             surface,
         } = prepared;
         muster_agent::control_guard::check()?;
-        if codesign::process_start(pid) != Some(start) || user_input_generation() != generation {
+        if codesign::process_start(pid) != Some(start) || target_input_generation(pid) != generation
+        {
             return Err(Error::Conflict(
                 "desktop changed after session preparation".into(),
             ));
@@ -1447,6 +1452,12 @@ impl NativeAppController {
         });
         runtime.spawn(controller.clone().poll_loop());
         Ok(controller)
+    }
+
+    /// Input that could reach this app since attach; a person's use of other
+    /// apps does not change it (ADR 0115).
+    fn input_generation(&self) -> u64 {
+        target_input_generation(self.pid)
     }
 
     /// The target is still the process we attached to and still shows the session.
@@ -1836,7 +1847,7 @@ impl NativeAppController {
         let mut wait = ClearWait::default();
         loop {
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "local input changed before clearing the composer; not sent".into(),
                 ));
@@ -1948,8 +1959,9 @@ impl NativeAppController {
         // Preparation is read-only. A brief input change here may settle;
         // every retry resolves this exact session and reads its draft afresh.
         trace.stage("prepare_draft");
-        let ((mut action, composer), generation) =
-            muster_agent::control_guard::prepare_stable(user_input_generation, || {
+        let ((mut action, composer), generation) = muster_agent::control_guard::prepare_stable(
+            || self.input_generation(),
+            || {
                 self.check_identity()?;
                 self.composer_question_guard(expected)?;
                 // A cached composer may still belong to the web area after
@@ -1968,10 +1980,11 @@ impl NativeAppController {
                 self.check_write_surface(&fresh.web_area, &composer)?;
                 *self.surface.lock().unwrap() = fresh;
                 Ok((action, composer))
-            })
-            .await?;
+            },
+        )
+        .await?;
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "local input changed before drafting; not sent".into(),
             ));
@@ -1996,7 +2009,7 @@ impl NativeAppController {
             )?;
             *self.surface.lock().unwrap() = fresh;
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "local input changed during focus; not sent".into(),
                 ));
@@ -2037,7 +2050,7 @@ impl NativeAppController {
         let (web_area, composer, send) = loop {
             use muster_agent::native_send::Readiness;
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "local input changed; the draft was preserved, not sent".into(),
                 ));
@@ -2118,7 +2131,7 @@ impl NativeAppController {
                     trace.stage("wait_send_ready");
                     self.check_write_surface(&fresh.web_area, &current)?;
                     muster_agent::control_guard::check()?;
-                    if user_input_generation() != generation {
+                    if self.input_generation() != generation {
                         return Err(Error::Conflict(
                             "local input changed before focus; not sent".into(),
                         ));
@@ -2178,7 +2191,7 @@ impl NativeAppController {
                 "draft or send control changed; not sent".into(),
             ));
         }
-        let current_generation = user_input_generation();
+        let current_generation = self.input_generation();
         if current_generation != generation {
             log::warn!(
                 "native_app send to {}: local input changed before press ({generation} -> {current_generation}); not sent",
@@ -2206,7 +2219,7 @@ impl NativeAppController {
         // From here an interrupted send can no longer be reported as not started.
         muster_agent::control_guard::delivery_attempt();
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed before submit; not sent".into(),
             ));
@@ -2274,14 +2287,14 @@ impl Controller for NativeAppController {
         {
             return Ok(false);
         }
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         let fresh = match find_surface(self.profile, &self.app, &self.session, &self.resolver) {
             Ok(surface) if surface.composer.is_some() => surface,
             Ok(_) | Err(Error::NotFound(_)) => return Ok(false),
             Err(error) => return Err(error),
         };
         muster_agent::control_guard::check()?;
-        if generation != user_input_generation()
+        if generation != self.input_generation()
             || screen_locked()
             || codesign::process_start(self.pid) != Some(self.start)
         {
@@ -2368,11 +2381,11 @@ impl Controller for NativeAppController {
             .try_lock()
             .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
         self.unconfirmed.admit()?;
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         let locate = || -> Result<Element, Error> {
             muster_agent::control_guard::check()?;
             self.composer_question_guard(None)?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "Local input changed during completion; draft preserved".into(),
                 ));
@@ -2416,6 +2429,11 @@ impl Controller for NativeAppController {
                 "The native draft or focus changed; no Tab sent".into(),
             ));
         }
+        if self.input_generation() != generation || modifiers_held() {
+            return Err(Error::Conflict(
+                "Local input changed or a modifier key is held; no Tab sent".into(),
+            ));
+        }
         self.app
             .tab()
             .map_err(|e| Error::Unavailable(format!("Native Tab failed ({e})")))?;
@@ -2430,7 +2448,7 @@ impl Controller for NativeAppController {
                 // Compare immediately before restoration; never overwrite a
                 // person's edits or another editor after a view transition.
                 muster_agent::control_guard::check()?;
-                if user_input_generation() != generation
+                if self.input_generation() != generation
                     || current.string("AXValue").as_deref() != Some(value.as_str())
                 {
                     return Err(Error::Conflict(

@@ -1367,7 +1367,20 @@ async fn reconnect_loop(node: Weak<Node>) {
             let node = node.clone();
             jobs.spawn(async move {
                 if let Err(e) = node.connect(peer).await {
-                    log::debug!("reconnect {}: {e}", peer.short());
+                    let (report, failures) = node
+                        .retries
+                        .lock()
+                        .unwrap()
+                        .get(&peer)
+                        .map_or((false, 0), |r| (r.report_failure(), r.failures()));
+                    if report {
+                        log::info!(
+                            "member {} unreachable after {failures} attempts (direct and relay): {e}",
+                            peer.short()
+                        );
+                    } else {
+                        log::debug!("reconnect {}: {e}", peer.short());
+                    }
                 }
                 peer
             });

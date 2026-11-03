@@ -51,7 +51,7 @@ Existing invariants list test or code locations. New objectives still require th
 | I7 | **Display only provider-declared decisions**: approval options come from the provider (Codex `availableDecisions`, Claude `allow/deny/cancel`, or numbered onscreen choices), never invented by the UI. | Controllers in `muster-agent` |
 | I8 | **No input broadcast**: iTerm2 `SendText` always uses `suppress_broadcast`. | `muster-terminal/src/iterm2.rs` |
 | I9 | **Read back before and after writing**: the terminal or desktop editor must be empty before writing; confirm the echo before sending Return; an unknown result stops further input. | `muster-agent/src/iterm_cli.rs`, `muster-platform/src/macos/native_app.rs` |
-| I10 | **Present user takes priority**: if the user's HID input count changes during a write, abort and mark the outcome unknown. | `muster-platform/src/macos/input.rs` |
+| I10 | **Present user takes priority**: if HID input that could reach the target app changes during a write, abort and mark the outcome unknown; Locked Use counts input anywhere on the Mac (ADR 0115). | `muster-agent/src/local_input.rs`, `muster-platform/src/macos/input.rs` |
 | I11 | **One authorization point**: remote requests are decided once in `authorize_request`; service layers trust that decision. | `musterd/src/handler.rs` |
 | I12 | **Removal means no network**: after local removal, `has_network=false`; discard the old roster before pairing again. | `musterd/src/network.rs` |
 | I14 | **No public-carrier downgrade**: both TCP / UDP 9443 first verify domain TLS; certificate errors are never bypassed and never fall back to raw UDP / ws. | `muster-net/src/relay_tls.rs`; regressions must cover wrong hostname, expiration, untrusted chains, ALPN, and plaintext rejection |

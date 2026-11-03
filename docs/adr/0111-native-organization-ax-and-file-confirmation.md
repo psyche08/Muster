@@ -159,3 +159,13 @@ Organize is not a read-only inspection, so it needs a Presence-signed Locked Use
 operation, which the command line cannot issue; that case belongs to client
 acceptance. Section and Project operations stay paused per
 [ADR 0113](0113-pin-only-session-catalog.md).
+
+## Target-scoped input generation
+
+The organization guard read a generation of all local input. Merging
+[ADR 0115](0115-target-scoped-local-input.md) narrowed that reading to the
+input that could reach a given app, so the guard now reads it for the
+controller's own process, as the chat and question paths already do. The guard
+is unchanged in what it rejects: a generation that moved between the plan's
+snapshot and a press still stops the operation. Input the owner directs at an
+unrelated app no longer counts as that interference.
