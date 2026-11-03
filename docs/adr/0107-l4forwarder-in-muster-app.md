@@ -1,7 +1,9 @@
 # ADR 0107: Ship l4forwarder in Muster.app and let musterd run it
 
 - Date: 2026-11-03
-- Status: Accepted; source verified, release and device migration pending
+- Status: Accepted; source verified, release and device migration pending;
+  the 5-second poll in decision 2 superseded by
+  [ADR 0108](0108-watch-l4forwarder-configuration.md)
 - Related: supersedes decision 6 (deployment) of
   [ADR 0105](0105-l4forwarder-addon.md); its other decisions stand.
   [addons/l4forwarder](../../addons/l4forwarder/README.md),
