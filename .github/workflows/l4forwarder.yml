@@ -1,0 +1,37 @@
+# addons/l4forwarder (ADR 0105): a standalone Cargo package, checked on its own
+# so a change there does not run the Muster core suite and vice versa.
+name: l4forwarder
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["addons/l4forwarder/**", ".github/workflows/l4forwarder.yml"]
+  pull_request:
+    paths: ["addons/l4forwarder/**", ".github/workflows/l4forwarder.yml"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: addons/l4forwarder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: addons/l4forwarder
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets
+      - run: cargo test --locked
