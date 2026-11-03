@@ -132,7 +132,10 @@ fn scan(
             !d.archived
                 && d.provider.as_str() == session.provider
                 && !d.hidden
-                && matches!(d.provider, crate::Provider::Codex | crate::Provider::Claude)
+                && matches!(
+                    d.provider,
+                    crate::Provider::Codex | crate::Provider::Claude | crate::Provider::Deepseek
+                )
         }) else {
             partial = true;
             continue;
@@ -157,6 +160,13 @@ fn scan(
         let Ok(file) = std::fs::File::open(&d.path) else {
             partial = true;
             continue;
+        };
+        // A log of Zstandard frames is searched in its decoded stream: the
+        // limits and offsets count decoded bytes, as the viewer's do.
+        let file: Box<dyn Read> = if d.path.extension().is_some_and(|e| e == "zstd") {
+            Box::new(crate::transcript::FrameReader::new(file))
+        } else {
+            Box::new(file)
         };
         let mut input = BufReader::new(file);
         let mut parser = Reader::new(d.provider, records, hooks, d.meta.clone());
@@ -197,7 +207,9 @@ fn scan(
             let hit = messages
                 .iter()
                 .filter(|m| {
-                    m.kind == MessageKind::Text && matches!(m.role, Role::User | Role::Assistant)
+                    m.kind == MessageKind::Text
+                        && matches!(m.role, Role::User | Role::Assistant)
+                        && m.phase != "reasoning"
                 })
                 .find_map(|m| snippet(&m.text, &needle));
             if let Some(hit) = hit {
@@ -346,5 +358,70 @@ mod transcript_tests {
         let p = scan("needle", "", docs, 10, &AtomicBool::new(true));
         assert!(p.sessions.is_empty());
         assert!(!p.notice.is_empty());
+    }
+
+    /// DeepSeek Harness logs are Zstandard frames: the person's and the
+    /// model's text match, tool output and context the app added do not.
+    #[test]
+    fn searches_deepseek_frames_but_not_tool_output_or_context() {
+        use ruzstd::encoding::{CompressionLevel, compress_to_vec};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.v4.jsonl.zstd");
+        let id = "session-0b6c4a52-3d1e-4f8a-9c2b-6e7d8f901a23";
+        let user = |seq: u64, text: &str, kind: &str| {
+            serde_json::json!({"type":"user/message","seq":seq,"time":1_793_362_469_000_u64,
+                "data":{"role":"user","id":format!("u{seq}"),"content":[{"type":"text","text":text}],
+                    "source":{"kind":kind}}})
+        };
+        let frames = [
+            vec![serde_json::json!({"type":"session","version":4,"id":id,"cwd":"/tmp"})],
+            vec![
+                user(1, "Current runtime context marker", "runtime-context"),
+                user(2, "Please check the Wake Path", "user"),
+            ],
+            vec![
+                serde_json::json!({"type":"tool/result","seq":3,"time":1_793_362_469_100_u64,
+                "data":{"message":{"role":"tool","id":"r","toolCallId":"c",
+                    "content":[{"type":"text","text":"private tool marker"}]}}}),
+            ],
+        ];
+        let mut log = Vec::new();
+        for records in frames {
+            let text: String = records.iter().map(|r| format!("{r}\n")).collect();
+            log.extend(compress_to_vec(text.as_bytes(), CompressionLevel::Fastest));
+        }
+        std::fs::write(&path, log).unwrap();
+        let d = Discovered {
+            id: id.into(),
+            provider: Provider::Deepseek,
+            path,
+            modified: std::time::SystemTime::now(),
+            size: 0,
+            archived: false,
+            hidden: false,
+            parent_id: None,
+            relation: "",
+            meta: SessionMeta::default(),
+            custom_title: false,
+            entrypoint: None,
+        };
+        let docs = vec![(
+            AgentSession {
+                id: id.into(),
+                title: "Example".into(),
+                provider: "deepseek".into(),
+                ..Default::default()
+            },
+            Some(d),
+        )];
+        let page = scan("wake path", "", docs.clone(), 10, &AtomicBool::new(false));
+        assert_eq!(page.sessions.len(), 1);
+        assert!(page.sessions[0].search_snippet.contains("Wake Path"));
+        assert!(page.notice.is_empty(), "the whole log was read");
+        for hidden in ["private tool marker", "runtime context marker"] {
+            let page = scan(hidden, "", docs.clone(), 10, &AtomicBool::new(false));
+            assert!(page.sessions.is_empty(), "{hidden}");
+            assert!(page.notice.is_empty());
+        }
     }
 }

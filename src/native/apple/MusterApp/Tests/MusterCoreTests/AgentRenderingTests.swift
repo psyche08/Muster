@@ -461,6 +461,48 @@ final class SessionChromeRenderingTests: XCTestCase {
         }
     }
 
+    /// ADR 0105: the compact header keeps every view tab visible at phone
+    /// width, and the DeepSeek style draws process rows as DSH's Chat does.
+    func testRenderCompactHeaderAndDeepSeekProcessRows() throws {
+        let reasoning = Muster_App_ChatBlock.with {
+            $0.id = "reason"; $0.kind = "reasoning"; $0.title = "Thought for 4s"
+            $0.message = .with { $0.text = "The panic repeats after sleep/wake. Check the GPU driver frames first." }
+        }
+        let row = Muster_App_ChatActivityRow.with {
+            $0.id = "call"; $0.title = "Ran log show --last 6h"; $0.toolName = "bash"; $0.category = "shell"
+            $0.detail = "log show --last 6h --predicate 'eventMessage CONTAINS \"panic\"'"
+            $0.output = "panic(cpu 2 caller 0xfffffe0012345678): GPU wake timeout"
+            $0.status = "completed"; $0.isResult = true
+        }
+        let failed = Muster_App_ChatActivityRow.with {
+            $0.id = "read"; $0.title = "Read Sources/Driver/Wake.swift"; $0.toolName = "read"
+            $0.category = "read"; $0.detail = "Sources/Driver/Wake.swift"; $0.status = "failed"
+            $0.output = "No such file or directory"; $0.isResult = true
+        }
+        let activity = Muster_App_ChatBlock.with {
+            $0.id = "tools"; $0.kind = "activity"; $0.title = "1 command · 1 file read"
+            $0.activityRows = [row, failed]
+        }
+        for scheme in [ColorScheme.light, .dark] {
+            let suffix = scheme == .dark ? "dark" : "light"
+            let content = VStack(alignment: .leading, spacing: 12) {
+                CompactChromeFixture(model: headerModel)
+                VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) {
+                    MessageBubble(message: .with { $0.role = "user"; $0.text = "Check last night's shutdown panic." })
+                    ReasoningRow(block: reasoning, expanded: true)
+                    ActivityGroup(block: activity, expanded: true)
+                    ToolActivityRow(row: row, expanded: true)
+                    MessageBubble(message: .with { $0.role = "assistant"; $0.text = "The GPU wake path times out after sleep." })
+                }.padding(.horizontal, 16)
+                Spacer(minLength: 0)
+            }
+            .background(ChatPalette(scheme: scheme, style: .deepseek).canvas)
+            .environment(\.conversationStyle, .deepseek)
+            try render(content, size: CGSize(width: 390, height: 760), scheme: scheme,
+                       name: "muster-deepseek-rows-390-\(suffix)")
+        }
+    }
+
     func testRenderTracePageInBothAppearances() throws {
         let chat = chatFixture()
         for scheme in [ColorScheme.light, .dark] {
@@ -478,6 +520,15 @@ private struct SessionChromeFixture: View {
 
     var body: some View {
         SessionChromeHeader(model: model, selected: $selected, actions: SessionChromeActions())
+    }
+}
+
+private struct CompactChromeFixture: View {
+    let model: SessionChromeModel
+    @State private var selected = "Subagents"
+
+    var body: some View {
+        SessionChromeHeader(model: model, selected: $selected, actions: SessionChromeActions(), compact: true)
     }
 }
 #endif

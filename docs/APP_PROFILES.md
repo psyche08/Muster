@@ -120,6 +120,7 @@ absent field is none of them); every key must hold.
 | `content` | path in the envelope | A string, or a list of blocks |
 | `text_blocks` | block types | Blocks whose `text` a person reads |
 | `media_blocks` | block types | Blocks that are content without text (images); count for recency only |
+| `reasoning_blocks` | block types, optional | An assistant's blocks whose `text` is its recorded reasoning: a message in the `reasoning` phase, shown collapsed. Needs `block_ids = "all"` |
 | `block_ids` | `text`, `all` | How blocks are numbered in message ids (`<offset>:<index>`): among text blocks (tool calls and results being records of their own) or among all blocks. Ids must not change between releases |
 | `phase` | path in the envelope, optional | The turn phase of the message (`final_answer`) |
 

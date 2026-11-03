@@ -12,7 +12,11 @@ use serde_json::{Value, json};
 
 const SESSION: &str = "session-0b6c4a52-3d1e-4f8a-9c2b-6e7d8f901a23";
 const ARCHIVED: &str = "session-1c7d5b63-4e2f-4a9b-8d3c-7f8e9a012b34";
-const CHILD: &str = "session-2d8e6c74-5f3a-4b0c-9e4d-8a9fab123c45";
+/// A subagent's session id is a bare UUID, as is its directory's name.
+const CHILD: &str = "2d8e6c74-5f3a-4b0c-9e4d-8a9fab123c45";
+const GRANDCHILD: &str = "4fa08e96-7b5c-4d2e-9a6f-acb0cd345e67";
+const FORK: &str = "session-5ab19fa7-8c6d-4e3f-8b70-bdc1de456f78";
+const WORKSPACE: &str = "6bc2a0b8-9d7e-4f40-8c81-ced2ef567089";
 const NEWER: &str = "session-3e9f7d85-6a4b-4c1d-8f5e-9bafbc234d56";
 
 fn frame(records: &[Value]) -> Vec<u8> {
@@ -133,6 +137,34 @@ async fn lists_reads_and_follows_deepseek_sessions() {
         )]),
     )
     .unwrap();
+    // A subagent of the subagent names its parent by that bare id.
+    std::fs::write(
+        log(home, GRANDCHILD, "session.v4.jsonl.zstd"),
+        frame(&[header(
+            GRANDCHILD,
+            &project,
+            json!({"parentSession":CHILD,"origin":"subagent","delegationDepth":2}),
+        )]),
+    )
+    .unwrap();
+    // A fork names the session it came from and is a session of its own.
+    // Its turn failed: a tool reported an error, then the provider did.
+    std::fs::write(
+        log(home, FORK, "session.v4.jsonl.zstd"),
+        frame(&[
+            header(FORK, &project, json!({"parentSession":SESSION,"isSeeded":true})),
+            event(1, "turn/start", json!({"turn":1})),
+            user(2, "Run the tests", "user"),
+            assistant(3, json!([
+                {"type":"tool-call","id":"call-2","name":"bash","arguments":"{\"command\":\"make test\"}"}
+            ])),
+            event(4, "tool/result", json!({"turn":1,"step":1,"message":{"role":"tool","id":"r2","toolCallId":"call-2",
+                "content":[{"type":"text","text":"exit 2"}],"isError":true,"source":{"kind":"tool","callId":"call-2"}}})),
+            event(5, "turn/end", json!({"turn":1,"reason":{"kind":"error",
+                "error":{"code":"MISSING_CREDENTIAL","message":"No API key is set."}}})),
+        ]),
+    )
+    .unwrap();
     // A generation this build does not read is left alone.
     std::fs::write(
         log(home, NEWER, "session.v5.jsonl.zstd"),
@@ -147,7 +179,11 @@ async fn lists_reads_and_follows_deepseek_sessions() {
     std::fs::create_dir_all(home.join("storages/session_projcache/sessions")).unwrap();
     std::fs::write(
         home.join("storages/workspace.json"),
-        json!({"global":{"archivedSessionIds":[ARCHIVED],"pinnedSessionIds":[]}}).to_string(),
+        json!({"unit":{"name":"workspace","version":2},
+            "global":{"workspaceIds":[WORKSPACE],"archivedSessionIds":[ARCHIVED],"pinnedSessionIds":[FORK]},
+            "tables":{"workspaces":{WORKSPACE:{"path":project,"title":"Project",
+                "sessionIds":[SESSION,ARCHIVED]}}}})
+        .to_string(),
     )
     .unwrap();
     std::fs::write(
@@ -178,10 +214,80 @@ async fn lists_reads_and_follows_deepseek_sessions() {
     let child = service.session(CHILD).expect("the subagent is known");
     assert!(child.read_only);
     assert_eq!(child.parent_session_id, SESSION);
+    assert_eq!(child.relationship, "subagent");
+    assert_eq!(child.title, "session 2d8e6c74");
+    let grandchild = service
+        .session(GRANDCHILD)
+        .expect("a nested subagent is known");
+    assert_eq!(grandchild.parent_session_id, CHILD);
+    let parent = service.session(SESSION).unwrap();
+    assert_eq!(
+        parent
+            .subagents
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        [CHILD]
+    );
+    assert_eq!(
+        parent
+            .subsessions
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        [FORK]
+    );
+    assert_eq!(service.session(CHILD).unwrap().subagents[0].id, GRANDCHILD);
     let listed = service.list(None, 0);
     assert!(
-        listed.iter().all(|s| s.id != CHILD),
+        listed.iter().all(|s| s.id != CHILD && s.id != GRANDCHILD),
         "subagents stay out of lists"
+    );
+    // The app's workspace and pin, as display metadata.
+    let fork = listed
+        .iter()
+        .find(|s| s.id == FORK)
+        .expect("a fork is listed");
+    assert_eq!(
+        (fork.relationship.as_str(), fork.parent_session_id.as_str()),
+        ("fork", SESSION)
+    );
+    assert!(fork.pinned && fork.section_id.is_empty());
+    let grouped = listed.iter().find(|s| s.id == SESSION).unwrap();
+    assert_eq!(
+        (
+            grouped.section_id.clone(),
+            grouped.section_position,
+            grouped.pinned
+        ),
+        (format!("workspace:{WORKSPACE}"), 0, false)
+    );
+    assert_eq!(
+        service
+            .sections()
+            .iter()
+            .map(|s| (s.provider.as_str(), s.title.as_str()))
+            .collect::<Vec<_>>(),
+        [("deepseek", "Project")]
+    );
+    // A failed tool and a failed turn say so.
+    let (forked, _) = service.messages(FORK, 50, None).await.unwrap();
+    let view: Vec<_> = forked
+        .iter()
+        .map(|m| (m.kind.as_str(), m.tool_status.as_str(), m.text.as_str()))
+        .collect();
+    assert_eq!(
+        view[view.len() - 3..],
+        [
+            ("tool_result", "failed", "bash (error): exit 2"),
+            (
+                "turn_status",
+                "failed",
+                "Turn: failed\nMISSING_CREDENTIAL: No API key is set."
+            ),
+            // Its usage still closes the turn, after the outcome.
+            ("turn_summary", "", ""),
+        ]
     );
     let archived = service.session(ARCHIVED).unwrap();
     assert!(archived.archived);
@@ -206,6 +312,7 @@ async fn lists_reads_and_follows_deepseek_sessions() {
         texts,
         [
             ("user", "text", "Read the README"),
+            ("assistant", "text", "Look at it first."),
             ("assistant", "text", "Reading it."),
             (
                 "assistant",
@@ -215,7 +322,16 @@ async fn lists_reads_and_follows_deepseek_sessions() {
             ("tool", "tool_result", "read_file: x"),
         ]
     );
-    assert_eq!(messages[2].tool_call_id, "call-1");
+    // The model's thinking is its own phase; the reply keeps the id its
+    // block always had.
+    assert_eq!(
+        (messages[1].phase.as_str(), messages[2].phase.as_str()),
+        ("reasoning", "")
+    );
+    assert_eq!(messages[2].id, format!("{}:1", messages[1].id));
+    assert_eq!(messages[3].tool_call_id, "call-1");
+    // The grammar records failure, so a result without it completed.
+    assert_eq!(messages[4].tool_status, "completed");
     assert_eq!(messages[0].ts_unix, 1_793_362_469);
     assert_eq!(service.session(SESSION).unwrap().title, "Read the README");
 

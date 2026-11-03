@@ -144,7 +144,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0072](0072-multica-install-dialog.md) | Accepted; device acceptance pending | Guided Multica installation with live logs |
 
-| [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074 | View DeepSeek Harness sessions; do not drive the app yet |
+| [0073](0073-deepseek-harness-session-viewing.md) | Accepted; driving superseded by 0074; viewing revised by 0105 | View DeepSeek Harness sessions; do not drive the app yet |
 
 | [0074](0074-deepseek-harness-plugin-control.md) | Accepted; installed daemon and phone remote control accepted on 1.1.8; locked-screen transaction pending | Drive DeepSeek Harness through a Muster plugin inside the app |
 
@@ -188,6 +188,8 @@ records a specific decision and does not revive code on its delete list.
 | [0103](0103-visible-tabs-and-provider-aggregation.md) | Accepted; source verified, device acceptance pending | Show every session tab and aggregate All devices by provider |
 
 | [0104](0104-three-category-session-catalog.md) | Accepted; source verified, device acceptance pending | Aggregate sessions into Pin, Section and Recent only |
+
+| [0105](0105-deepseek-harness-session-adaptation.md) | Accepted; source and rendering verified, device acceptance pending | Adapt DeepSeek Harness sessions on every surface |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

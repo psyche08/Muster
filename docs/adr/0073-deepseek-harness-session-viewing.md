@@ -3,7 +3,9 @@
 - Date: 2026-10-31
 - Status: Accepted; viewing implemented, device acceptance pending. Its
   "do not drive the app yet" part is superseded by
-  [ADR 0074](0074-deepseek-harness-plugin-control.md)
+  [ADR 0074](0074-deepseek-harness-plugin-control.md). Its hidden reasoning,
+  bare-UUID subagent ids and `unknown` state are revised by
+  [ADR 0105](0105-deepseek-harness-session-adaptation.md)
 - Related: ARCHITECTURE §3.6.2 and §3.6.4 (step 5, "the next app as a
   profile"), [APP_PROFILES.md](../APP_PROFILES.md)
 
