@@ -64,8 +64,17 @@ impl Supervisor {
 
     pub async fn run(self) {
         let changed = Arc::new(Notify::new());
-        // Events arrive while this lives; `None` falls back to polling.
-        let watcher = watch(&self.config, changed.clone());
+        // Events arrive while this lives; `None` falls back to polling. Asking
+        // the OS for the watcher is synchronous and can take long enough to
+        // delay everything else sharing this executor, daemon startup
+        // included, so it does not run on it.
+        let watcher = {
+            let config = self.config.clone();
+            let changed = changed.clone();
+            tokio::task::spawn_blocking(move || watch(&config, changed))
+                .await
+                .unwrap_or_default()
+        };
         let mut seen: Option<Vec<u8>> = None;
         let mut child: Option<Running> = None;
         let mut failures = 0u32;

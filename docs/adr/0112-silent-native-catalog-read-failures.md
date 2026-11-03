@@ -1,8 +1,10 @@
-# ADR 0107: Ignore native catalog read failures in the interface
+# ADR 0112: Ignore native catalog read failures in the interface
 
 - Date: 2026-11-03
 - Status: Accepted; verification pending
-- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md)
+- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0111](0111-native-organization-ax-and-file-confirmation.md)
+- Renumbered from 0107 when [ADR 0107](0107-l4forwarder-in-muster-app.md) landed on `main` first;
+  the decision and its evidence are unchanged.
 
 ## Context
 

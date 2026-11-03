@@ -75,3 +75,14 @@ polls only where the platform offers no watcher.
   - `kill -9` of musterd still ended the helper 0.06 s later.
 - Not done: a release, installation, and hosted CI (Actions are disabled,
   [ADR 0016](0016-suspend-hosted-actions-budget.md)).
+
+## Watcher creation off the executor
+
+Asking the OS for the file watcher is synchronous and, on macOS, slow enough to
+matter: the supervisor did it in its own async task at daemon startup, so it
+blocked whatever else shared that executor. Merging this record's branch with the
+session-catalog branch surfaced it as three Locked Use failures — the unlock had
+not started within the fixture's window, in a test runtime with a single thread —
+although each branch passed alone. Create the watcher through a blocking task and
+keep the polling fallback when that task cannot deliver one. The supervisor's own
+tests and the full Rust workspace, Locked Use included, pass after the change.

@@ -1,8 +1,10 @@
-# ADR 0106: Native organization through AX with file confirmation
+# ADR 0111: Native organization through AX with file confirmation
 
 - Date: 2026-11-03
 - Status: Accepted; implemented, native menu acceptance pending
 - Related: [ADR 0099](0099-local-claude-identity-and-permission-cards.md), [ADR 0110](0110-native-groups-paging-and-session-entry.md), ARCHITECTURE.md §3.6.2
+- Renumbered from 0106 when [ADR 0106](0106-deepseek-harness-session-adaptation.md) landed on `main` first;
+  the decision and its evidence are unchanged.
 
 ## Context
 
@@ -141,7 +143,7 @@ application-directed AX Right Arrow only after exact item/window focus readback.
 No global keyboard routing, pointer event or native-store write is introduced.
 Submenu expansion and remaining membership/archive acceptance are still pending.
 
-[ADR 0108](0108-pin-only-session-catalog.md) supersedes named-group presentation
+[ADR 0113](0113-pin-only-session-catalog.md) supersedes named-group presentation
 and Section/Project UI controls at the owner's request. Native data is preserved;
 Section acceptance is paused.
 
@@ -156,4 +158,4 @@ Archiving a session on a *locked* member Mac is not covered by this evidence.
 Organize is not a read-only inspection, so it needs a Presence-signed Locked Use
 operation, which the command line cannot issue; that case belongs to client
 acceptance. Section and Project operations stay paused per
-[ADR 0108](0108-pin-only-session-catalog.md).
+[ADR 0113](0113-pin-only-session-catalog.md).

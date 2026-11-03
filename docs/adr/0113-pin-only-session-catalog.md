@@ -1,8 +1,10 @@
-# ADR 0108: Show only Pin and the ordinary session list
+# ADR 0113: Show only Pin and the ordinary session list
 
 - Date: 2026-11-03
 - Status: Accepted; verification pending
-- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0106](0106-native-organization-ax-and-file-confirmation.md), [ADR 0107](0107-silent-native-catalog-read-failures.md)
+- Related: [ADR 0110](0110-native-groups-paging-and-session-entry.md), [ADR 0111](0111-native-organization-ax-and-file-confirmation.md), [ADR 0112](0112-silent-native-catalog-read-failures.md)
+- Renumbered from 0108 when [ADR 0108](0108-watch-l4forwarder-configuration.md) landed on `main` first;
+  the decision and its evidence are unchanged.
 
 ## Context
 
@@ -23,7 +25,7 @@ Remove native group labels, group management menus/dialogs and Section swipe
 controls. Shared Rust rejects stale Section/Project UI intents. Pin/unpin and the
 existing Archive action remain available. Preserve provider groups and native
 metadata internally; this change never deletes or moves native sessions/groups.
-Keep read failures silent as specified in ADR 0107. Pause native Section acceptance.
+Keep read failures silent as specified in ADR 0112. Pause native Section acceptance.
 
 ## Alternatives
 

@@ -102,10 +102,10 @@ candidate is 1.1.13 (103). Native mutation acceptance and deployed runtime resul
 are recorded separately from these source checks.
 
 The unavailable-notice presentation decision is superseded by
-[ADR 0107](0107-silent-native-catalog-read-failures.md). Native read diagnostics
+[ADR 0112](0112-silent-native-catalog-read-failures.md). Native read diagnostics
 and last-complete snapshot retention remain internal.
 
-[ADR 0108](0108-pin-only-session-catalog.md) supersedes named-group presentation
+[ADR 0113](0113-pin-only-session-catalog.md) supersedes named-group presentation
 and Section/Project UI controls at the owner's request. Native data is preserved;
 Section acceptance is paused.
 
