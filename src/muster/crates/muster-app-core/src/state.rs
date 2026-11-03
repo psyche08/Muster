@@ -36,6 +36,8 @@ pub struct Chat {
     /// First visible transcript ID; full history stays cached for offline paging.
     pub history_start: Option<String>,
     pub interactions: Vec<v1::PendingInteraction>,
+    pub approval_refresh_attempted: bool,
+    pub approval_refresh_pending: bool,
     pub has_earlier: bool,
     pub sending: bool,
     pub responding_interaction: String,

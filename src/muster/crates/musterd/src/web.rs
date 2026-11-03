@@ -63,9 +63,9 @@ pub fn grant(
         Decision::Allow => Ok(Grant::Read),
         // Said plainly, because the same member may be let in again the
         // moment the screen is unlocked.
-        _ if locked && decide(false, false) == Decision::Allow => Err(
-            "the screen is locked, and this machine does not offer control while locked".into(),
-        ),
+        _ if locked && decide(false, false) == Decision::Allow => {
+            Err("the screen is locked, and this machine does not offer control while locked".into())
+        }
         Decision::Deny(reason) => Err(format!("the browser is not lent to you: {reason}")),
         Decision::NeedsPresence => Err("the browser is not lent to you".into()),
     }
@@ -87,7 +87,12 @@ const REFUSED: u8 = 1;
 const NO_WINDOW: u8 = 2;
 
 /// Target side: one member's stream into this machine's window.
-pub async fn serve(daemon: &Arc<Daemon>, peer: DeviceId, mut send: SendStream, mut recv: RecvStream) {
+pub async fn serve(
+    daemon: &Arc<Daemon>,
+    peer: DeviceId,
+    mut send: SendStream,
+    mut recv: RecvStream,
+) {
     let asked = match read_message(&mut recv, 512).await {
         Ok(Some(bytes)) => String::from_utf8(bytes).ok(),
         _ => None,
@@ -192,7 +197,9 @@ fn reply(value: &Value) -> Option<Reply> {
             ))
         })
         .collect();
-    let body = BASE64.decode(value.get("body")?.as_str()?.as_bytes()).ok()?;
+    let body = BASE64
+        .decode(value.get("body")?.as_str()?.as_bytes())
+        .ok()?;
     Some(Reply {
         status,
         url,
@@ -253,7 +260,10 @@ mod tests {
     fn view_reads_control_acts_and_nothing_else_gets_in() {
         let policy = LocalPolicy::default();
         let (roster, viewer) = member(&["browser.view"]);
-        assert_eq!(grant(roster.state(), &viewer, &policy, false), Ok(Grant::Read));
+        assert_eq!(
+            grant(roster.state(), &viewer, &policy, false),
+            Ok(Grant::Read)
+        );
         let (roster, controller) = member(&["browser.control"]);
         assert_eq!(
             grant(roster.state(), &controller, &policy, false),

@@ -73,7 +73,10 @@ pub struct Reply {
 /// Whoever actually reaches the site. The window knows nothing of how: in
 /// Muster this is the browser the person is signed in with.
 pub trait Upstream: Send + Sync + 'static {
-    fn fetch(&self, request: Fetch) -> Pin<Box<dyn Future<Output = Result<Reply, String>> + Send + '_>>;
+    fn fetch(
+        &self,
+        request: Fetch,
+    ) -> Pin<Box<dyn Future<Output = Result<Reply, String>> + Send + '_>>;
 }
 
 /// What one reader may do through the window. The window does not decide
@@ -817,7 +820,10 @@ mod tests {
 
     #[test]
     fn a_url_becomes_the_request_target_it_names() {
-        assert_eq!(path_of("https://example.test/issues?page=2"), "/issues?page=2");
+        assert_eq!(
+            path_of("https://example.test/issues?page=2"),
+            "/issues?page=2"
+        );
         assert_eq!(path_of("https://example.test"), "/");
         assert_eq!(path_of("https://example.test/a#b"), "/a");
     }
@@ -834,7 +840,10 @@ mod tests {
             rewrite("strict-transport-security", "max-age=63072000"),
             None
         );
-        assert_eq!(rewrite("content-security-policy", "default-src 'self'"), None);
+        assert_eq!(
+            rewrite("content-security-policy", "default-src 'self'"),
+            None
+        );
         assert_eq!(rewrite("connection", "keep-alive"), None);
         assert_eq!(rewrite("transfer-encoding", "chunked"), None);
         // The browser holds the session; the reader is given none of it.
@@ -861,7 +870,13 @@ mod tests {
     fn a_reader_cannot_name_the_host_or_hand_over_a_cookie() {
         assert!(forward("accept"));
         assert!(forward("content-type"));
-        for refused in ["host", "cookie", "authorization", "connection", "content-length"] {
+        for refused in [
+            "host",
+            "cookie",
+            "authorization",
+            "connection",
+            "content-length",
+        ] {
             assert!(!forward(refused), "{refused} must not be passed on");
         }
     }
@@ -891,7 +906,10 @@ mod tests {
         assert_eq!(tunnel.map(|r| r.status), Some(405));
         let upgrade = target_of(&head("GET /live HTTP/1.1\nUpgrade: websocket")).err();
         assert_eq!(upgrade.map(|r| r.status), Some(501));
-        assert_eq!(target_of(&head("GET /issues HTTP/1.1")).ok(), Some("/issues"));
+        assert_eq!(
+            target_of(&head("GET /issues HTTP/1.1")).ok(),
+            Some("/issues")
+        );
     }
 
     #[tokio::test]

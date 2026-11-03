@@ -566,6 +566,8 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
         }],
         history_start: None,
         interactions: Vec::new(),
+        approval_refresh_attempted: false,
+        approval_refresh_pending: false,
         has_earlier: false,
         sending: false,
         responding_interaction: String::new(),
@@ -2494,4 +2496,129 @@ fn an_unattended_update_may_restart_behind_a_locked_screen_but_not_the_cover() {
     state.self_info = Some(info(true, false));
     state.busy = 1;
     assert!(!state.can_update_unattended());
+}
+
+#[tokio::test]
+async fn permission_reads_are_bounded_cancelled_and_yield_to_initial_cards() {
+    let dir = tempfile::tempdir().unwrap();
+    let shell = Arc::new(QuietShell);
+    let config = crate::AppConfig {
+        dir: dir.path().into(),
+        mode: crate::Mode::Embedded {
+            relay: None,
+            name: "phone".into(),
+            kind: "phone".into(),
+            bind: "127.0.0.1:0".parse().unwrap(),
+            version: String::new(),
+        },
+        allow_loopback: true,
+    };
+    let backend = Arc::new(
+        crate::backend::Backend::connect(&config, shell.clone())
+            .await
+            .unwrap(),
+    );
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell,
+        backend,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = running_chat();
+    state.foreground = true;
+    let session = "11111111-1111-4111-8111-111111111111".to_owned();
+    state.chat.as_mut().unwrap().session.id = session.clone();
+    state.chat.as_mut().unwrap().session.state = "waiting_approval".into();
+    let token = CancellationToken::new();
+    approval_cards::schedule(&mut state, &ctx, token.clone());
+    approval_cards::schedule(&mut state, &ctx, token.clone());
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap(),
+        Some(Loop::Msg(m)) if matches!(*m, Msg::RefreshApprovals { .. })
+    ));
+    // The subscription's initial card wins over the delayed refresh. No RPC.
+    state
+        .chat
+        .as_mut()
+        .unwrap()
+        .interactions
+        .push(v1::PendingInteraction {
+            kind: "approval".into(),
+            ..Default::default()
+        });
+    approval_cards::refresh(
+        &mut state,
+        &ctx,
+        token.clone(),
+        "mac".into(),
+        session.clone(),
+    );
+    assert!(!state.chat.as_ref().unwrap().approval_refresh_pending);
+    state.chat.as_mut().unwrap().interactions.clear();
+    for _ in 0..3 {
+        approval_cards::schedule(&mut state, &ctx, token.clone());
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(450), rx.recv())
+            .await
+            .is_err()
+    );
+    // A new running -> waiting episode permits another read, not Unknown noise.
+    for activity in ["unknown", "waiting_approval"] {
+        let mut s = state.chat.as_ref().unwrap().session.clone();
+        s.state = activity.into();
+        agents::msg_agent_event(
+            &mut state,
+            &ctx,
+            token.clone(),
+            "mac".into(),
+            session.clone(),
+            v1::agent_event::Ev::State(s),
+        );
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(450), rx.recv())
+            .await
+            .is_err()
+    );
+    for activity in ["running", "waiting_approval"] {
+        let mut s = state.chat.as_ref().unwrap().session.clone();
+        s.state = activity.into();
+        agents::msg_agent_event(
+            &mut state,
+            &ctx,
+            token.clone(),
+            "mac".into(),
+            session.clone(),
+            v1::agent_event::Ev::State(s),
+        );
+    }
+    token.cancel();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap(),
+        Some(Loop::Msg(m)) if matches!(*m, Msg::Ignored)
+    ));
+    // A late delayed message cannot start a read after navigation/cancellation.
+    approval_cards::refresh(&mut state, &ctx, token, "mac".into(), session);
+    assert!(state.chat_calls.is_empty());
+    let (reply, result) = tokio::sync::oneshot::channel();
+    state.foreground = false;
+    let epoch = state.chat_call_epoch;
+    msg(
+        &mut state,
+        &ctx,
+        Msg::ChatControl {
+            epoch,
+            device: "mac".into(),
+            provider: "claude".into(),
+            request: Req::AgentInspect(v1::AgentInspectRequest::default()),
+            reply,
+        },
+    );
+    assert!(result.await.unwrap().is_err());
 }

@@ -28,6 +28,7 @@ use crate::{Ctx, Error, Loop};
 
 pub(crate) mod admitted;
 mod agents;
+mod approval_cards;
 pub(crate) mod code_runs;
 mod desktop_chats;
 mod files;
@@ -103,6 +104,17 @@ pub enum Msg {
         locked_nonce: Option<Vec<u8>>,
         response_origin: Option<(String, String)>,
         result: Result<v1::OpResult, Error>,
+    },
+    RefreshApprovals {
+        token: CancellationToken,
+        device: String,
+        session: String,
+    },
+    ApprovalsRefreshed {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        error: Option<String>,
     },
     ChatControl {
         epoch: u64,
@@ -531,6 +543,17 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         ),
         Msg::LockedExpired(nonce) => operations::msg_locked_expired(state, ctx, nonce),
         Msg::Ignored => {}
+        Msg::RefreshApprovals {
+            token,
+            device,
+            session,
+        } => approval_cards::refresh(state, ctx, token, device, session),
+        Msg::ApprovalsRefreshed {
+            token,
+            device,
+            session,
+            error,
+        } => approval_cards::finished(state, token, device, session, error),
         Msg::ChatControl {
             epoch,
             device,
@@ -547,6 +570,7 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
                     Req::AgentChatOpen(r) => r.op_id = id.clone(),
                     Req::AgentChatOptions(r) => r.op_id = id.clone(),
                     Req::AgentComplete(r) => r.op_id = id.clone(),
+                    Req::AgentInspect(r) => r.op_id = id.clone(),
                     Req::AgentChatSetOptions(r) => r.op_id = id.clone(),
                     _ => {
                         let _ = reply.send(Err(unexpected()));

@@ -111,6 +111,17 @@ pub(super) fn op_request_from(
                 else {
                     return Err(unexpected());
                 };
+                if matches!(&req, Req::AgentInspect(_))
+                    && !info
+                        .services
+                        .iter()
+                        .any(|s| s == "agent.approvals.locked.v1")
+                {
+                    return Err(Error::Unavailable(
+                        "Update Muster on the target Mac to read permission cards while locked"
+                            .into(),
+                    ));
+                }
                 if !info.services.iter().any(|s| s == "agent.chat.locked.v1") {
                     return Err(Error::Unavailable(
                         "Update Muster on the target Mac to load or send Chat through Locked Use"

@@ -2357,6 +2357,10 @@ impl AgentService {
         self.controller(id)?.complete().await
     }
 
+    pub async fn refresh_interactions(&self, id: &str) -> Result<(), Error> {
+        self.controller(id)?.refresh_interactions().await
+    }
+
     pub fn question_diagnostic(&self, id: &str) -> Result<String, Error> {
         self.controller(id)?.question_diagnostic()
     }

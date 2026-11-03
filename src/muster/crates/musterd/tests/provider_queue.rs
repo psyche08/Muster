@@ -33,6 +33,15 @@ impl Controller for NativeWork {
     fn pending(&self) -> Vec<PendingInteraction> {
         vec![]
     }
+    async fn refresh_interactions(&self) -> Result<(), muster_agent::Error> {
+        tokio::task::yield_now().await;
+        self.events.send("inspect:refresh".into()).unwrap();
+        Ok(())
+    }
+    fn question_diagnostic(&self) -> Result<String, muster_agent::Error> {
+        self.events.send("inspect:diagnostic".into()).unwrap();
+        Ok("read-only".into())
+    }
     async fn send(&self, text: &str) -> Result<(), muster_agent::Error> {
         let wait = self.release.lock().unwrap().take();
         let events = self.events.clone();
@@ -158,6 +167,21 @@ async fn independent_clients(cancel_first: bool) {
     }
     assert!(
         matches!(next.finish().await.unwrap(), Resp::OpResult(r) if r.status == v1::op_result::Status::Applied as i32)
+    );
+    let inspected = second
+        .call(Req::AgentInspect(v1::AgentInspectRequest {
+            session: sessions[1].into(),
+            op_id: "inspect-only".into(),
+        }))
+        .await
+        .unwrap();
+    assert!(matches!(inspected, Resp::DebugText(r) if r.text == "read-only"));
+    for expected in ["inspect:refresh", "inspect:diagnostic"] {
+        assert_eq!(observed.recv().await.as_deref(), Some(expected));
+    }
+    assert!(
+        observed.try_recv().is_err(),
+        "inspection must not send or respond"
     );
     daemon.shutdown().await;
 }
