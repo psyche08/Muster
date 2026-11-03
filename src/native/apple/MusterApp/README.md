@@ -83,9 +83,10 @@ registers on first launch (SMAppService; approve it under System Settings
 |---|---|
 | `Muster.app/Contents/MacOS/musterd` | the daemon (copied by the MusterMac post-build script from `src/muster/target/release/musterd`; build it with `cargo build --release -p musterd --features sep`) |
 | `Muster.app/Contents/Helpers/muster` | the command line, same origin; `alias muster=/Applications/Muster.app/Contents/Helpers/muster` (not next to the app executable: `muster` and `Muster` collide on a case-insensitive volume). Every Muster process on the Mac runs from the installed bundle, none from a build tree |
+| `Muster.app/Contents/Helpers/l4forwarder` | the TCP/UDP forwarder addon ([ADR 0106](../../../../docs/adr/0106-l4forwarder-in-muster-app.md)), copied from `addons/l4forwarder/target/release/l4forwarder`; build it with `(cd addons/l4forwarder && cargo build --release --locked)`. musterd runs it while `l4forwarder.json` is in the state directory |
 | `Muster.app/Contents/Library/LaunchAgents/dev.linsheng.musterd.plist` | its LaunchAgent (`Apps/macOS/dev.linsheng.musterd.plist`) |
-| `~/Library/Application Support/Muster/` | store (`musterd.db`), socket (`musterd.sock`), the app's own state |
-| `~/Library/Logs/Muster/musterd.log` | the daemon's log (`musterd --log`) |
+| `~/Library/Application Support/Muster/` | store (`musterd.db`), socket (`musterd.sock`), the app's own state, and `l4forwarder.json` when forwarding is configured |
+| `~/Library/Logs/Muster/musterd.log` | the daemon's log (`musterd --log`); the addon's is `l4forwarder.log` beside it |
 
 The relay is set in the app (Settings › Relay) or with
 `muster relay muster.linsheng.dev:9443`; the daemon remembers it.

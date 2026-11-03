@@ -12,6 +12,7 @@ pub mod cloud_http;
 #[cfg(target_os = "macos")]
 pub mod ghostty;
 pub mod handler;
+pub mod l4forwarder;
 pub mod locked_use;
 pub mod multica;
 pub mod network;
@@ -420,6 +421,13 @@ impl Daemon {
         }
         if daemon.config.vnet {
             daemon.maybe_start_vnet().await;
+        }
+        // The bundled addon runs only where its configuration is (ADR 0106).
+        if daemon.kind() != DeviceKind::Phone
+            && let Some(supervisor) = l4forwarder::Supervisor::for_daemon(&daemon.config.dir)
+        {
+            let task = tokio::spawn(supervisor.run());
+            daemon.tasks.lock().unwrap().push(task);
         }
         // A window the owner opened earlier is open again after a restart; a
         // port it can no longer bind is logged, not fatal.
