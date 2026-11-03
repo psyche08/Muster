@@ -326,6 +326,7 @@ pub enum QuestionPreparation {
 
 #[derive(Default)]
 pub struct QuestionEditorWait {
+    editor_placeholders: &'static [&'static str],
     clear: ClearWait,
     refresh_due: bool,
     focused_delete: bool,
@@ -340,6 +341,52 @@ impl QuestionEditorWait {
             ..Self::default()
         }
     }
+    /// Only a single free-text question can use its disabled Submit as empty
+    /// evidence; a shared button may be disabled because another field is empty.
+    pub fn for_question(
+        profile: &crate::profile::App,
+        pending: &crate::PendingInteraction,
+        question: &muster_proto::v1::InteractionQuestion,
+    ) -> Self {
+        let mut wait = Self::for_provider(profile.app.provider);
+        if pending.kind == "question"
+            && pending.questions.len() == 1
+            && pending.questions.first() == Some(question)
+            && question.allow_text
+            && question.options.is_empty()
+            && !question.multi_select
+        {
+            wait.editor_placeholders = profile
+                .controls()
+                .questions
+                .as_ref()
+                .map_or(&[], |q| q.editor_placeholders);
+        }
+        wait
+    }
+
+    pub fn observe_question(
+        &mut self,
+        elapsed: Duration,
+        editor: QuestionEditor<'_>,
+        answer: &str,
+        submit_enabled: Option<bool>,
+        selected_range: Option<(usize, usize)>,
+    ) -> QuestionPreparation {
+        let projected_empty = editor.value.is_some_and(|value| {
+            self.editor_placeholders.contains(&value.trim())
+                && editor
+                    .placeholder
+                    .is_none_or(|hint| hint.trim().is_empty() || hint.trim() == value.trim())
+                && editor.characters == i64::try_from(value.encode_utf16().count()).ok()
+        }) && submit_enabled == Some(false)
+            && selected_range == Some((0, 0));
+        if elapsed < CLEAR_DEADLINE && projected_empty {
+            return QuestionPreparation::Ready { write: true };
+        }
+        self.observe(elapsed, editor, answer)
+    }
+
     pub fn observe(
         &mut self,
         elapsed: Duration,
@@ -590,6 +637,159 @@ mod question_editor_tests {
             },
         ] {
             assert!(poll_question_selection(expected, Some((0, 0)), Duration::ZERO, p).is_err());
+        }
+    }
+
+    fn reply_question() -> (
+        crate::PendingInteraction,
+        muster_proto::v1::InteractionQuestion,
+    ) {
+        let q = muster_proto::v1::InteractionQuestion {
+            id: "synthetic-reply".into(),
+            prompt: "Choose a test value".into(),
+            allow_text: true,
+            ..Default::default()
+        };
+        (
+            crate::PendingInteraction {
+                kind: "question".into(),
+                questions: vec![q.clone()],
+                ..Default::default()
+            },
+            q,
+        )
+    }
+
+    #[test]
+    fn single_reply_hint_requires_write_even_with_nonzero_projected_count() {
+        use crate::profile::CODEX_APP;
+        let (pending, q) = reply_question();
+        // Synthetic projections of the screenshot's hint, not captured AX bytes.
+        for value in ["Reply…", "Reply…\n", "Reply...", " Reply...\n"] {
+            for hint in [None, Some(""), Some(value.trim())] {
+                for answer in ["test answer", value] {
+                    let mut wait = QuestionEditorWait::for_question(&CODEX_APP, &pending, &q);
+                    assert_eq!(
+                        wait.observe_question(
+                            Duration::ZERO,
+                            QuestionEditor {
+                                value: Some(value),
+                                placeholder: hint,
+                                characters: Some(value.encode_utf16().count() as i64),
+                            },
+                            answer,
+                            Some(false),
+                            Some((0, 0))
+                        ),
+                        QuestionPreparation::Ready { write: true }
+                    );
+                    assert_eq!(wait.attempts(), 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reply_hint_cannot_override_conflicting_missing_or_late_evidence() {
+        use crate::profile::CODEX_APP;
+        let (pending, q) = reply_question();
+        let editor = || QuestionEditor {
+            value: Some("Reply…\n"),
+            placeholder: None,
+            characters: Some(7),
+        };
+        for (submit, range, elapsed) in [
+            (Some(true), Some((0, 0)), Duration::ZERO),
+            (None, Some((0, 0)), Duration::ZERO),
+            (Some(false), None, Duration::ZERO),
+            (Some(false), Some((0, 1)), Duration::ZERO),
+            (Some(false), Some((1, 0)), Duration::ZERO),
+            (Some(false), Some((0, 0)), CLEAR_DEADLINE),
+        ] {
+            assert_ne!(
+                QuestionEditorWait::for_question(&CODEX_APP, &pending, &q).observe_question(
+                    elapsed,
+                    editor(),
+                    "answer",
+                    submit,
+                    range
+                ),
+                QuestionPreparation::Ready { write: true }
+            );
+        }
+        for e in [
+            QuestionEditor {
+                value: Some("a draft"),
+                ..editor()
+            },
+            QuestionEditor {
+                value: None,
+                ..editor()
+            },
+            QuestionEditor {
+                placeholder: Some("another hint"),
+                ..editor()
+            },
+            QuestionEditor {
+                characters: None,
+                ..editor()
+            },
+            QuestionEditor {
+                characters: Some(6),
+                ..editor()
+            },
+            QuestionEditor {
+                characters: Some(-1),
+                ..editor()
+            },
+        ] {
+            assert_ne!(
+                QuestionEditorWait::for_question(&CODEX_APP, &pending, &q).observe_question(
+                    Duration::ZERO,
+                    e,
+                    "answer",
+                    Some(false),
+                    Some((0, 0))
+                ),
+                QuestionPreparation::Ready { write: true }
+            );
+        }
+    }
+
+    #[test]
+    fn reply_hint_is_not_empty_for_shared_choice_or_unknown_provider_cards() {
+        use crate::profile::{CLAUDE_APP, CODEX_APP};
+        let (pending, q) = reply_question();
+        let mut shared = pending.clone();
+        shared.questions.push(q.clone());
+        let mut choice = q.clone();
+        choice.options.push(Default::default());
+        let mut choice_pending = pending.clone();
+        choice_pending.questions = vec![choice.clone()];
+        let mut no_text = q.clone();
+        no_text.allow_text = false;
+        let mut no_text_pending = pending.clone();
+        no_text_pending.questions = vec![no_text.clone()];
+        for (profile, p, question) in [
+            (&CODEX_APP, &shared, &q),
+            (&CODEX_APP, &choice_pending, &choice),
+            (&CODEX_APP, &no_text_pending, &no_text),
+            (&CLAUDE_APP, &pending, &q),
+        ] {
+            assert_ne!(
+                QuestionEditorWait::for_question(profile, p, question).observe_question(
+                    Duration::ZERO,
+                    QuestionEditor {
+                        value: Some("Reply…\n"),
+                        placeholder: None,
+                        characters: Some(7)
+                    },
+                    "answer",
+                    Some(false),
+                    Some((0, 0))
+                ),
+                QuestionPreparation::Ready { write: true }
+            );
         }
     }
 

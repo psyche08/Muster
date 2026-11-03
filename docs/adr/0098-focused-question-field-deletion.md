@@ -1,9 +1,11 @@
 # ADR 0098: Delete a proven question-editor selection through the application
 
 - Date: 2026-11-02
-- Status: Accepted; first installed candidate failed; bounded selection settling pending
+- Status: Accepted; installed candidates failed; see ADR 0101
 - Related: ADR 0020, ADR 0055, ADR 0096
 - Partially supersedes: ADR 0096's repeated attribute-based clearing for Codex question fields
+
+- Follow-up: [ADR 0101](0101-question-placeholder-projection.md) addresses the screenshot-confirmed empty reply projection.
 
 ## Context
 
@@ -117,3 +119,9 @@ library tests (six existing ignored), including both new selection-settling
 regressions. Strict Clippy for all targets of the three crates, formatting,
 layer and public-content checks passed. These tests validate the readiness
 policy; they do not prove that the installed provider eventually selects text.
+
+On 2026-11-03, both the bounded-wait candidate and its installed descendant
+still observed only `(0, 0)` throughout the wait. No deletion or Submit was
+dispatched. A subsequently supplied screenshot showed an empty reply field
+with a gray hint and disabled Send; ADR 0101 records the resulting narrower
+empty-projection policy. These failed candidates are not device acceptance.

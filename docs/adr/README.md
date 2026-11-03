@@ -175,11 +175,13 @@ records a specific decision and does not revive code on its delete list.
 
 | [0096](0096-question-editor-preparation.md) | Accepted; source verified, installed question acceptance pending | Rebind and refresh question editors during preparation |
 
-| [0098](0098-focused-question-field-deletion.md) | Accepted; source verified, device acceptance pending | Delete a proven question-editor selection through the application |
+| [0098](0098-focused-question-field-deletion.md) | Accepted; installed candidates failed; see 0101 | Delete a proven question-editor selection through the application |
 
 | [0099](0099-local-claude-identity-and-permission-cards.md) | Accepted; device acceptance pending | Local Claude UUID mapping and fresh permission cards |
 
 | [0100](0100-locked-claude-permission-cards.md) | Accepted; verification pending | Observe and retain local Claude permission cards across lock |
+
+| [0101](0101-question-placeholder-projection.md) | Accepted; device acceptance pending | Recognize the empty optional question reply projection |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
