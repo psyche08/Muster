@@ -70,8 +70,11 @@ target/release/l4forwarder --config config.json --check   # validate and list th
 ## Running under Muster
 
 Write the configuration to `l4forwarder.json` in musterd's state directory.
-Within 5 seconds musterd starts the bundled helper; it restarts the helper when
-the file changes and stops it when the file is removed:
+musterd watches that directory
+([ADR 0108](../../docs/adr/0108-watch-l4forwarder-configuration.md)). As soon
+as the file appears it starts the bundled helper, restarts it when the file
+changes, and stops it when the file is removed. Atomic saves (write, then
+rename into place) are picked up too:
 
 | | Location (macOS) |
 |---|---|

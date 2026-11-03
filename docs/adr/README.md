@@ -193,7 +193,9 @@ records a specific decision and does not revive code on its delete list.
 
 | [0106](0106-deepseek-harness-session-adaptation.md) | Accepted; source and rendering verified, device acceptance pending | Adapt DeepSeek Harness sessions on every surface |
 
-| [0107](0107-l4forwarder-in-muster-app.md) | Accepted; source verified, release and device migration pending | Ship l4forwarder in Muster.app and let musterd run it |
+| [0107](0107-l4forwarder-in-muster-app.md) | Accepted; polling superseded by 0108; release and device migration pending | Ship l4forwarder in Muster.app and let musterd run it |
+
+| [0108](0108-watch-l4forwarder-configuration.md) | Accepted; source verified, release pending | Watch the l4forwarder configuration instead of polling it |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

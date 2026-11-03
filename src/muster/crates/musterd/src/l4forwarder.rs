@@ -4,15 +4,18 @@
 //! listeners stays the roster's and the local policy's say.
 //!
 //! The configuration is `l4forwarder.json` in the state directory. Its
-//! appearance starts the addon, a change restarts it, its removal stops it.
+//! appearance starts the addon, a change restarts it, its removal stops it;
+//! a file-system watch reports each, so nothing is polled (ADR 0108).
 //! The addon's standard input is a pipe from musterd and it runs with
 //! `--supervised`, so it exits with musterd even when musterd is killed.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tokio::process::{Child, ChildStdin, Command};
+use tokio::sync::Notify;
 
 pub const CONFIG: &str = "l4forwarder.json";
 const LOG: &str = "l4forwarder.log";
@@ -22,6 +25,11 @@ const MAX_CONFIG: u64 = 1 << 20;
 const STEADY: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const STOP_GRACE: Duration = Duration::from_secs(2);
+/// After a change event, the time a writer gets to finish before the file is
+/// read: one save can be several events.
+const SETTLE: Duration = Duration::from_millis(100);
+/// Only where the platform offers no file watcher.
+const FALLBACK_POLL: Duration = Duration::from_secs(5);
 
 /// Where the addon ships: `Contents/Helpers` of the macOS app bundle when
 /// musterd runs from `Contents/MacOS`, else beside musterd.
@@ -39,8 +47,6 @@ pub struct Supervisor {
     pub config: PathBuf,
     /// Where the addon's output goes; `None` keeps musterd's stderr.
     pub log: Option<PathBuf>,
-    /// How often the configuration is looked at.
-    pub poll: Duration,
     /// The first restart delay, doubled per failure up to a minute.
     pub backoff: Duration,
 }
@@ -52,29 +58,36 @@ impl Supervisor {
             program: program(&daemon),
             config: state_dir.join(CONFIG),
             log: muster_paths::log_dir().map(|d| d.join(LOG)),
-            poll: Duration::from_secs(5),
             backoff: Duration::from_secs(1),
         })
     }
 
     pub async fn run(self) {
+        let changed = Arc::new(Notify::new());
+        // Events arrive while this lives; `None` falls back to polling.
+        let watcher = watch(&self.config, changed.clone());
         let mut seen: Option<Vec<u8>> = None;
         let mut child: Option<Running> = None;
         let mut failures = 0u32;
-        let mut next_start = Instant::now();
+        // When the addon is due to start; `None` while it runs or is not wanted.
+        let mut start_at: Option<Instant> = None;
         let mut last_error = String::new();
+        let mut reread = true;
         loop {
-            let current = read_config(&self.config);
-            if current != seen {
-                if child.is_some() {
-                    log::info!("l4forwarder: configuration changed; stopping");
+            if std::mem::take(&mut reread) {
+                let current = read_config(&self.config);
+                if current != seen {
+                    if child.is_some() {
+                        log::info!("l4forwarder: configuration changed; stopping");
+                    }
+                    stop(&mut child).await;
+                    seen = current;
+                    failures = 0;
+                    start_at = seen.is_some().then(Instant::now);
                 }
-                stop(&mut child).await;
-                seen = current;
-                failures = 0;
-                next_start = Instant::now();
             }
-            if seen.is_some() && child.is_none() && Instant::now() >= next_start {
+            if child.is_none() && start_at.is_some_and(|at| at <= Instant::now()) {
+                start_at = None;
                 match self.spawn() {
                     Ok(started) => {
                         log::info!("l4forwarder: started ({})", self.program.display());
@@ -88,7 +101,7 @@ impl Supervisor {
                             last_error = why;
                         }
                         failures += 1;
-                        next_start = Instant::now() + self.delay(failures);
+                        start_at = Some(Instant::now() + self.delay(failures));
                     }
                 }
             }
@@ -97,9 +110,14 @@ impl Supervisor {
                     let ran = child.take().map(|c| c.since.elapsed()).unwrap_or_default();
                     failures = if ran >= STEADY { 1 } else { failures + 1 };
                     log::warn!("l4forwarder: exited ({status:?}) after {}s", ran.as_secs());
-                    next_start = Instant::now() + self.delay(failures);
+                    start_at = Some(Instant::now() + self.delay(failures));
                 }
-                _ = tokio::time::sleep(self.poll) => {}
+                () = changed.notified() => {
+                    tokio::time::sleep(SETTLE).await;
+                    reread = true;
+                }
+                () = until(start_at) => {}
+                () = tokio::time::sleep(FALLBACK_POLL), if watcher.is_none() => reread = true,
             }
         }
     }
@@ -146,6 +164,40 @@ struct Running {
     /// Open for as long as the addon should run.
     input: Option<ChildStdin>,
     since: Instant,
+}
+
+/// Wakes `changed` on every event about the configuration file. It watches
+/// the directory rather than the file: an atomic save replaces the file,
+/// which would end a watch on the old one. `None` when the platform offers
+/// no watcher.
+fn watch(config: &Path, changed: Arc<Notify>) -> Option<notify::RecommendedWatcher> {
+    use notify::{RecursiveMode, Watcher};
+    let dir = config.parent()?.to_path_buf();
+    let name = config.file_name()?.to_owned();
+    let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
+        // An error or an overflow may hide an event about the file.
+        let relevant = result.map_or(true, |event| {
+            event.need_rescan() || event.paths.iter().any(|p| p.file_name() == Some(&*name))
+        });
+        if relevant {
+            changed.notify_one();
+        }
+    })
+    .map_err(|error| log::info!("l4forwarder: no file watcher, polling: {error}"))
+    .ok()?;
+    watcher
+        .watch(&dir, RecursiveMode::NonRecursive)
+        .map_err(|error| log::info!("l4forwarder: watch {}: {error}; polling", dir.display()))
+        .ok()?;
+    Some(watcher)
+}
+
+/// Completes at `at`; never without one.
+async fn until(at: Option<Instant>) {
+    match at {
+        Some(at) => tokio::time::sleep_until(at.into()).await,
+        None => std::future::pending().await,
+    }
 }
 
 fn read_config(path: &Path) -> Option<Vec<u8>> {
@@ -243,7 +295,6 @@ mod tests {
             program,
             config: dir.join(CONFIG),
             log: Some(dir.join(LOG)),
-            poll: Duration::from_millis(50),
             backoff: Duration::from_millis(100),
         }
     }
@@ -285,6 +336,37 @@ mod tests {
             lines(&record, "start").len(),
             2,
             "restarted without a configuration"
+        );
+        task.abort();
+    }
+
+    /// The watch, not the fallback poll, reports a change: well within the
+    /// poll's 5 seconds, and a removal as much as a write.
+    #[tokio::test]
+    async fn changes_are_seen_as_they_happen() {
+        let dir = tempfile::tempdir().unwrap();
+        let (program, record) = fake_addon(dir.path());
+        let config = dir.path().join(CONFIG);
+        let task = tokio::spawn(supervisor(dir.path(), program).run());
+        // The watch is set up before the first look at the file.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let written = Instant::now();
+        save(&config, "{}");
+        until("not started", || lines(&record, "start").len() == 1).await;
+        assert!(
+            written.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            written.elapsed()
+        );
+
+        let removed = Instant::now();
+        std::fs::remove_file(&config).unwrap();
+        until("not stopped", || lines(&record, "exit").len() == 1).await;
+        assert!(
+            removed.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            removed.elapsed()
         );
         task.abort();
     }

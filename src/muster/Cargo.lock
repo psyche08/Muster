@@ -2395,6 +2395,7 @@ dependencies = [
  "muster-store",
  "muster-terminal",
  "muster-web",
+ "notify",
  "quinn",
  "rcgen",
  "reqwest",
