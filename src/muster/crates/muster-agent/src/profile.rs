@@ -497,6 +497,8 @@ pub struct MessageRule {
     pub text_blocks: &'static [&'static str],
     /// Block types that are content without text (images).
     pub media_blocks: &'static [&'static str],
+    /// An assistant's block types whose `text` is its recorded reasoning.
+    pub reasoning_blocks: &'static [&'static str],
     pub block_ids: BlockIds,
     /// The turn phase of the message, within the envelope (`final_answer`).
     pub phase: Option<&'static str>,

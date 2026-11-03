@@ -251,6 +251,7 @@ impl Tracker {
             phase: String::new(),
             tool_name: String::new(),
             tool_call_id: String::new(),
+            tool_status: String::new(),
         })
     }
     pub fn codex(&mut self, offset: u64, record: &Value) -> Option<Message> {

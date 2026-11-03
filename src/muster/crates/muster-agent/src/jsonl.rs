@@ -34,6 +34,10 @@ pub trait Hooks: Send + Sync {
         offset: u64,
         record: &Value,
     ) -> Option<Message>;
+    /// How the turn a record ends went, when it did not simply complete.
+    fn outcome(&self, _offset: u64, _record: &Value) -> Option<Message> {
+        None
+    }
     /// The exact prompt a record carries outside a user message (a prompt
     /// the app queued for a running turn); confirms a send like a user
     /// message does.
@@ -284,6 +288,12 @@ impl Reader {
                 out.push(summary);
             }
             self.ingest(*offset, record, &mut out);
+            // A turn's outcome stays inside the turn its summary closes.
+            if !self.bootstrap
+                && let Some(outcome) = self.hooks.outcome(*offset, record)
+            {
+                out.push(outcome);
+            }
             if !summary_first && let Some(summary) = summary {
                 out.push(summary);
             }
@@ -304,6 +314,7 @@ impl Reader {
             phase: at.phase.to_string(),
             tool_name: part.tool.0.to_string(),
             tool_call_id: part.tool.1.to_string(),
+            tool_status: String::new(),
         }
     }
 
@@ -377,7 +388,12 @@ impl Reader {
             kind,
             tool: (&name, &call_id),
         };
-        Some(Self::message_of(at, id, part, text))
+        let mut message = Self::message_of(at, id, part, text);
+        // Only a grammar that records failure can say a call succeeded.
+        if rule.error.is_some() && kind == MessageKind::ToolResult {
+            message.tool_status = if error { "failed" } else { "completed" }.into();
+        }
+        Some(message)
     }
 
     fn ingest(&mut self, offset: u64, record: &Value, out: &mut Vec<Message>) {
@@ -482,6 +498,19 @@ impl Reader {
                                 Part::text(role),
                                 text,
                             ));
+                        } else if role == Role::Assistant && rule.reasoning_blocks.contains(&kind) {
+                            // The grammar requires `block_ids = "all"` here.
+                            let text = block["text"].as_str().unwrap_or("").trim();
+                            if !text.is_empty() {
+                                let mut message = Self::message_of(
+                                    &at,
+                                    block_id(i),
+                                    Part::text(role),
+                                    text.to_string(),
+                                );
+                                message.phase = "reasoning".into();
+                                messages.push(message);
+                            }
                         } else if matches!(records.tool_call.at, Where::Block(t) if t == kind) {
                             let message = self.tool_call(block, block_id(i), &at);
                             messages.push(message);
@@ -519,7 +548,10 @@ impl Reader {
                 user_sent = true;
             }
             if ends && records.turn.mark_final {
-                for message in messages.iter_mut().filter(|m| m.kind == MessageKind::Text) {
+                for message in messages
+                    .iter_mut()
+                    .filter(|m| m.kind == MessageKind::Text && m.phase != "reasoning")
+                {
                     message.phase = "final_answer".into();
                 }
             }

@@ -12,7 +12,14 @@ fn parent<'a>(
     s: &AgentSession,
     all: &'a HashMap<String, &AgentSession>,
 ) -> Option<&'a AgentSession> {
-    if s.provider != "claude" || !matches!(s.relationship.as_str(), "subsession" | "fork") {
+    // Families are the listed sessions a provider links: Claude's subsessions
+    // and forks, DeepSeek Harness forks. Subagents are never catalog rows.
+    let family = match s.provider.as_str() {
+        "claude" => matches!(s.relationship.as_str(), "subsession" | "fork"),
+        "deepseek" => s.relationship == "fork",
+        _ => false,
+    };
+    if !family {
         return None;
     }
     let key = serde_json::to_string(&(&s.device_id, &s.provider, &s.parent_session_id)).unwrap();
@@ -214,6 +221,27 @@ mod tests {
         let rows = [s("a", "b"), s("b", "a")];
         let map = rows.iter().map(|s| (row_key(s), s)).collect();
         assert!(ancestors(&rows[0], &map).is_empty());
+    }
+    #[test]
+    fn deepseek_forks_join_a_family_but_subagents_and_other_providers_do_not() {
+        let mut p = s("p", "");
+        p.provider = "deepseek".into();
+        let mut fork = s("f", "p");
+        fork.provider = "deepseek".into();
+        fork.relationship = "fork".into();
+        let map = HashMap::from([(row_key(&p), &p)]);
+        assert_eq!(parent(&fork, &map).map(|p| p.id.as_str()), Some("p"));
+        let mut subagent = fork.clone();
+        subagent.relationship = "subagent".into();
+        assert!(parent(&subagent, &map).is_none());
+        let mut subsession = fork.clone();
+        subsession.relationship = "subsession".into();
+        assert!(parent(&subsession, &map).is_none());
+        let mut codex = fork.clone();
+        codex.provider = "codex".into();
+        p.provider = "codex".into();
+        let map = HashMap::from([(row_key(&p), &p)]);
+        assert!(parent(&codex, &map).is_none());
     }
     #[test]
     fn parent_never_crosses_device() {

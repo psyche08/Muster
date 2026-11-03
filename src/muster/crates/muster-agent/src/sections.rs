@@ -43,6 +43,15 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             )),
         }
     }
+    if let Some(home) = &config.deepseek_home {
+        match deepseek(home) {
+            Some(c) => merge(&mut out, c),
+            None => out.notices.push((
+                "deepseek".into(),
+                "DeepSeek native sections unavailable; showing ungrouped sessions".into(),
+            )),
+        }
+    }
     if let Some(root) = &config.claude_desktop {
         match claude(root) {
             Some(c) => merge(&mut out, c),
@@ -218,6 +227,76 @@ fn codex_projects(home: &Path, db: &Connection, out: &mut Catalog) {
             }
         }
     }
+}
+
+/// DeepSeek Harness workspaces (`storages/workspace.json`, unit version 2):
+/// `global.workspaceIds` is the display order, each workspace's `sessionIds`
+/// its members in display order, and `pinnedSessionIds` the pins, kept apart
+/// from membership. An archived session keeps its slot but is not shown.
+fn deepseek(home: &Path) -> Option<Catalog> {
+    let path = home.join("storages/workspace.json");
+    if std::fs::metadata(&path).ok()?.len() > 16 << 20 {
+        return None;
+    }
+    let state: Value = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
+    if state["unit"]["name"] != "workspace" || state["unit"]["version"] != 2 {
+        return None;
+    }
+    let global = &state["global"];
+    let ids = |v: &Value| -> Vec<String> {
+        v.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            // Only sessions a person started are listed; a subagent's
+            // bare id never is.
+            .filter(|id| id.strip_prefix("session-").is_some_and(is_uuid))
+            .take(100_000)
+            .map(str::to_string)
+            .collect()
+    };
+    let archived: HashSet<_> = ids(&global["archivedSessionIds"]).into_iter().collect();
+    let mut out = Catalog::default();
+    let mut assigned = HashSet::new();
+    let order = global["workspaceIds"].as_array()?;
+    for (position, workspace) in order
+        .iter()
+        .filter_map(Value::as_str)
+        .take(1000)
+        .enumerate()
+    {
+        let entry = &state["tables"]["workspaces"][workspace];
+        if !is_uuid(workspace) || !entry.is_object() {
+            continue;
+        }
+        let path = entry["path"].as_str().unwrap_or_default();
+        let title = entry["title"]
+            .as_str()
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| Path::new(path).file_name().and_then(|n| n.to_str()))
+            .unwrap_or("Workspace");
+        let id = format!("workspace:{workspace}");
+        out.sections.push(section(
+            "deepseek",
+            id.clone(),
+            title.into(),
+            position as i64,
+            false,
+        ));
+        for (slot, session) in ids(&entry["sessionIds"]).into_iter().enumerate() {
+            // A session belongs to one workspace; the first claim stands.
+            if !archived.contains(&session) && assigned.insert(session.clone()) {
+                out.members
+                    .insert(("deepseek".into(), session), (id.clone(), slot as i64));
+            }
+        }
+    }
+    for session in ids(&global["pinnedSessionIds"]) {
+        if !archived.contains(&session) {
+            out.pinned.insert(("deepseek".into(), session));
+        }
+    }
+    Some(out)
 }
 
 // Chromium is never opened by LevelDB: copy a bounded stable file set into
@@ -569,6 +648,72 @@ mod tests {
         claude_state(dir.path(), &unpinned).unwrap().apply(&mut s);
         assert!(!s.pinned);
         assert!(s.section_id.ends_with(":custom"));
+    }
+
+    #[test]
+    fn deepseek_workspaces_keep_native_order_pins_and_hide_archived_members() {
+        let dir = tempfile::tempdir().unwrap();
+        let session = |uuid: &str| format!("session-{uuid}");
+        let (one, two, three) = (session(A), session(B), session(USER));
+        let (w1, w2, missing) = (ORG, USER, A);
+        let write = |state: &Value| {
+            std::fs::create_dir_all(dir.path().join("storages")).unwrap();
+            std::fs::write(
+                dir.path().join("storages/workspace.json"),
+                state.to_string(),
+            )
+            .unwrap();
+        };
+        let mut state = serde_json::json!({
+            "unit": {"name": "workspace", "version": 2},
+            "global": {
+                "workspaceIds": [w2, missing, w1],
+                "archivedSessionIds": [three],
+                "pinnedSessionIds": [two, three, "not-a-session"],
+            },
+            "tables": {"workspaces": {
+                w1: {"path": "/work/api", "title": "Same", "sessionIds": [one, three]},
+                w2: {"path": "/work/web", "title": "", "sessionIds": [two, one, A]},
+            }},
+        });
+        write(&state);
+        let c = deepseek(dir.path()).unwrap();
+        // The app's display order, a path's name for an untitled workspace,
+        // and no section for a workspace the table no longer holds.
+        assert_eq!(
+            c.sections
+                .iter()
+                .map(|s| (s.title.as_str(), s.position, s.kind.as_str()))
+                .collect::<Vec<_>>(),
+            [("web", 0, "section"), ("Same", 2, "section")]
+        );
+        let web = format!("workspace:{w2}");
+        assert_eq!(
+            c.members[&("deepseek".into(), two.clone())],
+            (web.clone(), 0)
+        );
+        // One owner per session: the first workspace in display order.
+        assert_eq!(c.members[&("deepseek".into(), one.clone())], (web, 1));
+        // A subagent's bare id is never a member; an archived session keeps
+        // neither its slot nor its pin.
+        assert!(!c.members.contains_key(&("deepseek".into(), A.into())));
+        assert!(!c.members.contains_key(&("deepseek".into(), three.clone())));
+        assert_eq!(c.pinned, HashSet::from([("deepseek".into(), two.clone())]));
+        let mut pinned = AgentSession {
+            id: two.clone(),
+            provider: "deepseek".into(),
+            ..Default::default()
+        };
+        c.apply(&mut pinned);
+        assert!(pinned.pinned);
+        assert_eq!(pinned.section_id, format!("workspace:{w2}"));
+
+        // Another generation of the store is not guessed at.
+        state["unit"]["version"] = 3.into();
+        write(&state);
+        assert!(deepseek(dir.path()).is_none());
+        std::fs::write(dir.path().join("storages/workspace.json"), "{").unwrap();
+        assert!(deepseek(dir.path()).is_none());
     }
 
     #[test]
