@@ -191,6 +191,7 @@ message AgentCatalogRow {
   bool expandable = 4;
   bool expanded = 5;
   string parent_title = 6;
+  string source_label = 7; // Rust-projected device/native-section origin in aggregate lists
 }
 message AgentCatalogSection {
   string key = 1;

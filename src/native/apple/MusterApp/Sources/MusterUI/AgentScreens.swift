@@ -109,7 +109,10 @@ private struct CatalogSessionRow: View {
                                     .frame(width: 6, height: 6).accessibilityLabel(row.session.state == "waiting_approval" ? "Needs you" : "Working")
                             }
                         }.padding(.vertical, 6).help(row.session.title)
-                    } else { SessionRow(session: row.session) }
+                    } else { SessionRow(session: row.session, showDevice: row.sourceLabel.isEmpty) }
+                    if !row.sourceLabel.isEmpty {
+                        Text(row.sourceLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                     if !row.session.searchSnippet.isEmpty {
                         Text(row.session.searchSnippet).font(.callout).foregroundStyle(.secondary).lineLimit(3)
                     }
@@ -265,6 +268,7 @@ struct TurnFooter: View {
 
 struct SessionRow: View {
     let session: Muster_V1_AgentSession
+    var showDevice = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -281,7 +285,7 @@ struct SessionRow: View {
                 }
             }
             HStack {
-                if !session.deviceName.isEmpty { Text(session.deviceName).font(.footnote.weight(.medium)) }
+                if showDevice && !session.deviceName.isEmpty { Text(session.deviceName).font(.footnote.weight(.medium)) }
                 Text(session.cwd).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 Text(relative(session.updatedUnix)).font(.footnote).foregroundStyle(.secondary)

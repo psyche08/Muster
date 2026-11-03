@@ -1186,6 +1186,9 @@ public nonisolated struct Muster_App_AgentCatalogRow: Sendable {
 
   public var parentTitle: String = String()
 
+  /// Rust-projected device/native-section origin in aggregate lists
+  public var sourceLabel: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -5277,7 +5280,7 @@ nonisolated extension Muster_App_AgentCatalogAction.Kind: SwiftProtobuf._ProtoNa
 
 nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentCatalogRow"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}session\0\u{1}depth\0\u{1}expandable\0\u{1}expanded\0\u{3}parent_title\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}session\0\u{1}depth\0\u{1}expandable\0\u{1}expanded\0\u{3}parent_title\0\u{3}source_label\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5291,6 +5294,7 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
       case 4: try { try decoder.decodeSingularBoolField(value: &self.expandable) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.expanded) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.parentTitle) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.sourceLabel) }()
       default: break
       }
     }
@@ -5319,6 +5323,9 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
     if !self.parentTitle.isEmpty {
       try visitor.visitSingularStringField(value: self.parentTitle, fieldNumber: 6)
     }
+    if !self.sourceLabel.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceLabel, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5329,6 +5336,7 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
     if lhs.expandable != rhs.expandable {return false}
     if lhs.expanded != rhs.expanded {return false}
     if lhs.parentTitle != rhs.parentTitle {return false}
+    if lhs.sourceLabel != rhs.sourceLabel {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

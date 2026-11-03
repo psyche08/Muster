@@ -400,22 +400,24 @@ final class SessionChromeRenderingTests: XCTestCase {
     }
 
     func testRenderSessionChromeInBothAppearances() throws {
-        for scheme in [ColorScheme.light, .dark] {
-            let suffix = scheme == .dark ? "dark" : "light"
-            let header = SessionChromeFixture(model: headerModel)
-            let host = NSHostingView(rootView: header.environment(\.colorScheme, scheme).frame(width: 1180))
-            host.frame = NSRect(origin: .zero, size: host.fittingSize)
-            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = host
-            host.layoutSubtreeIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.25))
-            XCTAssertGreaterThanOrEqual(host.bounds.height, 70, "The chrome header must keep its 76pt DSH height")
-            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-            host.cacheDisplay(in: host.bounds, to: bitmap)
-            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-                .write(to: URL(fileURLWithPath: "/private/tmp/muster-session-chrome-\(suffix).png"))
-            window.close()
+        for width in [420.0, 1180.0] {
+            for scheme in [ColorScheme.light, .dark] {
+                let suffix = scheme == .dark ? "dark" : "light"
+                let header = SessionChromeFixture(model: headerModel)
+                let host = NSHostingView(rootView: header.environment(\.colorScheme, scheme).frame(width: width))
+                host.frame = NSRect(origin: .zero, size: host.fittingSize)
+                let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false
+                window.contentView = host
+                host.layoutSubtreeIfNeeded()
+                RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+                XCTAssertGreaterThanOrEqual(host.bounds.height, 70, "The chrome header must keep its 76pt DSH height")
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                    .write(to: URL(fileURLWithPath: "/private/tmp/muster-session-chrome-\(Int(width))-\(suffix).png"))
+                window.close()
+            }
         }
     }
 

@@ -145,3 +145,9 @@ Separate source/tests, build, rendering and device acceptance states:
 - Not verified here: physical-device interaction, VoiceOver/accessibility
   traversal of the new header and ledger, every window width, an installed
   iOS build, and Live provider data in the trace page.
+
+## Subsequent decision
+
+[ADR 0103](0103-visible-tabs-and-provider-aggregation.md) supersedes only the
+secondary-view overflow menu: all session tabs are direct controls in a horizontally scrollable strip on
+narrow windows. The other chrome and trace decisions remain in force.

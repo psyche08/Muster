@@ -2,7 +2,7 @@
 // header: a title row with session utilities and actions, then view tabs with
 // an underline for the active view. Presentation only: every value comes from
 // the Rust-owned ChatView and every control sends an Intent or a shell-only
-// preference. See ADR 0083.
+// preference. See ADR 0086 and ADR 0103.
 #if os(macOS) && canImport(SwiftUI)
 import SwiftUI
 
@@ -41,24 +41,15 @@ struct SessionChromeHeader: View {
 
     private var palette: SessionChromePalette { SessionChromePalette(scheme: scheme) }
 
-    private static let primaryTabs: [(id: String, title: String)] = [
-        ("Conversation", "Conversation"),
-        ("Tracing", "Trace"),
-    ]
-
-    /// The extra views live in the trailing menu, as DSH keeps its secondary
-    /// views behind the tab row's More launcher. Subagents and Sessions stay
-    /// listed even when empty so the menu is a stable entry point.
-    private var overflow: [(id: String, title: String)] {
-        var items: [(String, String)] = [
+    private var tabs: [(id: String, title: String)] {
+        [
+            ("Conversation", "Conversation"),
+            ("Tracing", "Trace"),
             ("Subagents", model.subagentCount > 0 ? "Subagents (\(model.subagentCount))" : "Subagents"),
             ("Sessions", model.subsessionCount > 0 ? "Sessions (\(model.subsessionCount))" : "Sessions"),
+            ("Terminal", "Terminal"),
         ]
-        if model.terminalAvailable { items.append(("Terminal", "Terminal")) }
-        return items
     }
-
-    private var overflowActive: Bool { overflow.contains { $0.id == selected } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -203,19 +194,21 @@ struct SessionChromeHeader: View {
     // MARK: View tabs
 
     private var tabsRow: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            HStack(alignment: .bottom, spacing: SessionChromeMetrics.tabGap) {
-                ForEach(Self.primaryTabs, id: \.id) { tab in
-                    tabButton(id: tab.id, title: tab.title)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(alignment: .bottom, spacing: SessionChromeMetrics.tabGap) {
+                    ForEach(tabs, id: \.id) { tab in
+                        tabButton(id: tab.id, title: tab.title).id(tab.id)
+                    }
                 }
             }
-            if !overflow.isEmpty {
-                moreMenu
-                    .padding(.leading, 16)
-                    .padding(.bottom, SessionChromeMetrics.tabBottomInset)
+            .scrollIndicators(.visible)
+            .onAppear { proxy.scrollTo(selected, anchor: .center) }
+            .onChange(of: selected) { _, tab in
+                withAnimation { proxy.scrollTo(tab, anchor: .center) }
             }
-            Spacer(minLength: 0)
         }
+        .frame(height: SessionChromeMetrics.tabLineHeight + SessionChromeMetrics.tabBottomInset)
         .padding(.leading, SessionChromeMetrics.tabsLeadingInset)
         .padding(.top, SessionChromeMetrics.tabsTopGap)
         .accessibilityIdentifier("session-chrome-tabs")
@@ -227,6 +220,7 @@ struct SessionChromeHeader: View {
             Text(title)
                 .font(.system(size: SessionChromeMetrics.tabFontSize, weight: .medium))
                 .foregroundStyle(active ? palette.businessPrimary : palette.labelTertiary)
+                .fixedSize()
                 .padding(.bottom, SessionChromeMetrics.tabBottomInset)
                 .overlay(alignment: .bottom) {
                     Rectangle()
@@ -236,36 +230,12 @@ struct SessionChromeHeader: View {
                 }
         }
         .buttonStyle(.plain)
+        .disabled(id == "Terminal" && !model.terminalAvailable)
+        .help(id == "Terminal" && !model.terminalAvailable ? "Terminal unavailable for this session" : title)
         .accessibilityIdentifier("session-tab-\(id)")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    private var moreMenu: some View {
-        Menu {
-            ForEach(overflow, id: \.id) { item in
-                Button {
-                    selected = item.id
-                } label: {
-                    if selected == item.id {
-                        Label(item.title, systemImage: "checkmark")
-                    } else {
-                        Text(item.title)
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(overflowActive ? palette.businessPrimary : palette.labelSecondary)
-                .frame(width: SessionChromeMetrics.tabMoreSize, height: SessionChromeMetrics.tabMoreSize)
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("More views")
-        .accessibilityIdentifier("session-tabs-more")
-    }
 }
 
 // MARK: Small chrome controls
