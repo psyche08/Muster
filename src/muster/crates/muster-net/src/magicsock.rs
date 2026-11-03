@@ -36,6 +36,16 @@ const PATH_PROBE_LEN: usize = 1350;
 const PING_INTERVAL: Duration = Duration::from_millis(1500);
 const PUNCH_INTERVAL: Duration = Duration::from_millis(400);
 const DIRECT_TIMEOUT: Duration = Duration::from_secs(6);
+/// Relay-only time after a QUIC dial fails over a direct path. It doubles on
+/// each consecutive failure (30 s to 8 min) and resets once QUIC arrives over
+/// a direct path or the network changes: a proxy that answers probes but not
+/// QUIC must not pull live connections onto itself every 30 seconds.
+const DIRECT_COOLDOWN: Duration = Duration::from_secs(30);
+const DIRECT_COOLDOWN_DOUBLINGS: u32 = 4;
+
+fn direct_cooldown(failures: u32) -> Duration {
+    DIRECT_COOLDOWN * (1 << failures.min(DIRECT_COOLDOWN_DOUBLINGS))
+}
 const CANDIDATE_INTERVAL: Duration = Duration::from_secs(2);
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(10);
 
@@ -318,6 +328,8 @@ struct PeerState {
     direct: Option<SocketAddr>,
     direct_since: Option<Instant>,
     direct_retry_at: Option<Instant>,
+    /// Consecutive QUIC failures over a direct path without QUIC since.
+    direct_failures: u32,
     last_pong: Option<Instant>,
     last_ping: Option<Instant>,
     last_candidates_sent: Option<Instant>,
@@ -506,10 +518,13 @@ impl MagicSock {
         {
             peer.direct_since = None;
             peer.last_pong = None;
-            peer.direct_retry_at = Some(Instant::now() + Duration::from_secs(30));
+            let cooldown = direct_cooldown(peer.direct_failures);
+            peer.direct_failures = peer.direct_failures.saturating_add(1);
+            peer.direct_retry_at = Some(Instant::now() + cooldown);
             log::info!(
-                "peer {} direct path failed; using relay for 30 seconds",
-                id.short()
+                "peer {} direct path failed; using relay for {} seconds",
+                id.short(),
+                cooldown.as_secs()
             );
         }
     }
@@ -584,6 +599,7 @@ impl MagicSock {
             peer.direct = None;
             peer.direct_since = None;
             peer.direct_retry_at = None;
+            peer.direct_failures = 0;
             peer.last_pong = None;
             peer.last_ping = None;
             peer.last_candidates_sent = None;
@@ -617,6 +633,7 @@ impl MagicSock {
                 direct: None,
                 direct_since: None,
                 direct_retry_at: None,
+                direct_failures: 0,
                 last_pong: None,
                 last_ping: None,
                 last_candidates_sent: None,
@@ -1236,6 +1253,8 @@ impl AsyncUdpSocket for MagicSock {
                         state.by_direct.get(&from).copied().map(|id| {
                             let peer = state.peers.get_mut(&id).unwrap();
                             peer.counters.rx_direct += 1;
+                            // QUIC itself crossed a direct path: it works.
+                            peer.direct_failures = 0;
                             self.saw(id, peer);
                             peer.virtual_addr
                         })
@@ -1350,6 +1369,59 @@ mod tests {
         sock.network_changed();
         sock.handle_direct_control(addr, &pong);
         assert_eq!(sock.path(&peer).unwrap().direct, Some(addr));
+        sock.shutdown();
+    }
+
+    #[test]
+    fn direct_cooldown_doubles_to_eight_minutes() {
+        let secs: Vec<_> = (0..7).map(|f| direct_cooldown(f).as_secs()).collect();
+        assert_eq!(secs, [30, 60, 120, 240, 480, 480, 480]);
+    }
+
+    #[tokio::test]
+    async fn repeated_direct_failures_back_off_until_quic_or_a_network_change() {
+        let sock = MagicSock::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            RelayLink::None,
+            Arc::new(SoftSigner::generate()),
+            MagicOptions::default(),
+        )
+        .unwrap();
+        let peer = SoftSigner::generate().public_key().device_id();
+        sock.add_peer(peer);
+        let retry_in = |sock: &MagicSock| {
+            let state = sock.state.lock().unwrap();
+            state.peers[&peer]
+                .direct_retry_at
+                .unwrap()
+                .saturating_duration_since(Instant::now())
+        };
+        let addr = "127.0.0.1:34567".parse().unwrap();
+        let pong = MagicSock::control_frame(PONG, &peer, 1);
+        for expected in [30, 60, 120] {
+            // Pretend the cooldown passed and the proxy answered a probe again.
+            sock.state
+                .lock()
+                .unwrap()
+                .peers
+                .get_mut(&peer)
+                .unwrap()
+                .direct_retry_at = None;
+            sock.handle_direct_control(addr, &pong);
+            assert_eq!(sock.path(&peer).unwrap().direct, Some(addr));
+            sock.defer_direct(&peer);
+            let wait = retry_in(&sock);
+            assert!(
+                wait > Duration::from_secs(expected - 1) && wait <= Duration::from_secs(expected)
+            );
+        }
+        sock.network_changed();
+        sock.handle_direct_control(addr, &pong);
+        sock.defer_direct(&peer);
+        assert!(
+            retry_in(&sock) <= Duration::from_secs(30),
+            "a new network starts over"
+        );
         sock.shutdown();
     }
 

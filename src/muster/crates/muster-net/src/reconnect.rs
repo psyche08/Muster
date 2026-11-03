@@ -30,6 +30,15 @@ impl Retry {
     pub fn reset(&mut self) {
         *self = Self::default();
     }
+    /// Consecutive failed attempts since the last success or network change.
+    pub fn failures(&self) -> u32 {
+        self.failures
+    }
+    /// Whether an attempt that just failed should be reported: the first
+    /// one, then about every ten minutes at the capped 8 s backoff.
+    pub fn report_failure(&self) -> bool {
+        self.failures == 1 || (self.failures > 0 && self.failures % 60 == 0)
+    }
     pub fn status(&self, now: Instant) -> &'static str {
         if self.started.is_some() && !self.expired(now) {
             "connecting"
@@ -67,5 +76,22 @@ mod tests {
         }
         retry.reset();
         assert!(retry.due(now));
+    }
+
+    #[test]
+    fn unreachable_members_are_reported_first_then_every_sixty_attempts() {
+        let mut retry = Retry::default();
+        assert!(!retry.report_failure());
+        let mut reported = Vec::new();
+        for _ in 1..=130 {
+            retry.fail(Instant::now());
+            if retry.report_failure() {
+                reported.push(retry.failures());
+            }
+        }
+        assert_eq!(reported, [1, 60, 120]);
+        retry.reset();
+        retry.fail(Instant::now());
+        assert!(retry.report_failure(), "a network change starts over");
     }
 }

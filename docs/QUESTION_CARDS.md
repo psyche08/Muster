@@ -111,3 +111,30 @@ cards retain their separate option-based protocol.
   timed-out queue cancellation, and new-record send confirmation.
 - The real Claude/Codex multi-page flows still require a live unanswered card;
   these tests do not resubmit any of the user's already answered questions.
+
+### Explaining a missed question form (ADR 0114)
+
+- **Why this was added.** After desktop 1.0.21, question-card answers sent from
+  the phone were rejected before any submit on two Macs. This affected
+  multi-question Claude cards and Codex cards. The logs said that the
+  controls were not found, but not why.
+- **The timeout warning now says why.** When the controls for a question are
+  still missing when the step times out, the `AX question controls timeout`
+  warning carries `why=`. It reads either `form matched; submit control not
+  ready`, or a summary of counts and AX roles:
+  - how often the prompt appears exactly, inside a longer label, or as a
+    fragment;
+  - how each option's labels resolve to controls anywhere (`<controls>c/<enabled>e`);
+  - for each ancestor of the first exact prompt, how many options have one,
+    no, or several matching enabled controls there (`u/z/m`), whether it holds
+    a free-text field (`+editor`), and where the climb stops (`composer` or
+    wrap-up `prose`);
+  - how many enabled controls carry the header (a page tab).
+
+  No prompt, option, header or answer text is logged.
+- **The probe reports it too.** The read-only `muster debug ax-question
+  SESSION_ID` probe adds the same summary as `miss` for each unmatched question.
+- **Unchanged:** the matcher itself. The stage that timed out was already named
+  by the step (`locate question panel`, `question submit ready`, …).
+- **Next step:** a matcher change needs one of these summaries from a live
+  unanswered card.
