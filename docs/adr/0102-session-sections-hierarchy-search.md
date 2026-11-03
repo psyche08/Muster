@@ -89,3 +89,9 @@ access integration), strict Clippy across affected targets, layer and public-con
 checks also pass. The ADR gate is run on the committed branch before landing. This record does not claim signed installation or physical
 UI acceptance. Target-device deployment and manual acceptance are separate delivery
 steps; source verification is not a substitute for them.
+
+### Subsequent aggregation decision
+
+[ADR 0103](0103-visible-tabs-and-provider-aggregation.md) changes All devices to
+provider aggregation with row origin labels; single-device native sections and
+UUID-scoped identity remain unchanged.
