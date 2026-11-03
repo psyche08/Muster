@@ -2311,7 +2311,7 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
     if what == "send" && !plugin && crate::agent_bridge::drives_desktop(daemon.platform().as_ref())
     {
         muster_agent::control_guard::wait_for_quiet(
-            muster_platform::macos::input::user_input_idle,
+            crate::agent_bridge::session_input_idle(agent, &session),
             Duration::from_millis(250),
             Duration::from_secs(3),
         )

@@ -724,7 +724,7 @@ impl NativeAppController {
         let pending = (self.question_source)()
             .and_then(|s| s.pending)
             .ok_or_else(|| Error::NotFound("No pending native question".into()))?;
-        let generation = user_input_generation();
+        let generation = self.input_generation();
         let mut history_pages = 0;
         if let Some(question) = pending.questions.first() {
             for _ in 0..3 {
@@ -806,7 +806,7 @@ impl NativeAppController {
     ) -> Result<Element, Error> {
         muster_agent::control_guard::check()?;
         self.check_identity()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed; question submission stopped".into(),
             ));
@@ -1296,9 +1296,14 @@ impl NativeAppController {
         // Avoid AX walks after focus acquisition, as for guarded Submit Space.
         let live = || -> Result<(), Error> {
             step.check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "Local input changed; no delete key sent".into(),
+                ));
+            }
+            if modifiers_held() {
+                return Err(Error::Conflict(
+                    "A modifier key is held; no delete key sent".into(),
                 ));
             }
             if !(self.question_source)()
@@ -1455,7 +1460,7 @@ impl NativeAppController {
         let mut sample = 0;
         let (focus_source, same_window) = loop {
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if self.input_generation() != generation {
                 return Err(Error::Conflict(
                     "Local input changed; no submit key sent".into(),
                 ));
@@ -1509,9 +1514,16 @@ impl NativeAppController {
         // No additional AX traversal after the focus sample: recheck the
         // cheap authorization/input guards immediately before the single key.
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation {
+        if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed; no submit key sent".into(),
+            ));
+        }
+        // The key goes to the app, not through the HID stream, so a person's
+        // held Command elsewhere could still turn Space into a shortcut.
+        if modifiers_held() {
+            return Err(Error::Conflict(
+                "A modifier key is held; no submit key sent".into(),
             ));
         }
         muster_agent::control_guard::delivery_attempt();
@@ -1543,16 +1555,18 @@ impl NativeAppController {
         self.unconfirmed.admit()?;
         // Settle brief input activity during read-only preparation. Once any
         // control is touched, retain this generation for the entire answer.
-        let ((pending, plans), generation) =
-            muster_agent::control_guard::prepare_stable(user_input_generation, || {
+        let ((pending, plans), generation) = muster_agent::control_guard::prepare_stable(
+            || self.input_generation(),
+            || {
                 self.check_identity()?;
                 let pending = (self.question_source)()
                     .and_then(|s| s.find(interaction).cloned())
                     .ok_or_else(|| Error::NotFound("This question is no longer pending".into()))?;
                 let plans = validate(&pending, answers)?;
                 Ok((pending, plans))
-            })
-            .await?;
+            },
+        )
+        .await?;
         // A draft left in the conversation's own composer breaks answering:
         // it adds a second, enabled Send to the surface and holds the app's
         // focus, so the card's Submit cannot take focus and no activation key

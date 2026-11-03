@@ -303,20 +303,43 @@ pub async fn hold_session(
     session: &str,
     what: &str,
 ) -> Result<Option<ProviderGuard>, crate::Error> {
-    use muster_agent::desktop_chat::app_of;
-    use muster_agent::desktop_lock::LockKind;
     let short: String = session.chars().take(20).collect();
-    let (app, kind) = match app_of(session) {
-        Some(app) => (app.profile(), LockKind::Chat),
-        None => match agent
-            .session(session)
-            .and_then(|s| muster_agent::profile::app(&s.provider))
-        {
-            Some(app) => (app, LockKind::Agent),
-            None => return Ok(None),
-        },
+    let Some((app, kind)) = session_app(agent, session) else {
+        return Ok(None);
     };
     hold(daemon, app, kind, &format!("{what} {short}")).await
+}
+
+fn session_app(
+    agent: &AgentService,
+    session: &str,
+) -> Option<(&'static App, muster_agent::desktop_lock::LockKind)> {
+    use muster_agent::desktop_lock::LockKind;
+    match muster_agent::desktop_chat::app_of(session) {
+        Some(app) => Some((app.profile(), LockKind::Chat)),
+        None => agent
+            .session(session)
+            .and_then(|s| muster_agent::profile::app(&s.provider))
+            .map(|app| (app, LockKind::Agent)),
+    }
+}
+
+/// How long input that could reach the app a session lives in has been
+/// quiet (ADR 0115). Every local input counts while that app is unknown or
+/// not running.
+#[cfg(target_os = "macos")]
+pub fn session_input_idle(agent: &AgentService, session: &str) -> impl Fn() -> Duration + use<> {
+    use muster_platform::macos::input::{target_input_idle, user_input_idle};
+    let pids = session_app(agent, session)
+        .map(|(app, _)| muster_platform::macos::native_app::app_pids(app))
+        .unwrap_or_default();
+    move || {
+        if pids.is_empty() {
+            user_input_idle()
+        } else {
+            target_input_idle(&pids)
+        }
+    }
 }
 
 /// Who holds `app` on this Mac now, if anyone.

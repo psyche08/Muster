@@ -25,7 +25,7 @@ use muster_proto::v1;
 
 use super::ax::{self, Element};
 use super::codesign;
-use super::input::user_input_generation;
+use super::input::target_input_generation;
 use super::native_app::AppProfile;
 
 const ATTRIBUTES: [&str; 14] = [
@@ -190,7 +190,7 @@ fn press(element: &Element, what: &str) -> Result<(), Error> {
 }
 
 /// Navigation must not race the person at the Mac: the same app launch, an
-/// unlocked console and an unchanged input counter from start to finish.
+/// unlocked console and no input that could reach the app, start to finish.
 struct Guard {
     pid: u32,
     start: u64,
@@ -202,7 +202,7 @@ impl Guard {
         Self {
             pid,
             start,
-            generation: user_input_generation(),
+            generation: target_input_generation(pid),
         }
     }
 
@@ -212,7 +212,7 @@ impl Guard {
         if codesign::process_start(self.pid) != Some(self.start) {
             return Err(Error::Unavailable("the app was restarted".into()));
         }
-        let current = user_input_generation();
+        let current = target_input_generation(self.pid);
         if current != self.generation {
             log::info!(
                 "chat navigation input generation changed {} -> {current}",
@@ -398,7 +398,7 @@ pub async fn return_to_code(app: ChatApp) -> Result<bool, Error> {
     let (tree, generation) = muster_agent::control_guard::prepare_readonly(
         "Code mode navigation",
         Duration::from_secs(3),
-        user_input_generation,
+        || target_input_generation(pid),
         || async {
             console_ready()?;
             if codesign::process_start(pid) != Some(start) {
@@ -1533,8 +1533,9 @@ impl ChatDriver {
             .ok_or_else(|| Error::Unavailable("the agent service stopped".into()))?;
         self.check_identity()?;
         // Read-only preparation; a brief local input settles like Code mode.
-        let ((composer, write), generation) =
-            muster_agent::control_guard::prepare_stable(user_input_generation, || {
+        let ((composer, write), generation) = muster_agent::control_guard::prepare_stable(
+            || target_input_generation(self.pid),
+            || {
                 self.check_identity()?;
                 let (tree, elements) = snapshot(&self.root, false);
                 let located = self.locate(&agent, &tree, session)?;
@@ -1547,10 +1548,11 @@ impl ChatDriver {
                     field.value.trim_end() != text.trim_end()
                 };
                 Ok((elements[located.composer].clone(), write))
-            })
-            .await?;
+            },
+        )
+        .await?;
         muster_agent::control_guard::check()?;
-        if user_input_generation() != generation {
+        if target_input_generation(self.pid) != generation {
             return Err(Error::Conflict(
                 "local input changed before drafting; not sent".into(),
             ));
@@ -1566,7 +1568,7 @@ impl ChatDriver {
         let mut readiness = muster_agent::native_send::DraftWait::default();
         let (send, elements, before) = loop {
             muster_agent::control_guard::check()?;
-            if user_input_generation() != generation {
+            if target_input_generation(self.pid) != generation {
                 return Err(Error::Conflict(
                     "local input changed; the draft was preserved, not sent".into(),
                 ));
@@ -1590,7 +1592,7 @@ impl ChatDriver {
                 Readiness::Focus => {
                     muster_agent::control_guard::check()?;
                     self.check_identity()?;
-                    if user_input_generation() != generation {
+                    if target_input_generation(self.pid) != generation {
                         return Err(Error::Conflict(
                             "Local input changed before focus; not sent".into(),
                         ));
@@ -1617,7 +1619,7 @@ impl ChatDriver {
         };
         muster_agent::control_guard::check()?;
         self.check_identity()?;
-        if user_input_generation() != generation {
+        if target_input_generation(self.pid) != generation {
             return Err(Error::Conflict(
                 "local input changed; draft preserved, not sent".into(),
             ));

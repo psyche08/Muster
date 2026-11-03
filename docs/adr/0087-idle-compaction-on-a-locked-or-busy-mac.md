@@ -2,7 +2,9 @@
 
 - Date: 2026-11-02
 - Status: Accepted; source and tests verified, device acceptance pending.
-  Amends [ADR 0083](0083-idle-compaction.md).
+  Amends [ADR 0083](0083-idle-compaction.md). The pause in local input is
+  amended by [ADR 0115](0115-target-scoped-local-input.md): only input that
+  could reach Claude counts.
 - Related: [ADR 0006](0006-desktop-presence-and-console-routing.md),
   [ADR 0007](0007-desktop-manual-locked-use.md);
   [LOCKED_USE.md](../LOCKED_USE.md),
