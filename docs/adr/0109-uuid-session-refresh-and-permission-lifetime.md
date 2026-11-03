@@ -108,3 +108,15 @@ full original prompt. Prefer the UUID-matched latest nonempty title index record
 in targeted refresh, catalog metadata and migrated history, matching JSONL
 provider discovery. Test fallback, rename and wrong-UUID rejection. A Mac client
 visually rendered the remote permission card while its source Mac was locked.
+
+## Reconnection acceptance follow-up
+
+A real daemon upgrade reproduced duplicate permission cards in a Mac client:
+reconnection replayed the current card with a new native ID alongside its old
+cached ID. On the authenticated first UUID/provider-matching state of each new
+subscription, retire prior stream interaction display handles before replay.
+Do not clear them on transport failure or ordinary running/idle status. Preserve
+queued-send state and outstanding/unknown response receipts; this is resync,
+not a claim that the provider resolved or executed a command. Cancelled or
+foreign device/provider/session callbacks cannot clear another chat. Version
+1.1.20 (110) carries this follow-up, with focused reducer and stream tests.

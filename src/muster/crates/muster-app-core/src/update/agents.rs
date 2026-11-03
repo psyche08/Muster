@@ -496,6 +496,21 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         ));
                     }
                 };
+                // A newly established subscription replays the server's current
+                // pending interactions. Retire the old stream's display IDs
+                // before that replay, not on transient activity changes.
+                if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                    ev: Some(v1::agent_event::Ev::State(initial)),
+                }) = &first
+                    && initial.id == session_id
+                {
+                    let _ = tx.send(loop_message(Msg::AgentStreamStarted {
+                        token: token.clone(),
+                        device: device.clone(),
+                        session: session_id.clone(),
+                        provider: initial.provider.clone(),
+                    }));
+                }
                 let cached = cache.get::<v1::AgentMessagePage>(&key).unwrap_or_default();
                 let mut catch_up = ChatCatchUp::new(cached.messages);
                 let mut queued = std::collections::VecDeque::new();
@@ -1105,6 +1120,27 @@ pub(super) fn msg_chat(
         }
     }
     super::admitted::settle(state);
+}
+
+pub(super) fn msg_agent_stream_started(
+    state: &mut State,
+    token: CancellationToken,
+    device: &str,
+    session: &str,
+    provider: &str,
+) {
+    if token.is_cancelled() {
+        return;
+    }
+    let Some(chat) = &mut state.chat else { return };
+    if chat.device != device || chat.session.id != session || chat.session.provider != provider {
+        return;
+    }
+    // This drops stale display handles; it does not assert command completion
+    // or reset an outstanding/unknown response receipt.
+    chat.interactions.retain(|i| i.kind == "queued_message");
+    chat.approval_refresh_attempted = false;
+    chat.approval_refresh_pending = false;
 }
 
 pub(super) fn msg_agent_event(

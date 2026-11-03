@@ -2676,3 +2676,45 @@ async fn permission_reads_are_bounded_cancelled_and_yield_to_initial_cards() {
     );
     assert!(result.await.unwrap().is_err());
 }
+
+#[test]
+fn new_subscription_replaces_stale_card_handles_only_for_its_live_source() {
+    let mut state = running_chat();
+    let token = CancellationToken::new();
+    let chat = state.chat.as_mut().unwrap();
+    chat.interactions = vec![
+        v1::PendingInteraction {
+            id: "old-approval".into(),
+            kind: "approval".into(),
+            ..Default::default()
+        },
+        v1::PendingInteraction {
+            id: "queued:fixture".into(),
+            kind: "queued_message".into(),
+            ..Default::default()
+        },
+    ];
+    chat.response_unknown = true;
+    chat.response_interaction = "old-approval".into();
+    let device = chat.device.clone();
+    let session = chat.session.id.clone();
+    let provider = chat.session.provider.clone();
+    for (d, s, p) in [
+        ("other", session.as_str(), provider.as_str()),
+        (device.as_str(), "other", provider.as_str()),
+        (device.as_str(), session.as_str(), "other"),
+    ] {
+        agents::msg_agent_stream_started(&mut state, token.clone(), d, s, p);
+        assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
+    }
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    agents::msg_agent_stream_started(&mut state, cancelled, &device, &session, &provider);
+    assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
+    agents::msg_agent_stream_started(&mut state, token, &device, &session, &provider);
+    let chat = state.chat.as_ref().unwrap();
+    assert_eq!(chat.interactions.len(), 1);
+    assert_eq!(chat.interactions[0].kind, "queued_message");
+    assert!(chat.response_unknown);
+    assert_eq!(chat.response_interaction, "old-approval");
+}

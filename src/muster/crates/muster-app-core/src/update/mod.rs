@@ -202,6 +202,12 @@ pub enum Msg {
         session: String,
         result: Result<v1::AgentChatOptions, Error>,
     },
+    AgentStreamStarted {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        provider: String,
+    },
     AgentEvent {
         token: CancellationToken,
         device: String,
@@ -690,6 +696,12 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             retry,
             result,
         } => desktop_chats::msg_desktop_chat_opened(state, ctx, view, device, retry, result),
+        Msg::AgentStreamStarted {
+            token,
+            device,
+            session,
+            provider,
+        } => agents::msg_agent_stream_started(state, token, &device, &session, &provider),
         Msg::AgentEvent {
             token,
             device,
