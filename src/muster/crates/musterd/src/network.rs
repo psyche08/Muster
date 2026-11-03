@@ -253,6 +253,7 @@ impl Daemon {
                 services.push("agent.options.v1".to_string());
                 services.push("agent.completion.v1".to_string());
                 services.push("agent.chat.locked.v1".to_string());
+                services.push("agent.approvals.locked.v1".to_string());
             }
         }
         if self.terminal().is_some() {
@@ -569,9 +570,10 @@ impl Daemon {
                 .map(|window| -> Result<_, Error> {
                     // Refused here rather than logged later: whoever sets the
                     // policy is the one who can correct it.
-                    window.origin.parse::<muster_web::Origin>().map_err(|error| {
-                        Error::Invalid(format!("web window: {error}"))
-                    })?;
+                    window
+                        .origin
+                        .parse::<muster_web::Origin>()
+                        .map_err(|error| Error::Invalid(format!("web window: {error}")))?;
                     Ok(muster_core::policy::WebWindow {
                         origin: window.origin.clone(),
                     })
@@ -607,9 +609,10 @@ impl Daemon {
         // The browser fetches, not the daemon: the session for the site is
         // the person's, held in Chrome (ADR 0026).
         let upstream = crate::web::Browser::new(muster_browser::socket_in(&self.config.dir));
-        let window = muster_web::Window::open(origin, &crate::web::socket_in(&self.config.dir), upstream)
-            .await
-            .map_err(|error| Error::Unavailable(format!("web window: {error}")))?;
+        let window =
+            muster_web::Window::open(origin, &crate::web::socket_in(&self.config.dir), upstream)
+                .await
+                .map_err(|error| Error::Unavailable(format!("web window: {error}")))?;
         *held = Some(Arc::new(window));
         Ok(())
     }

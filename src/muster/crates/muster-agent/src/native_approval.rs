@@ -8,6 +8,22 @@ pub struct Card {
     pub named: bool,
 }
 
+/// Retention is presentation only. A response must observe the complete card
+/// again, including its current native elements, before using its old ID.
+pub fn retain_while_locked(
+    profile: &App,
+    interaction: Option<&crate::model::PendingInteraction>,
+    locked: bool,
+    process: crate::controller::ProcessState,
+    accessibility: bool,
+) -> bool {
+    locked
+        && process == crate::controller::ProcessState::Running
+        && accessibility
+        && profile.controls().permission_card_prefix.is_some()
+        && interaction.is_some_and(|i| i.kind == "approval")
+}
+
 fn path(tree: &AxTree, mut index: usize) -> Option<Vec<usize>> {
     let mut result = Vec::new();
     for _ in 0..64 {
@@ -122,6 +138,50 @@ pub fn observe(profile: &App, tree: &AxTree) -> Option<Card> {
 mod tests {
     use super::*;
     use crate::{desktop_chat::AxNode, profile::CLAUDE_APP};
+    #[test]
+    fn locked_display_retention_never_survives_process_or_permission_loss() {
+        use crate::{controller::ProcessState, model::PendingInteraction};
+        let card = PendingInteraction {
+            kind: "approval".into(),
+            ..Default::default()
+        };
+        assert!(retain_while_locked(
+            &CLAUDE_APP,
+            Some(&card),
+            true,
+            ProcessState::Running,
+            true
+        ));
+        for (locked, process, ax) in [
+            (false, ProcessState::Running, true),
+            (true, ProcessState::Unknown, true),
+            (true, ProcessState::Ended, true),
+            (true, ProcessState::Running, false),
+        ] {
+            assert!(!retain_while_locked(
+                &CLAUDE_APP,
+                Some(&card),
+                locked,
+                process,
+                ax
+            ));
+        }
+        assert!(!retain_while_locked(
+            &CLAUDE_APP,
+            None,
+            true,
+            ProcessState::Running,
+            true
+        ));
+        assert!(!retain_while_locked(
+            &crate::profile::CODEX_APP,
+            Some(&card),
+            true,
+            ProcessState::Running,
+            true
+        ));
+    }
+
     fn fixture() -> AxTree {
         let mut tree = AxTree {
             complete: true,

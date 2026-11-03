@@ -283,6 +283,8 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         messages: cached.messages,
         history_start: None,
         interactions: Vec::new(),
+        approval_refresh_attempted: false,
+        approval_refresh_pending: false,
         has_earlier: cached.has_more,
         sending: false,
         responding_interaction: String::new(),
@@ -422,6 +424,8 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
     match &mut state.chat {
         Some(chat) if chat.device == device && chat.session.id == session_id => {
             chat.watch = Some(watch);
+            chat.approval_refresh_attempted = false;
+            chat.approval_refresh_pending = false;
         }
         _ => return,
     }
@@ -1002,6 +1006,11 @@ pub(super) fn msg_agent_event(
             }
         }
         v1::agent_event::Ev::State(s) => {
+            if !chat.approval_refresh_pending
+                && matches!(s.state.as_str(), "running" | "idle" | "ended")
+            {
+                chat.approval_refresh_attempted = false;
+            }
             if s.state != "waiting_approval" {
                 // Question lifetime is tied to a provider result, not
                 // transient process/AX activity (including locked use).
@@ -1052,6 +1061,7 @@ pub(super) fn msg_agent_event(
     if messages_changed {
         chat.cache_dirty = true;
     }
+    super::approval_cards::schedule(state, ctx, token);
     // A new message or queue row can account for a send this client made.
     super::admitted::settle(state);
     if let Some((title, body, session)) = notify {

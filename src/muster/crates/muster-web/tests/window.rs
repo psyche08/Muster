@@ -53,7 +53,10 @@ fn page() -> Reply {
                 "strict-transport-security".into(),
                 "max-age=63072000".into(),
             ),
-            ("content-security-policy".into(), "default-src 'self'".into()),
+            (
+                "content-security-policy".into(),
+                "default-src 'self'".into(),
+            ),
             ("set-cookie".into(), "session=secret; Path=/".into()),
         ],
         body: b"Muster!".to_vec(),
@@ -189,7 +192,11 @@ async fn the_window_is_a_socket_only_its_user_can_open() {
     let Opened { window, _dir } = open(stub.clone()).await;
 
     let mode = |path: &std::path::Path| {
-        std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+        std::fs::metadata(path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777
     };
     assert_eq!(mode(window.socket()), 0o600);
     assert_eq!(mode(window.socket().parent().expect("a directory")), 0o700);

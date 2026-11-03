@@ -156,9 +156,8 @@ impl Request {
                 for (name, value) in headers {
                     ensure!(
                         !name.is_empty()
-                            && name
-                                .bytes()
-                                .all(|b| b.is_ascii_lowercase() || b"!#$%&'*+-.^_`|~0123456789".contains(&b)),
+                            && name.bytes().all(|b| b.is_ascii_lowercase()
+                                || b"!#$%&'*+-.^_`|~0123456789".contains(&b)),
                         "invalid header name"
                     );
                     // The browser decides who the request is: a caller does not

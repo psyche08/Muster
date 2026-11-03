@@ -2285,6 +2285,9 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
             session: r.session,
         }),
         Req::AgentInspect(r) => {
+            // Observe before the covered read completes, not on a later poll
+            // that may run only after the console has relocked.
+            agent.refresh_interactions(&r.session).await?;
             let agent = agent.clone();
             let text = muster_agent::control_guard::spawn_blocking(move || {
                 agent.question_diagnostic(&r.session)

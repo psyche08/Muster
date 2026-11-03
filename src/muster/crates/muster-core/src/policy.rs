@@ -322,7 +322,14 @@ mod tests {
         let locked = TargetState { locked: true };
 
         assert!(
-            authorize(roster.state(), &phone, &read, &policy, &TargetState::default()).is_allow()
+            authorize(
+                roster.state(),
+                &phone,
+                &read,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
         );
         assert_eq!(
             authorize(roster.state(), &phone, &read, &policy, &locked),

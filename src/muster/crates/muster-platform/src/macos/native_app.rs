@@ -1592,12 +1592,27 @@ impl NativeAppController {
                 self.unconfirmed.reconcile();
             }
             // Losing an AX surface (tab switch, lock or TCC change) is not a process exit.
+            if self.retain_locked_approval() {
+                // The verified process is still running. Preserve display only;
+                // respond always re-observes after the protected unlock.
+                continue;
+            }
             if screen_locked() || !ax::trusted() || self.check_identity().is_err() {
                 self.unobserve(SessionState::Unknown).await;
                 continue;
             }
             self.observe().await;
         }
+    }
+
+    fn retain_locked_approval(&self) -> bool {
+        muster_agent::native_approval::retain_while_locked(
+            self.profile,
+            self.shared.lock().unwrap().interaction.as_ref(),
+            screen_locked(),
+            self.process_state(),
+            ax::trusted(),
+        )
     }
 
     async fn unobserve(&self, state: SessionState) {
@@ -1631,14 +1646,27 @@ impl NativeAppController {
 
     /// Reads the visible state: an enabled Stop control means running,
     /// enabled approval options mean a decision is pending.
-    async fn observe(&self) {
+    async fn observe(&self) -> bool {
         let _observation = self.observation.lock().await;
         let web_area = self.surface.lock().unwrap().web_area.clone();
         let controls = self.profile.controls();
-        let (tree, elements) = super::native_chat::approval_snapshot(&web_area);
+        let snapshot = muster_agent::control_guard::spawn_blocking(move || {
+            super::native_chat::approval_snapshot(&web_area)
+        })
+        .await;
+        let Ok((tree, elements)) = snapshot else {
+            if !self.retain_locked_approval() {
+                self.unobserve(SessionState::Unknown).await;
+            }
+            return false;
+        };
         if !tree.complete {
-            self.unobserve(SessionState::Unknown).await;
-            return;
+            // Lock may have arrived during the read. Keep display, never grant
+            // authority from this partial snapshot (respond checks the result).
+            if !self.retain_locked_approval() {
+                self.unobserve(SessionState::Unknown).await;
+            }
+            return false;
         }
         let stop = tree
             .nodes
@@ -1755,6 +1783,7 @@ impl NativeAppController {
         for event in to_send {
             let _ = self.events.send((self.session.clone(), event)).await;
         }
+        true
     }
 }
 
@@ -2444,7 +2473,11 @@ impl Controller for NativeAppController {
             self.app
                 .query_renderer(&self.surface.lock().unwrap().web_area);
         }
-        self.observe().await;
+        if !self.observe().await {
+            return Err(Error::Unavailable(
+                "Cannot refresh the permission card; no press sent".into(),
+            ));
+        }
         let button = {
             let shared = self.shared.lock().unwrap();
             match &shared.interaction {
@@ -2478,6 +2511,23 @@ impl Controller for NativeAppController {
             ))
         })?;
         self.observe().await;
+        Ok(())
+    }
+
+    async fn refresh_interactions(&self) -> Result<(), Error> {
+        self.check_identity()?;
+        if screen_locked() {
+            return Err(Error::Unavailable(
+                "Interaction observation needs a protected unlocked console".into(),
+            ));
+        }
+        self.app
+            .query_renderer(&self.surface.lock().unwrap().web_area);
+        if !self.observe().await {
+            return Err(Error::Unavailable(
+                "The permission-card observation was incomplete".into(),
+            ));
+        }
         Ok(())
     }
 

@@ -179,6 +179,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0099](0099-local-claude-identity-and-permission-cards.md) | Accepted; device acceptance pending | Local Claude UUID mapping and fresh permission cards |
 
+| [0100](0100-locked-claude-permission-cards.md) | Accepted; verification pending | Observe and retain local Claude permission cards across lock |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

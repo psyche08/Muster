@@ -78,6 +78,11 @@ pub trait Controller: Send + Sync {
     fn native_surface_ready(&self) -> Result<bool, Error> {
         Ok(false)
     }
+    /// Refresh provider interactions inside the existing authorized inspection.
+    /// Never chooses an option, edits a draft or submits anything.
+    async fn refresh_interactions(&self) -> Result<(), Error> {
+        Ok(())
+    }
     /// Read-only check of the native question controls. Never chooses/submits.
     fn question_diagnostic(&self) -> Result<String, Error> {
         Err(Error::Unavailable(
