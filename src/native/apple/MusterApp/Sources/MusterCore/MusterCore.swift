@@ -154,6 +154,9 @@ public final class MusterCore: MusterShell {
 
     public func openAgents(device: String = "") { send(.openAgents(Muster_App_OpenAgents.with { $0.deviceID = device })) }
 
+    public func agentOrganize(_ rowKey: String, action: Muster_V1_AgentOrganizeRequest.Action, section: String = "", name: String = "") {
+        send(.agentOrganize(Muster_App_AgentOrganize.with { $0.rowKey = rowKey; $0.action = action; $0.sectionID = section; $0.name = name }))
+    }
     public func agentCatalogAction(_ kind: Muster_App_AgentCatalogAction.Kind, value: String) {
         send(.agentCatalogAction(Muster_App_AgentCatalogAction.with { $0.kind = kind; $0.value = value }))
     }

@@ -97,6 +97,11 @@ pub trait Controller: Send + Sync {
             "Model and effort choices are unavailable for this controller".into(),
         ))
     }
+    async fn organize(&self, _plan: &crate::organization::Plan) -> Result<(), Error> {
+        Err(Error::Unavailable(
+            "Native organization is unavailable for this controller".into(),
+        ))
+    }
     async fn complete(&self) -> Result<String, Error> {
         Err(Error::Unavailable(
             "Native prompt completion is unavailable".into(),

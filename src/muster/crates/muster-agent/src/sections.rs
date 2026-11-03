@@ -17,6 +17,7 @@ pub(crate) struct Catalog {
     pub members: HashMap<(String, String), (String, i64)>,
     pub notices: Vec<(String, String)>,
     pub pinned: HashSet<(String, String)>,
+    pub titles: HashMap<(String, String), String>,
 }
 impl Catalog {
     pub fn apply(&self, session: &mut AgentSession) {
@@ -30,6 +31,61 @@ impl Catalog {
             session.section_id = id.clone();
             session.section_position = *position;
         }
+    }
+}
+fn read_title_file(path: &Path) -> Option<String> {
+    if std::fs::metadata(path).ok()?.len() > 4 << 20 {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    value["title"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_owned)
+}
+
+/// One UUID's current native label, never a title-based session lookup.
+pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Option<String> {
+    if !is_uuid(id) {
+        return None;
+    }
+    match provider {
+        "codex" => {
+            let db = Connection::open_with_flags(
+                config.codex_home.as_ref()?.join("state_5.sqlite"),
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .ok()?;
+            db.busy_timeout(Duration::from_millis(100)).ok()?;
+            db.query_row(
+                "SELECT title FROM threads WHERE id=?1 AND archived=0",
+                [id],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        }
+        "claude" => {
+            let root = config.claude_desktop.as_ref()?;
+            let desktop = claude_identity::desktop_for_cli(root, id)?;
+            let mut matches = Vec::new();
+            for org in std::fs::read_dir(root).ok()?.flatten() {
+                if !org.file_type().ok()?.is_dir() {
+                    continue;
+                }
+                for account in std::fs::read_dir(org.path()).ok()?.flatten() {
+                    let path = account.path().join(format!("{desktop}.json"));
+                    if path.is_file() {
+                        matches.push(path);
+                    }
+                }
+            }
+            match matches.as_slice() {
+                [one] => read_title_file(one),
+                _ => None,
+            }
+        }
+        _ => None,
     }
 }
 pub(crate) fn read(config: &AgentConfig) -> Catalog {
@@ -58,6 +114,7 @@ fn merge(out: &mut Catalog, c: Catalog) {
     out.sections.extend(c.sections);
     out.members.extend(c.members);
     out.pinned.extend(c.pinned);
+    out.titles.extend(c.titles);
 }
 fn section(
     provider: &str,
@@ -88,13 +145,17 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
     for row in q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
         let (id, name) = row?;
         if !id.is_empty() {
-            out.sections.push(section(
+            let mut g = section(
                 "codex",
                 format!("section:{id}"),
                 name,
                 out.sections.len() as i64,
                 false,
-            ));
+            );
+            if id == crate::catalog::CODEX_PINNED_SECTION {
+                g.kind = "pin".into();
+            }
+            out.sections.push(g);
         }
     }
     let mut q =
@@ -107,13 +168,15 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
         ))
     })? {
         let (id, name, pos) = row?;
-        out.sections.push(section(
+        let mut g = section(
             "codex",
             format!("project:{id}"),
             name,
             1000_i64.saturating_add(pos),
             false,
-        ));
+        );
+        g.kind = "project".into();
+        out.sections.push(g);
     }
     let known: HashSet<_> = out.sections.iter().map(|s| s.id.clone()).collect();
     let mut q = tx.prepare("SELECT id, thread_section_id, project_id, section_position FROM threads WHERE archived = 0 LIMIT 100001")?;
@@ -132,18 +195,32 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
         if is_uuid(&id)
             && let Some(group) = group.filter(|s| known.contains(s))
         {
+            if group == format!("section:{}", crate::catalog::CODEX_PINNED_SECTION) {
+                out.pinned.insert(("codex".into(), id.clone()));
+            }
             out.members
                 .insert(("codex".into(), id), (group, pos.unwrap_or(i64::MAX)));
         }
     }
     // Older provider schemas may not have this column. Missing pin metadata
     // must not discard otherwise valid native sections.
-    if let Ok(mut q) =
-        tx.prepare("SELECT id FROM threads WHERE archived=0 AND is_pinned=1 LIMIT 100001")
+    if !out.sections.iter().any(|g| g.kind == "pin")
+        && let Ok(mut q) =
+            tx.prepare("SELECT id FROM threads WHERE archived=0 AND is_pinned=1 LIMIT 100001")
         && let Ok(rows) = q.query_map([], |r| r.get::<_, String>(0))
     {
         for id in rows.flatten().filter(|id| is_uuid(id)) {
             out.pinned.insert(("codex".into(), id));
+        }
+    }
+    if let Ok(mut q) = tx.prepare("SELECT id,title FROM threads WHERE archived=0 LIMIT 100001")
+        && let Ok(rows) = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+    {
+        for (id, title) in rows
+            .flatten()
+            .filter(|(id, title)| is_uuid(id) && !title.trim().is_empty())
+        {
+            out.titles.insert(("codex".into(), id), title);
         }
     }
     codex_projects(home, &tx, &mut out);
@@ -332,6 +409,9 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             && mapping.iter().filter(|(_, c)| c == cli).count() == 1
         {
             ids.insert(desktop.as_str(), cli.as_str());
+            if let Some(title) = read_title_file(&account.join(format!("{desktop}.json"))) {
+                out.titles.insert(("claude".into(), cli.clone()), title);
+            }
         }
     }
     let mut assigned = HashSet::new();

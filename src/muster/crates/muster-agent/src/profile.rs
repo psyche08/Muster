@@ -395,6 +395,8 @@ pub struct Capabilities {
     pub chat: bool,
     /// Native agent and Chat modes offer model and effort choices.
     pub model_options: bool,
+    /// Native organization through AX with file confirmation.
+    pub organization: bool,
 }
 
 /// A condition on one field of a JSON record, addressed by a dotted path.

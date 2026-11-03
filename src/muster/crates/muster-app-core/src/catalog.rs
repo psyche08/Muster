@@ -4,7 +4,9 @@ use muster_proto::{
     app::{AgentCatalogRow, AgentCatalogSection},
     v1::AgentSession,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+#[cfg(test)]
+use std::collections::HashSet;
 pub(crate) fn row_key(s: &AgentSession) -> String {
     serde_json::to_string(&(&s.device_id, &s.provider, &s.id)).unwrap()
 }
@@ -18,6 +20,7 @@ fn parent<'a>(
     let key = serde_json::to_string(&(&s.device_id, &s.provider, &s.parent_session_id)).unwrap();
     all.get(&key).copied().filter(|p| p.id != s.id)
 }
+#[cfg(test)]
 fn ancestors<'a>(
     s: &'a AgentSession,
     all: &'a HashMap<String, &AgentSession>,
@@ -44,47 +47,85 @@ fn native_section<'a>(
         .iter()
         .find(|g| g.device_id == s.device_id && g.provider == s.provider && g.id == s.section_id)
 }
-fn category(state: &State, s: &AgentSession) -> usize {
-    let kind = native_section(state, s)
-        .map(|g| g.kind.as_str())
-        .unwrap_or("");
-    // Compatibility with the typed IDs emitted by older Claude readers. Never
-    // use a section's user-editable label to infer pin or recent semantics.
-    let legacy_claude = s.provider == "claude" && kind.is_empty();
-    if s.pinned || kind == "pin" || (legacy_claude && s.section_id.ends_with(":pinned")) {
-        0
-    } else if s.section_id.is_empty()
-        || kind == "recent"
-        || (legacy_claude && s.section_id.ends_with(":sessions"))
-    {
-        2
-    } else {
-        1
-    }
-}
 pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCatalogSection> {
+    use muster_agent::catalog::{PAGE_SIZE, display_key, family_roots, group};
     let searching = !state.agents.query.trim().is_empty();
     let all: HashMap<_, _> = sessions.iter().map(|s| (row_key(s), s)).collect();
-    let mut groups: Vec<_> = [("pin", "Pin"), ("section", "Section"), ("recent", "Recent")]
-        .into_iter()
-        .map(|(id, title)| {
-            let key = format!("catalog:{id}");
-            AgentCatalogSection {
+    let families = family_roots(sessions);
+    let mut projected = std::collections::BTreeMap::<String, AgentCatalogSection>::new();
+    let mut add = |g: muster_proto::v1::AgentCatalogGroup, remote: bool| {
+        let key = display_key(&g);
+        let p = projected
+            .entry(key.clone())
+            .or_insert_with(|| AgentCatalogSection {
+                key: key.clone(),
+                title: g.title.clone(),
+                kind: g.kind.clone(),
                 expanded: searching || *state.agent_disclosures.get(&key).unwrap_or(&true),
-                key,
+                loading_more: state
+                    .agent_catalog_pending
+                    .get(&key)
+                    .is_some_and(|n| *n > 0),
+                ..Default::default()
+            });
+        if remote {
+            p.count += g.count;
+            p.has_more |= !g.next_cursor.is_empty();
+        }
+        if p.kind != g.kind && !matches!(p.kind.as_str(), "pin" | "recent") {
+            p.kind = "mixed".into();
+        }
+    };
+    for (kind, title) in [("pin", "Pin"), ("recent", "Recent")] {
+        add(
+            muster_proto::v1::AgentCatalogGroup {
+                kind: kind.into(),
                 title: title.into(),
                 ..Default::default()
+            },
+            false,
+        );
+    }
+    if !searching {
+        for g in &state.agent_catalog_groups {
+            if !state.offline(&g.device_id)
+                && (state.agents.device_id.is_empty()
+                    || state.agents.device_id == "*"
+                    || state.agents.device_id == g.device_id)
+            {
+                add(g.clone(), true);
             }
-        })
-        .collect();
+        }
+        for sec in &state.agents.native_sections {
+            if state.offline(&sec.device_id)
+                || !(state.agents.device_id.is_empty()
+                    || state.agents.device_id == "*"
+                    || state.agents.device_id == sec.device_id)
+            {
+                continue;
+            }
+            add(
+                group(
+                    &AgentSession {
+                        provider: sec.provider.clone(),
+                        section_id: sec.id.clone(),
+                        device_id: sec.device_id.clone(),
+                        ..Default::default()
+                    },
+                    &state.agents.native_sections,
+                ),
+                false,
+            );
+        }
+    }
     let mut roots = Vec::new();
     let mut children: HashMap<String, Vec<&AgentSession>> = HashMap::new();
     for s in sessions {
-        // Keep native families within a category. A pinned child must remain
-        // visible under Pin even when its unpinned parent's family is collapsed.
-        let chain = ancestors(s, &all);
-        if !searching && !chain.is_empty() && category(state, s) == category(state, chain[0]) {
-            children.entry(row_key(chain[0])).or_default().push(s);
+        let own = row_key(s);
+        if !searching && families[&own] != own {
+            if let Some(p) = parent(s, &all) {
+                children.entry(row_key(p)).or_default().push(s);
+            }
         } else {
             roots.push(s);
         }
@@ -100,46 +141,128 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
     for list in children.values_mut() {
         sort(list);
     }
+    let mut seen: HashMap<String, usize> = HashMap::new();
     for root in roots {
-        let idx = category(state, root);
+        let g = group(root, &state.agents.native_sections);
+        let key = display_key(&g);
+        add(g, false);
+        *seen.entry(key).or_default() += 1;
+    }
+    let mut shown: HashMap<String, usize> = HashMap::new();
+    let mut roots: Vec<_> = sessions
+        .iter()
+        .filter(|s| searching || families[&row_key(s)] == row_key(s))
+        .collect();
+    sort(&mut roots);
+    for root in roots {
+        let key = display_key(&group(root, &state.agents.native_sections));
+        let limit = *state.agent_catalog_limits.get(&key).unwrap_or(&PAGE_SIZE);
+        let used = shown.entry(key.clone()).or_default();
+        if *used >= limit {
+            continue;
+        }
+        *used += 1;
         append(
             root,
             0,
             &children,
             &all,
             &state.agent_disclosures,
-            &mut groups[idx],
+            projected.get_mut(&key).unwrap(),
             searching,
         );
     }
-    for group in &mut groups {
-        for row in &mut group.rows {
-            let Some(session) = &row.session else {
+    for (key, g) in &mut projected {
+        let available = seen.get(key).copied().unwrap_or(0);
+        if searching || state.agent_catalog_groups.is_empty() {
+            g.count = available as u32;
+        }
+        g.has_more |= available > *state.agent_catalog_limits.get(key).unwrap_or(&PAGE_SIZE);
+        g.subtitle = match g.kind.as_str() {
+            "section" => "Section group",
+            "project" => "Project Group",
+            "mixed" => "Section group / Project Group",
+            _ => "",
+        }
+        .into();
+        for row in &mut g.rows {
+            let Some(s) = &row.session else {
                 continue;
             };
-            let device = if session.device_name.is_empty() {
-                &session.device_id
+            let device = if s.device_name.is_empty() {
+                &s.device_id
             } else {
-                &session.device_name
+                &s.device_name
             };
-            let mut origin = vec![provider_title(&session.provider)];
+            let mut origin = vec![provider_title(&s.provider)];
             if !device.is_empty() {
                 origin.push(device.clone());
             }
-            if let Some(section) = native_section(state, session)
-                && section.kind != "recent"
-                && section.kind != "pin"
-                && !(section.kind.is_empty()
-                    && session.provider == "claude"
-                    && (section.id.ends_with(":sessions") || section.id.ends_with(":pinned")))
-                && !section.title.is_empty()
+            if let Some(sec) = native_section(state, s)
+                && matches!(sec.kind.as_str(), "section" | "project")
+                && !sec.title.is_empty()
             {
-                origin.push(section.title.clone());
+                origin.push(sec.title.clone());
             }
             row.source_label = origin.join(" · ");
+            row.can_organize = can_organize(state, s);
+            row.organizing = state.agent_organizing.contains(&row.key);
+            row.destinations = destinations(state, s);
+            row.removable_section = row
+                .destinations
+                .iter()
+                .find(|d| d.section_id == s.section_id)
+                .map(|d| d.section_id.clone())
+                .unwrap_or_default();
         }
     }
-    groups
+    for sec in &state.agents.native_sections {
+        if !matches!(sec.kind.as_str(), "section" | "project") {
+            continue;
+        }
+        let Some(anchor) = state.agents.sessions.iter().find(|s| {
+            s.device_id == sec.device_id
+                && s.provider == sec.provider
+                && can_organize(state, s)
+                && destinations(state, s)
+                    .iter()
+                    .any(|d| d.section_id == sec.id)
+        }) else {
+            continue;
+        };
+        let key = display_key(&group(
+            &AgentSession {
+                provider: sec.provider.clone(),
+                section_id: sec.id.clone(),
+                device_id: sec.device_id.clone(),
+                ..Default::default()
+            },
+            &state.agents.native_sections,
+        ));
+        if let Some(g) = projected.get_mut(&key) {
+            g.native_targets
+                .push(muster_proto::app::AgentOrganizationTarget {
+                    key: serde_json::to_string(&(&anchor.device_id, &anchor.provider, &sec.id))
+                        .unwrap(),
+                    row_key: row_key(anchor),
+                    section_id: sec.id.clone(),
+                    title: format!(
+                        "{} · {} · {}",
+                        provider_title(&sec.provider),
+                        anchor.device_name,
+                        sec.title
+                    ),
+                });
+        }
+    }
+    let mut out: Vec<_> = projected.into_values().collect();
+    let rank = |g: &AgentCatalogSection| match g.kind.as_str() {
+        "pin" => 0,
+        "recent" => 2,
+        _ => 1,
+    };
+    out.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| a.title.cmp(&b.title)));
+    out
 }
 fn provider_title(provider: &str) -> String {
     match provider {
@@ -164,7 +287,6 @@ fn append(
     let key = row_key(s);
     let nested = children.get(&key);
     let expanded = depth > 0 || *disclosures.get(&key).unwrap_or(&true);
-    group.count += 1;
     let parent_title = parent(s, all).map(|p| p.title.clone()).unwrap_or_default();
     if group.expanded {
         group.rows.push(AgentCatalogRow {
@@ -228,13 +350,13 @@ mod tests {
 #[cfg(test)]
 mod projection_tests {
     use super::*;
-    use muster_proto::v1::AgentSection;
-    fn session(id: &str, parent: &str) -> AgentSession {
+    use muster_proto::v1::{AgentCatalogGroup, AgentSection};
+    fn session(id: &str, parent: &str, device: &str) -> AgentSession {
         AgentSession {
             id: id.into(),
             title: "Same".into(),
             provider: "claude".into(),
-            device_id: "host".into(),
+            device_id: device.into(),
             section_id: "custom".into(),
             relationship: "subsession".into(),
             parent_session_id: parent.into(),
@@ -242,163 +364,115 @@ mod projection_tests {
         }
     }
     #[test]
-    fn three_categories_preserve_device_identities_and_native_labels() {
+    fn equal_names_aggregate_without_collapsing_session_or_native_identity() {
         let mut state = State::new(false, Some("host".into()));
         state.agents.device_id = "*".into();
         state.agents.native_sections = ["host", "second"]
             .into_iter()
-            .map(|device| AgentSection {
+            .map(|d| AgentSection {
                 id: "custom".into(),
                 provider: "claude".into(),
-                device_id: device.into(),
-                title: "Same group".into(),
+                device_id: d.into(),
+                title: "Workspace".into(),
+                kind: if d == "host" { "section" } else { "project" }.into(),
                 ..Default::default()
             })
             .collect();
-        let mut old = session("same-id", "");
-        old.device_name = "Mac A".into();
-        old.updated_unix = 1;
-        old.section_position = 0;
-        let mut recent = old.clone();
-        recent.device_id = "second".into();
-        recent.device_name = "Mac B".into();
-        recent.updated_unix = 10;
-        recent.section_position = 99;
-        let mut codex = old.clone();
-        codex.provider = "codex".into();
-        let sessions = [old, recent, codex];
-        for query in ["", "same"] {
-            state.agents.query = query.into();
-            let groups = project(&state, &sessions);
-            assert_eq!(
-                groups.iter().map(|g| g.title.as_str()).collect::<Vec<_>>(),
-                ["Pin", "Section", "Recent"]
-            );
-            let claude = &groups[1];
-            assert_eq!(claude.count, 3);
-            assert_eq!(claude.rows[0].session.as_ref().unwrap().device_id, "second");
-            assert_ne!(claude.rows[0].key, claude.rows[1].key);
-            assert_eq!(claude.rows[0].source_label, "Claude · Mac B · Same group");
-            assert_eq!(claude.rows[1].source_label, "Claude · Mac A · Same group");
-        }
-        state.agents.query.clear();
-        state.agents.device_id = "host".into();
-        let groups = project(&state, &sessions[..1]);
-        assert_eq!(groups.len(), 3);
-        assert_eq!(groups[1].title, "Section");
+        let rows = [session("same", "", "host"), session("same", "", "second")];
+        let groups = project(&state, &rows);
         assert_eq!(
-            groups[1].rows[0].source_label,
-            "Claude · Mac A · Same group"
+            groups.iter().map(|g| g.title.as_str()).collect::<Vec<_>>(),
+            ["Pin", "Workspace", "Recent"]
         );
-    }
-
-    #[test]
-    fn claude_family_is_flat_and_native_sections_do_not_add_subdivisions() {
-        let mut state = State::new(false, Some("host".into()));
-        state.agents.device_id = "host".into();
-        state.agents.native_sections = vec![
-            AgentSection {
-                id: "custom".into(),
-                provider: "claude".into(),
-                device_id: "host".into(),
-                title: "Same".into(),
-                ..Default::default()
-            },
-            AgentSection {
-                id: "other".into(),
-                provider: "claude".into(),
-                device_id: "host".into(),
-                title: "Same".into(),
-                ..Default::default()
-            },
-        ];
-        let sessions = vec![
-            session("root", ""),
-            session("child", "root"),
-            session("grandchild", "child"),
-        ];
-        let groups = project(&state, &sessions);
-        assert_eq!(groups.len(), 3);
-        let group = &groups[1];
-        assert_eq!(group.count, 3);
-        assert_eq!(
-            group.rows.iter().map(|r| r.depth).collect::<Vec<_>>(),
-            vec![0, 1, 1]
-        );
-        assert!(group.rows[0].expandable);
-        assert!(!group.rows[1].expandable);
-        state.agent_disclosures.insert(row_key(&sessions[0]), false);
-        let groups = project(&state, &sessions);
-        let group = groups.iter().find(|g| g.count == 3).unwrap();
-        assert_eq!(group.rows.len(), 1);
-        state.agents.device_id = "other-device".into();
-        assert!(project(&state, &[]).iter().all(|g| g.count == 0));
+        assert_eq!(groups[1].kind, "mixed");
+        assert_eq!(groups[1].count, 2);
+        assert_ne!(groups[1].rows[0].key, groups[1].rows[1].key);
+        assert_eq!(state.agents.native_sections.len(), 2);
     }
     #[test]
-    fn native_pin_precedes_section_and_recent_is_not_a_custom_group() {
+    fn ten_roots_are_shown_with_all_children_and_load_more_advances_ten() {
         let mut state = State::new(false, Some("host".into()));
-        state.agents.native_sections = vec![
-            AgentSection {
-                id: "custom".into(),
-                provider: "claude".into(),
-                device_id: "host".into(),
-                title: "Pinned".into(),
-                kind: "section".into(),
-                collapsed: true,
-                ..Default::default()
-            },
-            AgentSection {
-                id: "default".into(),
-                provider: "claude".into(),
-                device_id: "host".into(),
-                title: "Custom label".into(),
-                kind: "recent".into(),
-                ..Default::default()
-            },
-        ];
-        let root = session("root", "");
-        let mut child = session("child", "root");
-        child.pinned = true;
-        let mut recent = session("recent", "");
-        recent.section_id = "default".into();
-        let mut plain = session("plain", "");
-        plain.section_id.clear();
-        state.agent_disclosures.insert(row_key(&root), false);
-        let sessions = [root, child, recent, plain];
-        for device in ["*", "host"] {
-            state.agents.device_id = device.into();
-            for query in ["", "needle"] {
-                state.agents.query = query.into();
-                let groups = project(&state, &sessions);
-                assert_eq!(
-                    groups.iter().map(|g| g.count).collect::<Vec<_>>(),
-                    [1, 1, 2]
-                );
-                assert_eq!(groups[0].rows[0].session.as_ref().unwrap().id, "child");
-                assert_eq!(groups[0].rows[0].depth, 0);
-                assert!(groups[1].expanded); // native collapsed flag is not a subdivision
-                assert_eq!(groups[1].rows[0].session.as_ref().unwrap().id, "root");
+        state.agents.native_sections = vec![AgentSection {
+            id: "custom".into(),
+            provider: "claude".into(),
+            device_id: "host".into(),
+            title: "Work".into(),
+            kind: "section".into(),
+            ..Default::default()
+        }];
+        let mut rows = Vec::new();
+        for i in 0..21 {
+            let id = format!("r{i:02}");
+            rows.push(session(&id, "", "host"));
+            for j in 0..3 {
+                rows.push(session(&format!("c{i:02}-{j}"), &id, "host"));
             }
         }
-        state.agents.query.clear();
-        state
-            .agent_disclosures
-            .insert("catalog:section".into(), false);
-        let groups = project(&state, &sessions);
-        assert_eq!(groups[1].count, 1);
-        assert!(groups[1].rows.is_empty());
-        assert_eq!(groups[0].rows.len(), 1);
+        let groups = project(&state, &rows);
+        let g = &groups[1];
+        assert_eq!(g.count, 21);
+        assert_eq!(g.rows.len(), 40);
+        assert!(g.has_more);
+        assert_eq!(g.rows.iter().filter(|r| r.depth == 0).count(), 10);
+        state.agent_catalog_limits.insert(g.key.clone(), 20);
+        let groups = project(&state, &rows);
+        assert_eq!(groups[1].rows.len(), 80);
+        assert_eq!(groups[1].rows.iter().filter(|r| r.depth == 0).count(), 20);
     }
-
     #[test]
-    fn older_peers_use_native_ids_not_section_titles() {
-        let state = State::new(false, Some("host".into()));
-        let mut s = session("one", "");
-        s.section_id = "scope:sessions".into();
-        assert_eq!(category(&state, &s), 2);
-        s.section_id = "scope:pinned".into();
-        assert_eq!(category(&state, &s), 0);
-        s.provider = "codex".into();
-        assert_eq!(category(&state, &s), 1);
+    fn server_totals_and_continuations_include_unloaded_roots() {
+        let mut state = State::new(false, Some("host".into()));
+        state.agent_catalog_groups = vec![AgentCatalogGroup {
+            key: "recent".into(),
+            title: "Recent".into(),
+            kind: "recent".into(),
+            device_id: "host".into(),
+            count: 42,
+            next_cursor: "cursor".into(),
+            ..Default::default()
+        }];
+        let mut s = session("one", "", "host");
+        s.section_id.clear();
+        let groups = project(&state, &[s]);
+        let g = groups.iter().find(|g| g.kind == "recent").unwrap();
+        assert_eq!(g.count, 42);
+        assert!(g.has_more);
+        assert_eq!(g.rows.len(), 1);
     }
+}
+
+pub(crate) fn can_organize(state: &State, s: &AgentSession) -> bool {
+    !s.read_only
+        && s.mode == "code"
+        && muster_agent::viewer::is_uuid(&s.id)
+        && matches!(s.provider.as_str(), "codex" | "claude")
+        && !state.offline(&s.device_id)
+}
+pub(crate) fn destinations(
+    state: &State,
+    s: &AgentSession,
+) -> Vec<muster_proto::app::AgentOrganizationTarget> {
+    let scope = if s.provider == "claude" {
+        s.section_id.rsplit_once(':').map(|(scope, _)| scope)
+    } else {
+        None
+    };
+    state
+        .agents
+        .native_sections
+        .iter()
+        .filter(|g| {
+            g.device_id == s.device_id
+                && g.provider == s.provider
+                && matches!(g.kind.as_str(), "section" | "project")
+                && (s.provider != "claude"
+                    || scope.is_some_and(|scope| g.id.starts_with(&format!("{scope}:"))))
+        })
+        .map(|g| muster_proto::app::AgentOrganizationTarget {
+            key: serde_json::to_string(&(&s.device_id, &s.provider, &g.id)).unwrap(),
+            row_key: row_key(s),
+            section_id: g.id.clone(),
+            title: g.title.clone(),
+        })
+        .collect()
 }

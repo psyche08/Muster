@@ -1181,3 +1181,53 @@ async fn index_only_rename_pushes_without_waiting_for_periodic_rescan() {
     .await
     .unwrap();
 }
+
+#[tokio::test]
+async fn entry_refresh_uses_native_uuid_title_and_survives_a_sidebar_rescan() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("claude");
+    let project = home.join("projects/repo");
+    let registry = dir.path().join("desktop");
+    let account = registry.join("org/user");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::create_dir_all(&account).unwrap();
+    let id = "11111111-1111-4111-8111-111111111111";
+    std::fs::write(project.join(format!("{id}.jsonl")),format!("{{\"type\":\"custom-title\",\"customTitle\":\"Transcript name\",\"sessionId\":\"{id}\"}}\n")).unwrap();
+    let path = account.join(format!("local_{id}.json"));
+    let rename = |name: &str| {
+        std::fs::write(&path,serde_json::json!({"sessionId":format!("local_{id}"),"cliSessionId":id,"title":name,"isArchived":false}).to_string()).unwrap()
+    };
+    rename("Native name");
+    let service = AgentService::start(AgentConfig {
+        codex_home: None,
+        claude_home: Some(home),
+        claude_desktop: Some(registry),
+        catdesk_home: None,
+        deepseek_home: None,
+        poll: Duration::from_secs(60),
+        rescan: Duration::from_secs(60),
+        ..Default::default()
+    });
+    service.rescan().await;
+    let mut events = service.subscribe();
+    service.refresh_session_metadata(id).await;
+    assert_eq!(service.session(id).unwrap().title, "Native name");
+    let event = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if let Event::State(s) = events.recv().await.unwrap() {
+                break s;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(event.id, id);
+    assert_eq!(event.title, "Native name");
+    // No active-account sidebar file is present: a scan must not regress to
+    // the transcript's older custom-title record.
+    service.rescan().await;
+    assert_eq!(service.session(id).unwrap().title, "Native name");
+    rename("Renamed natively");
+    service.refresh_session_metadata(id).await;
+    assert_eq!(service.session(id).unwrap().title, "Renamed natively");
+}

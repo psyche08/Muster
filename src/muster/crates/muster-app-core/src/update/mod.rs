@@ -156,6 +156,17 @@ pub enum Msg {
         device: String,
         result: Result<v1::AgentSessionPage, Error>,
     },
+    Organized {
+        key: String,
+        result: Result<Resp, Error>,
+    },
+    CatalogMore {
+        epoch: u64,
+        device: String,
+        display: String,
+        group: String,
+        result: Result<v1::AgentSessionPage, Error>,
+    },
     Agents {
         epoch: u64,
         device: String,
@@ -372,6 +383,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::CancelLockedUse(_) => cancel_locked(state, ctx, CancelReason::User),
         It::OrcaCreate(o) => orca::create(state, ctx, o),
         It::AgentCatalogAction(a) => catalog::intent(state, ctx, a),
+        It::AgentOrganize(a) => catalog::organize(state, ctx, a),
         It::OpenAgents(o) => agents::intent_open_agents(state, ctx, o),
         It::OpenAgent(o) => agents::intent_open_agent(state, ctx, o),
         It::OpenDesktopChats(o) => open_desktop_chats(state, ctx, o.provider),
@@ -579,6 +591,7 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
                     Req::AgentComplete(r) => r.op_id = id.clone(),
                     Req::AgentInspect(r) => r.op_id = id.clone(),
                     Req::AgentChatSetOptions(r) => r.op_id = id.clone(),
+                    Req::AgentOrganize(r) => r.op_id = id.clone(),
                     _ => {
                         let _ = reply.send(Err(unexpected()));
                         return;
@@ -636,6 +649,14 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             result,
         } => catalog::result(state, epoch, device, result),
+        Msg::Organized { key, result } => catalog::organized(state, ctx, key, result),
+        Msg::CatalogMore {
+            epoch,
+            device,
+            display,
+            group,
+            result,
+        } => catalog::more_result(state, ctx, epoch, device, display, group, result),
         Msg::Agents {
             epoch,
             device,

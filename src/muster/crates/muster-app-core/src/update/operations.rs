@@ -256,6 +256,14 @@ pub(super) fn op_request_from(
             if what == "chat" {
                 let id = response_origin.as_ref().ok_or_else(unexpected)?.1.clone();
                 let result = match response {
+                    Ok(Resp::OpResult(r))
+                        if matches!(
+                            v1::op_result::Status::try_from(r.status),
+                            Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)
+                        ) =>
+                    {
+                        Ok(Resp::OpResult(r))
+                    }
                     Ok(Resp::OpResult(r)) => Err(Error::Unavailable(if r.message.is_empty() {
                         "Chat operation did not complete".into()
                     } else {

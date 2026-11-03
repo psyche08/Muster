@@ -6,6 +6,7 @@
 
 pub mod attachments;
 mod cache;
+pub mod catalog;
 pub mod catdesk;
 pub mod catdesk_app;
 pub mod catdesk_ui;
@@ -30,12 +31,14 @@ pub mod model;
 pub mod native_approval;
 pub mod native_navigation;
 pub mod native_options;
+pub mod native_organization;
 pub mod native_scan;
 pub mod native_send;
 pub mod native_sidebar;
 pub mod native_step;
 pub mod native_tree;
 pub mod orca;
+pub mod organization;
 pub mod plugin_control;
 pub mod prediction;
 pub mod profile;
@@ -912,6 +915,33 @@ impl AgentService {
         }
     }
 
+    /// Refresh the native title on entry without waiting for history parsing or
+    /// scanning unrelated transcripts. Missing native names retain the fallback.
+    pub async fn refresh_session_metadata(&self, id: &str) {
+        let Some(provider) = self.session(id).map(|s| s.provider) else {
+            return;
+        };
+        let config = self.config.clone();
+        let target = id.to_owned();
+        let p = provider.clone();
+        let title =
+            tokio::task::spawn_blocking(move || sections::native_title(&config, &p, &target))
+                .await
+                .ok()
+                .flatten();
+        if let Some(title) = title {
+            self.inner
+                .lock()
+                .unwrap()
+                .sections
+                .titles
+                .insert((provider, id.into()), title);
+            if let Some(session) = self.session(id) {
+                let _ = self.events.send(Event::State(session));
+            }
+        }
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
     }
@@ -1010,7 +1040,7 @@ impl AgentService {
         let config = self.config.clone();
         let cache = self.inner.lock().unwrap().catalog.clone();
         let heads = self.heads.clone();
-        let (found, sections) = tokio::task::spawn_blocking(move || {
+        let (found, mut sections) = tokio::task::spawn_blocking(move || {
             (
                 Self::scan_all(&config, &cache, &heads),
                 sections::read(&config),
@@ -1037,6 +1067,17 @@ impl AgentService {
                     && let Some(project) = inner.projects.get(id)
                 {
                     d.meta.cwd = project.clone();
+                }
+            }
+            // A sidebar can expose only the active Claude account. Retain a
+            // UUID title refreshed on entry until that source supplies a newer
+            // label; never replace it with a transcript's first user message.
+            for (key, title) in &inner.sections.titles {
+                if new_catalog.contains_key(&key.1) {
+                    sections
+                        .titles
+                        .entry(key.clone())
+                        .or_insert_with(|| title.clone());
                 }
             }
             let changed = sections != inner.sections
@@ -1408,6 +1449,13 @@ impl AgentService {
 
     /// Codex uses its current index; transcript-named providers use their viewer.
     fn title_locked<'a>(inner: &'a Inner, d: &'a Discovered) -> &'a str {
+        if let Some(title) = inner
+            .sections
+            .titles
+            .get(&(d.provider.as_str().into(), d.id.clone()))
+        {
+            return title;
+        }
         if d.provider == Provider::Codex {
             return &d.meta.title;
         }
@@ -2398,6 +2446,47 @@ impl AgentService {
     }
 
     /// Choices belong to the selected native session, not to a cached transcript.
+    pub async fn organize(
+        &self,
+        request: muster_proto::v1::AgentOrganizeRequest,
+    ) -> Result<String, Error> {
+        let session = self
+            .session(&request.session)
+            .ok_or_else(|| Error::NotFound(request.session.clone()))?;
+        let config = self.config.clone();
+        let requested = request.clone();
+        let plan = control_guard::spawn_blocking(move || {
+            organization::prepare(&config, &session, &requested)
+        })
+        .await
+        .map_err(|e| Error::Unavailable(e.to_string()))??;
+        if plan.no_op {
+            return Ok(request.session);
+        }
+        self.controller(&request.session)?.organize(&plan).await?;
+        let plan = Arc::new(plan);
+        let until = Instant::now() + Duration::from_secs(8);
+        loop {
+            control_guard::check()?;
+            let config = self.config.clone();
+            let read = plan.clone();
+            let confirmed =
+                control_guard::spawn_blocking(move || organization::confirmed(&config, &read))
+                    .await
+                    .map_err(|e| Error::Unavailable(e.to_string()))?;
+            if let Ok(Some(subject)) = confirmed {
+                self.rescan().await;
+                return Ok(subject);
+            }
+            if Instant::now() >= until {
+                return Err(Error::UnknownOutcome(
+                    "Native files did not confirm the action; refresh before retrying".into(),
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+    }
+
     pub async fn model_options(
         &self,
         id: &str,

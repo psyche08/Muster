@@ -25,6 +25,7 @@ interrupt = true
 files = true
 # Chat mode offers model and effort choices.
 model_options = true
+organization = true
 
 # ---------------------------------------------- the transcript record grammar
 # One JSONL transcript per session under $CLAUDE_CONFIG_DIR/projects, read
