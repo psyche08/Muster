@@ -17,6 +17,7 @@ pub mod locked_use;
 pub mod multica;
 pub mod network;
 mod presence;
+pub mod vision;
 pub mod web;
 
 mod diagnostics;
