@@ -442,7 +442,6 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
     let mut out = Catalog::default();
     let mapping = claude_identity::mappings(root)?;
     let mut ids = HashMap::new();
-    let mut explicit_pins = HashMap::new();
     for (desktop, cli) in &mapping {
         // Reject ambiguity in either direction, and other account registries.
         if account.join(format!("{desktop}.json")).is_file()
@@ -460,7 +459,6 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             }
             if let Some(starred) = record.get("isStarred") {
                 let pinned = starred.as_bool()?;
-                explicit_pins.insert(cli.as_str(), pinned);
                 if pinned {
                     out.pinned.insert(("claude".into(), cli.clone()));
                 }
@@ -500,8 +498,9 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
         }
         .into();
         out.sections.push(metadata);
+        // pinnedOrder is presentation order, never proof of membership.
         let members = if kind == "pinned" {
-            state["pinnedOrder"].as_array()
+            None
         } else {
             s["members"].as_array()
         };
@@ -513,13 +512,7 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
                 continue;
             };
             if let Some(cli) = ids.get(desktop) {
-                if kind == "pinned" {
-                    // Older registries lack isStarred. Ordering is only a
-                    // fallback there; explicit false must defeat stale order.
-                    if !explicit_pins.contains_key(cli) {
-                        out.pinned.insert(("claude".into(), (*cli).into()));
-                    }
-                } else if assigned.insert(*cli) {
+                if assigned.insert(*cli) {
                     out.members.insert(
                         ("claude".into(), (*cli).into()),
                         (section_id.clone(), pos as i64),
@@ -726,6 +719,14 @@ mod tests {
                 .pinned
                 .contains(&("claude".into(), B.into()))
         );
+        record.as_object_mut().unwrap().remove("isStarred");
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            !claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
         record["isStarred"] = serde_json::json!("invalid");
         std::fs::write(&file, record.to_string()).unwrap();
         assert!(claude_state(dir.path(), &state).is_none());
@@ -738,7 +739,8 @@ mod tests {
         let desktop = format!("local_{A}");
         std::fs::write(
             account.join(format!("{desktop}.json")),
-            serde_json::json!({"sessionId": desktop, "cliSessionId": B}).to_string(),
+            serde_json::json!({"sessionId": desktop, "cliSessionId": B, "isStarred":true})
+                .to_string(),
         )
         .unwrap();
         let scope = format!("{ORG}/{USER}");
@@ -770,6 +772,13 @@ mod tests {
         c.apply(&mut s);
         assert!(s.pinned);
         claude_state(dir.path(), &unpinned).unwrap().apply(&mut s);
+        assert!(s.pinned); // Reordering does not unpin a native session.
+        std::fs::write(
+            account.join(format!("{desktop}.json")),
+            serde_json::json!({"sessionId":desktop,"cliSessionId":B,"isStarred":false}).to_string(),
+        )
+        .unwrap();
+        claude_state(dir.path(), &state).unwrap().apply(&mut s);
         assert!(!s.pinned);
         assert!(s.section_id.ends_with(":custom"));
     }

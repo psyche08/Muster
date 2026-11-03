@@ -119,8 +119,9 @@ AX-only decision; no provider API or store mutation is an alternative.
 The corrected menu selector executed Pin, but its receipt stayed unknown because
 Claude persists local pin membership as `isStarred` in the UUID-mapped registry
 file. `pinnedOrder` alone is ordering data, not current membership. Read the
-explicit registry boolean first, including false; use legacy ordering only when
-the field is absent. Invalid/unreadable registry state must not confirm unpin.
+explicit registry boolean, including false. A missing field is not a pin;
+ordering cannot establish membership or authorize a no-op. Invalid/unreadable
+registry state must not confirm unpin.
 The native UI and read-only registry confirmed the first Pin was applied, so it
 must not be replayed. Verify unpin/pin transitions on the same test UUID after
 fixing file interpretation, then restore its baseline before archive.
