@@ -206,7 +206,9 @@ and DSH session behavior.
     high-CPU interval was sampled.
 
   Both exercise only the text editor and the stack monitor, which this change
-  does not touch.
+  does not touch. Both failed again when run alone. They were not run against
+  `main`, and this Mac has no iPhone simulator, so the README's iPhone
+  destination was not used.
 
 ### Not yet verified
 
