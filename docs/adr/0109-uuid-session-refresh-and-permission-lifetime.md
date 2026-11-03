@@ -120,3 +120,29 @@ queued-send state and outstanding/unknown response receipts; this is resync,
 not a claim that the provider resolved or executed a command. Cancelled or
 foreign device/provider/session callbacks cannot clear another chat. Version
 1.1.20 (110) carries this follow-up, with focused reducer and stream tests.
+
+## Cold permission-card discovery while locked
+
+This decision already admits one guarded read per view and per later distinct
+waiting episode. The client only rearmed when a session *left* an episode, so an
+episode that opened while the chat stayed open never got its read: the entry read
+had already been spent on the running worker, and an attached controller sees no
+AX window while the console is locked. Treat a waiting boundary between two
+definite provider states as that episode boundary, in both directions, and in
+both the streamed state and list-refresh paths. An unknown state is lost sight of
+the same episode, not a boundary, so it still cannot rearm, and a read already in
+flight owns its episode. The provider's own `waiting` status remains the only
+waiting input; an unfinished `tool_use` in a transcript is never read as a
+pending request, and the card itself still comes only from a fresh AX read.
+
+### Device evidence
+
+On an authorized locked Mac at 1.1.20 (110), with a real unapproved local Claude
+command card pending, restarting the daemon through its launch agent reproduced
+the cold state: a fresh subscription reported the provider's `waiting_approval`
+with no native controller and no card. One signed, covered Locked Use inspection
+then attached the controller and streamed the card with a new interaction id,
+distinct from the pre-restart observation, while `IOConsoleLocked` stayed `Yes`
+throughout. No command was approved or denied. This confirms the daemon-side cold
+path; the client rearm above is covered by focused reducer tests and still needs
+an installed build for device acceptance.

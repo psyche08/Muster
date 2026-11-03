@@ -1203,12 +1203,7 @@ pub(super) fn msg_agent_event(
                     crate::catalog::reconcile_session(listed, &s, false);
                 }
             }
-            if !chat.approval_refresh_pending
-                && chat.session.state == "waiting_approval"
-                && matches!(s.state.as_str(), "running" | "idle" | "ended")
-            {
-                chat.approval_refresh_attempted = false;
-            }
+            super::approval_cards::episode_boundary(chat, &s.state);
             if s.state != "waiting_approval" && s.provider != "claude" {
                 // Question lifetime is tied to a provider result, not
                 // transient process/AX activity (including locked use).
@@ -1252,6 +1247,7 @@ pub(super) fn msg_agent_event(
         }
         v1::agent_event::Ev::ListChanged(page) => {
             if let Some(s) = page.sessions.into_iter().find(|s| s.id == session) {
+                super::approval_cards::episode_boundary(chat, &s.state);
                 chat.session = s;
             }
         }
