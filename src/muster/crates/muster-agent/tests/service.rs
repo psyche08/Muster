@@ -8,7 +8,7 @@ use muster_agent::model::Provider;
 use muster_agent::{AgentConfig, AgentService, Event};
 
 #[tokio::test]
-async fn claude_navigation_uses_current_registry_titles_and_refuses_real_duplicates() {
+async fn claude_navigation_remains_uuid_only_across_renames_and_duplicate_titles() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join("claude");
     let project = home.join("projects/repo");
@@ -16,9 +16,9 @@ async fn claude_navigation_uses_current_registry_titles_and_refuses_real_duplica
     let user = registry.join("org/user");
     std::fs::create_dir_all(&project).unwrap();
     std::fs::create_dir_all(&user).unwrap();
-    let target = "356f09a5-50c5-408f-8960-465d73225098";
-    let other = "177f73c7-3f0f-4beb-9eb1-b455c81a07d9";
-    let title = "1.18.2 客户端 PR 修改覆盖";
+    let target = "11111111-1111-4111-8111-111111111111";
+    let other = "22222222-2222-4222-8222-222222222222";
+    let title = "Example client review";
     for id in [target, other] {
         std::fs::write(
             project.join(format!("{id}.jsonl")),
@@ -46,7 +46,7 @@ async fn claude_navigation_uses_current_registry_titles_and_refuses_real_duplica
         claude_home: Some(home),
         catdesk_home: None,
         deepseek_home: None,
-        claude_desktop: Some(registry),
+        claude_desktop: Some(registry.clone()),
         poll: Duration::from_secs(60),
         rescan: Duration::from_secs(60),
         ..AgentConfig::default()
@@ -55,31 +55,39 @@ async fn claude_navigation_uses_current_registry_titles_and_refuses_real_duplica
     assert!(service.native_session_by_title("claude", title).is_none());
     assert_eq!(
         service.native_navigation_title(target),
-        Some((title.into(), true))
+        Some((String::new(), false))
     );
     assert_eq!(
         service.native_navigation_title(other),
-        Some(("Side chat".into(), true))
+        Some((String::new(), false))
+    );
+    assert_eq!(
+        muster_agent::claude_identity::desktop_for_cli(&registry, target),
+        Some(format!("local_{target}"))
     );
     entry(other, title, false);
     assert_eq!(
+        muster_agent::claude_identity::desktop_for_cli(&registry, target),
+        Some(format!("local_{target}"))
+    );
+    assert_eq!(
         service.native_navigation_title(target),
-        Some((title.into(), false))
+        Some((String::new(), false))
     );
     entry(other, title, true);
     assert_eq!(
         service.native_navigation_title(target),
-        Some((title.into(), true))
+        Some((String::new(), false))
     );
-    // A partial registry read must not establish uniqueness.
+    // A partial registry read must never re-enable title navigation.
     std::fs::write(
-        user.join("local_11111111-1111-4111-8111-111111111111.json"),
+        user.join("local_33333333-3333-4333-8333-333333333333.json"),
         "{",
     )
     .unwrap();
     assert_eq!(
         service.native_navigation_title(target),
-        Some((title.into(), false))
+        Some((String::new(), false))
     );
 }
 

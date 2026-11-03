@@ -28,17 +28,43 @@ struct AgentsView: View {
                     Label(agents.creating ? "Creating CLI session…" : "New CLI session", systemImage: "plus.bubble")
                 }.disabled(agents.creating)
             }
-            if agents.loading && agents.sessions.isEmpty {
-                ProgressView()
-            } else if agents.sessions.isEmpty {
-                ContentUnavailableView("No sessions", systemImage: "bubble.left.and.text.bubble.right", description: Text("Codex and Claude sessions on this device show up here."))
+            if agents.loading || agents.searching {
+                HStack { ProgressView(); Text(agents.searching ? "Searching conversations…" : "Loading sessions…").foregroundStyle(.secondary) }
             }
-            ForEach(agents.errors, id: \.self) { error in
-                Label(error, systemImage: "wifi.exclamationmark").font(.caption).foregroundStyle(.secondary)
+            if !agents.loading && !agents.searching && agents.sections.allSatisfy({ $0.count == 0 }) {
+                ContentUnavailableView(agents.query.isEmpty ? "No sessions" : "No matches", systemImage: agents.query.isEmpty ? "bubble.left.and.text.bubble.right" : "magnifyingglass", description: Text(agents.query.isEmpty ? "Codex and Claude sessions on this device show up here." : "Try another word from the title or conversation."))
             }
-            ForEach(agents.sessions, id: \.sourceKey) { session in
-                Button { core.openAgent(session.id, device: session.deviceID) } label: { SessionRow(session: session) }.buttonStyle(.plain)
-                    .listRowBackground(shown == session.sourceKey ? Color.accentColor.opacity(0.15) : nil)
+            ForEach(agents.errors + agents.searchNotices, id: \.self) { error in
+                Label(error, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+            }
+            if agents.searchHasMore {
+                Button { core.agentCatalogAction(.searchMore, value: "") } label: {
+                    Label("Search more conversations", systemImage: "magnifyingglass")
+                }.disabled(agents.searching)
+            }
+            ForEach(agents.sections, id: \.key) { section in
+                Section {
+                    ForEach(section.rows, id: \.key) { row in
+                        CatalogSessionRow(core: core, row: row, shown: shown)
+                            .listRowBackground(shown == row.session.sourceKey ? Color.accentColor.opacity(0.15) : nil)
+                    }
+                    if section.expanded && section.count == 0 {
+                        Text("No sessions in this section").font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Button { core.agentCatalogAction(.toggleSection, value: section.key) } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: section.expanded ? "chevron.down" : "chevron.right").font(.caption2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(section.title).font(.subheadline.weight(.semibold))
+                                Text(section.subtitle).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(section.count)").font(.caption).foregroundStyle(.secondary)
+                        }.contentShape(Rectangle())
+                    }.buttonStyle(.plain).textCase(nil).disabled(!agents.query.isEmpty)
+                    .accessibilityLabel("\(section.title), \(section.count) sessions, \(section.expanded ? "expanded" : "collapsed")")
+                }
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -47,6 +73,7 @@ struct AgentsView: View {
             }
             .background(.bar)
         }
+        .searchable(text: Binding(get: { agents.query }, set: { core.agentCatalogAction(.search, value: $0) }), prompt: "Search titles and conversations")
         .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -57,6 +84,54 @@ struct AgentsView: View {
         }
     }
 
+}
+
+private struct CatalogSessionRow: View {
+    let core: MusterCore
+    let row: Muster_App_AgentCatalogRow
+    let shown: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            if row.depth > 0 {
+                Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1)
+                    .padding(.leading, CGFloat(min(row.depth, 8) - 1) * 14 + 6)
+            }
+            Button { core.openAgent(row.session.id, device: row.session.deviceID) } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    if row.session.provider == "claude" {
+                        HStack(spacing: 8) {
+                            Text(row.session.title.isEmpty ? row.session.id : row.session.title)
+                                .font(.body).lineLimit(1).truncationMode(.tail)
+                            Spacer(minLength: 4)
+                            if row.session.state == "waiting_approval" || row.session.state == "running" {
+                                Circle().fill(row.session.state == "waiting_approval" ? Color.orange : Color.green)
+                                    .frame(width: 6, height: 6).accessibilityLabel(row.session.state == "waiting_approval" ? "Needs you" : "Working")
+                            }
+                        }.padding(.vertical, 6).help(row.session.title)
+                    } else { SessionRow(session: row.session) }
+                    if !row.session.searchSnippet.isEmpty {
+                        Text(row.session.searchSnippet).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+                    }
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            if row.expandable {
+                Button { core.agentCatalogAction(.toggleFamily, value: row.key) } label: {
+                    Image(systemName: row.expanded ? "chevron.down" : "chevron.right")
+                        .font(.caption).frame(width: 24, height: 28).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(row.expanded ? "Collapse child conversations" : "Expand child conversations")
+            }
+        }
+        .accessibilityIdentifier("agent-row-\(row.session.id)")
+        .contextMenu {
+            if !row.session.parentSessionID.isEmpty {
+                Button { core.openAgent(row.session.parentSessionID, device: row.session.deviceID) } label: {
+                    Label(row.session.parentTitle.isEmpty ? "Parent conversation" : row.session.parentTitle, systemImage: "arrow.turn.up.left")
+                }
+            }
+        }
+    }
 }
 
 private struct OrcaCreateSheet: View {
@@ -269,7 +344,7 @@ struct ChatView: View {
             #if os(iOS)
             if !chat.session.parentSessionID.isEmpty {
                 Button { core.openAgent(chat.session.parentSessionID, device: chat.deviceID) } label: {
-                    Label("Parent session", systemImage: "arrow.turn.up.left")
+                    Label(chat.session.parentTitle.isEmpty ? "Parent session" : chat.session.parentTitle, systemImage: "arrow.turn.up.left")
                 }.padding(8)
             }
             ConversationNavigation(chat: chat, selected: $contentTab)
@@ -346,7 +421,7 @@ struct ChatView: View {
     private var chromeModel: SessionChromeModel {
         var value = SessionChromeModel()
         value.title = chat.session.title.isEmpty ? chat.session.id : chat.session.title
-        value.parentTitle = chat.session.parentSessionID.isEmpty ? "" : "Parent session"
+        value.parentTitle = chat.session.parentSessionID.isEmpty ? "" : (chat.session.parentTitle.isEmpty ? "Parent session" : chat.session.parentTitle)
         value.providerLabel = chat.providerLabel
         value.deviceName = chat.session.deviceName
         value.state = chat.session.state

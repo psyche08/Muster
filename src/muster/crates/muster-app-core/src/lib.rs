@@ -7,6 +7,7 @@
 mod access;
 pub mod backend;
 mod cache;
+mod catalog;
 mod chat_hosts;
 #[cfg(unix)]
 pub mod desktop_startup;

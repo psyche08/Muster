@@ -108,6 +108,7 @@ impl Handler for Server {
                 }),
                 Req::AgentList(_) => Resp::AgentSessions(v1::AgentSessionPage {
                     sessions: vec![session(CODING, "Coding")],
+                    ..Default::default()
                 }),
                 Req::PolicyGet(_) => Resp::Policy(v1::Policy::default()),
                 Req::NetworkPending(_) => Resp::PendingJoins(v1::PendingJoins::default()),
@@ -183,6 +184,19 @@ impl Handler for Server {
                         assert_eq!(r.chat, LISTED);
                         Resp::AgentSession(session(LISTED, "Kyoto trip"))
                     }
+                }
+                Req::AgentWatch(r) if r.catalog_only => {
+                    events
+                        .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
+                            ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
+                                sessions: vec![session(CODING, "Coding")],
+                                ..Default::default()
+                            })),
+                        }))
+                        .await
+                        .unwrap();
+                    events.cancelled().cancelled().await;
+                    Resp::Ack(v1::Ack {})
                 }
                 Req::AgentWatch(r) => {
                     let title = if r.session == LISTED {

@@ -17,6 +17,7 @@ pub mod claude_identity;
 pub mod claude_runtime;
 pub mod cloud;
 pub mod codex;
+mod codex_history;
 pub mod controller;
 pub mod deepseek;
 pub mod deepseek_app;
@@ -42,6 +43,8 @@ pub mod questions;
 pub mod queue;
 pub mod receipt;
 mod recency;
+mod search;
+mod sections;
 pub mod text;
 pub mod transcript;
 pub mod unconfirmed;
@@ -198,6 +201,7 @@ struct CloudEntry {
 }
 
 struct Inner {
+    sections: sections::Catalog,
     catalog: HashMap<String, Discovered>,
     open: HashMap<String, Open>,
     controllers: HashMap<String, Arc<dyn Controller>>,
@@ -363,6 +367,7 @@ impl AgentService {
             chatgpt_catalog: Mutex::new(chat_catalog::LocalCatalog::default()),
             config,
             inner: Mutex::new(Inner {
+                sections: Default::default(),
                 catalog: HashMap::new(),
                 open: HashMap::new(),
                 controllers: HashMap::new(),
@@ -942,7 +947,7 @@ impl AgentService {
             out.extend(deepseek::scan(home));
         }
         for d in &mut out {
-            if !d.provider.file_transcripts() {
+            if !d.provider.file_transcripts() || codex_history::is(d) {
                 // The store reports its own titles and message times; no file
                 // to scan. Keep a project directory the running app reported,
                 // and a title a viewer read when the app keeps none.
@@ -1005,9 +1010,14 @@ impl AgentService {
         let config = self.config.clone();
         let cache = self.inner.lock().unwrap().catalog.clone();
         let heads = self.heads.clone();
-        let found = tokio::task::spawn_blocking(move || Self::scan_all(&config, &cache, &heads))
-            .await
-            .unwrap_or_default();
+        let (found, sections) = tokio::task::spawn_blocking(move || {
+            (
+                Self::scan_all(&config, &cache, &heads),
+                sections::read(&config),
+            )
+        })
+        .await
+        .unwrap_or_default();
         let (changed, replaced) = {
             let mut inner = self.inner.lock().unwrap();
             // Desktop resumes may create multiple rollout files for one ID.
@@ -1029,7 +1039,8 @@ impl AgentService {
                     d.meta.cwd = project.clone();
                 }
             }
-            let changed = new_catalog.len() != inner.catalog.len()
+            let changed = sections != inner.sections
+                || new_catalog.len() != inner.catalog.len()
                 || new_catalog.iter().any(|(id, d)| {
                     inner.catalog.get(id).is_none_or(|old| {
                         old.meta.title != d.meta.title
@@ -1057,6 +1068,7 @@ impl AgentService {
                 inner.open.remove(id);
             }
             inner.catalog = new_catalog;
+            inner.sections = sections;
             (changed, replaced)
         };
         for session in replaced {
@@ -1646,7 +1658,7 @@ impl AgentService {
             // A project the app reported after the viewer opened.
             meta.cwd = d.meta.cwd.clone();
         }
-        Some(AgentSession {
+        let mut session = AgentSession {
             id: id.to_string(),
             provider: d.provider.as_str().into(),
             title: meta.title,
@@ -1666,6 +1678,13 @@ impl AgentService {
             mode: "code".into(),
             read_only: d.hidden,
             relationship: d.relation.into(),
+            parent_title: d
+                .parent_id
+                .as_ref()
+                .and_then(|id| inner.catalog.get(id))
+                .filter(|p| p.provider == d.provider)
+                .map(|p| Self::title_locked(inner, p).to_owned())
+                .unwrap_or_default(),
             transcript_notice: open
                 .map(|o| o.viewer.transcript_notice().to_owned())
                 .unwrap_or_default(),
@@ -1688,7 +1707,9 @@ impl AgentService {
                 .cloned()
                 .unwrap_or_default(),
             ..Default::default()
-        })
+        };
+        inner.sections.apply(&mut session);
+        Some(session)
     }
 
     /// Any well-formed chat session id projects, known or not: a watcher that
@@ -2028,6 +2049,13 @@ impl AgentService {
         Some((target.title, unique))
     }
 
+    pub fn sections(&self) -> Vec<muster_proto::v1::AgentSection> {
+        self.inner.lock().unwrap().sections.sections.clone()
+    }
+    pub fn section_notices(&self) -> Vec<(String, String)> {
+        self.inner.lock().unwrap().sections.notices.clone()
+    }
+
     /// Visible sessions, newest first.
     pub fn list(&self, provider: Option<Provider>, limit: usize) -> Vec<AgentSession> {
         let inner = self.inner.lock().unwrap();
@@ -2084,11 +2112,15 @@ impl AgentService {
         let parsed = tokio::task::spawn_blocking(move || {
             // A JSONL source is read by the engine over its grammar and
             // hooks; a store by its own viewer.
-            let mut viewer: Box<dyn Viewer> = match discovered.provider.jsonl() {
-                Some((records, hooks)) => {
-                    Box::new(jsonl::JsonlViewer::open(&discovered, records, hooks))
+            let mut viewer: Box<dyn Viewer> = if codex_history::is(&discovered) {
+                Box::new(codex_history::History::new(discovered))
+            } else {
+                match discovered.provider.jsonl() {
+                    Some((records, hooks)) => {
+                        Box::new(jsonl::JsonlViewer::open(&discovered, records, hooks))
+                    }
+                    None => Box::new(catdesk::CatdeskViewer::open(&discovered)),
                 }
-                None => Box::new(catdesk::CatdeskViewer::open(&discovered)),
             };
             let stat = viewer.stamp().map_err(|e| Error::Io(e.to_string()))?;
             let polled = viewer.poll().map_err(|e| Error::Io(e.to_string()))?;

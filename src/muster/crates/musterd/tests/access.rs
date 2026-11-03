@@ -115,6 +115,7 @@ async fn sessions(remote: &Client, provider: &str) -> Result<Vec<String>, muster
         .call(Req::AgentList(v1::AgentListRequest {
             limit: 0,
             provider: provider.into(),
+            ..Default::default()
         }))
         .await?
     {
@@ -299,6 +300,37 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     // Listing: Codex only, and asking for Claude by name is refused.
     assert_eq!(sessions(&remote, "").await.unwrap(), [CODEX]);
     assert_eq!(sessions(&remote, "codex").await.unwrap(), [CODEX]);
+    // Search is the same provider-scoped read, including body results.
+    let Resp::AgentSessions(search) = remote
+        .call(Req::AgentList(v1::AgentListRequest {
+            query: "hello".into(),
+            limit: 100,
+            ..Default::default()
+        }))
+        .await
+        .unwrap()
+    else {
+        panic!("search response")
+    };
+    assert_eq!(search.query, "hello");
+    assert_eq!(
+        search
+            .sessions
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        [CODEX]
+    );
+    assert!(unauthorized(
+        &remote
+            .call(Req::AgentList(v1::AgentListRequest {
+                provider: "claude".into(),
+                query: "hello".into(),
+                ..Default::default()
+            }))
+            .await
+    ));
+
     assert!(unauthorized(&sessions(&remote, "claude").await));
 
     // The merged desktop-chat RPCs also honor their named provider before

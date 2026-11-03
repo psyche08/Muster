@@ -47,6 +47,7 @@ message Intent {
     muster.v1.MulticaBrowseRequest multica_browse = 90;
 
     OpenAgents open_agents = 30;
+    AgentCatalogAction agent_catalog_action = 92;
     OrcaCreate orca_create = 87;
     OpenAgent open_agent = 31;
     AgentSend agent_send = 32;
@@ -178,6 +179,27 @@ message SelectDevice {
 }
 
 message OrcaCreate { string device_id = 1; string directory = 2; string agent = 3; }
+message AgentCatalogAction {
+  enum Kind { SEARCH = 0; TOGGLE_SECTION = 1; TOGGLE_FAMILY = 2; SEARCH_MORE = 3; }
+  Kind kind = 1;
+  string value = 2; // query or Rust-issued display key
+}
+message AgentCatalogRow {
+  string key = 1;
+  muster.v1.AgentSession session = 2;
+  uint32 depth = 3;
+  bool expandable = 4;
+  bool expanded = 5;
+  string parent_title = 6;
+}
+message AgentCatalogSection {
+  string key = 1;
+  string title = 2;
+  string subtitle = 3;
+  bool expanded = 4;
+  uint32 count = 5;
+  repeated AgentCatalogRow rows = 6;
+}
 message OpenAgents { string device_id = 1; } // "*" = all devices; empty = current target
 message OpenAgent {
   string session = 1;
@@ -544,6 +566,12 @@ message JoinView {
 }
 
 message AgentsView {
+  repeated muster.v1.AgentSection native_sections = 8;
+  repeated AgentCatalogSection sections = 9;
+  string query = 10;
+  bool searching = 11;
+  bool search_has_more = 13;
+  repeated string search_notices = 12;
   repeated muster.v1.MemberView create_hosts = 5;
   repeated string create_agents = 6;
   bool creating = 7;

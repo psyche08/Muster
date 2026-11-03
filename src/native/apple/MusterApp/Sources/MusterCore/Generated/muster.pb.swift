@@ -2675,6 +2675,29 @@ public nonisolated struct Muster_V1_AgentSession: @unchecked Sendable {
     set {_uniqueStorage()._relationship = newValue}
   }
 
+  /// provider-native ID, scoped by device and provider
+  public var sectionID: String {
+    get {_storage._sectionID}
+    set {_uniqueStorage()._sectionID = newValue}
+  }
+
+  public var sectionPosition: Int64 {
+    get {_storage._sectionPosition}
+    set {_uniqueStorage()._sectionPosition = newValue}
+  }
+
+  /// display label only
+  public var parentTitle: String {
+    get {_storage._parentTitle}
+    set {_uniqueStorage()._parentTitle = newValue}
+  }
+
+  /// read-only title/body match, never input authority
+  public var searchSnippet: String {
+    get {_storage._searchSnippet}
+    set {_uniqueStorage()._searchSnippet = newValue}
+  }
+
   /// direct independently controlled desktop sessions
   public var subsessions: [Muster_V1_AgentSession] {
     get {_storage._subsessions}
@@ -2688,10 +2711,40 @@ public nonisolated struct Muster_V1_AgentSession: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+public nonisolated struct Muster_V1_AgentSection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var provider: String = String()
+
+  public var title: String = String()
+
+  public var position: Int64 = 0
+
+  public var collapsed: Bool = false
+
+  public var deviceID: String = String()
+
+  public var deviceName: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Muster_V1_AgentListRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  /// opaque session cursor from previous search page
+  public var searchCursor: String = String()
+
+  /// title and user/assistant text; empty = catalog
+  public var query: String = String()
 
   public var limit: UInt32 = 0
 
@@ -2708,6 +2761,17 @@ public nonisolated struct Muster_V1_AgentSessionPage: Sendable {
   // methods supported on all messages.
 
   public var sessions: [Muster_V1_AgentSession] = []
+
+  public var sections: [Muster_V1_AgentSection] = []
+
+  /// unavailable grouping or partial search coverage
+  public var notice: String = String()
+
+  /// more local transcripts remain to search
+  public var nextCursor: String = String()
+
+  /// exact accepted query; protects clients from old daemons ignoring it
+  public var query: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8908,7 +8972,7 @@ nonisolated extension Muster_V1_TerminalLines: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSession"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0\u{3}section_id\0\u{3}section_position\0\u{3}search_snippet\0\u{3}parent_title\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -8931,6 +8995,10 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
     var _composerSuggestion: String = String()
     var _descendantActivity: String = String()
     var _relationship: String = String()
+    var _sectionID: String = String()
+    var _sectionPosition: Int64 = 0
+    var _parentTitle: String = String()
+    var _searchSnippet: String = String()
     var _subsessions: [Muster_V1_AgentSession] = []
 
       // This property is used as the initial default value for new instances of the type.
@@ -8962,6 +9030,10 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       _composerSuggestion = source._composerSuggestion
       _descendantActivity = source._descendantActivity
       _relationship = source._relationship
+      _sectionID = source._sectionID
+      _sectionPosition = source._sectionPosition
+      _parentTitle = source._parentTitle
+      _searchSnippet = source._searchSnippet
       _subsessions = source._subsessions
     }
   }
@@ -9002,6 +9074,10 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         case 19: try { try decoder.decodeSingularStringField(value: &_storage._descendantActivity) }()
         case 20: try { try decoder.decodeSingularStringField(value: &_storage._relationship) }()
         case 21: try { try decoder.decodeRepeatedMessageField(value: &_storage._subsessions) }()
+        case 22: try { try decoder.decodeSingularStringField(value: &_storage._sectionID) }()
+        case 23: try { try decoder.decodeSingularInt64Field(value: &_storage._sectionPosition) }()
+        case 24: try { try decoder.decodeSingularStringField(value: &_storage._searchSnippet) }()
+        case 25: try { try decoder.decodeSingularStringField(value: &_storage._parentTitle) }()
         default: break
         }
       }
@@ -9073,6 +9149,18 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       if !_storage._subsessions.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._subsessions, fieldNumber: 21)
       }
+      if !_storage._sectionID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._sectionID, fieldNumber: 22)
+      }
+      if _storage._sectionPosition != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._sectionPosition, fieldNumber: 23)
+      }
+      if !_storage._searchSnippet.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._searchSnippet, fieldNumber: 24)
+      }
+      if !_storage._parentTitle.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._parentTitle, fieldNumber: 25)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9102,6 +9190,10 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         if _storage._composerSuggestion != rhs_storage._composerSuggestion {return false}
         if _storage._descendantActivity != rhs_storage._descendantActivity {return false}
         if _storage._relationship != rhs_storage._relationship {return false}
+        if _storage._sectionID != rhs_storage._sectionID {return false}
+        if _storage._sectionPosition != rhs_storage._sectionPosition {return false}
+        if _storage._parentTitle != rhs_storage._parentTitle {return false}
+        if _storage._searchSnippet != rhs_storage._searchSnippet {return false}
         if _storage._subsessions != rhs_storage._subsessions {return false}
         return true
       }
@@ -9112,9 +9204,69 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
+nonisolated extension Muster_V1_AgentSection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSection"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}position\0\u{1}collapsed\0\u{3}device_id\0\u{3}device_name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.position) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.collapsed) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 2)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 3)
+    }
+    if self.position != 0 {
+      try visitor.visitSingularInt64Field(value: self.position, fieldNumber: 4)
+    }
+    if self.collapsed != false {
+      try visitor.visitSingularBoolField(value: self.collapsed, fieldNumber: 5)
+    }
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 6)
+    }
+    if !self.deviceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSection, rhs: Muster_V1_AgentSection) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.position != rhs.position {return false}
+    if lhs.collapsed != rhs.collapsed {return false}
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.deviceName != rhs.deviceName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentListRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}limit\0\u{1}provider\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}limit\0\u{1}provider\0\u{1}query\0\u{3}search_cursor\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9124,6 +9276,8 @@ nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftPr
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.limit) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.query) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.searchCursor) }()
       default: break
       }
     }
@@ -9136,10 +9290,18 @@ nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftPr
     if !self.provider.isEmpty {
       try visitor.visitSingularStringField(value: self.provider, fieldNumber: 2)
     }
+    if !self.query.isEmpty {
+      try visitor.visitSingularStringField(value: self.query, fieldNumber: 3)
+    }
+    if !self.searchCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.searchCursor, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentListRequest, rhs: Muster_V1_AgentListRequest) -> Bool {
+    if lhs.searchCursor != rhs.searchCursor {return false}
+    if lhs.query != rhs.query {return false}
     if lhs.limit != rhs.limit {return false}
     if lhs.provider != rhs.provider {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -9149,7 +9311,7 @@ nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_AgentSessionPage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSessionPage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0\u{1}sections\0\u{1}notice\0\u{1}query\0\u{3}next_cursor\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9158,6 +9320,10 @@ nonisolated extension Muster_V1_AgentSessionPage: SwiftProtobuf.Message, SwiftPr
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sessions) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sections) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.notice) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.query) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
       default: break
       }
     }
@@ -9167,11 +9333,27 @@ nonisolated extension Muster_V1_AgentSessionPage: SwiftProtobuf.Message, SwiftPr
     if !self.sessions.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.sessions, fieldNumber: 1)
     }
+    if !self.sections.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sections, fieldNumber: 2)
+    }
+    if !self.notice.isEmpty {
+      try visitor.visitSingularStringField(value: self.notice, fieldNumber: 3)
+    }
+    if !self.query.isEmpty {
+      try visitor.visitSingularStringField(value: self.query, fieldNumber: 4)
+    }
+    if !self.nextCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.nextCursor, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentSessionPage, rhs: Muster_V1_AgentSessionPage) -> Bool {
     if lhs.sessions != rhs.sessions {return false}
+    if lhs.sections != rhs.sections {return false}
+    if lhs.notice != rhs.notice {return false}
+    if lhs.nextCursor != rhs.nextCursor {return false}
+    if lhs.query != rhs.query {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

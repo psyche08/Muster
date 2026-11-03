@@ -654,17 +654,38 @@ message AgentSession {
   // waiting_approval | empty (no verified active descendant). Never input authority.
   string descendant_activity = 19;
   string relationship = 20; // subagent | subsession | fork; provider-declared
+  string section_id = 22; // provider-native ID, scoped by device and provider
+  int64 section_position = 23;
+  string parent_title = 25; // display label only
+  string search_snippet = 24; // read-only title/body match, never input authority
   repeated AgentSession subsessions = 21; // direct independently controlled desktop sessions
 
 }
 
+message AgentSection {
+  string id = 1;
+  string provider = 2;
+  string title = 3;
+  int64 position = 4;
+  bool collapsed = 5;
+  string device_id = 6;
+  string device_name = 7;
+}
+
 message AgentListRequest {
+  string search_cursor = 4; // opaque session cursor from previous search page
+  string query = 3; // title and user/assistant text; empty = catalog
+
   uint32 limit = 1;
   string provider = 2;
 }
 
 message AgentSessionPage {
   repeated AgentSession sessions = 1;
+  repeated AgentSection sections = 2;
+  string notice = 3; // unavailable grouping or partial search coverage
+  string next_cursor = 5; // more local transcripts remain to search
+  string query = 4; // exact accepted query; protects clients from old daemons ignoring it
 }
 
 message AgentWatchRequest {
