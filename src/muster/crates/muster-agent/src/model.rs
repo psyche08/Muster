@@ -162,6 +162,8 @@ pub enum MessageKind {
     ToolResult,
     Interaction,
     TurnSummary,
+    /// How a turn ended, when it did not simply complete.
+    TurnStatus,
     ProviderCard,
 }
 
@@ -174,6 +176,7 @@ impl MessageKind {
             MessageKind::ToolResult => "tool_result",
             MessageKind::Interaction => "interaction",
             MessageKind::TurnSummary => "turn_summary",
+            MessageKind::TurnStatus => "turn_status",
         }
     }
 }
@@ -191,6 +194,9 @@ pub struct Message {
     pub phase: String,
     pub tool_name: String,
     pub tool_call_id: String,
+    /// `completed`, `failed`, `interrupted`, `running`, or empty when the
+    /// record does not say.
+    pub tool_status: String,
 }
 
 impl Message {
@@ -205,7 +211,7 @@ impl Message {
             phase: self.phase.clone(),
             tool_name: self.tool_name.clone(),
             tool_call_id: self.tool_call_id.clone(),
-            tool_status: String::new(),
+            tool_status: self.tool_status.clone(),
         }
     }
 }

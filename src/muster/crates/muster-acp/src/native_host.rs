@@ -242,7 +242,8 @@ impl Host for NativeHost {
                     if !started {
                         continue;
                     }
-                    if row.role == "assistant" && row.kind == "text" {
+                    // Recorded reasoning is not the reply an ACP client streams.
+                    if row.role == "assistant" && row.kind == "text" && row.phase != "reasoning" {
                         let old = seen.entry(row.id.clone()).or_default();
                         if let Some(delta) = row.text.strip_prefix(old.as_str())
                             && !delta.is_empty()

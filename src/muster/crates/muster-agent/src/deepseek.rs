@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::jsonl::Hooks;
-use crate::model::{Message, Provider, Role, SessionMeta, title_from};
+use crate::model::{Message, MessageKind, Provider, Role, SessionMeta, title_from};
 use crate::viewer::{Discovered, is_uuid};
 
 /// The session format this build reads; another generation is skipped.
@@ -53,6 +53,46 @@ impl Hooks for DeepseekHooks {
     ) -> Option<Message> {
         tracker.deepseek(offset, record)
     }
+    /// `turn/end` with a reason other than `completed`: a provider error,
+    /// the person's stop, or the model's output limit.
+    fn outcome(&self, offset: u64, record: &Value) -> Option<Message> {
+        if record["type"] != "turn/end" {
+            return None;
+        }
+        let reason = &record["data"]["reason"];
+        let (status, text) = match reason["kind"].as_str()? {
+            "completed" => return None,
+            "error" => {
+                let error = &reason["error"];
+                let detail = match (error["code"].as_str(), error["message"].as_str()) {
+                    (Some(code), Some(message)) => format!("{code}: {message}"),
+                    (code, message) => code.or(message).unwrap_or("").to_string(),
+                };
+                (
+                    "failed",
+                    format!("Turn: failed\n{detail}").trim_end().to_string(),
+                )
+            }
+            "aborted" => ("interrupted", "Turn: interrupted".to_string()),
+            "max-tokens" => (
+                "interrupted",
+                "Turn: interrupted\nThe reply reached the model's output limit.".to_string(),
+            ),
+            other => ("", format!("Turn: ended ({other})")),
+        };
+        Some(Message {
+            id: format!("{offset}:outcome"),
+            role: Role::System,
+            kind: MessageKind::TurnStatus,
+            text,
+            ts_unix: record["time"].as_u64().map_or(0, |ms| ms / 1000),
+            usage: None,
+            phase: String::new(),
+            tool_name: String::new(),
+            tool_call_id: String::new(),
+            tool_status: status.into(),
+        })
+    }
 }
 
 /// The app's state directory, when it holds sessions.
@@ -82,9 +122,11 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
     out
 }
 
-/// A session's id as the app writes it: `session-<uuid>`.
+/// A session's id as the app writes it: `session-<uuid>` for a session a
+/// person started, a bare `<uuid>` for a subagent's (its directory carries
+/// the same name).
 fn valid_id(id: &str) -> bool {
-    id.strip_prefix("session-").is_some_and(is_uuid)
+    is_uuid(id.strip_prefix("session-").unwrap_or(id))
 }
 
 /// The log the app reads in a session directory: the highest generation,
@@ -136,15 +178,25 @@ fn session(home: &Path, dir: &Path, archived: &HashSet<String>) -> Option<Discov
         return None;
     }
     let id = header["id"].as_str().filter(|id| valid_id(id))?.to_string();
+    if dir.file_name().and_then(|n| n.to_str()) != Some(id.as_str()) {
+        return None;
+    }
     let stat = std::fs::metadata(&path).ok()?;
     let modified = stat.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-    // A subagent's session names its parent; a fork is a session of its own.
+    // A subagent's session names its parent and stays out of lists; a
+    // session forked from another names it too and is listed on its own.
     let subagent = header["origin"] == "subagent";
     let parent_id = header["parentSession"]
         .as_str()
-        .filter(|parent| subagent && valid_id(parent))
+        .filter(|parent| valid_id(parent) && *parent != id)
         .map(str::to_string);
-    let title = title(home, &id).unwrap_or_else(|| format!("session {}", &id[8..16]));
+    let relation = match (subagent, &parent_id) {
+        (true, _) => "subagent",
+        (false, Some(_)) => "fork",
+        (false, None) => "",
+    };
+    let uuid = id.strip_prefix("session-").unwrap_or(&id);
+    let title = title(home, &id).unwrap_or_else(|| format!("session {}", &uuid[..8]));
     let is_archived = archived.contains(&id);
     let mut found = Discovered {
         id,
@@ -155,7 +207,7 @@ fn session(home: &Path, dir: &Path, archived: &HashSet<String>) -> Option<Discov
         archived: is_archived,
         hidden: subagent,
         parent_id,
-        relation: if subagent { "subagent" } else { "" },
+        relation,
         meta: SessionMeta {
             title,
             cwd: header["cwd"]

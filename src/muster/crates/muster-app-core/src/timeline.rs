@@ -170,8 +170,10 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
         messages
             .iter()
             .rposition(|m| {
-                !(m.kind == "text"
-                    && (m.text.trim().is_empty() || (m.role == "assistant" && m.phase.is_empty())))
+                !(m.kind == "turn_status"
+                    || m.kind == "text"
+                        && (m.text.trim().is_empty()
+                            || (m.role == "assistant" && m.phase.is_empty())))
             })
             .map_or(0, |index| index + 1)
     } else {
@@ -215,6 +217,22 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             &mut work,
             &mut work_first,
         );
+        // How the turn ended, when it did not simply complete, follows its
+        // work as a notice.
+        if message.kind == "turn_status" {
+            flush_work(&mut work, &mut work_first, completed, out);
+            if index >= visible {
+                out.push(ChatBlock {
+                    id: message.id.clone(),
+                    kind: "notice".into(),
+                    title: message.text.clone(),
+                    message: Some(message.clone()),
+                    completed,
+                    ..Default::default()
+                });
+            }
+            continue;
+        }
         let compact = is_compact_context(message);
         let boundary = compact
             || message.role == "user"
@@ -256,9 +274,12 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             if index < visible {
                 continue;
             }
+            // A provider's recorded reasoning is its own collapsed row.
+            let reasoning = message.phase == "reasoning";
             work.push(ChatBlock {
                 id: message.id.clone(),
-                kind: "message".into(),
+                kind: if reasoning { "reasoning" } else { "message" }.into(),
+                title: if reasoning { "Reasoning" } else { "" }.into(),
                 message: Some(message.clone()),
                 completed,
                 ..Default::default()
@@ -663,6 +684,65 @@ mod tests {
             text: id.into(),
             ..Default::default()
         }
+    }
+    #[test]
+    fn transcript_reasoning_is_a_collapsed_row_inside_worked() {
+        let mut reasoning = m("reason", "assistant", "text");
+        reasoning.phase = "reasoning".into();
+        let mut last = m("last-thought", "assistant", "text");
+        last.phase = "reasoning".into();
+        let messages = [
+            m("u", "user", "text"),
+            reasoning,
+            m("tool", "assistant", "tool_call"),
+            last,
+            m("answer", "assistant", "text"),
+        ];
+        let out = blocks(&messages, false);
+        assert_eq!(
+            out.iter().map(|b| b.kind.as_str()).collect::<Vec<_>>(),
+            ["message", "working", "message"]
+        );
+        let work = &out[1].children;
+        assert_eq!(
+            work.iter()
+                .map(|b| (b.kind.as_str(), b.title.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("reasoning", "Reasoning"),
+                ("activity", "1 tool call"),
+                ("reasoning", "Reasoning")
+            ]
+        );
+        // Reasoning right before the reply never takes the reply's place.
+        assert_eq!(out[2].message.as_ref().unwrap().id, "answer");
+    }
+    #[test]
+    fn a_turn_that_did_not_complete_ends_with_its_notice_after_the_reply() {
+        let mut failed = m("end", "system", "turn_status");
+        failed.text = "Turn: failed\nMISSING_CREDENTIAL: no key".into();
+        failed.tool_status = "failed".into();
+        let messages = [
+            m("u", "user", "text"),
+            m("tool", "assistant", "tool_call"),
+            m("partial", "assistant", "text"),
+            failed,
+            m("next", "user", "text"),
+        ];
+        let out = blocks(&messages, false);
+        assert_eq!(
+            out.iter()
+                .map(|b| (b.kind.as_str(), b.title.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("message", ""),
+                ("working", "Worked"),
+                ("message", ""),
+                ("notice", "Turn: failed\nMISSING_CREDENTIAL: no key"),
+                ("message", "")
+            ]
+        );
+        assert_eq!(out[2].message.as_ref().unwrap().id, "partial");
     }
     #[test]
     fn compact_context_is_separate_and_does_not_replace_the_final_reply() {

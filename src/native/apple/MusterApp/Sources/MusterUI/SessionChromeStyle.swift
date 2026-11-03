@@ -104,6 +104,15 @@ enum SessionChromeMetrics {
     static let dividerWidth: CGFloat = 0.5
     static let tabMoreSize: CGFloat = 22
 
+    // The compact (iOS) header keeps DSH's tab look at touch size: about 40pt
+    // tall tabs, under the native navigation bar.
+    static let compactHeaderTopPadding: CGFloat = 2
+    static let compactHeaderPadding: CGFloat = 16
+    static let compactTabFontSize: CGFloat = 15
+    static let compactTabLineHeight: CGFloat = 20
+    static let compactTabTopInset: CGFloat = 10
+    static let compactTabGap: CGFloat = 24
+
     static let traceToolbarHeight: CGFloat = 34
     static let traceToolbarControlHeight: CGFloat = 20
     static let traceToolbarFontSize: CGFloat = 12

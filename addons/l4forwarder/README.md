@@ -1,9 +1,11 @@
 # l4forwarder
 
 A small TCP/UDP port forwarder, kept as an addon beside Muster
-([ADR 0105](../../docs/adr/0105-l4forwarder-addon.md)). Each rule listens on
-one address and forwards one protocol to one upstream address: TCP byte for
-byte, UDP datagram for datagram.
+([ADR 0105](../../docs/adr/0105-l4forwarder-addon.md)). It ships inside the
+Muster app, and musterd runs it
+([ADR 0107](../../docs/adr/0107-l4forwarder-in-muster-app.md)). Each rule
+listens on one address and forwards one protocol to one upstream address: TCP
+byte for byte, UDP datagram for datagram.
 
 Its intended use is a service on a Muster member that listens only on the
 member's loopback, such as a local HTTP/SOCKS proxy on `127.0.0.1:7897`. vnet
@@ -11,8 +13,8 @@ delivers packets to the member's virtual address, so a loopback-only service is
 out of reach. l4forwarder on that member listens at its vnet address and
 forwards to the loopback port, without reconfiguring the service.
 
-l4forwarder does not depend on Muster and makes no access decisions. Who may
-reach the vnet address and port stays Muster's decision:
+l4forwarder does not depend on any Muster crate and makes no access
+decisions. Who may reach the vnet address and port stays Muster's decision:
 
 - The accessing member needs a `net:<proto>/<port>` scope, which an admin
   grants with `muster scopes <device> <all scopes…>`.
@@ -65,25 +67,32 @@ cargo build --release
 target/release/l4forwarder --config config.json --check   # validate and list the rules
 ```
 
-## Install as a launchd agent (macOS)
+## Running under Muster
 
-```bash
-deploy/install.sh path/to/config.json   # build, check, install, (re)load
-deploy/install.sh                       # upgrade, keeping the installed configuration
-```
+Write the configuration to `l4forwarder.json` in musterd's state directory.
+musterd watches that directory
+([ADR 0108](../../docs/adr/0108-watch-l4forwarder-configuration.md)). As soon
+as the file appears it starts the bundled helper, restarts it when the file
+changes, and stops it when the file is removed. Atomic saves (write, then
+rename into place) are picked up too:
 
-| | Location |
+| | Location (macOS) |
 |---|---|
-| Binary | `~/.local/bin/l4forwarder` |
-| Configuration | `~/.config/l4forwarder/config.json` |
-| Log | `~/Library/Logs/l4forwarder.log` |
-| Agent | `dev.linsheng.l4forwarder` |
+| Program | `/Applications/Muster.app/Contents/Helpers/l4forwarder` (beside `musterd` on other platforms) |
+| Configuration | `~/Library/Application Support/Muster/l4forwarder.json` |
+| Log | `~/Library/Logs/Muster/l4forwarder.log` |
 
-```bash
-launchctl print gui/$(id -u)/dev.linsheng.l4forwarder
-launchctl kickstart -k gui/$(id -u)/dev.linsheng.l4forwarder   # restart after a configuration change
-launchctl bootout gui/$(id -u)/dev.linsheng.l4forwarder        # stop
-```
+- **Restarts.** If the helper exits on its own, musterd starts it again after
+  1 s, doubling the delay up to a minute. A run of a minute or longer resets
+  the delay.
+- **Ends with musterd.** musterd runs the helper with `--supervised` and keeps
+  its standard input open. When musterd stops, even by being killed, the
+  helper sees its input close and exits. Its ports are then free for the next
+  daemon.
+- **Changes reconnect.** A configuration change restarts the helper, which
+  closes the connections it carries.
+- **Upgrades.** A Muster update replaces the helper together with the daemon.
+- **Phones.** A phone's embedded daemon never starts it.
 
-The agent runs as the logged-in user, so ports below 1024 are not available
+The helper runs as the logged-in user, so ports below 1024 are not available
 to it.

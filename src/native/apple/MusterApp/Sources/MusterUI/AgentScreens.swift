@@ -373,7 +373,6 @@ struct ChatView: View {
     let chat: Muster_App_ChatView
     @State private var showChatOptions = false
     @State private var contentTab = "Conversation"
-    @State private var activityTab = "Tracing"
     @State private var atLatest = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.conversationStyle) private var style
@@ -390,13 +389,9 @@ struct ChatView: View {
         let core = core
         VStack(spacing: 0) {
             #if os(iOS)
-            if !chat.session.parentSessionID.isEmpty {
-                Button { core.openAgent(chat.session.parentSessionID, device: chat.deviceID) } label: {
-                    Label(chat.session.parentTitle.isEmpty ? "Parent session" : chat.session.parentTitle, systemImage: "arrow.turn.up.left")
-                }.padding(8)
-            }
-            ConversationNavigation(chat: chat, selected: $contentTab)
-            Divider().opacity(0.5)
+            // The navigation bar keeps the title and the actions menu; the
+            // compact header carries the chips and every view tab.
+            SessionChromeHeader(model: chromeModel, selected: $contentTab, actions: chromeActions, compact: true)
             #else
             SessionChromeHeader(model: chromeModel, selected: $contentTab, actions: chromeActions)
             #endif
@@ -465,7 +460,6 @@ struct ChatView: View {
         #endif
     }
 
-    #if os(macOS)
     private var chromeModel: SessionChromeModel {
         var value = SessionChromeModel()
         value.title = chat.session.title.isEmpty ? chat.session.id : chat.session.title
@@ -492,7 +486,6 @@ struct ChatView: View {
             git: { core.openGit() }
         )
     }
-    #endif
 
     @ViewBuilder
     private func conversationPane(core: MusterCore) -> some View {
@@ -547,16 +540,6 @@ struct ChatView: View {
             if contentTab == "Terminal" {
                 CodeRunHistory(runs: chat.codeRuns, error: chat.codeError) { core.codeAction(.return, id: $0) }
                 SessionTerminalPane(core: core, workspace: chat.terminal, terminal: terminal)
-            } else if contentTab == "Activity" {
-                Picker("Activity", selection: $activityTab) {
-                    Text("Trace").tag("Tracing")
-                    Text("Agents (\(chat.session.subagents.count))").tag("Subagents")
-                    Text("Sessions").tag("Sessions")
-                }.pickerStyle(.segmented).padding(16)
-                if activityTab == "Tracing" {
-                    SessionTraceScreen(chat: chat, loadEarlier: { core.agentLoadEarlier() })
-                } else { RelatedSessionView(core: core, device: chat.deviceID,
-                    sessions: activityTab == "Subagents" ? chat.session.subagents : chat.session.subsessions, title: activityTab) }
             } else if contentTab == "Tracing" {
                 SessionTraceScreen(chat: chat, loadEarlier: { core.agentLoadEarlier() })
             } else {
@@ -725,6 +708,7 @@ struct AdmittedSendRow: View, Equatable {
 
 struct WorkingGroup: View {
     let block: Muster_App_ChatBlock
+    @Environment(\.conversationStyle) private var style
     private var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("working", id: block.id, defaultValue: block.defaultExpanded) }
     private var expanded: Bool { expansion.wrappedValue }
@@ -732,10 +716,39 @@ struct WorkingGroup: View {
     var body: some View {
         Group {
             if block.children.isEmpty {
-                Label(block.title, systemImage: "circle.dotted")
-                    .foregroundStyle(.secondary)
+                if style == .deepseek {
+                    DeepSeekRowTitle(title: block.title, expanded: false, running: !block.completed)
+                } else {
+                    Label(block.title, systemImage: "circle.dotted")
+                        .foregroundStyle(.secondary)
+                }
+            } else if style == .deepseek {
+                deepseekGroup
             } else {
                 workGroup
+            }
+        }
+        .font(.system(size: ChatStyle.bodySize))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// DSH's turn process: a quiet title with its chevron, the rows 6pt apart.
+    private var deepseekGroup: some View {
+        VStack(alignment: .leading, spacing: DeepSeekChat.titleGap) {
+            Button { expansion.wrappedValue.toggle() } label: {
+                DeepSeekRowTitle(title: block.title, expanded: expanded, running: !block.completed)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(block.title)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            if expanded {
+                VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) {
+                    ForEach(block.children, id: \.id) { child in
+                        if child.kind == "activity" { ActivityGroup(block: child) }
+                        else if child.kind == "reasoning" { ReasoningRow(block: child) }
+                        else { MessageBubble(message: child.message, parts: child.parts) }
+                    }
+                }
             }
         }
         .font(.system(size: ChatStyle.bodySize))
@@ -759,6 +772,7 @@ struct WorkingGroup: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(block.children, id: \.id) { child in
                         if child.kind == "activity" { ActivityGroup(block: child) }
+                        else if child.kind == "reasoning" { ReasoningRow(block: child) }
                         else { MessageBubble(message: child.message, parts: child.parts) }
                     }
                 }
@@ -774,11 +788,35 @@ struct ActivityGroup: View, Equatable {
     let block: Muster_App_ChatBlock
     var expanded = false
     @Environment(\.transcriptDisclosurePath) private var disclosurePath
+    @Environment(\.conversationStyle) private var style
 
     private var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("activity", id: block.id, defaultValue: expanded) }
 
     var body: some View {
+        if style == .deepseek { deepseekBody } else { standardBody }
+    }
+
+    private var deepseekBody: some View {
+        VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) {
+            Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
+                DeepSeekRowTitle(systemImage: "terminal", title: block.title.isEmpty ? "Tool activity" : block.title,
+                                 expanded: expansion.wrappedValue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
+            if expansion.wrappedValue {
+                VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) {
+                    ForEach(block.activityRows, id: \.id) { ToolActivityRow(row: $0).environment(\.transcriptDisclosurePath, disclosurePath + [block.id]) }
+                }
+                .padding(.leading, DeepSeekChat.bodyIndent)
+            }
+        }
+        .font(.system(size: ChatStyle.bodySize))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
                 HStack(spacing: 8) {
@@ -817,6 +855,36 @@ struct ToolActivityRow: View {
     private var expansion: Binding<Bool> { disclosure.binding("tool", id: row.id, defaultValue: expanded) }
 
     var body: some View {
+        if style == .deepseek { deepseekBody } else { standardBody }
+    }
+
+    private var deepseekBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
+                DeepSeekRowTitle(systemImage: symbol, title: row.title, status: row.status,
+                                 expanded: expansion.wrappedValue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(expansion.wrappedValue ? "Expanded" : "Collapsed")
+            if expansion.wrappedValue {
+                DeepSeekRowBody {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(row.category == "shell" ? "Shell" : row.toolName)
+                            .font(.system(size: DeepSeekChat.secondarySize - 1))
+                        DeepSeekBoundedText(text: row.detail, maxHeight: DeepSeekChat.bodyMaxHeight / 2)
+                        if !row.output.isEmpty {
+                            Divider().opacity(0.6)
+                            Text("Output").font(.system(size: DeepSeekChat.secondarySize - 1))
+                            DeepSeekBoundedText(text: row.output, maxHeight: DeepSeekChat.bodyMaxHeight)
+                        }
+                    }
+                }
+            }
+        }
+        .font(.system(size: ChatStyle.bodySize))
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { withAnimation(.easeInOut(duration: 0.18)) { expansion.wrappedValue.toggle() } } label: {
                 HStack(spacing: 8) {
@@ -943,7 +1011,7 @@ struct MessageBubble: View, Equatable {
 
     var body: some View {
         HStack(alignment: .top) {
-            if isUser { Spacer(minLength: 76) }
+            if isUser { Spacer(minLength: style == .deepseek ? 56 : 76) }
             VStack(alignment: .leading, spacing: 4) {
                 if parts.contains(where: { $0.kind == "code" }) {
                     ConversationText(text: message.text, parts: parts)
@@ -958,6 +1026,8 @@ struct MessageBubble: View, Equatable {
             .padding(.horizontal, isUser ? 16 : 0)
             .padding(.vertical, isUser ? 10 : 0)
             .background(isUser ? palette.userSurface : Color.clear, in: RoundedRectangle(cornerRadius: style.messageRadius))
+            // DSH caps the user's bubble at about 70% of its chat column.
+            .frame(maxWidth: isUser && style == .deepseek ? DeepSeekChat.userMaxWidth : nil, alignment: .trailing)
             if !isUser { Spacer(minLength: 0) }
         }
         .fixedSize(horizontal: false, vertical: true)

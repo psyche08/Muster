@@ -52,6 +52,8 @@ other_roles = "skip"
 content = "content"
 text_blocks = ["text"]
 media_blocks = ["image"]
+# The model's thinking, recorded before its reply and tool calls.
+reasoning_blocks = ["reasoning"]
 # Tool calls are blocks of the assistant's message.
 block_ids = "all"
 

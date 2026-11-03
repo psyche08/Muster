@@ -7,8 +7,9 @@
 #   scripts/install-mac.sh                       # Developer ID Application: <team 89LGY6BD53>
 #   TEAM=XXXXXXXXXX scripts/install-mac.sh
 #
-# Prerequisites: the Rust core (scripts/build-ffi.sh) and the daemon
-# (cd src/muster && cargo build --release -p musterd --features sep);
+# Prerequisites: the Rust core (scripts/build-ffi.sh), the daemon
+# (cd src/muster && cargo build --release -p musterd --features sep) and the
+# l4forwarder addon (cd addons/l4forwarder && cargo build --release --locked);
 # the Developer ID certificate in the login keychain (unlock it yourself
 # if signing fails with errSecInternalComponent).
 set -eu

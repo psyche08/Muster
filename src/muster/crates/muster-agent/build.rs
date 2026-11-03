@@ -132,6 +132,8 @@ struct MessageSpec {
     text_blocks: Vec<String>,
     #[serde(default)]
     media_blocks: Vec<String>,
+    #[serde(default)]
+    reasoning_blocks: Vec<String>,
     block_ids: String,
     phase: Option<String>,
 }
@@ -532,6 +534,11 @@ impl Generator<'_> {
             "all" => "BlockIds::All",
             other => at.fail(format!("message.block_ids {other:?}: expected text or all")),
         };
+        // Reasoning blocks take their index among all blocks: numbering
+        // only text blocks would move every text message's id.
+        if !m.reasoning_blocks.is_empty() && block_ids != "BlockIds::All" {
+            at.fail("message.reasoning_blocks needs message.block_ids = \"all\"");
+        }
         let string_option = |s: &Option<String>| match s {
             Some(s) => format!("Some({})", lit(s)),
             None => "None".into(),
@@ -542,7 +549,7 @@ impl Generator<'_> {
         }
         let _ = write!(
             self.out,
-            "/// The record grammar of the {name} transcripts.\npub static {name}_RECORDS: Records = Records {{\n    home: Home {{ env: {}, dir: {} }},\n    timestamp: {},\n    cwd: {},\n    skip: &[{}],\n    bootstrap_until: {},\n    summary_before: {},\n    message: MessageRule {{\n        when: {},\n        envelope: {},\n        role: {},\n        role_fallback: {},\n        other_roles: {other_roles},\n        content: {},\n        text_blocks: {},\n        media_blocks: {},\n        block_ids: {block_ids},\n        phase: {},\n    }},\n    tool_call: ToolCallRule {{ at: {}, name: {}, id: {}, arguments: {} }},\n    tool_result: ToolResultRule {{ at: {}, id: {}, output: {}, error: {}, interaction_tools: {} }},\n    turn: TurnRule {{\n        started: {},\n        ended: {},\n        ended_also: &[{}],\n        user_text_starts: {},\n        mark_final: {},\n        activity_on_messages: {},\n        final_phase: {},\n    }},\n}};\n\n",
+            "/// The record grammar of the {name} transcripts.\npub static {name}_RECORDS: Records = Records {{\n    home: Home {{ env: {}, dir: {} }},\n    timestamp: {},\n    cwd: {},\n    skip: &[{}],\n    bootstrap_until: {},\n    summary_before: {},\n    message: MessageRule {{\n        when: {},\n        envelope: {},\n        role: {},\n        role_fallback: {},\n        other_roles: {other_roles},\n        content: {},\n        text_blocks: {},\n        media_blocks: {},\n        reasoning_blocks: {},\n        block_ids: {block_ids},\n        phase: {},\n    }},\n    tool_call: ToolCallRule {{ at: {}, name: {}, id: {}, arguments: {} }},\n    tool_result: ToolResultRule {{ at: {}, id: {}, output: {}, error: {}, interaction_tools: {} }},\n    turn: TurnRule {{\n        started: {},\n        ended: {},\n        ended_also: &[{}],\n        user_text_starts: {},\n        mark_final: {},\n        activity_on_messages: {},\n        final_phase: {},\n    }},\n}};\n\n",
             lit(&spec.home.env),
             lit(&spec.home.dir),
             lit(&spec.timestamp),
@@ -557,6 +564,7 @@ impl Generator<'_> {
             lit(&m.content),
             list(&m.text_blocks),
             list(&m.media_blocks),
+            list(&m.reasoning_blocks),
             string_option(&m.phase),
             self.location(&at, &spec.tool_call.record, &spec.tool_call.block),
             lit(&spec.tool_call.name),

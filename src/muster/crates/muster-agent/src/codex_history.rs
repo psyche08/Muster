@@ -223,6 +223,7 @@ pub(crate) fn item(id: &str, raw: &str, ts: i64) -> Option<Message> {
         usage: None,
         tool_name: tool,
         tool_call_id: id.into(),
+        tool_status: String::new(),
     })
 }
 pub(crate) struct History {
