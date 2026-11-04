@@ -47,10 +47,13 @@ pub enum Permission {
 
 impl Permission {
     /// High-risk permissions need an additional proof at use time (§3.4).
-    /// The agent Locked Use gate also accepts paired phone identity signatures;
-    /// browser and administrative callers continue to verify Presence.
+    /// Administering the network is the one that still does: the prompt
+    /// belongs to joining and to changing who may do what. `locked.control`
+    /// left this set in ADR 0120 — the admin's grant at join is its
+    /// authorization, and the requesting device has already authenticated
+    /// its own user.
     pub fn high_risk(&self) -> bool {
-        matches!(self, Permission::LockedControl | Permission::NetworkAdmin)
+        matches!(self, Permission::NetworkAdmin)
     }
 
     /// Whether a member with `scopes` and `role` holds this permission.
@@ -439,7 +442,7 @@ mod tests {
             authorize_port(roster.state(), &phone_id, &strict, Proto::Tcp, 22),
             Decision::Deny("refused by local policy")
         );
-        // Locked screen: viewing is fine, locked control needs the policy and presence.
+        // Locked screen: viewing is fine, locked control needs the local policy.
         assert_eq!(
             decide(&agent(Some("codex"), false), &policy, &locked),
             Decision::Deny("refused by local policy")
@@ -450,8 +453,25 @@ mod tests {
             decide(&agent(Some("codex"), false), &lenient, &locked),
             Decision::Allow
         );
+        // ADR 0120: the admin's grant is the authorization; no per-operation
+        // signature. Administering the network still asks.
         assert_eq!(
             decide(&Permission::LockedControl, &lenient, &locked),
+            Decision::Allow
+        );
+        assert_eq!(
+            decide(&Permission::LockedControl, &policy, &locked),
+            Decision::Deny("refused by local policy")
+        );
+        let (admin_roster, admin_id) = roster_with(&["network.admin"]);
+        assert_eq!(
+            authorize(
+                admin_roster.state(),
+                &admin_id,
+                &Permission::NetworkAdmin,
+                &policy,
+                &unlocked
+            ),
             Decision::NeedsPresence
         );
         assert!(matches!(

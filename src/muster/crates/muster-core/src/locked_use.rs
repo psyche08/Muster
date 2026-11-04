@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use rand::RngCore;
 
 use crate::canonical::{Reader, Writer};
-use crate::identity::verify_domain;
 use crate::{Decision, DeviceId, Error, LocalPolicy, Permission, State, TargetState, authorize};
 
 pub const DOMAIN: &str = "MUSTER-LOCKED-USE-V1";
@@ -268,7 +267,7 @@ struct Lease {
     challenge: Challenge,
     deadline: Instant,
     input_generation: u64,
-    keys: OperationKeys,
+    keys: Authorization,
     inspection: bool,
     /// The agent provider the operation drives; its grant is re-checked.
     /// Empty for a terminal session.
@@ -736,7 +735,14 @@ impl Gate {
         if signature.len() > 80 {
             return Err(reject("signature too large"));
         }
-        lease.keys.verify(challenge, signature)?;
+        // ADR 0120: a remote member's `locked.control` is the authorization,
+        // and the challenge and requester checked above bind this step to one
+        // request. This Mac's own leases keep their separate admission paths:
+        // `arm_unattended` and `arm_scheduled` are the only ways in, and they
+        // used to be protected by a signature check that no longer runs here.
+        if lease.keys == Authorization::OwnMachine {
+            return Err(reject("this Mac's own lease is not armed by a requester"));
+        }
         self.check(state, policy, now, observation, false)?;
         if observation.screen != self.lease.as_ref().unwrap().initial_screen {
             self.stop(StopReason::UnexpectedScreenState, now);
@@ -1078,7 +1084,10 @@ impl Gate {
         if signature.len() > 80 {
             return Err(reject("signature too large"));
         }
-        lease.keys.verify(challenge, signature)?;
+        // ADR 0120: the renewal is bound by its own outstanding challenge.
+        if lease.keys == Authorization::OwnMachine {
+            return Err(reject("this Mac's own lease is not renewed by a requester"));
+        }
         self.check(state, policy, now, observation, true)?;
         if observation.screen != Screen::Unlocked {
             self.stop(StopReason::UnexpectedScreenState, now);
@@ -1210,30 +1219,19 @@ impl Gate {
     }
 }
 
-/// Phone operations use the existing paired hardware identity without a
-/// biometric prompt per message. Presence remains accepted for older clients;
-/// desktop writes and all administrative RPCs still require Presence. A typed
-/// read-only inspection may use any enrolled device key, without queue authority.
+/// What authorizes a lease, re-derived on every gate tick so that losing it
+/// stops a live transaction (ADR 0120).
 #[derive(Clone, PartialEq, Eq)]
-struct OperationKeys {
-    presence: Option<crate::PublicKey>,
-    phone: Option<crate::PublicKey>,
-}
-
-impl OperationKeys {
-    fn verify(&self, challenge: &Challenge, signature: &[u8]) -> Result<(), Error> {
-        let encoded = challenge.encode();
-        if self
-            .presence
-            .iter()
-            .chain(self.phone.iter())
-            .any(|key| verify_domain(key, DOMAIN, &encoded, signature).is_ok())
-        {
-            Ok(())
-        } else {
-            Err(reject("operation signature does not match an enrolled key"))
-        }
-    }
+enum Authorization {
+    /// A remote member's `locked.control`, granted by the network admin when
+    /// the device joined. No per-operation signature: that grant is the
+    /// decision, and the requesting device has already authenticated its own
+    /// user. The challenge still binds the operation to one request and one
+    /// principal.
+    Scope,
+    /// This Mac's own lease (ADR 0087, ADR 0097). There is no requester to
+    /// authorize, and its own admission path is the only way in.
+    OwnMachine,
 }
 
 /// What a lease authorizes beyond `locked.control`.
@@ -1263,7 +1261,7 @@ fn authorization(
     target: DeviceId,
     requester: DeviceId,
     scope: Scope,
-) -> Result<OperationKeys, Error> {
+) -> Result<Authorization, Error> {
     if let Scope::Unattended { provider } | Scope::Scheduled { provider } = scope {
         return unattended(state, policy, target, requester, provider);
     }
@@ -1271,27 +1269,24 @@ fn authorization(
         return Err(reject("target is not an active remote member"));
     }
     let locked = TargetState { locked: true };
-    let (control, inspection) = match scope {
-        Scope::Agent {
-            provider,
-            inspection,
-        } => (
-            Some(Permission::Agent {
-                provider: Some(provider.to_owned()),
-                control: true,
-            }),
-            inspection,
-        ),
-        Scope::Terminal => (Some(Permission::Terminal { control: true }), false),
-        Scope::Device | Scope::Unattended { .. } | Scope::Scheduled { .. } => (None, false),
+    // A read-only inspection answers to the same grant as a write: ADR 0120
+    // removed the separate key rule that distinguished them.
+    let control = match scope {
+        Scope::Agent { provider, .. } => Some(Permission::Agent {
+            provider: Some(provider.to_owned()),
+            control: true,
+        }),
+        Scope::Terminal => Some(Permission::Terminal { control: true }),
+        Scope::Device | Scope::Unattended { .. } | Scope::Scheduled { .. } => None,
     };
-    if authorize(
+    if !authorize(
         state,
         &requester,
         &Permission::LockedControl,
         policy,
         &locked,
-    ) != Decision::NeedsPresence
+    )
+    .is_allow()
         || control.as_ref().is_some_and(|control| {
             authorize(state, &requester, control, policy, &locked) != Decision::Allow
         })
@@ -1304,21 +1299,12 @@ fn authorization(
             }
         }));
     }
-    let record = &state
+    // ADR 0120: no enrolled key is looked up. The admin granted the scope when
+    // this member joined, and that grant is re-checked on every gate tick.
+    state
         .active(&requester)
-        .ok_or_else(|| reject("inactive requester"))?
-        .record;
-    let keys = OperationKeys {
-        presence: record.presence_key.clone(),
-        phone: (inspection || record.kind == crate::DeviceKind::Phone)
-            .then(|| record.public_key.clone()),
-    };
-    if keys.presence.is_none() && keys.phone.is_none() {
-        return Err(reject(
-            "requesting desktop has no enrolled Presence key; changing locked.control alone cannot enable desktop Locked Use",
-        ));
-    }
-    Ok(keys)
+        .ok_or_else(|| reject("inactive requester"))?;
+    Ok(Authorization::Scope)
 }
 
 /// An unattended lease has no requester to authorize: only this Mac, while
@@ -1330,7 +1316,7 @@ fn unattended(
     target: DeviceId,
     requester: DeviceId,
     provider: &str,
-) -> Result<OperationKeys, Error> {
+) -> Result<Authorization, Error> {
     if requester != target || state.active(&target).is_none() {
         return Err(reject(
             "an unattended lease belongs to this active Mac alone",
@@ -1345,10 +1331,7 @@ fn unattended(
             "this Mac does not allow unattended Locked Use of this app",
         ));
     }
-    Ok(OperationKeys {
-        presence: None,
-        phone: None,
-    })
+    Ok(Authorization::OwnMachine)
 }
 
 fn random() -> Result<[u8; 32], Error> {

@@ -13,6 +13,27 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
+### 2026-11-04: `locked.control` is the authorization
+
+[ADR 0120](adr/0120-locked-control-without-a-per-operation-signature.md) ends
+the per-operation signature for Locked Use. A member the network admin granted
+`locked.control`, on a machine whose local policy allows locked control, opens
+and runs a transaction on its granted scope with no Presence signature and no
+enrolled key of its own: the admin made that decision when the device joined,
+and the requesting device has already authenticated its own user.
+
+Administering the network is unchanged and still asks. `network.admin` remains
+the one high-risk permission, so joining, approving a joiner, changing scopes
+and enrolling or revoking a Presence key still need an operation-bound Presence
+proof. Enrollment itself stays: a Presence key still identifies a desktop for
+console routing.
+
+The transaction is otherwise untouched — a freshly observed locked console, the
+local switches, the app allowlist, the cover and its watchdog, one-time plugin
+consumption, the local-input stop, the deadline, draining, and the relock before
+the cover is released. The challenge still binds one operation to one requester,
+and revocation still stops a live transaction at the next check.
+
 ### 2026-11-02: a task-scoped scheduler grant
 
 [ADR 0097](adr/0097-task-scoped-scheduler-grant-for-locked-use.md) adds a
@@ -55,8 +76,9 @@ operation.
 
 ### 2026-11-02: this Mac's own unattended lease for idle compaction
 
-[ADR 0087](adr/0087-idle-compaction-on-a-locked-or-busy-mac.md) adds one
-exception to "every temporary unlock needs a person's Presence signature".
+[ADR 0087](adr/0087-idle-compaction-on-a-locked-or-busy-mac.md) was the first
+exception to "every temporary unlock needs a person's Presence signature", a
+rule ADR 0120 has since replaced for `locked.control`.
 The person chose it for idle compaction. The daemon's idle-compaction loop may
 issue a lease to its own Mac for exactly one operation: `/compact` in one idle
 Claude Code conversation.
@@ -88,9 +110,10 @@ The target's Shared Rust handler authorizes the provider request and chooses:
    and local service policy, without creating a temporary-unlock lease or
    requiring the Locked Use switch.
 
-Desktop callers use native Presence signatures and the admin-approved public
-key [enrollment](PRESENCE_ENROLLMENT.md). Phones retain their existing signing
-flow. A lost receipt stays unknown; these routing choices never replay it.
+Desktop and phone callers alike are admitted by their granted scope since
+ADR 0120; the admin-approved public key [enrollment](PRESENCE_ENROLLMENT.md)
+still identifies a desktop and still authorizes network administration. A lost
+receipt stays unknown; these routing choices never replay it.
 
 ### 2026-10-16: provider serialization survives RPC cancellation
 
@@ -174,9 +197,9 @@ device key, without a Face ID/Touch ID prompt for each message. Shared Rust
 validates the network, target, requester, operation digest and turn before
 signing. The target accepts this key only for a roster member of kind Phone
 with the existing provider and locked.control grants and enabled local policy.
-Presence signatures remain accepted for older clients and required for desktop
-requesters, browser control and network administration. Both clients and target
-daemons need this version for prompt-free mobile operation. The 15-second bound,
+Since ADR 0120 no Locked Use step is signed, browser control included; a
+signature an older client still sends is ignored, and network administration
+remains the one operation that requires a Presence proof. The 15-second bound,
 one-time nonce, cover/watchdog, local-input checks, revocation and relock remain.
 
 Controllers created during Locked Use now run their observers on the durable
@@ -350,7 +373,7 @@ This prevents authorization replay only; it **does not replace actual lock recov
 ```mermaid
 stateDiagram-v2
     Idle --> AwaitingSignature: issue
-    AwaitingSignature --> Armed: presence signature verified
+    AwaitingSignature --> Armed: requester arms its own challenge
     Armed --> Authorizing: plugin consumes nonce
     Authorizing --> AwaitingUnlock: authenticated Allowed terminal
     AwaitingUnlock --> Active: later OS unlock observed
@@ -369,7 +392,7 @@ Only a successful `take_action(requester, turn, operation, …)` consumes one ex
 `take_action` revalidates the operation and current authorization. The executor must keep checking the Gate during the action;
 a successful call cannot let arbitrarily long-running code escape the deadline.
 
-Every check revalidates active membership, both scopes, local policy, network id, and Presence Key.
+Every check revalidates active membership, both scopes, local policy and network id.
 Observations must come from the target OS/local runtime, be no older than 250 ms, and neither regress nor come from the future.
 Mismatched console identity, unknown lock state, missing or changed input observation, controller disconnection, lost cover, or watchdog
 loss revokes permission. Cover/watchdog confirmation binds this nonce; confirmation from a previous round cannot be reused.

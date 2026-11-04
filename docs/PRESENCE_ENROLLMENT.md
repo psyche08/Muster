@@ -3,7 +3,11 @@
 > Privacy note: operational identities in this record are anonymized examples; see [public content policy](PUBLIC_CONTENT.md). Technical outcomes and acceptance limits are unchanged.
 
 Desktop Presence signatures prove interactive user authentication on the
-requesting Mac. The ordinary daemon identity key is not a substitute. The native
+requesting Mac. Since
+[ADR 0120](adr/0120-locked-control-without-a-per-operation-signature.md) they no
+longer gate Locked Use, which `locked.control` authorizes on its own; they
+remain what identifies a desktop for console routing and what authorizes
+`network.admin`. The ordinary daemon identity key is not a substitute. The native
 shell creates/uses the hardware-backed Presence key; Shared Rust owns candidate
 registration, administrator approval, binding verification and request routing.
 Private key material never enters the daemon, roster, CLI or enrollment proof.

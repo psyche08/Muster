@@ -1,7 +1,6 @@
 use std::net::Ipv4Addr;
 use std::time::{Duration, Instant};
 
-use muster_core::identity::sign_domain;
 use muster_core::locked_use::*;
 use muster_core::{
     Author, DeviceId, DeviceKind, DeviceRecord, DeviceUpdate, HwSigner, LocalPolicy, Roster, Scope,
@@ -20,66 +19,68 @@ struct Fixture {
     observation: Observation,
 }
 
+/// ADR 0120: the grant arms the lease, for a phone and a desktop alike, and
+/// the challenge stays one-shot and revocable while it runs.
 #[test]
-fn paired_phone_signs_without_presence_but_desktop_device_key_cannot() {
+fn the_granted_scope_arms_one_challenge_once_and_revocation_still_stops_it() {
     for kind in [DeviceKind::Phone, DeviceKind::Desktop] {
         let mut f = Fixture::with_kind(kind);
         let c = f.issue();
-        let signature = f.phone.sign(&c.signing_message()).unwrap();
-        let result = f.gate.arm(
-            f.roster.state(),
-            &f.policy,
-            f.peer,
-            &c,
-            &signature,
-            f.now,
-            f.observation,
+        assert!(
+            f.gate
+                .arm(
+                    f.roster.state(),
+                    &f.policy,
+                    f.peer,
+                    &c,
+                    &[],
+                    f.now,
+                    f.observation
+                )
+                .is_ok()
         );
-        assert_eq!(result.is_ok(), kind == DeviceKind::Phone);
-        if kind == DeviceKind::Phone {
-            // One signed challenge remains one-shot.
-            assert!(
-                f.gate
-                    .arm(
-                        f.roster.state(),
-                        &f.policy,
-                        f.peer,
-                        &c,
-                        &signature,
-                        f.now,
-                        f.observation
-                    )
-                    .is_err()
-            );
-            f.policy.allow_locked_control = false;
-            f.poll();
-            assert_eq!(f.gate.last_stop(), Some(StopReason::AuthorizationChanged));
-            assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
-        }
+        // One challenge remains one-shot.
+        assert!(
+            f.gate
+                .arm(
+                    f.roster.state(),
+                    &f.policy,
+                    f.peer,
+                    &c,
+                    &[],
+                    f.now,
+                    f.observation
+                )
+                .is_err()
+        );
+        f.policy.allow_locked_control = false;
+        f.poll();
+        assert_eq!(f.gate.last_stop(), Some(StopReason::AuthorizationChanged));
+        assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
     }
 }
 
+/// ADR 0120: enrollment is no longer a precondition. A member the admin
+/// granted `locked.control` opens a challenge with no key of its own.
 #[test]
-fn desktop_without_presence_key_fails_before_challenge_but_phone_remains_supported() {
+fn a_member_with_no_enrolled_key_still_opens_a_challenge() {
     for kind in [DeviceKind::Desktop, DeviceKind::Phone] {
         let mut f = Fixture::with_enrollment(kind, false);
-        let result = f.gate.issue(
-            f.roster.state(),
-            &f.policy,
-            f.peer,
-            "codex",
-            "turn-1",
-            [9; 32],
-            Duration::from_secs(10),
-            f.now,
-            f.observation,
+        assert!(
+            f.gate
+                .issue(
+                    f.roster.state(),
+                    &f.policy,
+                    f.peer,
+                    "codex",
+                    "turn-1",
+                    [9; 32],
+                    Duration::from_secs(10),
+                    f.now,
+                    f.observation,
+                )
+                .is_ok()
         );
-        if kind == DeviceKind::Desktop {
-            let error = result.unwrap_err().to_string();
-            assert!(error.contains("no enrolled Presence key"), "{error}");
-        } else {
-            assert!(result.is_ok());
-        }
     }
 }
 
@@ -433,29 +434,27 @@ fn delayed_presence_is_rejected_at_exact_deadline() {
     assert_eq!(f.gate.phase(), Phase::Relocking);
 }
 
+/// ADR 0120 removed the signature, not the binding: the challenge still names
+/// one principal and one exact set of claims, and an oversized signature field
+/// is still refused.
 #[test]
-fn wrong_signer_domain_principal_and_every_changed_claim_are_rejected() {
+fn a_changed_claim_or_another_principal_still_cannot_arm() {
     let mut f = Fixture::new();
     let c = f.issue();
-    let good = f.presence.sign(&c.signing_message()).unwrap();
     let other = SoftSigner::generate();
-    let bad_signer = other.sign(&c.signing_message()).unwrap();
-    let wrong_domain = sign_domain(&f.presence, "MUSTER-PRESENCE-V1", &c.encode()).unwrap();
-    for sig in [&bad_signer, &wrong_domain, &vec![0; 81]] {
-        assert!(
-            f.gate
-                .arm(
-                    f.roster.state(),
-                    &f.policy,
-                    f.peer,
-                    &c,
-                    sig,
-                    f.now,
-                    f.observation
-                )
-                .is_err()
-        );
-    }
+    assert!(
+        f.gate
+            .arm(
+                f.roster.state(),
+                &f.policy,
+                f.peer,
+                &c,
+                &[0; 81],
+                f.now,
+                f.observation
+            )
+            .is_err()
+    );
     assert!(
         f.gate
             .arm(
@@ -463,20 +462,19 @@ fn wrong_signer_domain_principal_and_every_changed_claim_are_rejected() {
                 &f.policy,
                 other.public_key().device_id(),
                 &c,
-                &good,
+                &[],
                 f.now,
                 f.observation
             )
             .is_err()
     );
     // Includes epoch, nonce, network, target, caller, console, turn, digest,
-    // TTL and codec framing; even a correctly re-signed alteration must fail.
+    // TTL and codec framing.
     let bytes = c.encode();
     for index in 0..bytes.len() {
         let mut changed = bytes.clone();
         changed[index] ^= 1;
         if let Ok(changed) = Challenge::decode(&changed) {
-            let sig = f.presence.sign(&changed.signing_message()).unwrap();
             assert!(
                 f.gate
                     .arm(
@@ -484,7 +482,7 @@ fn wrong_signer_domain_principal_and_every_changed_claim_are_rejected() {
                         &f.policy,
                         f.peer,
                         &changed,
-                        &sig,
+                        &[],
                         f.now,
                         f.observation
                     )
@@ -499,7 +497,7 @@ fn wrong_signer_domain_principal_and_every_changed_claim_are_rejected() {
             &f.policy,
             f.peer,
             &c,
-            &good,
+            &[],
             f.now,
             f.observation,
         )
@@ -1322,8 +1320,10 @@ fn watchdog_witness_rejects_other_transaction_console_input_and_times() {
     assert!(f.action(f.peer, "turn-1", &[9; 32]).is_err());
 }
 
+/// ADR 0120: an inspection answers to the same grant as a write. It stays
+/// scoped, single-use and revocable, and still binds no provider queue.
 #[test]
-fn desktop_inspection_is_signed_scoped_single_use_and_revocable() {
+fn desktop_inspection_is_scoped_single_use_and_revocable() {
     let mut f = Fixture::with_kind(DeviceKind::Desktop);
     let c = f
         .gate
@@ -1340,28 +1340,13 @@ fn desktop_inspection_is_signed_scoped_single_use_and_revocable() {
         )
         .unwrap();
     assert!(f.gate.bind_provider_queue("codex").is_err());
-    let wrong = SoftSigner::generate().sign(&c.signing_message()).unwrap();
-    assert!(
-        f.gate
-            .arm(
-                f.roster.state(),
-                &f.policy,
-                f.peer,
-                &c,
-                &wrong,
-                f.now,
-                f.observation
-            )
-            .is_err()
-    );
-    let signature = f.phone.sign(&c.signing_message()).unwrap();
     f.gate
         .arm(
             f.roster.state(),
             &f.policy,
             f.peer,
             &c,
-            &signature,
+            &[],
             f.now,
             f.observation,
         )
@@ -1373,13 +1358,13 @@ fn desktop_inspection_is_signed_scoped_single_use_and_revocable() {
                 &f.policy,
                 f.peer,
                 &c,
-                &signature,
+                &[],
                 f.now,
                 f.observation
             )
             .is_err()
     );
-    // Inspection cannot turn into a write with a different signed digest.
+    // Inspection cannot turn into a write with a different digest.
     assert!(f.action(f.peer, "inspect-1", &[9; 32]).is_err());
     f.policy.allow_locked_control = false;
     f.poll();
@@ -1409,7 +1394,7 @@ fn a_terminal_session_stays_unlocked_only_while_its_requester_renews_it() {
 }
 
 #[test]
-fn a_renewal_runs_from_its_issue_and_is_signed_once_by_the_requester() {
+fn a_renewal_runs_from_its_issue_and_is_used_once_by_its_requester() {
     let mut f = Fixture::new();
     f.terminal_active();
     f.tick(5_000);
@@ -1430,11 +1415,10 @@ fn a_renewal_runs_from_its_issue_and_is_signed_once_by_the_requester() {
     };
     let deadline = renew(&mut f, &next, &signature).unwrap();
     assert_eq!(deadline, f.now - Duration::from_millis(9_000) + MAX_TTL);
-    // Used once; another signer, another requester or another session
-    // cannot renew.
+    // Used once; another requester or another session cannot renew. ADR 0120
+    // left no signer to be wrong about.
     assert!(renew(&mut f, &next, &signature).is_err());
     let stranger = SoftSigner::generate();
-    assert!(f.renew_with(&stranger).is_err());
     let other = stranger.public_key().device_id();
     assert!(f.gate.renewal(other, f.now).is_err());
     assert_eq!(f.gate.phase(), Phase::Active);

@@ -209,8 +209,9 @@ The browser page can review JSON requests and authenticate remote execution.
 `muster --target Mac-B browser --approve-in-app '<JSON>'` fills that review page;
 it never executes from a deep link alone. Browser authorization uses independent
 `browser.view` / `browser.control` scopes; locked targets additionally require
-`locked.control`, local policy and a request-bound presence proof. CDP leaves the
-screen locked and does not acquire a temporary desktop unlock/cover lease.
+`locked.control` and local policy; since ADR 0120 no presence proof. CDP
+leaves the screen locked and does not acquire a temporary desktop unlock/cover
+lease.
 See [extension guide](../src/browser/agenthalo-extension/README.md).
 
 Validation: 44 Rust, JavaScript and Swift checks passed, along with targeted
