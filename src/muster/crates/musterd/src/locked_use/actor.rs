@@ -835,7 +835,8 @@ pub(super) fn start_action(
                 &muster_core::Permission::LockedControl,
                 &checked_daemon.policy().read().unwrap(),
                 &muster_core::TargetState { locked: true },
-            ) == muster_core::Decision::NeedsPresence
+            )
+            .is_allow()
             && crate::handler::locked_operation_permission(&checked_daemon, &checked_request)
                 .is_ok_and(|permission| {
                     muster_core::authorize(

@@ -115,33 +115,21 @@ fn status(resp: Resp) -> Status {
     Status::try_from(r.status).unwrap()
 }
 
+/// ADR 0120: a locked browser call needs the local switch and the scope, and
+/// nothing else. It still leaves the screen locked, stays idempotent by op_id,
+/// and still cannot install the extension.
 #[tokio::test]
-async fn locked_browser_requires_policy_presence_and_binding_without_unlocking() {
-    let (_dir, daemon, client, presence, console, count) = fixture().await;
+async fn locked_browser_requires_the_local_switch_and_never_unlocks() {
+    let (_dir, daemon, client, _presence, console, count) = fixture().await;
     console.0.store(true, Ordering::SeqCst);
     assert!(client.call(request("denied-policy")).await.is_err());
-    daemon.policy().write().unwrap().allow_locked_control = true;
-    assert!(client.call(request("denied-presence")).await.is_err());
-    let id = client.next_id();
-    let signature = presence
-        .sign(&muster_proto::presence_message(id, &request("original")))
-        .unwrap();
-    assert!(
-        client
-            .start_presigned(id, request("changed"), signature)
-            .await
-            .unwrap()
-            .finish()
-            .await
-            .is_err()
-    );
     assert_eq!(count.load(Ordering::SeqCst), 0);
+    daemon.policy().write().unwrap().allow_locked_control = true;
     for expected in [Status::Applied, Status::Duplicate] {
-        let call = client
-            .start_signed(request("once"), &|m| presence.sign(m).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(status(call.finish().await.unwrap()), expected);
+        assert_eq!(
+            status(client.call(request("once")).await.unwrap()),
+            expected
+        );
     }
     assert_eq!(count.load(Ordering::SeqCst), 1);
     assert!(console.locked());

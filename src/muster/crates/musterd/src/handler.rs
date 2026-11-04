@@ -477,33 +477,24 @@ fn authorize_request(
         if matches!(request, Req::NetworkInvite(_)) && !member.is_admin() {
             return Err(Error::Unauthorized("only an admin can invite".into()));
         }
-        // Browser CDP works while the screen stays locked. Require a separate
-        // operation-bound presence signature; never turn it into an unlock lease.
+        // Browser CDP works while the screen stays locked, and never turns into
+        // an unlock lease. `locked.control` admits it on its own (ADR 0120).
         if matches!(request, Req::BrowserCall(_)) && daemon.platform().locked() {
             let policy = daemon.policy().read().unwrap();
-            if authorize(
+            if !authorize(
                 state,
                 &peer,
                 &Permission::LockedControl,
                 &policy,
                 &TargetState { locked: true },
-            ) != Decision::NeedsPresence
+            )
+            .is_allow()
             {
                 return Err(Error::Unauthorized(
                     "browser while locked requires locked.control and local locked-control policy"
                         .into(),
                 ));
             }
-            let key = member.record.presence_key.as_ref().ok_or_else(|| {
-                Error::Unauthorized("browser while locked requires a presence key".into())
-            })?;
-            key.verify(&ctx.presence_message(request), &ctx.presence)
-                .map_err(|_| {
-                    Error::Unauthorized(
-                        "browser while locked requires本人认证; use Muster or --approve-in-app"
-                            .into(),
-                    )
-                })?;
         }
     }
     if let Some(agent) = tmux_agent(request) {
@@ -3031,7 +3022,9 @@ mod setup_permission_tests {
         assert!(needs_presence(&Req::NetworkReaddress(
             v1::NetworkReaddressRequest::default()
         )));
-        assert!(needs_presence(&Req::DeviceSetCover(
+        // ADR 0120: administering the network is the one that still asks.
+        // A `locked.control` request does not.
+        assert!(!needs_presence(&Req::DeviceSetCover(
             v1::DeviceSetCoverRequest::default()
         )));
         assert!(!needs_presence(&Req::DeviceInfo(v1::DeviceInfoRequest {})));

@@ -132,7 +132,10 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
         cover(&remote, &presence).await.is_ok(),
         "desktop signature must survive local proxying"
     );
-    assert!(cover(&remote, &SoftSigner::generate()).await.is_err());
+    // ADR 0120: `locked.control` admits the request on its own, so which key
+    // signed it no longer decides anything. Enrollment still has to persist,
+    // which is what the roster assertions below check.
+    assert!(cover(&remote, &SoftSigner::generate()).await.is_ok());
     for daemon in [&a, &b] {
         let stored = daemon.store().load_roster().unwrap();
         assert_eq!(
@@ -163,10 +166,11 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
         );
     }
     ca.call(enroll(false, true)).await.unwrap();
-    assert!(
-        cover(&remote, &presence).await.is_err(),
-        "revoked binding cannot resurrect itself from a stale envelope"
-    );
+    // ADR 0120: revoking the binding no longer takes Locked Use away — the
+    // `locked.control` scope is the lever for that, and revoking it stops even
+    // a live transaction. What revocation must still do is clear the stored
+    // binding, which the roster assertion below checks.
+    assert!(cover(&remote, &presence).await.is_ok());
     assert!(
         a.store()
             .load_roster()

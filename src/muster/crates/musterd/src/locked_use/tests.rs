@@ -382,7 +382,9 @@ async fn start_fixture(
         .unwrap();
         roster.insert(genesis).unwrap();
         let mut record = DeviceRecord::new(peer_key.public_key(), "phone", DeviceKind::Phone);
-        record.presence_key = Some(presence.public_key());
+        // ADR 0120: no Presence key is enrolled for the requester. Every test
+        // below therefore runs on the granted scope alone, which is the whole
+        // point of the decision; signatures the tests still produce are ignored.
         record
             .scopes
             .extend([Scope::LockedControl, Scope::Terminals]);
@@ -516,6 +518,17 @@ async fn unattended(
     (owner, os, reply)
 }
 
+/// The unlock is submitted by the spawned job, not by the fixed settle sleep in
+/// `execute` / `unattended` / `scheduled`, so a loaded machine can reach the
+/// assertion first. Wait for the flag instead of assuming the sleep covered it.
+async fn unlock_started(os: &Os) {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !os.unlock_started.load(Ordering::SeqCst) {
+        assert!(Instant::now() < deadline, "unlock never started");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 /// A failure returns while the owner relocks; wait for it to finish.
 async fn ended(owner: &Owner) {
     let deadline = Instant::now() + Duration::from_secs(3);
@@ -530,7 +543,7 @@ async fn an_unattended_compaction_unlocks_under_cover_runs_and_relocks() {
     let (_dir, daemon, _owner, _os, _c, key, peer, _job) = start().await;
     crate::idle_compact::debug(&daemon, "on").unwrap();
     let (owner, os, reply) = unattended(&daemon).await;
-    assert!(os.unlock_started.load(Ordering::SeqCst));
+    unlock_started(&os).await;
     // A signed phone request cannot join this Mac's own lease.
     let queued = owner
         .enqueue(
@@ -831,7 +844,7 @@ async fn cancellation_joins_pending_unlock_before_releasing_console() {
     let (_dir, daemon, owner, os, c, key, peer, job) = start().await;
     os.delay_unlock.store(true, Ordering::SeqCst);
     let reply = execute(owner.clone(), &c, &key, peer).await;
-    assert!(os.unlock_started.load(Ordering::SeqCst));
+    unlock_started(&os).await;
     owner.cancel(peer, c.nonce(), None).await.unwrap();
     tokio::time::timeout(Duration::from_secs(3), job)
         .await
@@ -852,7 +865,7 @@ async fn owner_joins_submission_on_local_input_or_console_change() {
         let (_dir, daemon, owner, os, c, key, peer, job) = start().await;
         os.delay_unlock.store(true, Ordering::SeqCst);
         let reply = execute(owner.clone(), &c, &key, peer).await;
-        assert!(os.unlock_started.load(Ordering::SeqCst));
+        unlock_started(&os).await;
         if console_changed {
             os.audit_session.store(43, Ordering::SeqCst);
         } else {
@@ -2162,7 +2175,7 @@ async fn relocked(owner: &Owner, os: &Os) {
 async fn a_scheduled_lease_unlocks_under_cover_runs_its_one_operation_and_relocks() {
     let (_dir, daemon, _owner, _os, _c, _key, peer, _job) = start().await;
     let (owner, os, job, _hold, reply) = scheduled(&daemon, "op-s1").await;
-    assert!(os.unlock_started.load(Ordering::SeqCst));
+    unlock_started(&os).await;
     assert!(!job.started());
     // A signed phone request cannot join this task's lease.
     let queued = owner
