@@ -17,6 +17,15 @@ class PublicContentTests(unittest.TestCase):
         text += ' dev.linsheng.muster 89LGY6BD53 https://linsheng.dev:8443/muster/'
         self.assertEqual(list(module.findings(text)), [])
 
+    def test_a_reserved_name_covers_everything_under_it(self):
+        # RFC 2606 reserves these names and their subdomains, so an
+        # address-shaped fixture on one is synthetic; URL userinfo reads as an
+        # address to the same pattern.
+        text = 'https://user:pass@api.example.com/v1 ops@mail.staging.example.net'
+        self.assertEqual(list(module.findings(text)), [])
+        real = 'someone' + '@' + 'notexample.com'
+        self.assertEqual(list(module.findings(real)), [(1, 'contact-email')])
+
     def test_identity_and_credential_candidates_are_reported_without_values(self):
         candidate = 'fake-person' + '@' + 'mail.test'
         text = '\n' + candidate + '\n/Users/' + 'private-user/project'
