@@ -47,7 +47,24 @@ socket="$HOME/Library/Application Support/Muster/locked-use.sock"
 # Validate policy and signature before replacing the app.
 /usr/bin/python3 "$installer" "$plugin" "$socket" "$install_uid"
 # Stop the daemon that the previous copy registered, then replace the app.
+# pkill only asks; a SwiftUI app takes a moment to go. Deleting the bundle
+# while it is still running strands it: Launch Services loses the bundle, the
+# process keeps its event loop but no window-server connection, and the Dock
+# shows it as not responding forever (ADR 0122). So wait for it to leave,
+# escalating once, and refuse to delete the bundle while anything holds it.
 pkill -x Muster >/dev/null 2>&1 || true
+waited=0
+while pgrep -x Muster >/dev/null 2>&1; do
+  waited=$((waited + 1))
+  if [ "$waited" -eq 10 ]; then
+    pkill -KILL -x Muster >/dev/null 2>&1 || true
+  fi
+  if [ "$waited" -gt 20 ]; then
+    echo "Muster is still running after SIGTERM and SIGKILL; not replacing the bundle underneath it." >&2
+    exit 1
+  fi
+  sleep 0.5
+done
 launchctl bootout "gui/$(id -u)/dev.linsheng.musterd" >/dev/null 2>&1 || true
 rm -rf /Applications/Muster.app
 ditto "$app" /Applications/Muster.app
