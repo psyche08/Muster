@@ -123,6 +123,13 @@ flush() {
   fi
   [ -n "$br" ] && checked_out="$checked_out $br "
   if [ "$is_locked" = 1 ]; then keep "$path" "locked"; return 0; fi
+  # A registered path whose administrative files are gone answers nothing
+  # about its own state, and an empty answer reads as a clean tree. Keep it
+  # and say so rather than judging it or ending the sweep.
+  if ! git -C "$path" rev-parse --git-dir >/dev/null 2>&1; then
+    keep "$path" "registered, but not a readable worktree"
+    return 0
+  fi
   # --no-optional-locks keeps status from rewriting the index, which would
   # reset the idle clock below.
   dirty=$(git --no-optional-locks -C "$path" status --porcelain | wc -l | tr -d ' ')
