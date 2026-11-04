@@ -1168,7 +1168,12 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
     let checking = device.locked_use_setup == "checking";
     app::DesktopSetupView {
         ready: accessibility_ready && screen_recording_ready && plugin_ready,
-        restart_required: state.desktop_restart_required,
+        // A new Screen Recording grant reaches only a new process: macOS
+        // answers this daemon's preflight from what it cached at launch, in
+        // both directions, so the app never sees the grant land and no
+        // transition can be waited for. The restart is offered from the
+        // moment the grant is missing, and it is what makes one take.
+        restart_required: state.desktop_restart_required || !screen_recording_ready,
         can_restart: state.can_restart_desktop(),
         error: state.desktop_setup_error.clone(),
         visible: !state.desktop_setup_dismissed && (state.desktop_restart_required || !accessibility_ready || !screen_recording_ready || (!plugin_ready && !checking)),
@@ -1176,7 +1181,7 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
         screen_recording_message: if screen_recording_ready {
             "musterd 已获准读取窗口画面。"
         } else {
-            "在系统设置 → 隐私与安全性 → 屏幕录制中启用 musterd。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
+            "在系统设置 → 隐私与安全性 → 屏幕录制中启用 Muster；列表中的 musterd 属于同一项授权，一并启用。macOS 只把新授权交给新进程，所以启用后要用下方的「重启 Muster」才生效。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
         }.into(),
         can_install: matches!(device.locked_use_setup.as_str(), "checking" | "needs_installation"),
         plugin_message: match device.locked_use_setup.as_str() {
@@ -1188,36 +1193,37 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
     }
 }
 
-/// The terminal source's outstanding macOS Automation, for the Terminals
-/// page. Ghostty needs Automation only (it has no API to enable); iTerm2
-/// also needs its Python API. `None` means there is nothing to authorize,
-/// here or on any other platform.
+/// The terminal Automation this Mac still needs, for the Terminals page.
+/// One authorized source is all the Mac offers terminals through, so the
+/// other app's Automation is never asked for: a Mac driving iTerm2 has no
+/// use for a Ghostty grant, and being asked for one reads as a fault.
+/// Ghostty needs Automation only (it has no API to enable); iTerm2 also
+/// needs its Python API. `None` means there is no terminal app to
+/// authorize, here or on any other platform.
 fn terminal_authorization(state: &State) -> Option<app::TerminalAuthorizationView> {
     let device = local_mac(state)?;
-    let ghostty_pending = !device.ghostty_automation.is_empty()
-        && !matches!(
-            device.ghostty_automation.as_str(),
-            "granted" | "not_installed"
-        );
-    let iterm_ready_now = device.iterm2_automation == "not_installed"
-        || (device.iterm2_automation == "granted" && device.iterm2_api_available);
-    // Show the next outstanding source; one explicit action checks both.
-    let ghostty = device.terminal_source == "ghostty" || (iterm_ready_now && ghostty_pending);
-    let installed = if ghostty {
-        device.ghostty_automation != "not_installed"
-    } else {
-        device.iterm2_automation != "not_installed"
-    };
-    if !installed {
+    let iterm_installed = device.iterm2_automation != "not_installed";
+    let ghostty_installed =
+        !device.ghostty_automation.is_empty() && device.ghostty_automation != "not_installed";
+    if !iterm_installed && !ghostty_installed {
         return None;
     }
+    let iterm_ready = device.iterm2_automation == "granted" && device.iterm2_api_available;
+    let ghostty_ready = device.ghostty_automation == "granted";
+    let ready = iterm_ready || ghostty_ready;
+    // Which app the section speaks about: the authorized one once the Mac
+    // has terminals, otherwise the source Rust picked, or whichever of the
+    // two is installed at all.
+    let ghostty = if ready {
+        ghostty_ready && !iterm_ready
+    } else if device.terminal_source == "ghostty" {
+        ghostty_installed
+    } else {
+        !iterm_installed
+    };
     Some(app::TerminalAuthorizationView {
         app: if ghostty { "Ghostty" } else { "iTerm2" }.into(),
-        ready: if ghostty {
-            device.ghostty_automation == "granted"
-        } else {
-            device.iterm2_automation == "granted" && device.iterm2_api_available
-        },
+        ready,
         busy: state.busy > 0,
         message: if ghostty {
             match device.ghostty_automation.as_str() {
@@ -1291,9 +1297,12 @@ mod desktop_setup_tests {
         let view = desktop_setup(&state);
         assert!(view.visible && !view.screen_recording_ready);
         assert!(view.screen_recording_message.contains("屏幕录制"));
+        // The grant only reaches a new process, so the restart that makes it
+        // take is offered straight away rather than waited for.
+        assert!(view.restart_required);
         device(&mut state).screen_recording = String::new();
         let view = desktop_setup(&state);
-        assert!(view.screen_recording_ready && !view.visible);
+        assert!(view.screen_recording_ready && !view.visible && !view.restart_required);
     }
 
     /// Terminal Automation left the setup dialog: it no longer decides
@@ -1321,6 +1330,46 @@ mod desktop_setup_tests {
         assert!(!authorization.ready && !authorization.message.is_empty());
     }
 
+    /// One authorized source is all the Mac needs. A Ghostty that is
+    /// installed but not authorized must not be asked for while iTerm2
+    /// already drives this Mac's terminals, and the reverse holds too.
+    #[test]
+    fn an_authorized_source_never_asks_for_the_other_app() {
+        let mut state = ready();
+        device(&mut state).ghostty_automation = "not_running".into();
+        let authorization = terminal_authorization(&state).unwrap();
+        assert!(authorization.ready);
+        assert_eq!(authorization.app, "iTerm2");
+        // The other way round: Ghostty drives this Mac, iTerm2 is installed
+        // but unauthorized, and nothing asks for it.
+        device(&mut state).ghostty_automation = "granted".into();
+        device(&mut state).terminal_source = "ghostty".into();
+        device(&mut state).iterm2_automation = "missing".into();
+        device(&mut state).iterm2_api_available = false;
+        let authorization = terminal_authorization(&state).unwrap();
+        assert!(authorization.ready);
+        assert_eq!(authorization.app, "Ghostty");
+    }
+
+    /// With nothing authorized yet, the section names the source Rust picked,
+    /// and falls back to whichever app is installed at all.
+    #[test]
+    fn an_outstanding_grant_names_the_source_in_use() {
+        let mut state = ready();
+        device(&mut state).iterm2_automation = "missing".into();
+        device(&mut state).iterm2_api_available = false;
+        device(&mut state).ghostty_automation = "not_running".into();
+        let authorization = terminal_authorization(&state).unwrap();
+        assert!(!authorization.ready);
+        assert_eq!(authorization.app, "iTerm2"); // terminal_source is iterm2
+        device(&mut state).terminal_source = "ghostty".into();
+        assert_eq!(terminal_authorization(&state).unwrap().app, "Ghostty");
+        // Only Ghostty is installed: it is named whatever the source says.
+        device(&mut state).terminal_source = String::new();
+        device(&mut state).iterm2_automation = "not_installed".into();
+        assert_eq!(terminal_authorization(&state).unwrap().app, "Ghostty");
+    }
+
     /// The Terminals page belongs to the Mac itself; a phone's embedded
     /// daemon and other platforms get no authorization section.
     #[test]
@@ -1334,22 +1383,20 @@ mod desktop_setup_tests {
         assert!(terminal_authorization(&state).is_none());
     }
 
-    /// Ghostty needs Automation only; iTerm2 also needs its Python API, and
-    /// an iTerm2 that is authorized but has no API is not ready.
+    /// Ghostty needs Automation only; iTerm2 also needs its Python API, so
+    /// an iTerm2 that is authorized but has no API does not count as a
+    /// working source — and a Ghostty grant then makes the Mac ready.
     #[test]
-    fn the_outstanding_source_is_the_one_offered() {
+    fn an_iterm2_without_its_api_is_not_a_working_source() {
         let mut state = ready();
         device(&mut state).iterm2_api_available = false;
         let authorization = terminal_authorization(&state).unwrap();
         assert_eq!(authorization.app, "iTerm2");
         assert!(!authorization.ready);
-        device(&mut state).iterm2_api_available = true;
-        device(&mut state).ghostty_automation = "missing".into();
-        let authorization = terminal_authorization(&state).unwrap();
-        assert_eq!(authorization.app, "Ghostty");
-        assert!(!authorization.ready);
         device(&mut state).ghostty_automation = "granted".into();
-        assert!(terminal_authorization(&state).unwrap().ready);
+        let authorization = terminal_authorization(&state).unwrap();
+        assert!(authorization.ready);
+        assert_eq!(authorization.app, "Ghostty");
     }
 
     #[test]

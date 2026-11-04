@@ -1,4 +1,4 @@
-# ADR 0125: The Multica runtime bridge follows the container gateway
+# ADR 0126: The Multica runtime bridge follows the container gateway
 
 - Date: 2026-11-05
 - Status: Accepted; source and tests verified, installation and runtime pending
