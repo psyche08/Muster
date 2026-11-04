@@ -43,6 +43,8 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
     let db = open(&home.join("state_5.sqlite"))?;
     let mut q=db.prepare("SELECT id, title, cwd, updated_at, source, thread_source, originator, history_mode, attached_thread_parent_id FROM threads WHERE archived = 0 ORDER BY updated_at DESC LIMIT 10000")?;
     let mut rows = q.query([])?;
+    let history_db = open(&history)?;
+    let titles = crate::codex::load_index(&home.join("session_index.jsonl"));
     let mut out = Vec::new();
     while let Some(r) = rows.next()? {
         let id: String = r.get(0)?;
@@ -67,6 +69,12 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
             .or(r.get::<_, Option<String>>(8)?)
             .filter(|s| is_uuid(s));
         let updated = r.get::<_, i64>(3)?.max(0) as u64;
+        let message_time = last_message_time_from(&history_db, &id).unwrap_or(0);
+        let title = titles
+            .get(&id)
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or(r.get(1)?);
         out.push(Discovered {
             id,
             provider: Provider::Codex,
@@ -78,9 +86,9 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
             parent_id: parent,
             relation: if hidden { "subagent" } else { "" },
             meta: SessionMeta {
-                title: r.get(1)?,
+                title,
                 cwd: PathBuf::from(r.get::<_, String>(2)?),
-                updated_unix: updated,
+                updated_unix: message_time,
                 ..Default::default()
             },
             custom_title: true,
@@ -89,6 +97,29 @@ fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
     }
     Ok(out)
 }
+/// Native thread updated_at includes renames and metadata changes. Only a
+/// supported user/assistant message supplies the displayed conversation time.
+pub(crate) fn last_message_time(path: &Path, id: &str) -> rusqlite::Result<u64> {
+    last_message_time_from(&open(path)?, id)
+}
+fn last_message_time_from(db: &Connection, id: &str) -> rusqlite::Result<u64> {
+    let mut q = db.prepare("SELECT item_id, item_json, created_at_ms FROM thread_items WHERE thread_id=?1 AND item_type IN ('userMessage','agentMessage') AND length(item_json)<=1048576 ORDER BY rollout_ordinal DESC, item_id LIMIT 256")?;
+    let mut rows = q.query([id])?;
+    while let Some(row) = rows.next()? {
+        let raw: String = row.get(1)?;
+        let value: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
+        if !matches!(value["type"].as_str(), Some("userMessage" | "agentMessage")) {
+            continue;
+        }
+        if let Some(message) = item(&row.get::<_, String>(0)?, &raw, row.get(2)?)
+            && message.ts_unix > 0
+        {
+            return Ok(message.ts_unix);
+        }
+    }
+    Ok(0)
+}
+
 fn text(v: &Value) -> String {
     v.as_str()
         .map(str::to_owned)
@@ -377,6 +408,27 @@ mod store_tests {
         merge(dir.path(), &mut found);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].meta.title, "Same title");
+        assert_eq!(
+            found[0].meta.updated_unix, 1,
+            "message time, not thread updated_at"
+        );
+        state
+            .execute("UPDATE threads SET title='Renamed', updated_at=99999", [])
+            .unwrap();
+        db.execute(
+            "INSERT INTO thread_items VALUES(?1,'turn','tool',?2,99999000,2,'commandExecution')",
+            [ID, r#"{"type":"commandExecution","command":"example"}"#],
+        )
+        .unwrap();
+        let mut renamed = Vec::new();
+        merge(dir.path(), &mut renamed);
+        assert_eq!(renamed[0].meta.title, "Renamed");
+        assert_eq!(
+            renamed[0].meta.updated_unix, 1,
+            "rename and tool activity do not change message time"
+        );
+        db.execute("DELETE FROM thread_items WHERE item_id='tool'", [])
+            .unwrap();
         let mut viewer = History::new(found[0].clone());
         let first = viewer.poll().unwrap();
         assert_eq!(first.messages.len(), 1);

@@ -27,6 +27,8 @@ use super::input::{element_input_generation, modifiers_held, target_input_genera
 mod diagnostics;
 #[path = "native_options.rs"]
 mod native_options;
+#[path = "native_organization.rs"]
+mod native_organization;
 #[path = "native_queue.rs"]
 mod native_queue;
 use diagnostics::{Trace, control_label, label};
@@ -2274,6 +2276,9 @@ impl NativeAppController {
 
 #[async_trait]
 impl Controller for NativeAppController {
+    async fn organize(&self, plan: &muster_agent::organization::Plan) -> Result<(), Error> {
+        self.session_organize(plan).await
+    }
     fn native_surface_ready(&self) -> Result<bool, Error> {
         muster_agent::control_guard::check()?;
         if !ax::trusted()

@@ -387,8 +387,10 @@ async fn foreground_replaces_watch_and_rejects_its_late_snapshot() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn stalled_history_reports_error_then_reconnects_without_blank_forever() {
     let (_dir, core, shell, server, task) = fixture(true).await;
+    // The client's own history snapshot deadline is longer than the default
+    // patience; wait past it rather than shortening the product timeout.
     let view = shell
-        .wait(|v| {
+        .wait_within(Duration::from_secs(25), "a stalled history error", |v| {
             v.chat
                 .as_ref()
                 .is_some_and(|c| c.load_error.contains("timed out"))
@@ -609,7 +611,8 @@ impl Handler for PushCatalog {
                 }
                 Req::AgentWatch(r) => {
                     assert!(r.catalog_only);
-                    assert_eq!(r.limit, 1000);
+                    // One page of main sessions; later pages are requested.
+                    assert_eq!(r.limit, muster_agent::catalog::PAGE_SIZE as u32);
                     assert!(r.session.is_empty());
                     self.watches.fetch_add(1, Ordering::SeqCst);
                     loop {

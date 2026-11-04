@@ -9,6 +9,15 @@ use std::{
 
 type Entries = HashMap<String, Arc<Vec<u8>>>;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
+/// What the evictable part of the cache may keep on disk. Every session a
+/// device ever opened left a transcript page here and nothing removed it, so
+/// the directory grew with use and never shrank.
+const DISK_BYTES: u64 = 64 * 1024 * 1024;
+/// Durable entries are the owner's own unsent text. They are named apart so
+/// pruning can never take one, and pruning also leaves anything small enough
+/// to be a draft written before that naming existed.
+const KEEP: &str = ".keep";
+const DRAFT_BYTES: u64 = 32 * 1024;
 
 pub(crate) struct Cache {
     root: PathBuf,
@@ -31,6 +40,14 @@ impl Cache {
         let disk_worker = disk.clone();
         let (path, writes, notify) = (root.clone(), pending.clone(), wake.clone());
         let worker = tokio::spawn(async move {
+            {
+                let (path, disk) = (path.clone(), disk_worker.clone());
+                let _ = tokio::task::spawn_blocking(move || {
+                    let _disk = disk.lock().unwrap();
+                    prune(&path, DISK_BYTES);
+                })
+                .await;
+            }
             loop {
                 notify.notified().await;
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -81,7 +98,11 @@ impl Cache {
     pub fn get<T: Message + Default>(&self, key: &str) -> Option<T> {
         let mut memory = self.memory.lock().unwrap();
         if !memory.contains_key(key) {
-            let path = self.root.join(key);
+            // A durable entry written before it had its own name is still read
+            // from the plain one.
+            let path = [self.root.join(format!("{key}{KEEP}")), self.root.join(key)]
+                .into_iter()
+                .find(|p| p.is_file())?;
             if std::fs::metadata(&path).ok()?.len() > MAX_BYTES as u64 {
                 return None;
             }
@@ -99,7 +120,7 @@ impl Cache {
         let _disk = self.disk.lock().unwrap();
         Self::insert(&mut self.memory.lock().unwrap(), key.clone(), bytes.clone());
         self.pending.lock().unwrap().remove(&key);
-        if let Err(error) = write_entry(&self.root, &key, &bytes, true) {
+        if let Err(error) = write_entry(&self.root, &format!("{key}{KEEP}"), &bytes, true) {
             self.pending.lock().unwrap().insert(key, bytes);
             self.wake.notify_one();
             return Err(error);
@@ -130,6 +151,53 @@ impl Cache {
         Self::insert(&mut memory, key.clone(), bytes.clone());
         self.pending.lock().unwrap().insert(key, bytes);
         self.wake.notify_one();
+    }
+}
+
+/// Keeps the evictable cache within `budget`, oldest first. Durable entries and
+/// anything small enough to be a draft from before durable naming are left
+/// alone; so is a write still in flight, which carries the temporary suffix. A
+/// dropped page costs one ordinary history fetch the next time it is opened.
+fn prune(root: &std::path::Path, budget: u64) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut evictable = Vec::new();
+    let mut kept = 0u64;
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(KEEP) || name.ends_with(".tmp") || metadata.len() < DRAFT_BYTES {
+            kept += metadata.len();
+            continue;
+        }
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        evictable.push((modified, metadata.len(), entry.path()));
+    }
+    let mut total: u64 = kept + evictable.iter().map(|(_, len, _)| len).sum::<u64>();
+    if total <= budget {
+        return;
+    }
+    evictable.sort_by_key(|(modified, _, _)| *modified);
+    let mut removed = 0usize;
+    for (_, len, path) in evictable {
+        if total <= budget {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total -= len;
+            removed += 1;
+        }
+    }
+    if removed > 0 {
+        log::info!("Local cache pruned {removed} entries to {total} bytes");
     }
 }
 
@@ -204,6 +272,93 @@ mod tests {
         assert_eq!(
             Cache::new(dir.path().into()).get::<muster_proto::app::ChatDraft>(&key),
             Some(draft)
+        );
+    }
+
+    #[test]
+    fn pruning_bounds_pages_oldest_first_and_never_takes_the_owner_s_own_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let page = vec![b'p'; 64 * 1024];
+        let write = |name: &str, bytes: &[u8], age_secs: u64| {
+            let path = root.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(
+                    std::time::UNIX_EPOCH
+                        + std::time::Duration::from_secs(1_700_000_000 - age_secs),
+                ))
+                .unwrap();
+        };
+        for i in 0..6 {
+            write(&format!("page{i}"), &page, 100 - i);
+        }
+        write(&format!("draft{KEEP}"), &page, 1000); // Durable and oldest.
+        write("legacy-draft", b"unsent text", 1000); // Small and oldest.
+        write("inflight.tmp", &page, 1000);
+        prune(root, 4 * 64 * 1024);
+        let left: std::collections::BTreeSet<_> = std::fs::read_dir(root)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        // The oldest pages go first and the newest is the last to go. What is
+        // kept counts against the budget, so how many pages go with them
+        // follows from their size, not from a fixed count.
+        assert!(!left.contains("page0") && !left.contains("page1"));
+        assert!(left.contains("page5"));
+        assert!(left.contains(&format!("draft{KEEP}")));
+        assert!(left.contains("legacy-draft"));
+        assert!(left.contains("inflight.tmp"));
+        let total: u64 = std::fs::read_dir(root)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy() != "inflight.tmp")
+            .map(|e| e.metadata().unwrap().len())
+            .sum();
+        assert!(total <= 4 * 64 * 1024, "{total}");
+
+        // A second pass has nothing left to do.
+        let before = std::fs::read_dir(root).unwrap().count();
+        prune(root, 4 * 64 * 1024);
+        assert_eq!(std::fs::read_dir(root).unwrap().count(), before);
+    }
+
+    #[tokio::test]
+    async fn a_pruned_root_still_serves_the_owner_s_durable_draft() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = Cache::key(&["draft", "host", "session"]);
+        let draft = muster_proto::app::ChatDraft {
+            key: key.clone(),
+            text: "unsent".into(),
+            revision: "1".into(),
+        };
+        let cache = Cache::new(dir.path().into());
+        cache.put_durable(key.clone(), &draft).unwrap();
+        drop(cache);
+        // Fill the root past its budget with pages, then reopen: starting the
+        // cache prunes, and the draft survives it.
+        for i in 0..((DISK_BYTES / (64 * 1024)) + 4) {
+            std::fs::write(dir.path().join(format!("page{i}")), vec![b'p'; 64 * 1024]).unwrap();
+        }
+        let cache = Cache::new(dir.path().into());
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert_eq!(
+            cache.get::<muster_proto::app::ChatDraft>(&key),
+            Some(draft.clone())
+        );
+        assert!(dir.path().join(format!("{key}{KEEP}")).is_file());
+        let pages = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("page"))
+            .count();
+        assert!(
+            pages < usize::try_from(DISK_BYTES / (64 * 1024)).unwrap() + 4,
+            "{pages}"
         );
     }
 

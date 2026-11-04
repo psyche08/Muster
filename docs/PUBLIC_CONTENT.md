@@ -42,6 +42,9 @@ No website was deployed by this cleanup.
 Run `python3 scripts/check-public-content.py` before committing source or docs.
 Use synthetic session titles, reserved example domains and documentation addresses
 in fixtures; do not paste real account, task or device records into them.
+A reserved name covers everything under it, so `api.example.com` is as
+synthetic as `example.com` and an address-shaped fixture on either — URL
+userinfo such as `user:pass@api.example.com` included — is not a finding.
 The check reports file/line and rule names without printing candidate secrets.
 It checks tracked UTF-8 content only, not Git history, images or remote services.
 

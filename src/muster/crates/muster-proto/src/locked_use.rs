@@ -17,6 +17,7 @@ pub fn operation(req: &Req) -> Option<v1::LockedUseOperation> {
             Req::AgentChatOpen(r) => Operation::ChatOpen(r.clone()),
             Req::AgentChatOptions(r) => Operation::ChatOptions(r.clone()),
             Req::AgentChatSetOptions(r) => Operation::ChatSetOptions(r.clone()),
+            Req::AgentOrganize(r) => Operation::Organize(r.clone()),
             _ => return None,
         }),
     })
@@ -36,6 +37,7 @@ pub fn request(op: &v1::LockedUseOperation) -> Option<Req> {
         Operation::ChatOpen(r) => Req::AgentChatOpen(r.clone()),
         Operation::ChatOptions(r) => Req::AgentChatOptions(r.clone()),
         Operation::ChatSetOptions(r) => Req::AgentChatSetOptions(r.clone()),
+        Operation::Organize(r) => Req::AgentOrganize(r.clone()),
         Operation::Terminal(_) | Operation::Device(_) => return None,
     })
 }
@@ -65,6 +67,7 @@ pub fn turn(op: &v1::LockedUseOperation) -> Option<&str> {
         Operation::ChatOpen(r) => &r.op_id,
         Operation::ChatOptions(r) => &r.op_id,
         Operation::ChatSetOptions(r) => &r.op_id,
+        Operation::Organize(r) => &r.op_id,
     };
     (!id.is_empty()
         && id.len() <= 128
@@ -323,6 +326,40 @@ mod creation_tests {
             assert_ne!(
                 digest(&op),
                 digest(&operation(&Req::TerminalCreate(changed)).unwrap())
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod organization_tests {
+    use super::*;
+    #[test]
+    fn organization_identity_action_and_destination_are_signed() {
+        let request = v1::AgentOrganizeRequest {
+            op_id: "operation".into(),
+            session: "session-uuid".into(),
+            action: v1::agent_organize_request::Action::Move as i32,
+            section_id: "native-group".into(),
+            name: String::new(),
+        };
+        let original = operation(&Req::AgentOrganize(request.clone())).unwrap();
+        assert_eq!(
+            super::request(&original),
+            Some(Req::AgentOrganize(request.clone()))
+        );
+        assert_eq!(turn(&original), Some("operation"));
+        for field in 0..4 {
+            let mut changed = request.clone();
+            match field {
+                0 => changed.session = "other-session".into(),
+                1 => changed.section_id = "other-group".into(),
+                2 => changed.action = v1::agent_organize_request::Action::Archive as i32,
+                _ => changed.name = "Other name".into(),
+            };
+            assert_ne!(
+                digest(&original),
+                digest(&operation(&Req::AgentOrganize(changed)).unwrap())
             );
         }
     }

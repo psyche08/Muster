@@ -146,6 +146,7 @@ fn access_for(req: &Req) -> Access {
         | Req::AgentChatOptions(_)
         | Req::AgentChatSetOptions(_)
         | Req::AgentComplete(_)
+        | Req::AgentOrganize(_)
         | Req::AgentInspect(_) => Access::AgentSession { control: true },
     }
 }
@@ -643,6 +644,7 @@ fn session_provider(daemon: &Daemon, request: &Req) -> Result<(String, Option<St
         | Req::AgentRespond(_)
         | Req::AgentInterrupt(_)
         | Req::AgentComplete(_)
+        | Req::AgentOrganize(_)
         | Req::AgentInspect(_) => native_session(daemon, request)?,
         _ => return Err(Error::Invalid("not an agent session request".into())),
     };
@@ -709,14 +711,44 @@ impl<'a> AgentVisibility<'a> {
             .filter(|s| self.allows(Some(&s.provider)))
             .collect()
     }
-    fn section_notice(&self, agent: &muster_agent::AgentService) -> String {
-        agent
-            .section_notices()
-            .into_iter()
-            .filter(|(p, _)| self.allows(Some(p)))
-            .map(|(_, n)| n)
-            .collect::<Vec<_>>()
-            .join("; ")
+    fn snapshot(&self, agent: &muster_agent::AgentService) -> v1::AgentSessionPage {
+        let snapshot = agent.catalog_snapshot();
+        v1::AgentSessionPage {
+            sessions: snapshot
+                .sessions
+                .into_iter()
+                .filter(|s| self.allows(Some(&s.provider)))
+                .collect(),
+            sections: snapshot
+                .sections
+                .into_iter()
+                .filter(|s| self.allows(Some(&s.provider)))
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn catalog_page(
+        &self,
+        agent: &muster_agent::AgentService,
+        grouped: bool,
+        limit: usize,
+        visible: &[String],
+    ) -> Result<v1::AgentSessionPage, Error> {
+        let snapshot = self.snapshot(agent);
+        if grouped {
+            Ok(muster_agent::catalog::page(
+                snapshot.sessions,
+                snapshot.sections,
+                "",
+                "",
+                visible,
+            )?)
+        } else {
+            let mut page = snapshot;
+            page.sessions.truncate(if limit == 0 { 200 } else { limit });
+            Ok(page)
+        }
     }
 
     /// Newest sessions first, as `AgentService::list` pages them, from the
@@ -1718,6 +1750,29 @@ async fn dispatch(
                     ))
                 })?)
             };
+            if r.grouped && r.query.trim().is_empty() {
+                let visible = AgentVisibility::new(daemon, ctx);
+                let snapshot = visible.snapshot(agent);
+                let sessions = snapshot
+                    .sessions
+                    .into_iter()
+                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .collect();
+                let sections = snapshot
+                    .sections
+                    .into_iter()
+                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .collect();
+                let mut page = muster_agent::catalog::page(
+                    sessions,
+                    sections,
+                    &r.group_key,
+                    &r.group_cursor,
+                    &[],
+                )?;
+                page.notice = snapshot.notice;
+                return Ok(Resp::AgentSessions(page));
+            }
             if !r.query.trim().is_empty() {
                 let visible = AgentVisibility::new(daemon, ctx);
                 let sessions = visible
@@ -1744,7 +1799,6 @@ async fn dispatch(
                     .into_iter()
                     .filter(|s| r.provider.is_empty() || s.provider == r.provider)
                     .collect(),
-                notice: AgentVisibility::new(daemon, ctx).section_notice(agent),
                 sessions: AgentVisibility::new(daemon, ctx)
                     .list(
                         agent,
@@ -1784,12 +1838,12 @@ async fn dispatch(
             if filter.is_empty() {
                 events
                     .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
-                        ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
-                            sessions: visible.list(&agent, None, limit),
-                            sections: visible.sections(&agent),
-                            notice: visible.section_notice(&agent),
-                            ..Default::default()
-                        })),
+                        ev: Some(v1::agent_event::Ev::ListChanged(visible.catalog_page(
+                            &agent,
+                            r.grouped,
+                            limit,
+                            &r.visible_sessions,
+                        )?)),
                     }))
                     .await?;
             } else {
@@ -1798,6 +1852,11 @@ async fn dispatch(
                     .ok_or_else(|| Error::NotFound(format!("agent session {filter}")))?;
                 provider = Some(session.provider.clone());
                 _watch = Some(agent.watch_session(&filter));
+                let refresh = agent.clone();
+                let refresh_id = filter.clone();
+                tokio::spawn(async move {
+                    refresh.refresh_session_metadata(&refresh_id).await;
+                });
                 events
                     .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
                         ev: Some(v1::agent_event::Ev::State(session)),
@@ -1841,12 +1900,12 @@ async fn dispatch(
                     ) {
                         events
                             .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
-                                ev: Some(v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
-                                    sessions: visible.list(&agent, None, limit),
-                                    sections: visible.sections(&agent),
-                                    notice: visible.section_notice(&agent),
-                                    ..Default::default()
-                                })),
+                                ev: Some(v1::agent_event::Ev::ListChanged(visible.catalog_page(
+                                    &agent,
+                                    r.grouped,
+                                    limit,
+                                    &r.visible_sessions,
+                                )?)),
                             }))
                             .await?;
                     }
@@ -1855,12 +1914,12 @@ async fn dispatch(
                 let shown = |session: &str| !filter.is_empty() || visible.session(&agent, session);
                 let ev = match event {
                     muster_agent::Event::ListChanged if filter.is_empty() => {
-                        v1::agent_event::Ev::ListChanged(v1::AgentSessionPage {
-                            sessions: visible.list(&agent, None, limit),
-                            sections: visible.sections(&agent),
-                            notice: visible.section_notice(&agent),
-                            ..Default::default()
-                        })
+                        v1::agent_event::Ev::ListChanged(visible.catalog_page(
+                            &agent,
+                            r.grouped,
+                            limit,
+                            &r.visible_sessions,
+                        )?)
                     }
                     muster_agent::Event::ListChanged => match agent.session(&filter) {
                         Some(session) => v1::agent_event::Ev::State(session),
@@ -1973,6 +2032,7 @@ async fn dispatch(
         | Req::AgentRespond(_)
         | Req::AgentInterrupt(_)
         | Req::AgentComplete(_)
+        | Req::AgentOrganize(_)
         | Req::AgentInspect(_)) => locked_operation(daemon, request).await?,
         request @ (Req::AgentChats(_)
         | Req::AgentChatOpen(_)
@@ -2310,6 +2370,7 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         ));
     }
     let what = match &request {
+        Req::AgentOrganize(_) => "organize",
         Req::AgentSend(_) => "send",
         Req::AgentRespond(_) => "respond",
         Req::AgentInspect(_) => "inspect",
@@ -2317,6 +2378,7 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         _ => "interrupt",
     };
     let op_id = match &request {
+        Req::AgentOrganize(r) => r.op_id.as_str(),
         Req::AgentSend(r) => r.op_id.as_str(),
         Req::AgentRespond(r) => r.op_id.as_str(),
         Req::AgentInterrupt(r) => r.op_id.as_str(),
@@ -2364,6 +2426,22 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         preparation_started.elapsed().as_millis()
     );
     Ok(match request {
+        Req::AgentOrganize(r) => {
+            let agent = agent.clone();
+            let body = muster_proto::Message::encode_to_vec(&r);
+            let subject = r.session.clone();
+            let op_id = r.op_id.clone();
+            ledgered(
+                daemon,
+                &op_id,
+                "agent.organize",
+                &subject,
+                true,
+                &body,
+                async move { Ok(agent.organize(r).await?) },
+            )
+            .await?
+        }
         Req::AgentComplete(r) => Resp::AgentCompletion(v1::AgentCompletion {
             text: agent.complete(&r.session).await?,
             session: r.session,
@@ -2530,6 +2608,7 @@ fn undeclared(caps: &muster_agent::profile::Capabilities, request: &Req) -> Opti
         Req::AgentChatOptions(_) | Req::AgentChatSetOptions(_) => {
             (caps.model_options, "model or effort choices")
         }
+        Req::AgentOrganize(_) => (caps.organization, "native organization"),
         Req::AgentSend(_) => (caps.send, "sending prompts"),
         Req::AgentInterrupt(_) => (caps.interrupt, "interrupting a turn"),
         Req::AgentRespond(r) if !r.answers.is_empty() => (caps.questions, "question cards"),
@@ -2677,6 +2756,7 @@ pub(crate) fn native_session(daemon: &Daemon, request: &Req) -> Result<String, E
         }
         Req::AgentChatOptions(r) => Ok(r.session.clone()),
         Req::AgentChatSetOptions(r) => Ok(r.session.clone()),
+        Req::AgentOrganize(r) => Ok(r.session.clone()),
         Req::AgentSend(r) => Ok(r.session.clone()),
         Req::AgentInspect(r) => Ok(r.session.clone()),
         Req::AgentComplete(r) => Ok(r.session.clone()),
@@ -3045,6 +3125,7 @@ mod setup_permission_tests {
             files: false,
             chat: false,
             model_options: false,
+            organization: false,
         };
         assert_eq!(
             undeclared(&none, &Req::AgentSend(v1::AgentSendRequest::default())),

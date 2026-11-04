@@ -197,6 +197,8 @@ struct CapabilitiesSection {
     files: bool,
     #[serde(default)]
     model_options: bool,
+    #[serde(default)]
+    organization: bool,
 }
 
 #[derive(Deserialize)]
@@ -1047,7 +1049,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         let app_name = format!("{name}_APP");
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n    }},\n    controls: {controls},\n    plugin: {plugin},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
+            "/// {doc}\npub static {app_name}: App = App {{\n    app: &muster_core::apps::{name},\n    executable: {},\n    gui: {gui},\n    session_key: {session_key},\n    source: {source},\n    records: {records},\n    lock: {},\n    capabilities: Capabilities {{\n        send: {},\n        respond: {},\n        interrupt: {},\n        questions: {},\n        queue: {},\n        files: {},\n        chat: {},\n        model_options: {},\n        organization: {},\n    }},\n    controls: {controls},\n    plugin: {plugin},\n    chat: {chat},\n    cloud: {cloud},\n}};\n\n",
             lit(&app.executable),
             lit(&app.lock),
             caps.send,
@@ -1058,6 +1060,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             caps.files,
             file.chat.is_some(),
             caps.model_options,
+            caps.organization,
         );
         app_name
     }

@@ -49,6 +49,10 @@ message Intent {
 
     OpenAgents open_agents = 30;
     AgentCatalogAction agent_catalog_action = 92;
+    // Field 93 was this intent in the 1.1.20 (110) candidate built from this
+    // branch; `vision` landed on `main` with that number first, so organization
+    // takes the next one, as it does in the daemon protocol.
+    AgentOrganize agent_organize = 94;
     OrcaCreate orca_create = 87;
     OpenAgent open_agent = 31;
     AgentSend agent_send = 32;
@@ -181,9 +185,21 @@ message SelectDevice {
 
 message OrcaCreate { string device_id = 1; string directory = 2; string agent = 3; }
 message AgentCatalogAction {
-  enum Kind { SEARCH = 0; TOGGLE_SECTION = 1; TOGGLE_FAMILY = 2; SEARCH_MORE = 3; }
+  enum Kind { SEARCH = 0; TOGGLE_SECTION = 1; TOGGLE_FAMILY = 2; SEARCH_MORE = 3; LOAD_MORE = 4; }
   Kind kind = 1;
   string value = 2; // query or Rust-issued display key
+}
+message AgentOrganize {
+  string row_key = 1;
+  muster.v1.AgentOrganizeRequest.Action action = 2;
+  string section_id = 3;
+  string name = 4;
+}
+message AgentOrganizationTarget {
+  string key = 4;
+  string row_key = 1;
+  string section_id = 2;
+  string title = 3;
 }
 message AgentCatalogRow {
   string key = 1;
@@ -192,6 +208,10 @@ message AgentCatalogRow {
   bool expandable = 4;
   bool expanded = 5;
   string parent_title = 6;
+  bool can_organize = 8;
+  bool organizing = 9;
+  repeated AgentOrganizationTarget destinations = 10;
+  string removable_section = 11;
   string source_label = 7; // Rust-projected device/native-section origin in aggregate lists
 }
 message AgentCatalogSection {
@@ -201,6 +221,10 @@ message AgentCatalogSection {
   bool expanded = 4;
   uint32 count = 5;
   repeated AgentCatalogRow rows = 6;
+  bool has_more = 7;
+  bool loading_more = 8;
+  string kind = 9;
+  repeated AgentOrganizationTarget native_targets = 10;
 }
 message OpenAgents { string device_id = 1; } // "*" = all devices; empty = current target
 message OpenAgent {

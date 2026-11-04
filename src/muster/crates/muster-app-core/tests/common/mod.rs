@@ -41,7 +41,18 @@ impl TestShell {
         what: &str,
         check: impl Fn(&app::ViewModel) -> bool,
     ) -> app::ViewModel {
-        tokio::time::timeout(Duration::from_secs(5), async {
+        self.wait_within(Duration::from_secs(5), what, check).await
+    }
+
+    /// For a view that waits on one of the client's own longer deadlines, such
+    /// as the chat history snapshot timeout.
+    pub async fn wait_within(
+        &self,
+        patience: Duration,
+        what: &str,
+        check: impl Fn(&app::ViewModel) -> bool,
+    ) -> app::ViewModel {
+        tokio::time::timeout(patience, async {
             loop {
                 let view = self.latest.lock().unwrap().clone();
                 if check(&view) {

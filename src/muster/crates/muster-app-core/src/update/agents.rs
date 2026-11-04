@@ -71,7 +71,7 @@ pub(super) fn cache_chat(ctx: &Ctx, chat: &Chat) {
 /// Ended sessions remain history; only explicitly archived sessions are hidden.
 /// Sessions listed per device, newest first: the list refreshes every few
 /// seconds while visible, and a phone does not need a device's whole history.
-const AGENT_LIST_LIMIT: u32 = 1000;
+const AGENT_LIST_LIMIT: u32 = muster_agent::catalog::PAGE_SIZE as u32;
 
 pub(super) fn visible_agents(mut sessions: Vec<v1::AgentSession>) -> Vec<v1::AgentSession> {
     sessions.retain(|session| !session.archived);
@@ -97,6 +97,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         .sessions
         .retain(|s| filter == "*" || s.device_id == filter);
     state.catalog_watches.clear();
+    state.agent_catalog_pending.clear();
+    state.agent_catalog_pages.clear();
     state.agents_epoch += 1;
     let epoch = state.agents_epoch;
     // An offline Mac is neither asked nor shown (its cache stays on disk);
@@ -121,7 +123,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                 .cache
                 .get::<v1::AgentSessionPage>(&cache_key(state, "agents", &device, ""))
         {
-            state.agents.sessions.extend(visible_agents(page.sessions));
+            restore_catalog_cache(state, &device, &name, page);
         }
         // Network state can arrive before DeviceInfo. Route an explicitly
         // local member through the local socket even before self_id is loaded.
@@ -130,6 +132,14 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         } else {
             state.self_id.clone()
         };
+        let visible_sessions: Vec<_> = state
+            .agents
+            .sessions
+            .iter()
+            .filter(|s| s.device_id == device)
+            .map(|s| s.id.clone())
+            .take(2000)
+            .collect();
         let (watch, token) = state.new_watch();
         state.catalog_watches.insert(device.clone(), watch);
         let backend = ctx.backend.clone();
@@ -151,6 +161,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                                 session: String::new(),
                                 catalog_only: true,
                                 limit: AGENT_LIST_LIMIT,
+                                grouped: true,
+                                visible_sessions: visible_sessions.clone(),
                             }))
                             .await?,
                     );
@@ -173,7 +185,9 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                         {
                             first = false;
                             retry = 1;
-                            page.sessions.truncate(AGENT_LIST_LIMIT as usize);
+                            if page.groups.is_empty() {
+                                page.sessions.truncate(AGENT_LIST_LIMIT as usize);
+                            }
                             for session in &mut page.sessions {
                                 session.device_id = device.clone();
                                 session.device_name = name.clone();
@@ -199,6 +213,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             &client,
                             Req::AgentList(v1::AgentListRequest {
                                 limit: AGENT_LIST_LIMIT,
+                                grouped: true,
                                 ..Default::default()
                             }),
                         ),
@@ -453,7 +468,12 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
         loop {
             let mut active_call = None;
             let attempt = async {
-                let client = backend.client_for(&device, &self_id).await?;
+                let client = tokio::time::timeout(
+                    Duration::from_secs(3),
+                    backend.client_for(&device, &self_id),
+                )
+                .await
+                .map_err(|_| Error::Unavailable("session connection timed out".into()))??;
                 active_call = Some(
                     client
                         .start(Req::AgentWatch(v1::AgentWatchRequest {
@@ -476,13 +496,45 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         ));
                     }
                 };
+                // A newly established subscription replays the server's current
+                // pending interactions. Retire the old stream's display IDs
+                // before that replay, not on transient activity changes.
+                if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                    ev: Some(v1::agent_event::Ev::State(initial)),
+                }) = &first
+                    && initial.id == session_id
+                {
+                    let _ = tx.send(loop_message(Msg::AgentStreamStarted {
+                        token: token.clone(),
+                        device: device.clone(),
+                        session: session_id.clone(),
+                        provider: initial.provider.clone(),
+                    }));
+                }
                 let cached = cache.get::<v1::AgentMessagePage>(&key).unwrap_or_default();
                 let mut catch_up = ChatCatchUp::new(cached.messages);
-                let mut queued = std::collections::VecDeque::from([first]);
+                let mut queued = std::collections::VecDeque::new();
+                let dispatch = |event, queued: &mut std::collections::VecDeque<_>| {
+                    match event {
+                        v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(event) })
+                            if !matches!(event, v1::agent_event::Ev::Message(_)) =>
+                        {
+                            // Metadata and controls must not wait behind transcript I/O.
+                            let _ = tx.send(loop_message(Msg::AgentEvent {
+                                token: token.clone(),
+                                device: device.clone(),
+                                session: session_id.clone(),
+                                event,
+                            }));
+                        }
+                        event => queued.push_back(event),
+                    }
+                };
+                dispatch(first, &mut queued);
                 let has_more = loop {
                     let request = catch_up.request(&session_id);
                     let snapshot = tokio::time::timeout(
-                        Duration::from_secs(3),
+                        Duration::from_secs(15),
                         unary(&client, Req::AgentMessages(request)),
                     );
                     tokio::pin!(snapshot);
@@ -490,7 +542,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         tokio::select! {
                             result=&mut snapshot => break result.map_err(|_|Error::Unavailable("session history timed out".into()))??,
                             event=call.events.recv() => match event {
-                                Some(event) if queued.len()<2048 => queued.push_back(event),
+                                Some(event) if queued.len()<2048 => dispatch(event, &mut queued),
                                 _ => return Err(Error::Unavailable("session watch needs resynchronization".into())),
                             }
                         }
@@ -576,6 +628,15 @@ pub(super) fn chat_target(state: &mut State) -> Option<(String, String)> {
 }
 
 pub(super) fn intent_open_agents(state: &mut State, ctx: &Ctx, o: app::OpenAgents) {
+    let next = if o.device_id.is_empty() {
+        state.target()
+    } else {
+        o.device_id.clone()
+    };
+    if next != state.agents.device_id {
+        state.agent_catalog_limits.clear();
+        state.agent_catalog_pending.clear();
+    }
     state.agents.device_id = if o.device_id.is_empty() {
         state.target()
     } else {
@@ -634,6 +695,7 @@ pub(super) fn intent_open_agent(state: &mut State, ctx: &Ctx, o: app::OpenAgent)
             .agents
             .sessions
             .iter()
+            .chain(state.agents_search_sessions.iter())
             .any(|s| s.id == o.session && s.device_id == o.device_id)
         {
             state.toast("session is no longer listed on this device", true);
@@ -877,6 +939,43 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     });
 }
 
+fn restore_catalog_cache(
+    state: &mut State,
+    device: &str,
+    name: &str,
+    mut page: v1::AgentSessionPage,
+) {
+    // Old cache entries stored only rows. Do not render UUIDs as group names
+    // while waiting for the first complete native snapshot after upgrade.
+    if page.sections.is_empty() && page.sessions.iter().any(|s| !s.section_id.is_empty()) {
+        return;
+    }
+    for session in &mut page.sessions {
+        session.device_id = device.into();
+        session.device_name = name.into();
+    }
+    state.agents.sessions.extend(visible_agents(page.sessions));
+    state
+        .agents
+        .native_sections
+        .retain(|s| s.device_id != device);
+    state
+        .agents
+        .native_sections
+        .extend(page.sections.into_iter().map(|mut s| {
+            s.device_id = device.into();
+            s.device_name = name.into();
+            s
+        }));
+    state.agent_catalog_groups.retain(|g| g.device_id != device);
+    state
+        .agent_catalog_groups
+        .extend(page.groups.into_iter().map(|mut g| {
+            g.device_id = device.into();
+            g
+        }));
+}
+
 pub(super) fn msg_agents(
     state: &mut State,
     ctx: &Ctx,
@@ -894,7 +993,32 @@ pub(super) fn msg_agents(
     match result {
         _ if state.offline(&device) => {}
         Ok(page) => {
+            ctx.cache
+                .put(cache_key(state, "agents", &device, ""), &page);
+            state.agent_catalog_groups.retain(|g| g.device_id != device);
+            state
+                .agent_catalog_groups
+                .extend(page.groups.into_iter().map(|mut g| {
+                    g.device_id = device.clone();
+                    g
+                }));
             let sessions = visible_agents(page.sessions);
+            for fresh in &sessions {
+                for result in &mut state.agents_search_sessions {
+                    crate::catalog::reconcile_session(result, fresh, true);
+                }
+                if let Some(chat) = &mut state.chat {
+                    crate::catalog::reconcile_session(&mut chat.session, fresh, true);
+                    for child in chat
+                        .session
+                        .subagents
+                        .iter_mut()
+                        .chain(chat.session.subsessions.iter_mut())
+                    {
+                        crate::catalog::reconcile_session(child, fresh, true);
+                    }
+                }
+            }
             state
                 .agents
                 .native_sections
@@ -912,17 +1036,9 @@ pub(super) fn msg_agents(
                     }
                     s
                 }));
-            if !page.notice.is_empty() && !state.agents_errors.contains(&page.notice) {
-                state.agents_errors.push(page.notice);
-            }
+            // Catalog notices from older peers describe optional native metadata.
+            // Keep them silent; transport and mutation failures have separate paths.
 
-            ctx.cache.put(
-                cache_key(state, "agents", &device, ""),
-                &v1::AgentSessionPage {
-                    sessions: sessions.clone(),
-                    ..Default::default()
-                },
-            );
             state.agents.sessions.retain(|s| s.device_id != device);
             state.agents.sessions.extend(sessions);
             state.agents.sessions.sort_by(|a, b| {
@@ -1006,6 +1122,27 @@ pub(super) fn msg_chat(
     super::admitted::settle(state);
 }
 
+pub(super) fn msg_agent_stream_started(
+    state: &mut State,
+    token: CancellationToken,
+    device: &str,
+    session: &str,
+    provider: &str,
+) {
+    if token.is_cancelled() {
+        return;
+    }
+    let Some(chat) = &mut state.chat else { return };
+    if chat.device != device || chat.session.id != session || chat.session.provider != provider {
+        return;
+    }
+    // This drops stale display handles; it does not assert command completion
+    // or reset an outstanding/unknown response receipt.
+    chat.interactions.retain(|i| i.kind == "queued_message");
+    chat.approval_refresh_attempted = false;
+    chat.approval_refresh_pending = false;
+}
+
 pub(super) fn msg_agent_event(
     state: &mut State,
     ctx: &Ctx,
@@ -1041,13 +1178,33 @@ pub(super) fn msg_agent_event(
                 chat.content_revision = crate::state::next_content_revision();
             }
         }
-        v1::agent_event::Ev::State(s) => {
-            if !chat.approval_refresh_pending
-                && matches!(s.state.as_str(), "running" | "idle" | "ended")
+        v1::agent_event::Ev::State(mut s) => {
+            if s.id != session
+                || (!chat.session.provider.is_empty() && s.provider != chat.session.provider)
             {
-                chat.approval_refresh_attempted = false;
+                return;
             }
-            if s.state != "waiting_approval" {
+            s.device_id = device.clone();
+            s.device_name = chat.session.device_name.clone();
+            for child in s.subagents.iter_mut().chain(s.subsessions.iter_mut()) {
+                child.device_id = device.clone();
+                child.device_name = s.device_name.clone();
+            }
+            for listed in state
+                .agents
+                .sessions
+                .iter_mut()
+                .chain(state.agents_search_sessions.iter_mut())
+            {
+                if listed.device_id == device
+                    && listed.provider == s.provider
+                    && listed.id == session
+                {
+                    crate::catalog::reconcile_session(listed, &s, false);
+                }
+            }
+            super::approval_cards::episode_boundary(chat, &s.state);
+            if s.state != "waiting_approval" && s.provider != "claude" {
                 // Question lifetime is tied to a provider result, not
                 // transient process/AX activity (including locked use).
                 chat.interactions
@@ -1090,6 +1247,7 @@ pub(super) fn msg_agent_event(
         }
         v1::agent_event::Ev::ListChanged(page) => {
             if let Some(s) = page.sessions.into_iter().find(|s| s.id == session) {
+                super::approval_cards::episode_boundary(chat, &s.state);
                 chat.session = s;
             }
         }
@@ -1142,5 +1300,103 @@ pub(super) fn msg_watch_ended(
                 terminal.status = error.unwrap_or_else(|| "detached".into());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod catalog_cache_regressions {
+    use super::*;
+    #[tokio::test]
+    async fn catalog_read_notices_are_silent_but_transport_errors_remain_visible() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: muster_rpc::Client::new(socket),
+            }),
+            tx,
+        };
+        let mut state = State::new(false, Some("host".into()));
+        let epoch = state.agents_epoch;
+        for _ in 0..3 {
+            msg_agents(
+                &mut state,
+                &ctx,
+                epoch,
+                "host".into(),
+                Ok(v1::AgentSessionPage {
+                    notice: "Native Pin, Section and Project metadata unavailable".into(),
+                    sessions: vec![v1::AgentSession {
+                        id: "session".into(),
+                        provider: "claude".into(),
+                        section_id: "native-id".into(),
+                        pinned: true,
+                        ..Default::default()
+                    }],
+                    sections: vec![v1::AgentSection {
+                        id: "native-id".into(),
+                        title: "Example group".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+            );
+            assert!(state.agents.errors.is_empty());
+            assert!(state.agents_errors.is_empty());
+            assert_eq!(state.agents.native_sections[0].title, "Example group");
+            assert!(state.agents.sessions[0].pinned);
+        }
+        msg_agents(
+            &mut state,
+            &ctx,
+            epoch,
+            "host".into(),
+            Err(Error::Unavailable("device disconnected".into())),
+        );
+        assert!(
+            state
+                .agents
+                .errors
+                .iter()
+                .any(|e| e.contains("device disconnected"))
+        );
+    }
+
+    #[test]
+    fn restored_sessions_keep_native_names_and_page_metadata_in_same_frame() {
+        let mut state = State::new(false, Some("host".into()));
+        restore_catalog_cache(
+            &mut state,
+            "host",
+            "Example Mac",
+            v1::AgentSessionPage {
+                sessions: vec![v1::AgentSession {
+                    id: "session".into(),
+                    section_id: "native-id".into(),
+                    ..Default::default()
+                }],
+                sections: vec![v1::AgentSection {
+                    id: "native-id".into(),
+                    title: "Example group".into(),
+                    ..Default::default()
+                }],
+                groups: vec![v1::AgentCatalogGroup {
+                    key: "native-id".into(),
+                    count: 21,
+                    next_cursor: "next".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        );
+        assert_eq!(state.agents.sessions[0].device_id, "host");
+        assert_eq!(state.agents.native_sections[0].title, "Example group");
+        assert_eq!(state.agents.native_sections[0].device_id, "host");
+        assert_eq!(state.agent_catalog_groups[0].count, 21);
+        assert_eq!(state.agent_catalog_groups[0].device_id, "host");
     }
 }

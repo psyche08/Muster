@@ -65,3 +65,8 @@ regeneration pass. macOS and iOS simulator MusterUI compile successfully.
 Native organization write actions remain unimplemented; no provider store was
 modified for this change. Signed installation and physical UI acceptance are
 tracked separately from this source verification.
+
+### Subsequent group decision
+
+[ADR 0110](0110-native-groups-paging-and-session-entry.md) supersedes the combined
+Section bucket with individual native Section and Project groups and paged reads.

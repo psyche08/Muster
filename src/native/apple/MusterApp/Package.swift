@@ -51,6 +51,13 @@ let package = Package(
                 .linkedFramework("ApplicationServices", .when(platforms: [.macOS])),
                 .linkedFramework("IOKit", .when(platforms: [.macOS])),
                 .linkedFramework("SystemConfiguration", .when(platforms: [.macOS, .iOS])),
+                // muster-platform's build.rs compiles the shim's console,
+                // notice and vision helpers into the static library and asks
+                // cargo to link these; a Swift build links the library itself,
+                // so it has to ask for the same ones.
+                .linkedFramework("ScreenCaptureKit", .when(platforms: [.macOS])),
+                .linkedFramework("ImageIO", .when(platforms: [.macOS])),
+                .linkedFramework("CoreGraphics", .when(platforms: [.macOS])),
             ]
         ),
         // SwiftUI screens and effects; empty on Linux.

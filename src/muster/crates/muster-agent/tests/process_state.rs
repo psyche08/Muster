@@ -302,11 +302,12 @@ async fn claude_reply_end_does_not_end_a_busy_worker_or_its_stop_hooks() {
         ..Default::default()
     });
     service.rescan().await;
-    service.attach(Arc::new(Observed {
+    let native = Arc::new(Observed {
         identity: ProcessIdentity { pid: 7, start: 1 },
         process: Mutex::new(ProcessState::Running),
         activity: Mutex::new(SessionState::Running),
-    }));
+    });
+    service.attach(native.clone());
     assert_eq!(
         service.session(SESSION).unwrap().process_state,
         "unknown",
@@ -340,6 +341,13 @@ async fn claude_reply_end_does_not_end_a_busy_worker_or_its_stop_hooks() {
     idle.status_unix = muster_agent::model::parse_ts("2026-09-29T02:01:00Z");
     service.observe_runtime(vec![], vec![(idle, ProcessState::Running)], None);
     assert_eq!(service.session(SESSION).unwrap().state, "idle");
+    *native.activity.lock().unwrap() = SessionState::WaitingApproval;
+    assert_eq!(
+        service.session(SESSION).unwrap().state,
+        "waiting_approval",
+        "an observed AX request outranks idle file activity"
+    );
+    *native.activity.lock().unwrap() = SessionState::Running;
     let mut unknown = registration();
     unknown.activity = SessionState::Unknown;
     service.observe_runtime(vec![], vec![(unknown, ProcessState::Running)], None);

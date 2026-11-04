@@ -197,11 +197,23 @@ records a specific decision and does not revive code on its delete list.
 
 | [0108](0108-watch-l4forwarder-configuration.md) | Accepted; source verified, release pending | Watch the l4forwarder configuration instead of polling it |
 
+| [0109](0109-uuid-session-refresh-and-permission-lifetime.md) | Accepted; verification pending | UUID metadata reconciliation, message recency and permission lifetime |
+
+| [0110](0110-native-groups-paging-and-session-entry.md) | Accepted; verification pending | Native group pages of ten main sessions and immediate session metadata |
+
+| [0111](0111-native-organization-ax-and-file-confirmation.md) | Accepted; verification pending | Native organization with AX controls and file readback |
+
+| [0112](0112-silent-native-catalog-read-failures.md) | Accepted; verification pending | Ignore native catalog read failures in the interface |
+
+| [0113](0113-pin-only-session-catalog.md) | Accepted; verification pending | Show only Pin and the ordinary session list |
+
 | [0114](0114-restore-unlanded-1-0-21-field-fixes.md) | Accepted; source verified, release pending | Restore two 1.0.21 field fixes that never landed |
 
 | [0115](0115-target-scoped-local-input.md) | Accepted; source and tests verified, device acceptance pending | Count only local input that could reach the target app |
 
 | [0116](0116-failure-screenshot-analysis.md) | Accepted; source and tests verified, device acceptance pending | Look at a failed native send with the user's own LLM |
+
+| [0117](0117-bounded-view-cache-and-empty-pin.md) | Accepted; source verified, device acceptance pending | Bound the view cache on disk and drop an empty Pin |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

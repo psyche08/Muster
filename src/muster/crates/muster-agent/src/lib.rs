@@ -6,6 +6,7 @@
 
 pub mod attachments;
 mod cache;
+pub mod catalog;
 pub mod catdesk;
 pub mod catdesk_app;
 pub mod catdesk_ui;
@@ -31,12 +32,14 @@ pub mod model;
 pub mod native_approval;
 pub mod native_navigation;
 pub mod native_options;
+pub mod native_organization;
 pub mod native_scan;
 pub mod native_send;
 pub mod native_sidebar;
 pub mod native_step;
 pub mod native_tree;
 pub mod orca;
+pub mod organization;
 pub mod plugin_control;
 pub mod prediction;
 pub mod profile;
@@ -168,7 +171,11 @@ pub enum Event {
 }
 
 struct Open {
-    viewer: Box<dyn Viewer>,
+    viewer: Option<Box<dyn Viewer>>,
+    generation: Arc<()>,
+    meta: model::SessionMeta,
+    custom_title: bool,
+    notice: String,
     messages: Vec<Message>,
     last_used: Instant,
     stat: (SystemTime, u64),
@@ -202,7 +209,15 @@ struct CloudEntry {
     error: Option<String>,
 }
 
+/// A single committed native catalog, before caller visibility filtering.
+pub struct CatalogSnapshot {
+    pub sessions: Vec<AgentSession>,
+    pub sections: Vec<muster_proto::v1::AgentSection>,
+    pub notices: Vec<(String, String)>,
+}
+
 struct Inner {
+    metadata_generation: u64,
     sections: sections::Catalog,
     catalog: HashMap<String, Discovered>,
     open: HashMap<String, Open>,
@@ -268,6 +283,8 @@ pub struct AgentService {
     cloud_wake: tokio::sync::Notify,
     /// Transcript heads the catalog scans have read, by provider.
     heads: Arc<Mutex<(codex::Heads, claude::Heads)>>,
+    scan_lock: tokio::sync::Mutex<()>,
+    metadata_lock: tokio::sync::Mutex<()>,
     orca: Option<Arc<orca::Source>>,
     /// DeepSeek Harness's Muster plugin, when the app's home is known.
     deepseek: Option<Arc<deepseek_app::Link>>,
@@ -369,6 +386,7 @@ impl AgentService {
             chatgpt_catalog: Mutex::new(chat_catalog::LocalCatalog::default()),
             config,
             inner: Mutex::new(Inner {
+                metadata_generation: 0,
                 sections: Default::default(),
                 catalog: HashMap::new(),
                 open: HashMap::new(),
@@ -388,6 +406,8 @@ impl AgentService {
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
             heads: Default::default(),
+            scan_lock: Default::default(),
+            metadata_lock: Default::default(),
             orca,
             deepseek,
             predict,
@@ -914,6 +934,64 @@ impl AgentService {
         }
     }
 
+    /// Refresh the native title on entry without waiting for history parsing or
+    /// scanning unrelated transcripts. Missing native names retain the fallback.
+    pub async fn refresh_session_metadata(&self, id: &str) {
+        // Serialize targeted reads with each other, independently of slow scans.
+        let _refresh = self.metadata_lock.lock().await;
+        let Some(source) = self.inner.lock().unwrap().catalog.get(id).cloned() else {
+            return;
+        };
+        let config = self.config.clone();
+        let expected = source.clone();
+        let target = id.to_owned();
+        let Ok((title, time)) = tokio::task::spawn_blocking(move || {
+            let title = sections::native_title(&config, source.provider.as_str(), &target);
+            let time = if codex_history::is(&source) {
+                codex_history::last_message_time(&source.path, &target).ok()
+            } else if source.provider.file_transcripts() {
+                recency::last_message_time_scoped(
+                    &source.path,
+                    source.provider,
+                    source.parent_id.is_some(),
+                )
+                .ok()
+            } else {
+                None
+            };
+            (title, time)
+        })
+        .await
+        else {
+            return;
+        };
+        let state = {
+            let mut inner = self.inner.lock().unwrap();
+            let Some(current) = inner
+                .catalog
+                .get_mut(id)
+                .filter(|d| d.provider == expected.provider && d.path == expected.path)
+            else {
+                return;
+            };
+            if let Some(time) = time {
+                current.meta.updated_unix = time;
+            }
+            if let Some(title) = title {
+                inner
+                    .sections
+                    .titles
+                    .insert((expected.provider.as_str().into(), id.into()), title);
+            }
+            inner.metadata_generation = inner.metadata_generation.wrapping_add(1);
+            Self::project_locked(&inner, id)
+        };
+        if let Some(state) = state {
+            let _ = self.events.send(Event::State(state));
+            let _ = self.events.send(Event::ListChanged);
+        }
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
     }
@@ -970,7 +1048,10 @@ impl AgentService {
             let unchanged = known.filter(|k| k.modified == d.modified && k.size == d.size);
             d.meta.updated_unix = match unchanged {
                 Some(known) => known.meta.updated_unix,
-                None => recency::last_message_time(&d.path, d.provider).unwrap_or(0),
+                None => {
+                    recency::last_message_time_scoped(&d.path, d.provider, d.parent_id.is_some())
+                        .unwrap_or(0)
+                }
             };
             match d.provider {
                 // Codex names come from its session index, read every scan.
@@ -1009,17 +1090,24 @@ impl AgentService {
 
     /// Rescans the transcript roots now.
     pub async fn rescan(&self) {
+        // An older filesystem scan must never overwrite a newer native change.
+        let _scan = self.scan_lock.lock().await;
         let config = self.config.clone();
-        let cache = self.inner.lock().unwrap().catalog.clone();
+        let (cache, metadata_generation) = {
+            let inner = self.inner.lock().unwrap();
+            (inner.catalog.clone(), inner.metadata_generation)
+        };
         let heads = self.heads.clone();
-        let (found, sections) = tokio::task::spawn_blocking(move || {
+        let Ok((found, mut sections)) = tokio::task::spawn_blocking(move || {
             (
                 Self::scan_all(&config, &cache, &heads),
                 sections::read(&config),
             )
         })
         .await
-        .unwrap_or_default();
+        else {
+            return;
+        };
         let (changed, replaced) = {
             let mut inner = self.inner.lock().unwrap();
             // Desktop resumes may create multiple rollout files for one ID.
@@ -1039,6 +1127,34 @@ impl AgentService {
                     && let Some(project) = inner.projects.get(id)
                 {
                     d.meta.cwd = project.clone();
+                }
+            }
+            if inner.metadata_generation != metadata_generation {
+                for (id, d) in &mut new_catalog {
+                    if let Some(current) = inner.catalog.get(id)
+                        && current.provider == d.provider
+                        && current.path == d.path
+                        && current.modified == d.modified
+                        && current.size == d.size
+                    {
+                        d.meta.updated_unix = current.meta.updated_unix;
+                    }
+                }
+            }
+            sections.retain_unavailable(&inner.sections);
+            // A sidebar can expose only the active Claude account. Retain a
+            // UUID title refreshed on entry until that source supplies a newer
+            // label; never replace it with a transcript's first user message.
+            for (key, title) in &inner.sections.titles {
+                if new_catalog.contains_key(&key.1) {
+                    if inner.metadata_generation != metadata_generation {
+                        sections.titles.insert(key.clone(), title.clone());
+                    } else {
+                        sections
+                            .titles
+                            .entry(key.clone())
+                            .or_insert_with(|| title.clone());
+                    }
                 }
             }
             let changed = sections != inner.sections
@@ -1149,12 +1265,13 @@ impl AgentService {
 
     fn poll_transcripts(&self, ids: Vec<String>) {
         for id in ids {
-            let mut emitted = Vec::new();
-            let mut predict = false;
-            {
+            let (mut viewer, generation, prior, source) = {
                 let mut inner = self.inner.lock().unwrap();
-                let watched = inner.watching.contains_key(&id);
-                let retained = inner.controllers.contains_key(&id) || watched;
+                let retained =
+                    inner.controllers.contains_key(&id) || inner.watching.contains_key(&id);
+                let Some(source) = inner.catalog.get(&id).cloned() else {
+                    continue;
+                };
                 let Some(open) = inner.open.get_mut(&id) else {
                     continue;
                 };
@@ -1162,14 +1279,61 @@ impl AgentService {
                     inner.open.remove(&id);
                     continue;
                 }
-                let Ok(stat) = open.viewer.stamp() else {
+                let Some(viewer) = open.viewer.take() else {
                     continue;
                 };
-                if stat == open.stat {
-                    continue;
+                (viewer, open.generation.clone(), open.stat, source)
+            };
+            // No await occurs while the viewer is leased out: cancellation
+            // cannot strand it. Metadata and cached history remain readable.
+            let result = viewer.stamp().and_then(|stat| {
+                if stat == prior {
+                    Ok((stat, None))
+                } else {
+                    viewer.poll().map(|polled| (stat, Some(polled)))
                 }
-                match open.viewer.poll() {
-                    Ok(polled) => {
+            });
+            let time = if result.as_ref().is_ok_and(|(_, p)| p.is_some()) {
+                if codex_history::is(&source) {
+                    codex_history::last_message_time(&source.path, &id).ok()
+                } else if source.provider.file_transcripts() {
+                    recency::last_message_time_scoped(
+                        &source.path,
+                        source.provider,
+                        source.parent_id.is_some(),
+                    )
+                    .ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            let mut emitted = Vec::new();
+            let mut predict = false;
+            {
+                let mut inner = self.inner.lock().unwrap();
+                let Some(current) = inner
+                    .catalog
+                    .get(&id)
+                    .filter(|d| d.path == source.path && d.provider == source.provider)
+                else {
+                    continue;
+                };
+                let unchanged = current.modified == source.modified && current.size == source.size;
+                let Some(open) = inner
+                    .open
+                    .get_mut(&id)
+                    .filter(|o| Arc::ptr_eq(&o.generation, &generation))
+                else {
+                    continue;
+                };
+                open.meta = viewer.meta().clone();
+                open.custom_title = viewer.custom_title();
+                open.notice = viewer.transcript_notice().to_owned();
+                open.viewer = Some(viewer);
+                match result {
+                    Ok((stat, Some(polled))) => {
                         open.stat = stat;
                         if polled.reset {
                             emitted.push(Event::Reset {
@@ -1183,50 +1347,39 @@ impl AgentService {
                                 message: m.to_proto(),
                             });
                         }
-                        // A turn ended or a new one began: the suggestion is due
-                        // or stale.
                         let turn_changed = polled
                             .messages
                             .iter()
                             .any(|m| m.kind == MessageKind::TurnSummary || m.role == Role::User);
                         open.messages.extend(polled.messages);
                         let touched = !emitted.is_empty() || polled.meta_changed;
-                        if touched {
-                            let (title, custom) =
-                                (open.viewer.meta().title.clone(), open.viewer.custom_title());
-                            if let Some(d) = inner.catalog.get_mut(&id) {
-                                // Keep a rename the viewer read for the next scan.
-                                Self::refine_catalog_title(d, title, custom);
-                                // The stat is also scan_all's recency cache key.
-                                // Never mark fresh bytes as cached while retaining
-                                // the old last-message time (even for an open viewer).
-                                // A store-backed provider has no transcript file.
-                                if d.provider.file_transcripts()
-                                    && let Ok(time) =
-                                        recency::last_message_time(&d.path, d.provider)
-                                {
-                                    d.meta.updated_unix = time;
+                        let (title, custom) = (open.meta.title.clone(), open.custom_title);
+                        if let Some(d) = inner.catalog.get_mut(&id).filter(|_| unchanged) {
+                            Self::refine_catalog_title(d, title, custom);
+                            if let Some(time) = time {
+                                d.meta.updated_unix = time;
+                                if !codex_history::is(d) {
                                     d.modified = stat.0;
                                     d.size = stat.1;
                                 }
                             }
+                        }
+                        if touched {
                             if let Some(session) = Self::project_locked(&inner, &id) {
                                 emitted.push(Event::State(session));
                             }
                             emitted.push(Event::ListChanged);
                         }
                         predict = turn_changed
-                            && watched
-                            && inner
-                                .catalog
-                                .get(&id)
-                                .is_some_and(|d| d.provider == Provider::Codex);
+                            && inner.watching.contains_key(&id)
+                            && source.provider == Provider::Codex;
                     }
+                    Ok((_, None)) => {}
                     Err(error) => log::debug!("poll {id}: {error}"),
                 }
             }
-            for ev in emitted {
-                let _ = self.events.send(ev);
+            for event in emitted {
+                let _ = self.events.send(event);
             }
             if predict {
                 self.want_prediction(&id);
@@ -1410,12 +1563,20 @@ impl AgentService {
 
     /// Codex uses its current index; transcript-named providers use their viewer.
     fn title_locked<'a>(inner: &'a Inner, d: &'a Discovered) -> &'a str {
+        if let Some(title) = inner
+            .sections
+            .titles
+            .get(&(d.provider.as_str().into(), d.id.clone()))
+        {
+            return title;
+        }
         if d.provider == Provider::Codex {
             return &d.meta.title;
         }
-        inner.open.get(&d.id).map_or(d.meta.title.as_str(), |open| {
-            open.viewer.meta().title.as_str()
-        })
+        inner
+            .open
+            .get(&d.id)
+            .map_or(d.meta.title.as_str(), |open| open.meta.title.as_str())
     }
 
     /// Asks the prediction loop to bring a session's suggestion up to date.
@@ -1563,6 +1724,16 @@ impl AgentService {
         activity
     }
 
+    /// Newest first: conversation time, then the change stamp, then the id
+    /// descending so the whole key can be compared in one direction.
+    fn child_recency(d: &Discovered) -> (u64, std::time::SystemTime, std::cmp::Reverse<&str>) {
+        (
+            d.meta.updated_unix,
+            d.modified,
+            std::cmp::Reverse(d.id.as_str()),
+        )
+    }
+
     fn project_locked(inner: &Inner, id: &str) -> Option<AgentSession> {
         let mut session = Self::project_summary(inner, id)?;
         let activity = Self::descendant_activity(inner);
@@ -1577,7 +1748,10 @@ impl AgentService {
                     && d.id != id
             })
             .collect();
-        children.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
+        // Conversation time orders these; a child with none is not therefore
+        // the oldest, so fall back to the change stamp before the id. The
+        // stamp only breaks that tie: it is never shown as a message time.
+        children.sort_by(|a, b| Self::child_recency(b).cmp(&Self::child_recency(a)));
         session.subagents = children
             .into_iter()
             .take(200)
@@ -1594,7 +1768,7 @@ impl AgentService {
                     && d.id != id
             })
             .collect();
-        subsessions.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
+        subsessions.sort_by(|a, b| Self::child_recency(b).cmp(&Self::child_recency(a)));
         session.subsessions = subsessions
             .into_iter()
             .take(200)
@@ -1644,7 +1818,7 @@ impl AgentService {
                     .map(|c| c.state())
                     .unwrap_or(SessionState::Unknown);
                 match runtime.map(|r| r.activity) {
-                    Some(SessionState::Running) if ax == SessionState::WaitingApproval => ax,
+                    _ if ax == SessionState::WaitingApproval => ax,
                     Some(state) if state != SessionState::Unknown => state,
                     _ => ax,
                 }
@@ -1653,7 +1827,7 @@ impl AgentService {
             ProcessState::Unknown => SessionState::Unknown,
         };
         let mut meta = open
-            .map(|o| o.viewer.meta().clone())
+            .map(|o| o.meta.clone())
             .unwrap_or_else(|| d.meta.clone());
         meta.title = Self::title_locked(inner, d).to_owned();
         if meta.cwd.as_os_str().is_empty() {
@@ -1687,9 +1861,7 @@ impl AgentService {
                 .filter(|p| p.provider == d.provider)
                 .map(|p| Self::title_locked(inner, p).to_owned())
                 .unwrap_or_default(),
-            transcript_notice: open
-                .map(|o| o.viewer.transcript_notice().to_owned())
-                .unwrap_or_default(),
+            transcript_notice: open.map(|o| o.notice.clone()).unwrap_or_default(),
             // A suggestion follows a finished turn, never a running one.
             composer_suggestion: inner
                 .predictions
@@ -2061,14 +2233,33 @@ impl AgentService {
     /// Visible sessions, newest first.
     pub fn list(&self, provider: Option<Provider>, limit: usize) -> Vec<AgentSession> {
         let inner = self.inner.lock().unwrap();
-        let mut activity = Self::descendant_activity(&inner);
+        self.list_locked(&inner, provider, limit)
+    }
+
+    /// Membership and native names from the same committed discovery snapshot.
+    pub fn catalog_snapshot(&self) -> CatalogSnapshot {
+        let inner = self.inner.lock().unwrap();
+        CatalogSnapshot {
+            sessions: self.list_locked(&inner, None, usize::MAX),
+            sections: inner.sections.sections.clone(),
+            notices: inner.sections.notices.clone(),
+        }
+    }
+
+    fn list_locked(
+        &self,
+        inner: &Inner,
+        provider: Option<Provider>,
+        limit: usize,
+    ) -> Vec<AgentSession> {
+        let mut activity = Self::descendant_activity(inner);
         let mut sessions: Vec<AgentSession> = inner
             .catalog
             .iter()
             .filter(|(_, d)| !d.hidden && !d.archived)
             .filter(|(_, d)| provider.is_none_or(|p| d.provider == p))
             .filter_map(|(id, _)| {
-                let mut session = Self::project_summary(&inner, id)?;
+                let mut session = Self::project_summary(inner, id)?;
                 session.descendant_activity = activity.remove(id).unwrap_or_default();
                 Some(session)
             })
@@ -2078,7 +2269,7 @@ impl AgentService {
                     .iter()
                     .filter(|(_, e)| !e.remote.archived)
                     .filter(|(_, e)| provider.is_none_or(|p| e.provider == p))
-                    .filter_map(|(id, _)| Self::project_cloud(&inner, id)),
+                    .filter_map(|(id, _)| Self::project_cloud(inner, id)),
             )
             .collect();
         if provider.is_none() {
@@ -2111,6 +2302,7 @@ impl AgentService {
                 None => return Err(Error::NotFound(format!("session {id}"))),
             }
         };
+        let source = discovered.clone();
         let parsed = tokio::task::spawn_blocking(move || {
             // A JSONL source is read by the engine over its grammar and
             // hooks; a store by its own viewer.
@@ -2127,7 +2319,11 @@ impl AgentService {
             let stat = viewer.stamp().map_err(|e| Error::Io(e.to_string()))?;
             let polled = viewer.poll().map_err(|e| Error::Io(e.to_string()))?;
             Ok::<_, Error>(Open {
-                viewer,
+                meta: viewer.meta().clone(),
+                custom_title: viewer.custom_title(),
+                notice: viewer.transcript_notice().to_owned(),
+                generation: Arc::new(()),
+                viewer: Some(viewer),
                 messages: polled.messages,
                 last_used: Instant::now(),
                 stat,
@@ -2136,9 +2332,18 @@ impl AgentService {
         .await
         .map_err(|e| Error::Io(e.to_string()))??;
         let mut inner = self.inner.lock().unwrap();
+        if !inner
+            .catalog
+            .get(id)
+            .is_some_and(|d| d.path == source.path && d.provider == source.provider)
+        {
+            return Err(Error::Conflict(
+                "Session source changed while opening history".into(),
+            ));
+        }
         let open = inner.open.entry(id.to_string()).or_insert(parsed);
         // The whole file was read: its newest title outlives the viewer.
-        let (title, custom) = (open.viewer.meta().title.clone(), open.viewer.custom_title());
+        let (title, custom) = (open.meta.title.clone(), open.custom_title);
         if let Some(d) = inner.catalog.get_mut(id) {
             Self::refine_catalog_title(d, title, custom);
         }
@@ -2400,6 +2605,47 @@ impl AgentService {
     }
 
     /// Choices belong to the selected native session, not to a cached transcript.
+    pub async fn organize(
+        &self,
+        request: muster_proto::v1::AgentOrganizeRequest,
+    ) -> Result<String, Error> {
+        let session = self
+            .session(&request.session)
+            .ok_or_else(|| Error::NotFound(request.session.clone()))?;
+        let config = self.config.clone();
+        let requested = request.clone();
+        let plan = control_guard::spawn_blocking(move || {
+            organization::prepare(&config, &session, &requested)
+        })
+        .await
+        .map_err(|e| Error::Unavailable(e.to_string()))??;
+        if plan.no_op {
+            return Ok(request.session);
+        }
+        self.controller(&request.session)?.organize(&plan).await?;
+        let plan = Arc::new(plan);
+        let until = Instant::now() + Duration::from_secs(8);
+        loop {
+            control_guard::check()?;
+            let config = self.config.clone();
+            let read = plan.clone();
+            let confirmed =
+                control_guard::spawn_blocking(move || organization::confirmed(&config, &read))
+                    .await
+                    .map_err(|e| Error::Unavailable(e.to_string()))?;
+            if let Ok(Some(subject)) = confirmed {
+                self.rescan().await;
+                return Ok(subject);
+            }
+            if Instant::now() >= until {
+                return Err(Error::UnknownOutcome(
+                    "Native files did not confirm the action; refresh before retrying".into(),
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+    }
+
     pub async fn model_options(
         &self,
         id: &str,
@@ -2665,7 +2911,7 @@ impl AgentService {
         let cwd = inner
             .open
             .get(id)
-            .map(|o| o.viewer.meta().cwd.clone())
+            .map(|o| o.meta.cwd.clone())
             .filter(|cwd| !cwd.as_os_str().is_empty())
             .or_else(|| inner.catalog.get(id).map(|d| d.meta.cwd.clone()))
             .ok_or_else(|| Error::NotFound(format!("session {id}")))?;
@@ -2730,3 +2976,121 @@ fn entered(controller: Arc<dyn Controller>) -> Arc<dyn Controller> {
 }
 
 pub mod native_runtime;
+
+#[cfg(test)]
+mod polling_regressions {
+    use super::*;
+    struct Slow {
+        meta: model::SessionMeta,
+        entered: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+    impl Viewer for Slow {
+        fn provider(&self) -> Provider {
+            Provider::Claude
+        }
+        fn meta(&self) -> &model::SessionMeta {
+            &self.meta
+        }
+        fn state(&self) -> SessionState {
+            SessionState::Idle
+        }
+        fn path(&self) -> &std::path::Path {
+            std::path::Path::new("/tmp/synthetic-transcript")
+        }
+        fn stamp(&self) -> std::io::Result<(std::time::SystemTime, u64)> {
+            Ok((std::time::SystemTime::UNIX_EPOCH, 1))
+        }
+        fn poll(&mut self) -> std::io::Result<viewer::Polled> {
+            self.entered.send(()).unwrap();
+            self.release.recv_timeout(Duration::from_secs(5)).unwrap();
+            self.meta.title = "late old title".into();
+            Ok(viewer::Polled {
+                meta_changed: true,
+                ..Default::default()
+            })
+        }
+    }
+    #[tokio::test]
+    async fn slow_poll_releases_catalog_and_cannot_overwrite_replaced_viewer() {
+        let service = AgentService::start(AgentConfig {
+            codex_home: None,
+            claude_home: None,
+            claude_desktop: None,
+            catdesk_home: None,
+            deepseek_home: None,
+            poll: Duration::from_secs(60),
+            rescan: Duration::from_secs(60),
+            ..Default::default()
+        });
+        // Finish initial empty scan before inserting the isolated source.
+        service.rescan().await;
+        let (entered, receive) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let meta = model::SessionMeta {
+            title: "visible".into(),
+            cwd: PathBuf::from("/tmp"),
+            updated_unix: 1,
+            archived: false,
+            state: SessionState::Idle,
+        };
+        let source = Discovered {
+            id: "fixture".into(),
+            provider: Provider::Claude,
+            path: PathBuf::from("/tmp/synthetic-transcript"),
+            modified: std::time::SystemTime::UNIX_EPOCH,
+            size: 0,
+            archived: false,
+            hidden: false,
+            parent_id: None,
+            relation: "",
+            meta: meta.clone(),
+            custom_title: false,
+            entrypoint: None,
+        };
+        {
+            let mut inner = service.inner.lock().unwrap();
+            inner.catalog.insert("fixture".into(), source);
+            inner.open.insert(
+                "fixture".into(),
+                Open {
+                    viewer: Some(Box::new(Slow {
+                        meta: meta.clone(),
+                        entered,
+                        release: wait,
+                    })),
+                    generation: Arc::new(()),
+                    meta,
+                    custom_title: false,
+                    notice: String::new(),
+                    messages: vec![],
+                    last_used: Instant::now(),
+                    stat: (std::time::SystemTime::UNIX_EPOCH, 0),
+                },
+            );
+        }
+        let polling = service.clone();
+        let worker = std::thread::spawn(move || polling.poll_transcripts(vec!["fixture".into()]));
+        receive.recv_timeout(Duration::from_secs(2)).unwrap();
+        let readable = service.inner.try_lock();
+        assert!(
+            readable.is_ok(),
+            "polling must not hold the catalog mutex during file I/O"
+        );
+        let mut inner = readable.unwrap();
+        let open = inner.open.get_mut("fixture").unwrap();
+        assert_eq!(open.meta.title, "visible");
+        assert!(open.viewer.is_none());
+        open.generation = Arc::new(());
+        open.meta.title = "replacement".into();
+        drop(inner);
+        // A concurrent poll sees the lease and returns immediately.
+        service.poll_transcripts(vec!["fixture".into()]);
+        release.send(()).unwrap();
+        worker.join().unwrap();
+        assert_eq!(
+            service.inner.lock().unwrap().open["fixture"].meta.title,
+            "replacement"
+        );
+    }
+}

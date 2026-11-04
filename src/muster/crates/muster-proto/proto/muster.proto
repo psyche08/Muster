@@ -147,6 +147,12 @@ message Request {
     // Explicit user attestation for the exact original send. Never submits input.
     AgentSendRequest agent_confirm_delivered = 73;
     VisionRequest vision = 74;
+    // Field 74 was this request in the 1.1.20 (110) candidate built from this
+    // branch; `vision` landed on `main` with that number first, so organization
+    // takes the next one. Only the pre-release installs on the authorized Macs
+    // and that OTA build speak the old number, and they are replaced by the
+    // next release.
+    AgentOrganizeRequest agent_organize = 75;
   }
 }
 
@@ -322,6 +328,7 @@ message LockedUseOperation {
     DeviceLeaseRequest device = 11;
     AgentCompleteRequest complete = 12;
     TerminalCreateRequest terminal_create = 13;
+    AgentOrganizeRequest organize = 14;
   }
   // Empty: one operation. Otherwise presence also authorizes this requester's
   // subsequent native operations for this provider during the same lease.
@@ -676,7 +683,20 @@ message AgentSection {
   string device_name = 7;
 }
 
+message AgentOrganizeRequest {
+  enum Action { PIN = 0; UNPIN = 1; MOVE = 2; REMOVE = 3; CREATE_SECTION = 4; DELETE_SECTION = 5; ARCHIVE = 6; }
+  string op_id = 1;
+  string session = 2; // exact local UUID; also binds native account for section operations
+  Action action = 3;
+  string section_id = 4; // provider-native destination or group to remove
+  string name = 5; // new native section name
+}
+
 message AgentListRequest {
+  bool grouped = 5; // native group pages, ten roots per page
+  string group_key = 6; // server-issued local group key
+  string group_cursor = 7; // bound to group and page boundary
+
   string search_cursor = 4; // opaque session cursor from previous search page
   string query = 3; // title and user/assistant text; empty = catalog
 
@@ -688,11 +708,26 @@ message AgentSessionPage {
   repeated AgentSession sessions = 1;
   repeated AgentSection sections = 2;
   string notice = 3; // unavailable grouping or partial search coverage
+  repeated AgentCatalogGroup groups = 6;
   string next_cursor = 5; // more local transcripts remain to search
   string query = 4; // exact accepted query; protects clients from old daemons ignoring it
 }
 
+message AgentCatalogGroup {
+  string key = 1;
+  string kind = 2; // pin | section | project | recent
+  string title = 3;
+  string provider = 4;
+  string section_id = 5;
+  uint32 count = 6; // roots only; Claude descendants do not count
+  string next_cursor = 7;
+  string device_id = 8; // assigned by the receiving Rust core
+}
+
 message AgentWatchRequest {
+  bool grouped = 4;
+  repeated string visible_sessions = 5; // refresh already loaded rows in addition to the first page
+
   string session = 1;  // "" = list changes for all sessions
   bool catalog_only = 2; // no message contents; bounded catalog snapshots
   uint32 limit = 3; // catalog-only snapshot limit, default 200, maximum 1000

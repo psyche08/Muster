@@ -43,30 +43,7 @@ struct AgentsView: View {
                 }.disabled(agents.searching)
             }
             ForEach(agents.sections, id: \.key) { section in
-                Section {
-                    ForEach(section.rows, id: \.key) { row in
-                        CatalogSessionRow(core: core, row: row, shown: shown)
-                            .listRowBackground(shown == row.session.sourceKey ? Color.accentColor.opacity(0.15) : nil)
-                    }
-                    if section.expanded && section.count == 0 {
-                        Text("No sessions in this section").font(.caption).foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Button { core.agentCatalogAction(.toggleSection, value: section.key) } label: {
-                        HStack(spacing: 7) {
-                            Image(systemName: section.expanded ? "chevron.down" : "chevron.right").font(.caption2)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(section.title).font(.subheadline.weight(.semibold))
-                                if !section.subtitle.isEmpty {
-                                    Text(section.subtitle).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Text("\(section.count)").font(.caption).foregroundStyle(.secondary)
-                        }.contentShape(Rectangle())
-                    }.buttonStyle(.plain).textCase(nil).disabled(!agents.query.isEmpty)
-                    .accessibilityLabel("\(section.title), \(section.count) sessions, \(section.expanded ? "expanded" : "collapsed")")
-                }
+                CatalogSessionGroup(core: core, section: section, shown: shown, searching: !agents.query.isEmpty)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -88,6 +65,48 @@ struct AgentsView: View {
 
 }
 
+private struct CatalogSessionGroup: View {
+    let core: MusterCore
+    let section: Muster_App_AgentCatalogSection
+    let shown: String
+    let searching: Bool
+    var body: some View {
+        Section {
+            ForEach(section.rows, id: \.key) { row in
+                CatalogSessionRow(core: core, row: row, shown: shown)
+                    .listRowBackground(shown == row.session.sourceKey ? Color.accentColor.opacity(0.15) : nil)
+            }
+            if section.expanded && section.hasMore_p {
+                Button { core.agentCatalogAction(.loadMore, value: section.key) } label: {
+                    HStack {
+                        if section.loadingMore { ProgressView().controlSize(.small) }
+                        Text(section.loadingMore ? "Loading…" : "Load more")
+                    }
+                }.disabled(section.loadingMore)
+            }
+            if section.expanded && section.count == 0 {
+                Text("No sessions").font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Button { core.agentCatalogAction(.toggleSection, value: section.key) } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: section.expanded ? "chevron.down" : "chevron.right").font(.caption2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(section.title).font(.subheadline.weight(.semibold))
+                        if !section.subtitle.isEmpty {
+                            Text(section.subtitle).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Text("\(section.count)").font(.caption).foregroundStyle(.secondary)
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain).textCase(nil).disabled(searching)
+            .accessibilityLabel("\(section.title), \(section.count) sessions, \(section.expanded ? "expanded" : "collapsed")")
+
+        }
+    }
+}
+
 private struct CatalogSessionRow: View {
     let core: MusterCore
     let row: Muster_App_AgentCatalogRow
@@ -106,6 +125,11 @@ private struct CatalogSessionRow: View {
                             Text(row.session.title.isEmpty ? row.session.id : row.session.title)
                                 .font(.body).lineLimit(1).truncationMode(.tail)
                             Spacer(minLength: 4)
+                            if row.session.updatedUnix > 0 {
+                                Text(relative(row.session.updatedUnix))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityLabel("Last message \(relative(row.session.updatedUnix))")
+                            }
                             if row.session.state == "waiting_approval" || row.session.state == "running" {
                                 Circle().fill(row.session.state == "waiting_approval" ? Color.orange : Color.green)
                                     .frame(width: 6, height: 6).accessibilityLabel(row.session.state == "waiting_approval" ? "Needs you" : "Working")
@@ -130,12 +154,30 @@ private struct CatalogSessionRow: View {
         }
         .accessibilityIdentifier("agent-row-\(row.session.id)")
         .contextMenu {
+            if row.canOrganize { organizationActions }
             if !row.session.parentSessionID.isEmpty {
                 Button { core.openAgent(row.session.parentSessionID, device: row.session.deviceID) } label: {
                     Label(row.session.parentTitle.isEmpty ? "Parent conversation" : row.session.parentTitle, systemImage: "arrow.turn.up.left")
                 }
             }
         }
+        #if os(iOS)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if row.canOrganize {
+                Button("Archive", role: .destructive) { perform(.archive) }.disabled(row.organizing)
+                Button(row.session.pinned ? "Unpin" : "Pin") { perform(row.session.pinned ? .unpin : .pin) }.tint(.orange).disabled(row.organizing)
+            }
+        }
+        #endif
+    }
+    private func perform(_ action: Muster_V1_AgentOrganizeRequest.Action) {
+        core.agentOrganize(row.key, action: action)
+    }
+    @ViewBuilder private var organizationActions: some View {
+        Group {
+            Button(row.session.pinned ? "Unpin" : "Pin", systemImage: row.session.pinned ? "pin.slash" : "pin") { perform(row.session.pinned ? .unpin : .pin) }
+            Button("Archive", systemImage: "archivebox", role: .destructive) { perform(.archive) }
+        }.disabled(row.organizing)
     }
 }
 

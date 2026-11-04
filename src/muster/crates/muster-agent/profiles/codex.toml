@@ -20,6 +20,7 @@ respond = true
 interrupt = true
 files = true
 model_options = true
+organization = true
 
 # ------------------------------------------------- the rollout record grammar
 # One JSONL rollout per thread under $CODEX_HOME/sessions (archived ones

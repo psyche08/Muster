@@ -32,8 +32,26 @@ fn timestamp(record: &Value, provider: Provider) -> Option<u64> {
 
 /// Scan backwards, keeping only one bounded JSON line in memory. Ignore a
 /// partial final line: it will be reconsidered after the next file change.
+#[cfg(test)]
 pub fn last_message_time(path: &Path, provider: Provider) -> std::io::Result<u64> {
-    Ok(last_record(path, |r| timestamp(r, provider))?.unwrap_or(0))
+    last_message_time_scoped(path, provider, false)
+}
+
+pub(crate) fn last_message_time_scoped(
+    path: &Path,
+    provider: Provider,
+    child: bool,
+) -> std::io::Result<u64> {
+    Ok(last_record(path, |r| {
+        if child && provider == Provider::Claude && r["isSidechain"] == true {
+            let mut own = r.clone();
+            own["isSidechain"] = Value::Bool(false);
+            timestamp(&own, provider)
+        } else {
+            timestamp(r, provider)
+        }
+    })?
+    .unwrap_or(0))
 }
 
 pub fn activity(path: &Path, provider: Provider, process_start: u64) -> crate::model::SessionState {
@@ -187,6 +205,18 @@ pub(crate) fn last_record_within<T>(
 mod tests {
     use super::*;
     use crate::model::parse_ts;
+    #[test]
+    fn child_transcript_time_uses_its_own_sidechain_messages() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(file, "{}", serde_json::json!({"type":"assistant","isSidechain":true,"timestamp":"2026-11-01T01:00:00Z","message":{"role":"assistant","content":"Child reply"}})).unwrap();
+        assert_eq!(last_message_time(file.path(), Provider::Claude).unwrap(), 0);
+        assert_eq!(
+            last_message_time_scoped(file.path(), Provider::Claude, true).unwrap(),
+            parse_ts("2026-11-01T01:00:00Z")
+        );
+    }
+
     #[test]
     fn claude_ignores_metadata_tools_sidechains_and_incomplete_records() {
         let mut file = tempfile::NamedTempFile::new().unwrap();

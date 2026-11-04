@@ -158,3 +158,13 @@ Constraints:
   - Make a send fail behind a dialog, and check the diagnosis on the phone.
   - Confirm that the stored key is not readable from the app, the store or
     logs.
+
+## Linking the vision helpers into a Swift build
+
+`muster-platform`'s `build.rs` compiles the shim's vision sources into the
+static library and asks cargo to link `ScreenCaptureKit`, `ImageIO` and
+`CoreGraphics`, so musterd and the Rust workspace build. The Swift package
+links that same library through its own manifest, whose framework list is
+separate, so `swift test` and `swift run MusterDev` failed to link the capture
+classes once the vision objects were in the library. The manifest now asks for
+the same three frameworks on macOS. No source of this decision changes.

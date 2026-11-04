@@ -17,8 +17,44 @@ pub(crate) struct Catalog {
     pub members: HashMap<(String, String), (String, i64)>,
     pub notices: Vec<(String, String)>,
     pub pinned: HashSet<(String, String)>,
+    pub titles: HashMap<(String, String), String>,
 }
 impl Catalog {
+    /// A failed read is not a new empty native state. Retain only that provider's
+    /// last complete display snapshot; mutation preparation reads afresh.
+    pub fn retain_unavailable(&mut self, previous: &Self) {
+        for (provider, _) in &self.notices {
+            self.sections.extend(
+                previous
+                    .sections
+                    .iter()
+                    .filter(|s| &s.provider == provider)
+                    .cloned(),
+            );
+            self.members.extend(
+                previous
+                    .members
+                    .iter()
+                    .filter(|((p, _), _)| p == provider)
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+            self.pinned.extend(
+                previous
+                    .pinned
+                    .iter()
+                    .filter(|(p, _)| p == provider)
+                    .cloned(),
+            );
+            self.titles.extend(
+                previous
+                    .titles
+                    .iter()
+                    .filter(|((p, _), _)| p == provider)
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+        }
+    }
+
     pub fn apply(&self, session: &mut AgentSession) {
         session.pinned = self
             .pinned
@@ -29,7 +65,82 @@ impl Catalog {
         {
             session.section_id = id.clone();
             session.section_position = *position;
+        } else {
+            session.section_id.clear();
+            session.section_position = 0;
         }
+    }
+}
+fn read_registry(path: &Path) -> Option<Value> {
+    if std::fs::metadata(path).ok()?.len() > 4 << 20 {
+        return None;
+    }
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+}
+
+/// One UUID's current native label, never a title-based session lookup.
+pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Option<String> {
+    if !is_uuid(id) {
+        return None;
+    }
+    match provider {
+        "codex" => {
+            // The native title index contains generated/renamed labels while
+            // threads.title may still contain the original full prompt.
+            let home = config.codex_home.as_ref()?;
+            if let Some(title) = crate::codex::load_index(&home.join("session_index.jsonl"))
+                .remove(&id.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(title);
+            }
+            let db = Connection::open_with_flags(
+                config.codex_home.as_ref()?.join("state_5.sqlite"),
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .ok()?;
+            db.busy_timeout(Duration::from_millis(100)).ok()?;
+            db.query_row(
+                "SELECT title FROM threads WHERE id=?1 AND archived=0",
+                [id],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        }
+        "claude" => {
+            let root = config.claude_desktop.as_ref()?;
+            let desktop = claude_identity::desktop_for_cli(root, id)?;
+            let mut matches = Vec::new();
+            for org in std::fs::read_dir(root).ok()?.flatten() {
+                if !org.file_type().ok()?.is_dir() {
+                    continue;
+                }
+                for account in std::fs::read_dir(org.path()).ok()?.flatten() {
+                    let path = account.path().join(format!("{desktop}.json"));
+                    if path.is_file() {
+                        matches.push(path);
+                    }
+                }
+            }
+            match matches.as_slice() {
+                [one] => {
+                    let record = read_registry(one)?;
+                    if record["sessionId"] != desktop
+                        || record["cliSessionId"] != id
+                        || record["isArchived"] == true
+                    {
+                        return None;
+                    }
+                    record["title"]
+                        .as_str()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(str::to_owned)
+                }
+                _ => None,
+            }
+        }
+        _ => None,
     }
 }
 pub(crate) fn read(config: &AgentConfig) -> Catalog {
@@ -39,7 +150,7 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             Ok(c) => merge(&mut out, c),
             Err(_) => out.notices.push((
                 "codex".into(),
-                "Codex native sections unavailable; showing ungrouped sessions".into(),
+                "Codex native sections temporarily unavailable".into(),
             )),
         }
     }
@@ -57,7 +168,7 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             Some(c) => merge(&mut out, c),
             None => out.notices.push((
                 "claude".into(),
-                "Claude native sections unavailable; showing ungrouped sessions".into(),
+                "Claude native sections temporarily unavailable".into(),
             )),
         }
     }
@@ -67,6 +178,7 @@ fn merge(out: &mut Catalog, c: Catalog) {
     out.sections.extend(c.sections);
     out.members.extend(c.members);
     out.pinned.extend(c.pinned);
+    out.titles.extend(c.titles);
 }
 fn section(
     provider: &str,
@@ -97,13 +209,17 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
     for row in q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
         let (id, name) = row?;
         if !id.is_empty() {
-            out.sections.push(section(
+            let mut g = section(
                 "codex",
                 format!("section:{id}"),
                 name,
                 out.sections.len() as i64,
                 false,
-            ));
+            );
+            if id == crate::catalog::CODEX_PINNED_SECTION {
+                g.kind = "pin".into();
+            }
+            out.sections.push(g);
         }
     }
     let mut q =
@@ -116,13 +232,15 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
         ))
     })? {
         let (id, name, pos) = row?;
-        out.sections.push(section(
+        let mut g = section(
             "codex",
             format!("project:{id}"),
             name,
             1000_i64.saturating_add(pos),
             false,
-        ));
+        );
+        g.kind = "project".into();
+        out.sections.push(g);
     }
     let known: HashSet<_> = out.sections.iter().map(|s| s.id.clone()).collect();
     let mut q = tx.prepare("SELECT id, thread_section_id, project_id, section_position FROM threads WHERE archived = 0 LIMIT 100001")?;
@@ -141,18 +259,37 @@ fn codex(home: &Path) -> rusqlite::Result<Catalog> {
         if is_uuid(&id)
             && let Some(group) = group.filter(|s| known.contains(s))
         {
+            if group == format!("section:{}", crate::catalog::CODEX_PINNED_SECTION) {
+                out.pinned.insert(("codex".into(), id.clone()));
+            }
             out.members
                 .insert(("codex".into(), id), (group, pos.unwrap_or(i64::MAX)));
         }
     }
     // Older provider schemas may not have this column. Missing pin metadata
     // must not discard otherwise valid native sections.
-    if let Ok(mut q) =
-        tx.prepare("SELECT id FROM threads WHERE archived=0 AND is_pinned=1 LIMIT 100001")
+    if !out.sections.iter().any(|g| g.kind == "pin")
+        && let Ok(mut q) =
+            tx.prepare("SELECT id FROM threads WHERE archived=0 AND is_pinned=1 LIMIT 100001")
         && let Ok(rows) = q.query_map([], |r| r.get::<_, String>(0))
     {
         for id in rows.flatten().filter(|id| is_uuid(id)) {
             out.pinned.insert(("codex".into(), id));
+        }
+    }
+    if let Ok(mut q) = tx.prepare("SELECT id,title FROM threads WHERE archived=0 LIMIT 100001")
+        && let Ok(rows) = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+    {
+        for (id, title) in rows
+            .flatten()
+            .filter(|(id, title)| is_uuid(id) && !title.trim().is_empty())
+        {
+            out.titles.insert(("codex".into(), id), title);
+        }
+    }
+    for (id, title) in crate::codex::load_index(&home.join("session_index.jsonl")) {
+        if !title.is_empty() {
+            out.titles.insert(("codex".into(), id), title);
         }
     }
     codex_projects(home, &tx, &mut out);
@@ -410,7 +547,21 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
             && mapping.iter().filter(|(d, _)| d == desktop).count() == 1
             && mapping.iter().filter(|(_, c)| c == cli).count() == 1
         {
+            let record = read_registry(&account.join(format!("{desktop}.json")))?;
+            if record["sessionId"] != *desktop || record["cliSessionId"] != *cli {
+                return None;
+            }
             ids.insert(desktop.as_str(), cli.as_str());
+            if let Some(title) = record["title"].as_str().filter(|s| !s.trim().is_empty()) {
+                out.titles
+                    .insert(("claude".into(), cli.clone()), title.to_owned());
+            }
+            if let Some(starred) = record.get("isStarred") {
+                let pinned = starred.as_bool()?;
+                if pinned {
+                    out.pinned.insert(("claude".into(), cli.clone()));
+                }
+            }
         }
     }
     let mut assigned = HashSet::new();
@@ -446,8 +597,9 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
         }
         .into();
         out.sections.push(metadata);
+        // pinnedOrder is presentation order, never proof of membership.
         let members = if kind == "pinned" {
-            state["pinnedOrder"].as_array()
+            None
         } else {
             s["members"].as_array()
         };
@@ -459,10 +611,7 @@ fn claude_state(root: &Path, state: &Value) -> Option<Catalog> {
                 continue;
             };
             if let Some(cli) = ids.get(desktop) {
-                if kind == "pinned" {
-                    // Pinning is independent of manual membership. Retain both.
-                    out.pinned.insert(("claude".into(), (*cli).into()));
-                } else if assigned.insert(*cli) {
+                if assigned.insert(*cli) {
                     out.members.insert(
                         ("claude".into(), (*cli).into()),
                         (section_id.clone(), pos as i64),
@@ -491,6 +640,42 @@ mod tests {
     const B: &str = "22222222-2222-4222-8222-222222222222";
     const USER: &str = "33333333-3333-4333-8333-333333333333";
     const ORG: &str = "44444444-4444-4444-8444-444444444444";
+    #[test]
+    fn unavailable_provider_keeps_display_snapshot_but_successful_removal_clears_membership() {
+        let key = ("claude".into(), A.into());
+        let previous = Catalog {
+            sections: vec![section(
+                "claude",
+                "group".into(),
+                "Example".into(),
+                0,
+                false,
+            )],
+            members: HashMap::from([(key.clone(), ("group".into(), 3))]),
+            pinned: HashSet::from([key]),
+            ..Default::default()
+        };
+        let mut failed = Catalog {
+            notices: vec![("claude".into(), "unavailable".into())],
+            ..Default::default()
+        };
+        failed.retain_unavailable(&previous);
+        assert_eq!(failed.sections, previous.sections);
+        let mut session = AgentSession {
+            id: A.into(),
+            provider: "claude".into(),
+            ..Default::default()
+        };
+        failed.apply(&mut session);
+        assert_eq!(session.section_id, "group");
+        assert!(session.pinned);
+        let mut successful = Catalog::default();
+        successful.retain_unavailable(&previous);
+        successful.apply(&mut session);
+        assert!(session.section_id.is_empty());
+        assert!(!session.pinned);
+        assert_eq!(session.section_position, 0);
+    }
     #[test]
     fn codex_membership_is_by_uuid_and_keeps_duplicate_section_labels() {
         let dir = tempfile::tempdir().unwrap();
@@ -607,6 +792,45 @@ mod tests {
     }
 
     #[test]
+    fn claude_registry_star_is_authoritative_over_pinned_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let account = dir.path().join(ORG).join(USER);
+        std::fs::create_dir_all(&account).unwrap();
+        let desktop = format!("local_{A}");
+        let file = account.join(format!("{desktop}.json"));
+        let scope = format!("{ORG}/{USER}");
+        let mut state = serde_json::json!({"lastSidebarScopeKey":scope,"pinnedOrder":[],
+            "codeSidebarByScope":{&scope:{"sections":[{"id":"pinned","kind":"pinned"},{"id":"sessions","kind":"sessions"}]}}});
+        let mut record = serde_json::json!({"sessionId":desktop,"cliSessionId":B,"isStarred":true});
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
+        state["pinnedOrder"] = serde_json::json!([format!("code:{desktop}")]);
+        record["isStarred"] = serde_json::json!(false);
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            !claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
+        record.as_object_mut().unwrap().remove("isStarred");
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(
+            !claude_state(dir.path(), &state)
+                .unwrap()
+                .pinned
+                .contains(&("claude".into(), B.into()))
+        );
+        record["isStarred"] = serde_json::json!("invalid");
+        std::fs::write(&file, record.to_string()).unwrap();
+        assert!(claude_state(dir.path(), &state).is_none());
+    }
+    #[test]
     fn claude_pin_is_independent_of_custom_membership_and_visibility() {
         let dir = tempfile::tempdir().unwrap();
         let account = dir.path().join(ORG).join(USER);
@@ -614,7 +838,8 @@ mod tests {
         let desktop = format!("local_{A}");
         std::fs::write(
             account.join(format!("{desktop}.json")),
-            serde_json::json!({"sessionId": desktop, "cliSessionId": B}).to_string(),
+            serde_json::json!({"sessionId": desktop, "cliSessionId": B, "isStarred":true})
+                .to_string(),
         )
         .unwrap();
         let scope = format!("{ORG}/{USER}");
@@ -646,6 +871,13 @@ mod tests {
         c.apply(&mut s);
         assert!(s.pinned);
         claude_state(dir.path(), &unpinned).unwrap().apply(&mut s);
+        assert!(s.pinned); // Reordering does not unpin a native session.
+        std::fs::write(
+            account.join(format!("{desktop}.json")),
+            serde_json::json!({"sessionId":desktop,"cliSessionId":B,"isStarred":false}).to_string(),
+        )
+        .unwrap();
+        claude_state(dir.path(), &state).unwrap().apply(&mut s);
         assert!(!s.pinned);
         assert!(s.section_id.ends_with(":custom"));
     }
@@ -731,5 +963,47 @@ mod tests {
         db.delete(key).unwrap();
         db.flush().unwrap();
         assert!(local_storage(dir.path()).is_none());
+    }
+}
+
+#[cfg(test)]
+mod title_regressions {
+    use super::*;
+    #[test]
+    fn title_index_wins_over_original_prompt_and_refreshes_by_uuid() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Connection::open(dir.path().join("state_5.sqlite")).unwrap();
+        db.execute_batch("CREATE TABLE threads(id TEXT,title TEXT,archived INTEGER);")
+            .unwrap();
+        let id = "11111111-1111-4111-8111-111111111111";
+        db.execute(
+            "INSERT INTO threads VALUES(?1,'Long original prompt',0)",
+            [id],
+        )
+        .unwrap();
+        let config = AgentConfig {
+            codex_home: Some(dir.path().into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Long original prompt")
+        );
+        let index = dir.path().join("session_index.jsonl");
+        let line = |name| serde_json::json!({"id":id,"thread_name":name}).to_string() + "\n";
+        std::fs::write(&index, line("Native title")).unwrap();
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Native title")
+        );
+        std::fs::write(&index, line("Native title") + &line("Renamed")).unwrap();
+        assert_eq!(
+            native_title(&config, "codex", id).as_deref(),
+            Some("Renamed")
+        );
+        assert_eq!(
+            native_title(&config, "codex", "22222222-2222-4222-8222-222222222222"),
+            None
+        );
     }
 }
