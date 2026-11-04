@@ -150,8 +150,18 @@ operation signature does not match an enrolled key" — the behaviour this
 decision replaces, observed on a live machine minutes apart from the run that
 succeeded.
 
-The signature length guard still runs: an 81-byte signature was refused with
-"locked use: signature too large" before anything else happened.
+The interoperability claim was checked the same way: a second run carrying a
+64-byte garbage signature — what an older client that still signs looks like to
+this daemon — was also `APPLIED` and relocked on cancel. The signature length
+guard still runs: an 81-byte signature was refused with "locked use: signature
+too large" before anything else happened.
+
+Not covered by a live run: the iPhone. A phone was already admitted on its
+paired device key without a prompt before this decision, so its path is the one
+this diff does not change; the garbage-signature run above stands in for "an
+older client that still signs". The phone's link was down at the end of the
+session, which is the connectivity flapping seen earlier the same day and not
+related to this change.
 
 Gates on the branch: `cargo test --workspace` (85 suites), `cargo clippy
 --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`,
