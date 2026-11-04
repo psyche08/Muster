@@ -4,6 +4,7 @@
 - Status: Accepted; source, tests and device acceptance verified.
 - Related: [ADR 0115](0115-target-scoped-local-input.md),
   [ADR 0046](0046-send-recovery-and-quiet-admission.md),
+  [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md),
   [SECURITY.md](../SECURITY.md), [AGENT_CONTROL_DESIGN.md](../AGENT_CONTROL_DESIGN.md)
 
 ## Context
@@ -155,9 +156,9 @@ Constraints:
   regenerated; the `MusterUI` Swift target builds.
 - Signing and publication: not part of this change.
 - Device acceptance, 2026-11-05, on the development Mac (macOS 27.0) against
-  an installed bundle built from `406296a5`. That bundle also carried an
-  unmerged change that prompts for Screen Recording at startup; it edits none
-  of the sources this decision names, which are identical to `main` in it.
+  an installed bundle built from `406296a`, the first commit of
+  [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md).
+  That change edits none of the sources this decision names.
   A loopback endpoint stood in for the owner's provider: it recorded exactly
   what musterd sent and answered in either format, so the run needed no API
   key and reached no third party. Requests went in over the 0600 local socket
@@ -176,8 +177,13 @@ Constraints:
   - Screen Recording. Turning the feature on calls
     `CGRequestScreenCaptureAccess`, which for a launchd agent shows no
     dialog; it registered musterd in System Settings, where the owner
-    switched it on, and `VisionStatus.screen_recording` followed without a
-    restart.
+    switched it on, and the preflight answered `true` at once. musterd then
+    restarted, and the capture below came from the restarted process, which
+    is the order
+    [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md)
+    requires. No capture was attempted between the grant and that restart,
+    so this run says nothing about what the older process would have
+    returned.
   - Without the grant. A native send that failed with `unavailable: ChatGPT
     needs one supported local catalog database …` was looked at from the
     failure text alone: the request carried the app name and that text and
