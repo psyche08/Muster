@@ -217,6 +217,7 @@ records a specific decision and does not revive code on its delete list.
 | [0117](0117-bounded-view-cache-and-empty-pin.md) | Accepted; source verified, device acceptance pending | Bound the view cache on disk and drop an empty Pin |
 
 | [0118](0118-sweep-past-an-unreadable-worktree.md) | Accepted; source and tests verified | Sweep past a worktree that cannot answer for itself |
+| [0119](0119-ignore-loose-credential-files.md) | Accepted; source verified | Ignore the credential file types the fleet actually keeps loose |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

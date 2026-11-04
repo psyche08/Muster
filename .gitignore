@@ -35,6 +35,10 @@ local.properties
 *.sepblob
 *.p12
 *.pfx
+*.p7b
+*.cer
+*.certSigningRequest
+*.password
 *.mobileprovision
 *.xcent
 *.xcent.der
