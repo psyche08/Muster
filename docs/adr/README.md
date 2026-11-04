@@ -212,7 +212,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0115](0115-target-scoped-local-input.md) | Accepted; source and tests verified, device acceptance pending | Count only local input that could reach the target app |
 
-| [0116](0116-failure-screenshot-analysis.md) | Accepted; source and tests verified, device acceptance pending | Look at a failed native send with the user's own LLM |
+| [0116](0116-failure-screenshot-analysis.md) | Accepted; source, tests and device acceptance verified | Look at a failed native send with the user's own LLM |
 
 | [0117](0117-bounded-view-cache-and-empty-pin.md) | Accepted; source verified, device acceptance pending | Bound the view cache on disk and drop an empty Pin |
 

@@ -1,9 +1,10 @@
 # ADR 0116: Look at a failed native send with the user's own LLM
 
 - Date: 2026-11-04
-- Status: Accepted; source and tests verified, device acceptance pending.
+- Status: Accepted; source, tests and device acceptance verified.
 - Related: [ADR 0115](0115-target-scoped-local-input.md),
   [ADR 0046](0046-send-recovery-and-quiet-admission.md),
+  [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md),
   [SECURITY.md](../SECURITY.md), [AGENT_CONTROL_DESIGN.md](../AGENT_CONTROL_DESIGN.md)
 
 ## Context
@@ -134,7 +135,9 @@ Constraints:
   Settings section says so before the switch can be turned on. Turning the
   switch off, or clearing the key, stops it.
 - musterd needs Screen Recording for screenshots. Without it the look uses
-  the failure text only.
+  the failure text only. macOS shows no dialog for a launchd agent, so
+  turning the feature on registers musterd in System Settings and the owner
+  switches it on there.
 - A failed send now takes up to 20 s longer to report while the feature is
   on.
 
@@ -151,13 +154,57 @@ Constraints:
     being sent is removed from the failure text.
 - Builds: workspace build, strict clippy, rustfmt; Swift bindings
   regenerated; the `MusterUI` Swift target builds.
-- Signing, publication and installation: not part of this change.
-- Runtime and device acceptance: pending.
-  - Configure each protocol in Settings and test it.
-  - Grant Screen Recording to musterd.
-  - Make a send fail behind a dialog, and check the diagnosis on the phone.
-  - Confirm that the stored key is not readable from the app, the store or
-    logs.
+- Signing and publication: not part of this change.
+- Device acceptance, 2026-11-05, on the development Mac (macOS 27.0) against
+  an installed bundle built from `406296a`, the first commit of
+  [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md).
+  That change edits none of the sources this decision names.
+  A loopback endpoint stood in for the owner's provider: it recorded exactly
+  what musterd sent and answered in either format, so the run needed no API
+  key and reached no third party. Requests went in over the 0600 local socket
+  with `muster rpc`, the same local-owner path Settings uses.
+  - Both protocols. `http://127.0.0.1:18116/v1` as `openai` reached
+    `POST /v1/chat/completions` with `authorization: Bearer`;
+    `http://127.0.0.1:18116` as `anthropic` reached `POST /v1/messages` with
+    `x-api-key` and `anthropic-version: 2023-06-01`. The test action answered
+    through both, and saving again without a key kept the stored one.
+  - The key. `vision.config` in the store holds the switch, the format, the
+    base URL and the model and nothing else; the key is in neither
+    `musterd.db` nor `musterd.log`; the item is musterd's own
+    `dev.linsheng.musterd.vision` / `api-key`, and `VisionStatus` says only
+    that one is stored. The background read after a failed send needed no
+    prompt and unlocked nothing.
+  - Screen Recording. Turning the feature on calls
+    `CGRequestScreenCaptureAccess`, which for a launchd agent shows no
+    dialog; it registered musterd in System Settings, where the owner
+    switched it on, and the preflight answered `true` at once. musterd then
+    restarted, and the capture below came from the restarted process, which
+    is the order
+    [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md)
+    requires. No capture was attempted between the grant and that restart,
+    so this run says nothing about what the older process would have
+    returned.
+  - Without the grant. A native send that failed with `unavailable: ChatGPT
+    needs one supported local catalog database …` was looked at from the
+    failure text alone: the request carried the app name and that text and
+    said no screenshot was available, and the answer came back after
+    `Muster looked:`. The missing permission failed nothing.
+  - With the grant. The same send carried a 1568 x 902, 406,946-byte PNG of
+    the app's largest on-screen window, its longest side exactly at the cap,
+    and the answer described what that picture showed. The window held an
+    open conversation, as this decision says it would.
+  - Bounds and budget. A 900-character answer over several lines reached the
+    caller as one line of exactly 300 characters ending in an ellipsis. An
+    endpoint that answered after 25 s gave `Muster could not look: it took
+    too long` after 20 s, with the failure text unchanged. A caller that gave
+    up at 5 s was answered at 5 s, not at 20.
+  - What left the Mac. The text being sent never appeared in the request, and
+    the outcome did not move: the reply stayed `unavailable: ...` with the
+    diagnosis on a second line.
+  - Not covered. The annotated failure was read over the local socket, not on
+    the phone, which was offline; it is the same `Error.message` the phone
+    renders. No hosted provider was called, and the Settings screen was not
+    driven.
 
 ## Linking the vision helpers into a Swift build
 
