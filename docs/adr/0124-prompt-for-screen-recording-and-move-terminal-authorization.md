@@ -1,7 +1,7 @@
 # ADR 0124: Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page
 
 - Date: 2026-11-04
-- Status: Accepted; source and tests verified, device acceptance pending
+- Status: Accepted; source and tests verified, installed and verified on the owner's Mac
 - Related: [ADR 0116](0116-failure-screenshot-analysis.md) (the capture that
   needs Screen Recording), [ADR 0006](0006-desktop-presence-and-console-routing.md)
   (the bundled daemon whose permissions these are),
@@ -60,6 +60,13 @@ Rust; the shells render what they are given.
 - `RequestScreenRecording` is a top-level intent beside `RequestAccessibility`,
   not a `DesktopSetupAction`: the Network settings page offers the same grant,
   and neither entry point belongs to the dialog.
+- The grant joins `observe_desktop_permissions`, so a `missing` -> `granted`
+  transition sets `desktop_restart_required` and reopens a dismissed dialog.
+  macOS answers a preflight with the new grant at once, but the process that
+  asked keeps capturing nothing until it restarts -- which is why the system's
+  own prompt offers "Quit & Reopen". `musterd` is that process, so without
+  this the dialog would report Screen Recording as ready while every capture
+  still came back empty. Observed on the owner's Mac: see Verification.
 
 ### Terminal authorization
 
@@ -100,6 +107,11 @@ owner has any reason to open those settings.
 **Ask the app for Screen Recording and hand the capture to the daemon.** The
 permission is per process, and the capture is the daemon's. A grant the app
 holds would not let `musterd` read a single pixel.
+
+**Trust the preflight and skip the restart.** The preflight answers `true` as
+soon as the grant lands, so the dialog would close itself and report the
+daemon ready. It would be wrong until the next restart, and the failure it
+hides is the silent one this ADR exists to remove.
 
 **Keep terminal Automation in the startup dialog and only add Screen
 Recording.** The dialog's point is "this Mac is not yet reachable". Automation
@@ -151,9 +163,28 @@ for no gain.
   SwiftProtobuf 1.38.1 and verified to reproduce the committed output from the
   unmodified schema; `swift build` and `swift test` pass (109 tests), and the
   `testRenderDesktopSetup` snapshot shows the three-item dialog.
-- **Signing, notarization, installation, runtime**: not performed. The system
-  prompts themselves — the Screen Recording dialog `musterd` raises, and
-  whether the Automation section clears on the Terminals page after a grant —
-  need an installed signed build on a Mac whose TCC state can be reset, and
-  are unverified here.
-- **Device acceptance**: pending.
+- **Signing and installation**: verified. Built with
+  `MUSTER_MAC_PROFILE="Muster Developer ID Presence G2"` and signed with
+  `Developer ID Application: Sheng Lin (89LGY6BD53)`;
+  `scripts/install-mac.sh` installed 1.1.21 (111) into `/Applications`, and
+  `codesign --verify --deep --strict` passed. Not notarized; not published.
+- **Runtime, on the owner's M1Max**: verified for both halves.
+  - The freshly installed `musterd` reported `screen_recording: "missing"`
+    while Accessibility and the Locked Use plugin were both ready — a state
+    the previous build said nothing about. The startup dialog came up with
+    the Screen Recording section outstanding, naming
+    `/Applications/Muster.app/Contents/MacOS/musterd`.
+  - Granting it in System Settings moved the daemon's report to
+    `"granted"`, and the dialog stopped appearing after the restart that the
+    install performs.
+  - The Terminals page showed the Ghostty Automation section above the
+    session list (this Mac's `ghostty_automation` is `not_running`), with
+    Rust's own message and the "授权并检查 Ghostty…" button, while the
+    startup dialog no longer carried any terminal item.
+- **Unverified**: the `missing` -> `granted` transition raising the restart
+  requirement was observed only as the problem, not as the fix. Reproducing
+  it needs `tccutil` to revoke the grant on a Mac the owner is using, which
+  was not done; the behavior rests on `a_screen_recording_grant_requires_a_restart`
+  and on the macOS rule the Decision cites. Notarization, publication and the
+  other three Macs in the fleet are untouched.
+- **Device acceptance**: partial — this Mac only.
