@@ -1,8 +1,8 @@
 # ADR 0097: Task-scoped scheduler grant for Locked Use
 
 - Date: 2026-11-02
-- Status: Accepted; source and tests verified, local installation and device
-  acceptance recorded below.
+- Status: Accepted; source and tests verified. No release, installation or
+  device acceptance: the grant has never run on an installed build.
 - Numbered 0097: ADR 0095 and 0096 on `main` are the shared AX navigation
   and question editor decisions.
 - Related: [ADR 0007](0007-desktop-manual-locked-use.md),
@@ -194,6 +194,22 @@ Its rules:
 - No password, Keychain, system lock setting or `security unlock-keychain` is
   involved anywhere.
 
+## Protocol field renumbering
+
+The branch this decision was written on carried the grant as request and
+status field 74 in `muster.proto`. [ADR 0116](0116-failure-screenshot-analysis.md)
+landed on `main` with 74 for its vision request and
+[ADR 0111](0111-native-organization-ax-and-file-confirmation.md) with 75 for
+organization, so the grant takes the next free number in each oneof — 76 — and
+the schema says what the old number was and why it moved. Nothing addresses
+these fields by number in Rust, Swift or Harmony, and the Locked Use
+`Operation` oneof is untouched, so no lease digest changes. No released or
+pre-release build ever spoke the old number: the grant has never shipped.
+
+The record keeps its own number. 0097 was free on `main` when this landed —
+0096 and 0098 are the question editor and focused deletion decisions — so the
+number this branch chose stands, and nothing cross-referencing it moved.
+
 ## Alternatives
 
 - **A Presence signature per package.** It keeps the existing invariant, but
@@ -238,7 +254,9 @@ Its rules:
   generator. The Harmony bindings were regenerated with the pinned
   `protobufjs-cli` 1.3.3. That output also picks up schema changes already on
   `main` that earlier commits had not regenerated for Harmony: the
-  desktop-update `AUTO_ON`/`AUTO_OFF` actions and `automatic` field.
+  desktop-update `AUTO_ON`/`AUTO_OFF` actions and `automatic` field, and, on
+  landing, the session sections, organization, catalog group and vision
+  messages of ADRs 0102, 0111 and 0116.
 
 ## Verification
 
@@ -287,10 +305,32 @@ Its rules:
     - a done adoption answers again until revocation;
     - only the scope's code session in its directory is adoptable.
 - **Lint:** `cargo clippy --workspace --all-targets -- -D warnings` reported
-  nothing, and `scripts/check-layers.py` passed. The touched files are
-  rustfmt-clean with both the Homebrew 1.99.1 and rustup-stable rustfmt.
-  `cargo fmt --all --check` still reports six untouched files that already
-  differ on `origin/main`.
+  nothing, and `src/muster/scripts/check-layers.py` passed. The touched files
+  are rustfmt-clean with both the Homebrew 1.99.1 and rustup-stable rustfmt.
+  When this was written, `cargo fmt --all --check` still reported six
+  untouched files that already differed on `origin/main`; they have since been
+  formatted there.
 - **Generated code:**
   - Swift: swift-protobuf 1.38.1 (55d7a1cc) with the vendored protoc.
   - Harmony: protobufjs-cli 1.3.3 with protobufjs 7.6.6.
+
+## Verification on landing
+
+Re-run on the three commits rebased onto `main` at 583b8b29, with the field
+renumbering above and the bindings regenerated rather than merged:
+
+- `cargo test --workspace` passed, 0 failures.
+- `cargo clippy --workspace --all-targets -- -D warnings` reported nothing.
+- `cargo fmt --all --check` is clean across the workspace.
+- `src/muster/scripts/check-layers.py`: 18 crates follow the layer map.
+- `scripts/check-adr.sh origin/main`, `python3 scripts/check-public-content.py`
+  (0 findings over 877 files) and the 14 script tests passed.
+- `swift test --parallel` in `src/native/apple/MusterApp` passed 109 of 109
+  against a debug `libmuster_ffi.a`, so the regenerated Swift bindings compile
+  and the app's own tests still pass.
+- The grant's operation kinds are still the closed set of create, send,
+  read_options, set_options and interrupt. The organization operation that
+  landed meanwhile ([ADR 0111](0111-native-organization-ax-and-file-confirmation.md))
+  is not among them, and a scheduled lease cannot carry it.
+
+Nothing here is installation or device acceptance; see the status line.
