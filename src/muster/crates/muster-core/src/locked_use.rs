@@ -40,9 +40,11 @@ pub struct Console {
     pub audit_session: u32,
 }
 
-/// Immutable, target-issued challenge. Sign `signing_message()` with the
-/// enrolled remote presence key, or an enrolled phone's device key. The authenticated
-/// transport principal must also match `requester` when the signature arrives.
+/// Immutable, target-issued challenge. Since ADR 0120 nothing signs it: the
+/// requester arms it on its granted `locked.control`, and the authenticated
+/// transport principal must match `requester` when the arm arrives. The
+/// signature field stays in the exchange for older clients and is ignored,
+/// so `signing_message()` remains for them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Challenge {
     epoch: [u8; 32],
@@ -172,6 +174,8 @@ pub struct Observation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     Idle,
+    /// Issued and waiting for the requester to arm its own challenge. The name
+    /// is the protocol's; since ADR 0120 no signature is checked here.
     AwaitingSignature,
     Armed,
     Authorizing,

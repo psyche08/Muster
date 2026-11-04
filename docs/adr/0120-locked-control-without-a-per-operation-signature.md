@@ -129,4 +129,31 @@ outrun. They now wait for the flag.
 
 ## Implementation verification
 
-Recorded with the evidence once the branch is built and installed.
+2026-11-04, on the owner's own fleet. M1Max ran this branch (`musterd` reports
+commit `49e40cd`); M4Pro and M4Mini stayed on `df0fd20`, the build that still
+required a signature, which made the contrast an A/B on real hardware rather
+than an argument.
+
+M1Max's screen was genuinely locked (`CGSSessionScreenIsLocked = Yes` in
+`ioreg -n Root -d1`). M4Pro — a desktop member holding `locked.control`, no
+signature of any kind — asked M1Max for a device-lease challenge and executed
+it with an **empty** signature:
+
+- `LockedUsePrepare` for `DeviceLease` returned a 231-byte challenge.
+- `LockedUseExecute` with `signature: []` answered `OpResult { status:
+  APPLIED }`. The Mac unlocked under the cover.
+- `LockedUseCancel` with the challenge's nonce was acked, and the Mac relocked:
+  `CGSSessionScreenIsLocked = Yes` again.
+
+The same request to M4Pro's older daemon was refused with "locked use:
+operation signature does not match an enrolled key" — the behaviour this
+decision replaces, observed on a live machine minutes apart from the run that
+succeeded.
+
+The signature length guard still runs: an 81-byte signature was refused with
+"locked use: signature too large" before anything else happened.
+
+Gates on the branch: `cargo test --workspace` (85 suites), `cargo clippy
+--workspace --all-targets -- -D warnings`, `cargo fmt --all --check`,
+`scripts/check-layers.py` (18 crates), `scripts/check-public-content.py`
+(879 files, 0 findings), `scripts/check-adr.sh origin/main` — all pass.
