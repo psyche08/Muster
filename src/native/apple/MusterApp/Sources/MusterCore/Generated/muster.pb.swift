@@ -830,6 +830,19 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .agentOrganize(newValue)}
   }
 
+  /// Local owner only: one task's bounded scheduler grant (ADR 0097).
+  /// Field 74 was this request on the branch this change comes from;
+  /// `vision` and `agent_organize` landed on `main` with 74 and 75
+  /// first, so the grant takes the next one. No released build ever
+  /// spoke the old number: the grant has never shipped.
+  public var agentScheduler: Muster_V1_AgentSchedulerRequest {
+    get {
+      if case .agentScheduler(let v)? = req {return v}
+      return Muster_V1_AgentSchedulerRequest()
+    }
+    set {req = .agentScheduler(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Req: Equatable, Sendable {
@@ -906,6 +919,12 @@ public nonisolated struct Muster_V1_Request: Sendable {
     /// and that OTA build speak the old number, and they are replaced by the
     /// next release.
     case agentOrganize(Muster_V1_AgentOrganizeRequest)
+    /// Local owner only: one task's bounded scheduler grant (ADR 0097).
+    /// Field 74 was this request on the branch this change comes from;
+    /// `vision` and `agent_organize` landed on `main` with 74 and 75
+    /// first, so the grant takes the next one. No released build ever
+    /// spoke the old number: the grant has never shipped.
+    case agentScheduler(Muster_V1_AgentSchedulerRequest)
 
   }
 
@@ -1178,6 +1197,14 @@ public nonisolated struct Muster_V1_Response: Sendable {
     set {resp = .vision(newValue)}
   }
 
+  public var agentScheduler: Muster_V1_AgentSchedulerStatus {
+    get {
+      if case .agentScheduler(let v)? = resp {return v}
+      return Muster_V1_AgentSchedulerStatus()
+    }
+    set {resp = .agentScheduler(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Resp: Equatable, Sendable {
@@ -1210,6 +1237,7 @@ public nonisolated struct Muster_V1_Response: Sendable {
     case multica(Muster_V1_MulticaStatus)
     case multicaPage(Muster_V1_MulticaPage)
     case vision(Muster_V1_VisionStatus)
+    case agentScheduler(Muster_V1_AgentSchedulerStatus)
 
   }
 
@@ -4536,6 +4564,338 @@ public nonisolated struct Muster_V1_VisionStatus: Sendable {
   public init() {}
 }
 
+/// Local owner only (ADR 0097). One task's scheduler grant: at most a producer
+/// and a reviewer session of one provider in one directory, bounded quotas and
+/// lifetime, its desktop operations under Locked Use while the console is
+/// locked. Status, revoke and reconcile never touch the desktop.
+public nonisolated struct Muster_V1_AgentSchedulerRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var action: Muster_V1_AgentSchedulerRequest.OneOf_Action? = nil
+
+  public var grant: Muster_V1_AgentSchedulerGrant {
+    get {
+      if case .grant(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerGrant()
+    }
+    set {action = .grant(newValue)}
+  }
+
+  public var revoke: Muster_V1_AgentSchedulerTask {
+    get {
+      if case .revoke(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerTask()
+    }
+    set {action = .revoke(newValue)}
+  }
+
+  public var status: Muster_V1_AgentSchedulerTask {
+    get {
+      if case .status(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerTask()
+    }
+    set {action = .status(newValue)}
+  }
+
+  public var operate: Muster_V1_AgentSchedulerOperate {
+    get {
+      if case .operate(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerOperate()
+    }
+    set {action = .operate(newValue)}
+  }
+
+  /// Read-only, for the exact original operate request: resolves a reserved
+  /// or unknown operation from provider evidence (a creation's transcript
+  /// receipt, a send's confirmed ledger row). Never re-runs anything.
+  public var reconcile: Muster_V1_AgentSchedulerOperate {
+    get {
+      if case .reconcile(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerOperate()
+    }
+    set {action = .reconcile(newValue)}
+  }
+
+  /// Binds a session that already exists to a role instead of creating one.
+  /// musterd checks it in the provider's own session registry first.
+  public var adopt: Muster_V1_AgentSchedulerAdopt {
+    get {
+      if case .adopt(let v)? = action {return v}
+      return Muster_V1_AgentSchedulerAdopt()
+    }
+    set {action = .adopt(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Action: Equatable, Sendable {
+    case grant(Muster_V1_AgentSchedulerGrant)
+    case revoke(Muster_V1_AgentSchedulerTask)
+    case status(Muster_V1_AgentSchedulerTask)
+    case operate(Muster_V1_AgentSchedulerOperate)
+    /// Read-only, for the exact original operate request: resolves a reserved
+    /// or unknown operation from provider evidence (a creation's transcript
+    /// receipt, a send's confirmed ledger row). Never re-runs anything.
+    case reconcile(Muster_V1_AgentSchedulerOperate)
+    /// Binds a session that already exists to a role instead of creating one.
+    /// musterd checks it in the provider's own session registry first.
+    case adopt(Muster_V1_AgentSchedulerAdopt)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_AgentSchedulerGrant: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String = String()
+
+  /// lowercase hex of the approved task contract
+  public var contractSha256: String = String()
+
+  public var provider: String = String()
+
+  /// resolved to its canonical path
+  public var directory: String = String()
+
+  /// the only model an option set may choose
+  public var model: String = String()
+
+  /// the only effort an option set may choose
+  public var effort: String = String()
+
+  /// at most 24 hours
+  public var ttlSeconds: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_AgentSchedulerTask: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// The session must exist now: this provider, code mode, cwd equal to the
+/// grant's directory, not archived, not read-only, not a child session. Each
+/// role binds one session once, by creation or adoption; an adoption counts
+/// as one of the two sessions. The same adoption again changes nothing.
+public nonisolated struct Muster_V1_AgentSchedulerAdopt: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String = String()
+
+  /// producer | reviewer
+  public var role: String = String()
+
+  public var provider: String = String()
+
+  public var directory: String = String()
+
+  public var session: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// One desktop operation. provider, directory and session state what the
+/// caller intends; each must equal the grant's own binding. The session is the
+/// one this role's creation receipt bound; a creation names none.
+public nonisolated struct Muster_V1_AgentSchedulerOperate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String = String()
+
+  public var opID: String = String()
+
+  /// producer | reviewer
+  public var role: String = String()
+
+  /// create | send | read_options | set_options | interrupt
+  public var kind: String = String()
+
+  public var provider: String = String()
+
+  public var directory: String = String()
+
+  public var session: String = String()
+
+  /// create: the first prompt; send: the message
+  public var text: String = String()
+
+  /// set_options
+  public var model: String = String()
+
+  /// set_options
+  public var effort: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_AgentSchedulerOp: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var opID: String = String()
+
+  public var kind: String = String()
+
+  public var role: String = String()
+
+  public var session: String = String()
+
+  /// reserved | applied | rejected | unknown
+  public var state: String = String()
+
+  /// applied: the receipt (a creation: its session)
+  public var result: String = String()
+
+  public var message: String = String()
+
+  public var reservedUnixMs: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// The grant as this Mac records it. An operation's own answer (an OpResult
+/// or the chat options) comes back for operate; this for everything else.
+public nonisolated struct Muster_V1_AgentSchedulerStatus: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var taskID: String {
+    get {_storage._taskID}
+    set {_uniqueStorage()._taskID = newValue}
+  }
+
+  public var contractSha256: String {
+    get {_storage._contractSha256}
+    set {_uniqueStorage()._contractSha256 = newValue}
+  }
+
+  public var provider: String {
+    get {_storage._provider}
+    set {_uniqueStorage()._provider = newValue}
+  }
+
+  public var directory: String {
+    get {_storage._directory}
+    set {_uniqueStorage()._directory = newValue}
+  }
+
+  public var model: String {
+    get {_storage._model}
+    set {_uniqueStorage()._model = newValue}
+  }
+
+  public var effort: String {
+    get {_storage._effort}
+    set {_uniqueStorage()._effort = newValue}
+  }
+
+  public var issuedUnixMs: UInt64 {
+    get {_storage._issuedUnixMs}
+    set {_uniqueStorage()._issuedUnixMs = newValue}
+  }
+
+  public var expiresUnixMs: UInt64 {
+    get {_storage._expiresUnixMs}
+    set {_uniqueStorage()._expiresUnixMs = newValue}
+  }
+
+  /// 0: not revoked
+  public var revokedUnixMs: UInt64 {
+    get {_storage._revokedUnixMs}
+    set {_uniqueStorage()._revokedUnixMs = newValue}
+  }
+
+  public var live: Bool {
+    get {_storage._live}
+    set {_uniqueStorage()._live = newValue}
+  }
+
+  public var producerSession: String {
+    get {_storage._producerSession}
+    set {_uniqueStorage()._producerSession = newValue}
+  }
+
+  public var reviewerSession: String {
+    get {_storage._reviewerSession}
+    set {_uniqueStorage()._reviewerSession = newValue}
+  }
+
+  public var creates: UInt32 {
+    get {_storage._creates}
+    set {_uniqueStorage()._creates = newValue}
+  }
+
+  public var packages: UInt32 {
+    get {_storage._packages}
+    set {_uniqueStorage()._packages = newValue}
+  }
+
+  public var reviews: UInt32 {
+    get {_storage._reviews}
+    set {_uniqueStorage()._reviews = newValue}
+  }
+
+  public var controls: UInt32 {
+    get {_storage._controls}
+    set {_uniqueStorage()._controls = newValue}
+  }
+
+  public var ops: [Muster_V1_AgentSchedulerOp] {
+    get {_storage._ops}
+    set {_uniqueStorage()._ops = newValue}
+  }
+
+  /// The operation reconcile was asked about, after reconciliation.
+  public var op: Muster_V1_AgentSchedulerOp {
+    get {_storage._op ?? Muster_V1_AgentSchedulerOp()}
+    set {_uniqueStorage()._op = newValue}
+  }
+  /// Returns true if `op` has been explicitly set.
+  public var hasOp: Bool {_storage._op != nil}
+  /// Clears the value of `op`. Subsequent reads from it will return its default value.
+  public mutating func clearOp() {_uniqueStorage()._op = nil}
+
+  /// roles whose session was adopted, not created
+  public var adopted: [String] {
+    get {_storage._adopted}
+    set {_uniqueStorage()._adopted = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "muster.v1"
@@ -4833,7 +5193,7 @@ nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{3}agent_scheduler\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5686,6 +6046,19 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
           self.req = .agentOrganize(v)
         }
       }()
+      case 76: try {
+        var v: Muster_V1_AgentSchedulerRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .agentScheduler(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .agentScheduler(v)
+        }
+      }()
       default: break
       }
     }
@@ -5957,6 +6330,10 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
       guard case .agentOrganize(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 75)
     }()
+    case .agentScheduler?: try {
+      guard case .agentScheduler(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 76)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -6016,7 +6393,7 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Response"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0\u{2}\u{3}vision\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0\u{2}\u{3}vision\0\u{4}\u{2}agent_scheduler\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6401,6 +6778,19 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
           self.resp = .vision(v)
         }
       }()
+      case 76: try {
+        var v: Muster_V1_AgentSchedulerStatus?
+        var hadOneofValue = false
+        if let current = self.resp {
+          hadOneofValue = true
+          if case .agentScheduler(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.resp = .agentScheduler(v)
+        }
+      }()
       default: break
       }
     }
@@ -6527,6 +6917,10 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
     case .vision?: try {
       guard case .vision(let v)? = self.resp else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 74)
+    }()
+    case .agentScheduler?: try {
+      guard case .agentScheduler(let v)? = self.resp else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 76)
     }()
     case nil: break
     }
@@ -12990,6 +13384,617 @@ nonisolated extension Muster_V1_VisionStatus: SwiftProtobuf.Message, SwiftProtob
     if lhs.screenRecording != rhs.screenRecording {return false}
     if lhs.message != rhs.message {return false}
     if lhs.busy != rhs.busy {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}grant\0\u{1}revoke\0\u{1}status\0\u{1}operate\0\u{1}reconcile\0\u{1}adopt\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Muster_V1_AgentSchedulerGrant?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .grant(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .grant(v)
+        }
+      }()
+      case 2: try {
+        var v: Muster_V1_AgentSchedulerTask?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .revoke(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .revoke(v)
+        }
+      }()
+      case 3: try {
+        var v: Muster_V1_AgentSchedulerTask?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .status(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .status(v)
+        }
+      }()
+      case 4: try {
+        var v: Muster_V1_AgentSchedulerOperate?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .operate(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .operate(v)
+        }
+      }()
+      case 5: try {
+        var v: Muster_V1_AgentSchedulerOperate?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .reconcile(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .reconcile(v)
+        }
+      }()
+      case 6: try {
+        var v: Muster_V1_AgentSchedulerAdopt?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .adopt(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .adopt(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.action {
+    case .grant?: try {
+      guard case .grant(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .revoke?: try {
+      guard case .revoke(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .status?: try {
+      guard case .status(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .operate?: try {
+      guard case .operate(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case .reconcile?: try {
+      guard case .reconcile(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case .adopt?: try {
+      guard case .adopt(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerRequest, rhs: Muster_V1_AgentSchedulerRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerGrant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerGrant"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{3}contract_sha256\0\u{1}provider\0\u{1}directory\0\u{1}model\0\u{1}effort\0\u{3}ttl_seconds\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.taskID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contractSha256) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.directory) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.effort) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.ttlSeconds) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.taskID.isEmpty {
+      try visitor.visitSingularStringField(value: self.taskID, fieldNumber: 1)
+    }
+    if !self.contractSha256.isEmpty {
+      try visitor.visitSingularStringField(value: self.contractSha256, fieldNumber: 2)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 3)
+    }
+    if !self.directory.isEmpty {
+      try visitor.visitSingularStringField(value: self.directory, fieldNumber: 4)
+    }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 5)
+    }
+    if !self.effort.isEmpty {
+      try visitor.visitSingularStringField(value: self.effort, fieldNumber: 6)
+    }
+    if self.ttlSeconds != 0 {
+      try visitor.visitSingularUInt64Field(value: self.ttlSeconds, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerGrant, rhs: Muster_V1_AgentSchedulerGrant) -> Bool {
+    if lhs.taskID != rhs.taskID {return false}
+    if lhs.contractSha256 != rhs.contractSha256 {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.directory != rhs.directory {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.effort != rhs.effort {return false}
+    if lhs.ttlSeconds != rhs.ttlSeconds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerTask: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerTask"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.taskID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.taskID.isEmpty {
+      try visitor.visitSingularStringField(value: self.taskID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerTask, rhs: Muster_V1_AgentSchedulerTask) -> Bool {
+    if lhs.taskID != rhs.taskID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerAdopt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerAdopt"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{1}role\0\u{1}provider\0\u{1}directory\0\u{1}session\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.taskID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.directory) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.session) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.taskID.isEmpty {
+      try visitor.visitSingularStringField(value: self.taskID, fieldNumber: 1)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 3)
+    }
+    if !self.directory.isEmpty {
+      try visitor.visitSingularStringField(value: self.directory, fieldNumber: 4)
+    }
+    if !self.session.isEmpty {
+      try visitor.visitSingularStringField(value: self.session, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerAdopt, rhs: Muster_V1_AgentSchedulerAdopt) -> Bool {
+    if lhs.taskID != rhs.taskID {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.directory != rhs.directory {return false}
+    if lhs.session != rhs.session {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerOperate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerOperate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{3}op_id\0\u{1}role\0\u{1}kind\0\u{1}provider\0\u{1}directory\0\u{1}session\0\u{1}text\0\u{1}model\0\u{1}effort\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.taskID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.opID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.directory) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.session) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.effort) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.taskID.isEmpty {
+      try visitor.visitSingularStringField(value: self.taskID, fieldNumber: 1)
+    }
+    if !self.opID.isEmpty {
+      try visitor.visitSingularStringField(value: self.opID, fieldNumber: 2)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 3)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 4)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 5)
+    }
+    if !self.directory.isEmpty {
+      try visitor.visitSingularStringField(value: self.directory, fieldNumber: 6)
+    }
+    if !self.session.isEmpty {
+      try visitor.visitSingularStringField(value: self.session, fieldNumber: 7)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 8)
+    }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 9)
+    }
+    if !self.effort.isEmpty {
+      try visitor.visitSingularStringField(value: self.effort, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerOperate, rhs: Muster_V1_AgentSchedulerOperate) -> Bool {
+    if lhs.taskID != rhs.taskID {return false}
+    if lhs.opID != rhs.opID {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.directory != rhs.directory {return false}
+    if lhs.session != rhs.session {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.effort != rhs.effort {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerOp: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerOp"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{1}kind\0\u{1}role\0\u{1}session\0\u{1}state\0\u{1}result\0\u{1}message\0\u{3}reserved_unix_ms\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.opID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.session) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.state) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.result) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 8: try { try decoder.decodeSingularUInt64Field(value: &self.reservedUnixMs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.opID.isEmpty {
+      try visitor.visitSingularStringField(value: self.opID, fieldNumber: 1)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 2)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 3)
+    }
+    if !self.session.isEmpty {
+      try visitor.visitSingularStringField(value: self.session, fieldNumber: 4)
+    }
+    if !self.state.isEmpty {
+      try visitor.visitSingularStringField(value: self.state, fieldNumber: 5)
+    }
+    if !self.result.isEmpty {
+      try visitor.visitSingularStringField(value: self.result, fieldNumber: 6)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 7)
+    }
+    if self.reservedUnixMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.reservedUnixMs, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerOp, rhs: Muster_V1_AgentSchedulerOp) -> Bool {
+    if lhs.opID != rhs.opID {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.session != rhs.session {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.result != rhs.result {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.reservedUnixMs != rhs.reservedUnixMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentSchedulerStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentSchedulerStatus"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}task_id\0\u{3}contract_sha256\0\u{1}provider\0\u{1}directory\0\u{1}model\0\u{1}effort\0\u{3}issued_unix_ms\0\u{3}expires_unix_ms\0\u{3}revoked_unix_ms\0\u{1}live\0\u{3}producer_session\0\u{3}reviewer_session\0\u{1}creates\0\u{1}packages\0\u{1}reviews\0\u{1}controls\0\u{1}ops\0\u{1}op\0\u{1}adopted\0")
+
+  fileprivate class _StorageClass {
+    var _taskID: String = String()
+    var _contractSha256: String = String()
+    var _provider: String = String()
+    var _directory: String = String()
+    var _model: String = String()
+    var _effort: String = String()
+    var _issuedUnixMs: UInt64 = 0
+    var _expiresUnixMs: UInt64 = 0
+    var _revokedUnixMs: UInt64 = 0
+    var _live: Bool = false
+    var _producerSession: String = String()
+    var _reviewerSession: String = String()
+    var _creates: UInt32 = 0
+    var _packages: UInt32 = 0
+    var _reviews: UInt32 = 0
+    var _controls: UInt32 = 0
+    var _ops: [Muster_V1_AgentSchedulerOp] = []
+    var _op: Muster_V1_AgentSchedulerOp? = nil
+    var _adopted: [String] = []
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _taskID = source._taskID
+      _contractSha256 = source._contractSha256
+      _provider = source._provider
+      _directory = source._directory
+      _model = source._model
+      _effort = source._effort
+      _issuedUnixMs = source._issuedUnixMs
+      _expiresUnixMs = source._expiresUnixMs
+      _revokedUnixMs = source._revokedUnixMs
+      _live = source._live
+      _producerSession = source._producerSession
+      _reviewerSession = source._reviewerSession
+      _creates = source._creates
+      _packages = source._packages
+      _reviews = source._reviews
+      _controls = source._controls
+      _ops = source._ops
+      _op = source._op
+      _adopted = source._adopted
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._taskID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._contractSha256) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._provider) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._directory) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._model) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._effort) }()
+        case 7: try { try decoder.decodeSingularUInt64Field(value: &_storage._issuedUnixMs) }()
+        case 8: try { try decoder.decodeSingularUInt64Field(value: &_storage._expiresUnixMs) }()
+        case 9: try { try decoder.decodeSingularUInt64Field(value: &_storage._revokedUnixMs) }()
+        case 10: try { try decoder.decodeSingularBoolField(value: &_storage._live) }()
+        case 11: try { try decoder.decodeSingularStringField(value: &_storage._producerSession) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._reviewerSession) }()
+        case 13: try { try decoder.decodeSingularUInt32Field(value: &_storage._creates) }()
+        case 14: try { try decoder.decodeSingularUInt32Field(value: &_storage._packages) }()
+        case 15: try { try decoder.decodeSingularUInt32Field(value: &_storage._reviews) }()
+        case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._controls) }()
+        case 17: try { try decoder.decodeRepeatedMessageField(value: &_storage._ops) }()
+        case 18: try { try decoder.decodeSingularMessageField(value: &_storage._op) }()
+        case 19: try { try decoder.decodeRepeatedStringField(value: &_storage._adopted) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._taskID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._taskID, fieldNumber: 1)
+      }
+      if !_storage._contractSha256.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._contractSha256, fieldNumber: 2)
+      }
+      if !_storage._provider.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._provider, fieldNumber: 3)
+      }
+      if !_storage._directory.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._directory, fieldNumber: 4)
+      }
+      if !_storage._model.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._model, fieldNumber: 5)
+      }
+      if !_storage._effort.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._effort, fieldNumber: 6)
+      }
+      if _storage._issuedUnixMs != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._issuedUnixMs, fieldNumber: 7)
+      }
+      if _storage._expiresUnixMs != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._expiresUnixMs, fieldNumber: 8)
+      }
+      if _storage._revokedUnixMs != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._revokedUnixMs, fieldNumber: 9)
+      }
+      if _storage._live != false {
+        try visitor.visitSingularBoolField(value: _storage._live, fieldNumber: 10)
+      }
+      if !_storage._producerSession.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._producerSession, fieldNumber: 11)
+      }
+      if !_storage._reviewerSession.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._reviewerSession, fieldNumber: 12)
+      }
+      if _storage._creates != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._creates, fieldNumber: 13)
+      }
+      if _storage._packages != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._packages, fieldNumber: 14)
+      }
+      if _storage._reviews != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._reviews, fieldNumber: 15)
+      }
+      if _storage._controls != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._controls, fieldNumber: 16)
+      }
+      if !_storage._ops.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._ops, fieldNumber: 17)
+      }
+      try { if let v = _storage._op {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+      } }()
+      if !_storage._adopted.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._adopted, fieldNumber: 19)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentSchedulerStatus, rhs: Muster_V1_AgentSchedulerStatus) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._taskID != rhs_storage._taskID {return false}
+        if _storage._contractSha256 != rhs_storage._contractSha256 {return false}
+        if _storage._provider != rhs_storage._provider {return false}
+        if _storage._directory != rhs_storage._directory {return false}
+        if _storage._model != rhs_storage._model {return false}
+        if _storage._effort != rhs_storage._effort {return false}
+        if _storage._issuedUnixMs != rhs_storage._issuedUnixMs {return false}
+        if _storage._expiresUnixMs != rhs_storage._expiresUnixMs {return false}
+        if _storage._revokedUnixMs != rhs_storage._revokedUnixMs {return false}
+        if _storage._live != rhs_storage._live {return false}
+        if _storage._producerSession != rhs_storage._producerSession {return false}
+        if _storage._reviewerSession != rhs_storage._reviewerSession {return false}
+        if _storage._creates != rhs_storage._creates {return false}
+        if _storage._packages != rhs_storage._packages {return false}
+        if _storage._reviews != rhs_storage._reviews {return false}
+        if _storage._controls != rhs_storage._controls {return false}
+        if _storage._ops != rhs_storage._ops {return false}
+        if _storage._op != rhs_storage._op {return false}
+        if _storage._adopted != rhs_storage._adopted {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

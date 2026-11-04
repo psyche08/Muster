@@ -410,6 +410,46 @@ the Mac and absent means off.
 Rust tests, targeted Clippy and builds passed. Device acceptance with a live
 Claude Desktop conversation has not been run.
 
+## Scheduler grant (2026-11-02)
+
+[ADR 0097](adr/0097-task-scoped-scheduler-grant-for-locked-use.md). A local
+supervisor drives one task's desktop conversations through
+`muster rpc --request -`. JSON names one action:
+`{"agent_scheduler":{"action":{"<action>":{...}}}}`.
+
+| Action | Fields | Effect |
+|---|---|---|
+| `grant` | `task_id`, `contract_sha256`, `provider`, `directory`, `model`, `effort`, `ttl_seconds` (at most 86400) | Grants the one live task. The identical scope again answers the existing grant unchanged. |
+| `revoke` / `status` | `task_id` | Ends the grant for good, or reports scope, counts, bound sessions and every operation. |
+| `operate` | `task_id`, `op_id`, `role` (`producer`/`reviewer`), `kind`, `provider`, `directory`, `session`, `text`, `model`, `effort` | Reserves, then runs one operation. |
+| `reconcile` | the same request as `operate` | Read-only. Settles a reserved or unknown operation from provider evidence, then reports it. |
+| `adopt` | `task_id`, `role`, `provider`, `directory`, `session` | Binds an existing session to a role instead of creating one. musterd first checks it in the provider's session registry: this provider, code mode, cwd equal to the directory, not archived, read-only or a child session. Once per role; it counts as one of the two sessions. The same adoption again answers the status unchanged. Never touches the desktop. |
+
+- **Kinds.**
+  - `create`: text, no session. The answer's `result_id` is the new session.
+  - `send`: text and the role's bound session.
+  - `read_options` and `interrupt`: the bound session only.
+  - `set_options`: the bound session with the grant's exact model and effort.
+- **Answers.**
+  - `applied`: done. For `read_options` and `set_options` the answer is the
+    conversation's options.
+  - `duplicate`: this op_id was already applied; the answer repeats its
+    result.
+  - `rejected`: provably not sent. The quota charge is released; retry with a
+    new op_id.
+  - `unknown`: never replayed. Run `reconcile` later.
+- **Refusals reserve nothing:** out of scope, expired, revoked, quota, an
+  undrivable desktop, or a console that is busy.
+- **Adoption.** A role whose creation is reserved, applied or unknown cannot
+  adopt; a role that adopted cannot create. Status lists adopted roles in
+  `adopted`.
+- **Locked Mac.** One scheduled Locked Use lease per operation (see
+  LOCKED_USE.md). **Unlocked Mac.** After 1 s without local input (waiting at
+  most 30 s), while no Locked Use owns the console.
+- **Completion is not the RPC's job.** `applied` means the submit has a
+  provider receipt, not that the model has finished. The supervisor reads
+  turn completion and artifacts through the read-only interfaces.
+
 ## Desktop Chat mode
 
 The Claude and ChatGPT apps' ordinary conversations, read and driven through

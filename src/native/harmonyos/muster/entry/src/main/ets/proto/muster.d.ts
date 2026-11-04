@@ -542,6 +542,15 @@ export namespace muster {
 
             /** Request agentConfirmDelivered */
             agentConfirmDelivered?: (muster.v1.IAgentSendRequest|null);
+
+            /** Request vision */
+            vision?: (muster.v1.IVisionRequest|null);
+
+            /** Request agentOrganize */
+            agentOrganize?: (muster.v1.IAgentOrganizeRequest|null);
+
+            /** Request agentScheduler */
+            agentScheduler?: (muster.v1.IAgentSchedulerRequest|null);
         }
 
         /** Represents a Request. */
@@ -742,8 +751,17 @@ export namespace muster {
             /** Request agentConfirmDelivered. */
             public agentConfirmDelivered?: (muster.v1.IAgentSendRequest|null);
 
+            /** Request vision. */
+            public vision?: (muster.v1.IVisionRequest|null);
+
+            /** Request agentOrganize. */
+            public agentOrganize?: (muster.v1.IAgentOrganizeRequest|null);
+
+            /** Request agentScheduler. */
+            public agentScheduler?: (muster.v1.IAgentSchedulerRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -934,6 +952,12 @@ export namespace muster {
 
             /** Response multicaPage */
             multicaPage?: (muster.v1.IMulticaPage|null);
+
+            /** Response vision */
+            vision?: (muster.v1.IVisionStatus|null);
+
+            /** Response agentScheduler */
+            agentScheduler?: (muster.v1.IAgentSchedulerStatus|null);
         }
 
         /** Represents a Response. */
@@ -1029,8 +1053,14 @@ export namespace muster {
             /** Response multicaPage. */
             public multicaPage?: (muster.v1.IMulticaPage|null);
 
+            /** Response vision. */
+            public vision?: (muster.v1.IVisionStatus|null);
+
+            /** Response agentScheduler. */
+            public agentScheduler?: (muster.v1.IAgentSchedulerStatus|null);
+
             /** Response resp. */
-            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage");
+            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"vision"|"agentScheduler");
 
             /**
              * Creates a new Response instance using the specified properties.
@@ -2015,6 +2045,9 @@ export namespace muster {
             /** LockedUseOperation terminalCreate */
             terminalCreate?: (muster.v1.ITerminalCreateRequest|null);
 
+            /** LockedUseOperation organize */
+            organize?: (muster.v1.IAgentOrganizeRequest|null);
+
             /** LockedUseOperation providerQueue */
             providerQueue?: (string|null);
         }
@@ -2064,11 +2097,14 @@ export namespace muster {
             /** LockedUseOperation terminalCreate. */
             public terminalCreate?: (muster.v1.ITerminalCreateRequest|null);
 
+            /** LockedUseOperation organize. */
+            public organize?: (muster.v1.IAgentOrganizeRequest|null);
+
             /** LockedUseOperation providerQueue. */
             public providerQueue: string;
 
             /** LockedUseOperation operation. */
-            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate");
+            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize");
 
             /**
              * Creates a new LockedUseOperation instance using the specified properties.
@@ -5079,6 +5115,21 @@ export namespace muster {
             /** AgentSession relationship */
             relationship?: (string|null);
 
+            /** AgentSession sectionId */
+            sectionId?: (string|null);
+
+            /** AgentSession sectionPosition */
+            sectionPosition?: (number|Long|null);
+
+            /** AgentSession parentTitle */
+            parentTitle?: (string|null);
+
+            /** AgentSession pinned */
+            pinned?: (boolean|null);
+
+            /** AgentSession searchSnippet */
+            searchSnippet?: (string|null);
+
             /** AgentSession subsessions */
             subsessions?: (muster.v1.IAgentSession[]|null);
         }
@@ -5152,6 +5203,21 @@ export namespace muster {
             /** AgentSession relationship. */
             public relationship: string;
 
+            /** AgentSession sectionId. */
+            public sectionId: string;
+
+            /** AgentSession sectionPosition. */
+            public sectionPosition: (number|Long);
+
+            /** AgentSession parentTitle. */
+            public parentTitle: string;
+
+            /** AgentSession pinned. */
+            public pinned: boolean;
+
+            /** AgentSession searchSnippet. */
+            public searchSnippet: string;
+
             /** AgentSession subsessions. */
             public subsessions: muster.v1.IAgentSession[];
 
@@ -5188,8 +5254,207 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of an AgentSection. */
+        interface IAgentSection {
+
+            /** AgentSection kind */
+            kind?: (string|null);
+
+            /** AgentSection id */
+            id?: (string|null);
+
+            /** AgentSection provider */
+            provider?: (string|null);
+
+            /** AgentSection title */
+            title?: (string|null);
+
+            /** AgentSection position */
+            position?: (number|Long|null);
+
+            /** AgentSection collapsed */
+            collapsed?: (boolean|null);
+
+            /** AgentSection deviceId */
+            deviceId?: (string|null);
+
+            /** AgentSection deviceName */
+            deviceName?: (string|null);
+        }
+
+        /** Represents an AgentSection. */
+        class AgentSection implements IAgentSection {
+
+            /**
+             * Constructs a new AgentSection.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSection);
+
+            /** AgentSection kind. */
+            public kind: string;
+
+            /** AgentSection id. */
+            public id: string;
+
+            /** AgentSection provider. */
+            public provider: string;
+
+            /** AgentSection title. */
+            public title: string;
+
+            /** AgentSection position. */
+            public position: (number|Long);
+
+            /** AgentSection collapsed. */
+            public collapsed: boolean;
+
+            /** AgentSection deviceId. */
+            public deviceId: string;
+
+            /** AgentSection deviceName. */
+            public deviceName: string;
+
+            /**
+             * Creates a new AgentSection instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSection instance
+             */
+            public static create(properties?: muster.v1.IAgentSection): muster.v1.AgentSection;
+
+            /**
+             * Encodes the specified AgentSection message. Does not implicitly {@link muster.v1.AgentSection.verify|verify} messages.
+             * @param message AgentSection message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSection, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSection message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSection
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSection;
+
+            /**
+             * Gets the default type url for AgentSection
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentOrganizeRequest. */
+        interface IAgentOrganizeRequest {
+
+            /** AgentOrganizeRequest opId */
+            opId?: (string|null);
+
+            /** AgentOrganizeRequest session */
+            session?: (string|null);
+
+            /** AgentOrganizeRequest action */
+            action?: (muster.v1.AgentOrganizeRequest.Action|null);
+
+            /** AgentOrganizeRequest sectionId */
+            sectionId?: (string|null);
+
+            /** AgentOrganizeRequest name */
+            name?: (string|null);
+        }
+
+        /** Represents an AgentOrganizeRequest. */
+        class AgentOrganizeRequest implements IAgentOrganizeRequest {
+
+            /**
+             * Constructs a new AgentOrganizeRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentOrganizeRequest);
+
+            /** AgentOrganizeRequest opId. */
+            public opId: string;
+
+            /** AgentOrganizeRequest session. */
+            public session: string;
+
+            /** AgentOrganizeRequest action. */
+            public action: muster.v1.AgentOrganizeRequest.Action;
+
+            /** AgentOrganizeRequest sectionId. */
+            public sectionId: string;
+
+            /** AgentOrganizeRequest name. */
+            public name: string;
+
+            /**
+             * Creates a new AgentOrganizeRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentOrganizeRequest instance
+             */
+            public static create(properties?: muster.v1.IAgentOrganizeRequest): muster.v1.AgentOrganizeRequest;
+
+            /**
+             * Encodes the specified AgentOrganizeRequest message. Does not implicitly {@link muster.v1.AgentOrganizeRequest.verify|verify} messages.
+             * @param message AgentOrganizeRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentOrganizeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentOrganizeRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentOrganizeRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentOrganizeRequest;
+
+            /**
+             * Gets the default type url for AgentOrganizeRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace AgentOrganizeRequest {
+
+            /** Action enum. */
+            enum Action {
+                PIN = 0,
+                UNPIN = 1,
+                MOVE = 2,
+                REMOVE = 3,
+                CREATE_SECTION = 4,
+                DELETE_SECTION = 5,
+                ARCHIVE = 6
+            }
+        }
+
         /** Properties of an AgentListRequest. */
         interface IAgentListRequest {
+
+            /** AgentListRequest grouped */
+            grouped?: (boolean|null);
+
+            /** AgentListRequest groupKey */
+            groupKey?: (string|null);
+
+            /** AgentListRequest groupCursor */
+            groupCursor?: (string|null);
+
+            /** AgentListRequest searchCursor */
+            searchCursor?: (string|null);
+
+            /** AgentListRequest query */
+            query?: (string|null);
 
             /** AgentListRequest limit */
             limit?: (number|null);
@@ -5206,6 +5471,21 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.v1.IAgentListRequest);
+
+            /** AgentListRequest grouped. */
+            public grouped: boolean;
+
+            /** AgentListRequest groupKey. */
+            public groupKey: string;
+
+            /** AgentListRequest groupCursor. */
+            public groupCursor: string;
+
+            /** AgentListRequest searchCursor. */
+            public searchCursor: string;
+
+            /** AgentListRequest query. */
+            public query: string;
 
             /** AgentListRequest limit. */
             public limit: number;
@@ -5251,6 +5531,21 @@ export namespace muster {
 
             /** AgentSessionPage sessions */
             sessions?: (muster.v1.IAgentSession[]|null);
+
+            /** AgentSessionPage sections */
+            sections?: (muster.v1.IAgentSection[]|null);
+
+            /** AgentSessionPage notice */
+            notice?: (string|null);
+
+            /** AgentSessionPage groups */
+            groups?: (muster.v1.IAgentCatalogGroup[]|null);
+
+            /** AgentSessionPage nextCursor */
+            nextCursor?: (string|null);
+
+            /** AgentSessionPage query */
+            query?: (string|null);
         }
 
         /** Represents an AgentSessionPage. */
@@ -5264,6 +5559,21 @@ export namespace muster {
 
             /** AgentSessionPage sessions. */
             public sessions: muster.v1.IAgentSession[];
+
+            /** AgentSessionPage sections. */
+            public sections: muster.v1.IAgentSection[];
+
+            /** AgentSessionPage notice. */
+            public notice: string;
+
+            /** AgentSessionPage groups. */
+            public groups: muster.v1.IAgentCatalogGroup[];
+
+            /** AgentSessionPage nextCursor. */
+            public nextCursor: string;
+
+            /** AgentSessionPage query. */
+            public query: string;
 
             /**
              * Creates a new AgentSessionPage instance using the specified properties.
@@ -5298,8 +5608,108 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of an AgentCatalogGroup. */
+        interface IAgentCatalogGroup {
+
+            /** AgentCatalogGroup key */
+            key?: (string|null);
+
+            /** AgentCatalogGroup kind */
+            kind?: (string|null);
+
+            /** AgentCatalogGroup title */
+            title?: (string|null);
+
+            /** AgentCatalogGroup provider */
+            provider?: (string|null);
+
+            /** AgentCatalogGroup sectionId */
+            sectionId?: (string|null);
+
+            /** AgentCatalogGroup count */
+            count?: (number|null);
+
+            /** AgentCatalogGroup nextCursor */
+            nextCursor?: (string|null);
+
+            /** AgentCatalogGroup deviceId */
+            deviceId?: (string|null);
+        }
+
+        /** Represents an AgentCatalogGroup. */
+        class AgentCatalogGroup implements IAgentCatalogGroup {
+
+            /**
+             * Constructs a new AgentCatalogGroup.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentCatalogGroup);
+
+            /** AgentCatalogGroup key. */
+            public key: string;
+
+            /** AgentCatalogGroup kind. */
+            public kind: string;
+
+            /** AgentCatalogGroup title. */
+            public title: string;
+
+            /** AgentCatalogGroup provider. */
+            public provider: string;
+
+            /** AgentCatalogGroup sectionId. */
+            public sectionId: string;
+
+            /** AgentCatalogGroup count. */
+            public count: number;
+
+            /** AgentCatalogGroup nextCursor. */
+            public nextCursor: string;
+
+            /** AgentCatalogGroup deviceId. */
+            public deviceId: string;
+
+            /**
+             * Creates a new AgentCatalogGroup instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentCatalogGroup instance
+             */
+            public static create(properties?: muster.v1.IAgentCatalogGroup): muster.v1.AgentCatalogGroup;
+
+            /**
+             * Encodes the specified AgentCatalogGroup message. Does not implicitly {@link muster.v1.AgentCatalogGroup.verify|verify} messages.
+             * @param message AgentCatalogGroup message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentCatalogGroup, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentCatalogGroup message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentCatalogGroup
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentCatalogGroup;
+
+            /**
+             * Gets the default type url for AgentCatalogGroup
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of an AgentWatchRequest. */
         interface IAgentWatchRequest {
+
+            /** AgentWatchRequest grouped */
+            grouped?: (boolean|null);
+
+            /** AgentWatchRequest visibleSessions */
+            visibleSessions?: (string[]|null);
 
             /** AgentWatchRequest session */
             session?: (string|null);
@@ -5319,6 +5729,12 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.v1.IAgentWatchRequest);
+
+            /** AgentWatchRequest grouped. */
+            public grouped: boolean;
+
+            /** AgentWatchRequest visibleSessions. */
+            public visibleSessions: string[];
 
             /** AgentWatchRequest session. */
             public session: string;
@@ -9453,6 +9869,860 @@ export namespace muster {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+
+        /** Properties of a VisionRequest. */
+        interface IVisionRequest {
+
+            /** VisionRequest action */
+            action?: (muster.v1.VisionRequest.Action|null);
+
+            /** VisionRequest enabled */
+            enabled?: (boolean|null);
+
+            /** VisionRequest apiFormat */
+            apiFormat?: (string|null);
+
+            /** VisionRequest baseUrl */
+            baseUrl?: (string|null);
+
+            /** VisionRequest model */
+            model?: (string|null);
+
+            /** VisionRequest apiKey */
+            apiKey?: (string|null);
+        }
+
+        /** Represents a VisionRequest. */
+        class VisionRequest implements IVisionRequest {
+
+            /**
+             * Constructs a new VisionRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IVisionRequest);
+
+            /** VisionRequest action. */
+            public action: muster.v1.VisionRequest.Action;
+
+            /** VisionRequest enabled. */
+            public enabled: boolean;
+
+            /** VisionRequest apiFormat. */
+            public apiFormat: string;
+
+            /** VisionRequest baseUrl. */
+            public baseUrl: string;
+
+            /** VisionRequest model. */
+            public model: string;
+
+            /** VisionRequest apiKey. */
+            public apiKey: string;
+
+            /**
+             * Creates a new VisionRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns VisionRequest instance
+             */
+            public static create(properties?: muster.v1.IVisionRequest): muster.v1.VisionRequest;
+
+            /**
+             * Encodes the specified VisionRequest message. Does not implicitly {@link muster.v1.VisionRequest.verify|verify} messages.
+             * @param message VisionRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IVisionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a VisionRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns VisionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.VisionRequest;
+
+            /**
+             * Gets the default type url for VisionRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace VisionRequest {
+
+            /** Action enum. */
+            enum Action {
+                GET = 0,
+                SAVE = 1,
+                TEST = 2,
+                CLEAR_KEY = 3
+            }
+        }
+
+        /** Properties of a VisionStatus. */
+        interface IVisionStatus {
+
+            /** VisionStatus supported */
+            supported?: (boolean|null);
+
+            /** VisionStatus enabled */
+            enabled?: (boolean|null);
+
+            /** VisionStatus apiFormat */
+            apiFormat?: (string|null);
+
+            /** VisionStatus baseUrl */
+            baseUrl?: (string|null);
+
+            /** VisionStatus model */
+            model?: (string|null);
+
+            /** VisionStatus keyStored */
+            keyStored?: (boolean|null);
+
+            /** VisionStatus screenRecording */
+            screenRecording?: (boolean|null);
+
+            /** VisionStatus message */
+            message?: (string|null);
+
+            /** VisionStatus busy */
+            busy?: (boolean|null);
+        }
+
+        /** Represents a VisionStatus. */
+        class VisionStatus implements IVisionStatus {
+
+            /**
+             * Constructs a new VisionStatus.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IVisionStatus);
+
+            /** VisionStatus supported. */
+            public supported: boolean;
+
+            /** VisionStatus enabled. */
+            public enabled: boolean;
+
+            /** VisionStatus apiFormat. */
+            public apiFormat: string;
+
+            /** VisionStatus baseUrl. */
+            public baseUrl: string;
+
+            /** VisionStatus model. */
+            public model: string;
+
+            /** VisionStatus keyStored. */
+            public keyStored: boolean;
+
+            /** VisionStatus screenRecording. */
+            public screenRecording: boolean;
+
+            /** VisionStatus message. */
+            public message: string;
+
+            /** VisionStatus busy. */
+            public busy: boolean;
+
+            /**
+             * Creates a new VisionStatus instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns VisionStatus instance
+             */
+            public static create(properties?: muster.v1.IVisionStatus): muster.v1.VisionStatus;
+
+            /**
+             * Encodes the specified VisionStatus message. Does not implicitly {@link muster.v1.VisionStatus.verify|verify} messages.
+             * @param message VisionStatus message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IVisionStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a VisionStatus message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns VisionStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.VisionStatus;
+
+            /**
+             * Gets the default type url for VisionStatus
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerRequest. */
+        interface IAgentSchedulerRequest {
+
+            /** AgentSchedulerRequest grant */
+            grant?: (muster.v1.IAgentSchedulerGrant|null);
+
+            /** AgentSchedulerRequest revoke */
+            revoke?: (muster.v1.IAgentSchedulerTask|null);
+
+            /** AgentSchedulerRequest status */
+            status?: (muster.v1.IAgentSchedulerTask|null);
+
+            /** AgentSchedulerRequest operate */
+            operate?: (muster.v1.IAgentSchedulerOperate|null);
+
+            /** AgentSchedulerRequest reconcile */
+            reconcile?: (muster.v1.IAgentSchedulerOperate|null);
+
+            /** AgentSchedulerRequest adopt */
+            adopt?: (muster.v1.IAgentSchedulerAdopt|null);
+        }
+
+        /** Represents an AgentSchedulerRequest. */
+        class AgentSchedulerRequest implements IAgentSchedulerRequest {
+
+            /**
+             * Constructs a new AgentSchedulerRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerRequest);
+
+            /** AgentSchedulerRequest grant. */
+            public grant?: (muster.v1.IAgentSchedulerGrant|null);
+
+            /** AgentSchedulerRequest revoke. */
+            public revoke?: (muster.v1.IAgentSchedulerTask|null);
+
+            /** AgentSchedulerRequest status. */
+            public status?: (muster.v1.IAgentSchedulerTask|null);
+
+            /** AgentSchedulerRequest operate. */
+            public operate?: (muster.v1.IAgentSchedulerOperate|null);
+
+            /** AgentSchedulerRequest reconcile. */
+            public reconcile?: (muster.v1.IAgentSchedulerOperate|null);
+
+            /** AgentSchedulerRequest adopt. */
+            public adopt?: (muster.v1.IAgentSchedulerAdopt|null);
+
+            /** AgentSchedulerRequest action. */
+            public action?: ("grant"|"revoke"|"status"|"operate"|"reconcile"|"adopt");
+
+            /**
+             * Creates a new AgentSchedulerRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerRequest instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerRequest): muster.v1.AgentSchedulerRequest;
+
+            /**
+             * Encodes the specified AgentSchedulerRequest message. Does not implicitly {@link muster.v1.AgentSchedulerRequest.verify|verify} messages.
+             * @param message AgentSchedulerRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerRequest;
+
+            /**
+             * Gets the default type url for AgentSchedulerRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerGrant. */
+        interface IAgentSchedulerGrant {
+
+            /** AgentSchedulerGrant taskId */
+            taskId?: (string|null);
+
+            /** AgentSchedulerGrant contractSha256 */
+            contractSha256?: (string|null);
+
+            /** AgentSchedulerGrant provider */
+            provider?: (string|null);
+
+            /** AgentSchedulerGrant directory */
+            directory?: (string|null);
+
+            /** AgentSchedulerGrant model */
+            model?: (string|null);
+
+            /** AgentSchedulerGrant effort */
+            effort?: (string|null);
+
+            /** AgentSchedulerGrant ttlSeconds */
+            ttlSeconds?: (number|Long|null);
+        }
+
+        /** Represents an AgentSchedulerGrant. */
+        class AgentSchedulerGrant implements IAgentSchedulerGrant {
+
+            /**
+             * Constructs a new AgentSchedulerGrant.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerGrant);
+
+            /** AgentSchedulerGrant taskId. */
+            public taskId: string;
+
+            /** AgentSchedulerGrant contractSha256. */
+            public contractSha256: string;
+
+            /** AgentSchedulerGrant provider. */
+            public provider: string;
+
+            /** AgentSchedulerGrant directory. */
+            public directory: string;
+
+            /** AgentSchedulerGrant model. */
+            public model: string;
+
+            /** AgentSchedulerGrant effort. */
+            public effort: string;
+
+            /** AgentSchedulerGrant ttlSeconds. */
+            public ttlSeconds: (number|Long);
+
+            /**
+             * Creates a new AgentSchedulerGrant instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerGrant instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerGrant): muster.v1.AgentSchedulerGrant;
+
+            /**
+             * Encodes the specified AgentSchedulerGrant message. Does not implicitly {@link muster.v1.AgentSchedulerGrant.verify|verify} messages.
+             * @param message AgentSchedulerGrant message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerGrant, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerGrant message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerGrant
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerGrant;
+
+            /**
+             * Gets the default type url for AgentSchedulerGrant
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerTask. */
+        interface IAgentSchedulerTask {
+
+            /** AgentSchedulerTask taskId */
+            taskId?: (string|null);
+        }
+
+        /** Represents an AgentSchedulerTask. */
+        class AgentSchedulerTask implements IAgentSchedulerTask {
+
+            /**
+             * Constructs a new AgentSchedulerTask.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerTask);
+
+            /** AgentSchedulerTask taskId. */
+            public taskId: string;
+
+            /**
+             * Creates a new AgentSchedulerTask instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerTask instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerTask): muster.v1.AgentSchedulerTask;
+
+            /**
+             * Encodes the specified AgentSchedulerTask message. Does not implicitly {@link muster.v1.AgentSchedulerTask.verify|verify} messages.
+             * @param message AgentSchedulerTask message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerTask, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerTask message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerTask
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerTask;
+
+            /**
+             * Gets the default type url for AgentSchedulerTask
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerAdopt. */
+        interface IAgentSchedulerAdopt {
+
+            /** AgentSchedulerAdopt taskId */
+            taskId?: (string|null);
+
+            /** AgentSchedulerAdopt role */
+            role?: (string|null);
+
+            /** AgentSchedulerAdopt provider */
+            provider?: (string|null);
+
+            /** AgentSchedulerAdopt directory */
+            directory?: (string|null);
+
+            /** AgentSchedulerAdopt session */
+            session?: (string|null);
+        }
+
+        /** Represents an AgentSchedulerAdopt. */
+        class AgentSchedulerAdopt implements IAgentSchedulerAdopt {
+
+            /**
+             * Constructs a new AgentSchedulerAdopt.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerAdopt);
+
+            /** AgentSchedulerAdopt taskId. */
+            public taskId: string;
+
+            /** AgentSchedulerAdopt role. */
+            public role: string;
+
+            /** AgentSchedulerAdopt provider. */
+            public provider: string;
+
+            /** AgentSchedulerAdopt directory. */
+            public directory: string;
+
+            /** AgentSchedulerAdopt session. */
+            public session: string;
+
+            /**
+             * Creates a new AgentSchedulerAdopt instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerAdopt instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerAdopt): muster.v1.AgentSchedulerAdopt;
+
+            /**
+             * Encodes the specified AgentSchedulerAdopt message. Does not implicitly {@link muster.v1.AgentSchedulerAdopt.verify|verify} messages.
+             * @param message AgentSchedulerAdopt message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerAdopt, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerAdopt message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerAdopt
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerAdopt;
+
+            /**
+             * Gets the default type url for AgentSchedulerAdopt
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerOperate. */
+        interface IAgentSchedulerOperate {
+
+            /** AgentSchedulerOperate taskId */
+            taskId?: (string|null);
+
+            /** AgentSchedulerOperate opId */
+            opId?: (string|null);
+
+            /** AgentSchedulerOperate role */
+            role?: (string|null);
+
+            /** AgentSchedulerOperate kind */
+            kind?: (string|null);
+
+            /** AgentSchedulerOperate provider */
+            provider?: (string|null);
+
+            /** AgentSchedulerOperate directory */
+            directory?: (string|null);
+
+            /** AgentSchedulerOperate session */
+            session?: (string|null);
+
+            /** AgentSchedulerOperate text */
+            text?: (string|null);
+
+            /** AgentSchedulerOperate model */
+            model?: (string|null);
+
+            /** AgentSchedulerOperate effort */
+            effort?: (string|null);
+        }
+
+        /** Represents an AgentSchedulerOperate. */
+        class AgentSchedulerOperate implements IAgentSchedulerOperate {
+
+            /**
+             * Constructs a new AgentSchedulerOperate.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerOperate);
+
+            /** AgentSchedulerOperate taskId. */
+            public taskId: string;
+
+            /** AgentSchedulerOperate opId. */
+            public opId: string;
+
+            /** AgentSchedulerOperate role. */
+            public role: string;
+
+            /** AgentSchedulerOperate kind. */
+            public kind: string;
+
+            /** AgentSchedulerOperate provider. */
+            public provider: string;
+
+            /** AgentSchedulerOperate directory. */
+            public directory: string;
+
+            /** AgentSchedulerOperate session. */
+            public session: string;
+
+            /** AgentSchedulerOperate text. */
+            public text: string;
+
+            /** AgentSchedulerOperate model. */
+            public model: string;
+
+            /** AgentSchedulerOperate effort. */
+            public effort: string;
+
+            /**
+             * Creates a new AgentSchedulerOperate instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerOperate instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerOperate): muster.v1.AgentSchedulerOperate;
+
+            /**
+             * Encodes the specified AgentSchedulerOperate message. Does not implicitly {@link muster.v1.AgentSchedulerOperate.verify|verify} messages.
+             * @param message AgentSchedulerOperate message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerOperate, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerOperate message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerOperate
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerOperate;
+
+            /**
+             * Gets the default type url for AgentSchedulerOperate
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerOp. */
+        interface IAgentSchedulerOp {
+
+            /** AgentSchedulerOp opId */
+            opId?: (string|null);
+
+            /** AgentSchedulerOp kind */
+            kind?: (string|null);
+
+            /** AgentSchedulerOp role */
+            role?: (string|null);
+
+            /** AgentSchedulerOp session */
+            session?: (string|null);
+
+            /** AgentSchedulerOp state */
+            state?: (string|null);
+
+            /** AgentSchedulerOp result */
+            result?: (string|null);
+
+            /** AgentSchedulerOp message */
+            message?: (string|null);
+
+            /** AgentSchedulerOp reservedUnixMs */
+            reservedUnixMs?: (number|Long|null);
+        }
+
+        /** Represents an AgentSchedulerOp. */
+        class AgentSchedulerOp implements IAgentSchedulerOp {
+
+            /**
+             * Constructs a new AgentSchedulerOp.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerOp);
+
+            /** AgentSchedulerOp opId. */
+            public opId: string;
+
+            /** AgentSchedulerOp kind. */
+            public kind: string;
+
+            /** AgentSchedulerOp role. */
+            public role: string;
+
+            /** AgentSchedulerOp session. */
+            public session: string;
+
+            /** AgentSchedulerOp state. */
+            public state: string;
+
+            /** AgentSchedulerOp result. */
+            public result: string;
+
+            /** AgentSchedulerOp message. */
+            public message: string;
+
+            /** AgentSchedulerOp reservedUnixMs. */
+            public reservedUnixMs: (number|Long);
+
+            /**
+             * Creates a new AgentSchedulerOp instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerOp instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerOp): muster.v1.AgentSchedulerOp;
+
+            /**
+             * Encodes the specified AgentSchedulerOp message. Does not implicitly {@link muster.v1.AgentSchedulerOp.verify|verify} messages.
+             * @param message AgentSchedulerOp message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerOp, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerOp message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerOp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerOp;
+
+            /**
+             * Gets the default type url for AgentSchedulerOp
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSchedulerStatus. */
+        interface IAgentSchedulerStatus {
+
+            /** AgentSchedulerStatus taskId */
+            taskId?: (string|null);
+
+            /** AgentSchedulerStatus contractSha256 */
+            contractSha256?: (string|null);
+
+            /** AgentSchedulerStatus provider */
+            provider?: (string|null);
+
+            /** AgentSchedulerStatus directory */
+            directory?: (string|null);
+
+            /** AgentSchedulerStatus model */
+            model?: (string|null);
+
+            /** AgentSchedulerStatus effort */
+            effort?: (string|null);
+
+            /** AgentSchedulerStatus issuedUnixMs */
+            issuedUnixMs?: (number|Long|null);
+
+            /** AgentSchedulerStatus expiresUnixMs */
+            expiresUnixMs?: (number|Long|null);
+
+            /** AgentSchedulerStatus revokedUnixMs */
+            revokedUnixMs?: (number|Long|null);
+
+            /** AgentSchedulerStatus live */
+            live?: (boolean|null);
+
+            /** AgentSchedulerStatus producerSession */
+            producerSession?: (string|null);
+
+            /** AgentSchedulerStatus reviewerSession */
+            reviewerSession?: (string|null);
+
+            /** AgentSchedulerStatus creates */
+            creates?: (number|null);
+
+            /** AgentSchedulerStatus packages */
+            packages?: (number|null);
+
+            /** AgentSchedulerStatus reviews */
+            reviews?: (number|null);
+
+            /** AgentSchedulerStatus controls */
+            controls?: (number|null);
+
+            /** AgentSchedulerStatus ops */
+            ops?: (muster.v1.IAgentSchedulerOp[]|null);
+
+            /** AgentSchedulerStatus op */
+            op?: (muster.v1.IAgentSchedulerOp|null);
+
+            /** AgentSchedulerStatus adopted */
+            adopted?: (string[]|null);
+        }
+
+        /** Represents an AgentSchedulerStatus. */
+        class AgentSchedulerStatus implements IAgentSchedulerStatus {
+
+            /**
+             * Constructs a new AgentSchedulerStatus.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSchedulerStatus);
+
+            /** AgentSchedulerStatus taskId. */
+            public taskId: string;
+
+            /** AgentSchedulerStatus contractSha256. */
+            public contractSha256: string;
+
+            /** AgentSchedulerStatus provider. */
+            public provider: string;
+
+            /** AgentSchedulerStatus directory. */
+            public directory: string;
+
+            /** AgentSchedulerStatus model. */
+            public model: string;
+
+            /** AgentSchedulerStatus effort. */
+            public effort: string;
+
+            /** AgentSchedulerStatus issuedUnixMs. */
+            public issuedUnixMs: (number|Long);
+
+            /** AgentSchedulerStatus expiresUnixMs. */
+            public expiresUnixMs: (number|Long);
+
+            /** AgentSchedulerStatus revokedUnixMs. */
+            public revokedUnixMs: (number|Long);
+
+            /** AgentSchedulerStatus live. */
+            public live: boolean;
+
+            /** AgentSchedulerStatus producerSession. */
+            public producerSession: string;
+
+            /** AgentSchedulerStatus reviewerSession. */
+            public reviewerSession: string;
+
+            /** AgentSchedulerStatus creates. */
+            public creates: number;
+
+            /** AgentSchedulerStatus packages. */
+            public packages: number;
+
+            /** AgentSchedulerStatus reviews. */
+            public reviews: number;
+
+            /** AgentSchedulerStatus controls. */
+            public controls: number;
+
+            /** AgentSchedulerStatus ops. */
+            public ops: muster.v1.IAgentSchedulerOp[];
+
+            /** AgentSchedulerStatus op. */
+            public op?: (muster.v1.IAgentSchedulerOp|null);
+
+            /** AgentSchedulerStatus adopted. */
+            public adopted: string[];
+
+            /**
+             * Creates a new AgentSchedulerStatus instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSchedulerStatus instance
+             */
+            public static create(properties?: muster.v1.IAgentSchedulerStatus): muster.v1.AgentSchedulerStatus;
+
+            /**
+             * Encodes the specified AgentSchedulerStatus message. Does not implicitly {@link muster.v1.AgentSchedulerStatus.verify|verify} messages.
+             * @param message AgentSchedulerStatus message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSchedulerStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSchedulerStatus message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSchedulerStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSchedulerStatus;
+
+            /**
+             * Gets the default type url for AgentSchedulerStatus
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Namespace app. */
@@ -9530,8 +10800,17 @@ export namespace muster {
             /** Intent multicaBrowse */
             multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
 
+            /** Intent vision */
+            vision?: (muster.v1.IVisionRequest|null);
+
             /** Intent openAgents */
             openAgents?: (muster.app.IOpenAgents|null);
+
+            /** Intent agentCatalogAction */
+            agentCatalogAction?: (muster.app.IAgentCatalogAction|null);
+
+            /** Intent agentOrganize */
+            agentOrganize?: (muster.app.IAgentOrganize|null);
 
             /** Intent orcaCreate */
             orcaCreate?: (muster.app.IOrcaCreate|null);
@@ -9705,8 +10984,17 @@ export namespace muster {
             /** Intent multicaBrowse. */
             public multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
 
+            /** Intent vision. */
+            public vision?: (muster.v1.IVisionRequest|null);
+
             /** Intent openAgents. */
             public openAgents?: (muster.app.IOpenAgents|null);
+
+            /** Intent agentCatalogAction. */
+            public agentCatalogAction?: (muster.app.IAgentCatalogAction|null);
+
+            /** Intent agentOrganize. */
+            public agentOrganize?: (muster.app.IAgentOrganize|null);
 
             /** Intent orcaCreate. */
             public orcaCreate?: (muster.app.IOrcaCreate|null);
@@ -9802,7 +11090,7 @@ export namespace muster {
             public setPushToken?: (muster.app.ISetPushToken|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"openAgents"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -9895,7 +11183,9 @@ export namespace muster {
             enum Action {
                 CHECK = 0,
                 DOWNLOAD = 1,
-                INSTALL = 2
+                INSTALL = 2,
+                AUTO_ON = 3,
+                AUTO_OFF = 4
             }
         }
 
@@ -9922,6 +11212,9 @@ export namespace muster {
 
             /** DesktopUpdateView canInstall */
             canInstall?: (boolean|null);
+
+            /** DesktopUpdateView automatic */
+            automatic?: (boolean|null);
         }
 
         /** Represents a DesktopUpdateView. */
@@ -9953,6 +11246,9 @@ export namespace muster {
 
             /** DesktopUpdateView canInstall. */
             public canInstall: boolean;
+
+            /** DesktopUpdateView automatic. */
+            public automatic: boolean;
 
             /**
              * Creates a new DesktopUpdateView instance using the specified properties.
@@ -11078,6 +12374,434 @@ export namespace muster {
 
             /**
              * Gets the default type url for OrcaCreate
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentCatalogAction. */
+        interface IAgentCatalogAction {
+
+            /** AgentCatalogAction kind */
+            kind?: (muster.app.AgentCatalogAction.Kind|null);
+
+            /** AgentCatalogAction value */
+            value?: (string|null);
+        }
+
+        /** Represents an AgentCatalogAction. */
+        class AgentCatalogAction implements IAgentCatalogAction {
+
+            /**
+             * Constructs a new AgentCatalogAction.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentCatalogAction);
+
+            /** AgentCatalogAction kind. */
+            public kind: muster.app.AgentCatalogAction.Kind;
+
+            /** AgentCatalogAction value. */
+            public value: string;
+
+            /**
+             * Creates a new AgentCatalogAction instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentCatalogAction instance
+             */
+            public static create(properties?: muster.app.IAgentCatalogAction): muster.app.AgentCatalogAction;
+
+            /**
+             * Encodes the specified AgentCatalogAction message. Does not implicitly {@link muster.app.AgentCatalogAction.verify|verify} messages.
+             * @param message AgentCatalogAction message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentCatalogAction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentCatalogAction message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentCatalogAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentCatalogAction;
+
+            /**
+             * Gets the default type url for AgentCatalogAction
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace AgentCatalogAction {
+
+            /** Kind enum. */
+            enum Kind {
+                SEARCH = 0,
+                TOGGLE_SECTION = 1,
+                TOGGLE_FAMILY = 2,
+                SEARCH_MORE = 3,
+                LOAD_MORE = 4
+            }
+        }
+
+        /** Properties of an AgentOrganize. */
+        interface IAgentOrganize {
+
+            /** AgentOrganize rowKey */
+            rowKey?: (string|null);
+
+            /** AgentOrganize action */
+            action?: (muster.v1.AgentOrganizeRequest.Action|null);
+
+            /** AgentOrganize sectionId */
+            sectionId?: (string|null);
+
+            /** AgentOrganize name */
+            name?: (string|null);
+        }
+
+        /** Represents an AgentOrganize. */
+        class AgentOrganize implements IAgentOrganize {
+
+            /**
+             * Constructs a new AgentOrganize.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentOrganize);
+
+            /** AgentOrganize rowKey. */
+            public rowKey: string;
+
+            /** AgentOrganize action. */
+            public action: muster.v1.AgentOrganizeRequest.Action;
+
+            /** AgentOrganize sectionId. */
+            public sectionId: string;
+
+            /** AgentOrganize name. */
+            public name: string;
+
+            /**
+             * Creates a new AgentOrganize instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentOrganize instance
+             */
+            public static create(properties?: muster.app.IAgentOrganize): muster.app.AgentOrganize;
+
+            /**
+             * Encodes the specified AgentOrganize message. Does not implicitly {@link muster.app.AgentOrganize.verify|verify} messages.
+             * @param message AgentOrganize message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentOrganize, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentOrganize message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentOrganize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentOrganize;
+
+            /**
+             * Gets the default type url for AgentOrganize
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentOrganizationTarget. */
+        interface IAgentOrganizationTarget {
+
+            /** AgentOrganizationTarget key */
+            key?: (string|null);
+
+            /** AgentOrganizationTarget rowKey */
+            rowKey?: (string|null);
+
+            /** AgentOrganizationTarget sectionId */
+            sectionId?: (string|null);
+
+            /** AgentOrganizationTarget title */
+            title?: (string|null);
+        }
+
+        /** Represents an AgentOrganizationTarget. */
+        class AgentOrganizationTarget implements IAgentOrganizationTarget {
+
+            /**
+             * Constructs a new AgentOrganizationTarget.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentOrganizationTarget);
+
+            /** AgentOrganizationTarget key. */
+            public key: string;
+
+            /** AgentOrganizationTarget rowKey. */
+            public rowKey: string;
+
+            /** AgentOrganizationTarget sectionId. */
+            public sectionId: string;
+
+            /** AgentOrganizationTarget title. */
+            public title: string;
+
+            /**
+             * Creates a new AgentOrganizationTarget instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentOrganizationTarget instance
+             */
+            public static create(properties?: muster.app.IAgentOrganizationTarget): muster.app.AgentOrganizationTarget;
+
+            /**
+             * Encodes the specified AgentOrganizationTarget message. Does not implicitly {@link muster.app.AgentOrganizationTarget.verify|verify} messages.
+             * @param message AgentOrganizationTarget message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentOrganizationTarget, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentOrganizationTarget message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentOrganizationTarget
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentOrganizationTarget;
+
+            /**
+             * Gets the default type url for AgentOrganizationTarget
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentCatalogRow. */
+        interface IAgentCatalogRow {
+
+            /** AgentCatalogRow key */
+            key?: (string|null);
+
+            /** AgentCatalogRow session */
+            session?: (muster.v1.IAgentSession|null);
+
+            /** AgentCatalogRow depth */
+            depth?: (number|null);
+
+            /** AgentCatalogRow expandable */
+            expandable?: (boolean|null);
+
+            /** AgentCatalogRow expanded */
+            expanded?: (boolean|null);
+
+            /** AgentCatalogRow parentTitle */
+            parentTitle?: (string|null);
+
+            /** AgentCatalogRow canOrganize */
+            canOrganize?: (boolean|null);
+
+            /** AgentCatalogRow organizing */
+            organizing?: (boolean|null);
+
+            /** AgentCatalogRow destinations */
+            destinations?: (muster.app.IAgentOrganizationTarget[]|null);
+
+            /** AgentCatalogRow removableSection */
+            removableSection?: (string|null);
+
+            /** AgentCatalogRow sourceLabel */
+            sourceLabel?: (string|null);
+        }
+
+        /** Represents an AgentCatalogRow. */
+        class AgentCatalogRow implements IAgentCatalogRow {
+
+            /**
+             * Constructs a new AgentCatalogRow.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentCatalogRow);
+
+            /** AgentCatalogRow key. */
+            public key: string;
+
+            /** AgentCatalogRow session. */
+            public session?: (muster.v1.IAgentSession|null);
+
+            /** AgentCatalogRow depth. */
+            public depth: number;
+
+            /** AgentCatalogRow expandable. */
+            public expandable: boolean;
+
+            /** AgentCatalogRow expanded. */
+            public expanded: boolean;
+
+            /** AgentCatalogRow parentTitle. */
+            public parentTitle: string;
+
+            /** AgentCatalogRow canOrganize. */
+            public canOrganize: boolean;
+
+            /** AgentCatalogRow organizing. */
+            public organizing: boolean;
+
+            /** AgentCatalogRow destinations. */
+            public destinations: muster.app.IAgentOrganizationTarget[];
+
+            /** AgentCatalogRow removableSection. */
+            public removableSection: string;
+
+            /** AgentCatalogRow sourceLabel. */
+            public sourceLabel: string;
+
+            /**
+             * Creates a new AgentCatalogRow instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentCatalogRow instance
+             */
+            public static create(properties?: muster.app.IAgentCatalogRow): muster.app.AgentCatalogRow;
+
+            /**
+             * Encodes the specified AgentCatalogRow message. Does not implicitly {@link muster.app.AgentCatalogRow.verify|verify} messages.
+             * @param message AgentCatalogRow message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentCatalogRow, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentCatalogRow message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentCatalogRow
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentCatalogRow;
+
+            /**
+             * Gets the default type url for AgentCatalogRow
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentCatalogSection. */
+        interface IAgentCatalogSection {
+
+            /** AgentCatalogSection key */
+            key?: (string|null);
+
+            /** AgentCatalogSection title */
+            title?: (string|null);
+
+            /** AgentCatalogSection subtitle */
+            subtitle?: (string|null);
+
+            /** AgentCatalogSection expanded */
+            expanded?: (boolean|null);
+
+            /** AgentCatalogSection count */
+            count?: (number|null);
+
+            /** AgentCatalogSection rows */
+            rows?: (muster.app.IAgentCatalogRow[]|null);
+
+            /** AgentCatalogSection hasMore */
+            hasMore?: (boolean|null);
+
+            /** AgentCatalogSection loadingMore */
+            loadingMore?: (boolean|null);
+
+            /** AgentCatalogSection kind */
+            kind?: (string|null);
+
+            /** AgentCatalogSection nativeTargets */
+            nativeTargets?: (muster.app.IAgentOrganizationTarget[]|null);
+        }
+
+        /** Represents an AgentCatalogSection. */
+        class AgentCatalogSection implements IAgentCatalogSection {
+
+            /**
+             * Constructs a new AgentCatalogSection.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentCatalogSection);
+
+            /** AgentCatalogSection key. */
+            public key: string;
+
+            /** AgentCatalogSection title. */
+            public title: string;
+
+            /** AgentCatalogSection subtitle. */
+            public subtitle: string;
+
+            /** AgentCatalogSection expanded. */
+            public expanded: boolean;
+
+            /** AgentCatalogSection count. */
+            public count: number;
+
+            /** AgentCatalogSection rows. */
+            public rows: muster.app.IAgentCatalogRow[];
+
+            /** AgentCatalogSection hasMore. */
+            public hasMore: boolean;
+
+            /** AgentCatalogSection loadingMore. */
+            public loadingMore: boolean;
+
+            /** AgentCatalogSection kind. */
+            public kind: string;
+
+            /** AgentCatalogSection nativeTargets. */
+            public nativeTargets: muster.app.IAgentOrganizationTarget[];
+
+            /**
+             * Creates a new AgentCatalogSection instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentCatalogSection instance
+             */
+            public static create(properties?: muster.app.IAgentCatalogSection): muster.app.AgentCatalogSection;
+
+            /**
+             * Encodes the specified AgentCatalogSection message. Does not implicitly {@link muster.app.AgentCatalogSection.verify|verify} messages.
+             * @param message AgentCatalogSection message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentCatalogSection, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentCatalogSection message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentCatalogSection
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentCatalogSection;
+
+            /**
+             * Gets the default type url for AgentCatalogSection
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -13724,6 +15448,9 @@ export namespace muster {
             /** ViewModel multicaPage */
             multicaPage?: (muster.v1.IMulticaPage|null);
 
+            /** ViewModel vision */
+            vision?: (muster.v1.IVisionStatus|null);
+
             /** ViewModel navigationPath */
             navigationPath?: (muster.app.Screen[]|null);
         }
@@ -13838,6 +15565,9 @@ export namespace muster {
 
             /** ViewModel multicaPage. */
             public multicaPage?: (muster.v1.IMulticaPage|null);
+
+            /** ViewModel vision. */
+            public vision?: (muster.v1.IVisionStatus|null);
 
             /** ViewModel navigationPath. */
             public navigationPath: muster.app.Screen[];
@@ -14620,6 +16350,24 @@ export namespace muster {
         /** Properties of an AgentsView. */
         interface IAgentsView {
 
+            /** AgentsView nativeSections */
+            nativeSections?: (muster.v1.IAgentSection[]|null);
+
+            /** AgentsView sections */
+            sections?: (muster.app.IAgentCatalogSection[]|null);
+
+            /** AgentsView query */
+            query?: (string|null);
+
+            /** AgentsView searching */
+            searching?: (boolean|null);
+
+            /** AgentsView searchHasMore */
+            searchHasMore?: (boolean|null);
+
+            /** AgentsView searchNotices */
+            searchNotices?: (string[]|null);
+
             /** AgentsView createHosts */
             createHosts?: (muster.v1.IMemberView[]|null);
 
@@ -14650,6 +16398,24 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.app.IAgentsView);
+
+            /** AgentsView nativeSections. */
+            public nativeSections: muster.v1.IAgentSection[];
+
+            /** AgentsView sections. */
+            public sections: muster.app.IAgentCatalogSection[];
+
+            /** AgentsView query. */
+            public query: string;
+
+            /** AgentsView searching. */
+            public searching: boolean;
+
+            /** AgentsView searchHasMore. */
+            public searchHasMore: boolean;
+
+            /** AgentsView searchNotices. */
+            public searchNotices: string[];
 
             /** AgentsView createHosts. */
             public createHosts: muster.v1.IMemberView[];

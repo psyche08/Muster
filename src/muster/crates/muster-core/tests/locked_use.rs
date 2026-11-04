@@ -1864,3 +1864,192 @@ fn local_switches_and_a_locked_console_gate_an_unattended_lease() {
         assert!(f.action(target, "idle-compact-1", &[5; 32]).is_err());
     }
 }
+
+fn reservation(op_id: &str) -> muster_core::scheduler_grant::Reservation {
+    use muster_core::scheduler_grant::*;
+    let mut grant = Grant::new(
+        Scope {
+            task_id: "task-1".into(),
+            contract_sha256: "ab".repeat(32),
+            provider: "claude".into(),
+            directory: "/work/project".into(),
+            model: "Model A".into(),
+            effort: "High".into(),
+        },
+        1_000,
+        60_000,
+    )
+    .unwrap();
+    let request = Request {
+        op_id,
+        kind: Kind::Create,
+        role: Role::Producer,
+        provider: "claude",
+        directory: "/work/project",
+        session: "",
+        model: "",
+        effort: "",
+        body: [7; 32],
+    };
+    match grant.reserve(&request, Vec::new(), 1_000).unwrap() {
+        Admission::Fresh(reservation) => reservation,
+        other => panic!("{other:?}"),
+    }
+}
+
+impl Fixture {
+    fn issue_scheduled(
+        &mut self,
+        reservation: &muster_core::scheduler_grant::Reservation,
+    ) -> Result<Challenge, muster_core::Error> {
+        self.gate.issue_scheduled(
+            self.roster.state(),
+            &self.policy,
+            reservation,
+            MAX_TTL,
+            self.now,
+            self.observation,
+        )
+    }
+
+    fn scheduled_active(&mut self, reservation: &muster_core::scheduler_grant::Reservation) {
+        let c = self.issue_scheduled(reservation).unwrap();
+        assert_eq!(
+            self.gate
+                .arm_scheduled(
+                    self.roster.state(),
+                    &self.policy,
+                    self.now,
+                    self.observation
+                )
+                .unwrap(),
+            Directive::PrepareCoverAndWatchdog
+        );
+        self.observation.cover_nonce = Some(*c.nonce());
+        self.observation.watchdog_nonce = Some(*c.nonce());
+        self.consume(&c).unwrap();
+        self.gate
+            .plugin_finished(c.nonce(), PluginOutcome::Allowed, self.now)
+            .unwrap();
+        self.tick(1);
+        self.observation.screen = Screen::Unlocked;
+        assert_eq!(self.poll(), Directive::ReadyForAction);
+    }
+}
+
+#[test]
+fn a_scheduled_lease_takes_only_its_reserved_operation_and_no_key_arms_it() {
+    let reserved = reservation("op-create-1");
+    let mut f = Fixture::new();
+    let target = f.target();
+    let c = f.issue_scheduled(&reserved).unwrap();
+    assert!(f.gate.is_scheduled());
+    assert!(!f.gate.is_unattended());
+    assert_eq!(c.turn(), "op-create-1");
+    assert_eq!(c.operation(), &reserved.digest());
+    for signer in [&f.phone, &f.presence, &f.admin] {
+        let signature = signer.sign(&c.signing_message()).unwrap();
+        for requester in [target, f.peer] {
+            assert!(
+                f.gate
+                    .arm(
+                        f.roster.state(),
+                        &f.policy,
+                        requester,
+                        &c,
+                        &signature,
+                        f.now,
+                        f.observation
+                    )
+                    .is_err()
+            );
+        }
+    }
+    // The /compact lease's arming cannot arm it, nor can it become a queue.
+    assert!(
+        f.gate
+            .arm_unattended(f.roster.state(), &f.policy, f.now, f.observation)
+            .is_err()
+    );
+    assert!(f.gate.bind_provider_queue("claude").is_err());
+    // And an unattended /compact lease is not armed as a scheduled one.
+    let mut compact = Fixture::new();
+    compact.issue_unattended("claude").unwrap();
+    assert!(
+        compact
+            .gate
+            .arm_scheduled(
+                compact.roster.state(),
+                &compact.policy,
+                compact.now,
+                compact.observation
+            )
+            .is_err()
+    );
+
+    let mut f = Fixture::new();
+    let target = f.target();
+    f.scheduled_active(&reserved);
+    assert!(f.action(f.peer, "op-create-1", &reserved.digest()).is_err());
+    assert!(f.action(target, "op-create-2", &reserved.digest()).is_err());
+    assert!(f.action(target, "op-create-1", &[5; 32]).is_err());
+    f.action(target, "op-create-1", &reserved.digest()).unwrap();
+    assert!(f.action(target, "op-create-1", &reserved.digest()).is_err());
+    assert_eq!(
+        f.gate.stop(StopReason::Completed, f.now),
+        Directive::LockAndKeepCovered(StopReason::Completed)
+    );
+    f.tick(1);
+    f.observation.screen = Screen::Locked;
+    assert_eq!(f.poll(), Directive::ReleaseCover);
+    assert_eq!(f.gate.phase(), Phase::Idle);
+}
+
+#[test]
+fn local_switches_a_locked_console_and_local_input_gate_a_scheduled_lease() {
+    type Change = fn(&mut Fixture);
+    let refused: &[Change] = &[
+        |f| f.policy.allow_locked_control = false,
+        |f| f.policy.offer_agent = false,
+        |f| f.policy.ax_allowlist.clear(),
+        |f| f.observation.screen = Screen::Unlocked,
+        |f| f.observation.input_generation = None,
+    ];
+    for change in refused {
+        let mut f = Fixture::new();
+        change(&mut f);
+        assert!(f.issue_scheduled(&reservation("op-1")).is_err());
+    }
+    // One console transaction at a time: another owner's lease blocks it.
+    let mut f = Fixture::new();
+    f.issue();
+    assert!(f.issue_scheduled(&reservation("op-1")).is_err());
+
+    let revoked: &[(Change, StopReason)] = &[
+        (
+            |f| f.policy.allow_locked_control = false,
+            StopReason::AuthorizationChanged,
+        ),
+        (
+            |f| f.policy.ax_allowlist.clear(),
+            StopReason::AuthorizationChanged,
+        ),
+        (
+            |f| f.observation.input_generation = Some(8),
+            StopReason::LocalInput,
+        ),
+        (
+            |f| f.observation.watchdog_nonce = None,
+            StopReason::WatchdogLost,
+        ),
+    ];
+    for (change, reason) in revoked {
+        let reserved = reservation("op-1");
+        let mut f = Fixture::new();
+        let target = f.target();
+        f.scheduled_active(&reserved);
+        change(&mut f);
+        assert_eq!(f.poll(), Directive::LockAndKeepCovered(*reason));
+        assert!(f.action(target, "op-1", &reserved.digest()).is_err());
+    }
+}

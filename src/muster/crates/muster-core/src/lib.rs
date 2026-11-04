@@ -11,6 +11,7 @@ pub mod locked_use;
 pub mod policy;
 pub mod presence;
 pub mod roster;
+pub mod scheduler_grant;
 pub mod scope;
 
 pub use identity::{DeviceId, HwSigner, PublicKey, SharedSigner, SoftSigner};

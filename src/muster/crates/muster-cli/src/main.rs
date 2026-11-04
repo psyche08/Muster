@@ -1408,4 +1408,36 @@ mod tests {
         );
         assert!(serde_json::from_str::<Req>(r#"{"unknown_method":{}}"#).is_err());
     }
+
+    #[test]
+    fn rpc_json_names_one_scheduler_action() {
+        let request: Req = serde_json::from_str(
+            r#"{"agent_scheduler":{"action":{"operate":{"task_id":"t","op_id":"o","role":"producer","kind":"send","provider":"claude","directory":"/d","session":"s","text":"x"}}}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request,
+            Req::AgentScheduler(muster_proto::v1::AgentSchedulerRequest {
+                action: Some(muster_proto::v1::agent_scheduler_request::Action::Operate(
+                    _
+                ))
+            })
+        ));
+        assert!(
+            serde_json::from_str::<Req>(
+                r#"{"agent_scheduler":{"action":{"operate":{"task_id":"t","sesion":"s"}}}}"#
+            )
+            .is_err()
+        );
+        let request: Req = serde_json::from_str(
+            r#"{"agent_scheduler":{"action":{"adopt":{"task_id":"t","role":"producer","provider":"claude","directory":"/d","session":"s"}}}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request,
+            Req::AgentScheduler(muster_proto::v1::AgentSchedulerRequest {
+                action: Some(muster_proto::v1::agent_scheduler_request::Action::Adopt(_))
+            })
+        ));
+    }
 }

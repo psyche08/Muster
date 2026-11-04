@@ -279,6 +279,9 @@ struct Lease {
     device: bool,
     /// This Mac's own lease (ADR 0087): nobody signed it.
     unattended: bool,
+    /// This Mac's own lease for one operation a task grant reserved (ADR
+    /// 0097): nobody signed it either, and it is not an unattended one.
+    scheduled: bool,
     initial_screen: Screen,
     // A signed manual lease can cover an already unlocked console. This is
     // distinct from plugin consumption and carries its own relock obligation.
@@ -518,6 +521,55 @@ impl Gate {
         self.lease.as_ref().is_some_and(|l| l.unattended)
     }
 
+    /// This Mac's own lease for one operation its task scheduler grant
+    /// reserved (ADR 0097). Only a `Reservation` opens it: its provider, op_id
+    /// (the turn) and digest come from the grant, so no other operation can
+    /// be taken under it. Like an unattended lease it is admitted on this
+    /// Mac's local switches, keeps every other Locked Use rule, can never be
+    /// armed by a key and never binds a provider queue.
+    pub fn issue_scheduled(
+        &mut self,
+        state: &State,
+        policy: &LocalPolicy,
+        reservation: &crate::scheduler_grant::Reservation,
+        ttl: Duration,
+        now: Instant,
+        observation: Observation,
+    ) -> Result<Challenge, Error> {
+        self.issue_with_proof(
+            state,
+            policy,
+            self.target,
+            Scope::Scheduled {
+                provider: reservation.provider(),
+            },
+            reservation.op_id(),
+            reservation.digest(),
+            ttl,
+            now,
+            observation,
+        )
+    }
+
+    pub fn is_scheduled(&self) -> bool {
+        self.lease.as_ref().is_some_and(|l| l.scheduled)
+    }
+
+    /// Arms the outstanding scheduled lease in place of a signature, after
+    /// the same live checks `arm` makes.
+    pub fn arm_scheduled(
+        &mut self,
+        state: &State,
+        policy: &LocalPolicy,
+        now: Instant,
+        observation: Observation,
+    ) -> Result<Directive, Error> {
+        if self.phase != Phase::AwaitingSignature || !self.is_scheduled() {
+            return Err(reject("no scheduled lease to arm"));
+        }
+        self.arm_local(state, policy, now, observation)
+    }
+
     /// Arms the outstanding unattended lease in place of a signature, after
     /// the same live checks `arm` makes.
     pub fn arm_unattended(
@@ -530,6 +582,16 @@ impl Gate {
         if self.phase != Phase::AwaitingSignature || !self.is_unattended() {
             return Err(reject("no unattended lease to arm"));
         }
+        self.arm_local(state, policy, now, observation)
+    }
+
+    fn arm_local(
+        &mut self,
+        state: &State,
+        policy: &LocalPolicy,
+        now: Instant,
+        observation: Observation,
+    ) -> Result<Directive, Error> {
         self.check(state, policy, now, observation, false)?;
         if observation.screen != self.lease.as_ref().unwrap().initial_screen {
             self.stop(StopReason::UnexpectedScreenState, now);
@@ -566,7 +628,9 @@ impl Gate {
             Scope::Terminal => ("", false, true, false, false),
             Scope::Device => ("", false, false, true, false),
             Scope::Unattended { provider } => (provider, false, false, false, true),
+            Scope::Scheduled { provider } => (provider, false, false, false, false),
         };
+        let scheduled = matches!(scope, Scope::Scheduled { .. });
         if !fresh(now, observation.at)
             || (observation.screen != Screen::Locked
                 && !(device && observation.screen == Screen::Unlocked))
@@ -603,6 +667,7 @@ impl Gate {
             terminal,
             device,
             unattended,
+            scheduled,
             initial_screen: observation.screen,
             covered_unlocked: false,
             renewal: None,
@@ -631,7 +696,8 @@ impl Gate {
             return Err(reject("invalid provider queue scope or already armed"));
         }
         let lease = self.lease.as_mut().ok_or_else(|| reject("no challenge"))?;
-        if lease.inspection || lease.terminal || lease.device || lease.unattended {
+        if lease.inspection || lease.terminal || lease.device || lease.unattended || lease.scheduled
+        {
             return Err(reject(
                 "read-only inspection cannot authorize a provider queue",
             ));
@@ -1078,6 +1144,10 @@ impl Gate {
             Scope::Unattended {
                 provider: &lease.provider,
             }
+        } else if lease.scheduled {
+            Scope::Scheduled {
+                provider: &lease.provider,
+            }
         } else {
             Scope::Agent {
                 provider: &lease.provider,
@@ -1181,6 +1251,10 @@ enum Scope<'a> {
     Unattended {
         provider: &'a str,
     },
+    /// This Mac's own operation reserved by its task scheduler grant.
+    Scheduled {
+        provider: &'a str,
+    },
 }
 
 fn authorization(
@@ -1190,7 +1264,7 @@ fn authorization(
     requester: DeviceId,
     scope: Scope,
 ) -> Result<OperationKeys, Error> {
-    if let Scope::Unattended { provider } = scope {
+    if let Scope::Unattended { provider } | Scope::Scheduled { provider } = scope {
         return unattended(state, policy, target, requester, provider);
     }
     if target == requester || state.active(&target).is_none() {
@@ -1209,7 +1283,7 @@ fn authorization(
             inspection,
         ),
         Scope::Terminal => (Some(Permission::Terminal { control: true }), false),
-        Scope::Device | Scope::Unattended { .. } => (None, false),
+        Scope::Device | Scope::Unattended { .. } | Scope::Scheduled { .. } => (None, false),
     };
     if authorize(
         state,
@@ -1225,7 +1299,9 @@ fn authorization(
         return Err(reject(match scope {
             Scope::Agent { .. } => "locked.control and Agents for this provider are required",
             Scope::Terminal => "locked.control and Terminal control are required",
-            Scope::Device | Scope::Unattended { .. } => "locked.control is required",
+            Scope::Device | Scope::Unattended { .. } | Scope::Scheduled { .. } => {
+                "locked.control is required"
+            }
         }));
     }
     let record = &state

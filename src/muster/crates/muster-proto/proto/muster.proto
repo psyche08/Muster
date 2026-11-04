@@ -153,6 +153,12 @@ message Request {
     // and that OTA build speak the old number, and they are replaced by the
     // next release.
     AgentOrganizeRequest agent_organize = 75;
+    // Local owner only: one task's bounded scheduler grant (ADR 0097).
+    // Field 74 was this request on the branch this change comes from;
+    // `vision` and `agent_organize` landed on `main` with 74 and 75
+    // first, so the grant takes the next one. No released build ever
+    // spoke the old number: the grant has never shipped.
+    AgentSchedulerRequest agent_scheduler = 76;
   }
 }
 
@@ -203,6 +209,7 @@ message Response {
     MulticaStatus multica = 70;
     MulticaPage multica_page = 71;
     VisionStatus vision = 74;
+    AgentSchedulerStatus agent_scheduler = 76;
   }
 }
 
@@ -1176,4 +1183,100 @@ message VisionStatus {
   // The result of the last SAVE or TEST, or why the feature is unavailable.
   string message = 8;
   bool busy = 9; // projected by the app while a request is outstanding
+}
+
+// Local owner only (ADR 0097). One task's scheduler grant: at most a producer
+// and a reviewer session of one provider in one directory, bounded quotas and
+// lifetime, its desktop operations under Locked Use while the console is
+// locked. Status, revoke and reconcile never touch the desktop.
+message AgentSchedulerRequest {
+  oneof action {
+    AgentSchedulerGrant grant = 1;
+    AgentSchedulerTask revoke = 2;
+    AgentSchedulerTask status = 3;
+    AgentSchedulerOperate operate = 4;
+    // Read-only, for the exact original operate request: resolves a reserved
+    // or unknown operation from provider evidence (a creation's transcript
+    // receipt, a send's confirmed ledger row). Never re-runs anything.
+    AgentSchedulerOperate reconcile = 5;
+    // Binds a session that already exists to a role instead of creating one.
+    // musterd checks it in the provider's own session registry first.
+    AgentSchedulerAdopt adopt = 6;
+  }
+}
+
+message AgentSchedulerGrant {
+  string task_id = 1;
+  string contract_sha256 = 2;  // lowercase hex of the approved task contract
+  string provider = 3;
+  string directory = 4;        // resolved to its canonical path
+  string model = 5;            // the only model an option set may choose
+  string effort = 6;           // the only effort an option set may choose
+  uint64 ttl_seconds = 7;      // at most 24 hours
+}
+
+message AgentSchedulerTask { string task_id = 1; }
+
+// The session must exist now: this provider, code mode, cwd equal to the
+// grant's directory, not archived, not read-only, not a child session. Each
+// role binds one session once, by creation or adoption; an adoption counts
+// as one of the two sessions. The same adoption again changes nothing.
+message AgentSchedulerAdopt {
+  string task_id = 1;
+  string role = 2;       // producer | reviewer
+  string provider = 3;
+  string directory = 4;
+  string session = 5;
+}
+
+// One desktop operation. provider, directory and session state what the
+// caller intends; each must equal the grant's own binding. The session is the
+// one this role's creation receipt bound; a creation names none.
+message AgentSchedulerOperate {
+  string task_id = 1;
+  string op_id = 2;
+  string role = 3;       // producer | reviewer
+  string kind = 4;       // create | send | read_options | set_options | interrupt
+  string provider = 5;
+  string directory = 6;
+  string session = 7;
+  string text = 8;       // create: the first prompt; send: the message
+  string model = 9;      // set_options
+  string effort = 10;    // set_options
+}
+
+message AgentSchedulerOp {
+  string op_id = 1;
+  string kind = 2;
+  string role = 3;
+  string session = 4;
+  string state = 5;      // reserved | applied | rejected | unknown
+  string result = 6;     // applied: the receipt (a creation: its session)
+  string message = 7;
+  uint64 reserved_unix_ms = 8;
+}
+
+// The grant as this Mac records it. An operation's own answer (an OpResult
+// or the chat options) comes back for operate; this for everything else.
+message AgentSchedulerStatus {
+  string task_id = 1;
+  string contract_sha256 = 2;
+  string provider = 3;
+  string directory = 4;
+  string model = 5;
+  string effort = 6;
+  uint64 issued_unix_ms = 7;
+  uint64 expires_unix_ms = 8;
+  uint64 revoked_unix_ms = 9;  // 0: not revoked
+  bool live = 10;
+  string producer_session = 11;
+  string reviewer_session = 12;
+  uint32 creates = 13;
+  uint32 packages = 14;
+  uint32 reviews = 15;
+  uint32 controls = 16;
+  repeated AgentSchedulerOp ops = 17;
+  // The operation reconcile was asked about, after reconciliation.
+  AgentSchedulerOp op = 18;
+  repeated string adopted = 19;  // roles whose session was adopted, not created
 }
