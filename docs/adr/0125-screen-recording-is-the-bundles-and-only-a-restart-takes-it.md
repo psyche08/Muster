@@ -144,9 +144,18 @@ driving iTerm2.
   the restart section with its button — the restart being offered while the
   grant is missing, which is the correction this ADR makes. No terminal item
   appeared in the dialog.
-- **Not verified**: pressing that button and watching the dialog clear, and
-  the Terminals page under the new rule, were not driven on the device.
-  Notarization, publication and the fleet's other Macs are untouched.
+- **The loop closes.** The owner then switched the grant on in System
+  Settings. The running daemon went on reporting `missing` (uptime 803s),
+  as this ADR says it must; once it was restarted it reported `granted`,
+  and the dialog stopped appearing on its own. That is the correction's
+  whole path, end to end, with the restart standing in for the button.
+- **Not verified**: the restart was performed from the shell, not by
+  pressing the dialog's own button, so that button's path is unexercised
+  here — it is pre-existing behavior this change only re-timed, and
+  `launchctl print gui/501/dev.linsheng.musterd` confirms the service its
+  probe looks for is registered. The Terminals page under the new rule was
+  not driven on the device either. Notarization, publication and the fleet's
+  other Macs are untouched.
 - **A separate defect, not from this change**: the app's windows are absent
   from the accessibility tree on this Mac, so the automation used for these
   checks could not see or drive them, and `app_menu` reported Muster as an
