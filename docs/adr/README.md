@@ -223,6 +223,7 @@ records a specific decision and does not revive code on its delete list.
 | [0122](0122-wait-for-the-app-to-exit-before-replacing-it.md) | Accepted; source verified, install verified | Wait for Muster to exit before replacing its bundle |
 | [0123](0123-the-daemon-leaves-the-dock.md) | Accepted; source verified, install verified | The daemon leaves the Dock instead of moving out of the bundle |
 | [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; source and tests verified, install and runtime verified | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
+| [0125](0125-multica-bridge-follows-the-container-gateway.md) | Accepted; source and tests verified, installation and runtime pending | The Multica runtime bridge follows the container gateway |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
