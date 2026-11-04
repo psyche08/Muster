@@ -614,38 +614,48 @@ pub(super) fn intent_desktop_setup_action(
                 app::effect::Ef::AuthorizeDesktopHelper(app::AuthorizeDesktopHelper {}),
             );
         }
-        Ok(app::desktop_setup_action::Action::Iterm) => {
-            if state.busy > 0 {
-                return;
-            }
-            state.desktop_setup_error.clear();
-            state.busy += 1;
-            let client = ctx.backend.local();
-            spawn(ctx, async move {
-                let result = unary(
-                    &client,
-                    Req::DeviceRequestAutomation(v1::DeviceRequestAutomationRequest {}),
-                )
-                .await
-                .map(|_| None);
-                Msg::Done {
-                    what: "accessibility",
-                    result,
-                }
-            });
-            effect(
-                state,
-                ctx,
-                EffectKind::Other,
-                app::effect::Ef::OpenUrl(app::OpenUrl {
-                    url:
-                        "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-                            .into(),
-                }),
-            );
-        }
         Err(_) => {}
     }
+}
+
+/// The Terminals page's own request, not part of the setup dialog: macOS
+/// Automation for the terminal source this Mac offers, and iTerm2's Python
+/// API where that is the source. The daemon checks both and reports what is
+/// still outstanding.
+pub(super) fn intent_request_terminal_authorization(state: &mut State, ctx: &Ctx) {
+    if state.embedded
+        || state.busy > 0
+        || !state
+            .self_info
+            .as_ref()
+            .is_some_and(|i| i.platform == "macos")
+    {
+        return;
+    }
+    state.desktop_setup_error.clear();
+    state.busy += 1;
+    let client = ctx.backend.local();
+    spawn(ctx, async move {
+        let result = unary(
+            &client,
+            Req::DeviceRequestAutomation(v1::DeviceRequestAutomationRequest {}),
+        )
+        .await
+        .map(|_| None);
+        Msg::Done {
+            what: "accessibility",
+            result,
+        }
+    });
+    effect(
+        state,
+        ctx,
+        EffectKind::Other,
+        app::effect::Ef::OpenUrl(app::OpenUrl {
+            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+                .into(),
+        }),
+    );
 }
 
 pub(super) fn intent_request_accessibility(state: &mut State, ctx: &Ctx) {
@@ -684,6 +694,47 @@ pub(super) fn intent_request_accessibility(state: &mut State, ctx: &Ctx) {
             app::effect::Ef::OpenUrl(app::OpenUrl {
                 url:
                     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+                        .into(),
+            }),
+        );
+    }
+}
+
+/// Screen Recording is granted per process and musterd is the process that
+/// captures, so the daemon raises the prompt. It appears once per denial, so
+/// the pane is where the user finishes, exactly as for Accessibility.
+pub(super) fn intent_request_screen_recording(state: &mut State, ctx: &Ctx) {
+    if ctx.backend.daemon().is_some() {
+        log::debug!("screen recording is a desktop matter; ignored");
+        return;
+    }
+    state.desktop_setup_error.clear();
+    state.busy += 1;
+    let client = ctx.backend.local();
+    spawn(ctx, async move {
+        let result = unary(
+            &client,
+            Req::DeviceRequestScreenRecording(v1::DeviceRequestScreenRecordingRequest {}),
+        )
+        .await
+        .map(|_| None);
+        Msg::Done {
+            what: "screen recording",
+            result,
+        }
+    });
+    if state
+        .self_info
+        .as_ref()
+        .is_some_and(|i| i.platform == "macos")
+    {
+        effect(
+            state,
+            ctx,
+            EffectKind::Other,
+            app::effect::Ef::OpenUrl(app::OpenUrl {
+                url:
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
                         .into(),
             }),
         );

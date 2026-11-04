@@ -159,6 +159,7 @@ message Request {
     // first, so the grant takes the next one. No released build ever
     // spoke the old number: the grant has never shipped.
     AgentSchedulerRequest agent_scheduler = 76;
+    DeviceRequestScreenRecordingRequest device_request_screen_recording = 77;
   }
 }
 
@@ -270,6 +271,7 @@ message DeviceInfo {
 // answer comes back as DeviceState.accessibility.
 message DeviceRequestAccessibilityRequest {}
 message DeviceRequestAutomationRequest {}
+message DeviceRequestScreenRecordingRequest {}
 
 // A platform diagnostic for the desktop's own user (local socket only),
 // e.g. what = "ax-dump", arg = "Claude": the answer is DebugText.
@@ -312,6 +314,10 @@ message DeviceState {
   bytes manual_locked_use_nonce = 15;
   bool manual_locked_use_active = 16;
   string ghostty_automation = 13; // granted | missing | not_running | not_installed | unavailable
+  // "" where the OS has no such permission; "granted" | "missing" on macOS
+  // (Screen Recording: what lets the daemon read an app's window pixels when
+  // a native send fails, ADR 0116).
+  string screen_recording = 17;
 }
 
 // Raise or drop the privacy cover. Local, or a member holding

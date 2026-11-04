@@ -222,6 +222,7 @@ records a specific decision and does not revive code on its delete list.
 | [0121](0121-generated-xcode-project-follows-project-yml.md) | Accepted; source verified, fleet build pending | `project.yml` is the Mac project's only version, and drift is reported |
 | [0122](0122-wait-for-the-app-to-exit-before-replacing-it.md) | Accepted; source verified, install verified | Wait for Muster to exit before replacing its bundle |
 | [0123](0123-the-daemon-leaves-the-dock.md) | Accepted; source verified, install verified | The daemon leaves the Dock instead of moving out of the bundle |
+| [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; source and tests verified, device acceptance pending | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

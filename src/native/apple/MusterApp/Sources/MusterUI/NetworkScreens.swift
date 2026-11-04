@@ -589,14 +589,31 @@ struct SettingsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
+                if !vm.self_p.state.screenRecording.isEmpty {
+                    LabeledContent("Screen Recording") {
+                        HStack {
+                            Text(vm.self_p.state.screenRecording == "granted" ? "granted" : "not granted")
+                                .foregroundStyle(vm.self_p.state.screenRecording == "granted" ? Color.secondary : Color.orange)
+                            if vm.self_p.state.screenRecording != "granted" {
+                                Button("Grant…") { core.requestScreenRecording() }
+                            }
+                        }
+                    }
+                    if vm.self_p.state.screenRecording != "granted" {
+                        Text("Needed to look at an app window when a native send fails. Enable musterd under System Settings › Privacy & Security › Screen Recording on this Mac.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 #if os(macOS)
                 if !vm.embedded {
                     LabeledContent("Locked Use", value: vm.desktopSetup.pluginReady ? "已安装并验证" : "需要设置")
-                    LabeledContent(vm.desktopSetup.terminalApp.isEmpty ? "iTerm2" : vm.desktopSetup.terminalApp,
-                                   value: vm.desktopSetup.itermReady ? "自动化已授权" : "需要设置")
                     if !vm.desktopSetup.ready {
                         Button("完成 Mac 授权与安装…") { core.desktopSetup(.show) }
                         Text(vm.desktopSetup.pluginMessage).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if vm.terminals.hasAuthorization {
+                        LabeledContent(vm.terminals.authorization.app,
+                                       value: vm.terminals.authorization.ready ? "自动化已授权" : "在终端页面授权")
                     }
                 }
                 #endif

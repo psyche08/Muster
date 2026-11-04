@@ -86,6 +86,7 @@ fn access_for(req: &Req) -> Access {
         | Req::DeviceSetRelay(_)
         | Req::DeviceRequestAccessibility(_)
         | Req::DeviceRequestAutomation(_)
+        | Req::DeviceRequestScreenRecording(_)
         | Req::DeviceDebug(_)
         | Req::NetworkRefresh(_)
         | Req::DesktopUpdateLease(_)
@@ -1376,6 +1377,21 @@ async fn dispatch(
             let granted = daemon.platform().request_accessibility();
             log::info!("accessibility requested: {granted:?}");
             Resp::DeviceInfo(daemon.device_info())
+        }
+        // The prompt belongs to musterd, not the app: Screen Recording is
+        // granted per process, and musterd is the one that captures.
+        Req::DeviceRequestScreenRecording(_) => {
+            #[cfg(target_os = "macos")]
+            {
+                let granted =
+                    tokio::task::spawn_blocking(muster_platform::macos::vision::request_capture)
+                        .await
+                        .map_err(|e| Error::Unavailable(e.to_string()))?;
+                log::info!("screen recording requested: {granted}");
+                Resp::DeviceInfo(daemon.device_info())
+            }
+            #[cfg(not(target_os = "macos"))]
+            return Err(Error::Unavailable("Requires macOS".into()));
         }
         Req::DeviceSetRelay(r) => {
             let relay = r.relay.trim();
@@ -3010,6 +3026,18 @@ mod setup_permission_tests {
         assert!(matches!(
             access_for(&Req::DeviceRequestAutomation(
                 v1::DeviceRequestAutomationRequest {}
+            )),
+            Access::LocalOnly
+        ));
+    }
+
+    /// A permission prompt appears on this Mac's own screen, so no member may
+    /// raise one; Screen Recording is no different from Accessibility here.
+    #[test]
+    fn screen_recording_prompt_is_local_only() {
+        assert!(matches!(
+            access_for(&Req::DeviceRequestScreenRecording(
+                v1::DeviceRequestScreenRecordingRequest {}
             )),
             Access::LocalOnly
         ));

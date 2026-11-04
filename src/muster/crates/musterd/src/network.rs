@@ -218,6 +218,20 @@ impl Daemon {
             } else {
                 String::new()
             },
+            screen_recording: {
+                #[cfg(target_os = "macos")]
+                {
+                    if muster_platform::macos::vision::capture_allowed() {
+                        "granted".to_string()
+                    } else {
+                        "missing".to_string()
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    String::new()
+                }
+            },
             accessibility: match self.platform().accessibility() {
                 None => String::new(),
                 Some(true) => "granted".into(),

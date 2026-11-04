@@ -168,6 +168,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 .filter(|s| !state.offline(&s.device_id))
                 .cloned()
                 .collect(),
+            authorization: terminal_authorization(state),
             ..state.terminals.clone()
         }),
         terminal: None,
@@ -1144,19 +1145,55 @@ fn device_actions(state: &State) -> app::DeviceActions {
     }
 }
 
+/// This Mac's own state, or `None` wherever the setup dialog does not apply
+/// (a phone's embedded daemon, a shell on another platform).
+fn local_mac(state: &State) -> Option<muster_proto::v1::DeviceState> {
+    let info = state.self_info.as_ref()?;
+    if state.embedded || info.platform != "macos" {
+        return None;
+    }
+    Some(info.state.clone().unwrap_or_default())
+}
+
 fn desktop_setup(state: &State) -> app::DesktopSetupView {
-    let Some(info) = &state.self_info else {
+    let Some(device) = local_mac(state) else {
         return app::DesktopSetupView::default();
     };
-    if state.embedded || info.platform != "macos" {
-        return app::DesktopSetupView::default();
-    }
-    let device = info.state.clone().unwrap_or_default();
     let accessibility_ready = device.accessibility == "granted";
+    // Screen Recording belongs to musterd: the daemon is what captures, and
+    // the app cannot hold the permission for it. An OS with no such
+    // permission reports nothing, which is not something to ask for.
+    let screen_recording_ready = device.screen_recording != "missing";
     let plugin_ready = device.locked_use_setup == "ready";
     let checking = device.locked_use_setup == "checking";
-    // The terminal source's app: Ghostty needs Automation only (it has no
-    // API to enable); iTerm2 also needs its Python API.
+    app::DesktopSetupView {
+        ready: accessibility_ready && screen_recording_ready && plugin_ready,
+        restart_required: state.desktop_restart_required,
+        can_restart: state.can_restart_desktop(),
+        error: state.desktop_setup_error.clone(),
+        visible: !state.desktop_setup_dismissed && (state.desktop_restart_required || !accessibility_ready || !screen_recording_ready || (!plugin_ready && !checking)),
+        accessibility_ready, screen_recording_ready, plugin_ready, checking,
+        screen_recording_message: if screen_recording_ready {
+            "musterd 已获准读取窗口画面。"
+        } else {
+            "在系统设置 → 隐私与安全性 → 屏幕录制中启用 musterd。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
+        }.into(),
+        can_install: matches!(device.locked_use_setup.as_str(), "checking" | "needs_installation"),
+        plugin_message: match device.locked_use_setup.as_str() {
+            "ready" => "Locked Use 插件已由系统 helper 安装并验证。",
+            "checking" => "正在检查并安装 Locked Use 插件…",
+            "needs_installation" => "需要授权系统 helper 安装或验证 Locked Use 插件。在系统设置 → 通用 → 登录项与扩展中允许 Muster 后台运行，随后将自动安装，最多等待约一分钟。",
+            _ => "无法验证 Locked Use 插件。请将最新版 Muster 放入 /Applications 后重新启动。",
+        }.into(),
+    }
+}
+
+/// The terminal source's outstanding macOS Automation, for the Terminals
+/// page. Ghostty needs Automation only (it has no API to enable); iTerm2
+/// also needs its Python API. `None` means there is nothing to authorize,
+/// here or on any other platform.
+fn terminal_authorization(state: &State) -> Option<app::TerminalAuthorizationView> {
+    let device = local_mac(state)?;
     let ghostty_pending = !device.ghostty_automation.is_empty()
         && !matches!(
             device.ghostty_automation.as_str(),
@@ -1164,29 +1201,25 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
         );
     let iterm_ready_now = device.iterm2_automation == "not_installed"
         || (device.iterm2_automation == "granted" && device.iterm2_api_available);
-    // Show the next outstanding source; one explicit setup action checks both.
+    // Show the next outstanding source; one explicit action checks both.
     let ghostty = device.terminal_source == "ghostty" || (iterm_ready_now && ghostty_pending);
-    let show_iterm = if ghostty {
+    let installed = if ghostty {
         device.ghostty_automation != "not_installed"
     } else {
         device.iterm2_automation != "not_installed"
     };
-    let iterm_ready = !show_iterm
-        || if ghostty {
+    if !installed {
+        return None;
+    }
+    Some(app::TerminalAuthorizationView {
+        app: if ghostty { "Ghostty" } else { "iTerm2" }.into(),
+        ready: if ghostty {
             device.ghostty_automation == "granted"
         } else {
             device.iterm2_automation == "granted" && device.iterm2_api_available
-        };
-    app::DesktopSetupView {
-        terminal_app: if ghostty { "Ghostty" } else { "iTerm2" }.into(),
-        ready: accessibility_ready && plugin_ready && iterm_ready,
-        show_iterm,
-        restart_required: state.desktop_restart_required,
-        can_restart: state.can_restart_desktop(),
-        error: state.desktop_setup_error.clone(),
-        visible: !state.desktop_setup_dismissed && (state.desktop_restart_required || !accessibility_ready || (!plugin_ready && !checking) || !iterm_ready),
-        iterm_ready,
-        iterm_message: if ghostty {
+        },
+        busy: state.busy > 0,
+        message: if ghostty {
             match device.ghostty_automation.as_str() {
                 "granted" => "自动化权限已授权，可以列出 Ghostty 终端并输入；Mac 锁屏时，手机打开终端会在遮罩下临时解锁读屏。",
                 "not_running" => "请先启动 Ghostty，再点击授权。",
@@ -1198,15 +1231,7 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
             "not_running" => "请先启动 iTerm2，再点击授权。在 iTerm2 Settings → General → Magic 中启用 Python API。",
             _ => "需要允许 Muster / musterd 自动化控制 iTerm2，并在 iTerm2 Settings → General → Magic 中启用 Python API。首次连接时还需允许 Muster 访问。",
         } }.into(),
-        accessibility_ready, plugin_ready, checking,
-        can_install: matches!(device.locked_use_setup.as_str(), "checking" | "needs_installation"),
-        plugin_message: match device.locked_use_setup.as_str() {
-            "ready" => "Locked Use 插件已由系统 helper 安装并验证。",
-            "checking" => "正在检查并安装 Locked Use 插件…",
-            "needs_installation" => "需要授权系统 helper 安装或验证 Locked Use 插件。在系统设置 → 通用 → 登录项与扩展中允许 Muster 后台运行，随后将自动安装，最多等待约一分钟。",
-            _ => "无法验证 Locked Use 插件。请将最新版 Muster 放入 /Applications 后重新启动。",
-        }.into(),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -1219,6 +1244,7 @@ mod desktop_setup_tests {
             platform: "macos".into(),
             state: Some(v1::DeviceState {
                 accessibility: "granted".into(),
+                screen_recording: "granted".into(),
                 locked_use_setup: "ready".into(),
                 iterm2_automation: "granted".into(),
                 iterm2_api_available: true,
@@ -1228,18 +1254,17 @@ mod desktop_setup_tests {
         });
         state
     }
+    fn device(state: &mut State) -> &mut v1::DeviceState {
+        state.self_info.as_mut().unwrap().state.as_mut().unwrap()
+    }
     #[test]
     fn ready_needs_every_permission_and_installation() {
         let mut state = ready();
         assert!(desktop_setup(&state).ready);
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .locked_use_setup = "needs_installation".into();
+        device(&mut state).locked_use_setup = "needs_installation".into();
+        assert!(!desktop_setup(&state).ready);
+        device(&mut state).locked_use_setup = "ready".into();
+        device(&mut state).screen_recording = "missing".into();
         assert!(!desktop_setup(&state).ready);
     }
 
@@ -1247,14 +1272,7 @@ mod desktop_setup_tests {
     fn startup_prompt_requires_current_local_permission_observations() {
         let mut state = ready();
         assert!(!desktop_setup(&state).visible);
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .accessibility = "missing".into();
+        device(&mut state).accessibility = "missing".into();
         assert!(desktop_setup(&state).visible);
         state.desktop_setup_dismissed = true;
         assert!(!desktop_setup(&state).visible);
@@ -1262,63 +1280,85 @@ mod desktop_setup_tests {
         state.embedded = true;
         assert!(!desktop_setup(&state).visible);
     }
+
+    /// Screen Recording is musterd's own permission, so a missing one has to
+    /// reach the startup prompt the same way Accessibility does. An OS that
+    /// has no such permission reports nothing and is never prompted.
     #[test]
-    fn absent_iterm_does_not_require_setup_but_installed_stopped_iterm_does() {
+    fn missing_screen_recording_prompts_but_an_unreporting_os_does_not() {
         let mut state = ready();
-        let device = state.self_info.as_mut().unwrap().state.as_mut().unwrap();
-        device.iterm2_automation = "not_installed".into();
-        device.iterm2_api_available = false;
-        assert!(!desktop_setup(&state).show_iterm);
-        assert!(!desktop_setup(&state).visible);
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .iterm2_automation = "not_running".into();
-        assert!(desktop_setup(&state).show_iterm);
-        assert!(desktop_setup(&state).visible);
+        device(&mut state).screen_recording = "missing".into();
+        let view = desktop_setup(&state);
+        assert!(view.visible && !view.screen_recording_ready);
+        assert!(view.screen_recording_message.contains("屏幕录制"));
+        device(&mut state).screen_recording = String::new();
+        let view = desktop_setup(&state);
+        assert!(view.screen_recording_ready && !view.visible);
     }
+
+    /// Terminal Automation left the setup dialog: it no longer decides
+    /// whether the dialog appears, and `ready` no longer waits on it.
+    #[test]
+    fn terminal_automation_no_longer_drives_the_setup_dialog() {
+        let mut state = ready();
+        device(&mut state).iterm2_automation = "missing".into();
+        device(&mut state).iterm2_api_available = false;
+        let view = desktop_setup(&state);
+        assert!(view.ready && !view.visible);
+        let authorization = terminal_authorization(&state).unwrap();
+        assert_eq!(authorization.app, "iTerm2");
+        assert!(!authorization.ready);
+    }
+
+    #[test]
+    fn absent_terminal_app_has_nothing_to_authorize_but_a_stopped_one_does() {
+        let mut state = ready();
+        device(&mut state).iterm2_automation = "not_installed".into();
+        device(&mut state).iterm2_api_available = false;
+        assert!(terminal_authorization(&state).is_none());
+        device(&mut state).iterm2_automation = "not_running".into();
+        let authorization = terminal_authorization(&state).unwrap();
+        assert!(!authorization.ready && !authorization.message.is_empty());
+    }
+
+    /// The Terminals page belongs to the Mac itself; a phone's embedded
+    /// daemon and other platforms get no authorization section.
+    #[test]
+    fn terminal_authorization_is_offered_on_this_mac_only() {
+        let mut state = ready();
+        assert!(terminal_authorization(&state).is_some());
+        state.embedded = true;
+        assert!(terminal_authorization(&state).is_none());
+        state.embedded = false;
+        state.self_info.as_mut().unwrap().platform = "ios".into();
+        assert!(terminal_authorization(&state).is_none());
+    }
+
+    /// Ghostty needs Automation only; iTerm2 also needs its Python API, and
+    /// an iTerm2 that is authorized but has no API is not ready.
+    #[test]
+    fn the_outstanding_source_is_the_one_offered() {
+        let mut state = ready();
+        device(&mut state).iterm2_api_available = false;
+        let authorization = terminal_authorization(&state).unwrap();
+        assert_eq!(authorization.app, "iTerm2");
+        assert!(!authorization.ready);
+        device(&mut state).iterm2_api_available = true;
+        device(&mut state).ghostty_automation = "missing".into();
+        let authorization = terminal_authorization(&state).unwrap();
+        assert_eq!(authorization.app, "Ghostty");
+        assert!(!authorization.ready);
+        device(&mut state).ghostty_automation = "granted".into();
+        assert!(terminal_authorization(&state).unwrap().ready);
+    }
+
     #[test]
     fn helper_registration_or_socket_alone_does_not_mean_ready() {
         let mut state = ready();
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .locked_use_setup = "needs_installation".into();
+        device(&mut state).locked_use_setup = "needs_installation".into();
         let view = desktop_setup(&state);
         assert!(view.visible && view.can_install && !view.plugin_ready);
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .locked_use_setup = "ready".into();
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .iterm2_automation = "missing".into();
-        assert!(desktop_setup(&state).visible && !desktop_setup(&state).iterm_ready);
-        state
-            .self_info
-            .as_mut()
-            .unwrap()
-            .state
-            .as_mut()
-            .unwrap()
-            .iterm2_automation = "granted".into();
+        device(&mut state).locked_use_setup = "ready".into();
         assert!(!desktop_setup(&state).visible);
     }
 }
