@@ -219,6 +219,7 @@ records a specific decision and does not revive code on its delete list.
 | [0118](0118-sweep-past-an-unreadable-worktree.md) | Accepted; source and tests verified | Sweep past a worktree that cannot answer for itself |
 | [0119](0119-ignore-loose-credential-files.md) | Accepted; source verified | Ignore the credential file types the fleet actually keeps loose |
 | [0120](0120-locked-control-without-a-per-operation-signature.md) | Accepted; source and tests verified | `locked.control` authorizes Locked Use without a per-operation signature |
+| [0121](0121-generated-xcode-project-follows-project-yml.md) | Accepted; source verified, fleet build pending | `project.yml` is the Mac project's only version, and drift is reported |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

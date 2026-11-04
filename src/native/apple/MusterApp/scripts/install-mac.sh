@@ -7,11 +7,17 @@
 #   scripts/install-mac.sh                       # Developer ID Application: <team 89LGY6BD53>
 #   TEAM=XXXXXXXXXX scripts/install-mac.sh
 #
-# Prerequisites: the Rust core (scripts/build-ffi.sh), the daemon
-# (cd src/muster && cargo build --release -p musterd --features sep) and the
-# l4forwarder addon (cd addons/l4forwarder && cargo build --release --locked);
-# the Developer ID certificate in the login keychain (unlock it yourself
-# if signing fails with errSecInternalComponent).
+# Prerequisites, all of them (the build phase fails on a missing one):
+#   scripts/build-ffi.sh                                       # the Rust core
+#   cd src/muster && cargo build --release -p musterd --features sep
+#   cd src/muster && cargo build --release -p muster-cli       # Helpers/muster
+#   cd src/muster && cargo build --release -p muster-browser   # browser host
+#   cd addons/l4forwarder && cargo build --release --locked
+# and MUSTER_MAC_PROFILE set to the installed provisioning profile's name, or
+# xcodebuild refuses the Presence entitlement ("requires a provisioning
+# profile"); see docs/PRESENCE_ENROLLMENT.md. The Developer ID certificate has
+# to be in the login keychain -- unlock it yourself if signing fails with
+# errSecInternalComponent.
 set -eu
 cd "$(dirname "$0")/.."
 install_uid=$(id -u)
@@ -20,6 +26,16 @@ team="${TEAM:-89LGY6BD53}"
 identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | grep "($team)" | head -1 | sed -E 's/.*"(.*)"/\1/')
 [ -n "$identity" ] || { echo "no Developer ID Application identity for team $team in the keychain" >&2; exit 1; }
 xcodegen generate
+# project.pbxproj is generated from project.yml on every build, so a version or
+# setting edited in the generated project is reverted right here, silently.
+# That is how 1.1.20 (110) came back as 1.1.15 (105); say so instead (ADR 0121).
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 &&
+   ! git diff --quiet -- Muster.xcodeproj/project.pbxproj; then
+  echo "Muster.xcodeproj/project.pbxproj no longer matches project.yml:" >&2
+  git --no-pager diff --stat -- Muster.xcodeproj/project.pbxproj >&2
+  echo "move the edit into project.yml, or commit the regenerated project." >&2
+  exit 1
+fi
 xcodebuild -project Muster.xcodeproj -scheme MusterMac -configuration Release \
   -derivedDataPath build/DerivedData CODE_SIGN_STYLE=Manual "DEVELOPMENT_TEAM=$team" \
   "CODE_SIGN_IDENTITY=$identity" OTHER_CODE_SIGN_FLAGS=--timestamp build
