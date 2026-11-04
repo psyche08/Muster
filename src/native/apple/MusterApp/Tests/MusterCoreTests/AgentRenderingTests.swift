@@ -46,10 +46,14 @@ final class AgentRenderingTests: XCTestCase {
         let setup = Muster_App_DesktopSetupView.with {
             $0.visible = true; $0.canInstall = true
             $0.pluginMessage = "需要授权系统 helper 安装或验证 Locked Use 插件。在系统设置 → 通用 → 登录项与扩展中允许 Muster 后台运行，随后将自动安装，最多等待约一分钟。"
-            $0.screenRecordingMessage = "在系统设置 → 隐私与安全性 → 屏幕录制中启用 musterd。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
+            // The strings and flags Rust produces for a Mac that is missing
+            // the grant: the restart is offered, because only a new process
+            // reads a new grant (ADR 0125).
+            $0.screenRecordingMessage = "在系统设置 → 隐私与安全性 → 屏幕录制中启用 Muster；列表中的 musterd 属于同一项授权，一并启用。macOS 只把新授权交给新进程，所以启用后要用下方的「重启 Muster」才生效。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
+            $0.restartRequired = true; $0.canRestart = true
         }
         var refreshCount = 0
-        let host = NSHostingView(rootView: DesktopSetupView(setup: setup, accessibility: {}, screenRecording: {}, install: {}, later: {}, refresh: { refreshCount += 1 }).environment(\.colorScheme, .light).tint(.blue))
+        let host = NSHostingView(rootView: DesktopSetupView(setup: setup, accessibility: {}, screenRecording: {}, install: {}, later: {}, refresh: { refreshCount += 1 }, restart: {}).environment(\.colorScheme, .light).tint(.blue))
         host.frame = NSRect(origin: .zero, size: host.fittingSize)
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; window.contentView = host

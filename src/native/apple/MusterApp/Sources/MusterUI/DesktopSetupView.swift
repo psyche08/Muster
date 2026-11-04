@@ -73,7 +73,9 @@ struct DesktopSetupView: View {
                     .font(.headline)
                 Text(setup.screenRecordingMessage).foregroundStyle(.secondary)
                 if !setup.screenRecordingReady {
-                    Text(MacInstall.daemon)
+                    // The grant is the host bundle's, not the daemon
+                    // executable's: macOS judges musterd by Muster.app.
+                    Text(MacInstall.app)
                         .font(.caption.monospaced()).textSelection(.enabled)
                     Button("打开屏幕录制设置…", action: screenRecording).buttonStyle(.borderedProminent)
                 }
