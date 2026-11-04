@@ -48,6 +48,14 @@ match it.**
   the first time anyone builds, which is as early as this can be caught without
   putting `xcodegen` into CI.
 
+What the check can and cannot see follows from its order: `xcodegen` overwrites
+the file before the diff runs, so the comparison is against the **committed**
+project. A committed hand-edit — the case that drifted here, and the only one
+that can reach anyone else — stops the install. An uncommitted hand-edit is
+still thrown away silently, because by the time anything could look, the
+generator has already replaced it. Reversing the order would mean diffing the
+file the previous build left behind, which says nothing about `project.yml`.
+
 ## Alternatives
 
 - **Stop tracking `project.pbxproj`.** Cleanest in principle, and wrong here:
@@ -80,6 +88,14 @@ match it.**
 ## Verification
 
 `xcodegen generate` leaves the tracked project unchanged, and a second run
-changes nothing further. `sh -n` on the script. Then an install on the owner's
-Mac reporting 1.1.21 (111), and a deliberate edit to the generated project
-showing the install refuses with the diff.
+changes nothing further. `sh -n` on the script.
+
+Checked on the owner's Mac, 2026-11-04: a committed hand-edit of
+`CURRENT_PROJECT_VERSION` to 999 made `install-mac.sh` exit 1 after
+regeneration with "Muster.xcodeproj/project.pbxproj no longer matches
+project.yml", the one-line diff, and the instruction to move the edit into
+`project.yml`. Nothing was built or installed. The same edit left uncommitted
+did not stop the install, which is the limitation described above, found by
+running it that way first.
+
+Still pending: an install reporting 1.1.21 (111).
