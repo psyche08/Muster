@@ -426,6 +426,10 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         }
         It::DesktopSetupAction(action) => network::intent_desktop_setup_action(state, ctx, action),
         It::RequestAccessibility(_) => network::intent_request_accessibility(state, ctx),
+        It::RequestScreenRecording(_) => network::intent_request_screen_recording(state, ctx),
+        It::RequestTerminalAuthorization(_) => {
+            network::intent_request_terminal_authorization(state, ctx)
+        }
         It::SetRelay(r) => network::intent_set_relay(state, ctx, r),
         It::SetPushToken(t) => network::intent_set_push_token(state, ctx, t),
         It::OpenSsh(o) => open_ssh(state, ctx, o),

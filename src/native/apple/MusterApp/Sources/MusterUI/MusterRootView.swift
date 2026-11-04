@@ -32,7 +32,7 @@ public struct MusterRootView: View {
                 workspaceNavigation(core: core)
                 #if os(macOS)
                 .sheet(isPresented: Binding(get: { model.vm.desktopSetup.visible }, set: { if !$0 { core.desktopSetup(.dismiss) } })) {
-                    DesktopSetupView(setup: model.vm.desktopSetup, busy: model.vm.busy, accessibility: { core.requestAccessibility() }, install: { core.desktopSetup(.install) }, iterm: { core.desktopSetup(.iterm) }, later: { core.desktopSetup(.dismiss) }, refresh: { core.desktopSetup(.check) }, restart: { core.desktopSetup(.restart) })
+                    DesktopSetupView(setup: model.vm.desktopSetup, accessibility: { core.requestAccessibility() }, screenRecording: { core.requestScreenRecording() }, install: { core.desktopSetup(.install) }, later: { core.desktopSetup(.dismiss) }, refresh: { core.desktopSetup(.check) }, restart: { core.desktopSetup(.restart) })
                 }
                 #endif
                 .overlay(alignment: .bottom) { ToastStack(toasts: model.vm.toasts) { core.dismiss(toast: $0) } }

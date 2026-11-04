@@ -135,6 +135,19 @@ public final class MusterCore: MusterShell {
         send(.requestAccessibility(Muster_App_RequestAccessibility()))
     }
 
+    /// macOS: ask for the Screen Recording permission musterd needs to look
+    /// at an app window after a native send fails (the OS prompts once per
+    /// denial; the pane opens).
+    public func requestScreenRecording() {
+        send(.requestScreenRecording(Muster_App_RequestScreenRecording()))
+    }
+
+    /// macOS: ask for Automation over the terminal source this Mac offers,
+    /// and for iTerm2's Python API where that is the source.
+    public func requestTerminalAuthorization() {
+        send(.requestTerminalAuthorization(Muster_App_RequestTerminalAuthorization()))
+    }
+
     /// The privacy cover: this desktop's (device empty) or a member's.
     public func setCover(_ on: Bool, device: String = "") {
         send(.setCover(Muster_App_SetCover.with { $0.on = on; $0.deviceID = device }))

@@ -28,6 +28,9 @@ pub(super) fn open_terminals(state: &mut State, ctx: &Ctx) {
         errors: Vec::new(),
         can_create: false,
         sources: Vec::new(),
+        // Projected by `render`, never stored: the permission observation is
+        // the daemon's, not this view's.
+        authorization: None,
     };
     for member in devices {
         let device = member.device_id;

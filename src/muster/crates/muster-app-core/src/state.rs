@@ -251,7 +251,7 @@ pub struct State {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub auto_update: crate::desktop_update::auto::Schedule,
     pub desktop_restart_required: bool,
-    pub desktop_permissions: Option<[Option<bool>; 3]>,
+    pub desktop_permissions: Option<[Option<bool>; 4]>,
     pub desktop_setup_dismissed: bool,
     pub desktop_setup_error: String,
     pub browser: app::BrowserView,
@@ -455,6 +455,16 @@ impl State {
         }
         let mut now = [
             match device.accessibility.as_str() {
+                "granted" => Some(true),
+                "missing" => Some(false),
+                _ => None,
+            },
+            // macOS answers a Screen Recording preflight with the new grant
+            // at once, but the process that asked keeps capturing nothing
+            // until it is restarted -- which is why the system's own prompt
+            // offers "Quit & Reopen". musterd is that process, so the grant
+            // counts as a transition that requires a restart.
+            match device.screen_recording.as_str() {
                 "granted" => Some(true),
                 "missing" => Some(false),
                 _ => None,
@@ -782,6 +792,7 @@ mod desktop_restart_tests {
         let mut state = State::new(false, None);
         let mut device = v1::DeviceState {
             accessibility: "granted".into(),
+            screen_recording: "granted".into(),
             locked_use_setup: "checking".into(),
             ..Default::default()
         };
@@ -801,6 +812,39 @@ mod desktop_restart_tests {
         let mut relaunched = State::new(false, None);
         relaunched.observe_desktop_permissions(&device);
         assert!(!relaunched.desktop_restart_required);
+    }
+
+    /// A Screen Recording grant reaches the running daemon's preflight
+    /// immediately, but its captures stay empty until musterd restarts, so
+    /// the transition has to ask for one -- and has to reopen a dialog the
+    /// user dismissed, exactly as the other permissions do.
+    #[test]
+    fn a_screen_recording_grant_requires_a_restart() {
+        let mut state = State::new(false, None);
+        let mut device = v1::DeviceState {
+            accessibility: "granted".into(),
+            screen_recording: "missing".into(),
+            locked_use_setup: "ready".into(),
+            ..Default::default()
+        };
+        state.observe_desktop_permissions(&device);
+        assert!(!state.desktop_restart_required);
+        state.desktop_setup_dismissed = true;
+        device.screen_recording = "granted".into();
+        state.observe_desktop_permissions(&device);
+        assert!(state.desktop_restart_required);
+        assert!(!state.desktop_setup_dismissed);
+        // An OS that reports no such permission never asks for a restart.
+        let mut silent = State::new(false, None);
+        let mut device = v1::DeviceState {
+            accessibility: "granted".into(),
+            locked_use_setup: "ready".into(),
+            ..Default::default()
+        };
+        silent.observe_desktop_permissions(&device);
+        device.screen_recording = String::new();
+        silent.observe_desktop_permissions(&device);
+        assert!(!silent.desktop_restart_required);
     }
     #[test]
     fn restart_is_blocked_during_locked_use_or_operations() {

@@ -49,6 +49,11 @@ struct TerminalsView: View {
 
     var body: some View {
         List {
+            if vm.terminals.hasAuthorization && !vm.terminals.authorization.ready {
+                TerminalAuthorizationRow(authorization: vm.terminals.authorization) {
+                    core.requestTerminalAuthorization()
+                }
+            }
             if vm.terminals.loading && vm.terminals.sessions.isEmpty {
                 ProgressView("Loading terminals…")
             } else if vm.terminals.sessions.isEmpty {
@@ -97,6 +102,26 @@ struct TerminalsView: View {
         .sheet(isPresented: $ssh) {
             SshSheet { user, port in core.openSsh(port: port, user: user, cols: 80, rows: 24) }
         }
+    }
+}
+
+/// What macOS still withholds from this Mac's terminal source. Rust decides
+/// which source is outstanding and what to say; this only renders it and
+/// sends the request back.
+struct TerminalAuthorizationRow: View {
+    let authorization: Muster_App_TerminalAuthorizationView
+    let grant: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("\(authorization.app) 自动化授权", systemImage: "terminal.badge.xmark")
+                .font(.headline)
+            Text(authorization.message).font(.callout).foregroundStyle(.secondary)
+            Button(authorization.busy ? "正在检查…" : "授权并检查 \(authorization.app)…", action: grant)
+                .buttonStyle(.borderedProminent)
+                .disabled(authorization.busy)
+        }
+        .padding(.vertical, 4)
     }
 }
 

@@ -42,22 +42,18 @@ public enum DesktopHelper {
 
 struct DesktopSetupView: View {
     let setup: Muster_App_DesktopSetupView
-    var busy = false
     let accessibility: () -> Void
+    var screenRecording: () -> Void = {}
     let install: () -> Void
-    let iterm: () -> Void
     let later: () -> Void
     var refresh: () -> Void = {}
     var restart: () -> Void = {}
-
-    /// The terminal app the Mac's terminal source is (Rust names it).
-    private var terminalApp: String { setup.terminalApp.isEmpty ? "iTerm2" : setup.terminalApp }
 
     var body: some View {
         ScrollView {
         VStack(alignment: .leading, spacing: 22) {
             Label("完成 Mac 设置", systemImage: "desktopcomputer").font(.title2.bold())
-            Text("从其他设备操作这台 Mac 的 Codex、Claude 和 \(terminalApp)，需要以下权限与设置。")
+            Text("从其他设备操作这台 Mac 的 Codex 和 Claude，需要以下权限与设置。终端授权在终端页面完成。")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
                 Label("辅助功能权限", systemImage: setup.accessibilityReady ? "checkmark.circle.fill" : "exclamationmark.circle")
@@ -73,6 +69,17 @@ struct DesktopSetupView: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 10) {
+                Label("屏幕录制权限", systemImage: setup.screenRecordingReady ? "checkmark.circle.fill" : "exclamationmark.circle")
+                    .font(.headline)
+                Text(setup.screenRecordingMessage).foregroundStyle(.secondary)
+                if !setup.screenRecordingReady {
+                    Text(MacInstall.daemon)
+                        .font(.caption.monospaced()).textSelection(.enabled)
+                    Button("打开屏幕录制设置…", action: screenRecording).buttonStyle(.borderedProminent)
+                }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 10) {
                 Label("Locked Use 插件", systemImage: setup.pluginReady ? "checkmark.circle.fill" : "lock.shield")
                     .font(.headline)
                 Text(setup.pluginMessage).foregroundStyle(.secondary)
@@ -82,17 +89,6 @@ struct DesktopSetupView: View {
                     Text("通过 Muster 的系统 helper 自动安装，无需另开安装器或在终端运行 sudo。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            }
-            if setup.showIterm {
-            Divider()
-            VStack(alignment: .leading, spacing: 10) {
-                Label(terminalApp == "iTerm2" ? "iTerm2 自动化与 API" : "\(terminalApp) 自动化", systemImage: setup.itermReady ? "checkmark.circle.fill" : "terminal")
-                    .font(.headline)
-                Text(setup.itermMessage).foregroundStyle(.secondary)
-                if !setup.itermReady {
-                    Button(busy ? "正在检查…" : "授权并检查 \(terminalApp)…", action: iterm).buttonStyle(.borderedProminent).disabled(busy)
-                }
-            }
             }
             if setup.restartRequired {
                 Label("新授权需要重启 Muster 后生效", systemImage: "arrow.clockwise").font(.headline)

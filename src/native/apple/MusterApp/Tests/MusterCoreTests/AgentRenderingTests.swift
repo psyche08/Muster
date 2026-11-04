@@ -46,10 +46,10 @@ final class AgentRenderingTests: XCTestCase {
         let setup = Muster_App_DesktopSetupView.with {
             $0.visible = true; $0.canInstall = true
             $0.pluginMessage = "需要授权系统 helper 安装或验证 Locked Use 插件。在系统设置 → 通用 → 登录项与扩展中允许 Muster 后台运行，随后将自动安装，最多等待约一分钟。"
-            $0.itermMessage = "需要允许 Muster / musterd 自动化控制 iTerm2，并在 iTerm2 Settings → General → Magic 中启用 Python API。首次连接时还需允许 Muster 访问。"
+            $0.screenRecordingMessage = "在系统设置 → 隐私与安全性 → 屏幕录制中启用 musterd。原生发送失败时，Muster 才能看一眼应用窗口并说明原因。"
         }
         var refreshCount = 0
-        let host = NSHostingView(rootView: DesktopSetupView(setup: setup, accessibility: {}, install: {}, iterm: {}, later: {}, refresh: { refreshCount += 1 }).environment(\.colorScheme, .light).tint(.blue))
+        let host = NSHostingView(rootView: DesktopSetupView(setup: setup, accessibility: {}, screenRecording: {}, install: {}, later: {}, refresh: { refreshCount += 1 }).environment(\.colorScheme, .light).tint(.blue))
         host.frame = NSRect(origin: .zero, size: host.fittingSize)
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; window.contentView = host

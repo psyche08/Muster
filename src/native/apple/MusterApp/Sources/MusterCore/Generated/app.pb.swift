@@ -276,6 +276,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .requestAccessibility(newValue)}
   }
 
+  public var requestScreenRecording: Muster_App_RequestScreenRecording {
+    get {
+      if case .requestScreenRecording(let v)? = _storage._it {return v}
+      return Muster_App_RequestScreenRecording()
+    }
+    set {_uniqueStorage()._it = .requestScreenRecording(newValue)}
+  }
+
   public var openBrowser: Muster_App_OpenBrowser {
     get {
       if case .openBrowser(let v)? = _storage._it {return v}
@@ -583,6 +591,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .sessionTerminalAction(newValue)}
   }
 
+  public var requestTerminalAuthorization: Muster_App_RequestTerminalAuthorization {
+    get {
+      if case .requestTerminalAuthorization(let v)? = _storage._it {return v}
+      return Muster_App_RequestTerminalAuthorization()
+    }
+    set {_uniqueStorage()._it = .requestTerminalAuthorization(newValue)}
+  }
+
   public var codeAction: Muster_App_CodeAction {
     get {
       if case .codeAction(let v)? = _storage._it {return v}
@@ -655,6 +671,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case selectDevice(Muster_App_SelectDevice)
     case setRelay(Muster_App_SetRelay)
     case requestAccessibility(Muster_App_RequestAccessibility)
+    case requestScreenRecording(Muster_App_RequestScreenRecording)
     case openBrowser(Muster_App_OpenBrowser)
     case browserSetup(Muster_App_BrowserSetup)
     case browserRun(Muster_App_BrowserRun)
@@ -696,6 +713,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case closeTerminal(Muster_App_CloseTerminal)
     case terminalPaste(Muster_App_TerminalPaste)
     case sessionTerminalAction(Muster_App_SessionTerminalAction)
+    case requestTerminalAuthorization(Muster_App_RequestTerminalAuthorization)
     case codeAction(Muster_App_CodeAction)
     case openFiles(Muster_App_OpenFiles)
     case openFile(Muster_App_OpenFile)
@@ -806,12 +824,12 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Terminal Automation left this dialog for the Terminals page: 3 was ITERM.
   public nonisolated enum Action: SwiftProtobuf.Enum, Swift.CaseIterable {
     public typealias RawValue = Int
     case show // = 0
     case dismiss // = 1
     case install // = 2
-    case iterm // = 3
     case check // = 4
     case restart // = 5
     case UNRECOGNIZED(Int)
@@ -825,7 +843,6 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       case 0: self = .show
       case 1: self = .dismiss
       case 2: self = .install
-      case 3: self = .iterm
       case 4: self = .check
       case 5: self = .restart
       default: self = .UNRECOGNIZED(rawValue)
@@ -837,7 +854,6 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       case .show: return 0
       case .dismiss: return 1
       case .install: return 2
-      case .iterm: return 3
       case .check: return 4
       case .restart: return 5
       case .UNRECOGNIZED(let i): return i
@@ -849,7 +865,6 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       .show,
       .dismiss,
       .install,
-      .iterm,
       .check,
       .restart,
     ]
@@ -1053,6 +1068,30 @@ public nonisolated struct Muster_App_SetRelay: Sendable {
 /// Ask the OS for the permission that lets this device's daemon drive
 /// other apps (macOS Accessibility); a desktop only.
 public nonisolated struct Muster_App_RequestAccessibility: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// macOS: Screen Recording for musterd, so a failed native send's window can
+/// be looked at (ADR 0116).
+public nonisolated struct Muster_App_RequestScreenRecording: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// macOS: Automation for the terminal source this Mac offers, and iTerm2's
+/// Python API where that is the source.
+public nonisolated struct Muster_App_RequestTerminalAuthorization: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2509,6 +2548,10 @@ public nonisolated struct Muster_App_AccessItem: Sendable {
   public init() {}
 }
 
+/// What this Mac still needs before other devices can drive it: the two
+/// system permissions musterd cannot grant itself, and the Locked Use plugin.
+/// Terminal Automation moved to TerminalAuthorizationView: 7, 8, 12 and 14
+/// were iterm_ready, iterm_message, show_iterm and terminal_app.
 public nonisolated struct Muster_App_DesktopSetupView: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2526,23 +2569,18 @@ public nonisolated struct Muster_App_DesktopSetupView: Sendable {
 
   public var pluginMessage: String = String()
 
-  public var itermReady: Bool = false
-
-  public var itermMessage: String = String()
-
   public var error: String = String()
 
   public var restartRequired: Bool = false
 
   public var canRestart: Bool = false
 
-  public var showIterm: Bool = false
-
   /// every required permission and installation is in place
   public var ready: Bool = false
 
-  /// The terminal app the iterm_* fields describe: "iTerm2" or "Ghostty".
-  public var terminalApp: String = String()
+  public var screenRecordingReady: Bool = false
+
+  public var screenRecordingMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3079,6 +3117,41 @@ public nonisolated struct Muster_App_TerminalsView: Sendable {
 
   public var sources: [Muster_V1_TerminalSource] = []
 
+  /// Only on the Mac itself; absent everywhere else.
+  public var authorization: Muster_App_TerminalAuthorizationView {
+    get {_authorization ?? Muster_App_TerminalAuthorizationView()}
+    set {_authorization = newValue}
+  }
+  /// Returns true if `authorization` has been explicitly set.
+  public var hasAuthorization: Bool {self._authorization != nil}
+  /// Clears the value of `authorization`. Subsequent reads from it will return its default value.
+  public mutating func clearAuthorization() {self._authorization = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _authorization: Muster_App_TerminalAuthorizationView? = nil
+}
+
+/// What macOS still withholds from the terminal source this Mac offers.
+/// Rust owns which source is outstanding and what to say about it; the
+/// Terminals page renders this and sends RequestTerminalAuthorization.
+public nonisolated struct Muster_App_TerminalAuthorizationView: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The app the message describes: "iTerm2" or "Ghostty". Empty means there
+  /// is nothing to authorize, and the shell shows no section at all.
+  public var app: String = String()
+
+  public var ready: Bool = false
+
+  public var message: String = String()
+
+  public var busy: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3570,7 +3643,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}&code_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}&code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4357,6 +4430,32 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .codeAction(v)
           }
         }()
+        case 133: try {
+          var v: Muster_App_RequestScreenRecording?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .requestScreenRecording(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .requestScreenRecording(v)
+          }
+        }()
+        case 134: try {
+          var v: Muster_App_RequestTerminalAuthorization?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .requestTerminalAuthorization(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .requestTerminalAuthorization(v)
+          }
+        }()
         default: break
         }
       }
@@ -4602,6 +4701,14 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
         guard case .codeAction(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 132)
       }()
+      case .requestScreenRecording?: try {
+        guard case .requestScreenRecording(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 133)
+      }()
+      case .requestTerminalAuthorization?: try {
+        guard case .requestTerminalAuthorization(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 134)
+      }()
       case nil: break
       }
     }
@@ -4753,7 +4860,7 @@ nonisolated extension Muster_App_DesktopSetupAction: SwiftProtobuf.Message, Swif
 }
 
 nonisolated extension Muster_App_DesktopSetupAction.Action: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHOW\0\u{1}DISMISS\0\u{1}INSTALL\0\u{1}ITERM\0\u{1}CHECK\0\u{1}RESTART\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHOW\0\u{1}DISMISS\0\u{1}INSTALL\0\u{2}\u{2}CHECK\0\u{1}RESTART\0")
 }
 
 nonisolated extension Muster_App_SetDeviceLockedUse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -5218,6 +5325,44 @@ nonisolated extension Muster_App_RequestAccessibility: SwiftProtobuf.Message, Sw
   }
 
   public static func ==(lhs: Muster_App_RequestAccessibility, rhs: Muster_App_RequestAccessibility) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_RequestScreenRecording: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RequestScreenRecording"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_RequestScreenRecording, rhs: Muster_App_RequestScreenRecording) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_RequestTerminalAuthorization: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RequestTerminalAuthorization"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_RequestTerminalAuthorization, rhs: Muster_App_RequestTerminalAuthorization) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7951,7 +8096,7 @@ nonisolated extension Muster_App_AccessItem: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Muster_App_DesktopSetupView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSetupView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visible\0\u{3}accessibility_ready\0\u{3}plugin_ready\0\u{1}checking\0\u{3}can_install\0\u{3}plugin_message\0\u{3}iterm_ready\0\u{3}iterm_message\0\u{1}error\0\u{3}restart_required\0\u{3}can_restart\0\u{3}show_iterm\0\u{1}ready\0\u{3}terminal_app\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visible\0\u{3}accessibility_ready\0\u{3}plugin_ready\0\u{1}checking\0\u{3}can_install\0\u{3}plugin_message\0\u{2}\u{3}error\0\u{3}restart_required\0\u{3}can_restart\0\u{2}\u{2}ready\0\u{4}\u{2}screen_recording_ready\0\u{3}screen_recording_message\0\u{b}iterm_ready\0\u{b}iterm_message\0\u{b}show_iterm\0\u{b}terminal_app\0\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}\u{c}\u{c}\u{1}\u{c}\u{e}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7965,14 +8110,12 @@ nonisolated extension Muster_App_DesktopSetupView: SwiftProtobuf.Message, SwiftP
       case 4: try { try decoder.decodeSingularBoolField(value: &self.checking) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.canInstall) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.pluginMessage) }()
-      case 7: try { try decoder.decodeSingularBoolField(value: &self.itermReady) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.itermMessage) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self.error) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.restartRequired) }()
       case 11: try { try decoder.decodeSingularBoolField(value: &self.canRestart) }()
-      case 12: try { try decoder.decodeSingularBoolField(value: &self.showIterm) }()
       case 13: try { try decoder.decodeSingularBoolField(value: &self.ready) }()
-      case 14: try { try decoder.decodeSingularStringField(value: &self.terminalApp) }()
+      case 15: try { try decoder.decodeSingularBoolField(value: &self.screenRecordingReady) }()
+      case 16: try { try decoder.decodeSingularStringField(value: &self.screenRecordingMessage) }()
       default: break
       }
     }
@@ -7997,12 +8140,6 @@ nonisolated extension Muster_App_DesktopSetupView: SwiftProtobuf.Message, SwiftP
     if !self.pluginMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.pluginMessage, fieldNumber: 6)
     }
-    if self.itermReady != false {
-      try visitor.visitSingularBoolField(value: self.itermReady, fieldNumber: 7)
-    }
-    if !self.itermMessage.isEmpty {
-      try visitor.visitSingularStringField(value: self.itermMessage, fieldNumber: 8)
-    }
     if !self.error.isEmpty {
       try visitor.visitSingularStringField(value: self.error, fieldNumber: 9)
     }
@@ -8012,14 +8149,14 @@ nonisolated extension Muster_App_DesktopSetupView: SwiftProtobuf.Message, SwiftP
     if self.canRestart != false {
       try visitor.visitSingularBoolField(value: self.canRestart, fieldNumber: 11)
     }
-    if self.showIterm != false {
-      try visitor.visitSingularBoolField(value: self.showIterm, fieldNumber: 12)
-    }
     if self.ready != false {
       try visitor.visitSingularBoolField(value: self.ready, fieldNumber: 13)
     }
-    if !self.terminalApp.isEmpty {
-      try visitor.visitSingularStringField(value: self.terminalApp, fieldNumber: 14)
+    if self.screenRecordingReady != false {
+      try visitor.visitSingularBoolField(value: self.screenRecordingReady, fieldNumber: 15)
+    }
+    if !self.screenRecordingMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.screenRecordingMessage, fieldNumber: 16)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -8031,14 +8168,12 @@ nonisolated extension Muster_App_DesktopSetupView: SwiftProtobuf.Message, SwiftP
     if lhs.checking != rhs.checking {return false}
     if lhs.canInstall != rhs.canInstall {return false}
     if lhs.pluginMessage != rhs.pluginMessage {return false}
-    if lhs.itermReady != rhs.itermReady {return false}
-    if lhs.itermMessage != rhs.itermMessage {return false}
     if lhs.error != rhs.error {return false}
     if lhs.restartRequired != rhs.restartRequired {return false}
     if lhs.canRestart != rhs.canRestart {return false}
-    if lhs.showIterm != rhs.showIterm {return false}
     if lhs.ready != rhs.ready {return false}
-    if lhs.terminalApp != rhs.terminalApp {return false}
+    if lhs.screenRecordingReady != rhs.screenRecordingReady {return false}
+    if lhs.screenRecordingMessage != rhs.screenRecordingMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8965,7 +9100,7 @@ nonisolated extension Muster_App_ChatDiffLine: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_App_TerminalsView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TerminalsView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{3}ssh_available\0\u{1}loading\0\u{1}errors\0\u{3}can_create\0\u{1}sources\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{3}ssh_available\0\u{1}loading\0\u{1}errors\0\u{3}can_create\0\u{1}sources\0\u{1}authorization\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8980,12 +9115,17 @@ nonisolated extension Muster_App_TerminalsView: SwiftProtobuf.Message, SwiftProt
       case 5: try { try decoder.decodeRepeatedStringField(value: &self.errors) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.canCreate) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._authorization) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.deviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
     }
@@ -9007,6 +9147,9 @@ nonisolated extension Muster_App_TerminalsView: SwiftProtobuf.Message, SwiftProt
     if !self.sources.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 7)
     }
+    try { if let v = self._authorization {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9018,6 +9161,52 @@ nonisolated extension Muster_App_TerminalsView: SwiftProtobuf.Message, SwiftProt
     if lhs.errors != rhs.errors {return false}
     if lhs.canCreate != rhs.canCreate {return false}
     if lhs.sources != rhs.sources {return false}
+    if lhs._authorization != rhs._authorization {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_TerminalAuthorizationView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TerminalAuthorizationView"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}app\0\u{1}ready\0\u{1}message\0\u{1}busy\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.app) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.ready) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.busy) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.app.isEmpty {
+      try visitor.visitSingularStringField(value: self.app, fieldNumber: 1)
+    }
+    if self.ready != false {
+      try visitor.visitSingularBoolField(value: self.ready, fieldNumber: 2)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 3)
+    }
+    if self.busy != false {
+      try visitor.visitSingularBoolField(value: self.busy, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_TerminalAuthorizationView, rhs: Muster_App_TerminalAuthorizationView) -> Bool {
+    if lhs.app != rhs.app {return false}
+    if lhs.ready != rhs.ready {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.busy != rhs.busy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

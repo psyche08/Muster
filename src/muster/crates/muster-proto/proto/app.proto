@@ -35,6 +35,7 @@ message Intent {
     SelectDevice select_device = 17;
     SetRelay set_relay = 19;
     RequestAccessibility request_accessibility = 20;
+    RequestScreenRecording request_screen_recording = 133;
     OpenBrowser open_browser = 80;
     BrowserSetup browser_setup = 81;
     BrowserRun browser_run = 82;
@@ -78,6 +79,7 @@ message Intent {
     CloseTerminal close_terminal = 47;
     TerminalPaste terminal_paste = 48;
     SessionTerminalAction session_terminal_action = 49;
+    RequestTerminalAuthorization request_terminal_authorization = 134;
     CodeAction code_action = 132;
 
     OpenFiles open_files = 50;
@@ -107,7 +109,12 @@ message DesktopUpdateView {
   bool automatic = 8;
 }
 message DesktopSetupAction {
-  enum Action { SHOW = 0; DISMISS = 1; INSTALL = 2; ITERM = 3; CHECK = 4; RESTART = 5; }
+  // Terminal Automation left this dialog for the Terminals page: 3 was ITERM.
+  enum Action {
+    reserved 3;
+    reserved "ITERM";
+    SHOW = 0; DISMISS = 1; INSTALL = 2; CHECK = 4; RESTART = 5;
+  }
   Action action = 1;
 }
 message SetDeviceLockedUse { string device_id = 1; bool on = 2; }
@@ -168,6 +175,12 @@ message SetRelay {
 // Ask the OS for the permission that lets this device's daemon drive
 // other apps (macOS Accessibility); a desktop only.
 message RequestAccessibility {}
+// macOS: Screen Recording for musterd, so a failed native send's window can
+// be looked at (ADR 0116).
+message RequestScreenRecording {}
+// macOS: Automation for the terminal source this Mac offers, and iTerm2's
+// Python API where that is the source.
+message RequestTerminalAuthorization {}
 // The privacy cover on this desktop (device_id empty) or on a member's
 // (device_id set; needs locked.control and a presence proof). Dropping
 // the cover locally asks for local authentication first.
@@ -558,22 +571,25 @@ message AccessItem {
   bool requires_toggle = 4; // counts only while the section's toggle is on
 }
 
+// What this Mac still needs before other devices can drive it: the two
+// system permissions musterd cannot grant itself, and the Locked Use plugin.
+// Terminal Automation moved to TerminalAuthorizationView: 7, 8, 12 and 14
+// were iterm_ready, iterm_message, show_iterm and terminal_app.
 message DesktopSetupView {
+  reserved 7, 8, 12, 14;
+  reserved "iterm_ready", "iterm_message", "show_iterm", "terminal_app";
   bool visible = 1;
   bool accessibility_ready = 2;
   bool plugin_ready = 3;
   bool checking = 4;
   bool can_install = 5;
   string plugin_message = 6;
-  bool iterm_ready = 7;
-  string iterm_message = 8;
   string error = 9;
   bool restart_required = 10;
   bool can_restart = 11;
-  bool show_iterm = 12;
   bool ready = 13; // every required permission and installation is in place
-  // The terminal app the iterm_* fields describe: "iTerm2" or "Ghostty".
-  string terminal_app = 14;
+  bool screen_recording_ready = 15;
+  string screen_recording_message = 16;
 }
 
 message Toast {
@@ -722,6 +738,20 @@ message TerminalsView {
   repeated string errors = 5;
   bool can_create = 6; // a new window on one device (not the all-devices list)
   repeated muster.v1.TerminalSource sources = 7;
+  // Only on the Mac itself; absent everywhere else.
+  TerminalAuthorizationView authorization = 8;
+}
+
+// What macOS still withholds from the terminal source this Mac offers.
+// Rust owns which source is outstanding and what to say about it; the
+// Terminals page renders this and sends RequestTerminalAuthorization.
+message TerminalAuthorizationView {
+  // The app the message describes: "iTerm2" or "Ghostty". Empty means there
+  // is nothing to authorize, and the shell shows no section at all.
+  string app = 1;
+  bool ready = 2;
+  string message = 3;
+  bool busy = 4;
 }
 
 // A rendered grid: the shell draws rows and the cursor, nothing else.
