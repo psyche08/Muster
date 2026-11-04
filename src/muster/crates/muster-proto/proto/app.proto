@@ -45,10 +45,14 @@ message Intent {
     DesktopUpdateAction desktop_update_action = 24;
     muster.v1.MulticaRequest multica = 89;
     muster.v1.MulticaBrowseRequest multica_browse = 90;
+    muster.v1.VisionRequest vision = 93;
 
     OpenAgents open_agents = 30;
     AgentCatalogAction agent_catalog_action = 92;
-    AgentOrganize agent_organize = 93;
+    // Field 93 was this intent in the 1.1.20 (110) candidate built from this
+    // branch; `vision` landed on `main` with that number first, so organization
+    // takes the next one, as it does in the daemon protocol.
+    AgentOrganize agent_organize = 94;
     OrcaCreate orca_create = 87;
     OpenAgent open_agent = 31;
     AgentSend agent_send = 32;
@@ -495,6 +499,7 @@ message ViewModel {
   DeviceActions device_actions = 32; // for selected_device on the DEVICE screen
   muster.v1.MulticaStatus multica = 35;
   muster.v1.MulticaPage multica_page = 36;
+  muster.v1.VisionStatus vision = 37;
   repeated Screen navigation_path = 34; // visible root through current screen
 }
 

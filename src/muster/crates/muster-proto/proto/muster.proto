@@ -146,7 +146,13 @@ message Request {
     AgentNativeCreateRequest agent_native_create = 72;
     // Explicit user attestation for the exact original send. Never submits input.
     AgentSendRequest agent_confirm_delivered = 73;
-    AgentOrganizeRequest agent_organize = 74;
+    VisionRequest vision = 74;
+    // Field 74 was this request in the 1.1.20 (110) candidate built from this
+    // branch; `vision` landed on `main` with that number first, so organization
+    // takes the next one. Only the pre-release installs on the authorized Macs
+    // and that OTA build speak the old number, and they are replaced by the
+    // next release.
+    AgentOrganizeRequest agent_organize = 75;
   }
 }
 
@@ -196,6 +202,7 @@ message Response {
     PresenceInfo presence_info = 65;
     MulticaStatus multica = 70;
     MulticaPage multica_page = 71;
+    VisionStatus vision = 74;
   }
 }
 
@@ -1140,4 +1147,33 @@ message AgentNativeCreateRequest {
   string provider = 2;
   string directory = 3;
   string prompt = 4;
+}
+
+// The owner's own vision-capable LLM, which looks at the app window a native
+// send failed in (ADR 0116). Local owner only. The API key is write-only:
+// musterd keeps it in its own login-keychain item and never returns it.
+message VisionRequest {
+  enum Action { GET = 0; SAVE = 1; TEST = 2; CLEAR_KEY = 3; }
+  Action action = 1;
+  bool enabled = 2;
+  string api_format = 3; // openai | anthropic
+  // OpenAI-compatible: the API root with its version path, e.g. /v1.
+  // Anthropic: the host root; requests go to {base_url}/v1/messages.
+  string base_url = 4;
+  string model = 5;
+  // SAVE only; empty keeps the stored key.
+  string api_key = 6;
+}
+message VisionStatus {
+  bool supported = 1;
+  bool enabled = 2;
+  string api_format = 3;
+  string base_url = 4;
+  string model = 5;
+  bool key_stored = 6;
+  // musterd may capture windows (Screen Recording is granted to it).
+  bool screen_recording = 7;
+  // The result of the last SAVE or TEST, or why the feature is unavailable.
+  string message = 8;
+  bool busy = 9; // projected by the app while a request is outstanding
 }

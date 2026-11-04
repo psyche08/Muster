@@ -169,3 +169,16 @@ controller's own process, as the chat and question paths already do. The guard
 is unchanged in what it rejects: a generation that moved between the plan's
 snapshot and a press still stops the operation. Input the owner directs at an
 unrelated app no longer counts as that interference.
+
+## Protocol field renumbering
+
+The 1.1.20 (110) candidate built from this branch carried organization as
+request field 74 and intent field 93. [ADR 0116](0116-failure-screenshot-analysis.md)
+landed on `main` with those two numbers for its own vision request, so
+organization takes the next free number in each oneof — 75 and 94 — and both
+proto files say what the old numbers were and why they moved. Nothing addresses
+these fields by number in Rust or Swift, and the signed Locked Use operation
+keeps its own number, so no lease digest changes. Only the pre-release installs
+on the authorized Macs and the OTA build of 110 speak the old numbers; the next
+release replaces them, and until then an organize request from one of them is
+not decodable as a vision request and is refused rather than misread.

@@ -98,10 +98,12 @@ before requesting a Presence signature; mask/watchdog acknowledgments come from 
 - **musterd Unix socket**: mode 0600, serving only the same user; `Envelope.target` forwarding is available only to local principals.
 - **Controllers**: NativeApp first validates process code signature (`identifier "com.anthropic.claudefordesktop" and anchor apple generic and certificate leaf[subject.OU] = "Q6L2SF6YDW"`) and start time. The iTerm2 controller operates only on sessions referenced by Claude Code registration files (user-owned, not group/other-writable, single-link, ≤ 64 KiB).
 - **App shells**: receive only ViewModels and send only Intents. Hardware-key and presence-key signatures use callbacks; private keys never leave the security chip.
+- **Owner's vision LLM** ([ADR 0116](adr/0116-failure-screenshot-analysis.md)): configured only by the local owner. The endpoint must be HTTPS, or HTTP to loopback, without credentials, query or fragment; redirects are never followed and transport errors are reported by cause, never by text. After an ordinary native send fails on an unlocked Mac, musterd sends the configured service a PNG of the session app's window (which shows whatever the window shows), the app's name and the failure text with the message removed. The bounded reply is advice appended to the failure; it never changes the ledger or the outcome.
 
 ## 7. Storage
 
 - SQLite: identity (SEP blob or software key), roster entries, policies, kv, and ledger.
+- The owner's vision LLM API key: musterd's own login-keychain generic password (service `dev.linsheng.musterd.vision`). It is write-only over the 0600 socket: replies say only whether a key is stored, and an error text that echoes it has it removed. A background read never shows a keychain prompt; Muster never unlocks a keychain.
 - Local storage encryption (deferred by D3): currently relies on OS user-directory permissions; software keys are for development only.
 
 ## 8. Known Gaps

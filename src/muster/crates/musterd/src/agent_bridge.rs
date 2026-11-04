@@ -310,7 +310,7 @@ pub async fn hold_session(
     hold(daemon, app, kind, &format!("{what} {short}")).await
 }
 
-fn session_app(
+pub(crate) fn session_app(
     agent: &AgentService,
     session: &str,
 ) -> Option<(&'static App, muster_agent::desktop_lock::LockKind)> {

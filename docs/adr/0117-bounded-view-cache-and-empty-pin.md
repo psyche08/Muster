@@ -1,10 +1,12 @@
-# ADR 0116: Bound the view cache on disk and drop an empty Pin
+# ADR 0117: Bound the view cache on disk and drop an empty Pin
 
 - Date: 2026-11-04
 - Status: Accepted; source verified, device acceptance pending
 - Related: [ADR 0113](0113-pin-only-session-catalog.md), [ADR 0109](0109-uuid-session-refresh-and-permission-lifetime.md), [ADR 0090](0090-reuse-transcript-heads-between-rescans.md), [ADR 0091](0091-prune-conversation-views-only-where-separate.md)
-- Renumbered from 0114 when [ADR 0114](0114-restore-unlanded-1-0-21-field-fixes.md)
-  landed on `main` first; the decision and its evidence are unchanged.
+- Renumbered from 0114, then from 0116, when
+  [ADR 0114](0114-restore-unlanded-1-0-21-field-fixes.md) and
+  [ADR 0116](0116-failure-screenshot-analysis.md) landed on `main` first; the
+  decision and its evidence are unchanged.
 
 ## Context
 

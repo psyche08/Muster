@@ -1,6 +1,6 @@
-//! Builds the macOS-only console OS shim and notice panel, and (with `sep`)
-//! the Secure Enclave Swift adapter. Other hosts and targets never link these
-//! adapters.
+//! Builds the macOS-only console OS shim, notice panel and vision helpers
+//! (window capture, keychain), and (with `sep`) the Secure Enclave Swift
+//! adapter. Other hosts and targets never link these adapters.
 //! Module caches live under Cargo OUT_DIR, keeping builds sandbox-compatible.
 
 use std::env;
@@ -23,6 +23,7 @@ fn main() {
     for (source, object) in [
         ("LockedUse/Console.m", "console.o"),
         ("Notice/Notice.m", "notice.o"),
+        ("Vision/Vision.m", "vision.o"),
     ] {
         let shim = sources.join(source);
         println!("cargo:rerun-if-changed={}", shim.display());
@@ -56,7 +57,15 @@ fn main() {
     );
     println!("cargo:rustc-link-search=native={}", out.display());
     println!("cargo:rustc-link-lib=static=muster_console");
-    for framework in ["AppKit", "ApplicationServices", "Security", "IOKit"] {
+    for framework in [
+        "AppKit",
+        "ApplicationServices",
+        "Security",
+        "IOKit",
+        "ScreenCaptureKit",
+        "ImageIO",
+        "CoreGraphics",
+    ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
     println!("cargo:rustc-link-lib=bsm");

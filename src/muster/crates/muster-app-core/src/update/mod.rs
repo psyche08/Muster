@@ -43,6 +43,7 @@ mod shell;
 mod terminals;
 #[cfg(test)]
 mod tests;
+mod vision;
 
 pub(crate) use agents::flush_chat_cache;
 use agents::*;
@@ -142,6 +143,7 @@ pub enum Msg {
         message: Vec<u8>,
     },
     Multica(Result<v1::MulticaStatus, Error>),
+    Vision(Result<v1::VisionStatus, Error>),
     MulticaProgress(v1::MulticaInstallation),
     MulticaPage {
         generation: u64,
@@ -337,6 +339,7 @@ pub fn init(state: &mut State, ctx: &Ctx) {
     activate_network(state, ctx);
     load_basics(state, ctx);
     multica::request(state, ctx, v1::MulticaRequest::default());
+    vision::request(state, ctx, v1::VisionRequest::default());
 }
 
 // ------------------------------------------------------------- intents
@@ -373,6 +376,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::BrowserRun(r) => network::intent_browser_run(state, ctx, r),
         It::MulticaBrowse(request) => multica::browse(state, ctx, request),
         It::Multica(request) => multica::request(state, ctx, request),
+        It::Vision(request) => vision::request(state, ctx, request),
         It::Refresh(_) => intent_refresh(state, ctx),
         It::Navigate(n) => intent_navigate(state, ctx, n),
         It::UploadDiagnostics(u) => network::intent_upload_diagnostics(state, ctx, u),
@@ -484,6 +488,9 @@ fn intent_navigate(state: &mut State, ctx: &Ctx, n: app::Navigate) {
         }
         if screen == Screen::Settings || screen == Screen::Multica {
             multica::request(state, ctx, v1::MulticaRequest::default());
+        }
+        if screen == Screen::Settings {
+            vision::request(state, ctx, v1::VisionRequest::default());
         }
         if screen == Screen::DesktopChats {
             open_desktop_chats(state, ctx, String::new());
@@ -642,6 +649,7 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         ),
         Msg::MulticaPage { generation, result } => multica::apply_page(state, generation, result),
         Msg::Multica(result) => multica::apply_result(state, result),
+        Msg::Vision(result) => vision::apply_result(state, result),
         Msg::MulticaProgress(progress) => {
             if state.multica.busy {
                 state.multica.installation = Some(progress);

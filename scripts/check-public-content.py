@@ -12,6 +12,7 @@ from pathlib import Path
 HOME = re.compile(r"/(?:Users|home)/([^/\s\"'<>`\\]+)")
 EMAIL = re.compile(r"(?<![\w/])[\w.+%-]+@([\w.-]+\.[A-Za-z]{2,})")
 SAFE_USERS = {"developer", "demo", "me", "test", "user", "alice", "bob", "example"}
+RESERVED = ("example.com", "example.org", "example.net", "example.invalid")
 RULES = {
     "private-key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"),
     "access-token": re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|mul_[A-Za-z0-9_-]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|sk-(?:ant-api\d+-|proj-)?[A-Za-z0-9_-]{32,}|xox[baprs]-[A-Za-z0-9-]{20,})\b"),
@@ -30,7 +31,11 @@ def findings(text):
             yield text.count("\n", 0, match.start()) + 1, "personal-home-path"
     for match in EMAIL.finditer(text):
         domain = match[1].lower()
-        if (domain in {"example.com", "example.org", "example.net", "example.invalid"}
+        # RFC 2606 reserves these names and everything under them, so a
+        # fixture host such as api.example.com is as synthetic as the name
+        # itself; URL userinfo (user:pass@api.example.com) reads as an address.
+        if (domain in RESERVED
+                or domain.endswith(tuple(f".{name}" for name in RESERVED))
                 or domain.endswith((".example", ".invalid"))
                 or match[0] == "git@github.com"
                 or re.fullmatch(r"icon_\d+x\d+@[12]x\.png", match[0])):

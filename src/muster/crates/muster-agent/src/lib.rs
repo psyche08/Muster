@@ -54,6 +54,7 @@ pub mod transcript;
 pub mod unconfirmed;
 mod usage;
 pub mod viewer;
+pub mod vision;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

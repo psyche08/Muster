@@ -809,6 +809,19 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .agentConfirmDelivered(newValue)}
   }
 
+  public var vision: Muster_V1_VisionRequest {
+    get {
+      if case .vision(let v)? = req {return v}
+      return Muster_V1_VisionRequest()
+    }
+    set {req = .vision(newValue)}
+  }
+
+  /// Field 74 was this request in the 1.1.20 (110) candidate built from this
+  /// branch; `vision` landed on `main` with that number first, so organization
+  /// takes the next one. Only the pre-release installs on the authorized Macs
+  /// and that OTA build speak the old number, and they are replaced by the
+  /// next release.
   public var agentOrganize: Muster_V1_AgentOrganizeRequest {
     get {
       if case .agentOrganize(let v)? = req {return v}
@@ -886,6 +899,12 @@ public nonisolated struct Muster_V1_Request: Sendable {
     case agentNativeCreate(Muster_V1_AgentNativeCreateRequest)
     /// Explicit user attestation for the exact original send. Never submits input.
     case agentConfirmDelivered(Muster_V1_AgentSendRequest)
+    case vision(Muster_V1_VisionRequest)
+    /// Field 74 was this request in the 1.1.20 (110) candidate built from this
+    /// branch; `vision` landed on `main` with that number first, so organization
+    /// takes the next one. Only the pre-release installs on the authorized Macs
+    /// and that OTA build speak the old number, and they are replaced by the
+    /// next release.
     case agentOrganize(Muster_V1_AgentOrganizeRequest)
 
   }
@@ -1151,6 +1170,14 @@ public nonisolated struct Muster_V1_Response: Sendable {
     set {resp = .multicaPage(newValue)}
   }
 
+  public var vision: Muster_V1_VisionStatus {
+    get {
+      if case .vision(let v)? = resp {return v}
+      return Muster_V1_VisionStatus()
+    }
+    set {resp = .vision(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Resp: Equatable, Sendable {
@@ -1182,6 +1209,7 @@ public nonisolated struct Muster_V1_Response: Sendable {
     case presenceInfo(Muster_V1_PresenceInfo)
     case multica(Muster_V1_MulticaStatus)
     case multicaPage(Muster_V1_MulticaPage)
+    case vision(Muster_V1_VisionStatus)
 
   }
 
@@ -4406,6 +4434,108 @@ public nonisolated struct Muster_V1_AgentNativeCreateRequest: Sendable {
   public init() {}
 }
 
+/// The owner's own vision-capable LLM, which looks at the app window a native
+/// send failed in (ADR 0116). Local owner only. The API key is write-only:
+/// musterd keeps it in its own login-keychain item and never returns it.
+public nonisolated struct Muster_V1_VisionRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var action: Muster_V1_VisionRequest.Action = .get
+
+  public var enabled: Bool = false
+
+  /// openai | anthropic
+  public var apiFormat: String = String()
+
+  /// OpenAI-compatible: the API root with its version path, e.g. /v1.
+  /// Anthropic: the host root; requests go to {base_url}/v1/messages.
+  public var baseURL: String = String()
+
+  public var model: String = String()
+
+  /// SAVE only; empty keeps the stored key.
+  public var apiKey: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Action: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case get // = 0
+    case save // = 1
+    case test // = 2
+    case clearKey // = 3
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .get
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .get
+      case 1: self = .save
+      case 2: self = .test
+      case 3: self = .clearKey
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .get: return 0
+      case .save: return 1
+      case .test: return 2
+      case .clearKey: return 3
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_VisionRequest.Action] = [
+      .get,
+      .save,
+      .test,
+      .clearKey,
+    ]
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_VisionStatus: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var supported: Bool = false
+
+  public var enabled: Bool = false
+
+  public var apiFormat: String = String()
+
+  public var baseURL: String = String()
+
+  public var model: String = String()
+
+  public var keyStored: Bool = false
+
+  /// musterd may capture windows (Screen Recording is granted to it).
+  public var screenRecording: Bool = false
+
+  /// The result of the last SAVE or TEST, or why the feature is unavailable.
+  public var message: String = String()
+
+  /// projected by the app while a request is outstanding
+  public var busy: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "muster.v1"
@@ -4703,7 +4833,7 @@ nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{3}agent_organize\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5531,6 +5661,19 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
         }
       }()
       case 74: try {
+        var v: Muster_V1_VisionRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .vision(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .vision(v)
+        }
+      }()
+      case 75: try {
         var v: Muster_V1_AgentOrganizeRequest?
         var hadOneofValue = false
         if let current = self.req {
@@ -5806,9 +5949,13 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
       guard case .agentConfirmDelivered(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 73)
     }()
+    case .vision?: try {
+      guard case .vision(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 74)
+    }()
     case .agentOrganize?: try {
       guard case .agentOrganize(let v)? = self.req else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 74)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 75)
     }()
     case nil: break
     }
@@ -5869,7 +6016,7 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Response"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0\u{2}\u{3}vision\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6241,6 +6388,19 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
           self.resp = .multicaPage(v)
         }
       }()
+      case 74: try {
+        var v: Muster_V1_VisionStatus?
+        var hadOneofValue = false
+        if let current = self.resp {
+          hadOneofValue = true
+          if case .vision(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.resp = .vision(v)
+        }
+      }()
       default: break
       }
     }
@@ -6363,6 +6523,10 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
     case .multicaPage?: try {
       guard case .multicaPage(let v)? = self.resp else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 71)
+    }()
+    case .vision?: try {
+      guard case .vision(let v)? = self.resp else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 74)
     }()
     case nil: break
     }
@@ -12697,6 +12861,135 @@ nonisolated extension Muster_V1_AgentNativeCreateRequest: SwiftProtobuf.Message,
     if lhs.provider != rhs.provider {return false}
     if lhs.directory != rhs.directory {return false}
     if lhs.prompt != rhs.prompt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_VisionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}action\0\u{1}enabled\0\u{3}api_format\0\u{3}base_url\0\u{1}model\0\u{3}api_key\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.apiFormat) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.baseURL) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.apiKey) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.action != .get {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 1)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 2)
+    }
+    if !self.apiFormat.isEmpty {
+      try visitor.visitSingularStringField(value: self.apiFormat, fieldNumber: 3)
+    }
+    if !self.baseURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.baseURL, fieldNumber: 4)
+    }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 5)
+    }
+    if !self.apiKey.isEmpty {
+      try visitor.visitSingularStringField(value: self.apiKey, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_VisionRequest, rhs: Muster_V1_VisionRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.apiFormat != rhs.apiFormat {return false}
+    if lhs.baseURL != rhs.baseURL {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.apiKey != rhs.apiKey {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_VisionRequest.Action: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GET\0\u{1}SAVE\0\u{1}TEST\0\u{1}CLEAR_KEY\0")
+}
+
+nonisolated extension Muster_V1_VisionStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionStatus"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}supported\0\u{1}enabled\0\u{3}api_format\0\u{3}base_url\0\u{1}model\0\u{3}key_stored\0\u{3}screen_recording\0\u{1}message\0\u{1}busy\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.supported) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.apiFormat) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.baseURL) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.keyStored) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.screenRecording) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.busy) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.supported != false {
+      try visitor.visitSingularBoolField(value: self.supported, fieldNumber: 1)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 2)
+    }
+    if !self.apiFormat.isEmpty {
+      try visitor.visitSingularStringField(value: self.apiFormat, fieldNumber: 3)
+    }
+    if !self.baseURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.baseURL, fieldNumber: 4)
+    }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 5)
+    }
+    if self.keyStored != false {
+      try visitor.visitSingularBoolField(value: self.keyStored, fieldNumber: 6)
+    }
+    if self.screenRecording != false {
+      try visitor.visitSingularBoolField(value: self.screenRecording, fieldNumber: 7)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 8)
+    }
+    if self.busy != false {
+      try visitor.visitSingularBoolField(value: self.busy, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_VisionStatus, rhs: Muster_V1_VisionStatus) -> Bool {
+    if lhs.supported != rhs.supported {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.apiFormat != rhs.apiFormat {return false}
+    if lhs.baseURL != rhs.baseURL {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.keyStored != rhs.keyStored {return false}
+    if lhs.screenRecording != rhs.screenRecording {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.busy != rhs.busy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
