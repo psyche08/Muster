@@ -137,9 +137,21 @@ driving iTerm2.
   `tccutil`, System Settings and `muster rpc device_info`. The daemon's
   signing identifier is `dev.linsheng.musterd`; `tccutil` refuses it as a
   bundle identifier and resets it under `dev.linsheng.muster`.
-- **Not verified**: the corrected build is not installed, so the dialog's new
-  wording and the restart-then-clear path were not driven end to end on the
-  device; neither was the Terminals page with the new rule. The evidence
-  above is about the macOS behavior the fix is built on, measured with the
-  previous build. Notarization, publication and the fleet's other Macs are
-  untouched.
+- **The corrected build, installed on the owner's M1Max**: with the grant
+  revoked and the daemon restarted (`screen_recording: "missing"`,
+  Accessibility granted, the plugin ready), the running app showed the
+  dialog with the new message, `/Applications/Muster.app` as the path, and
+  the restart section with its button — the restart being offered while the
+  grant is missing, which is the correction this ADR makes. No terminal item
+  appeared in the dialog.
+- **Not verified**: pressing that button and watching the dialog clear, and
+  the Terminals page under the new rule, were not driven on the device.
+  Notarization, publication and the fleet's other Macs are untouched.
+- **A separate defect, not from this change**: the app's windows are absent
+  from the accessibility tree on this Mac, so the automation used for these
+  checks could not see or drive them, and `app_menu` reported Muster as an
+  agent process with no menu bar. The window itself is healthy —
+  `CGWindowListCopyWindowInfo` shows it on screen at layer 0, the owner sees
+  and uses it, and `screencapture -l` captured the evidence above. This
+  predates the change (it appeared with the first install of ADR 0124's
+  build) and is untouched here.
