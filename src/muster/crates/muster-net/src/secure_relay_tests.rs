@@ -244,9 +244,13 @@ async fn lost_probe_is_retried_inside_original_deadline_without_reconnecting() {
         link.active() == Some(Carrier::Quic)
     })
     .await;
-    let (generation, previous_ack) = {
+    let (generation, previous_ack, previous_rtt) = {
         let state = link.state.lock().unwrap();
-        (state.paths[0].generation, state.paths[0].last_ack)
+        (
+            state.paths[0].generation,
+            state.paths[0].last_ack,
+            state.paths[0].rtt,
+        )
     };
     f.udp.send_replace(false);
     // Uses the same probe path as a phone network-change verification.
@@ -266,6 +270,10 @@ async fn lost_probe_is_retried_inside_original_deadline_without_reconnecting() {
             "no replacement connection"
         );
         assert!(state.paths[0].ready);
+        assert_eq!(
+            state.paths[0].rtt, previous_rtt,
+            "a resent probe's ACK is no RTT sample"
+        );
         assert_eq!(state.paths[1].generation, 0, "no unnecessary TLS fallback");
     }
     mailbox(&link, 9).await;
