@@ -1,7 +1,7 @@
 # Multica 独立工作台、DSH App bridge 与跨设备服务设计
 
 日期：2026-11-05。状态：方案设计，尚未实现或完成设备验收。
-决策记录：[ADR 0140](adr/0140-multica-service-and-dsh-app-bridge-design.md)。
+决策记录：[ADR 0141](adr/0141-multica-service-and-dsh-app-bridge-design.md)。
 
 ## 1. 目标与范围
 

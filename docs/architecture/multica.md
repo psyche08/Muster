@@ -36,7 +36,7 @@ pull, stop or rollback**: those remain manual operator steps documented in
 
 ### Proposed independent service and DSH App bridge
 
-[ADR 0140](../adr/0140-multica-service-and-dsh-app-bridge-design.md) and the
+[ADR 0141](../adr/0141-multica-service-and-dsh-app-bridge-design.md) and the
 [Multica service design](../MULTICA_SERVICE_DESIGN.md) propose task-owned
 sessions outside Agents, a bridge to the existing DSH desktop App, and a
 default-off remote Multica service over PeerLink. Shared Rust owns binding,

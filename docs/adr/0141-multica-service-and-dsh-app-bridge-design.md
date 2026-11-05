@@ -1,4 +1,4 @@
-# ADR 0140: Design a separate Multica service and a DSH App runtime bridge
+# ADR 0141: Design a separate Multica service and a DSH App runtime bridge
 
 - Date: 2026-11-05
 - Status: Proposed; design only, no runtime implementation or device acceptance
