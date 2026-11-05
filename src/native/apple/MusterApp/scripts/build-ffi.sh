@@ -2,8 +2,9 @@
 # Builds libmuster_ffi.a for the Apple targets the apps link (run on a Mac).
 #   scripts/build-ffi.sh            # macOS arm64, iOS arm64, iOS simulator arm64
 #   scripts/build-ffi.sh --debug    # unoptimized
-# Output: src/muster/target/<triple>/{release,debug}/libmuster_ffi.a, which
-# project.yml points OTHER_LDFLAGS at per SDK.
+# Output: <target dir>/<triple>/{release,debug}/libmuster_ffi.a, which
+# project.yml points OTHER_LDFLAGS at per SDK. The target dir is
+# $CARGO_TARGET_DIR when set, else src/muster/target (ADR 0140).
 #
 # The iOS targets need rustup's toolchain (rust-std for iOS); a Homebrew
 # `cargo` earlier on PATH fails with "can't find crate for `core`". The
@@ -30,5 +31,5 @@ for target in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
   rustup target add "$target" >/dev/null 2>&1 || true
   # shellcheck disable=SC2086
   cargo build $flag -p muster-ffi --target "$target"
-  ls -la "target/$target/$profile/libmuster_ffi.a"
+  ls -la "${CARGO_TARGET_DIR:-target}/$target/$profile/libmuster_ffi.a"
 done

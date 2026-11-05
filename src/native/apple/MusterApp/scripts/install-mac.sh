@@ -15,6 +15,8 @@
 #   cd src/muster && cargo build --release -p muster-platform --bin muster-panel
 #                                                              # Helpers/muster-panel
 #   cd addons/l4forwarder && cargo build --release --locked
+# all in one shell: with CARGO_TARGET_DIR set they land there and the build
+# reads them from there, else from each workspace's target/ (ADR 0140).
 # and MUSTER_MAC_PROFILE set to the installed provisioning profile's name, or
 # xcodebuild refuses the Presence entitlement ("requires a provisioning
 # profile"); see docs/PRESENCE_ENROLLMENT.md. The Developer ID certificate has

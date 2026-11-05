@@ -48,6 +48,12 @@ xcodegen generate            # → Muster.xcodeproj: targets MusterMac and Muste
 open Muster.xcodeproj
 ```
 
+The project links and bundles cargo's outputs from `$CARGO_TARGET_DIR` when
+`xcodebuild` runs with it set, and from each workspace's own `target/`
+otherwise (Xcode opened from the Dock has no such variable). With it set,
+`addons/l4forwarder` builds into the same directory as `src/muster`
+([ADR 0140](../../../../docs/adr/0140-resolve-cargo-output-through-cargo-target-dir.md)).
+
 Both targets carry the bundle id `dev.linsheng.muster` (one product on
 both platforms; it is also the APNs topic the relay's push hook uses).
 Signing: set your team on both targets; the iOS target needs the
@@ -57,7 +63,7 @@ the relay's push hook).
 Development without Xcode (macOS or Linux):
 
 ```sh
-MUSTER_FFI_LIB=$PWD/../../../muster/target/debug/libmuster_ffi.a swift test
+MUSTER_FFI_LIB=${CARGO_TARGET_DIR:-$PWD/../../../muster/target}/debug/libmuster_ffi.a swift test
 swift run MusterDev            # macOS only; expects musterd's socket in ~/Library/Application Support/Muster
 ```
 
@@ -81,10 +87,10 @@ registers on first launch (SMAppService; approve it under System Settings
 
 | | |
 |---|---|
-| `Muster.app/Contents/MacOS/musterd` | the daemon (copied by the MusterMac post-build script from `src/muster/target/release/musterd`; build it with `cargo build --release -p musterd --features sep`) |
+| `Muster.app/Contents/MacOS/musterd` | the daemon (copied by the MusterMac post-build script from cargo's `release/musterd`, under `$CARGO_TARGET_DIR` or `src/muster/target`; build it with `cargo build --release -p musterd --features sep`) |
 | `Muster.app/Contents/Helpers/muster` | the command line, same origin; `alias muster=/Applications/Muster.app/Contents/Helpers/muster` (not next to the app executable: `muster` and `Muster` collide on a case-insensitive volume). Every Muster process on the Mac runs from the installed bundle, none from a build tree |
 | `Muster.app/Contents/Helpers/muster-panel` | the AppKit panel helper: the idle-compaction banner ([ADR 0087](../../../../docs/adr/0087-idle-compaction-on-a-locked-or-busy-mac.md)) and the Locked Use console cover, each one borderless and non-activating, on a main thread the daemon has none of. Not in `Contents/MacOS`: an AppKit process there takes `Muster.app` as its main bundle and registers with Launch Services under the app's own bundle id, which hid the app's windows from the Accessibility API ([ADR 0128](../../../../docs/adr/0128-the-panel-helper-keeps-its-own-identity.md)). Build it with `cargo build --release -p muster-platform --bin muster-panel` |
-| `Muster.app/Contents/Helpers/l4forwarder` | the TCP/UDP forwarder addon ([ADR 0107](../../../../docs/adr/0107-l4forwarder-in-muster-app.md)), copied from `addons/l4forwarder/target/release/l4forwarder`; build it with `(cd addons/l4forwarder && cargo build --release --locked)`. musterd runs it while `l4forwarder.json` is in the state directory |
+| `Muster.app/Contents/Helpers/l4forwarder` | the TCP/UDP forwarder addon ([ADR 0107](../../../../docs/adr/0107-l4forwarder-in-muster-app.md)), copied from `release/l4forwarder` under `$CARGO_TARGET_DIR` or `addons/l4forwarder/target`; build it with `(cd addons/l4forwarder && cargo build --release --locked)`. musterd runs it while `l4forwarder.json` is in the state directory |
 | `Muster.app/Contents/Library/LaunchAgents/dev.linsheng.musterd.plist` | its LaunchAgent (`Apps/macOS/dev.linsheng.musterd.plist`) |
 | `~/Library/Application Support/Muster/` | store (`musterd.db`), socket (`musterd.sock`), the app's own state, and `l4forwarder.json` when forwarding is configured |
 | `~/Library/Logs/Muster/musterd.log` | the daemon's log (`musterd --log`); the addon's is `l4forwarder.log` beside it |

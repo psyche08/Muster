@@ -237,10 +237,10 @@ records a specific decision and does not revive code on its delete list.
 | [0136](0136-settle-relay-carrier-switches.md) | Accepted; installed in 1.1.22 on three Macs, switch counts pending | Settle relay carrier switches |
 | [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; installed in 1.1.22, the log file verified on three Macs | Keep the desktop app's log in a file |
 | [0138](0138-paired-release-1-1-22.md) | Accepted; published and installed on three Macs | Publish Apple 1.1.22 (112) and install it on the three Macs |
+| [0139](0139-cache-macos-transcript-row-measurements.md) | Accepted; installed acceptance pending | Reuse unchanged macOS transcript row measurements |
+| [0140](0140-resolve-cargo-output-through-cargo-target-dir.md) | Accepted; macOS, iOS and Android builds verified in both modes | Resolve Cargo output through CARGO_TARGET_DIR |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
 superseding decisions get new numbers and bidirectional links.
-
-| [0139](0139-cache-macos-transcript-row-measurements.md) | Accepted; installed acceptance pending | Reuse unchanged macOS transcript row measurements |

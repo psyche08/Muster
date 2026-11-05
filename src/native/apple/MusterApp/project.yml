@@ -24,6 +24,14 @@ settings:
     MARKETING_VERSION: "1.1.22"
     CURRENT_PROJECT_VERSION: "112"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    # Where cargo left the Rust outputs this project links and bundles: the
+    # caller's CARGO_TARGET_DIR (xcodebuild reads its environment as the
+    # lowest build-setting level), else each workspace's own target/. Xcode
+    # started from the Dock has no CARGO_TARGET_DIR and reads the in-repo
+    # trees, as before. With it set, the l4forwarder workspace writes into
+    # the same directory as src/muster (ADR 0140).
+    MUSTER_CARGO_TARGET_DIR: "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../muster/target)"
+    L4FORWARDER_CARGO_TARGET_DIR: "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../../addons/l4forwarder/target)"
 targets:
   MusterMac:
     type: application
@@ -39,7 +47,7 @@ targets:
         # The bundling script reads the cargo build tree.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         # The archive by path: cargo also leaves a dylib next to it.
-        OTHER_LDFLAGS: "$(SRCROOT)/../../../muster/target/aarch64-apple-darwin/release/libmuster_ffi.a"
+        OTHER_LDFLAGS: "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-darwin/release/libmuster_ffi.a"
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
         PROVISIONING_PROFILE_SPECIFIER: "$(MUSTER_MAC_PROFILE)"
@@ -75,8 +83,9 @@ targets:
         script: |
           set -e
           # Every Muster process on a Mac comes from this bundle: the daemon
-          # (launchd) and the command line, both from src/muster/target/release.
-          BIN="$SRCROOT/../../../muster/target/release"
+          # (launchd) and the command line, both from cargo's release output
+          # ($CARGO_TARGET_DIR, else src/muster/target).
+          BIN="$MUSTER_CARGO_TARGET_DIR/release"
           if [ ! -x "$BIN/musterd" ]; then echo "warning: $BIN/musterd missing; build it with cargo (see README)"; exit 0; fi
           install -m 0755 "$BIN/musterd" "$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd"
           install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
@@ -105,7 +114,7 @@ targets:
           codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           # Addons ship as helpers too; musterd runs l4forwarder while
           # l4forwarder.json is in its state directory (ADR 0107).
-          ADDON="$SRCROOT/../../../../addons/l4forwarder/target/release/l4forwarder"
+          ADDON="$L4FORWARDER_CARGO_TARGET_DIR/release/l4forwarder"
           [ -x "$ADDON" ] || { echo "error: $ADDON missing; (cd addons/l4forwarder && cargo build --release --locked)"; exit 1; }
           install -m 0755 "$ADDON" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder"
           codesign --force --options runtime --identifier dev.linsheng.muster.l4forwarder --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder"
@@ -127,11 +136,11 @@ targets:
           install -m 0644 "$PLUGIN/install.py" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse/install.py"
         inputFiles:
           - $(SRCROOT)/../../../../docs/third-party/orca-MIT.txt
-          - $(SRCROOT)/../../../muster/target/release/musterd
-          - $(SRCROOT)/../../../muster/target/release/muster
-          - $(SRCROOT)/../../../muster/target/release/muster-panel
-          - $(SRCROOT)/../../../muster/target/release/muster-browser-host
-          - $(SRCROOT)/../../../../addons/l4forwarder/target/release/l4forwarder
+          - $(MUSTER_CARGO_TARGET_DIR)/release/musterd
+          - $(MUSTER_CARGO_TARGET_DIR)/release/muster
+          - $(MUSTER_CARGO_TARGET_DIR)/release/muster-panel
+          - $(MUSTER_CARGO_TARGET_DIR)/release/muster-browser-host
+          - $(L4FORWARDER_CARGO_TARGET_DIR)/release/l4forwarder
           - $(SRCROOT)/../../../browser/agenthalo-extension/manifest.json
           - $(SRCROOT)/../../../browser/agenthalo-extension/sw.js
           - $(SRCROOT)/Apps/macOS/musterd.entitlements
@@ -173,8 +182,8 @@ targets:
         # #A0644B in light mode, 4.75:1 with white either way; the icon's own
         # #B5775D in dark.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        "OTHER_LDFLAGS[sdk=iphoneos*]": "$(SRCROOT)/../../../muster/target/aarch64-apple-ios/release/libmuster_ffi.a"
-        "OTHER_LDFLAGS[sdk=iphonesimulator*]": "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/release/libmuster_ffi.a"
+        "OTHER_LDFLAGS[sdk=iphoneos*]": "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios/release/libmuster_ffi.a"
+        "OTHER_LDFLAGS[sdk=iphonesimulator*]": "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/release/libmuster_ffi.a"
     info:
       path: Apps/iOS/Info.plist
       properties:
@@ -211,7 +220,7 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Muster.app/Muster"
         BUNDLE_LOADER: "$(TEST_HOST)"
         SUPPORTED_PLATFORMS: iphonesimulator
-        OTHER_LDFLAGS: "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/debug/libmuster_ffi.a"
+        OTHER_LDFLAGS: "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/debug/libmuster_ffi.a"
 
 schemes:
   MusterMobileTests:
