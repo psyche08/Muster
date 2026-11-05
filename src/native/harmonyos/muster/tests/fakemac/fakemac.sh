@@ -19,7 +19,7 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../../../../.." && pwd)
-bin="$repo/src/muster/target/debug"
+bin="${CARGO_TARGET_DIR:-$repo/src/muster/target}/debug"
 dir="${FAKEMAC_DIR:-$HOME/.muster-fakemac}"
 case "${1:-}" in
   run)

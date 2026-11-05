@@ -8,4 +8,6 @@ for target in aarch64-linux-android x86_64-linux-android; do
   rustup target add "$target" >/dev/null 2>&1 || true
 done
 cargo ndk -t arm64-v8a -t x86_64 build --release -p muster-ffi
-ls -la target/aarch64-linux-android/release/libmuster_ffi.a target/x86_64-linux-android/release/libmuster_ffi.a
+# core/build.gradle.kts hands the same directory to CMake (ADR 0140).
+out="${CARGO_TARGET_DIR:-target}"
+ls -la "$out/aarch64-linux-android/release/libmuster_ffi.a" "$out/x86_64-linux-android/release/libmuster_ffi.a"
