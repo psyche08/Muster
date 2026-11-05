@@ -8,7 +8,9 @@
   (the daemon's grants are filed under the app bundle, which is what makes its
   identity worth keeping), [ADR 0006](0006-desktop-presence-and-console-routing.md)
   (the bundled daemon's stable identity),
-  [ADR 0116](0116-failure-screenshot-analysis.md) (what reads the app's windows)
+  [ADR 0116](0116-failure-screenshot-analysis.md) (what reads the app's windows),
+  [ADR 0128](0128-the-panel-helper-keeps-its-own-identity.md) (the other half
+  of this bug: the AppKit panel helpers, proposed separately)
 
 ## Context
 
@@ -195,7 +197,13 @@ layout change it wants does not belong in the same change as a deletion.
   helpers already in `Contents/Helpers`, which ends the bundle association for
   them without touching the daemon's: they draw a borderless panel and need
   none of the daemon's TCC grants. That is a bundle layout and build change,
-  it is independent of this deletion, and it is left to its own record.
+  it is independent of this deletion, and it is left to its own record:
+  [ADR 0128](0128-the-panel-helper-keeps-its-own-identity.md), proposed in
+  PR #132, which moves both panel bodies into a `muster-panel` helper under
+  `Contents/Helpers`. Until that lands the window described here is open, and
+  the `musterd --muster-notice` subcommand this record measures still exists;
+  afterwards it does not, and the measurement above describes the state before
+  it.
 - Screen Recording and terminal authorization are untouched. Because the
   executable does not move, the daemon's grants stay filed under the app
   bundle, so ADR 0125 continues to hold as written.
