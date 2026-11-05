@@ -230,7 +230,7 @@ records a specific decision and does not revive code on its delete list.
 | [0129](0129-ask-ax-for-windows-by-name.md) | Accepted; premise withdrawn by 0131 | Ask the Accessibility API for windows by name, not by walking children |
 | [0130](0130-mount-the-multica-data-image-before-the-container-starts.md) | Accepted; source and tests verified, installation and reboot acceptance pending | Mount the Multica data image before the container starts |
 | [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
-| [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance pending | Restore the daemon's background registration, and the Dock tile goes |
+| [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance passed | Restore the daemon's background registration, and the Dock tile goes |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

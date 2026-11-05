@@ -1,8 +1,8 @@
 # ADR 0132: Restore the daemon's background registration, and the Dock tile goes
 
 - Date: 2026-11-05
-- Status: Accepted; source verified, timeline measured on the owner's Mac.
-  Install acceptance pending — see Verification.
+- Status: Accepted; source verified, timeline measured and **install
+  acceptance passed** on the owner's Mac — see Verification.
 - Restores the code ADR 0127 removed, on ADR 0123's reasoning.
 - Related: [ADR 0123](0123-the-daemon-leaves-the-dock.md) (the decision this
   brings back), [ADR 0127](0127-the-daemon-stays-out-of-launch-services.md)
@@ -122,8 +122,20 @@ identity. Only `launchctl kickstart -k` on the real job reproduces it.
 `cargo fmt --all --check`, `scripts/check-layers.py`,
 `check-public-content.py`, `check-adr.sh origin/main`.
 
-Install acceptance, not yet run: build and install from this branch, restart
-the daemon, and confirm `lsappinfo` reports the daemon `BackgroundOnly` and the
-Dock's accessibility tree holds one `AXDockItem` for Muster rather than two.
-Until that runs, this record claims the reasoning and the timeline, not the
-outcome.
+Install acceptance, run 2026-11-05 on the owner's Mac, built and installed
+from main at `a8c69ca` — the daemon reports that commit, bundle 1.1.21 (111):
+
+| | before | after |
+| --- | --- | --- |
+| records for `dev.linsheng.muster` | 2 | 2 |
+| daemon's type | `Foreground` | **`BackgroundOnly`** |
+| `AXDockItem` entries titled "Muster" | **2** | **1** |
+
+The one remaining Dock item is the app's own. The duplicate Launch Services
+record is still there, as this decision says it would be — it is the type that
+changed, and with it the tile. The daemon serves RPCs normally afterwards and
+`l4forwarder` is still supervised.
+
+So the outcome is now claimed as well as the reasoning. What is still not
+claimed is the mechanism: which startup step creates the record remains
+unknown, and the candidates above are untested rather than excluded.
