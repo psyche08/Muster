@@ -1,7 +1,7 @@
 # ADR 0135: Give session watches the forwarding budget and report why they ended
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, install acceptance pending
+- Status: Accepted; installed in 1.1.22 on three Macs, runtime acceptance pending
 - Related: [architecture/network.md](../architecture/network.md),
   [ADR 0114](0114-restore-unlanded-1-0-21-field-fixes.md) (direct-path
   cooldown on the same links)
@@ -117,7 +117,9 @@ This is a property of the code. The logs do not show which failures it caused.
     `a_chat_names_its_offline_mac_and_rewatches_when_it_returns`.
   - Existing chat, watch and proxy tests pass.
   - Clippy passes with `-D warnings`.
-- **Not done:** building, signing, installation, and runtime acceptance. The
+- **Installed, 2026-11-05.** Shipped in Apple 1.1.22 (112) on Mac-A, Mac-B and
+  Mac-C ([ADR 0138](0138-paired-release-1-1-22.md)).
+- **Not done:** runtime acceptance. The
   acceptance run is: on a desktop client, open a session hosted on a Mac whose
   daemon restarts; the banner should name that Mac, and the conversation should
   load as soon as the Mac is back.

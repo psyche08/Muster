@@ -1,7 +1,7 @@
 # ADR 0137: Keep the desktop app's log in a file
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, install acceptance pending
+- Status: Accepted; installed in 1.1.22, the log file verified on three Macs
 - Related: [ADR 0135](0135-give-session-watches-the-forwarding-budget.md)
   (the investigation that lacked this log),
   [src/native/apple/MusterApp/README.md](../../src/native/apple/MusterApp/README.md)
@@ -78,8 +78,11 @@ stays in the user's own Library, as `musterd.log` does.
     (`swiftc -typecheck -I Sources/CMuster`), and fails to when the new
     function's name is misspelt. A full `swift build` of the package was not
     run: fetching its GitHub dependencies broke off mid-transfer.
-- **Not done:** an Xcode build of the macOS app, signing, installation, and
-  runtime acceptance. After installing, open the app from the Dock and check
-  that `~/Library/Logs/Muster/app.log` starts with the marker line. With a
+- **Installed, 2026-11-05.** Shipped in Apple 1.1.22 (112)
+  ([ADR 0138](0138-paired-release-1-1-22.md)). On Mac-A, Mac-B and Mac-C,
+  `~/Library/Logs/Muster/app.log` starts with `app log opened, pid N` for the
+  app that the installer opened through Launch Services, where stderr is not
+  kept.
+- **Not done:** the chat-failure line. With a
   member's daemon stopped, a chat for one of its sessions should add a
   `session live updates interrupted` line.

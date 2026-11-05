@@ -232,11 +232,11 @@ records a specific decision and does not revive code on its delete list.
 | [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
 | [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance passed | Restore the daemon's background registration, and the Dock tile goes |
 | [0133](0133-mount-the-multica-data-image-as-the-user.md) | Accepted; source and tests verified, install acceptance passed | Mount the Multica data image as the user, not through diskutil |
-| [0134](0134-activate-claude-next-and-back-by-keyboard-focus.md) | Accepted; source and tests verified, live card acceptance pending | Activate Claude's Next and Back through keyboard focus |
-| [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; source and tests verified, install acceptance pending | Give session watches the forwarding budget and report why they ended |
-| [0136](0136-settle-relay-carrier-switches.md) | Accepted; source and tests verified, install acceptance pending | Settle relay carrier switches |
-| [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; source and tests verified, install acceptance pending | Keep the desktop app's log in a file |
-| [0138](0138-paired-release-1-1-22.md) | Accepted; release pending | Publish Apple 1.1.22 (112) and install it on the three Macs |
+| [0134](0134-activate-claude-next-and-back-by-keyboard-focus.md) | Accepted; installed in 1.1.22 on three Macs, live card acceptance pending | Activate Claude's Next and Back through keyboard focus |
+| [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; installed in 1.1.22 on three Macs, runtime acceptance pending | Give session watches the forwarding budget and report why they ended |
+| [0136](0136-settle-relay-carrier-switches.md) | Accepted; installed in 1.1.22 on three Macs, switch counts pending | Settle relay carrier switches |
+| [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; installed in 1.1.22, the log file verified on three Macs | Keep the desktop app's log in a file |
+| [0138](0138-paired-release-1-1-22.md) | Accepted; published and installed on three Macs | Publish Apple 1.1.22 (112) and install it on the three Macs |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

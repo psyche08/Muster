@@ -1,7 +1,7 @@
 # ADR 0136: Settle relay carrier switches
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, install acceptance pending
+- Status: Accepted; installed in 1.1.22 on three Macs, switch counts pending
 - Related: [architecture/network.md](../architecture/network.md) (dual
   carriers, "hysteresis"), [PROTOCOL.md](../PROTOCOL.md) (probe rules),
   [ADR 0135](0135-give-session-watches-the-forwarding-budget.md) (the log
@@ -114,7 +114,11 @@ apply to them too.
   - The integration test `lost_probe_is_retried_inside_original_deadline_without_reconnecting`
     also asserts that the resent probe's reply left the RTT unchanged.
   - All `muster-net` secure-relay tests pass.
-- **Not done:** building, signing and installation. For install acceptance,
-  read three days of the installed daemon's log. Most switch lines should then
+- **Installed, 2026-11-05.** Shipped in Apple 1.1.22 (112) on Mac-A, Mac-B and
+  Mac-C ([ADR 0138](0138-paired-release-1-1-22.md)). The installed daemons'
+  switch lines carry both RTTs, for example `relay carrier None -> Some(Quic)
+  (rtt quic=5ms tls=-)`.
+- **Not done:** the switch counts. Read three days of the installed daemon's
+  log. Most switch lines should then
   follow a relay error, and the RTTs on the remaining lines should show which
   rule moved them.
