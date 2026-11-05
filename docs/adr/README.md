@@ -236,6 +236,7 @@ records a specific decision and does not revive code on its delete list.
 | [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; source and tests verified, install acceptance pending | Give session watches the forwarding budget and report why they ended |
 | [0136](0136-settle-relay-carrier-switches.md) | Accepted; source and tests verified, install acceptance pending | Settle relay carrier switches |
 | [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; source and tests verified, install acceptance pending | Keep the desktop app's log in a file |
+| [0138](0138-paired-release-1-1-22.md) | Accepted; release pending | Publish Apple 1.1.22 (112) and install it on the three Macs |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
