@@ -1,8 +1,8 @@
 # ADR 0133: Mount the Multica data image as the user, not through diskutil
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, installation and runtime
-  acceptance pending
+- Status: Accepted; source and tests verified, install acceptance passed on
+  one Mac from the branch build
 - Related: [ADR 0130](0130-mount-the-multica-data-image-before-the-container-starts.md)
   (this record replaces its mount step and leaves the rest of it in place)
 
@@ -93,6 +93,17 @@ were:
   - On the real image, the next keep-alive pass found the root mounted,
     skipped the mount, started the container, and brought the Multica daemon
     up.
-- Pending: installing a build with this change, then repeating the
-  stop, unmount and detach sequence and turning keep-alive back on, to show
-  musterd mounting the image itself.
+- Install acceptance, passed. A build of this branch was installed as 1.1.21
+  (111) on the Mac where ADR 0130 failed.
+  - Through a request: with keep-alive off, the container was stopped, the
+    volume unmounted with `umount`, and the image detached. An empty mount
+    point was left behind. Turning keep-alive on returned within 2 seconds.
+    By then the image was mounted with `nobrowse` and `noowners` as the user,
+    the container was running, and the daemon reported running.
+  - Through keep-alive alone: with keep-alive on, the same teardown was done
+    and no request was sent. The next pass mounted the image and started the
+    container within 8 seconds.
+  - Neither run showed a password prompt. The host and the guest listed the
+    same entries in the data root.
+- Pending: reinstalling from main after merge. A real reboot has not been
+  tested; the keep-alive-alone run is its closest stand-in.
