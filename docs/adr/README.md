@@ -224,6 +224,7 @@ records a specific decision and does not revive code on its delete list.
 | [0123](0123-the-daemon-leaves-the-dock.md) | Superseded by 0127 | The daemon leaves the Dock instead of moving out of the bundle |
 | [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 | [0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md) | Accepted; source and tests verified, device evidence recorded | Screen Recording is the bundle's grant, and only a daemon restart takes it |
+| [0126](0126-multica-bridge-follows-the-container-gateway.md) | Accepted; source and tests verified, installation and runtime pending | The Multica runtime bridge follows the container gateway |
 | [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; premise corrected by 0131 | The daemon stays out of Launch Services instead of leaving the Dock |
 | [0128](0128-the-panel-helper-keeps-its-own-identity.md) | Accepted; source verified | The panel helper keeps its own identity |
 | [0129](0129-ask-ax-for-windows-by-name.md) | Accepted; premise withdrawn by 0131 | Ask the Accessibility API for windows by name, not by walking children |
