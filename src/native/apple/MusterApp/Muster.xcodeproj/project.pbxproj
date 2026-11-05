@@ -306,11 +306,11 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/../../../../docs/third-party/orca-MIT.txt",
-				"$(SRCROOT)/../../../muster/target/release/musterd",
-				"$(SRCROOT)/../../../muster/target/release/muster",
-				"$(SRCROOT)/../../../muster/target/release/muster-panel",
-				"$(SRCROOT)/../../../muster/target/release/muster-browser-host",
-				"$(SRCROOT)/../../../../addons/l4forwarder/target/release/l4forwarder",
+				"$(MUSTER_CARGO_TARGET_DIR)/release/musterd",
+				"$(MUSTER_CARGO_TARGET_DIR)/release/muster",
+				"$(MUSTER_CARGO_TARGET_DIR)/release/muster-panel",
+				"$(MUSTER_CARGO_TARGET_DIR)/release/muster-browser-host",
+				"$(L4FORWARDER_CARGO_TARGET_DIR)/release/l4forwarder",
 				"$(SRCROOT)/../../../browser/agenthalo-extension/manifest.json",
 				"$(SRCROOT)/../../../browser/agenthalo-extension/sw.js",
 				"$(SRCROOT)/Apps/macOS/musterd.entitlements",
@@ -341,7 +341,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n# Every Muster process on a Mac comes from this bundle: the daemon\n# (launchd) and the command line, both from src/muster/target/release.\nBIN=\"$SRCROOT/../../../muster/target/release\"\nif [ ! -x \"$BIN/musterd\" ]; then echo \"warning: $BIN/musterd missing; build it with cargo (see README)\"; exit 0; fi\ninstall -m 0755 \"$BIN/musterd\" \"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents\"\ninstall -m 0644 \"$SRCROOT/Apps/macOS/dev.linsheng.musterd.plist\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents/\"\n# Same identity as the app: launchd's requirement for a bundled\n# LaunchAgent program is derived from the app's signature.\ncodesign --force --options runtime --entitlements \"$SRCROOT/Apps/macOS/musterd.entitlements\" --identifier dev.linsheng.musterd --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd\"\n# The command line goes under Contents/Helpers: next to the app\n# executable, `muster` and `Muster` are one file on a\n# case-insensitive volume.\n[ -x \"$BIN/muster\" ] || { echo \"error: $BIN/muster missing; cargo build --release -p muster-cli\"; exit 1; }\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\ninstall -m 0755 \"$BIN/muster\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.cli --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster\"\n# The AppKit panel helper draws the idle-compaction banner (ADR 0087)\n# and the Locked Use console cover. It belongs here and not in\n# Contents/MacOS: an AppKit process there takes Muster.app as its\n# main bundle and registers with Launch Services under the app's own\n# bundle id, which hides the app from the Accessibility API\n# (ADR 0128, ADR 0127).\n[ -x \"$BIN/muster-panel\" ] || { echo \"error: $BIN/muster-panel missing; cargo build --release -p muster-platform --bin muster-panel\"; exit 1; }\ninstall -m 0755 \"$BIN/muster-panel\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.panel --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel\"\n[ -x \"$BIN/muster-browser-host\" ] || { echo \"error: build muster-browser first\"; exit 1; }\ninstall -m 0755 \"$BIN/muster-browser-host\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.browser --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host\"\n# Addons ship as helpers too; musterd runs l4forwarder while\n# l4forwarder.json is in its state directory (ADR 0107).\nADDON=\"$SRCROOT/../../../../addons/l4forwarder/target/release/l4forwarder\"\n[ -x \"$ADDON\" ] || { echo \"error: $ADDON missing; (cd addons/l4forwarder && cargo build --release --locked)\"; exit 1; }\ninstall -m 0755 \"$ADDON\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.l4forwarder --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty\"\ninstall -m 0644 \"$SRCROOT/../../../../docs/third-party/orca-MIT.txt\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Orca-LICENSE.txt\"\nEXT=\"$SRCROOT/../../../browser/agenthalo-extension\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser\"\ninstall -m 0644 \"$EXT/manifest.json\" \"$EXT/sw.js\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser/\"\nHELPER=\"$SRCROOT/../NetHelper\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons\"\nxcrun swiftc -O -o \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper\" \"$HELPER/main.swift\" \"$HELPER/LockedUseInstall.swift\"\ncodesign --force --options runtime --timestamp --identifier dev.linsheng.muster.helper --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper\"\ninstall -m 0644 \"$SRCROOT/Apps/macOS/dev.linsheng.muster.helper.plist\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons/\"\n# Locked Use is a standard part of every desktop distribution.\n# musterd requests installation from the SMAppService root helper.\nPLUGIN=\"$SRCROOT/../MusterLockedUse\"\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$PLUGIN/build.sh\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/PlugIns/MusterLockedUse.bundle\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse\"\ninstall -m 0644 \"$PLUGIN/install.py\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse/install.py\"\n";
+			shellScript = "set -e\n# Every Muster process on a Mac comes from this bundle: the daemon\n# (launchd) and the command line, both from cargo's release output\n# ($CARGO_TARGET_DIR, else src/muster/target).\nBIN=\"$MUSTER_CARGO_TARGET_DIR/release\"\nif [ ! -x \"$BIN/musterd\" ]; then echo \"warning: $BIN/musterd missing; build it with cargo (see README)\"; exit 0; fi\ninstall -m 0755 \"$BIN/musterd\" \"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents\"\ninstall -m 0644 \"$SRCROOT/Apps/macOS/dev.linsheng.musterd.plist\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents/\"\n# Same identity as the app: launchd's requirement for a bundled\n# LaunchAgent program is derived from the app's signature.\ncodesign --force --options runtime --entitlements \"$SRCROOT/Apps/macOS/musterd.entitlements\" --identifier dev.linsheng.musterd --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd\"\n# The command line goes under Contents/Helpers: next to the app\n# executable, `muster` and `Muster` are one file on a\n# case-insensitive volume.\n[ -x \"$BIN/muster\" ] || { echo \"error: $BIN/muster missing; cargo build --release -p muster-cli\"; exit 1; }\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\ninstall -m 0755 \"$BIN/muster\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.cli --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster\"\n# The AppKit panel helper draws the idle-compaction banner (ADR 0087)\n# and the Locked Use console cover. It belongs here and not in\n# Contents/MacOS: an AppKit process there takes Muster.app as its\n# main bundle and registers with Launch Services under the app's own\n# bundle id, which hides the app from the Accessibility API\n# (ADR 0128, ADR 0127).\n[ -x \"$BIN/muster-panel\" ] || { echo \"error: $BIN/muster-panel missing; cargo build --release -p muster-platform --bin muster-panel\"; exit 1; }\ninstall -m 0755 \"$BIN/muster-panel\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.panel --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel\"\n[ -x \"$BIN/muster-browser-host\" ] || { echo \"error: build muster-browser first\"; exit 1; }\ninstall -m 0755 \"$BIN/muster-browser-host\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.browser --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host\"\n# Addons ship as helpers too; musterd runs l4forwarder while\n# l4forwarder.json is in its state directory (ADR 0107).\nADDON=\"$L4FORWARDER_CARGO_TARGET_DIR/release/l4forwarder\"\n[ -x \"$ADDON\" ] || { echo \"error: $ADDON missing; (cd addons/l4forwarder && cargo build --release --locked)\"; exit 1; }\ninstall -m 0755 \"$ADDON\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder\"\ncodesign --force --options runtime --identifier dev.linsheng.muster.l4forwarder --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/l4forwarder\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty\"\ninstall -m 0644 \"$SRCROOT/../../../../docs/third-party/orca-MIT.txt\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Orca-LICENSE.txt\"\nEXT=\"$SRCROOT/../../../browser/agenthalo-extension\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser\"\ninstall -m 0644 \"$EXT/manifest.json\" \"$EXT/sw.js\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/AgentHaloBrowser/\"\nHELPER=\"$SRCROOT/../NetHelper\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons\"\nxcrun swiftc -O -o \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper\" \"$HELPER/main.swift\" \"$HELPER/LockedUseInstall.swift\"\ncodesign --force --options runtime --timestamp --identifier dev.linsheng.muster.helper --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchServices/muster-helper\"\ninstall -m 0644 \"$SRCROOT/Apps/macOS/dev.linsheng.muster.helper.plist\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons/\"\n# Locked Use is a standard part of every desktop distribution.\n# musterd requests installation from the SMAppService root helper.\nPLUGIN=\"$SRCROOT/../MusterLockedUse\"\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$PLUGIN/build.sh\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/PlugIns/MusterLockedUse.bundle\"\ninstall -d \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse\"\ninstall -m 0644 \"$PLUGIN/install.py\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/LockedUse/install.py\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -401,8 +401,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios/release/libmuster_ffi.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/release/libmuster_ffi.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios/release/libmuster_ffi.a";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/release/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.muster;
 				PRODUCT_NAME = Muster;
 				SDKROOT = iphoneos;
@@ -457,10 +457,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				L4FORWARDER_CARGO_TARGET_DIR = "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../../addons/l4forwarder/target)";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.22;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				MUSTER_CARGO_TARGET_DIR = "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../muster/target)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -521,10 +523,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				L4FORWARDER_CARGO_TARGET_DIR = "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../../addons/l4forwarder/target)";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.22;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
+				MUSTER_CARGO_TARGET_DIR = "$(CARGO_TARGET_DIR:default=$(SRCROOT)/../../../muster/target)";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -548,7 +552,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				OTHER_LDFLAGS = "$(SRCROOT)/../../../muster/target/aarch64-apple-darwin/release/libmuster_ffi.a";
+				OTHER_LDFLAGS = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-darwin/release/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.muster;
 				PRODUCT_NAME = Muster;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MUSTER_MAC_PROFILE)";
@@ -566,7 +570,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/debug/libmuster_ffi.a";
+				OTHER_LDFLAGS = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/debug/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.MusterMobileTests;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphonesimulator;
@@ -589,8 +593,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios/release/libmuster_ffi.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/release/libmuster_ffi.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios/release/libmuster_ffi.a";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/release/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.muster;
 				PRODUCT_NAME = Muster;
 				SDKROOT = iphoneos;
@@ -608,7 +612,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(SRCROOT)/../../../muster/target/aarch64-apple-ios-sim/debug/libmuster_ffi.a";
+				OTHER_LDFLAGS = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-ios-sim/debug/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.MusterMobileTests;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphonesimulator;
@@ -632,7 +636,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				OTHER_LDFLAGS = "$(SRCROOT)/../../../muster/target/aarch64-apple-darwin/release/libmuster_ffi.a";
+				OTHER_LDFLAGS = "$(MUSTER_CARGO_TARGET_DIR)/aarch64-apple-darwin/release/libmuster_ffi.a";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.linsheng.muster;
 				PRODUCT_NAME = Muster;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MUSTER_MAC_PROFILE)";

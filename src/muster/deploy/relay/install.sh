@@ -6,7 +6,9 @@ host="${1:?usage: install.sh <relay hostname>}"
 case "$host" in *[!A-Za-z0-9.-]*|'') echo "invalid hostname" >&2; exit 1;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 src=$(cd "$here/../.." && pwd)
-bin="$src/target/release/muster-relay"
+# cargo's output: $CARGO_TARGET_DIR when set (sudo drops it unless kept),
+# else the workspace's own target/.
+bin="${CARGO_TARGET_DIR:-$src/target}/release/muster-relay"
 [ -x "$bin" ] || { echo "build first: cargo build --release -p muster-relay" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 cert_dir="${CERT_DIR:-/etc/letsencrypt/live/$host}"

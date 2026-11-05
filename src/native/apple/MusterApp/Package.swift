@@ -6,7 +6,7 @@
 //
 // Linking: the Rust core is `libmuster_ffi.a` from `src/muster` (scripts/build-ffi.sh).
 // Xcode app targets link it in OTHER_LDFLAGS (project.yml); on the command
-// line: MUSTER_FFI_LIB=$PWD/../../../muster/target/debug/libmuster_ffi.a swift test
+// line: MUSTER_FFI_LIB=${CARGO_TARGET_DIR:-$PWD/../../../muster/target}/debug/libmuster_ffi.a swift test
 import Foundation
 import PackageDescription
 

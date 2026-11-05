@@ -19,7 +19,7 @@ command -v ip >/dev/null || { echo "iproute2 (ip) is required"; exit 2; }
 command -v socat >/dev/null || { echo "socat is required"; exit 2; }
 
 cargo build -q -p musterd -p muster-cli -p muster-relay
-BIN=target/debug
+BIN="${CARGO_TARGET_DIR:-target}/debug"
 T=$(mktemp -d /tmp/muster-vnet.XXXXXX)
 LOG=$T/log
 mkdir -p "$LOG"

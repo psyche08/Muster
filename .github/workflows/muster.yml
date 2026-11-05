@@ -123,5 +123,5 @@ jobs:
           git diff --exit-code -- Sources/MusterCore/Generated
       - name: build and test MusterCore against libmuster_ffi
         working-directory: src/native/apple/MusterApp
-        run: MUSTER_FFI_LIB="$GITHUB_WORKSPACE/src/muster/target/debug/libmuster_ffi.a" swift test
+        run: MUSTER_FFI_LIB="${CARGO_TARGET_DIR:-$GITHUB_WORKSPACE/src/muster/target}/debug/libmuster_ffi.a" swift test
 
