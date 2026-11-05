@@ -238,6 +238,8 @@ records a specific decision and does not revive code on its delete list.
 | [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; installed in 1.1.22, the log file verified on three Macs | Keep the desktop app's log in a file |
 | [0138](0138-paired-release-1-1-22.md) | Accepted; published and installed on three Macs | Publish Apple 1.1.22 (112) and install it on the three Macs |
 
+| [0140](0140-multica-service-and-dsh-app-bridge-design.md) | Proposed; design only | Separate Multica session ownership, DSH App bridging and opt-in remote service |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

@@ -33,3 +33,12 @@ keep-alive off a running container's bridge and wrappers are still reconciled
 without starting stopped services. **There is no in-app Multica upgrade, image
 pull, stop or rollback**: those remain manual operator steps documented in
 [DESKTOP_UPDATES.md](../DESKTOP_UPDATES.md) and `deploy/multica/README.md`.
+
+### Proposed independent service and DSH App bridge
+
+[ADR 0140](../adr/0140-multica-service-and-dsh-app-bridge-design.md) and the
+[Multica service design](../MULTICA_SERVICE_DESIGN.md) propose task-owned
+sessions outside Agents, a bridge to the existing DSH desktop App, and a
+default-off remote Multica service over PeerLink. Shared Rust owns binding,
+authorization, capability and navigation state. This is design only: the
+current local-only workbench and Codex/Claude bridge above remain unchanged.
