@@ -225,6 +225,7 @@ records a specific decision and does not revive code on its delete list.
 | [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 | [0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md) | Accepted; source and tests verified, device evidence recorded | Screen Recording is the bundle's grant, and only a daemon restart takes it |
 | [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; source verified, root cause and fix verified | The daemon stays out of Launch Services instead of leaving the Dock |
+| [0130](0130-mount-the-multica-data-image-before-the-container-starts.md) | Accepted; source and tests verified, installation and reboot acceptance pending | Mount the Multica data image before the container starts |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
