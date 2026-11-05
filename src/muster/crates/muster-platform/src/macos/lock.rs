@@ -21,6 +21,103 @@ pub struct SessionState {
     pub screen_locked: bool,
 }
 
+/// What a trusted process sees of an application's windows, asked attribute by
+/// attribute. `ax-dump` walks `AXChildren`, which for an application yields the
+/// menu bar and not the windows, so a dump that shows no `AXWindow` says
+/// nothing about windows; this asks `AXWindows` and its neighbours by name.
+///
+/// Read only, and deliberately so: unlike `ax-dump` this does not call
+/// `enable_manual_accessibility`, because setting `AXManualAccessibility` or
+/// `AXEnhancedUserInterface` changes the app being measured and would confound
+/// the reading (ADR 0129).
+fn windows_diagnostic(pid: u32, point: Option<(f64, f64)>) -> String {
+    use super::ax::Element;
+    let app = Element::application(pid);
+    let mut out = String::new();
+    let line = |out: &mut String, text: String| {
+        out.push_str(&text);
+        out.push('\n');
+    };
+    let describe = |element: &Element| -> String {
+        format!(
+            "role={} subrole={:?} title={:?}",
+            element.role(),
+            element.string("AXSubrole").unwrap_or_default(),
+            element.string("AXTitle").unwrap_or_default()
+        )
+    };
+    line(&mut out, format!("pid={pid} {}", describe(&app)));
+
+    let children = app.children();
+    line(
+        &mut out,
+        format!(
+            "AXChildren: count={} roles=[{}]",
+            children.len(),
+            children
+                .iter()
+                .map(Element::role)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    );
+
+    let status = app.status("AXWindows");
+    let windows = app
+        .attribute("AXWindows")
+        .map(|value| Element::elements_of(&value))
+        .unwrap_or_default();
+    line(
+        &mut out,
+        format!("AXWindows: status={status} count={}", windows.len()),
+    );
+    for (index, window) in windows.iter().enumerate() {
+        line(&mut out, format!("  [{index}] {}", describe(window)));
+    }
+
+    for name in ["AXMainWindow", "AXFocusedWindow", "AXMenuBar"] {
+        let found = app.element(name);
+        line(
+            &mut out,
+            match found {
+                Some(element) => {
+                    format!("{name}: status={} {}", app.status(name), describe(&element))
+                }
+                None => format!("{name}: status={} none", app.status(name)),
+            },
+        );
+    }
+
+    let names = app.attribute_names();
+    line(
+        &mut out,
+        format!(
+            "attribute names: count={} advertises AXWindows={} [{}]",
+            names.len(),
+            names.iter().any(|n| n == "AXWindows"),
+            names.join(", ")
+        ),
+    );
+
+    // A window the application does not list may still answer at its own
+    // position, which is a different route into the same tree.
+    if let Some((x, y)) = point {
+        let hit = Element::system_wide().element_at(x, y);
+        line(
+            &mut out,
+            match hit {
+                Some(element) => format!(
+                    "elementAtPosition({x},{y}): pid={:?} {}",
+                    element.pid(),
+                    describe(&element)
+                ),
+                None => format!("elementAtPosition({x},{y}): none"),
+            },
+        );
+    }
+    out
+}
+
 /// `None` when the dictionary cannot be read: callers treat that as locked.
 pub fn session_state() -> Option<SessionState> {
     // SAFETY: returns a +1 CFDictionary or NULL.
@@ -97,6 +194,10 @@ impl Platform for MacPlatform {
                 }
             }
             "lock-field" => Ok(super::locked_use::field_diagnostic()),
+            // This walks `AXChildren` from the application element, which
+            // yields the menu bar and never the windows, so its output shows
+            // no `AXWindow` for any app -- Finder's eight windows included.
+            // Use `ax-windows` for a window question (ADR 0129).
             "ax-dump" => {
                 if !super::ax::trusted() {
                     return Err("Accessibility not granted".into());
@@ -106,6 +207,26 @@ impl Platform for MacPlatform {
                 // A long conversation in the ChatGPT app runs to thousands of
                 // nodes; recordings need the whole window (read only).
                 Ok(app.dump(20_000, std::time::Duration::from_secs(30)))
+            }
+            "ax-windows" => {
+                if !super::ax::trusted() {
+                    return Err("Accessibility not granted".into());
+                }
+                // `<pid|App> [x,y]`: the point is optional and is asked of the
+                // system-wide element, not of this application.
+                let mut fields = arg.split_whitespace();
+                let who = fields.next().unwrap_or_default();
+                let point = match fields.next() {
+                    None => None,
+                    Some(pair) => match pair.split_once(',') {
+                        Some((x, y)) => match (x.trim().parse::<f64>(), y.trim().parse::<f64>()) {
+                            (Ok(x), Ok(y)) => Some((x, y)),
+                            _ => return Err("usage: ax-windows <pid|App> [x,y]".into()),
+                        },
+                        None => return Err("usage: ax-windows <pid|App> [x,y]".into()),
+                    },
+                };
+                Ok(windows_diagnostic(pid(who)?, point))
             }
             "ax-chat" => super::native_chat::diagnostic(arg),
             "ax-sessions" => Ok(super::native_app::web_areas(pid(arg)?)
