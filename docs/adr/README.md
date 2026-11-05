@@ -244,3 +244,5 @@ implementation. Add later evidence without erasing earlier acceptance limits;
 superseding decisions get new numbers and bidirectional links.
 
 | [0139](0139-cache-macos-transcript-row-measurements.md) | Accepted; installed acceptance pending | Reuse unchanged macOS transcript row measurements |
+
+| [0141](0141-session-history-and-live-push-latency.md) | Accepted; source verified, installed acceptance pending | Keep session history and live pushes independent of catalog work |

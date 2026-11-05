@@ -24,6 +24,7 @@ pub mod deepseek;
 pub mod deepseek_app;
 pub mod desktop_chat;
 pub mod desktop_lock;
+mod discovery;
 pub mod files;
 pub mod idle_compact;
 pub mod jsonl;
@@ -283,6 +284,7 @@ pub struct AgentService {
     cloud_wake: tokio::sync::Notify,
     /// Transcript heads the catalog scans have read, by provider.
     heads: Arc<Mutex<(codex::Heads, claude::Heads)>>,
+    sources: Arc<Mutex<discovery::Sources>>,
     scan_lock: tokio::sync::Mutex<()>,
     metadata_lock: tokio::sync::Mutex<()>,
     orca: Option<Arc<orca::Source>>,
@@ -292,27 +294,14 @@ pub struct AgentService {
     predict: Option<mpsc::UnboundedSender<String>>,
 }
 
-/// Watches the transcript trees of both providers; every event wakes the
-/// poll loop, a create/remove/rename also asks for a rescan. `None` when
-/// the platform offers no watcher: polling alone then does the job.
-fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::RecommendedWatcher> {
-    use notify::event::{EventKind, ModifyKind};
+/// Coalesce paths before waking the loop so a full channel cannot lose changes.
+fn watch_homes(
+    config: &AgentConfig,
+    tx: mpsc::Sender<()>,
+    pending: Arc<Mutex<discovery::Changes>>,
+) -> (Option<notify::RecommendedWatcher>, bool) {
+    use notify::event::EventKind;
     use notify::{RecursiveMode, Watcher};
-    let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
-        if let Ok(event) = result {
-            let structural = matches!(
-                event.kind,
-                EventKind::Create(_)
-                    | EventKind::Remove(_)
-                    | EventKind::Modify(ModifyKind::Name(_))
-            );
-            if structural || matches!(event.kind, EventKind::Modify(_)) {
-                let _ = tx.try_send(true);
-            }
-        }
-    })
-    .map_err(|error| log::info!("file watcher unavailable, polling only: {error}"))
-    .ok()?;
     let roots = [
         (config.codex_home.clone(), RecursiveMode::NonRecursive),
         (
@@ -331,6 +320,14 @@ fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::R
             RecursiveMode::Recursive,
         ),
         (config.claude_desktop.clone(), RecursiveMode::Recursive),
+        (
+            config
+                .claude_desktop
+                .as_ref()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("Local Storage/leveldb")),
+            RecursiveMode::Recursive,
+        ),
         (config.catdesk_home.clone(), RecursiveMode::Recursive),
         // Not all of ~/.dsh: its profiles hold installed packages.
         (
@@ -342,21 +339,96 @@ fn watch_homes(config: &AgentConfig, tx: mpsc::Sender<bool>) -> Option<notify::R
             RecursiveMode::Recursive,
         ),
     ];
-    let mut watching = 0;
+    let aliases: Vec<_> = roots
+        .iter()
+        .filter_map(|(root, _)| root.as_ref())
+        .map(|root| (discovery::canonical_path(root), root.clone()))
+        .collect();
+    let watched_config = config.clone();
+    let watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
+        let mut changes = match result {
+            Ok(event) if event.need_rescan() => discovery::Changes::full(),
+            Ok(event)
+                if matches!(
+                    event.kind,
+                    EventKind::Create(_)
+                        | EventKind::Remove(_)
+                        | EventKind::Modify(_)
+                        | EventKind::Any
+                        | EventKind::Other
+                ) =>
+            {
+                if event.paths.is_empty() {
+                    discovery::Changes::full()
+                } else {
+                    discovery::Changes {
+                        paths: event
+                            .paths
+                            .into_iter()
+                            .flat_map(|path| {
+                                let path = discovery::canonical_path(&path);
+                                aliases.iter().filter_map(move |(canonical, configured)| {
+                                    if let Ok(relative) = path.strip_prefix(canonical) {
+                                        Some(configured.join(relative))
+                                    } else if canonical.starts_with(&path) {
+                                        Some(configured.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
+                            .filter(|p| {
+                                !p.file_name()
+                                    .is_some_and(|n| n.to_string_lossy().ends_with("-shm"))
+                            })
+                            .collect(),
+                        full: false,
+                    }
+                }
+            }
+            Ok(_) => return,
+            Err(error) => {
+                log::warn!("session watcher lost coverage: {error}");
+                discovery::Changes::full()
+            }
+        };
+        changes.retain_relevant(&watched_config);
+        if !changes.is_empty() {
+            pending.lock().unwrap().merge(changes);
+            let _ = tx.try_send(());
+        }
+    });
+    let mut watcher = match watcher {
+        Ok(watcher) => watcher,
+        Err(error) => {
+            log::info!("file watcher unavailable, polling only: {error}");
+            return (None, false);
+        }
+    };
+    let mut complete = true;
     for (root, mode) in roots {
-        let Some(root) = root else { continue };
+        let Some(mut root) = root else { continue };
+        let mut mode = mode;
         if !root.is_dir() {
-            continue;
+            if let Some(parent) = root.parent().filter(|p| p.is_dir()) {
+                root = parent.to_owned();
+                mode = RecursiveMode::Recursive;
+            } else {
+                complete = false;
+                continue;
+            }
         }
         match watcher.watch(&root, mode) {
             Ok(()) => {
                 log::info!("watching {}", root.display());
-                watching += 1;
             }
-            Err(error) => log::info!("watch {}: {error}", root.display()),
+            Err(error) => {
+                complete = false;
+                log::info!("watch {}: {error}", root.display());
+            }
         }
     }
-    (watching > 0).then_some(watcher)
+    (Some(watcher), complete)
 }
 
 impl AgentService {
@@ -406,6 +478,7 @@ impl AgentService {
             cloud,
             cloud_wake: tokio::sync::Notify::new(),
             heads: Default::default(),
+            sources: Default::default(),
             scan_lock: Default::default(),
             metadata_lock: Default::default(),
             orca,
@@ -413,8 +486,13 @@ impl AgentService {
             predict,
         });
         let (wake_tx, wake_rx) = mpsc::channel(1);
-        let watcher = watch_homes(&service.config, wake_tx.clone());
-        tokio::spawn(service.clone().poll_loop(wake_rx, wake_tx, watcher));
+        let pending = Arc::new(Mutex::new(discovery::Changes::default()));
+        let (watcher, complete) = watch_homes(&service.config, wake_tx.clone(), pending.clone());
+        tokio::spawn(
+            service
+                .clone()
+                .poll_loop(wake_rx, wake_tx, pending, watcher, complete),
+        );
         tokio::spawn(service.clone().controller_loop(ctl_rx));
         if let Some(rx) = predict_rx {
             tokio::spawn(service.clone().prediction_loop(rx));
@@ -1000,31 +1078,27 @@ impl AgentService {
         config: &AgentConfig,
         cache: &HashMap<String, Discovered>,
         heads: &Mutex<(codex::Heads, claude::Heads)>,
+        sources: &Mutex<discovery::Sources>,
+        changes: &discovery::Changes,
     ) -> Vec<Discovered> {
-        let mut out = Vec::new();
-        let mut heads = heads.lock().unwrap();
-        if let Some(home) = &config.codex_home {
-            out.extend(codex::scan(home, &mut heads.0));
-        }
-        if let Some(home) = &config.claude_home {
-            let mut found = claude::scan(home, &mut heads.1);
-            // Claude.app archives conversations in its own registry and then
-            // lists none of their sessions.
-            if let Some(root) = &config.claude_desktop {
-                claude::apply_desktop_relationships(root, &mut found);
-                let archived = claude::desktop_archived(root);
-                for d in found.iter_mut().filter(|d| archived.contains(&d.id)) {
-                    d.archived = true;
-                    d.meta.archived = true;
-                }
+        let mut out = sources
+            .lock()
+            .unwrap()
+            .update(config, &mut heads.lock().unwrap(), changes);
+        if let Some(root) = &config.claude_desktop {
+            let mut found: Vec<_> = out
+                .iter()
+                .filter(|r| r.provider == Provider::Claude)
+                .cloned()
+                .collect();
+            claude::apply_desktop_relationships(root, &mut found);
+            let archived = claude::desktop_archived(root);
+            for d in found.iter_mut().filter(|d| archived.contains(&d.id)) {
+                d.archived = true;
+                d.meta.archived = true;
             }
+            out.retain(|r| r.provider != Provider::Claude);
             out.extend(found);
-        }
-        if let Some(home) = &config.catdesk_home {
-            out.extend(catdesk::scan(home));
-        }
-        if let Some(home) = &config.deepseek_home {
-            out.extend(deepseek::scan(home));
         }
         for d in &mut out {
             if !d.provider.file_transcripts() || codex_history::is(d) {
@@ -1090,18 +1164,31 @@ impl AgentService {
 
     /// Rescans the transcript roots now.
     pub async fn rescan(&self) {
+        self.refresh_sources(discovery::Changes::full()).await;
+    }
+
+    async fn refresh_sources(&self, changes: discovery::Changes) {
         // An older filesystem scan must never overwrite a newer native change.
         let _scan = self.scan_lock.lock().await;
         let config = self.config.clone();
-        let (cache, metadata_generation) = {
+        let (cache, metadata_generation, previous_sections) = {
             let inner = self.inner.lock().unwrap();
-            (inner.catalog.clone(), inner.metadata_generation)
+            (
+                inner.catalog.clone(),
+                inner.metadata_generation,
+                inner.sections.clone(),
+            )
         };
         let heads = self.heads.clone();
+        let sources = self.sources.clone();
         let Ok((found, mut sections)) = tokio::task::spawn_blocking(move || {
             (
-                Self::scan_all(&config, &cache, &heads),
-                sections::read(&config),
+                Self::scan_all(&config, &cache, &heads, &sources, &changes),
+                if changes.metadata_changed(&config) {
+                    sections::read(&config)
+                } else {
+                    previous_sections
+                },
             )
         })
         .await
@@ -1197,70 +1284,89 @@ impl AgentService {
         }
     }
 
-    /// Polls the open transcripts when the filesystem watcher wakes it,
-    /// and on a timer as the fallback (a watcher may be missing or may miss
-    /// events on some filesystems). The watcher lives as long as the loop;
-    /// keeping a sender here means `recv` never ends.
+    /// Live content progresses independently of one bounded discovery worker.
+    /// Healthy watchers replace periodic full scans with path invalidations.
     async fn poll_loop(
         self: Arc<Self>,
-        mut wake: mpsc::Receiver<bool>,
-        _keep: mpsc::Sender<bool>,
-        _watcher: Option<notify::RecommendedWatcher>,
+        mut wake: mpsc::Receiver<()>,
+        keep: mpsc::Sender<()>,
+        pending: Arc<Mutex<discovery::Changes>>,
+        mut watcher: Option<notify::RecommendedWatcher>,
+        mut complete: bool,
     ) {
-        self.rescan().await;
-        let mut last_rescan = Instant::now();
-        // A structural event gets a rescan now and one more shortly after:
-        // a file created inside a directory that was itself just created
-        // can land before the watcher covers the new directory.
-        let mut followup: Option<Instant> = None;
-        let mut catalog_dirty = false;
+        let mut scan = Some(Box::pin(self.refresh_sources(discovery::Changes::full())));
+        let mut last_scan = Instant::now();
+        let mut dirty = discovery::Changes::default();
+        let mut followup: Option<(Instant, discovery::Changes)> = None;
         loop {
-            let mut wait = match followup {
-                Some(at) => at
-                    .saturating_duration_since(Instant::now())
-                    .min(self.config.poll),
-                None => self.config.poll,
-            };
-            if catalog_dirty {
-                wait = wait.min(Duration::from_millis(500).saturating_sub(last_rescan.elapsed()));
+            let mut wait = self.config.poll;
+            if scan.is_none() {
+                if !dirty.is_empty() {
+                    wait = wait.min(Duration::from_millis(500).saturating_sub(last_scan.elapsed()));
+                }
+                if let Some((at, _)) = &followup {
+                    wait = wait.min(at.saturating_duration_since(Instant::now()));
+                }
+                if !complete {
+                    wait = wait.min(self.config.rescan.saturating_sub(last_scan.elapsed()));
+                }
             }
-            let mut structural = false;
             tokio::select! {
+                _ = async { scan.as_mut().expect("active scan").await }, if scan.is_some() => {
+                    scan = None;
+                    last_scan = Instant::now();
+                    continue;
+                }
                 _ = tokio::time::sleep(wait) => {}
-                got = wake.recv() => {
-                    structural |= got.unwrap_or(false);
-                    // One write produces a burst of events; take them together.
+                _ = wake.recv() => {
                     tokio::time::sleep(Duration::from_millis(30)).await;
-                    while let Ok(more) = wake.try_recv() {
-                        structural |= more;
+                    while wake.try_recv().is_ok() {}
+                    let changes = std::mem::take(&mut *pending.lock().unwrap());
+                    if changes.full || changes.watch_root_changed(&self.config) {
+                        (watcher, complete) = watch_homes(&self.config, keep.clone(), pending.clone());
+                    }
+                    if !changes.is_empty() {
+                        let (_, later) = followup.get_or_insert_with(|| (Instant::now(), discovery::Changes::default()));
+                        later.merge(changes.clone());
+                        followup.as_mut().unwrap().0 = Instant::now() + Duration::from_millis(500);
+                        dirty.merge(changes);
                     }
                 }
             }
-            catalog_dirty |= structural;
-            self.poll_queues();
             self.poll_open().await;
-            let followup_due = followup.is_some_and(|at| Instant::now() >= at);
-            if followup_due {
-                followup = None;
+            if scan.is_some() {
+                continue;
             }
-            if (catalog_dirty && last_rescan.elapsed() >= Duration::from_millis(500))
-                || followup_due
-                || last_rescan.elapsed() >= self.config.rescan
+            if followup
+                .as_ref()
+                .is_some_and(|(at, _)| Instant::now() >= *at)
             {
-                let changed_files = catalog_dirty;
-                catalog_dirty = false;
-                self.rescan().await;
-                last_rescan = Instant::now();
-                if changed_files {
-                    followup = Some(Instant::now() + Duration::from_millis(500));
-                }
+                dirty.merge(followup.take().unwrap().1);
             }
+            if !complete && last_scan.elapsed() >= self.config.rescan {
+                dirty.merge(discovery::Changes::full());
+                (watcher, complete) = watch_homes(&self.config, keep.clone(), pending.clone());
+            }
+            if !dirty.is_empty()
+                && last_scan.elapsed() >= Duration::from_millis(500).min(self.config.rescan)
+            {
+                scan = Some(Box::pin(self.refresh_sources(std::mem::take(&mut dirty))));
+            }
+            let _ = &watcher;
         }
     }
 
-    async fn poll_open(&self) {
-        let ids: Vec<String> = self.inner.lock().unwrap().open.keys().cloned().collect();
-        self.poll_transcripts(ids);
+    async fn poll_open(self: &Arc<Self>) {
+        let service = self.clone();
+        if let Err(error) = tokio::task::spawn_blocking(move || {
+            let ids = service.inner.lock().unwrap().open.keys().cloned().collect();
+            service.poll_transcripts(ids);
+            service.poll_queues();
+        })
+        .await
+        {
+            log::warn!("session polling worker failed: {error}");
+        }
     }
 
     fn poll_transcripts(&self, ids: Vec<String>) {
@@ -2363,24 +2469,19 @@ impl AgentService {
         if orca::is_orca(&request.session) {
             return self.orca_source()?.history(request).await;
         }
-        let all = if cloud::is_cloud(&request.session) {
+        if cloud::is_cloud(&request.session) {
             self.ensure_cloud_open(&request.session).await?;
-            self.inner
-                .lock()
-                .unwrap()
+        } else if desktop_chat::app_of(&request.session).is_none() {
+            self.ensure_open(&request.session).await?;
+        }
+        let inner = self.inner.lock().unwrap();
+        let messages = if cloud::is_cloud(&request.session) {
+            inner
                 .cloud
                 .get(&request.session)
-                .map(|entry| {
-                    entry
-                        .messages
-                        .iter()
-                        .map(Message::to_proto)
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default()
+                .map(|entry| &entry.messages)
         } else if desktop_chat::app_of(&request.session).is_some() {
-            let inner = self.inner.lock().unwrap();
-            inner
+            let all = inner
                 .chats
                 .get(&request.session)
                 .map(|entry| {
@@ -2399,23 +2500,17 @@ impl AgentService {
                         })
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default()
+                .unwrap_or_default();
+            return Ok(muster_proto::history::page(&all, request));
         } else {
-            self.ensure_open(&request.session).await?;
-            self.inner
-                .lock()
-                .unwrap()
-                .open
-                .get(&request.session)
-                .map(|open| {
-                    open.messages
-                        .iter()
-                        .map(Message::to_proto)
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default()
+            inner.open.get(&request.session).map(|open| &open.messages)
         };
-        Ok(muster_proto::history::page(&all, request))
+        Ok(muster_proto::history::page_from(
+            messages.map(Vec::as_slice).unwrap_or_default(),
+            request,
+            |message| &message.id,
+            Message::to_proto,
+        ))
     }
 
     /// The last `tail` messages before `before` (a message id), oldest first.
@@ -2980,6 +3075,94 @@ pub mod native_runtime;
 #[cfg(test)]
 mod polling_regressions {
     use super::*;
+    fn isolated_config() -> AgentConfig {
+        AgentConfig {
+            codex_home: None,
+            claude_home: None,
+            claude_desktop: None,
+            catdesk_home: None,
+            deepseek_home: None,
+            poll: Duration::from_millis(10),
+            rescan: Duration::from_millis(20),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn live_messages_continue_while_catalog_scan_waits() {
+        use std::io::Write;
+        let temp = tempfile::tempdir().unwrap();
+        let id = "11111111-1111-4111-8111-111111111111";
+        let project = temp.path().join("projects/synthetic");
+        std::fs::create_dir_all(&project).unwrap();
+        let path = project.join(format!("{id}.jsonl"));
+        std::fs::write(
+            &path,
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"initial\"}}\n",
+        )
+        .unwrap();
+        let service = AgentService::start(isolated_config());
+        // Block startup discovery before the poll task first runs.
+        let held = service.scan_lock.lock().await;
+        let source = claude::scan(temp.path(), &mut claude::Heads::default())
+            .pop()
+            .unwrap();
+        service
+            .inner
+            .lock()
+            .unwrap()
+            .catalog
+            .insert(id.into(), source);
+        service.ensure_open(id).await.unwrap();
+        let mut events = service.subscribe();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        writeln!(file, "{{\"type\":\"assistant\",\"message\":{{\"role\":\"assistant\",\"content\":\"fresh\"}}}}").unwrap();
+        let message = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Event::Message { message, .. } = events.recv().await.unwrap() {
+                    break message;
+                }
+            }
+        })
+        .await
+        .expect("catalog discovery must not pause message pushes");
+        assert_eq!(message.text, "fresh");
+        drop(held);
+    }
+
+    #[tokio::test]
+    async fn healthy_watch_coverage_does_not_periodically_rescan() {
+        let service = AgentService::start(isolated_config());
+        // Let startup's one scan finish. With no configured roots, coverage is complete.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("projects/synthetic");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("11111111-1111-4111-8111-111111111111.jsonl"),
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"fixture\"}}\n",
+        )
+        .unwrap();
+        let source = claude::scan(temp.path(), &mut claude::Heads::default())
+            .pop()
+            .unwrap();
+        let id = source.id.clone();
+        service
+            .inner
+            .lock()
+            .unwrap()
+            .catalog
+            .insert(id.clone(), source);
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(
+            service.session(&id).is_some(),
+            "a periodic empty full scan erased the fixture"
+        );
+    }
+
     struct Slow {
         meta: model::SessionMeta,
         entered: std::sync::mpsc::Sender<()>,
@@ -3070,24 +3253,28 @@ mod polling_regressions {
             );
         }
         let polling = service.clone();
-        let worker = std::thread::spawn(move || polling.poll_transcripts(vec!["fixture".into()]));
-        receive.recv_timeout(Duration::from_secs(2)).unwrap();
-        let readable = service.inner.try_lock();
-        assert!(
-            readable.is_ok(),
-            "polling must not hold the catalog mutex during file I/O"
-        );
-        let mut inner = readable.unwrap();
-        let open = inner.open.get_mut("fixture").unwrap();
-        assert_eq!(open.meta.title, "visible");
-        assert!(open.viewer.is_none());
-        open.generation = Arc::new(());
-        open.meta.title = "replacement".into();
-        drop(inner);
+        let worker = tokio::spawn(async move { polling.poll_open().await });
+        tokio::task::spawn_blocking(move || receive.recv_timeout(Duration::from_secs(2)))
+            .await
+            .unwrap()
+            .unwrap();
+        {
+            let readable = service.inner.try_lock();
+            assert!(
+                readable.is_ok(),
+                "polling must not hold the catalog mutex during file I/O"
+            );
+            let mut inner = readable.unwrap();
+            let open = inner.open.get_mut("fixture").unwrap();
+            assert_eq!(open.meta.title, "visible");
+            assert!(open.viewer.is_none());
+            open.generation = Arc::new(());
+            open.meta.title = "replacement".into();
+        }
         // A concurrent poll sees the lease and returns immediately.
         service.poll_transcripts(vec!["fixture".into()]);
         release.send(()).unwrap();
-        worker.join().unwrap();
+        worker.await.unwrap();
         assert_eq!(
             service.inner.lock().unwrap().open["fixture"].meta.title,
             "replacement"

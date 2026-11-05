@@ -70,12 +70,28 @@ pub struct Heads(HeadCache<Head>);
 
 /// Every rollout under the two roots, with head metadata.
 pub fn scan(home: &Path, heads: &mut Heads) -> Vec<Discovered> {
-    let found = discover(home, &mut heads.0);
+    let mut found = discover(home, &mut heads.0, None);
+    crate::codex_history::merge(home, &mut found);
     heads.0.finish();
     found
 }
 
-fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
+pub(crate) fn retain_heads(heads: &mut Heads, paths: &std::collections::HashSet<PathBuf>) {
+    heads.0.retain(paths);
+}
+
+pub(crate) fn scan_paths(home: &Path, heads: &mut Heads, paths: &[PathBuf]) -> Vec<Discovered> {
+    if paths.is_empty() {
+        return Vec::new();
+    }
+    discover(home, &mut heads.0, Some(paths))
+}
+
+fn discover(
+    home: &Path,
+    heads: &mut HeadCache<Head>,
+    paths: Option<&[PathBuf]>,
+) -> Vec<Discovered> {
     let titles = load_index(&home.join("session_index.jsonl"));
     let mut out = Vec::new();
     for (root, archived) in [
@@ -83,7 +99,35 @@ fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
         (home.join("archived_sessions"), true),
     ] {
         let mut files = Vec::new();
-        walk(&root, 0, &mut files);
+        match paths {
+            None => walk(&root, 0, &mut files),
+            Some(paths) => {
+                for path in paths {
+                    if path.starts_with(&root) {
+                        let Ok(kind) = std::fs::symlink_metadata(path).map(|m| m.file_type())
+                        else {
+                            continue;
+                        };
+                        if kind.is_symlink() {
+                            continue;
+                        }
+                        if kind.is_dir() {
+                            walk(path, 0, &mut files);
+                        } else if path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .is_some_and(|n| n.starts_with("rollout-") && n.ends_with(".jsonl"))
+                        {
+                            files.push(path.clone());
+                        }
+                    } else if root.starts_with(path) {
+                        walk(&root, 0, &mut files);
+                    }
+                }
+            }
+        }
+        files.sort();
+        files.dedup();
         for path in files {
             if out.len() >= MAX_FILES {
                 break;
@@ -129,7 +173,6 @@ fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
             });
         }
     }
-    crate::codex_history::merge(home, &mut out);
     out
 }
 
