@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 muster-app-core = { path = "../muster-app-core" }
+muster-paths = { path = "../muster-paths" }
 muster-terminal = { path = "../muster-terminal" }
 serde.workspace = true
 serde_json.workspace = true

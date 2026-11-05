@@ -94,7 +94,9 @@ This is a property of the code. The logs do not show which failures it caused.
 - **Classify errors by matching their text.** The offline verdict already comes
   from Rust-owned presence, so the banner only substitutes the device name.
 - **Add hysteresis to relay carrier switching, and persist the GUI app's
-  logs.** These are separate follow-ups and are not part of this record.
+  logs.** These are separate follow-ups and are not part of this record. They
+  became [ADR 0136](0136-settle-relay-carrier-switches.md) and
+  [ADR 0137](0137-keep-the-desktop-apps-log-in-a-file.md).
 
 ## Consequences
 

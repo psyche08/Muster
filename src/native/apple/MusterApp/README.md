@@ -88,6 +88,7 @@ registers on first launch (SMAppService; approve it under System Settings
 | `Muster.app/Contents/Library/LaunchAgents/dev.linsheng.musterd.plist` | its LaunchAgent (`Apps/macOS/dev.linsheng.musterd.plist`) |
 | `~/Library/Application Support/Muster/` | store (`musterd.db`), socket (`musterd.sock`), the app's own state, and `l4forwarder.json` when forwarding is configured |
 | `~/Library/Logs/Muster/musterd.log` | the daemon's log (`musterd --log`); the addon's is `l4forwarder.log` beside it |
+| `~/Library/Logs/Muster/app.log` | the app's own log, from its shared-Rust core at info, kept to two files of 8 MiB (`app.log`, `app.log.1`; [ADR 0137](../../../../docs/adr/0137-keep-the-desktop-apps-log-in-a-file.md)) |
 
 The relay is set in the app (Settings › Relay) or with
 `muster relay muster.linsheng.dev:9443`; the daemon remembers it.

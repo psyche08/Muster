@@ -38,7 +38,6 @@ public final class MusterRuntime {
         String(cString: muster_version())
     }
 
-    /// Logging to stderr: 0 off, 1 error, 2 warn, 3 info, 4 debug.
     public static func desktopUpdateStartup() { muster_desktop_update_startup() }
 
     public static func prepareDesktop(socket: String, managed: Bool,
@@ -51,8 +50,16 @@ public final class MusterRuntime {
         }
     }
 
+    /// Logging to stderr: 0 off, 1 error, 2 warn, 3 info, 4 debug.
     public static func initLogging(level: UInt32) {
         muster_log_init(level)
+    }
+
+    /// The same, and also to app.log in the log directory the core picks
+    /// (macOS: ~/Library/Logs/Muster): an app opened from Finder or the
+    /// Dock has nowhere for stderr to go.
+    public static func initFileLogging(level: UInt32) {
+        muster_log_init_file(level)
     }
 
     public init(configJSON: Data, shell: MusterShell) throws {

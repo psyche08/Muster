@@ -30,7 +30,6 @@ typedef struct MusterPlatform {
     intptr_t (*presence_public_key)(void *ctx, uint8_t *out, size_t cap);
 } MusterPlatform;
 
-/* Logging to stderr at `level` (0 = off, 1 = error, 2 = warn, 3 = info, 4 = debug). */
 void muster_desktop_update_startup(void);
 /* Synchronous worker-thread preparation; not callable from a Rust runtime.
  * managed: 0 custom socket, 1 bundled service. action: 0 register, 1 recover
@@ -39,7 +38,12 @@ void muster_desktop_update_startup(void);
  * muster_string_free). socket is a NUL-terminated UTF-8 path. */
 int32_t muster_desktop_prepare(const char *socket, uint8_t managed,
                              int32_t (*action)(uint32_t), char **error_out);
+/* Logging to stderr at `level` (0 = off, 1 = error, 2 = warn, 3 = info, 4 = debug). */
 void muster_log_init(uint32_t level);
+/* The same, and also to app.log in the platform's log directory (macOS:
+ * ~/Library/Logs/Muster, or $MUSTER_DIR when set), kept to two files of
+ * 8 MiB (app.log, app.log.1). For a desktop app, whose stderr goes nowhere. */
+void muster_log_init_file(uint32_t level);
 
 /* The crate version, static. */
 const char *muster_version(void);
