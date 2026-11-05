@@ -1,4 +1,4 @@
-# ADR 0141: Keep session history and live pushes independent of catalog work
+# ADR 0142: Keep session history and live pushes independent of catalog work
 
 - Date: 2026-11-05
 - Status: Accepted; source verified, installed acceptance pending
