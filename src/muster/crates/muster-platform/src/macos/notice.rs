@@ -1,8 +1,10 @@
 //! A notification-style banner at the top right of the main display while
 //! Muster works in a desktop app the person may be using (ADR 0087). AppKit
 //! windows need a main thread the daemon does not own, so the banner lives in
-//! a short helper process (`musterd --muster-notice`). Dropping the handle
-//! closes it; so does the daemon exiting, or [`LIFETIME`].
+//! a short helper process (`muster-panel --muster-notice`, from the bundle's
+//! `Contents/Helpers`: an AppKit process in `Contents/MacOS` would take the
+//! app's Launch Services identity, ADR 0128). Dropping the handle closes it;
+//! so does the daemon exiting, or [`LIFETIME`].
 
 use std::{
     ffi::CString,
@@ -27,7 +29,7 @@ pub struct Notice {
 
 impl Notice {
     pub fn show(title: &str, body: &str) -> Result<Self, String> {
-        let mut child = Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
+        let mut child = Command::new(super::bundle::panel()?)
             .arg(FLAG)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())

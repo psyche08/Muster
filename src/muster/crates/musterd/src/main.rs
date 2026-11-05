@@ -56,20 +56,12 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        let args: Vec<String> = std::env::args().collect();
-        if args.get(1).is_some_and(|a| a == "--locked-use-watchdog") {
-            return muster_platform::macos::locked_use::watchdog(&args[2..])
-                .map_err(anyhow::Error::msg);
-        }
-        if args
-            .get(1)
-            .is_some_and(|a| a == muster_platform::macos::notice::FLAG)
-        {
-            return muster_platform::macos::notice::run().map_err(anyhow::Error::msg);
-        }
-    }
+    // The AppKit panel bodies (the idle-compaction banner and the Locked Use
+    // console cover) are no longer subcommands here. Run from
+    // `Contents/MacOS`, each one registered with Launch Services as a second
+    // running application under the app's bundle id, which is how the app's
+    // windows went missing from the Accessibility API. They are the
+    // `muster-panel` helper in `Contents/Helpers` now (ADR 0128).
     tokio::runtime::Runtime::new()?.block_on(run())
 }
 async fn run() -> anyhow::Result<()> {

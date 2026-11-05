@@ -19,7 +19,8 @@ decides anything; it signs when asked.
   assertions are released (build it with Console.m, see its header).
 - `Notice/Notice.m`: the top-right notice panel that
   `muster-platform/src/macos/notice.rs` shows in its helper process
-  (`musterd --muster-notice`) while idle compaction works on a Mac in use
+  (`muster-panel --muster-notice`, from the bundle's `Contents/Helpers`:
+  ADR 0128) while idle compaction works on a Mac in use
   (ADR 0087). The panel never activates, takes focus or receives clicks.
   `muster-platform/build.rs` compiles it into the same static library.
 
