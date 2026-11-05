@@ -79,10 +79,17 @@ async fn run() -> anyhow::Result<()> {
         logger.target(env_logger::Target::Pipe(Box::new(file)));
     }
     logger.init();
-    // Nothing here transforms the process type. Doing so registered the
-    // daemon with Launch Services as a second running application under the
-    // app's own bundle id, which is how the app's windows went missing from
-    // the Accessibility API (ADR 0127 supersedes ADR 0123).
+    // Drop the Dock tile. The daemon ships inside Muster.app/Contents/MacOS,
+    // so Launch Services registers it under the app's bundle id about three
+    // seconds into startup and, left alone, as a `Foreground` application —
+    // a tile a headless process can never service. The duplicate record is
+    // there either way; this only sets its type, and the type is what decides
+    // whether there is a tile. Runs before that registration appears, and a
+    // failure is logged rather than fatal (ADR 0132 restores ADR 0123).
+    #[cfg(target_os = "macos")]
+    if let Err(status) = muster_platform::macos::procs::leave_the_dock() {
+        log::warn!("could not leave the Dock: TransformProcessType returned {status}");
+    }
     let dir = args
         .dir
         .or_else(muster_paths::state_dir)
