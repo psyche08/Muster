@@ -130,8 +130,9 @@ suffix = " more in Recents"
 # Next; attributes may be Chromium's stale cache, so the renderer is asked
 # for a fresh read; a single-select card of plain buttons answers on press.
 [controls.questions]
-# AXPress focuses Submit but does not activate current Claude forms (ADR 0017).
-submit_via_focused_space = true
+# AXPress focuses Submit, Next and Back but does not activate them in current
+# Claude forms (ADR 0017, ADR 0134).
+commands_via_focused_space = true
 submit = "$submit"
 next = "$next"
 back = "$back"

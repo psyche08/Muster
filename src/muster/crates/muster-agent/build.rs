@@ -269,7 +269,7 @@ struct QuestionsSpec {
     open: Option<Labels>,
     submit: Labels,
     #[serde(default)]
-    submit_via_focused_space: bool,
+    commands_via_focused_space: bool,
     next: Labels,
     back: Labels,
     other: Labels,
@@ -728,7 +728,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let questions = match &spec.questions {
             Some(q) => format!(
-                "Some(Questions {{ editor_placeholders: {}, open: {}, submit: {}, submit_via_focused_space: {}, next: {}, back: {}, other: {}, paged: {}, refresh_renderer: {}, button_choices: {}, immediate_suggestions: {} }})",
+                "Some(Questions {{ editor_placeholders: {}, open: {}, submit: {}, commands_via_focused_space: {}, next: {}, back: {}, other: {}, paged: {}, refresh_renderer: {}, button_choices: {}, immediate_suggestions: {} }})",
                 q.editor_placeholders
                     .as_ref()
                     .map_or_else(|| "&[]".into(), |labels| self.labels(&at, labels)),
@@ -736,7 +736,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
                     .as_ref()
                     .map_or_else(|| "&[]".into(), |labels| self.labels(&at, labels)),
                 self.labels(&at, &q.submit),
-                q.submit_via_focused_space,
+                q.commands_via_focused_space,
                 self.labels(&at, &q.next),
                 self.labels(&at, &q.back),
                 self.labels(&at, &q.other),

@@ -154,8 +154,9 @@ pub struct Questions {
     /// Reopen a collapsed optional question reply panel.
     pub open: &'static [&'static str],
     pub submit: &'static [&'static str],
-    /// Activate the exact focused Submit button with Space instead of AXPress.
-    pub submit_via_focused_space: bool,
+    /// Activate the card's exact Submit, Next and Back buttons by focusing
+    /// them and pressing Space: AXPress only focuses them.
+    pub commands_via_focused_space: bool,
     pub next: &'static [&'static str],
     pub back: &'static [&'static str],
     /// The option that opens a free-text answer.

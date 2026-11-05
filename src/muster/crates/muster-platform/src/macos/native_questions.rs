@@ -95,7 +95,7 @@ fn cards(profile: &AppProfile) -> &'static muster_agent::profile::Questions {
         editor_placeholders: &[],
         open: &[],
         submit: &[],
-        submit_via_focused_space: false,
+        commands_via_focused_space: false,
         next: &[],
         back: &[],
         other: &[],
@@ -128,6 +128,36 @@ struct Form {
 enum FilledQuestion {
     Immediate { needs_submit: bool },
     Form(Tree, Form),
+}
+/// A question form's own command button.
+#[derive(Clone, Copy)]
+enum QuestionCommand {
+    Submit,
+    Next,
+    Back,
+}
+impl QuestionCommand {
+    fn labels(self, cards: &'static muster_agent::profile::Questions) -> &'static [&'static str] {
+        match self {
+            Self::Submit => cards.submit,
+            Self::Next => cards.next,
+            Self::Back => cards.back,
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::Submit => "Submit",
+            Self::Next => "Next",
+            Self::Back => "Back",
+        }
+    }
+    fn log_name(self) -> &'static str {
+        match self {
+            Self::Submit => "submit",
+            Self::Next => "next",
+            Self::Back => "back",
+        }
+    }
 }
 // Preserve the distinction between a provider not supplying an optional focus
 // attribute and an AX transport/proxy failure. The latter cannot authorize input.
@@ -581,6 +611,28 @@ impl Tree {
                 .is_some()
     }
 
+    /// Whether pressing the planned option answers by itself: an immediate
+    /// card, or a single-select card of plain buttons. Radio options (current
+    /// Claude pages) only select; the page's Next or Submit then acts.
+    fn answers_on_press(
+        &self,
+        form: &Form,
+        profile: &AppProfile,
+        pending: &PendingInteraction,
+        plan: &AnswerPlan,
+    ) -> bool {
+        let cards = cards(profile);
+        muster_agent::questions::immediate_option(cards, pending, plan)
+            || (cards.button_choices
+                && !plan.question.multi_select
+                && plan.labels.len() == 1
+                && plan.text.is_empty()
+                && form
+                    .choices
+                    .iter()
+                    .all(|&i| self.nodes[i].role == "AXButton"))
+    }
+
     fn ready_form(
         &self,
         pending: &PendingInteraction,
@@ -917,10 +969,14 @@ impl NativeAppController {
         );
         let mut opened = false;
         let mut history_pages = 0;
+        let mut last: Option<Tree> = None;
         loop {
+            if let Some(tree) = &last {
+                self.controls_step(&step, tree, pending, question, require_submit)?;
+            }
             step.check()?;
             let tree = self.fresh_question_tree(pending, generation)?;
-            step.check()?;
+            self.controls_step(&step, &tree, pending, question, require_submit)?;
             let matched_at = Instant::now();
             let form = tree.ready_form(pending, question, self.profile, require_submit);
             log::info!(
@@ -933,7 +989,7 @@ impl NativeAppController {
                 matched_at.elapsed().as_millis(),
                 step.elapsed().as_millis()
             );
-            step.check()?;
+            self.controls_step(&step, &tree, pending, question, require_submit)?;
             if let Some(form) = form {
                 log::info!(
                     "AX question controls ready: session={} question={} submit={} elapsed_ms={}",
@@ -983,29 +1039,11 @@ impl NativeAppController {
                     self.session,
                     question.id
                 );
+                last = Some(tree);
                 tokio::time::sleep(Duration::from_millis(150)).await;
                 continue;
             }
-            if step.expired() {
-                let visible: Vec<_> = pending
-                    .questions
-                    .iter()
-                    .filter(|q| tree.form_for(pending, q, self.profile).is_some())
-                    .map(|q| q.id.as_str())
-                    .collect();
-                // Content-free: says why the form was not matched, never what it says.
-                let why = match tree.form_for(pending, question, self.profile) {
-                    Some(_) => "form matched; submit control not ready".to_owned(),
-                    None => tree.form_miss(pending, question),
-                };
-                log::warn!(
-                    "AX question controls timeout: session={} question={} submit={} visible={visible:?} why={why}",
-                    self.session,
-                    question.id,
-                    require_submit
-                );
-                step.check()?;
-            }
+            self.controls_step(&step, &tree, pending, question, require_submit)?;
             // Ordinary attribute polling can keep returning Chromium's old
             // browser-side AX cache while covered. Ask the renderer a read-only
             // geometry question, then let its asynchronous update arrive. Never
@@ -1019,8 +1057,40 @@ impl NativeAppController {
                     question.id
                 );
             }
+            last = Some(tree);
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    /// `step.check()` for a controls wait, saying first why the latest tree
+    /// did not offer the controls. Content-free: counts and roles, never text.
+    fn controls_step(
+        &self,
+        step: &Step,
+        tree: &Tree,
+        pending: &PendingInteraction,
+        question: &InteractionQuestion,
+        require_submit: bool,
+    ) -> Result<(), Error> {
+        if step.expired() {
+            let visible: Vec<_> = pending
+                .questions
+                .iter()
+                .filter(|q| tree.form_for(pending, q, self.profile).is_some())
+                .map(|q| q.id.as_str())
+                .collect();
+            let why = match tree.form_for(pending, question, self.profile) {
+                Some(_) => "form matched; submit control not ready".to_owned(),
+                None => tree.form_miss(pending, question),
+            };
+            log::warn!(
+                "AX question controls timeout: session={} question={} submit={} visible={visible:?} why={why}",
+                self.session,
+                question.id,
+                require_submit
+            );
+        }
+        step.check()
     }
     async fn first_question_page(
         &self,
@@ -1048,16 +1118,26 @@ impl NativeAppController {
             let Some(previous) = index.checked_sub(1).map(|i| &pending.questions[i]) else {
                 break;
             };
-            let Some(back) = tree.command(&form, self.profile, cards(self.profile).back) else {
+            if tree
+                .command(&form, self.profile, cards(self.profile).back)
+                .is_none()
+            {
                 break;
-            };
+            }
             log::info!(
                 "AX question back: session={} from={} to={}",
                 self.session,
                 current.id,
                 previous.id
             );
-            self.press_question(pending, generation, &tree.nodes[back].element)?;
+            self.activate_question_command(
+                pending,
+                generation,
+                current,
+                &tree,
+                &form,
+                QuestionCommand::Back,
+            )?;
             self.locate_form(pending, generation, previous).await?;
         }
         Err(Error::Unavailable(
@@ -1077,17 +1157,7 @@ impl NativeAppController {
         let (mut tree, mut form) = self
             .locate_form(pending, generation, &plan.question)
             .await?;
-        let cards = cards(self.profile);
-        let immediate = muster_agent::questions::immediate_option(cards, pending, plan)
-            || (cards.button_choices
-                && !plan.question.multi_select
-                && plan.labels.len() == 1
-                && plan.text.is_empty()
-                && form
-                    .choices
-                    .iter()
-                    .all(|&i| tree.nodes[i].role == "AXButton"));
-        if immediate {
+        if tree.answers_on_press(&form, self.profile, pending, plan) {
             let choice = plan
                 .question
                 .options
@@ -1431,28 +1501,50 @@ impl NativeAppController {
         tree: &Tree,
         form: &Form,
     ) -> Result<(), Error> {
-        let submit = tree
-            .command(form, self.profile, cards(self.profile).submit)
-            .ok_or_else(|| {
-                Error::Unavailable("The question's submit button is not visible".into())
-            })?;
-        let element = &tree.nodes[submit].element;
-        if !cards(self.profile).submit_via_focused_space {
+        self.activate_question_command(
+            pending,
+            generation,
+            question,
+            tree,
+            form,
+            QuestionCommand::Submit,
+        )
+    }
+
+    /// Activates the form's own Submit, Next or Back. Claude's card commands
+    /// take focus on AXPress without acting (ADR 0017, ADR 0134), so such a
+    /// profile focuses the exact control and sends one Space.
+    fn activate_question_command(
+        &self,
+        pending: &PendingInteraction,
+        generation: u64,
+        question: &InteractionQuestion,
+        tree: &Tree,
+        form: &Form,
+        command: QuestionCommand,
+    ) -> Result<(), Error> {
+        let name = command.name();
+        let labels = command.labels(cards(self.profile));
+        let index = tree.command(form, self.profile, labels).ok_or_else(|| {
+            Error::Unavailable(format!("The question's {name} button is not visible"))
+        })?;
+        let element = &tree.nodes[index].element;
+        if !cards(self.profile).commands_via_focused_space {
             return self.press_question(pending, generation, element);
         }
         // Complete AX discovery before acquiring focus. A successful focus
         // write is not evidence that focus survives another tree traversal.
         let fresh = self.fresh_question_tree(pending, generation)?;
         let current = fresh
-            .ready_form(pending, question, self.profile, true)
-            .and_then(|form| fresh.command(&form, self.profile, cards(self.profile).submit))
+            .form_for(pending, question, self.profile)
+            .and_then(|form| fresh.command(&form, self.profile, labels))
             .map(|index| &fresh.nodes[index].element)
             .filter(|current| *current == element)
-            .ok_or_else(|| Error::Conflict("Question Submit changed; no key sent".into()))?;
+            .ok_or_else(|| Error::Conflict(format!("Question {name} changed; no key sent")))?;
         self.check_question_control(pending, generation, current)?;
         current.set_bool("AXFocused", true).map_err(|code| {
             Error::Unavailable(format!(
-                "Cannot focus the question Submit ({code}); no key sent"
+                "Cannot focus the question {name} ({code}); no key sent"
             ))
         })?;
         use muster_agent::questions::SubmitApplicationFocus;
@@ -1496,7 +1588,8 @@ impl NativeAppController {
                 }
                 Err(error) => {
                     log::warn!(
-                        "AX question submit focus rejected: session={} question={} enabled={:?} focused={:?} application={:?} native_error={:?} same_window={} samples={} elapsed_ms={}; no activation key sent",
+                        "AX question {} focus rejected: session={} question={} enabled={:?} focused={:?} application={:?} native_error={:?} same_window={} samples={} elapsed_ms={}; no activation key sent",
+                        command.log_name(),
                         self.session,
                         question.id,
                         enabled,
@@ -1530,7 +1623,8 @@ impl NativeAppController {
         self.question_writes
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         log::info!(
-            "AX question submit dispatch: session={} question={} method=focused_space focus={:?} same_window={} samples={} elapsed_ms={}",
+            "AX question {} dispatch: session={} question={} method=focused_space focus={:?} same_window={} samples={} elapsed_ms={}",
+            command.log_name(),
             self.session,
             question.id,
             focus_source,
@@ -1540,7 +1634,7 @@ impl NativeAppController {
         );
         self.app.space().map_err(|code| {
             Error::Unavailable(format!(
-                "Question Space dispatch failed ({code}); do not retry automatically"
+                "Question {name} Space dispatch failed ({code}); do not retry automatically"
             ))
         })
     }
@@ -1622,9 +1716,18 @@ impl NativeAppController {
                     self.submit_question_page(&pending, generation, &plan.question, &tree, &form)?;
                 }
                 FilledQuestion::Form(tree, form) => {
-                    if let Some(next) = tree.command(&form, self.profile, cards(self.profile).next)
+                    if tree
+                        .command(&form, self.profile, cards(self.profile).next)
+                        .is_some()
                     {
-                        self.press_question(&pending, generation, &tree.nodes[next].element)?;
+                        self.activate_question_command(
+                            &pending,
+                            generation,
+                            &plan.question,
+                            &tree,
+                            &form,
+                            QuestionCommand::Next,
+                        )?;
                     } else if pending.optional
                         && tree.individual_submit(&form, &pending, &plan.question, self.profile)
                     {
@@ -1635,6 +1738,12 @@ impl NativeAppController {
                             &tree,
                             &form,
                         )?;
+                    } else if cards(self.profile).paged {
+                        // The next page appears only after Next; waiting for
+                        // it would only end in a locate timeout.
+                        return Err(Error::Unavailable(
+                            "The question's Next button is not available".into(),
+                        ));
                     }
                 }
             }
@@ -2110,6 +2219,65 @@ mod tests {
             tree.ready_form(&PendingInteraction::default(), &q, &CLAUDE_APP, true)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn claude_radio_page_selects_then_activates_its_own_next_by_keyboard() {
+        // A two-question page as the failed answers' logs imply (ADR 0134):
+        // radio options with text children and the page's own Back and Next.
+        // The second prompt is not in the tree until Next acts.
+        let mut second = question("1", "Second?");
+        second.options[0].label = "Later".into();
+        let pending = PendingInteraction {
+            questions: vec![question("0", "First?"), second.clone()],
+            ..Default::default()
+        };
+        let mut no = question("0", "First?");
+        no.options.push(muster_proto::v1::QuestionOption {
+            id: "1".into(),
+            label: "No".into(),
+            ..Default::default()
+        });
+        let tree = Tree {
+            nodes: vec![
+                node(None, "AXWebArea", ""),
+                node(Some(0), "AXGroup", ""),
+                node(Some(1), "AXStaticText", "First?"),
+                node(Some(1), "AXRadioButton", ""),
+                node(Some(3), "AXStaticText", "Yes"),
+                node(Some(1), "AXRadioButton", ""),
+                node(Some(5), "AXStaticText", "No"),
+                node(Some(1), "AXButton", "Back"),
+                node(Some(1), "AXButton", "Next"),
+                node(Some(0), "AXTextArea", "Prompt"),
+            ],
+        };
+        let form = tree.form_for(&pending, &no, &CLAUDE_APP).unwrap();
+        assert_eq!(form.choices, vec![3, 5]);
+        let plan = AnswerPlan {
+            question: no.clone(),
+            labels: vec!["Yes".into()],
+            text: String::new(),
+        };
+        // A radio press only selects: the answer moves on through Next.
+        assert!(!tree.answers_on_press(&form, &CLAUDE_APP, &pending, &plan));
+        let cards = cards(&CLAUDE_APP);
+        assert!(cards.paged && cards.commands_via_focused_space);
+        assert_eq!(
+            tree.command(&form, &CLAUDE_APP, QuestionCommand::Next.labels(cards)),
+            Some(8)
+        );
+        assert_eq!(
+            tree.command(&form, &CLAUDE_APP, QuestionCommand::Back.labels(cards)),
+            Some(7)
+        );
+        assert!(tree.form_for(&pending, &second, &CLAUDE_APP).is_none());
+        // Plain option buttons still answer on press.
+        let mut buttons = tree;
+        buttons.nodes[3].role = "AXButton".into();
+        buttons.nodes[5].role = "AXButton".into();
+        let form = buttons.form_for(&pending, &no, &CLAUDE_APP).unwrap();
+        assert!(buttons.answers_on_press(&form, &CLAUDE_APP, &pending, &plan));
     }
 
     #[test]

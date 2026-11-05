@@ -429,10 +429,10 @@ mod focused_submit_tests {
     }
 
     #[test]
-    fn only_claude_separate_submit_uses_keyboard_activation() {
+    fn only_claude_card_commands_use_keyboard_activation() {
         use crate::profile::{CLAUDE, CODEX};
-        assert!(CLAUDE.questions.as_ref().unwrap().submit_via_focused_space);
-        assert!(!CODEX.questions.as_ref().unwrap().submit_via_focused_space);
+        assert!(CLAUDE.questions.as_ref().unwrap().commands_via_focused_space);
+        assert!(!CODEX.questions.as_ref().unwrap().commands_via_focused_space);
     }
 }
 

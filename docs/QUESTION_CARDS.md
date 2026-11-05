@@ -138,3 +138,20 @@ cards retain their separate option-based protocol.
   by the step (`locate question panel`, `question submit ready`, …).
 - **Next step:** a matcher change needs one of these summaries from a live
   unanswered card.
+
+### Moving between pages (ADR 0134)
+
+- **Why this changed.** Two-question Claude cards stopped on the first page.
+  Its radio options only select, and AXPress on Next only focused the button,
+  as ADR 0017 had found for Submit. The tree never changed, so the second
+  question timed out with an unknown outcome.
+- **Next and Back use Submit's activation.** With the profile flag
+  `commands_via_focused_space` set, they are re-matched, focused and proven
+  focused, then pressed with one Space. AXPress is never tried first. Codex
+  keeps AXPress.
+- **A missing Next fails at once.** A non-final page of a paged card with no
+  enabled Next fails with "The question's Next button is not available",
+  rather than waiting 3 s for a page that cannot appear.
+- **The `why=` warning now appears.** ADR 0114's summary was unreachable,
+  because an earlier step check returned first. It is now logged on every
+  timeout exit of the controls wait.

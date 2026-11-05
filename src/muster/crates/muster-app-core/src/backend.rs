@@ -202,6 +202,21 @@ impl Backend {
         }
     }
 
+    /// Forgets a cached member link that stopped answering, so the next call
+    /// opens a fresh stream rather than waiting for QUIC's idle timeout. A
+    /// desktop's daemon forgets its own forwarding link (muster-rpc `proxy`).
+    pub fn discard(&self, device: &str, client: &Client) {
+        if let Backend::Embedded { remotes, .. } = self {
+            let mut remotes = remotes.lock().unwrap();
+            if remotes
+                .get(device)
+                .is_some_and(|cached| cached.same_connection(client))
+            {
+                remotes.remove(device);
+            }
+        }
+    }
+
     /// A forward stream to `port` on `device` (embedded only: desktops use vnet).
     pub async fn forward(
         &self,

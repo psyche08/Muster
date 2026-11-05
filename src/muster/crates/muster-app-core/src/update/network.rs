@@ -928,7 +928,19 @@ pub(super) fn msg_network(state: &mut State, ctx: &Ctx, status: v1::NetworkStatu
             })
             .unwrap_or_default()
     };
-    let presence_changed = offline(state.network.as_ref()) != offline(Some(&status));
+    let was_offline = offline(state.network.as_ref());
+    let presence_changed = was_offline != offline(Some(&status));
+    let returned: Vec<String> = status
+        .members
+        .iter()
+        .filter(|m| {
+            !crate::state::member_offline(m)
+                && was_offline
+                    .iter()
+                    .any(|(device, off)| *off && *device == m.device_id)
+        })
+        .map(|m| m.device_id.clone())
+        .collect();
     if status.pending_joins as usize != state.pending.len() {
         load_pending(ctx);
     }
@@ -941,6 +953,7 @@ pub(super) fn msg_network(state: &mut State, ctx: &Ctx, status: v1::NetworkStatu
             state.screen = Screen::Agents;
         }
     }
+    super::agents::rewatch_returned_member(state, ctx, &returned);
     let has = state.has_network();
     if has && !had && matches!(state.screen, Screen::Onboarding) {
         state.screen = Screen::Agents;
