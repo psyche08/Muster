@@ -100,7 +100,9 @@ fn windows_diagnostic(pid: u32, point: Option<(f64, f64)>) -> String {
     );
 
     // A window the application does not list may still answer at its own
-    // position, which is a different route into the same tree.
+    // position, which is a different route into the same tree. This hit-tests
+    // whatever is frontmost at the point, so it says something about this app
+    // only when this app's window is in front there.
     if let Some((x, y)) = point {
         let hit = Element::system_wide().element_at(x, y);
         line(
@@ -194,10 +196,12 @@ impl Platform for MacPlatform {
                 }
             }
             "lock-field" => Ok(super::locked_use::field_diagnostic()),
-            // This walks `AXChildren` from the application element, which
-            // yields the menu bar and never the windows, so its output shows
-            // no `AXWindow` for any app -- Finder's eight windows included.
-            // Use `ax-windows` for a window question (ADR 0129).
+            // Ask a window question in an unlocked session. While the screen
+            // is locked -- including under a Locked Use cover -- the
+            // Accessibility API hands back the application element in place of
+            // window elements, for every app, so a walk reports no `AXWindow`
+            // and the attribute reads mislabel (ADR 0131 corrects ADR 0129,
+            // which took that artifact for a blind spot in this action).
             "ax-dump" => {
                 if !super::ax::trusted() {
                     return Err("Accessibility not granted".into());

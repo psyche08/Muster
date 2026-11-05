@@ -1,8 +1,10 @@
 # ADR 0129: Ask the Accessibility API for windows by name, not by walking children
 
 - Date: 2026-11-05
-- Status: Accepted; source verified and built. Runtime unverified — the action
-  needs a trusted process, so it cannot be exercised from a scratch build.
+- Status: Accepted; the action stands on a smaller claim, its premise is
+  withdrawn by [ADR 0131](0131-a-locked-screen-explains-the-missing-windows.md)
+  — `ax-dump` has no blind spot, and the zero `AXWindow` counts below were
+  a locked-session artifact
 - Related: [ADR 0127](0127-the-daemon-stays-out-of-launch-services.md) (the
   investigation this instruments, and the record whose causal claim is still
   open), [ADR 0128](0128-the-panel-helper-keeps-its-own-identity.md) (the other
@@ -10,6 +12,15 @@
   (what reads the app's windows)
 
 ## Context
+
+> **Premise withdrawn by [ADR 0131](0131-a-locked-screen-explains-the-missing-windows.md).**
+> The four-app table below was measured while the screen was locked, which makes
+> the Accessibility API return the application element in place of window
+> elements for every app. Unlocked, `ax-dump` prints Finder's window as its
+> first child, and the sentence "`AXChildren` yields the menu bar, not the
+> windows" is false. `ax-windows` is kept because asking attributes by name with
+> their error codes is a sharper read than a walk, and because it does not
+> mutate the app it measures — not because a walk cannot see windows.
 
 The app's windows are missing from the Accessibility API on the owner's Mac.
 ADR 0127 removed a duplicate Launch Services record that was a real defect, and
@@ -29,9 +40,18 @@ server "publishes no windows at all", because its output contained no
 Finder has eight windows and `ax-dump` reports none, so the dump says nothing
 about windows for any application. The reason is in the code:
 `ax-dump` calls `Element::application(pid).dump(..)`, `dump` descends through
-`Element::children`, and `children` reads **`AXChildren`**. For an application
-element `AXChildren` yields the menu bar, not the windows. `AXWindows` is a
-separate attribute, and nothing in that path ever asks for it.
+`Element::children`, and `children` reads **`AXChildren`**, never `AXWindows`.
+
+**The explanation that followed here was wrong and is withdrawn.** This record
+said that for an application element `AXChildren` yields the menu bar and not
+the windows. This action's own output contradicts it: unlocked, `AXChildren` is
+count=2 for Muster and count=3 for Finder, with `AXWindow` first in both
+(see [ADR 0130](0130-the-ax-symptom-was-a-locked-screen.md)). The measurement
+that `ax-dump` reports no `AXWindow` for any application, Finder's eight
+included, still stands — taken unlocked at 11:03–11:06. Why it does is
+unexplained. One hypothesis, untested: `dump` skips a node it has already
+seen, so a first child that resolved to the application element would stop the
+walk descending into it.
 
 So the question that matters — what does a trusted process get when it asks
 this application for its windows — had no instrument. The two other routes were
