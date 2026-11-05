@@ -2217,6 +2217,7 @@ dependencies = [
  "env_logger",
  "log",
  "muster-app-core",
+ "muster-paths",
  "muster-proto",
  "muster-terminal",
  "serde",

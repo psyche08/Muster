@@ -234,6 +234,8 @@ records a specific decision and does not revive code on its delete list.
 | [0133](0133-mount-the-multica-data-image-as-the-user.md) | Accepted; source and tests verified, install acceptance passed | Mount the Multica data image as the user, not through diskutil |
 | [0134](0134-activate-claude-next-and-back-by-keyboard-focus.md) | Accepted; source and tests verified, live card acceptance pending | Activate Claude's Next and Back through keyboard focus |
 | [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; source and tests verified, install acceptance pending | Give session watches the forwarding budget and report why they ended |
+| [0136](0136-settle-relay-carrier-switches.md) | Accepted; source and tests verified, install acceptance pending | Settle relay carrier switches |
+| [0137](0137-keep-the-desktop-apps-log-in-a-file.md) | Accepted; source and tests verified, install acceptance pending | Keep the desktop app's log in a file |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

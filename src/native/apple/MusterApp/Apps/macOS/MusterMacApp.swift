@@ -24,7 +24,7 @@ struct MusterMacApp: App {
                 .tint(Color("AccentColor"))
                 .frame(minWidth: 720, minHeight: 480)
                 .task {
-                    MusterRuntime.initLogging(level: 3)
+                    MusterRuntime.initFileLogging(level: 3)
                     DesktopHelper.registerIfInstalled()
                     let socket = MusterPaths.daemonSocket
                     let managed = DaemonAgent.isBundled && ProcessInfo.processInfo.environment["MUSTER_DIR"] == nil

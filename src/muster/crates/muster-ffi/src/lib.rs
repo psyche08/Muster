@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use muster_app_core::{AppConfig, AppCore, Mode, Shell};
 
+mod log_file;
+
 #[repr(C)]
 pub struct MusterPlatform {
     pub ctx: *mut c_void,
@@ -298,8 +300,7 @@ pub unsafe extern "C" fn muster_string_free(s: *mut c_char) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn muster_log_init(level: u32) {
+fn logger(level: u32) -> env_logger::Builder {
     let filter = match level {
         0 => "off",
         1 => "error",
@@ -307,8 +308,32 @@ pub extern "C" fn muster_log_init(level: u32) {
         3 => "info",
         _ => "debug",
     };
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(filter))
-        .try_init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(filter))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn muster_log_init(level: u32) {
+    let _ = logger(level).try_init();
+}
+
+/// Like `muster_log_init`, and also to `app.log` in the platform's log
+/// directory (`muster_paths::log_dir`), for a desktop app whose stderr goes
+/// nowhere. Stderr alone when that file cannot be opened.
+#[unsafe(no_mangle)]
+pub extern "C" fn muster_log_init_file(level: u32) {
+    let mut logger = logger(level);
+    let file = muster_paths::log_dir()
+        .ok_or_else(|| std::io::Error::other("no log directory"))
+        .and_then(|dir| log_file::LogFile::open(&dir, log_file::LIMIT));
+    let opened = file.map(|file| {
+        logger.target(env_logger::Target::Pipe(Box::new(file)));
+    });
+    if logger.try_init().is_ok() {
+        match opened {
+            Ok(()) => log::info!("app log opened, pid {}", std::process::id()),
+            Err(error) => log::warn!("app log file unavailable, stderr only: {error}"),
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

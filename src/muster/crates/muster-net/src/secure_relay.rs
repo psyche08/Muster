@@ -19,7 +19,9 @@ use crate::relay_tls;
 const CAPACITY: usize = 256;
 const PROBE_INTERVAL: Duration = Duration::from_secs(5);
 const PROBE_RETRY: Duration = Duration::from_secs(1);
-const MIN_DWELL: Duration = Duration::from_secs(10);
+/// How long a live carrier must stay the better one by RTT before traffic
+/// moves to it. A failed carrier is left at once.
+const SETTLE: Duration = Duration::from_secs(30);
 
 /// How a device keeps its relay carriers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,10 +79,14 @@ impl Health {
                     now.saturating_duration_since(at) < PROBE_INTERVAL + CONNECT_TIMEOUT
                 }))
     }
-    fn ack(&mut self, now: Instant, rtt: Duration) {
+    /// `rtt` is `None` for a probe answered after a retry: which send it
+    /// answers is unknown, so it proves liveness but is no RTT sample.
+    fn ack(&mut self, now: Instant, rtt: Option<Duration>) {
         self.ready = true;
         self.last_ack = Some(now);
-        self.rtt = Some(self.rtt.map_or(rtt, |old| (old * 3 + rtt) / 4));
+        if let Some(rtt) = rtt {
+            self.rtt = Some(self.rtt.map_or(rtt, |old| (old * 3 + rtt) / 4));
+        }
         self.successes = self.successes.saturating_add(1);
         self.failures = 0;
     }
@@ -95,7 +101,8 @@ impl Health {
 struct Selection {
     paths: [Health; 2],
     active: Option<Carrier>,
-    switched: Instant,
+    /// The live carrier RTT prefers over the active one, and since when.
+    preferred: Option<(Carrier, Instant)>,
     started: Instant,
     probing: bool,
     /// The carrier and generation the relay acknowledged an Activate on.
@@ -107,7 +114,7 @@ impl Selection {
         Self {
             paths: Default::default(),
             active: None,
-            switched: now,
+            preferred: None,
             started: now,
             probing,
             activated: None,
@@ -116,40 +123,65 @@ impl Selection {
     fn live(&self, carrier: Carrier, now: Instant) -> bool {
         self.paths[carrier.index()].live(now, self.probing)
     }
+    /// Datagrams are preferred: leaving QUIC takes an RTT half again and
+    /// 20 ms above TLS's; once off it, QUIC is back in favour when no more
+    /// than a quarter or 10 ms above. The gap keeps an RTT near one line
+    /// from switching carriers back and forth.
+    fn quic_slower(&self) -> bool {
+        let qr = self.paths[0].rtt.unwrap_or(CONNECT_TIMEOUT);
+        let tr = self.paths[1].rtt.unwrap_or(CONNECT_TIMEOUT);
+        let (ratio, margin) = if self.active == Some(Carrier::Quic) {
+            (1.5, Duration::from_millis(20))
+        } else {
+            (1.25, Duration::from_millis(10))
+        };
+        qr > tr.mul_f64(ratio) && qr > tr + margin
+    }
     fn choose(&mut self, now: Instant) -> Option<Carrier> {
         let q = self.live(Carrier::Quic, now);
         let t = self.live(Carrier::Tls, now);
         let best = match (q, t) {
-            (true, true) => {
-                let qr = self.paths[0].rtt.unwrap_or(CONNECT_TIMEOUT);
-                let tr = self.paths[1].rtt.unwrap_or(CONNECT_TIMEOUT);
-                // Prefer datagrams unless TCP is materially faster.
-                Some(if qr <= tr.mul_f64(1.25) {
-                    Carrier::Quic
-                } else {
-                    Carrier::Tls
-                })
-            }
+            (true, true) => Some(if self.quic_slower() {
+                Carrier::Tls
+            } else {
+                Carrier::Quic
+            }),
             (true, false) => Some(Carrier::Quic),
             (false, true) => Some(Carrier::Tls),
             _ => None,
         };
         let next = match (self.active, best) {
             (Some(current), Some(candidate)) if current != candidate && self.live(current, now) => {
-                let stable = self.paths[candidate.index()].successes >= 3
-                    && now.saturating_duration_since(self.switched) >= MIN_DWELL;
-                if stable {
-                    Some(candidate)
-                } else {
-                    Some(current)
-                }
+                // A preference has to hold, unbroken, for SETTLE.
+                let since = match self.preferred {
+                    Some((carrier, since)) if carrier == candidate => since,
+                    _ => now,
+                };
+                self.preferred = Some((candidate, since));
+                let settled = self.paths[candidate.index()].successes >= 3
+                    && now.saturating_duration_since(since) >= SETTLE;
+                Some(if settled { candidate } else { current })
             }
-            _ => best,
+            _ => {
+                self.preferred = None;
+                best
+            }
         };
         if self.active != next {
-            log::info!("relay carrier {:?} -> {:?}", self.active, next);
+            let rtt = |carrier: Carrier| {
+                self.paths[carrier.index()]
+                    .rtt
+                    .map_or("-".to_owned(), |rtt| format!("{}ms", rtt.as_millis()))
+            };
+            log::info!(
+                "relay carrier {:?} -> {:?} (rtt quic={} tls={})",
+                self.active,
+                next,
+                rtt(Carrier::Quic),
+                rtt(Carrier::Tls)
+            );
             self.active = next;
-            self.switched = now;
+            self.preferred = None;
         }
         next
     }
@@ -581,7 +613,9 @@ struct Worker {
     verify: watch::Receiver<u64>,
 }
 impl Worker {
-    async fn open(&self) -> anyhow::Result<(Wire, Vec<u8>)> {
+    /// The connection, the relay's REFLECT, and the first full-frame
+    /// probe's round trip: the carrier's first RTT sample.
+    async fn open(&self) -> anyhow::Result<(Wire, Vec<u8>, Duration)> {
         let liveness = match self.strategy {
             Strategy::Standby => relay_tls::Liveness::Fast,
             Strategy::Fallback => relay_tls::Liveness::Sparse,
@@ -620,6 +654,7 @@ impl Worker {
         // A tiny authentication response does not prove usable UDP MTU.
         // Probe and ACK are padded to MAX_FRAME and must both cross the path.
         let nonce = rand::random::<u64>();
+        let probed = Instant::now();
         wire.send(Frame::Probe { id, nonce }.encode()).await?;
         loop {
             match Frame::decode(&wire.recv().await?)? {
@@ -630,6 +665,7 @@ impl Worker {
                 _ => {}
             }
         }
+        let rtt = probed.elapsed();
         let push_token = self.push_token.lock().unwrap().clone();
         if let Some(bytes) = push_token {
             wire.send(bytes).await?;
@@ -643,9 +679,9 @@ impl Worker {
             .encode(),
         )
         .await?;
-        Ok((wire, bytes))
+        Ok((wire, bytes, rtt))
     }
-    fn ack(&self, generation: u64, rtt: Duration) {
+    fn ack(&self, generation: u64, rtt: Option<Duration>) {
         let mut state = self.state.lock().unwrap();
         let p = &mut state.paths[self.carrier.index()];
         if p.generation == generation {
@@ -658,12 +694,14 @@ impl Worker {
     async fn run(&mut self, wire: &mut Wire, generation: u64) -> anyhow::Result<()> {
         let probing = self.strategy == Strategy::Standby;
         let mut next_probe = Instant::now() + PROBE_INTERVAL;
-        let mut pending = None::<(u64, Instant)>;
+        // The probe in flight: nonce, first send, and whether it was resent.
+        let mut pending = None::<(u64, Instant, bool)>;
         let mut retry_at = next_probe;
         self.verify.borrow_and_update();
         loop {
-            let deadline =
-                pending.map_or(next_probe, |(_, at)| (at + CONNECT_TIMEOUT).min(retry_at));
+            let deadline = pending.map_or(next_probe, |(_, at, _)| {
+                (at + CONNECT_TIMEOUT).min(retry_at)
+            });
             let id = self.signer.public_key().device_id();
             tokio::select! {
                 changed = self.reset.changed() => { let _ = changed; return Ok(()) }
@@ -674,19 +712,20 @@ impl Worker {
                     wire.tx.try_send(Frame::Probe { id, nonce }.encode())
                         .map_err(|_| anyhow::anyhow!("relay control queue unavailable"))?;
                     let sent = Instant::now();
-                    pending = Some((nonce, sent));
+                    pending = Some((nonce, sent, false));
                     retry_at = sent + PROBE_RETRY;
                 }
                 _ = tokio::time::sleep_until(deadline.into()), if probing || pending.is_some() => {
                     let now = Instant::now();
-                    let (nonce, sent) = pending.unwrap_or_else(|| (rand::random::<u64>(), now));
+                    let (nonce, sent, resent) = pending
+                        .map_or((rand::random::<u64>(), now, false), |(nonce, sent, _)| (nonce, sent, true));
                     // QUIC DATAGRAM does not retransmit a lost probe/ACK. Retry
                     // only the same nonce inside the original three-second
                     // window; unrelated traffic and stale ACKs cannot extend it.
                     anyhow::ensure!(now < sent + CONNECT_TIMEOUT, "relay keepalive exceeded 3s");
                     wire.tx.try_send(Frame::Probe { id, nonce }.encode())
                         .map_err(|_| anyhow::anyhow!("relay control queue unavailable"))?;
-                    pending = Some((nonce, sent));
+                    pending = Some((nonce, sent, resent));
                     retry_at = now + PROBE_RETRY;
                 }
                 incoming = wire.recv() => {
@@ -696,10 +735,11 @@ impl Worker {
                     let Ok(frame) = Frame::decode(&bytes) else { continue };
                     match frame {
                         Frame::ProbeAck { nonce } => {
-                            if pending.is_some_and(|(expected,_)| nonce == expected) {
-                                let (_,at) = pending.take().expect("checked");
+                            if pending.is_some_and(|(expected,_,_)| nonce == expected) {
+                                let (_,at,resent) = pending.take().expect("checked");
                                 anyhow::ensure!(at.elapsed() < CONNECT_TIMEOUT, "relay keepalive exceeded 3s");
-                                self.ack(generation,at.elapsed());
+                                // Karn's rule: an ACK after a resend times neither send.
+                                self.ack(generation,(!resent).then(|| at.elapsed()));
                                 next_probe = Instant::now() + PROBE_INTERVAL;
                             }
                         }
@@ -752,7 +792,6 @@ impl Worker {
             p.ready = false;
             p.generation
         };
-        let started = Instant::now();
         let mut opening_reset = self.reset.clone();
         let opened = tokio::select! {
             biased;
@@ -763,14 +802,14 @@ impl Worker {
             result = tokio::time::timeout(CONNECT_TIMEOUT, self.open()) => result,
         };
         let ended = match opened {
-            Ok(Ok((mut wire, reflect))) => {
+            Ok(Ok((mut wire, reflect, rtt))) => {
                 log::info!(
                     "relay {} authenticated {}:{}",
                     self.carrier.label(),
                     self.host,
                     self.port
                 );
-                self.ack(generation, started.elapsed());
+                self.ack(generation, Some(rtt));
                 // REFLECT belongs to this outer socket, not inner PeerLink.
                 let _ = reflect;
                 match self.run(&mut wire, generation).await {
@@ -897,28 +936,89 @@ mod tests {
     fn selection_failure_hysteresis_and_rtt() {
         let mut s = Selection::new(true);
         let t = s.started;
-        s.paths[1].ack(t, Duration::from_millis(40));
+        s.paths[1].ack(t, Some(Duration::from_millis(40)));
         assert_eq!(s.choose(t), Some(Carrier::Tls));
-        s.paths[0].ack(t, Duration::from_millis(10));
+        s.paths[0].ack(t, Some(Duration::from_millis(10)));
         assert_eq!(s.choose(t), Some(Carrier::Tls));
-        for dt in [5, 10] {
-            let now = t + Duration::from_secs(dt);
-            s.paths[0].ack(now, Duration::from_millis(10));
-            s.paths[1].ack(now, Duration::from_millis(40));
+        let mut now = t;
+        while now + PROBE_INTERVAL < t + SETTLE {
+            now += PROBE_INTERVAL;
+            s.paths[0].ack(now, Some(Duration::from_millis(10)));
+            s.paths[1].ack(now, Some(Duration::from_millis(40)));
+            assert_eq!(s.choose(now), Some(Carrier::Tls), "settling");
         }
-        let now = t + MIN_DWELL;
+        let now = t + SETTLE;
+        s.paths[0].ack(now, Some(Duration::from_millis(10)));
+        s.paths[1].ack(now, Some(Duration::from_millis(40)));
         assert_eq!(s.choose(now), Some(Carrier::Quic));
         s.paths[0].fail();
         assert_eq!(s.choose(now), Some(Carrier::Tls));
         s.paths[1].fail();
         assert_eq!(s.choose(now), None);
     }
+
+    /// Both carriers answer a probe every second for `secs` at these
+    /// RTTs; the carrier chosen after each.
+    fn hold(
+        s: &mut Selection,
+        at: &mut Instant,
+        secs: u64,
+        quic_ms: u64,
+        tls_ms: u64,
+    ) -> Vec<Option<Carrier>> {
+        s.paths[0].rtt = Some(Duration::from_millis(quic_ms));
+        s.paths[1].rtt = Some(Duration::from_millis(tls_ms));
+        (0..secs)
+            .map(|_| {
+                *at += Duration::from_secs(1);
+                // Resent-probe ACKs: liveness only, the RTTs stay as set.
+                s.paths[0].ack(*at, None);
+                s.paths[1].ack(*at, None);
+                s.choose(*at)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rtt_near_the_line_or_briefly_high_keeps_the_carrier() {
+        use Carrier::{Quic, Tls};
+        let mut s = Selection::new(true);
+        let mut at = s.started;
+        assert_eq!(hold(&mut s, &mut at, 1, 30, 25), [Some(Quic)]);
+        // Above the former single line (1.25 x TLS), inside the gap.
+        assert!(
+            hold(&mut s, &mut at, 120, 40, 25)
+                .iter()
+                .all(|c| *c == Some(Quic))
+        );
+        assert_eq!(s.paths[0].rtt, Some(Duration::from_millis(40)));
+        // Three times slower, but never for SETTLE at a stretch.
+        for _ in 0..3 {
+            assert!(
+                hold(&mut s, &mut at, 25, 80, 25)
+                    .iter()
+                    .all(|c| *c == Some(Quic))
+            );
+            hold(&mut s, &mut at, 1, 30, 25);
+        }
+        // Sustained: traffic moves after SETTLE, not before.
+        let chosen = hold(&mut s, &mut at, 31, 80, 25);
+        assert_eq!(chosen.iter().position(|c| *c == Some(Tls)), Some(30));
+        // Off QUIC, it is back in favour within a quarter or 10 ms.
+        let chosen = hold(&mut s, &mut at, 31, 34, 25);
+        assert_eq!(chosen.iter().position(|c| *c == Some(Quic)), Some(30));
+        assert!(
+            hold(&mut s, &mut at, 60, 34, 25)
+                .iter()
+                .all(|c| *c == Some(Quic))
+        );
+    }
     #[test]
     fn an_unprobed_carrier_is_live_while_connected() {
         let mut s = Selection::new(false);
         let t = s.started;
         assert_eq!(s.choose(t), None);
-        s.paths[0].ack(t, Duration::from_millis(30));
+        s.paths[0].ack(t, Some(Duration::from_millis(30)));
         let much_later = t + PROBE_INTERVAL * 10;
         assert_eq!(s.choose(much_later), Some(Carrier::Quic));
         s.paths[0].fail();
@@ -929,8 +1029,8 @@ mod tests {
     fn stale_health_is_not_success_and_tcp_can_win() {
         let mut s = Selection::new(true);
         let t = s.started;
-        s.paths[0].ack(t, Duration::from_millis(150));
-        s.paths[1].ack(t, Duration::from_millis(20));
+        s.paths[0].ack(t, Some(Duration::from_millis(150)));
+        s.paths[1].ack(t, Some(Duration::from_millis(20)));
         assert_eq!(s.choose(t), Some(Carrier::Tls));
         assert_eq!(s.choose(t + PROBE_INTERVAL + CONNECT_TIMEOUT), None);
     }
