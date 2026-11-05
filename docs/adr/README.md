@@ -232,6 +232,8 @@ records a specific decision and does not revive code on its delete list.
 | [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
 | [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance passed | Restore the daemon's background registration, and the Dock tile goes |
 | [0133](0133-mount-the-multica-data-image-as-the-user.md) | Accepted; source and tests verified, install acceptance passed | Mount the Multica data image as the user, not through diskutil |
+| [0134](0134-activate-claude-next-and-back-by-keyboard-focus.md) | Accepted; source and tests verified, live card acceptance pending | Activate Claude's Next and Back through keyboard focus |
+| [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; source and tests verified, install acceptance pending | Give session watches the forwarding budget and report why they ended |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

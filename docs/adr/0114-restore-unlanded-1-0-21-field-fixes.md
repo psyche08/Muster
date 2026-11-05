@@ -7,6 +7,9 @@
   [architecture/network.md](../architecture/network.md)
 - Numbering: 0109–0113 are taken by an open pull request, so this record
   takes the next free number rather than reusing theirs
+- Later evidence: the `why=` warning never fired, because an earlier step
+  check returned first; [ADR 0134](0134-activate-claude-next-and-back-by-keyboard-focus.md)
+  logs it on every timeout exit
 
 ## Context
 

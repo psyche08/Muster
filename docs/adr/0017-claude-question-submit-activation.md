@@ -5,6 +5,8 @@
 - Date: 2026-10-22
 - Status: Accepted
 - Focus-proof requirement superseded by ADR 0020; activation policy retained.
+- Back and Next activation superseded by [ADR 0134](0134-activate-claude-next-and-back-by-keyboard-focus.md):
+  they now use this record's focused Space activation too.
 - Related: ADR 0007, ADR 0010; AGENT_INTERFACE.md user-confirmed answer delivery
 
 ## Context
