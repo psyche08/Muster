@@ -28,6 +28,77 @@ final class MacConversationTests: XCTestCase {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 600), styleMask: [.borderless], backing: .buffered, defer: false)
         w.isReleasedWhenClosed = false; w.contentViewController = c; w.setContentSize(NSSize(width: 600, height: 600)); w.orderFront(nil); settle(); return w
     }
+    func testRepeatedFittingReusesHeightUntilContentOrWidthChanges() throws {
+        let item = MacConversationItem()
+        let probe = MacMeasurementProbe(frame: NSRect(x: 0, y: 0, width: 500, height: 200))
+        item.view = probe
+        let model = MacSizingFixtureModel()
+        item.render(AnyView(MacSizingFixture(model: model)))
+        let window = NSWindow(contentRect: probe.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = probe; window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        settle()
+        func height(_ width: CGFloat) -> CGFloat {
+            let attributes = NSCollectionViewLayoutAttributes(forItemWith: IndexPath(item: 0, section: 0))
+            attributes.size = NSSize(width: width, height: 100)
+            return item.preferredLayoutAttributesFitting(attributes).size.height
+        }
+        _ = height(500); settle()
+        let original = height(500)
+        let before = probe.layoutRequests
+        for _ in 0..<30 { XCTAssertEqual(height(500), original, accuracy: 0.5) }
+        XCTAssertEqual(probe.layoutRequests, before,
+            "Scrolling must not lay out unchanged hosted content again for each fitting request")
+
+        let narrow = height(250)
+        XCTAssertGreaterThan(narrow, original + 20, "A different column width needs a fresh measurement")
+        model.text += String(repeating: " More streamed content that wraps.", count: 30)
+        settle()
+        let grown = height(250)
+        XCTAssertGreaterThan(grown, narrow + 100, "Intrinsic changes must invalidate the measured height")
+
+        item.render(AnyView(Text("Short replacement"))); settle()
+        XCTAssertLessThan(height(250), grown - 100, "A replacement cannot reuse the old content's height")
+        item.prepareForReuse()
+        let retained = TranscriptHostingView(rootView: AnyView(Text("Retained interaction").frame(height: 180)))
+        item.attach(retained); settle()
+        XCTAssertEqual(height(250), 180, accuracy: 1)
+        retained.setContent(AnyView(Text("Expanded interaction").frame(height: 300))); settle()
+        XCTAssertEqual(height(250), 300, accuracy: 1)
+
+        // Diffable reuse can move the retained input host to another item
+        // before its former item receives prepareForReuse.
+        let next = MacConversationItem()
+        next.attach(retained); window.contentView = next.view; settle()
+        let attributes = NSCollectionViewLayoutAttributes(forItemWith: IndexPath(item: 1, section: 0))
+        attributes.size = NSSize(width: 250, height: 100)
+        XCTAssertEqual(next.preferredLayoutAttributesFitting(attributes).size.height, 300, accuracy: 1)
+        item.prepareForReuse()
+        retained.setContent(AnyView(Text("Moved interaction").frame(height: 420))); settle()
+        XCTAssertEqual(next.preferredLayoutAttributesFitting(attributes).size.height, 420, accuracy: 1,
+            "The former item must not detach the new owner's intrinsic-size callback")
+    }
+
+    func testLongTableScrollKeepsStableGeometry() throws {
+        let c = MacConversationController(); var value = chat(0..<40)
+        value.timeline[20].message.text = "| Item | Description | Result |\n| --- | --- | --- |\n" +
+            (0..<30).map { "| Row \($0) | Synthetic **Markdown** text that wraps in a narrow column. | Complete |\n" }.joined()
+        update(c, value); let window = show(c); defer { window.close() }
+        let path = IndexPath(item: 21, section: 0)
+        c.collection.beginScrolling()
+        c.collection.scrollToItems(at: [path], scrollPosition: .top)
+        settle(); c.collection.endScrolling(); settle()
+        let originalHeight = try XCTUnwrap(c.collection.layoutAttributesForItem(at: path)).size.height
+        XCTAssertGreaterThan(originalHeight, 600)
+        for delta: Int32 in [-80, 80, -80, 80] {
+            let before = c.scroll.contentView.bounds.minY
+            try wheel(c, .began, delta: 0); try wheel(c, .changed, delta: delta); settle()
+            try wheel(c, .ended, delta: 0); settle()
+            XCTAssertEqual(c.scroll.contentView.bounds.minY, before - CGFloat(delta), accuracy: 4)
+            XCTAssertEqual(try XCTUnwrap(c.collection.layoutAttributesForItem(at: path)).size.height,
+                originalHeight, accuracy: 1)
+        }
+    }
     func testRecyclingPrependGrowthResizeAndRelease() throws {
         var c: MacConversationController? = MacConversationController()
         var value = chat(200..<700)
@@ -398,6 +469,17 @@ final class MacConversationTests: XCTestCase {
 private struct MacDraftFixture: View {
     @State private var text = ""
     var body: some View { TextField("Answer", text: $text).textFieldStyle(.roundedBorder).padding() }
+}
+private final class MacMeasurementProbe: NSView {
+    var layoutRequests = 0
+    override func layoutSubtreeIfNeeded() { layoutRequests += 1; super.layoutSubtreeIfNeeded() }
+}
+private final class MacSizingFixtureModel: ObservableObject {
+    @Published var text = String(repeating: "Synthetic wrapping content. ", count: 20)
+}
+private struct MacSizingFixture: View {
+    @ObservedObject var model: MacSizingFixtureModel
+    var body: some View { Text(model.text).fixedSize(horizontal: false, vertical: true) }
 }
 private struct MacTabFixture: View {
     let controller: MacConversationController
