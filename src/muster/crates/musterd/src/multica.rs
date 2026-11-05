@@ -32,7 +32,7 @@ pub struct Manager {
     executable: Option<PathBuf>,
     gate: tokio::sync::Mutex<()>,
     browse_gate: tokio::sync::Semaphore,
-    bridge: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
+    bridge: tokio::sync::Mutex<Option<bridge::Bridge>>,
     last_error: std::sync::Mutex<String>,
     // Tests supply the host Multica CLI so installation can be exercised
     // without touching an operator's ~/.local/bin.
@@ -44,8 +44,8 @@ pub struct Manager {
 }
 impl Drop for Manager {
     fn drop(&mut self) {
-        if let Some(task) = self.bridge.get_mut().take() {
-            task.abort();
+        if let Some(bridge) = self.bridge.get_mut().take() {
+            bridge.task.abort();
         }
     }
 }

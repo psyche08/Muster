@@ -331,23 +331,58 @@ pub(super) async fn ensure(
         ));
     }
     let mut bridge = manager.bridge.lock().await;
-    if bridge.as_ref().is_some_and(|t| !t.is_finished()) {
-        return refresh_wrappers(manager, c).await;
+    let rebound = listen(&mut bridge, c, socket, gateway).await?;
+    refresh_wrappers(manager, c).await?;
+    if rebound {
+        remove_legacy_alias(manager, c).await?;
+    }
+    Ok(())
+}
+
+/// A bridge listener and the container gateway it is bound to.
+pub(super) struct Bridge {
+    gateway: String,
+    pub(super) task: tokio::task::JoinHandle<()>,
+}
+
+/// Keep a listener on the container's current gateway and publish its port and
+/// token. Apple's container network can come back on another subnet; the old
+/// address then leaves the host, and its listener stays open but can never be
+/// reached again. Returns whether a new listener was published.
+#[cfg(unix)]
+async fn listen(
+    bridge: &mut Option<Bridge>,
+    c: &Config,
+    socket: &Path,
+    gateway: &str,
+) -> Result<bool, Error> {
+    if bridge
+        .as_ref()
+        .is_some_and(|b| b.gateway == gateway && !b.task.is_finished())
+    {
+        return Ok(false);
     }
     let (listener, port, token) = bind_bridge(gateway).await?;
+    if let Some(old) = bridge.take() {
+        // Its connections came through an address the guest no longer reaches;
+        // end them before their launchers are revoked.
+        old.task.abort();
+        let _ = old.task.await;
+    }
     revoke_stale(c)?;
     write_bridge_files(c, gateway, port, &token)?;
-    refresh_wrappers(manager, c).await?;
-    remove_legacy_alias(manager, c).await?;
     let allowed = PathBuf::from(workspaces(c));
-    *bridge = Some(spawn_bridge(
-        listener,
-        token,
-        socket.to_path_buf(),
-        Path::new(&c.data_dir).to_path_buf(),
-        allowed,
-    ));
-    Ok(())
+    *bridge = Some(Bridge {
+        gateway: gateway.to_owned(),
+        task: spawn_bridge(
+            listener,
+            token,
+            socket.to_path_buf(),
+            Path::new(&c.data_dir).to_path_buf(),
+            allowed,
+        ),
+    });
+    Ok(true)
 }
 
 /// Serve one listener for this process's lifetime. Each connection is one
@@ -806,5 +841,59 @@ mod tests {
         );
 
         server.abort();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bridge_follows_a_changed_container_gateway() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        let credentials = data.join(".runtime-credentials");
+        std::fs::create_dir_all(&credentials).unwrap();
+        let c = Config {
+            data_dir: data.to_string_lossy().into_owned(),
+            container_name: "mlt".into(),
+            ..Default::default()
+        };
+        let socket = dir.path().join("musterd.sock");
+
+        // A live bridge still bound to the subnet the container network left.
+        let stale = tokio::spawn(std::future::pending::<()>());
+        let stale_task = stale.abort_handle();
+        let mut bridge = Some(Bridge {
+            gateway: "192.168.64.1".into(),
+            task: stale,
+        });
+        let launcher = credentials.join(format!("multica-{}", "b".repeat(32)));
+        std::fs::write(&launcher, "#!/bin/sh\n").unwrap();
+
+        assert!(listen(&mut bridge, &c, &socket, "127.0.0.1").await.unwrap());
+        assert!(
+            stale_task.is_finished(),
+            "the unreachable listener must end"
+        );
+        assert!(!launcher.exists(), "its launchers must be revoked");
+        let codex = std::fs::read_to_string(data.join("runtime-codex")).unwrap();
+        assert!(codex.contains(&format!("MUSTER_BRIDGE_HOST={}", quote("127.0.0.1"))));
+        let port: u16 = codex
+            .split("MUSTER_BRIDGE_PORT=")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|port| port.parse().ok())
+            .unwrap();
+        tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("the published port must be the new listener");
+
+        // An unchanged gateway keeps the listener, its port and its token.
+        let token = std::fs::read(data.join("bridge-token")).unwrap();
+        assert!(!listen(&mut bridge, &c, &socket, "127.0.0.1").await.unwrap());
+        assert_eq!(std::fs::read(data.join("bridge-token")).unwrap(), token);
+        assert_eq!(
+            std::fs::read_to_string(data.join("runtime-codex")).unwrap(),
+            codex
+        );
+
+        bridge.unwrap().task.abort();
     }
 }
