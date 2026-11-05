@@ -324,6 +324,7 @@ final class MacConversationItem: NSCollectionViewItem {
     private var host: TranscriptHostingView?
     private weak var retained: NSView?
     private var pins: [NSLayoutConstraint] = []
+    private var measuredSize: NSSize?
     override func loadView() { view = NSView() }
     func render(_ content: AnyView) {
         detach()
@@ -340,12 +341,18 @@ final class MacConversationItem: NSCollectionViewItem {
         NSLayoutConstraint.activate(pins)
     }
     private func detach() {
+        measuredSize = nil
+        host?.sizeChanged = nil
         NSLayoutConstraint.deactivate(pins); pins = []
-        if retained?.superview === view { retained?.removeFromSuperview() }
+        if retained?.superview === view {
+            (retained as? TranscriptHostingView)?.sizeChanged = nil
+            retained?.removeFromSuperview()
+        }
         retained = nil; host?.removeFromSuperview()
     }
     private var heightCheckScheduled = false
     private func invalidateHeight() {
+        measuredSize = nil
         guard !heightCheckScheduled else { return }
         heightCheckScheduled = true
         DispatchQueue.main.async { [weak self] in
@@ -360,11 +367,17 @@ final class MacConversationItem: NSCollectionViewItem {
     }
     override func prepareForReuse() { super.prepareForReuse(); detach(); host?.setContent(AnyView(EmptyView())) }
     private func measuredHeight(width: CGFloat) -> CGFloat {
+        // AppKit asks repeatedly while scrolling and reconciling estimated
+        // rows. A fitting request alone is not a content change: do not walk
+        // the entire SwiftUI/Markdown subtree again at the same width.
+        if let measuredSize, measuredSize.width == width { return measuredSize.height }
         let content = host ?? (retained as? TranscriptHostingView)
         content?.setColumnWidth(width)
         view.setFrameSize(NSSize(width: width, height: view.frame.height))
         view.layoutSubtreeIfNeeded()
-        return max(1, content?.fittingSize.height ?? view.fittingSize.height)
+        let height = max(1, content?.fittingSize.height ?? view.fittingSize.height)
+        measuredSize = NSSize(width: width, height: height)
+        return height
     }
     override func preferredLayoutAttributesFitting(_ attributes: NSCollectionViewLayoutAttributes) -> NSCollectionViewLayoutAttributes {
         let result = attributes.copy() as! NSCollectionViewLayoutAttributes
