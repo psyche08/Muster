@@ -105,8 +105,10 @@ Concretely:
 **One real difference survives, and it is not the Accessibility API.** The
 app's window reports an empty `AXTitle` where both controls report theirs. That
 is a trusted read with nothing redacting it. The cause is in the app:
-`AgentScreens.swift` sets `.navigationTitle("")`, which on macOS sets the
-window's title and so overrides `WindowGroup("Muster")`. Not a defect in AX,
+`AgentScreens.swift:56` sets `.navigationTitle("")`, which on macOS sets the
+window's title and so overrides `WindowGroup("Muster")`;
+`TerminalScreens.swift:82` does the same, and those are the only two in
+`MusterUI`, so neither is the whole story on its own. Not a defect in AX,
 and not what was being hunted — but an empty window title does make the window
 harder for any accessibility client or window list to identify, so it is
 recorded here rather than left as an loose end. Whether to give the window a
@@ -153,8 +155,9 @@ title is a product decision and is not taken in this record.
 - **Locked** (`CGSSessionScreenIsLocked=1`): the table above, reproduced
   independently from two sessions.
 - **The empty title** is read from the unlocked `ax-windows` output and traced
-  to `.navigationTitle("")` in `AgentScreens.swift`; the controls, which set no
-  such modifier, report their titles.
+  to `.navigationTitle("")` at `AgentScreens.swift:56` and
+  `TerminalScreens.swift:82`; the controls, which set no such modifier, report
+  their titles.
 - **Gates.** `cargo test --workspace`, `cargo clippy --workspace --all-targets
   -- -D warnings`, `cargo fmt --all --check`,
   `src/muster/scripts/check-layers.py`, `scripts/check-public-content.py`,
