@@ -1251,6 +1251,97 @@ async fn a_mac_coming_back_online_is_listed_again() {
     assert_eq!(state.agents_pending, 2);
 }
 
+/// A failed chat watch names the Mac, says when the daemon reports it
+/// offline, and reconnects as soon as it is back instead of waiting out the
+/// retry delay.
+#[tokio::test]
+async fn a_chat_names_its_offline_mac_and_rewatches_when_it_returns() {
+    let (_dir, ctx, mut state) = phone().await;
+    let member = |presence: &str| v1::MemberView {
+        name: "Studio".into(),
+        ..mac("a1b2c3", presence)
+    };
+    state.network = Some(network_of(vec![member("online")]));
+    state.screen = Screen::Chat;
+    let (watch, old) = state.new_watch();
+    state.chat = Some(Chat {
+        device: "a1b2c3".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            ..Default::default()
+        },
+        watch: Some(watch),
+        ..Default::default()
+    });
+    let failed = |state: &mut State, message: &str| {
+        agents::msg_chat(
+            state,
+            CancellationToken::new(),
+            "a1b2c3".into(),
+            "s".into(),
+            false,
+            false,
+            Err(Error::Rpc(message.into())),
+        );
+        state.chat.as_ref().unwrap().load_error.clone()
+    };
+    assert_eq!(
+        failed(&mut state, "a1b2c3: io: timeout: connect (3 seconds)"),
+        "Studio: io: timeout: connect (3 seconds). Reconnecting…"
+    );
+    network::msg_network(&mut state, &ctx, network_of(vec![member("offline")]));
+    assert_eq!(
+        failed(&mut state, "a1b2c3: io: offline: a1b2c3 is unreachable"),
+        "Studio is offline. Reconnecting…"
+    );
+    assert!(!old.is_cancelled());
+    network::msg_network(&mut state, &ctx, network_of(vec![member("online")]));
+    assert!(old.is_cancelled(), "the returning Mac did not restart the watch");
+    let chat = state.chat.as_ref().unwrap();
+    assert!(chat.watch.as_ref().is_some_and(|w| !w.token.is_cancelled()));
+}
+
+/// A watch that ends before its first event reports the final response (a
+/// forwarding daemon's reason), not a generic timeout.
+#[tokio::test]
+async fn a_watch_ended_before_state_reports_the_forwarding_error() {
+    struct Refusing;
+    impl muster_rpc::Handler for Refusing {
+        fn call(
+            &self,
+            _ctx: muster_rpc::Context,
+            _request: Req,
+            _events: muster_rpc::EventSink,
+        ) -> muster_rpc::HandlerFuture<'_> {
+            Box::pin(async {
+                muster_rpc::err(
+                    v1::error::Code::Unavailable,
+                    "a1b2c3: io: offline: a1b2c3 is unreachable",
+                )
+            })
+        }
+    }
+    let (_dir, ctx, _state) = phone().await;
+    let (a, b) = tokio::io::duplex(65536);
+    tokio::spawn(muster_rpc::serve(
+        b,
+        muster_rpc::Principal::Local,
+        std::sync::Arc::new(Refusing),
+    ));
+    let client = Client::new(a);
+    let mut call = Some(
+        client
+            .start(Req::AgentWatch(Default::default()))
+            .await
+            .unwrap(),
+    );
+    let error = agents::first_watch_event(&ctx.backend, "a1b2c3", &client, &mut call, "timed out")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "a1b2c3: io: offline: a1b2c3 is unreachable");
+    assert!(call.is_none(), "the finished call is not cancelled again");
+}
+
 /// The background suspends presence (a suspended phone's failed dials say
 /// nothing about the Macs); the foreground resumes it.
 #[tokio::test]

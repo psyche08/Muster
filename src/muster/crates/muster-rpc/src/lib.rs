@@ -354,12 +354,14 @@ async fn proxy(
         },
     };
     let mut events_open = true;
+    let mut answered = false;
     let response = loop {
         tokio::select! {
             biased;
             _ = cancel.cancelled() => break None,
             ev = call.events.recv(), if events_open => match ev {
                 Some(ev) => {
+                    answered = true;
                     let sent = tokio::select! {
                         biased;
                         _ = cancel.cancelled() => false,
@@ -389,6 +391,18 @@ async fn proxy(
             .unwrap_or(Err(Error::Closed))
         }
     };
+    if response.is_err() && !answered {
+        // The target answered neither the call nor its cancellation. QUIC
+        // notices a dead path only at its idle timeout, so later calls open a
+        // fresh stream instead of queueing behind this one. Calls already on
+        // it keep it until it ends.
+        if let Ok(mut slot) = slot.try_lock()
+            && slot.as_ref().is_some_and(|c| c.same_connection(&client))
+        {
+            log::warn!("rpc proxy target {target}: link answered nothing; reconnecting next call");
+            *slot = None;
+        }
+    }
     let response = match response {
         Ok(response) => Envelope {
             id,
@@ -586,6 +600,11 @@ impl Client {
 
     pub fn is_closed(&self) -> bool {
         self.closed.is_cancelled() || self.tx.is_closed()
+    }
+
+    /// Whether both handles use one connection (`with_target` copies do).
+    pub fn same_connection(&self, other: &Client) -> bool {
+        Arc::ptr_eq(&self.pending, &other.pending)
     }
 
     /// Discard a stale transport so cached clients cannot keep reusing it.
@@ -795,6 +814,67 @@ mod tests {
                 Ok(Box::new(a) as Box<dyn Stream>)
             })
         }
+    }
+    /// A target whose link accepts frames and never answers (a half-dead path).
+    struct MuteTarget {
+        opened: Arc<std::sync::atomic::AtomicUsize>,
+        held: Mutex<Vec<tokio::io::DuplexStream>>,
+    }
+    impl Handler for MuteTarget {
+        fn call(
+            &self,
+            ctx: Context,
+            req: v1::request::Req,
+            events: EventSink,
+        ) -> HandlerFuture<'_> {
+            EchoHandler.call(ctx, req, events)
+        }
+        fn open_target(&self, _target: &str) -> TargetFuture<'_> {
+            Box::pin(async move {
+                self.opened.fetch_add(1, Ordering::SeqCst);
+                let (a, b) = tokio::io::duplex(65536);
+                self.held.lock().unwrap().push(b);
+                Ok(Box::new(a) as Box<dyn Stream>)
+            })
+        }
+    }
+    #[tokio::test]
+    async fn silent_target_link_is_not_reused_after_a_cancelled_call() {
+        let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (a, b) = tokio::io::duplex(65536);
+        let server = tokio::spawn(serve(
+            b,
+            Principal::Local,
+            Arc::new(MuteTarget {
+                opened: opened.clone(),
+                held: Mutex::default(),
+            }),
+        ));
+        let client = Client::new(a);
+        let target = client.with_target("mute");
+        let call = target
+            .start(v1::request::Req::DeviceInfo(Default::default()))
+            .await
+            .unwrap();
+        while opened.load(Ordering::SeqCst) == 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        call.cancel().await;
+        let response = call.finish_raw().await.unwrap();
+        assert!(matches!(
+            response.resp,
+            Some(v1::response::Resp::Error(ref e)) if e.code == v1::error::Code::Timeout as i32
+        ));
+        let again = target
+            .start(v1::request::Req::DeviceInfo(Default::default()))
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(opened.load(Ordering::SeqCst), 2, "the silent link was reused");
+        drop(again);
+        client.close();
+        let _ = server.await;
     }
     #[tokio::test]
     async fn slow_target_does_not_block_local_or_other_target_calls() {

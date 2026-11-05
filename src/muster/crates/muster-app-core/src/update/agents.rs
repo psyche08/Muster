@@ -170,11 +170,17 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                     let mut first = true;
                     loop {
                         let event = if first {
-                            tokio::time::timeout(Duration::from_secs(3), call.events.recv())
-                                .await
-                                .map_err(|_| {
-                                    Error::Unavailable("catalog snapshot timed out".into())
-                                })?
+                            // Same budget as a session watch: on a desktop it
+                            // covers the daemon's connection to the member.
+                            match tokio::time::timeout(WATCH_START, call.events.recv()).await {
+                                Ok(event) => event,
+                                Err(_) => {
+                                    backend.discard(&device, &client);
+                                    return Err(Error::Unavailable(
+                                        "catalog snapshot timed out".into(),
+                                    ));
+                                }
+                            }
                         } else {
                             call.events.recv().await
                         };
@@ -446,6 +452,41 @@ impl ChatCatchUp {
     }
 }
 
+/// How long a watch may take to deliver its first event. On a desktop the
+/// local daemon first connects to the member (up to `CONNECT_TIMEOUT`) and
+/// only then forwards the call, so the budget covers both.
+const WATCH_START: Duration =
+    Duration::from_secs(muster_net::reconnect::CONNECT_TIMEOUT.as_secs() + 3);
+
+/// A watch's first event. A stream that ends first reports its final
+/// response (a forwarding daemon's "offline" or "unreachable"), not a
+/// generic timeout. A silent link is forgotten so the retry reconnects.
+pub(super) async fn first_watch_event(
+    backend: &crate::backend::Backend,
+    device: &str,
+    client: &Client,
+    call: &mut Option<muster_rpc::Call>,
+    timed_out: &str,
+) -> Result<v1::event::Ev, Error> {
+    let events = &mut call.as_mut().expect("started watch").events;
+    match tokio::time::timeout(WATCH_START, events.recv()).await {
+        Ok(Some(event)) => Ok(event),
+        Ok(None) => {
+            let ended = call.take().expect("started watch");
+            match tokio::time::timeout(Duration::from_secs(1), ended.finish()).await {
+                Ok(Err(error)) => Err(error.into()),
+                _ => Err(Error::Unavailable(
+                    "session watch ended before initial state".into(),
+                )),
+            }
+        }
+        Err(_) => {
+            backend.discard(device, client);
+            Err(Error::Unavailable(timed_out.into()))
+        }
+    }
+}
+
 /// Streams a session's events into the open chat until its watch ends.
 pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_id: String) {
     flush_chat_cache(state, ctx);
@@ -482,20 +523,17 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         }))
                         .await?,
                 );
-                let call = active_call.as_mut().expect("started watch");
                 // The first State comes after server subscription. Fetch history
                 // only after that barrier, while subsequent events queue here.
-                let first = match tokio::time::timeout(Duration::from_secs(3), call.events.recv())
-                    .await
-                    .map_err(|_| Error::Unavailable("session watch timed out".into()))?
-                {
-                    Some(event) => event,
-                    None => {
-                        return Err(Error::Unavailable(
-                            "session watch ended before initial state".into(),
-                        ));
-                    }
-                };
+                let first = first_watch_event(
+                    &backend,
+                    &device,
+                    &client,
+                    &mut active_call,
+                    "session watch timed out",
+                )
+                .await?;
+                let call = active_call.as_mut().expect("started watch");
                 // A newly established subscription replays the server's current
                 // pending interactions. Retire the old stream's display IDs
                 // before that replay, not on transient activity changes.
@@ -1067,6 +1105,10 @@ pub(super) fn msg_chat(
     if token.is_cancelled() {
         return;
     }
+    let failure = result
+        .as_ref()
+        .err()
+        .map(|error| chat_failure(state, &device, error));
     let Some(chat) = &mut state.chat else { return };
     if chat.device != device || chat.session.id != session {
         return;
@@ -1111,15 +1153,47 @@ pub(super) fn msg_chat(
             }
             chat.reconcile_history_start();
         }
-        Err(error) => {
+        Err(_) => {
+            let failure = failure.unwrap_or_default();
             chat.load_error = if earlier {
-                format!("{error}. Retry loading earlier messages.")
+                format!("{failure}. Retry loading earlier messages.")
             } else {
-                format!("{error}. Reconnecting…")
+                format!("{failure}. Reconnecting…")
             };
         }
     }
     super::admitted::settle(state);
+}
+
+/// A chat failure as shown: a member the daemon reports offline is named
+/// as such, and a forwarding daemon's error names the device, not its id.
+pub(super) fn chat_failure(state: &State, device: &str, error: &Error) -> String {
+    let name = state
+        .network
+        .as_ref()
+        .and_then(|n| n.members.iter().find(|m| m.device_id == device))
+        .map(|m| m.name.as_str())
+        .filter(|name| !name.is_empty());
+    let text = error.to_string();
+    match name {
+        Some(name) if state.offline(device) => format!("{name} is offline"),
+        Some(name) if !device.is_empty() => text.replace(device, name),
+        _ => text,
+    }
+}
+
+/// The open chat's member came back: a watch waiting out its retry delay
+/// reconnects now instead.
+pub(super) fn rewatch_returned_member(state: &mut State, ctx: &Ctx, returned: &[String]) {
+    let waiting = state.chat.as_ref().is_some_and(|chat| {
+        !chat.load_error.is_empty() && returned.contains(&chat.device)
+    });
+    if waiting
+        && state.on_path(Screen::Chat)
+        && let Some((device, session)) = state.chat_target()
+    {
+        watch_agent(state, ctx, device, session);
+    }
 }
 
 pub(super) fn msg_agent_stream_started(
