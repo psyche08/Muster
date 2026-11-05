@@ -83,6 +83,7 @@ unsafe extern "C" {
         y: f32,
         result: *mut AXUIElementRef,
     ) -> AXError;
+    fn AXUIElementCopyAttributeNames(element: AXUIElementRef, names: *mut CFArrayRef) -> AXError;
 }
 
 pub const MAX_NODES: usize = 4096;
@@ -184,6 +185,41 @@ impl Element {
         let raw = unsafe { AXUIElementCreateSystemWide() };
         // SAFETY: raw is a valid +1 CF object.
         Self::bounded(unsafe { CFType::wrap_under_create_rule(raw as CFTypeRef) })
+    }
+
+    /// Which attributes this element advertises. A window query that comes back
+    /// empty reads differently depending on whether `AXWindows` is even here.
+    pub fn attribute_names(&self) -> Vec<String> {
+        let mut names: CFArrayRef = std::ptr::null();
+        // SAFETY: valid element; `names` receives a +1 array on success.
+        let status = unsafe { AXUIElementCopyAttributeNames(self.raw(), &mut names) };
+        if status != 0 || names.is_null() {
+            return Vec::new();
+        }
+        // SAFETY: a +1 CF array this scope owns.
+        let array: CFArray<CFType> = unsafe { CFArray::wrap_under_create_rule(names) };
+        array
+            .iter()
+            .filter_map(|item| item.downcast::<CFString>().map(|s| s.to_string()))
+            .collect()
+    }
+
+    /// Whatever the Accessibility API reports at a screen point, which reaches
+    /// a window by a different route than the application's own window list.
+    /// Read only: this inspects, and posts no input.
+    pub fn element_at(&self, x: f64, y: f64) -> Option<Element> {
+        let mut raw: AXUIElementRef = std::ptr::null();
+        // SAFETY: valid element, finite point, and an out pointer that receives
+        // a +1 reference on success. This does not post mouse input.
+        let status =
+            unsafe { AXUIElementCopyElementAtPosition(self.raw(), x as f32, y as f32, &mut raw) };
+        if status != 0 || raw.is_null() {
+            return None;
+        }
+        // SAFETY: a valid +1 CF object.
+        Some(Self::bounded(unsafe {
+            CFType::wrap_under_create_rule(raw as CFTypeRef)
+        }))
     }
 
     fn raw(&self) -> AXUIElementRef {

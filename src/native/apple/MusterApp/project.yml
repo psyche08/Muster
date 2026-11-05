@@ -91,6 +91,15 @@ targets:
           install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
           install -m 0755 "$BIN/muster" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster"
           codesign --force --options runtime --identifier dev.linsheng.muster.cli --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster"
+          # The AppKit panel helper draws the idle-compaction banner (ADR 0087)
+          # and the Locked Use console cover. It belongs here and not in
+          # Contents/MacOS: an AppKit process there takes Muster.app as its
+          # main bundle and registers with Launch Services under the app's own
+          # bundle id, which hides the app from the Accessibility API
+          # (ADR 0128, ADR 0127).
+          [ -x "$BIN/muster-panel" ] || { echo "error: $BIN/muster-panel missing; cargo build --release -p muster-platform --bin muster-panel"; exit 1; }
+          install -m 0755 "$BIN/muster-panel" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel"
+          codesign --force --options runtime --identifier dev.linsheng.muster.panel --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-panel"
           [ -x "$BIN/muster-browser-host" ] || { echo "error: build muster-browser first"; exit 1; }
           install -m 0755 "$BIN/muster-browser-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
@@ -120,6 +129,7 @@ targets:
           - $(SRCROOT)/../../../../docs/third-party/orca-MIT.txt
           - $(SRCROOT)/../../../muster/target/release/musterd
           - $(SRCROOT)/../../../muster/target/release/muster
+          - $(SRCROOT)/../../../muster/target/release/muster-panel
           - $(SRCROOT)/../../../muster/target/release/muster-browser-host
           - $(SRCROOT)/../../../../addons/l4forwarder/target/release/l4forwarder
           - $(SRCROOT)/../../../browser/agenthalo-extension/manifest.json
@@ -136,6 +146,7 @@ targets:
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/ThirdParty/Orca-LICENSE.txt
           - $(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/musterd
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/muster
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/muster-panel
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/muster-browser-host
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/l4forwarder
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/AgentHaloBrowser/manifest.json

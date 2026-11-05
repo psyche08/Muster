@@ -38,7 +38,8 @@ pub trait Platform: Send + Sync {
         self.accessibility()
     }
     /// A diagnostic for the desktop's own user (`muster debug <what> [arg]`):
-    /// macOS knows `ax-dump <pid|Claude>` and `ax-sessions <pid|Claude>`.
+    /// macOS knows `ax-dump <pid|Claude>`, `ax-windows <pid|App> [x,y]` and
+    /// `ax-sessions <pid|Claude>`.
     fn debug(&self, what: &str, _arg: &str) -> Result<String, String> {
         Err(format!("no diagnostic {what:?} on this platform"))
     }

@@ -56,20 +56,12 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        let args: Vec<String> = std::env::args().collect();
-        if args.get(1).is_some_and(|a| a == "--locked-use-watchdog") {
-            return muster_platform::macos::locked_use::watchdog(&args[2..])
-                .map_err(anyhow::Error::msg);
-        }
-        if args
-            .get(1)
-            .is_some_and(|a| a == muster_platform::macos::notice::FLAG)
-        {
-            return muster_platform::macos::notice::run().map_err(anyhow::Error::msg);
-        }
-    }
+    // The AppKit panel bodies (the idle-compaction banner and the Locked Use
+    // console cover) are no longer subcommands here. Run from
+    // `Contents/MacOS`, each one registered with Launch Services as a second
+    // running application under the app's bundle id, which is how the app's
+    // windows went missing from the Accessibility API. They are the
+    // `muster-panel` helper in `Contents/Helpers` now (ADR 0128).
     tokio::runtime::Runtime::new()?.block_on(run())
 }
 async fn run() -> anyhow::Result<()> {
@@ -87,14 +79,10 @@ async fn run() -> anyhow::Result<()> {
         logger.target(env_logger::Target::Pipe(Box::new(file)));
     }
     logger.init();
-    // The daemon ships inside Muster.app/Contents/MacOS, so Launch Services
-    // hands it a Dock tile it can never service (ADR 0123). Cosmetic, so a
-    // failure is logged and startup continues. Only this path: the watchdog
-    // and notice subcommands returned before the runtime was built.
-    #[cfg(target_os = "macos")]
-    if let Err(status) = muster_platform::macos::procs::leave_the_dock() {
-        log::warn!("could not leave the Dock: TransformProcessType returned {status}");
-    }
+    // Nothing here transforms the process type. Doing so registered the
+    // daemon with Launch Services as a second running application under the
+    // app's own bundle id, which is how the app's windows went missing from
+    // the Accessibility API (ADR 0127 supersedes ADR 0123).
     let dir = args
         .dir
         .or_else(muster_paths::state_dir)

@@ -7,6 +7,14 @@ license.workspace = true
 publish.workspace = true
 description = "What only the operating system provides, behind traits: macOS lock state, Accessibility control of desktop agent apps, the Secure Enclave signer, the NetHelper client"
 
+# The AppKit panel helper (the idle-compaction banner and the Locked Use
+# console cover) is its own executable so it can ship in the app bundle's
+# `Contents/Helpers` rather than `Contents/MacOS`, where an AppKit process
+# takes the app's Launch Services identity (ADR 0128).
+[[bin]]
+name = "muster-panel"
+path = "src/bin/muster-panel.rs"
+
 [features]
 # The Secure Enclave signer: build.rs compiles the SepSign Swift library
 # (src/native/apple/MusterMacShim) with swiftc and links it with the Swift

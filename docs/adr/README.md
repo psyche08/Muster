@@ -221,10 +221,11 @@ records a specific decision and does not revive code on its delete list.
 | [0120](0120-locked-control-without-a-per-operation-signature.md) | Accepted; source and tests verified | `locked.control` authorizes Locked Use without a per-operation signature |
 | [0121](0121-generated-xcode-project-follows-project-yml.md) | Accepted; source verified, fleet build pending | `project.yml` is the Mac project's only version, and drift is reported |
 | [0122](0122-wait-for-the-app-to-exit-before-replacing-it.md) | Accepted; source verified, install verified | Wait for Muster to exit before replacing its bundle |
-| [0123](0123-the-daemon-leaves-the-dock.md) | Accepted; source verified, install verified | The daemon leaves the Dock instead of moving out of the bundle |
+| [0123](0123-the-daemon-leaves-the-dock.md) | Superseded by 0127 | The daemon leaves the Dock instead of moving out of the bundle |
 | [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 | [0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md) | Accepted; source and tests verified, device evidence recorded | Screen Recording is the bundle's grant, and only a daemon restart takes it |
 | [0126](0126-multica-bridge-follows-the-container-gateway.md) | Accepted; source and tests verified, installation and runtime pending | The Multica runtime bridge follows the container gateway |
+| [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; source verified, root cause and fix verified | The daemon stays out of Launch Services instead of leaving the Dock |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
