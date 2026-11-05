@@ -170,10 +170,12 @@ layout change it wants does not belong in the same change as a deletion.
 
 ## Consequences
 
-- An AX client resolving "Muster", by name or by bundle id, finds the app.
-  Window enumeration, menu-bar access, and screenshots of the app work again,
-  and the intermittency goes with them: which of the two records a client
-  picked was the only thing that varied.
+- An AX client resolving "Muster", by name or by bundle id, finds the app —
+  there is only one record left to find. **The rest of this bullet did not
+  survive the install acceptance.** Window enumeration and screenshots of the
+  app do *not* work again: a trusted client still gets zero windows. See
+  Verification. The intermittency claim rested on the same reasoning and is
+  withdrawn with it.
 - The daemon's path, signing identifier, launchd job, and TCC grants are
   unchanged, so no permission has to be re-approved.
 - **The Dock tile ADR 0123 removed.** This change deletes the mechanism that
@@ -279,3 +281,24 @@ layout change it wants does not belong in the same change as a deletion.
     app's main one.
   - The deletion stands. The causal story does not, and is corrected above
     rather than erased.
+- **Two supports for the causal claim collapsed, separately from the
+  acceptance.**
+  - The probe table above (`-25211` for Finder, iTerm2, Telegram, Tusk and
+    Muster; `-25204` for musterd and l4forwarder) was read as showing the
+    app's AX server answers like a healthy application's. Re-running that
+    probe shape shows the probing process reporting
+    `AXIsProcessTrusted() = false`, and an untrusted client gets `-25211`
+    from every application that has an AX server, whatever its state. The
+    table separates "has an AX server" from "has none" and nothing more.
+  - An `app_list_windows` call answering "App Muster is not in the
+    granted-applications list" was read as a client resolving to the daemon's
+    record. It is not: the same call succeeds when passed the bundle id
+    `dev.linsheng.muster` instead of the display name `Muster`, with one ASN
+    and the grant in place. It was a lookup-key difference in the tooling.
+- **What the window server says after this change**, for whoever picks the
+  symptom up: `CGWindowListCopyWindowInfo` with `.optionAll` returns exactly
+  one window for the app process — `win=166897 layer=0 onscreen=true
+  alpha=1.0 1728x995 at (0,34)`. The four offscreen 1728x33 surfaces seen
+  before ADR 0128 are gone. Its `kCGWindowName` reads empty, which says
+  nothing: the window server redacts that field from a client without Screen
+  Recording, and the client here had none.
