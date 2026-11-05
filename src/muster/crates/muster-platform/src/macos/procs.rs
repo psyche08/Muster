@@ -224,6 +224,49 @@ fn bundle_for_executable(path: &Path) -> Option<&Path> {
         .then_some(bundle)
 }
 
+/// Leave the Dock. `musterd` runs from `Muster.app/Contents/MacOS/musterd`,
+/// the bundle's main executable folder, so Launch Services registers it under
+/// the app's bundle id; the bundle's `Info.plist` cannot say otherwise without
+/// hiding the real app too. A headless daemon that never services an event
+/// loop then reads to the Dock as "Application Not Responding" (ADR 0123).
+///
+/// This call does **not** create that record. The registration appears about
+/// three seconds into startup whether or not this runs — measured at t+2.60s
+/// on the owner's Mac — and all this does is set its type: `BackgroundOnly`
+/// with the call, `Foreground` without, and the type is what decides whether
+/// there is a tile. ADR 0127 removed this on the opposite belief and the tile
+/// came back; ADR 0132 restores it with the measurement.
+///
+/// Transforming to a background application keeps the executable where it is,
+/// so the daemon's TCC grants — Accessibility above all — stay with the path
+/// they were given to.
+#[cfg(target_os = "macos")]
+pub fn leave_the_dock() -> Result<(), i32> {
+    #[repr(C)]
+    struct ProcessSerialNumber {
+        high: u32,
+        low: u32,
+    }
+    /// `kCurrentProcess`, from HIServices' Processes.h.
+    const CURRENT: u32 = 2;
+    /// `kProcessTransformToBackgroundApplication`. Not UIElement: this process
+    /// has no interface to element-ise, and nothing ever brings it forward.
+    const TO_BACKGROUND: u32 = 2;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn TransformProcessType(psn: *const ProcessSerialNumber, state: u32) -> i32;
+    }
+
+    let psn = ProcessSerialNumber {
+        high: 0,
+        low: CURRENT,
+    };
+    // SAFETY: `psn` outlives the call, which only reads it.
+    let status = unsafe { TransformProcessType(&psn, TO_BACKGROUND) };
+    if status == 0 { Ok(()) } else { Err(status) }
+}
+
 #[cfg(test)]
 mod bundle_tests {
     use super::*;
