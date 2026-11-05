@@ -89,3 +89,24 @@ bump, following the ADR 0092 process.
 
 Release evidence is added below after publication and installation, with code,
 signing, publication and installation reported as separate states.
+
+### Release gate — 2026-11-05
+
+The first build, from the bump's merge commit `d39ccabb`, built and signed. But
+`verify-release.sh` refused it: the daemon lacked the shipped-fix fingerprint
+`Question Submit changed; no key sent`, which stands for the 1.0.80 question
+submit guard.
+
+- **The guard is still there.** ADR 0134 left the guard's logic unchanged:
+  the command button is re-read and must be the same element before a key is
+  sent. What changed is the message. It now names the command,
+  `format!("Question {name} changed; no key sent")`, so the old literal is no
+  longer in the binary.
+- **The fingerprint had to follow.** The fingerprint file's rule is to keep a
+  line when its message is reworded, and ADR 0134 did not update the line.
+- **Fix.** The line now holds the fixed tail, `changed; no key sent`, which the
+  daemon carries and nothing else in the source produces.
+- **Check.** Every line of `release-fingerprints.txt` was checked against
+  `strings -a` of that first daemon, and all of them passed.
+
+The release is built again from the merge commit that carries this fix.

@@ -21,7 +21,9 @@ Presence enrollment installed: device= | administrator-approved desktop Presence
 forward ended without a response after dispatch | preserve unknown mutation outcomes (1.0.75)
 
 # 1.0.80: Claude question submit requires the verified current button and focus.
-Question Submit changed; no key sent
+# ADR 0134 names the command in the message ("Question {name} changed; no key
+# sent"), so the fixed tail is what the daemon carries (ADR 0138).
+changed; no key sent | the question command is re-read and must be unchanged before a key is sent
 Approval control changed or left the conversation; no press sent
 
 MUSTER_NATIVE_V1 | Native Multica bridge framing survives releases after recovery (ADR 0060)
