@@ -1,9 +1,11 @@
 # ADR 0130: Mount the Multica data image before the container starts
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, installation and reboot
-  acceptance pending
-- Related: [ADR 0051](0051-multica-management-and-live-catalog.md) (musterd
+- Status: Accepted; mount step superseded by
+  [ADR 0133](0133-mount-the-multica-data-image-as-the-user.md) after the
+  install acceptance failed
+- Related: [ADR 0133](0133-mount-the-multica-data-image-as-the-user.md)
+  (replaces the `diskutil mount` step), [ADR 0051](0051-multica-management-and-live-catalog.md) (musterd
   owns the container lifecycle), [ADR 0052](0052-targeted-multica-deployment.md)
   (the data root can be relocated), [ADR 0064](0064-multica-native-runtime.md)
   (host-native runtimes open task directories under the same root)
@@ -111,3 +113,13 @@ loses its bind source. On platforms other than Unix the step does nothing.
   change, not by musterd.
 - Pending: installing this musterd build, and a reboot or unmount test showing
   that keep-alive mounts the image and starts the container by itself.
+- Install acceptance, failed: this build was installed from main as 1.1.21
+  (111). The test stopped the container, unmounted and detached the image, and
+  turned keep-alive back on.
+  - musterd attached the image.
+  - Its `diskutil mount` was refused by Disk Arbitration as not privileged.
+    StorageKit then asked for an administrator password.
+  - Every later pass queued behind the prompt until its 60-second timeout.
+  - The container stayed stopped until the volume was mounted by hand.
+  - [ADR 0133](0133-mount-the-multica-data-image-as-the-user.md) replaces the
+    mount step.
