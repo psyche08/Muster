@@ -1,7 +1,7 @@
 # ADR 0134: Activate Claude's Next and Back through keyboard focus
 
 - Date: 2026-11-05
-- Status: Accepted; source and tests verified, live card acceptance pending
+- Status: Accepted; installed in 1.1.22 on three Macs, live card acceptance pending
 - Related: [ADR 0017](0017-claude-question-submit-activation.md) (this record
   supersedes its "Back and Next retain their existing activation paths"),
   [ADR 0114](0114-restore-unlanded-1-0-21-field-fixes.md) (its `why=` warning),
@@ -111,8 +111,9 @@ from earlier pages.
   - Renamed agent test `only_claude_card_commands_use_keyboard_activation`.
   - Existing question-form tests pass.
   - Clippy passes with `-D warnings`.
+- **Installed, 2026-11-05.** Shipped in Apple 1.1.22 (112) on Mac-A, Mac-B and
+  Mac-C ([ADR 0138](0138-paired-release-1-1-22.md)).
 - **Not done:**
-  - Building, signing and installation.
   - Live acceptance. This needs an unanswered two-question Claude card on an
     installed build, answered from another device. Before answering, run the
     read-only `muster debug ax-question SESSION_ID` probe to record the page's
