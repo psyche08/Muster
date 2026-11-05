@@ -1,8 +1,11 @@
 # ADR 0127: The daemon stays out of Launch Services instead of leaving the Dock
 
 - Date: 2026-11-05
-- Status: Accepted; source verified, root cause reproduced and the fix verified
-  against a rebuilt daemon on the owner's Mac. Install acceptance pending.
+- Status: Accepted; source verified. The duplicate record is gone, and the
+  change is worth keeping on that ground alone. **The install acceptance
+  failed**: with the fix installed and one ASN, the app's windows are still
+  missing from the Accessibility API, so this record's causal claim does not
+  hold as written. See Verification.
 - Related: [ADR 0123](0123-the-daemon-leaves-the-dock.md) (superseded by this
   record), [ADR 0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md)
   (the daemon's grants are filed under the app bundle, which is what makes its
@@ -40,8 +43,11 @@ ASN:0x0-0x7a25a1e  executable=…/Contents/MacOS/Muster   pid 10812  type="Foreg
 
 An AX client resolves "Muster" by name or by bundle id, takes the first match,
 and lands on the daemon — a `.prohibited` process that answers no AX message at
-all. The app is never asked. That is the whole bug: the app's own AX server was
-never broken. Asking each process for `kAXWindows` from an untrusted probe
+all. The app is never asked. This was written as the whole bug; the install
+acceptance below shows it is not. Removing the daemon's record leaves one ASN
+and the symptom survives, so the misresolution described here is at most part
+of the cause. What the probe below does establish is narrower: the app's own AX
+server answers like a healthy application's. Asking each process for `kAXWindows` from an untrusted probe
 separates the two cases by error code, because the trust gate is only reached
 on a process that has an AX server to gate:
 
@@ -164,10 +170,12 @@ layout change it wants does not belong in the same change as a deletion.
 
 ## Consequences
 
-- An AX client resolving "Muster", by name or by bundle id, finds the app.
-  Window enumeration, menu-bar access, and screenshots of the app work again,
-  and the intermittency goes with them: which of the two records a client
-  picked was the only thing that varied.
+- An AX client resolving "Muster", by name or by bundle id, finds the app —
+  there is only one record left to find. **The rest of this bullet did not
+  survive the install acceptance.** Window enumeration and screenshots of the
+  app do *not* work again: a trusted client still gets zero windows. See
+  Verification. The intermittency claim rested on the same reasoning and is
+  withdrawn with it.
 - The daemon's path, signing identifier, launchd job, and TCC grants are
   unchanged, so no permission has to be re-approved.
 - **The Dock tile ADR 0123 removed.** This change deletes the mechanism that
@@ -251,10 +259,46 @@ layout change it wants does not belong in the same change as a deletion.
   loaded machine can reach the assertion while the lease guard is still held.
   The `unlock_started()` helper in the same file is the right shape for it.
   Left to that cleanup, not mixed into this change.
-- **Unresolved.** Install acceptance: the owner's Mac still runs the 111
-  daemon, whose record is live, so the AX symptom persists until a build with
-  this change is installed. The end-to-end check after installing is that
-  `lsappinfo find bundleID=dev.linsheng.muster` names one ASN and that an AX
-  client lists the app's window. Restarting the running daemon is not a
-  substitute: `launchctl kickstart -k` leaves a fresh 111 daemon, which
-  registers the same record again.
+- **Install acceptance: run, and failed on its second half.** 2026-11-05, on
+  the owner's Mac, built and installed from main at `2ebe0a3` (which carries
+  this change and ADR 0128); the daemon reports that commit, bundle 1.1.21
+  (111).
+  - First half, passed: `lsappinfo find bundleID=dev.linsheng.muster` returned
+    two ASNs before the install and **one** after, and the only Launch Services
+    record left is the app's own `…/Contents/MacOS/Muster`, `type="Foreground"`.
+    No Dock tile returned, which this record predicted and ADR 0123's author
+    had doubted.
+  - Second half, failed: an AX client holding a full grant for
+    `dev.linsheng.muster` got `[]` from an enumeration of the app's windows,
+    and a capture attempt answered "the window server shows a window of Muster
+    on screen, but accessibility does not list it". Twice, seconds apart, with
+    both processes running (app pid 73887, musterd pid 73906).
+  - So the duplicate record was real and removing it was right, but it was not
+    what hid the window. A window the window server shows and the Accessibility
+    API does not list, with a single ASN and no daemon record, points
+    elsewhere: at the app's own activation policy or `NSApplication`
+    configuration, or at the window being owned by a process other than the
+    app's main one.
+  - The deletion stands. The causal story does not, and is corrected above
+    rather than erased.
+- **Two supports for the causal claim collapsed, separately from the
+  acceptance.**
+  - The probe table above (`-25211` for Finder, iTerm2, Telegram, Tusk and
+    Muster; `-25204` for musterd and l4forwarder) was read as showing the
+    app's AX server answers like a healthy application's. Re-running that
+    probe shape shows the probing process reporting
+    `AXIsProcessTrusted() = false`, and an untrusted client gets `-25211`
+    from every application that has an AX server, whatever its state. The
+    table separates "has an AX server" from "has none" and nothing more.
+  - An `app_list_windows` call answering "App Muster is not in the
+    granted-applications list" was read as a client resolving to the daemon's
+    record. It is not: the same call succeeds when passed the bundle id
+    `dev.linsheng.muster` instead of the display name `Muster`, with one ASN
+    and the grant in place. It was a lookup-key difference in the tooling.
+- **What the window server says after this change**, for whoever picks the
+  symptom up: `CGWindowListCopyWindowInfo` with `.optionAll` returns exactly
+  one window for the app process — `win=166897 layer=0 onscreen=true
+  alpha=1.0 1728x995 at (0,34)`. The four offscreen 1728x33 surfaces seen
+  before ADR 0128 are gone. Its `kCGWindowName` reads empty, which says
+  nothing: the window server redacts that field from a client without Screen
+  Recording, and the client here had none.
