@@ -240,6 +240,8 @@ records a specific decision and does not revive code on its delete list.
 | [0139](0139-cache-macos-transcript-row-measurements.md) | Accepted; installed acceptance pending | Reuse unchanged macOS transcript row measurements |
 | [0140](0140-resolve-cargo-output-through-cargo-target-dir.md) | Accepted; macOS, iOS and Android builds verified in both modes | Resolve Cargo output through CARGO_TARGET_DIR |
 
+| [0141](0141-multica-service-and-dsh-app-bridge-design.md) | Proposed; design only | Separate Multica session ownership, DSH App bridging and opt-in remote service |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
