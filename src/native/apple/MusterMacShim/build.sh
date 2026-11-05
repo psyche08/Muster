@@ -9,4 +9,4 @@ if [ -x "$toolchain/bin/cargo" ]; then
   export PATH="$toolchain/bin:$PATH"
 fi
 cargo build --release -p musterd --features sep
-echo "musterd with SEP: target/release/musterd"
+echo "musterd with SEP: ${CARGO_TARGET_DIR:-target}/release/musterd"

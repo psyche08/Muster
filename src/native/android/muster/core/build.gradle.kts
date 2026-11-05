@@ -18,7 +18,10 @@ android {
         minSdk = 28
         externalNativeBuild {
             cmake {
-                arguments += listOf("-DMUSTER_PROFILE=release")
+                // Always passed, empty when unset, so a configure without it
+                // does not keep a stale value in the CMake cache (ADR 0140).
+                val cargoTargetDir = providers.environmentVariable("CARGO_TARGET_DIR").orElse("").get()
+                arguments += listOf("-DMUSTER_PROFILE=release", "-DMUSTER_CARGO_TARGET_DIR=$cargoTargetDir")
             }
         }
         ndk {

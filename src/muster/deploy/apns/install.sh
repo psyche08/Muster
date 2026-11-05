@@ -9,8 +9,11 @@ cert="${1:?usage: install.sh <cert.pem> <key.pem>}"
 key="${2:?usage: install.sh <cert.pem> <key.pem>}"
 here=$(cd "$(dirname "$0")" && pwd)
 src=$(cd "$here/../.." && pwd)
+# cargo's output: $CARGO_TARGET_DIR when set (sudo drops it unless kept),
+# else the workspace's own target/.
+out="${CARGO_TARGET_DIR:-$src/target}/release"
 for b in muster-apns muster-apns-push; do
-  [ -x "$src/target/release/$b" ] || { echo "build first: cargo build --release -p muster-apns" >&2; exit 1; }
+  [ -x "$out/$b" ] || { echo "build first: cargo build --release -p muster-apns" >&2; exit 1; }
 done
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 [ -f /etc/muster/relay.env ] || { echo "install the relay first (deploy/relay/install.sh)" >&2; exit 1; }
@@ -24,8 +27,8 @@ openssl x509 -in "$cert" -noout -checkend 0 >/dev/null || { echo "$cert has expi
 getent group muster-push >/dev/null || groupadd --system muster-push
 id muster-apns >/dev/null 2>&1 || useradd --system --home /nonexistent --shell /usr/sbin/nologin muster-apns
 install -d -m 0755 /opt/muster/bin /etc/muster/apns
-install -m 0755 "$src/target/release/muster-apns" /opt/muster/bin/muster-apns.new
-install -m 0755 "$src/target/release/muster-apns-push" /opt/muster/bin/muster-apns-push
+install -m 0755 "$out/muster-apns" /opt/muster/bin/muster-apns.new
+install -m 0755 "$out/muster-apns-push" /opt/muster/bin/muster-apns-push
 install -m 0444 -o root -g root "$cert" /etc/muster/apns/cert.pem
 install -m 0400 -o muster-apns -g root "$key" /etc/muster/apns/key.pem
 

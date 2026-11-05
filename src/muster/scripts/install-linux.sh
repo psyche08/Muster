@@ -10,7 +10,8 @@ cd "$(dirname "$0")/.."
 : "${MUSTER_NAME:=$(hostname -s)}"
 cargo build --release -p musterd -p muster-cli -p muster-relay
 install -d /opt/muster/bin /var/lib/muster /etc/muster
-install -m 0755 target/release/musterd target/release/muster target/release/muster-relay /opt/muster/bin/
+out="${CARGO_TARGET_DIR:-target}/release"
+install -m 0755 "$out/musterd" "$out/muster" "$out/muster-relay" /opt/muster/bin/
 ln -sf /opt/muster/bin/muster /usr/local/bin/muster
 printf 'MUSTER_RELAY=%s\nMUSTER_NAME=%s\n' "$MUSTER_RELAY" "$MUSTER_NAME" > /etc/muster/musterd.env
 install -m 0644 deploy/linux/musterd.service /etc/systemd/system/musterd.service

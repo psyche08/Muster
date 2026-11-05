@@ -1,6 +1,7 @@
 # The JNI shell plus the Rust core as one shared library per ABI.
 # libmuster_ffi.a comes from scripts/build-ffi.sh (cargo ndk) under
-# src/muster/target/<triple>/release.
+# <target dir>/<triple>/release: MUSTER_CARGO_TARGET_DIR, which
+# core/build.gradle.kts sets from CARGO_TARGET_DIR, else src/muster/target.
 cmake_minimum_required(VERSION 3.22)
 project(muster_jni C)
 
@@ -15,7 +16,12 @@ else()
     message(FATAL_ERROR "no Rust target for ABI ${ANDROID_ABI}")
 endif()
 set(MUSTER_PROFILE "release" CACHE STRING "cargo profile the core was built with")
-set(MUSTER_FFI "${MUSTER_ROOT}/target/${MUSTER_TRIPLE}/${MUSTER_PROFILE}/libmuster_ffi.a")
+if(MUSTER_CARGO_TARGET_DIR)
+    set(MUSTER_TARGET_DIR "${MUSTER_CARGO_TARGET_DIR}")
+else()
+    set(MUSTER_TARGET_DIR "${MUSTER_ROOT}/target")
+endif()
+set(MUSTER_FFI "${MUSTER_TARGET_DIR}/${MUSTER_TRIPLE}/${MUSTER_PROFILE}/libmuster_ffi.a")
 if(NOT EXISTS "${MUSTER_FFI}")
     message(FATAL_ERROR "missing ${MUSTER_FFI}: run scripts/build-ffi.sh first")
 endif()
