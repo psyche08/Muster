@@ -224,7 +224,11 @@ records a specific decision and does not revive code on its delete list.
 | [0123](0123-the-daemon-leaves-the-dock.md) | Superseded by 0127 | The daemon leaves the Dock instead of moving out of the bundle |
 | [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 | [0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md) | Accepted; source and tests verified, device evidence recorded | Screen Recording is the bundle's grant, and only a daemon restart takes it |
-| [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; source verified, root cause and fix verified | The daemon stays out of Launch Services instead of leaving the Dock |
+| [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; premise corrected by 0131 | The daemon stays out of Launch Services instead of leaving the Dock |
+| [0128](0128-the-panel-helper-keeps-its-own-identity.md) | Accepted; source verified | The panel helper keeps its own identity |
+| [0129](0129-ask-ax-for-windows-by-name.md) | Accepted; premise withdrawn by 0131 | Ask the Accessibility API for windows by name, not by walking children |
+| [0130](0130-the-ax-symptom-was-a-locked-screen.md) | Accepted; measured locked and unlocked against two controls | The Accessibility symptom does not reproduce on an unlocked screen |
+| [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its

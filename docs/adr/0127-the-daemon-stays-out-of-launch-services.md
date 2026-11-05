@@ -1,11 +1,10 @@
 # ADR 0127: The daemon stays out of Launch Services instead of leaving the Dock
 
 - Date: 2026-11-05
-- Status: Accepted; source verified. The duplicate record is gone, and the
-  change is worth keeping on that ground alone. **The install acceptance
-  failed**: with the fix installed and one ASN, the app's windows are still
-  missing from the Accessibility API, so this record's causal claim does not
-  hold as written. See Verification.
+- Status: Accepted; its decision stands, its premise is corrected by
+  [ADR 0131](0131-a-locked-screen-explains-the-missing-windows.md) — the
+  windows were not invisible to the Accessibility API, and removing the
+  duplicate Launch Services record was right on its own grounds
 - Related: [ADR 0123](0123-the-daemon-leaves-the-dock.md) (superseded by this
   record), [ADR 0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md)
   (the daemon's grants are filed under the app bundle, which is what makes its
@@ -17,8 +16,16 @@
 
 ## Context
 
-The app's windows were invisible to the Accessibility API on the owner's Mac
-(1.1.21/111). The window server was healthy throughout:
+> **Corrected by [ADR 0131](0131-a-locked-screen-explains-the-missing-windows.md).**
+> In an unlocked session the app's windows are in the Accessibility tree and the
+> client quoted below returns them. A locked screen makes the Accessibility API
+> return the application element in place of window elements, in every app,
+> which reproduces everything described here. The duplicate Launch Services
+> record was real and removing it was right; it was not the cause of a missing
+> window, and no Accessibility defect in the app is known.
+
+The app's windows were reported missing from the Accessibility API on the
+owner's Mac (1.1.21/111). The window server was healthy throughout:
 `CGWindowListCopyWindowInfo` listed the window as `layer=0`, `onscreen=1`,
 1728x995, the owner could see and use it, and `screencapture -l` captured it.
 But an AX client enumerating the app's windows got nothing, and asking for its
@@ -59,7 +66,8 @@ on a process that has an AX server to gate:
 | l4forwarder (headless helper) | `-25204 kAXErrorCannotComplete` |
 
 The app answers exactly as every healthy GUI application does. The daemon
-answers as every headless process does.
+answers as every headless process does. (This table separates "has an AX
+server" from "has none" and nothing more; see ADR 0131.)
 
 One note before the cause, because it decides what a re-check sees:
 **`lsappinfo list` does not show the daemon's record.** It lists one "Muster",
