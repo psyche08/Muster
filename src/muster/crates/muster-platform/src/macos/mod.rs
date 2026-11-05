@@ -3,6 +3,7 @@
 //! the NetHelper XPC client.
 
 pub mod ax;
+pub mod bundle;
 pub mod codesign;
 pub mod ghostty;
 pub mod input;

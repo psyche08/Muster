@@ -12,6 +12,8 @@
 #   cd src/muster && cargo build --release -p musterd --features sep
 #   cd src/muster && cargo build --release -p muster-cli       # Helpers/muster
 #   cd src/muster && cargo build --release -p muster-browser   # browser host
+#   cd src/muster && cargo build --release -p muster-platform --bin muster-panel
+#                                                              # Helpers/muster-panel
 #   cd addons/l4forwarder && cargo build --release --locked
 # and MUSTER_MAC_PROFILE set to the installed provisioning profile's name, or
 # xcodebuild refuses the Presence entitlement ("requires a provisioning

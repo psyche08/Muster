@@ -111,7 +111,10 @@ fn main() {
         }
     };
     // musterd's own build.rs adds `-rpath /usr/lib/swift`: link arguments
-    // from a library's build script do not reach the binary.
+    // from a library's build script do not reach a dependent's binary. They
+    // do reach this crate's own `muster-panel` bin, which needs the same
+    // rpath when the feature is on.
+    println!("cargo:rustc-link-arg-bins=-Wl,-rpath,/usr/lib/swift");
     println!("cargo:rustc-link-search=native={sdk}/usr/lib/swift");
     for lib in [
         "swiftCore",

@@ -111,8 +111,8 @@ impl LockedUseOs for MacLockedUse {
             Screen::Unknown => return Err("unknown initial console state".into()),
         };
         let nonce: String = nonce.iter().map(|b| format!("{b:02x}")).collect();
-        let mut child = Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
-            .arg("--locked-use-watchdog")
+        let mut child = Command::new(super::bundle::panel()?)
+            .arg(WATCHDOG_FLAG)
             .arg(&self.dir)
             .arg(nonce)
             .arg((monotonic_millis().saturating_add(ttl.as_millis() as u64)).to_string())
@@ -553,6 +553,9 @@ fn initial_screen_matches(expected: &str, observed: Screen) -> bool {
         ("locked", Screen::Locked) | ("unlocked", Screen::Unlocked)
     )
 }
+
+/// The panel helper's first argument for this body.
+pub const WATCHDOG_FLAG: &str = "--locked-use-watchdog";
 
 /// Must run on the process main thread, before starting Tokio/AppKit elsewhere.
 pub fn watchdog(args: &[String]) -> Result<(), String> {
