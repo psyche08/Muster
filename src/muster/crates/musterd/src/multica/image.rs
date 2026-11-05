@@ -96,16 +96,15 @@ pub(super) async fn prepare(manager: &Manager, c: &Config) -> Result<(), Error> 
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
         Err(e) => return Err(io(e)),
     };
+    // Mount as the user who attached the image, which owns its device nodes
+    // and the mount point. `diskutil mount` goes through Disk Arbitration,
+    // which refuses a caller outside the console session as not privileged;
+    // StorageKit then asks for an administrator password and every later
+    // diskutil call queues behind that prompt.
     let mounted = run(
-        &tool(manager, "/usr/sbin/diskutil"),
-        &[
-            "mount",
-            "nobrowse",
-            "-mountPoint",
-            &root.to_string_lossy(),
-            &device,
-        ],
-        60,
+        &tool(manager, "/sbin/mount_apfs"),
+        &["-o", "nobrowse,noowners", &device, &root.to_string_lossy()],
+        30,
     )
     .await;
     if mounted.is_err() {
@@ -125,7 +124,7 @@ pub(super) async fn prepare(_: &Manager, _: &Config) -> Result<(), Error> {
     Ok(())
 }
 
-/// Stand-ins for hdiutil and diskutil that log to `<dir>/calls`.
+/// Stand-ins for hdiutil and mount_apfs that log to `<dir>/calls`.
 #[cfg(all(test, unix))]
 pub(super) fn fake_tools(dir: &Path, mount_status: i32) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -138,7 +137,7 @@ pub(super) fn fake_tools(dir: &Path, mount_status: i32) -> PathBuf {
             "printf '/dev/disk9          \\tGUID_partition_scheme          \\t\\n/dev/disk10         \\tEF57347C-0000-11AA-AA11-0030654\\t\\n/dev/disk10s1       \\t41504653-0000-11AA-AA11-0030654\\t\\n'"
                 .to_owned(),
         ),
-        ("diskutil", format!("exit {mount_status}")),
+        ("mount_apfs", format!("exit {mount_status}")),
     ] {
         let path = bin.join(name);
         std::fs::write(
@@ -204,7 +203,7 @@ mod tests {
         assert_eq!(
             calls(dir.path()),
             format!(
-                "hdiutil attach -nomount {0}.sparsebundle\ndiskutil mount nobrowse -mountPoint {0} /dev/disk10s1\n",
+                "hdiutil attach -nomount {0}.sparsebundle\nmount_apfs -o nobrowse,noowners /dev/disk10s1 {0}\n",
                 c.data_dir
             )
         );

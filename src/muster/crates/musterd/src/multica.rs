@@ -38,7 +38,7 @@ pub struct Manager {
     // without touching an operator's ~/.local/bin.
     #[cfg(test)]
     host_cli_candidates: Option<Vec<PathBuf>>,
-    // Tests supply hdiutil and diskutil stand-ins for the data-image mount.
+    // Tests supply hdiutil and mount_apfs stand-ins for the data-image mount.
     #[cfg(test)]
     disk_tools: Option<PathBuf>,
 }
@@ -1194,7 +1194,7 @@ esac
             let calls = std::fs::read_to_string(dir.path().join("calls")).unwrap();
             let position = |prefix: &str| calls.lines().position(|s| s.starts_with(prefix));
             let attach = position("hdiutil attach -nomount").unwrap();
-            let mount = position("diskutil mount nobrowse").unwrap();
+            let mount = position("mount_apfs -o nobrowse,noowners").unwrap();
             assert!(attach < mount);
             if mount_status == 0 {
                 assert!(mount < position("start mlt").unwrap());
