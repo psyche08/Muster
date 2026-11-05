@@ -8,6 +8,7 @@ use std::{
 };
 mod bridge;
 mod browse;
+mod image;
 mod installation;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -37,6 +38,9 @@ pub struct Manager {
     // without touching an operator's ~/.local/bin.
     #[cfg(test)]
     host_cli_candidates: Option<Vec<PathBuf>>,
+    // Tests supply hdiutil and diskutil stand-ins for the data-image mount.
+    #[cfg(test)]
+    disk_tools: Option<PathBuf>,
 }
 impl Drop for Manager {
     fn drop(&mut self) {
@@ -57,6 +61,8 @@ impl Manager {
             last_error: std::sync::Mutex::new(String::new()),
             #[cfg(test)]
             host_cli_candidates: None,
+            #[cfg(test)]
+            disk_tools: None,
         }
     }
     async fn command(&self, args: &[&str], seconds: u64) -> Result<Vec<u8>, Error> {
@@ -489,6 +495,7 @@ impl Manager {
             Error::Unavailable("Multica container is missing; use Install".into())
         })?;
         if row["status"]["state"] != "running" {
+            image::prepare(self, c).await?;
             self.command(&["start", &c.container_name], 60).await?;
         }
         if c.managed || c.runtime_bridge {
@@ -758,6 +765,7 @@ exit 1"#,
 }
 async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Error> {
     manager.installation.stage("准备数据目录与工作区");
+    image::prepare(manager, c).await?;
     let root = Path::new(&c.data_dir);
     let marker = root.join(".muster-owned");
     if root.exists()
@@ -1087,11 +1095,10 @@ mod lifecycle_tests {
         manager.installation.finish(None);
     }
 
-    #[tokio::test]
-    async fn supervision_restarts_only_stopped_services_and_is_opt_in() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("container-fixture");
+    /// A container that starts when asked and runs the daemon on request,
+    /// logging each call to `<dir>/calls`.
+    fn supervised_container(dir: &Path) -> PathBuf {
+        let script = dir.join("container-fixture");
         std::fs::write(
             &script,
             r#"#!/bin/sh
@@ -1120,8 +1127,14 @@ esac
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        script
+    }
+
+    #[tokio::test]
+    async fn supervision_restarts_only_stopped_services_and_is_opt_in() {
+        let dir = tempfile::tempdir().unwrap();
         let mut manager = Manager::new(dir.path());
-        manager.executable = Some(script);
+        manager.executable = Some(supervised_container(dir.path()));
         let mut config = Config {
             container_name: "mlt".into(),
             data_dir: dir.path().join("work").to_string_lossy().into_owned(),
@@ -1158,6 +1171,40 @@ esac
         manager.maintain(Path::new("unused.sock")).await;
         assert!(dir.path().join("daemon").exists());
         assert!(manager.last_error.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_stopped_container_mounts_its_data_image_before_starting() {
+        for mount_status in [1, 0] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut manager = Manager::new(dir.path());
+            manager.executable = Some(supervised_container(dir.path()));
+            manager.disk_tools = Some(image::fake_tools(dir.path(), mount_status));
+            let root = dir.path().join("Multica");
+            std::fs::create_dir(dir.path().join("Multica.sparsebundle")).unwrap();
+            manager
+                .save(&Config {
+                    container_name: "mlt".into(),
+                    data_dir: root.to_string_lossy().into_owned(),
+                    keep_alive: true,
+                    ..Default::default()
+                })
+                .unwrap();
+            manager.maintain(Path::new("unused.sock")).await;
+            let calls = std::fs::read_to_string(dir.path().join("calls")).unwrap();
+            let position = |prefix: &str| calls.lines().position(|s| s.starts_with(prefix));
+            let attach = position("hdiutil attach -nomount").unwrap();
+            let mount = position("diskutil mount nobrowse").unwrap();
+            assert!(attach < mount);
+            if mount_status == 0 {
+                assert!(mount < position("start mlt").unwrap());
+                assert!(manager.last_error.lock().unwrap().is_empty());
+            } else {
+                assert_eq!(position("start "), None);
+                assert!(!root.exists());
+                assert!(manager.last_error.lock().unwrap().contains("data image"));
+            }
+        }
     }
 
     fn fake_container(root: &Path, fail_run: bool) -> PathBuf {

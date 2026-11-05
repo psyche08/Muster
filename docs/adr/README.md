@@ -227,6 +227,7 @@ records a specific decision and does not revive code on its delete list.
 | [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; premise corrected by 0131 | The daemon stays out of Launch Services instead of leaving the Dock |
 | [0128](0128-the-panel-helper-keeps-its-own-identity.md) | Accepted; source verified | The panel helper keeps its own identity |
 | [0129](0129-ask-ax-for-windows-by-name.md) | Accepted; premise withdrawn by 0131 | Ask the Accessibility API for windows by name, not by walking children |
+| [0130](0130-mount-the-multica-data-image-before-the-container-starts.md) | Accepted; source and tests verified, installation and reboot acceptance pending | Mount the Multica data image before the container starts |
 | [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
 
 Copy [template.md](template.md), choose the next unused four-digit number and a
