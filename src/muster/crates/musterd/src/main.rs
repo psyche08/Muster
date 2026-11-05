@@ -87,14 +87,10 @@ async fn run() -> anyhow::Result<()> {
         logger.target(env_logger::Target::Pipe(Box::new(file)));
     }
     logger.init();
-    // The daemon ships inside Muster.app/Contents/MacOS, so Launch Services
-    // hands it a Dock tile it can never service (ADR 0123). Cosmetic, so a
-    // failure is logged and startup continues. Only this path: the watchdog
-    // and notice subcommands returned before the runtime was built.
-    #[cfg(target_os = "macos")]
-    if let Err(status) = muster_platform::macos::procs::leave_the_dock() {
-        log::warn!("could not leave the Dock: TransformProcessType returned {status}");
-    }
+    // Nothing here transforms the process type. Doing so registered the
+    // daemon with Launch Services as a second running application under the
+    // app's own bundle id, which is how the app's windows went missing from
+    // the Accessibility API (ADR 0127 supersedes ADR 0123).
     let dir = args
         .dir
         .or_else(muster_paths::state_dir)

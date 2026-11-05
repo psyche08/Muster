@@ -1,7 +1,9 @@
 # ADR 0123: The daemon leaves the Dock instead of moving out of the bundle
 
 - Date: 2026-11-04
-- Status: Accepted; source verified, install verified on the owner's Mac
+- Status: Superseded by [ADR 0127](0127-the-daemon-stays-out-of-launch-services.md)
+  — the transform registered the daemon with Launch Services under the app's
+  own bundle id, which hid the app's windows from the Accessibility API
 - Related: [ADR 0006](0006-desktop-presence-and-console-routing.md) (the
   bundled daemon's stable identity), [ADR 0122](0122-wait-for-the-app-to-exit-before-replacing-it.md)
   (the other way this bundle stranded a process in the Dock)
