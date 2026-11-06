@@ -218,6 +218,11 @@ pub enum Msg {
         provider: String,
     },
     MulticaTick,
+    MulticaMutation {
+        workspace: String,
+        query: v1::MulticaBrowseRequest,
+        result: Result<v1::OpResult, Error>,
+    },
     MulticaServices {
         epoch: u64,
         results: Vec<(String, String, Result<v1::MulticaService, Error>)>,
@@ -401,6 +406,13 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::MulticaSelect(request) => multica::select(state, ctx, request.device_id),
         It::MulticaService(request) => multica::service_request(state, ctx, request),
         It::MulticaBrowse(request) => multica::browse(state, ctx, request),
+        It::MulticaMutation(request) => multica::mutate(state, ctx, request),
+        It::MulticaMutationAcknowledge(ack) => {
+            if ack && !state.multica_mutation_busy {
+                state.multica_mutation_uncertain = false;
+                state.multica_mutation_message.clear();
+            }
+        }
         It::Multica(request) => multica::request(state, ctx, request),
         It::Vision(request) => vision::request(state, ctx, request),
         It::Refresh(_) => intent_refresh(state, ctx),
@@ -742,6 +754,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             provider,
         } => agents::msg_agent_stream_started(state, token, &device, &session, &provider),
         Msg::MulticaTick => multica::discover(state, ctx),
+        Msg::MulticaMutation {
+            workspace,
+            query,
+            result,
+        } => multica::mutation_result(state, ctx, workspace, query, result),
         Msg::MulticaServices { epoch, results } => {
             if epoch == state.multica_discovery_epoch && state.foreground {
                 multica::apply_services(state, ctx, results);

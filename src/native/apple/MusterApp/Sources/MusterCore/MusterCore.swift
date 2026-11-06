@@ -231,6 +231,8 @@ public final class MusterCore: MusterShell {
     }
 
     public func multicaSelect(_ device: String) { send(.multicaSelect(.with { $0.deviceID = device })) }
+    public func multicaMutate(_ request: Muster_V1_MulticaMutation) { send(.multicaMutation(request)) }
+    public func multicaAcknowledgeMutation() { send(.multicaMutationAcknowledge(true)) }
     public func multicaService(_ request: Muster_V1_MulticaServiceRequest) { send(.multicaService(request)) }
 
     public func multica(_ request: Muster_V1_MulticaRequest) { send(.multica(request)) }

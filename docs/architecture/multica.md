@@ -41,10 +41,18 @@ pull, stop or rollback**: those remain manual operator steps documented in
 sessions outside Agents, a bridge to the existing DSH desktop App, and a
 default-off remote Multica service over PeerLink. Shared Rust owns binding,
 authorization, capability and navigation state. [ADR 0149](../adr/0149-multica-ownership-reservations.md)
-adds durable ownership reservations. [ADR 0151](../adr/0151-multica-task-session-isolation.md)
+adds durable ownership reservations. [ADR 0153](../adr/0153-multica-task-session-isolation.md)
 enforces registered ownership at Agent/terminal boundaries and adds default-off,
 workspace-selected remote metadata browsing with Mac/iPhone device selection.
 New scope issuance requires all active roster consumers to prove compatibility.
+
+[ADR 0154](../adr/0154-multica-workbench-operations.md) adds typed local-host
+agent edits, backlog issue creation/editing, assignment/status with `--no-start`,
+plain comments, exact-run cancellation, and bounded run/comment history. Rust
+checks exact workspace/resource identity, editable revision and permission,
+serializes writes and records no-replay operation results. Agent instructions
+are exposed only in local detail; remote views remain read-only. Starting,
+rerunning and mention scheduling are unavailable until the App binding exists.
 
 Registry production writers, legacy migration, task transcript access, DSH App
 scheduling and remote control are still pending; existing scheduler sessions are

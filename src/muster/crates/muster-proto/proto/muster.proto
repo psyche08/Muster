@@ -161,6 +161,7 @@ message Request {
     AgentSchedulerRequest agent_scheduler = 76;
     DeviceRequestScreenRecordingRequest device_request_screen_recording = 77;
     MulticaServiceRequest multica_service = 78;
+    MulticaMutation multica_mutation = 79;
   }
 }
 
@@ -1104,6 +1105,30 @@ message PresenceInfo {
 
 // Container administration and local deployment configuration are local-owner only.
 // Discovery is authenticated member-only; SAVE is trusted-local-owner-only.
+// Host-local administration; operation ID is required and never replayed.
+message MulticaMutation {
+  string op_id = 1;
+  string workspace_id = 2;
+  oneof action {
+    MulticaAgentEdit agent = 3;
+    MulticaIssueEdit issue = 4;
+    MulticaIssueAction issue_action = 5;
+  }
+}
+message MulticaAgentEdit {
+  string id = 1; string revision = 2;
+  string name = 3; string description = 4; string instructions = 5;
+  string model = 6; uint32 max_concurrent_tasks = 7;
+}
+// Empty id creates an unassigned backlog issue; existing id edits content only.
+message MulticaIssueEdit {
+  string id = 1; string revision = 2;
+  string title = 3; string description = 4;
+}
+message MulticaIssueAction {
+  enum Kind { UNSPECIFIED = 0; ASSIGN = 1; STATUS = 2; COMMENT = 3; RERUN = 4; CANCEL = 5; }
+  Kind kind = 1; string id = 2; string revision = 3; string value = 4;
+}
 message MulticaServiceRequest {
   enum Action { GET = 0; SAVE = 1; }
   Action action = 1;
@@ -1172,14 +1197,27 @@ message MulticaIssue {
   string id = 1; string identifier = 2; string title = 3; string description = 4;
   string status = 5; string priority = 6; string assignee_id = 7;
   string assignee_type = 8; string updated_at = 9;
+  string revision = 10;
 }
 message MulticaAgent {
   string id = 1; string name = 2; string description = 3; string status = 4;
   string runtime_id = 5; string model = 6;
+  // Host-local edit projection only; never exposed through remote browsing.
+  string instructions = 7; uint32 max_concurrent_tasks = 8;
+  string revision = 9; bool editable = 10;
 }
 message MulticaRuntime {
   string id = 1; string name = 2; string provider = 3; string status = 4;
   string last_seen_at = 5; string device_info = 6;
+}
+message MulticaStatusChoice { string key = 1; string title = 2; }
+message MulticaRun {
+  string id = 1; string agent_id = 2; string status = 3;
+  string created_at = 4; string completed_at = 5; string failure_reason = 6;
+  bool can_cancel = 7;
+}
+message MulticaComment {
+  string id = 1; string content = 2; string author_type = 3; string created_at = 4;
 }
 message MulticaPage {
   repeated MulticaWorkspace workspaces = 1;
@@ -1191,6 +1229,8 @@ message MulticaPage {
   MulticaIssue issue = 8; MulticaAgent agent = 9;
   bool busy = 10; string error = 11;
   uint32 next_offset = 12; uint32 previous_offset = 13;
+  repeated MulticaRun runs = 14; repeated MulticaComment comments = 15;
+  repeated MulticaStatusChoice status_choices = 16;
 }
 
 // A new desktop (Code mode) session in the provider's own app, from its

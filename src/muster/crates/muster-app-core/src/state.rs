@@ -300,6 +300,11 @@ pub struct State {
     pub multica_discovery: Option<Watch>,
     pub multica_probing: bool,
     pub multica_discovery_epoch: u64,
+    pub multica_mutation_busy: bool,
+    pub multica_mutation_message: String,
+    pub multica_mutation_result: u64,
+    pub multica_mutation_applied: bool,
+    pub multica_mutation_uncertain: bool,
     pub vision: v1::VisionStatus,
     /// Errors of the list refresh in flight; they replace the shown ones
     /// when it completes, so a refresh does not blink them away.
@@ -432,6 +437,11 @@ impl State {
             multica_discovery: None,
             multica_probing: false,
             multica_discovery_epoch: 0,
+            multica_mutation_busy: false,
+            multica_mutation_message: String::new(),
+            multica_mutation_result: 0,
+            multica_mutation_applied: false,
+            multica_mutation_uncertain: false,
             vision: v1::VisionStatus::default(),
             agents_errors: Vec::new(),
             chat: None,

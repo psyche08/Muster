@@ -302,7 +302,7 @@ Multica 调度回执、跨设备端到端。未来发布 macOS 更新时按仓�
 ## 10. 2026-11-06 实现进度
 
 [ADR 0149](adr/0149-multica-ownership-reservations.md) 已提供持久化预留与归属表。
-[ADR 0151](adr/0151-multica-task-session-isolation.md) 接入已登记归属的 Agents
+[ADR 0153](adr/0153-multica-task-session-isolation.md) 接入已登记归属的 Agents
 目录、搜索、子会话、直接 RPC、终端和 watch 隔离，并提供默认关闭、workspace
 选择、独立查看授权的跨设备元数据工作台。Mac/iPhone 设备选择、断线撤权清理、
 后台旧响应作废和全成员 scope 兼容性检查已有源码与测试；控制能力仍显示不可用。
@@ -314,3 +314,14 @@ App 调度、任务凭据回调与远端操作仍待实现。当前定制 Multic
 
 macOS 与 iOS Simulator 的共享 UI 编译已通过；没有签名、公证、发布、安装，
 没有宣称 Mac→Mac / iPhone→Mac 实机完整任务验收。
+
+[ADR 0154](adr/0154-multica-workbench-operations.md) 增加本机工作台编辑：智能体
+名称、描述、系统指令、模型和并发上限；任务创建/编辑、分派、状态、普通评论、
+指定执行取消以及执行历史/评论查看。Rust 校验权限、workspace、资源 ID 和
+编辑版本，持久化操作去重，未知结果不重放。新任务先保存为未分派 backlog，
+分派/状态变更带 `--no-start`；启动、重跑及提及调度仍不可用。凭据、环境变量、
+MCP 和身份管理未开放，远端仍只读，不能将本机管理界面称为全流程任务执行。
+
+部署文档已与已安装 CLI 0.3.58 的帮助和只读响应形状对照，分派使用 `--to-id`，
+取消使用 task ID 加 `--issue`。DSH App 自带 CLI，但入口调用 profile runtime，
+尚无证据证明它是正在运行的 App 的 IPC；继续使用 App 内插件作为目标接入点。

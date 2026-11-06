@@ -1,4 +1,4 @@
-# ADR 0151: Enforce registered task ownership and expose scoped Multica browsing
+# ADR 0153: Enforce registered task ownership and expose scoped Multica browsing
 
 - Date: 2026-11-06
 - Status: Accepted for the implementation below; full service and device acceptance pending

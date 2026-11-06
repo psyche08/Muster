@@ -48,6 +48,8 @@ message Intent {
     muster.v1.MulticaBrowseRequest multica_browse = 90;
     MulticaSelect multica_select = 96;
     muster.v1.MulticaServiceRequest multica_service = 97;
+    muster.v1.MulticaMutation multica_mutation = 137;
+    bool multica_mutation_acknowledge = 138;
     muster.v1.VisionRequest vision = 93;
 
     OpenAgents open_agents = 30;
@@ -508,6 +510,11 @@ message MulticaWorkspaceView {
   repeated MulticaDevice devices = 3;
   muster.v1.MulticaService local_service = 4;
   bool selected_is_local = 5;
+  bool mutation_busy = 6;
+  string mutation_message = 7;
+  uint64 mutation_result = 8;
+  bool mutation_applied = 9;
+  bool mutation_uncertain = 10;
 }
 
 message ViewModel {

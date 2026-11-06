@@ -10,6 +10,7 @@ mod bridge;
 mod browse;
 mod image;
 mod installation;
+pub(crate) mod operations;
 pub(crate) mod ownership;
 pub(crate) mod service;
 

@@ -380,6 +380,22 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .multicaService(newValue)}
   }
 
+  public var multicaMutation: Muster_V1_MulticaMutation {
+    get {
+      if case .multicaMutation(let v)? = _storage._it {return v}
+      return Muster_V1_MulticaMutation()
+    }
+    set {_uniqueStorage()._it = .multicaMutation(newValue)}
+  }
+
+  public var multicaMutationAcknowledge: Bool {
+    get {
+      if case .multicaMutationAcknowledge(let v)? = _storage._it {return v}
+      return false
+    }
+    set {_uniqueStorage()._it = .multicaMutationAcknowledge(newValue)}
+  }
+
   public var vision: Muster_V1_VisionRequest {
     get {
       if case .vision(let v)? = _storage._it {return v}
@@ -716,6 +732,8 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case multicaBrowse(Muster_V1_MulticaBrowseRequest)
     case multicaSelect(Muster_App_MulticaSelect)
     case multicaService(Muster_V1_MulticaServiceRequest)
+    case multicaMutation(Muster_V1_MulticaMutation)
+    case multicaMutationAcknowledge(Bool)
     case vision(Muster_V1_VisionRequest)
     case openAgents(Muster_App_OpenAgents)
     case agentCatalogAction(Muster_App_AgentCatalogAction)
@@ -2243,6 +2261,16 @@ public nonisolated struct Muster_App_MulticaWorkspaceView: Sendable {
   public mutating func clearLocalService() {self._localService = nil}
 
   public var selectedIsLocal: Bool = false
+
+  public var mutationBusy: Bool = false
+
+  public var mutationMessage: String = String()
+
+  public var mutationResult: UInt64 = 0
+
+  public var mutationApplied: Bool = false
+
+  public var mutationUncertain: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3894,7 +3922,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}multica_mutation\0\u{3}multica_mutation_acknowledge\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4759,6 +4787,27 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .nativeCreate(v)
           }
         }()
+        case 137: try {
+          var v: Muster_V1_MulticaMutation?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .multicaMutation(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .multicaMutation(v)
+          }
+        }()
+        case 138: try {
+          var v: Bool?
+          try decoder.decodeSingularBoolField(value: &v)
+          if let v = v {
+            if _storage._it != nil {try decoder.handleConflictingOneOf()}
+            _storage._it = .multicaMutationAcknowledge(v)
+          }
+        }()
         default: break
         }
       }
@@ -5027,6 +5076,14 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .nativeCreate?: try {
         guard case .nativeCreate(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 136)
+      }()
+      case .multicaMutation?: try {
+        guard case .multicaMutation(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 137)
+      }()
+      case .multicaMutationAcknowledge?: try {
+        guard case .multicaMutationAcknowledge(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 138)
       }()
       case nil: break
       }
@@ -7976,7 +8033,7 @@ nonisolated extension Muster_App_MulticaDevice: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaWorkspaceView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visible\0\u{3}selected_device\0\u{1}devices\0\u{3}local_service\0\u{3}selected_is_local\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visible\0\u{3}selected_device\0\u{1}devices\0\u{3}local_service\0\u{3}selected_is_local\0\u{3}mutation_busy\0\u{3}mutation_message\0\u{3}mutation_result\0\u{3}mutation_applied\0\u{3}mutation_uncertain\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7989,6 +8046,11 @@ nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, Sw
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.devices) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._localService) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.selectedIsLocal) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.mutationBusy) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.mutationMessage) }()
+      case 8: try { try decoder.decodeSingularUInt64Field(value: &self.mutationResult) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.mutationApplied) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.mutationUncertain) }()
       default: break
       }
     }
@@ -8014,6 +8076,21 @@ nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, Sw
     if self.selectedIsLocal != false {
       try visitor.visitSingularBoolField(value: self.selectedIsLocal, fieldNumber: 5)
     }
+    if self.mutationBusy != false {
+      try visitor.visitSingularBoolField(value: self.mutationBusy, fieldNumber: 6)
+    }
+    if !self.mutationMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.mutationMessage, fieldNumber: 7)
+    }
+    if self.mutationResult != 0 {
+      try visitor.visitSingularUInt64Field(value: self.mutationResult, fieldNumber: 8)
+    }
+    if self.mutationApplied != false {
+      try visitor.visitSingularBoolField(value: self.mutationApplied, fieldNumber: 9)
+    }
+    if self.mutationUncertain != false {
+      try visitor.visitSingularBoolField(value: self.mutationUncertain, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8023,6 +8100,11 @@ nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, Sw
     if lhs.devices != rhs.devices {return false}
     if lhs._localService != rhs._localService {return false}
     if lhs.selectedIsLocal != rhs.selectedIsLocal {return false}
+    if lhs.mutationBusy != rhs.mutationBusy {return false}
+    if lhs.mutationMessage != rhs.mutationMessage {return false}
+    if lhs.mutationResult != rhs.mutationResult {return false}
+    if lhs.mutationApplied != rhs.mutationApplied {return false}
+    if lhs.mutationUncertain != rhs.mutationUncertain {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

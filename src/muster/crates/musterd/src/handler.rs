@@ -61,6 +61,7 @@ fn access_for(req: &Req) -> Access {
     };
     match req {
         Req::Multica(_)
+        | Req::MulticaMutation(_)
         | Req::Vision(_)
         | Req::AgentScheduler(_) => Access::LocalOnly,
         Req::MulticaService(r) if r.action == v1::multica_service_request::Action::Save as i32 => Access::LocalOnly,
@@ -1262,6 +1263,7 @@ async fn dispatch(
             };
             daemon.locked_use.extend(peer, r).await?
         }
+        Req::MulticaMutation(r) => crate::multica::operations::mutate(daemon, r).await?,
         Req::MulticaService(r) => {
             Resp::MulticaService(crate::multica::service::configure(daemon, ctx, r).await?)
         }

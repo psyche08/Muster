@@ -197,6 +197,7 @@ struct MulticaView: View {
     @State private var sharing = false
     @State private var sharedWorkspaces: Set<String> = []
     @State private var section = 0
+    @State private var editor: MulticaEditor?
     @State private var showInstallation = false
     @State private var installationPreparation = false
     @State private var installationDraft = Muster_V1_MulticaRequest()
@@ -215,6 +216,15 @@ struct MulticaView: View {
                 }
             }
             if workspace.selectedIsLocal && workspace.localService.canManage { sharingSettings }
+            if workspace.selectedIsLocal && !workspace.mutationMessage.isEmpty {
+                HStack {
+                    Text(workspace.mutationMessage).font(.callout).textSelection(.enabled)
+                    if workspace.mutationBusy { ProgressView().controlSize(.small) }
+                    if workspace.mutationUncertain {
+                        Button("已核对当前结果") { core.multicaAcknowledgeMutation() }
+                    }
+                }
+            }
             HStack {
                 Picker("工作区", selection: Binding(get: { page.workspaceID }, set: { workspace in
                     var request = Muster_V1_MulticaBrowseRequest()
@@ -278,6 +288,9 @@ struct MulticaView: View {
             }
         }
         .padding()
+        .sheet(item: $editor) { input in
+            MulticaOperationEditor(core: core, input: input, page: page, workspace: workspace)
+        }
         .onAppear { loadSharing() }
         .onChange(of: workspace.localService) { _, _ in loadSharing() }
         .toolbar {
@@ -343,6 +356,11 @@ struct MulticaView: View {
     @ViewBuilder private var listing: some View {
         if section == 0 {
             VStack {
+                if workspace.selectedIsLocal {
+                    Button("新建任务", systemImage: "plus") {
+                        editIssue(.init())
+                    }.disabled(operationsDisabled)
+                }
                 List(page.issues, id: \.id) { issue in
                     Button { query(issue: issue.id) } label: {
                         VStack(alignment: .leading, spacing: 5) {
@@ -398,6 +416,40 @@ struct MulticaView: View {
                     LabeledContent("更新时间", value: page.issue.updatedAt)
                     Divider()
                     Text(page.issue.description_p).frame(maxWidth: .infinity, alignment: .leading)
+                    if workspace.selectedIsLocal {
+                        HStack {
+                            Button("编辑") { editIssue(page.issue) }
+                            Menu("任务操作") {
+                                Button("分派智能体") { issueAction(.assign, title: "分派智能体") }
+                                Button("修改状态") { issueAction(.status, title: "修改任务状态") }
+                                Button("添加评论") { issueAction(.comment, title: "添加评论") }
+                                Button("启动 / 续跑：App 任务桥接待接通") {}.disabled(true)
+                            }
+                        }.disabled(operationsDisabled)
+                    }
+                    Divider()
+                    Text("执行历史（最近 200 条）").font(.headline)
+                    if page.runs.isEmpty { Text("暂无执行记录").foregroundStyle(.secondary) }
+                    ForEach(page.runs, id: \.id) { run in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(run.status).font(.subheadline.bold())
+                            Text(run.createdAt).font(.caption).foregroundStyle(.secondary)
+                            if !run.failureReason.isEmpty { Text(run.failureReason).font(.caption) }
+                            if workspace.selectedIsLocal && run.canCancel {
+                                Button("取消这次执行", role: .destructive) {
+                                    issueAction(.cancel, title: "取消执行", value: run.id)
+                                }.disabled(operationsDisabled)
+                            }
+                        }.padding(.vertical, 4)
+                    }
+                    Divider()
+                    Text("最近评论").font(.headline)
+                    ForEach(page.comments, id: \.id) { comment in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(comment.authorType + " · " + comment.createdAt).font(.caption).foregroundStyle(.secondary)
+                            Text(comment.content)
+                        }.padding(.vertical, 4)
+                    }
                 } else if page.hasAgent {
                     Text(page.agent.name).font(.title2)
                     LabeledContent("状态", value: page.agent.status)
@@ -405,9 +457,41 @@ struct MulticaView: View {
                     LabeledContent("运行时", value: page.agent.runtimeID)
                     Divider()
                     Text(page.agent.description_p).frame(maxWidth: .infinity, alignment: .leading)
+                    if workspace.selectedIsLocal && page.agent.editable {
+                        Button("编辑智能体配置") { editAgent(page.agent) }.disabled(operationsDisabled)
+                    }
                 }
             }.textSelection(.enabled).padding(.trailing, 8)
         }
+    }
+
+    private var operationsDisabled: Bool { page.busy || workspace.mutationBusy || workspace.mutationUncertain }
+    private func editAgent(_ agent: Muster_V1_MulticaAgent) {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.agent = .with {
+                $0.id = agent.id; $0.revision = agent.revision; $0.name = agent.name
+                $0.description_p = agent.description_p; $0.instructions = agent.instructions
+                $0.model = agent.model; $0.maxConcurrentTasks = agent.maxConcurrentTasks
+            }
+        }
+        editor = MulticaEditor(title: "编辑智能体", request: request)
+    }
+    private func editIssue(_ issue: Muster_V1_MulticaIssue) {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.issue = .with {
+                $0.id = issue.id; $0.revision = issue.revision; $0.title = issue.title; $0.description_p = issue.description_p
+            }
+        }
+        editor = MulticaEditor(title: issue.id.isEmpty ? "新建任务" : "编辑任务", request: request)
+    }
+    private func issueAction(_ kind: Muster_V1_MulticaIssueAction.Kind, title: String, value: String = "") {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.issueAction = .with { $0.kind = kind; $0.id = page.issue.id; $0.revision = page.issue.revision; $0.value = value }
+        }
+        editor = MulticaEditor(title: title, request: request)
     }
 
     private func query(issue: String = "", agent: String = "", offset: UInt32 = 0) {

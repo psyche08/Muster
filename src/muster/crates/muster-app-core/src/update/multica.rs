@@ -174,6 +174,9 @@ pub(super) fn apply_page(
             if page.issue.is_some() || page.agent.is_some() {
                 state.multica_page.issue = page.issue.take();
                 state.multica_page.agent = page.agent.take();
+                state.multica_page.runs = page.runs;
+                state.multica_page.comments = page.comments;
+                state.multica_page.status_choices = page.status_choices;
                 state.multica_page.error.clear();
             } else {
                 state.multica_page = page;
@@ -310,6 +313,11 @@ pub(crate) fn view(state: &State) -> app::MulticaWorkspaceView {
         devices,
         local_service: Some(state.multica_service.clone()),
         selected_is_local: !state.embedded && state.is_self(&state.multica_selected),
+        mutation_busy: state.multica_mutation_busy,
+        mutation_message: state.multica_mutation_message.clone(),
+        mutation_result: state.multica_mutation_result,
+        mutation_applied: state.multica_mutation_applied,
+        mutation_uncertain: state.multica_mutation_uncertain,
     }
 }
 fn clear_page(state: &mut State, message: &str) {
@@ -687,5 +695,151 @@ mod service_tests {
             )],
         );
         assert!(!view(&state).visible);
+    }
+}
+
+pub(super) fn mutate(state: &mut State, ctx: &Ctx, mut request: v1::MulticaMutation) {
+    if state.embedded || !state.is_self(&state.multica_selected) {
+        state.toast("请在提供 Multica 服务的 Mac 上操作", true);
+        return;
+    }
+    if state.multica_mutation_busy || state.multica_mutation_uncertain {
+        state.toast("请等待当前操作完成，或先核对未确认的结果", true);
+        return;
+    }
+    if request.workspace_id != state.multica_page.workspace_id || request.workspace_id.is_empty() {
+        state.toast("工作区已改变，请重新打开详情", true);
+        return;
+    }
+    request.op_id = state.op_id();
+    state.multica_mutation_busy = true;
+    state.multica_mutation_message = "正在提交…".into();
+    state.multica_mutation_applied = false;
+    let workspace = request.workspace_id.clone();
+    let query = state.multica_query.clone();
+    let client = ctx.backend.local().clone();
+    spawn(ctx, async move {
+        let result = match unary(&client, Req::MulticaMutation(request)).await {
+            Ok(Resp::OpResult(result)) => Ok(result),
+            Ok(_) => Err(unexpected()),
+            Err(error) => Err(error),
+        };
+        Msg::MulticaMutation {
+            workspace,
+            query,
+            result,
+        }
+    });
+}
+
+pub(super) fn mutation_result(
+    state: &mut State,
+    ctx: &Ctx,
+    workspace: String,
+    query: v1::MulticaBrowseRequest,
+    result: Result<v1::OpResult, Error>,
+) {
+    use v1::op_result::Status;
+    state.multica_mutation_busy = false;
+    state.multica_mutation_result = state.multica_mutation_result.wrapping_add(1);
+    let (applied, uncertain, message) = match result {
+        Ok(r)
+            if matches!(
+                Status::try_from(r.status),
+                Ok(Status::Applied | Status::Duplicate)
+            ) =>
+        {
+            (
+                true,
+                false,
+                "已提交；任务执行结果请查看执行历史和评论".into(),
+            )
+        }
+        Ok(r) if r.status == Status::Rejected as i32 => (false, false, r.message),
+        _ => (
+            false,
+            true,
+            "操作结果尚未确认。请刷新详情和执行历史核对；不会自动重试。".into(),
+        ),
+    };
+    state.multica_mutation_applied = applied;
+    state.multica_mutation_uncertain = uncertain;
+    state.multica_mutation_message = message;
+    // Never overwrite a different target/workspace/detail opened during the call.
+    if applied
+        && state.is_self(&state.multica_selected)
+        && workspace == state.multica_page.workspace_id
+        && query == state.multica_query
+    {
+        browse(state, ctx, query);
+    }
+}
+
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+    #[tokio::test]
+    async fn host_only_submit_is_single_flight_and_unknown_results_require_review() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: Client::new(socket),
+            }),
+            tx,
+        };
+        let mut state = State::new(true, Some("phone".into()));
+        state.multica_selected = "host".into();
+        state.multica_page.workspace_id = "workspace-a".into();
+        let request = v1::MulticaMutation {
+            workspace_id: "workspace-a".into(),
+            ..Default::default()
+        };
+        mutate(&mut state, &ctx, request.clone());
+        assert!(
+            !state.multica_mutation_busy,
+            "a phone cannot become a local owner"
+        );
+        state.embedded = false;
+        state.multica_selected = "phone".into();
+        mutate(&mut state, &ctx, request.clone());
+        assert!(state.multica_mutation_busy);
+        let op = state.next_op;
+        mutate(&mut state, &ctx, request.clone());
+        assert_eq!(
+            state.next_op, op,
+            "duplicate clicks do not allocate another submission"
+        );
+        mutation_result(
+            &mut state,
+            &ctx,
+            "workspace-a".into(),
+            v1::MulticaBrowseRequest::default(),
+            Err(Error::Unavailable("lost reply".into())),
+        );
+        assert!(state.multica_mutation_uncertain && !state.multica_mutation_busy);
+        mutate(&mut state, &ctx, request);
+        assert_eq!(state.next_op, op, "an ambiguous write is not retried");
+        // A late success must not replace another target's selected page.
+        state.multica_selected = "other-host".into();
+        state.multica_page.workspace_id = "workspace-b".into();
+        let generation = state.multica_generation;
+        mutation_result(
+            &mut state,
+            &ctx,
+            "workspace-a".into(),
+            v1::MulticaBrowseRequest::default(),
+            Ok(v1::OpResult {
+                status: v1::op_result::Status::Applied as i32,
+                ..Default::default()
+            }),
+        );
+        assert_eq!(state.multica_page.workspace_id, "workspace-b");
+        assert_eq!(state.multica_generation, generation);
+        assert!(state.multica_mutation_applied);
     }
 }

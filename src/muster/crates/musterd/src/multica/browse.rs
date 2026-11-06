@@ -6,7 +6,12 @@ const MAX_OUTPUT: u64 = 4 * 1024 * 1024;
 const PAGE_SIZE: u32 = 50;
 
 impl Manager {
-    async fn query(&self, c: &Config, workspace: &str, args: &[&str]) -> Result<Value, Error> {
+    pub(super) async fn query(
+        &self,
+        c: &Config,
+        workspace: &str,
+        args: &[&str],
+    ) -> Result<Value, Error> {
         let executable = self.executable.clone().map(Ok).unwrap_or_else(binary)?;
         let mut command = tokio::process::Command::new(executable);
         command.args(["exec", &c.container_name, "multica"]);
@@ -102,6 +107,21 @@ impl Manager {
             offset: r.offset,
             next_offset: r.offset.saturating_add(PAGE_SIZE),
             previous_offset: r.offset.saturating_sub(PAGE_SIZE),
+            status_choices: [
+                ("backlog", "待办积压"),
+                ("todo", "待处理"),
+                ("in_progress", "进行中"),
+                ("in_review", "审核中"),
+                ("done", "已完成"),
+                ("blocked", "被阻塞"),
+                ("cancelled", "已取消"),
+            ]
+            .into_iter()
+            .map(|(key, title)| v1::MulticaStatusChoice {
+                key: key.into(),
+                title: title.into(),
+            })
+            .collect(),
             ..Default::default()
         };
         if workspace.is_empty() {
@@ -125,6 +145,32 @@ impl Manager {
                 return Err(Error::Invalid("Multica returned a different issue".into()));
             }
             page.issue = Some(issue(&data));
+            let run_args = ["issue", "runs", &r.issue_id];
+            let comment_args = ["issue", "comment", "list", &r.issue_id, "--recent", "10"];
+            let (runs, comments) = tokio::try_join!(
+                self.query(&c, &workspace, &run_args),
+                self.query(&c, &workspace, &comment_args)
+            )?;
+            page.runs = runs_projection(&runs, &workspace, &r.issue_id)?;
+            let rows = array(&comments)?;
+            if rows.len() > 2000 {
+                return Err(Error::Unavailable("Too many Multica comments".into()));
+            }
+            for row in rows {
+                if field(row, "issue_id") != r.issue_id {
+                    return Err(Error::Invalid("Comment belongs to another issue".into()));
+                }
+            }
+            page.comments = rows
+                .iter()
+                .take(200)
+                .map(|v| v1::MulticaComment {
+                    id: field(v, "id"),
+                    content: field(v, "content"),
+                    author_type: field(v, "author_type"),
+                    created_at: field(v, "created_at"),
+                })
+                .collect();
             return Ok(page);
         }
         if !r.agent_id.is_empty() {
@@ -135,7 +181,7 @@ impl Manager {
             if field(&data, "id") != r.agent_id {
                 return Err(Error::Invalid("Multica returned a different agent".into()));
             }
-            page.agent = Some(agent(&data));
+            page.agent = Some(agent(&data, allowed.is_none()));
             return Ok(page);
         }
         let offset = r.offset.to_string();
@@ -169,7 +215,7 @@ impl Manager {
         for row in agent_rows.iter().chain(runtime_rows) {
             check_workspace(row, &workspace)?;
         }
-        page.agents = agent_rows.iter().map(agent).collect();
+        page.agents = agent_rows.iter().map(|v| agent(v, false)).collect();
         page.runtimes = runtime_rows
             .iter()
             .map(|v| v1::MulticaRuntime {
@@ -184,7 +230,7 @@ impl Manager {
         Ok(page)
     }
 }
-fn validate_request(r: &v1::MulticaBrowseRequest) -> Result<(), Error> {
+pub(super) fn validate_request(r: &v1::MulticaBrowseRequest) -> Result<(), Error> {
     for id in [&r.workspace_id, &r.issue_id, &r.agent_id] {
         if id.len() > 128
             || id.starts_with('-')
@@ -205,10 +251,10 @@ fn array(value: &Value) -> Result<&Vec<Value>, Error> {
         .as_array()
         .ok_or_else(|| Error::Unavailable("Unsupported Multica list response".into()))
 }
-fn field(v: &Value, key: &str) -> String {
+pub(super) fn field(v: &Value, key: &str) -> String {
     v[key].as_str().unwrap_or_default().to_owned()
 }
-fn check_workspace(v: &Value, workspace: &str) -> Result<(), Error> {
+pub(super) fn check_workspace(v: &Value, workspace: &str) -> Result<(), Error> {
     if v["workspace_id"].as_str() != Some(workspace) {
         return Err(Error::Invalid(
             "Multica result belongs to a different workspace".into(),
@@ -227,9 +273,10 @@ fn issue(v: &Value) -> v1::MulticaIssue {
         assignee_id: field(v, "assignee_id"),
         assignee_type: field(v, "assignee_type"),
         updated_at: field(v, "updated_at"),
+        revision: revision(v),
     }
 }
-fn agent(v: &Value) -> v1::MulticaAgent {
+fn agent(v: &Value, local: bool) -> v1::MulticaAgent {
     v1::MulticaAgent {
         id: field(v, "id"),
         name: field(v, "name"),
@@ -237,7 +284,79 @@ fn agent(v: &Value) -> v1::MulticaAgent {
         status: field(v, "status"),
         runtime_id: field(v, "runtime_id"),
         model: field(v, "model"),
+        instructions: if local {
+            field(v, "instructions")
+        } else {
+            String::new()
+        },
+        max_concurrent_tasks: if local {
+            v["max_concurrent_tasks"]
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or_default()
+        } else {
+            0
+        },
+        revision: if local { revision(v) } else { String::new() },
+        editable: local
+            && v["viewer_is_editor"].as_bool() == Some(true)
+            && v["sensitive_config_redacted"].as_bool() == Some(false),
     }
+}
+pub(super) fn revision(v: &Value) -> String {
+    use sha2::{Digest, Sha256};
+    // Includes server revision and editable/dispatch-affecting fields, without
+    // sending raw provider configuration or secrets through the ABI.
+    let mut hash = Sha256::new();
+    for key in [
+        "id",
+        "workspace_id",
+        "updated_at",
+        "title",
+        "name",
+        "description",
+        "instructions",
+        "model",
+        "max_concurrent_tasks",
+        "runtime_id",
+        "assignee_id",
+        "assignee_type",
+        "status",
+    ] {
+        hash.update(key.as_bytes());
+        hash.update(serde_json::to_vec(&v[key]).unwrap_or_default());
+    }
+    hex::encode(hash.finalize())
+}
+pub(super) fn runs_projection(
+    data: &Value,
+    workspace: &str,
+    issue: &str,
+) -> Result<Vec<v1::MulticaRun>, Error> {
+    let rows = array(data)?;
+    if rows.len() > 2000 {
+        return Err(Error::Unavailable("Too many Multica runs".into()));
+    }
+    let mut projected = Vec::new();
+    for row in rows {
+        check_workspace(row, workspace)?;
+        if field(row, "issue_id") != issue {
+            return Err(Error::Invalid("Run belongs to another issue".into()));
+        }
+        let status = field(row, "status");
+        projected.push(v1::MulticaRun {
+            id: field(row, "id"),
+            agent_id: field(row, "agent_id"),
+            can_cancel: matches!(status.as_str(), "queued" | "dispatched" | "running"),
+            status,
+            created_at: field(row, "created_at"),
+            completed_at: field(row, "completed_at"),
+            failure_reason: field(row, "failure_reason"),
+        });
+    }
+    projected.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    projected.truncate(200);
+    Ok(projected)
 }
 #[cfg(test)]
 mod tests {
@@ -260,11 +379,21 @@ mod tests {
     }
     #[test]
     fn projection_excludes_custom_environment_and_server_metadata() {
-        let source = json!({"id":"agent-a","name":"Demo","custom_env":{"DEMO_TOKEN":"not-a-credential"},"mcp_config":{"secret":"synthetic"},"instructions":"private instructions"});
-        let encoded = serde_json::to_value(agent(&source)).unwrap();
+        let mut source = json!({"id":"agent-a","name":"Demo","custom_env":{"DEMO_TOKEN":"not-a-credential"},"mcp_config":{"secret":"synthetic"},"instructions":"private instructions","viewer_is_editor":true,"sensitive_config_redacted":false,"max_concurrent_tasks":2});
+        let encoded = serde_json::to_value(agent(&source, false)).unwrap();
         assert_eq!(encoded["name"], "Demo");
         assert!(encoded.get("custom_env").is_none());
-        assert!(encoded.get("instructions").is_none());
+        assert!(encoded.get("mcp_config").is_none());
+        assert_eq!(encoded["instructions"], "");
+        assert_eq!(encoded["revision"], "");
+        assert_eq!(encoded["editable"], false);
+        let local = agent(&source, true);
+        assert!(local.editable);
+        assert_eq!(local.instructions, "private instructions");
+        assert_eq!(local.max_concurrent_tasks, 2);
+        assert_eq!(local.revision.len(), 64);
+        source["sensitive_config_redacted"] = json!(true);
+        assert!(!agent(&source, true).editable);
     }
 }
 
@@ -305,6 +434,8 @@ case "$*" in
  'exec mlt multica --workspace-id w agent list --output json') echo '[{"id":"agent-a","name":"Reviewer","workspace_id":"w","custom_env":{"SECRET":"synthetic"}}]' ;;
  'exec mlt multica --workspace-id w runtime list --output json') echo '[{"id":"runtime-a","provider":"codex","status":"online","workspace_id":"w"}]' ;;
  'exec mlt multica --workspace-id w issue get issue-a --output json') echo '{"id":"issue-a","title":"Review","description":"Details","workspace_id":"w"}' ;;
+ 'exec mlt multica --workspace-id w issue runs issue-a --output json') echo '[]' ;;
+ 'exec mlt multica --workspace-id w issue comment list issue-a --recent 10 --output json') echo '[]' ;;
  'exec mlt multica --workspace-id w issue get other --output json') echo '{"id":"other","workspace_id":"another"}' ;;
  *) exit 90 ;;
 esac
