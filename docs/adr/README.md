@@ -244,7 +244,7 @@ records a specific decision and does not revive code on its delete list.
 
 | [0142](0142-session-history-and-live-push-latency.md) | Accepted; source verified, installed acceptance pending | Keep session history and live pushes independent of catalog work |
 
-| [0143](0143-paired-release-1-1-23.md) | Accepted; published and installed on three Macs; iPhone pending | Publish Apple 1.1.23 (113) from main and install the fleet |
+| [0143](0143-paired-release-1-1-23.md) | Accepted; published and installed on three Macs; cleanup verified; iPhone deferred | Publish Apple 1.1.23 (113) from main and install the fleet |
 
 | [0144](0144-local-release-and-independent-installation.md) | Accepted; three Mac installations verified | Local Apple release and independent installation jobs |
 
