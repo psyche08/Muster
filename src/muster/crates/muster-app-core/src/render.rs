@@ -92,7 +92,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 .as_ref()
                 .map(|trace| app::SessionLoadMarker {
                     trace_id: trace.id().into(),
-                    history_ready: !chat.loading && chat.load_error.is_empty(),
+                    history_ready: trace.history_ready(),
                 })
         }),
         browser: Some(state.browser.clone()),
@@ -454,7 +454,7 @@ impl Renderer {
             if let Some(chat) = &state.chat
                 && let Some(trace) = &chat.load_trace
             {
-                trace.published(!chat.loading && chat.load_error.is_empty(), bytes.len());
+                trace.published(trace.history_ready(), bytes.len());
             }
             ctx.shell.on_view(&bytes);
         }

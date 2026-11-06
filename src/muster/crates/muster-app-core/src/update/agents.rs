@@ -1200,6 +1200,7 @@ pub(super) fn msg_chat(
     match result {
         Ok((messages, has_more)) => {
             if !earlier && let Some(trace) = &chat.load_trace {
+                trace.history_applied();
                 trace.record(
                     "history_applied",
                     serde_json::json!({"messages":messages.len(),"reset":reset}),

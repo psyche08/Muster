@@ -126,6 +126,13 @@ fn main() {
         .cloned()
         .unwrap_or_else(|| first.agents.as_ref().unwrap().sessions[0].id.clone());
     for round in 0..3 {
+        let old_trace = shell
+            .latest
+            .lock()
+            .unwrap()
+            .session_load
+            .as_ref()
+            .map(|m| m.trace_id.clone());
         core.intent(app::Intent {
             it: Some(app::intent::It::OpenAgent(app::OpenAgent {
                 device_id: args[2].clone(),
@@ -133,7 +140,10 @@ fn main() {
             })),
         });
         let view = wait(&shell, |v| {
-            v.session_load.as_ref().is_some_and(|m| m.history_ready)
+            v.screen == app::Screen::Chat as i32
+                && v.session_load.as_ref().is_some_and(|m| {
+                    m.history_ready && old_trace.as_deref() != Some(m.trace_id.as_str())
+                })
         });
         println!(
             "{}",
