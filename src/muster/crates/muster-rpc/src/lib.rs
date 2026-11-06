@@ -97,6 +97,8 @@ pub type TargetFuture<'a> =
 
 /// The application side of a server. One call at a time per id; calls run
 /// concurrently. Return the final response; stream events through the sink.
+pub type TimingObserver = Arc<dyn Fn(v1::RpcTiming) + Send + Sync>;
+
 pub trait Handler: Send + Sync + 'static {
     /// The local daemon's verified public binding, attached when proxying its app.
     fn forwarding_enrollment(&self) -> Vec<u8> {
@@ -110,6 +112,13 @@ pub trait Handler: Send + Sync + 'static {
     /// (a device's daemon proxying for its app). Default: no proxying.
     fn open_target(&self, _target: &str) -> TargetFuture<'_> {
         Box::pin(async { Err(Error::Protocol("this endpoint does not proxy".into())) })
+    }
+    fn open_target_observed(
+        &self,
+        target: &str,
+        _observer: Option<TimingObserver>,
+    ) -> TargetFuture<'_> {
+        self.open_target(target)
     }
 }
 
@@ -228,6 +237,23 @@ where
                         // A cancelled handler gets a moment to answer on its
                         // own (a streaming call ending with Ack); then it is
                         // answered for it.
+                        let diagnostic_id =
+                            muster_proto::diagnostics::request_id(&req).map(str::to_owned);
+                        let started = std::time::Instant::now();
+                        let timing = |phase| {
+                            if let Some(diagnostic_id) = &diagnostic_id {
+                                let _ = tx.try_send(Envelope::event(
+                                    id,
+                                    v1::event::Ev::RpcTiming(v1::RpcTiming {
+                                        phase: phase as i32,
+                                        elapsed_us: started.elapsed().as_micros() as u64,
+                                        diagnostic_id: diagnostic_id.clone(),
+                                        reused_connection: false,
+                                    }),
+                                ));
+                            }
+                        };
+                        timing(v1::rpc_timing::Phase::ServerReceived);
                         let mut fut = handler.call(ctx, req, sink);
                         let resp = tokio::select! {
                             resp = &mut fut => resp,
@@ -236,6 +262,7 @@ where
                                 Err(_) => v1::response::Resp::Error(v1::Error { code: v1::error::Code::Timeout as i32, message: "cancelled".into() }),
                             },
                         };
+                        timing(v1::rpc_timing::Phase::ServerFinished);
                         in_flight.lock().unwrap().remove(&id);
                         let _ = tx.send(Envelope::response(id, resp)).await;
                     });
@@ -284,7 +311,27 @@ async fn proxy(
     let started = std::time::Instant::now();
     // One request owns one service stream. The handler/Node reuses the
     // authenticated QUIC connection; no other operation shares this reader.
-    let connect = async { Ok::<_, Error>(Client::new(handler.open_target(&target).await?)) };
+    let diagnostic_id = match &envelope.msg {
+        Some(Msg::Request(Request { req: Some(req) })) => {
+            muster_proto::diagnostics::request_id(req).map(str::to_owned)
+        }
+        _ => None,
+    };
+    let observer: Option<TimingObserver> = diagnostic_id.map(|diagnostic_id| {
+        let tx = tx.clone();
+        Arc::new(move |mut timing: v1::RpcTiming| {
+            timing.diagnostic_id = diagnostic_id.clone();
+            let _ = tx.try_send(Envelope::event(id, v1::event::Ev::RpcTiming(timing)));
+        }) as TimingObserver
+    });
+    let connect = async {
+        let client = Client::new(
+            handler
+                .open_target_observed(&target, observer.clone())
+                .await?,
+        );
+        Ok::<_, Error>(client.with_timing_observer(observer))
+    };
     let client = tokio::select! {
         biased;
         _ = cancel.cancelled() => {
@@ -444,6 +491,9 @@ fn into_result(response: Response) -> Result<v1::response::Resp, Error> {
 }
 
 struct Pending {
+    diagnostic_id: Option<String>,
+    timing_observer: Option<TimingObserver>,
+    timing_count: usize,
     events: mpsc::Sender<v1::event::Ev>,
     response: oneshot::Sender<Response>,
     target: String,
@@ -452,6 +502,7 @@ struct Pending {
 /// The calling side, usable from many tasks at once.
 #[derive(Clone)]
 pub struct Client {
+    timing_observer: Option<TimingObserver>,
     closed: CancellationToken,
     tx: mpsc::Sender<Envelope>,
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
@@ -522,6 +573,24 @@ impl Client {
                                 let _ = pending.response.send(response);
                             }
                         }
+                        Some(Msg::Event(v1::Event {
+                            ev: Some(v1::event::Ev::RpcTiming(timing)),
+                        })) => {
+                            // Diagnostics cannot satisfy watch initialization or fill its business queue.
+                            let observer = {
+                                let mut pending = reader_pending.lock().unwrap();
+                                pending.get_mut(&envelope.id).and_then(|p| {
+                                    if p.timing_count >= 16 || p.diagnostic_id.as_deref() != Some(timing.diagnostic_id.as_str())
+                                        || !matches!(v1::rpc_timing::Phase::try_from(timing.phase), Ok(phase) if phase != v1::rpc_timing::Phase::Unspecified)
+                                    { return None; }
+                                    p.timing_count += 1;
+                                    p.timing_observer.clone()
+                                })
+                            };
+                            if let Some(observer) = observer {
+                                observer(timing);
+                            }
+                        }
                         Some(Msg::Event(v1::Event { ev: Some(ev) })) => {
                             let sender = reader_pending
                                 .lock()
@@ -569,6 +638,7 @@ impl Client {
             reader_pending.lock().unwrap().clear();
         });
         Self {
+            timing_observer: None,
             closed,
             tx,
             pending,
@@ -581,12 +651,18 @@ impl Client {
     /// device id in hex) for the daemon to forward.
     pub fn with_target(&self, target: &str) -> Client {
         Client {
+            timing_observer: self.timing_observer.clone(),
             closed: self.closed.clone(),
             tx: self.tx.clone(),
             pending: self.pending.clone(),
             next_id: self.next_id.clone(),
             target: target.to_string(),
         }
+    }
+
+    pub fn with_timing_observer(mut self, observer: Option<TimingObserver>) -> Self {
+        self.timing_observer = observer;
+        self
     }
 
     pub fn is_closed(&self) -> bool {
@@ -609,6 +685,12 @@ impl Client {
         if self.is_closed() {
             return Err(Error::Closed);
         }
+        let diagnostic_id = match &envelope.msg {
+            Some(Msg::Request(Request { req: Some(req) })) => {
+                muster_proto::diagnostics::request_id(req).map(str::to_owned)
+            }
+            _ => None,
+        };
         let id = envelope.id;
         envelope.target = String::new();
         let permit = self.tx.reserve().await.map_err(|_| Error::Closed)?;
@@ -617,6 +699,9 @@ impl Client {
         self.pending.lock().unwrap().insert(
             id,
             Pending {
+                diagnostic_id,
+                timing_observer: self.timing_observer.clone(),
+                timing_count: 0,
                 events: events_tx,
                 response: response_tx,
                 target: String::new(),
@@ -686,12 +771,16 @@ impl Client {
         if self.is_closed() {
             return Err(Error::Closed);
         }
+        let diagnostic_id = muster_proto::diagnostics::request_id(&req).map(str::to_owned);
         let permit = self.tx.reserve().await.map_err(|_| Error::Closed)?;
         let (events_tx, events_rx) = mpsc::channel(256);
         let (response_tx, response_rx) = oneshot::channel();
         self.pending.lock().unwrap().insert(
             id,
             Pending {
+                diagnostic_id,
+                timing_observer: self.timing_observer.clone(),
+                timing_count: 0,
                 events: events_tx,
                 response: response_tx,
                 target: self.target.clone(),
@@ -733,6 +822,50 @@ pub fn err(code: v1::error::Code, message: impl Into<String>) -> v1::response::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn timings_are_correlated_bounded_and_never_business_events() {
+        let (a, mut peer) = tokio::io::duplex(65536);
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let sink = observed.clone();
+        let client = Client::new(a)
+            .with_timing_observer(Some(Arc::new(move |t| sink.lock().unwrap().push(t))));
+        let diagnostic_id = "0123456789abcdef-1";
+        let mut call = client
+            .start(v1::request::Req::AgentWatch(v1::AgentWatchRequest {
+                diagnostic_id: diagnostic_id.into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        for i in 0..32 {
+            peer.write_all(&frame(&Envelope::event(
+                call.id,
+                v1::event::Ev::RpcTiming(v1::RpcTiming {
+                    phase: 4,
+                    diagnostic_id: if i < 2 { "wrong" } else { diagnostic_id }.into(),
+                    elapsed_us: i,
+                    ..Default::default()
+                }),
+            )))
+            .await
+            .unwrap();
+        }
+        peer.write_all(&frame(&Envelope::event(
+            call.id,
+            v1::event::Ev::AgentEvent(v1::AgentEvent::default()),
+        )))
+        .await
+        .unwrap();
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), call.events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(event, v1::event::Ev::AgentEvent(_)));
+        let got = observed.lock().unwrap();
+        assert_eq!(got.len(), 16);
+        assert!(got.iter().all(|t| t.diagnostic_id == diagnostic_id));
+    }
 
     #[tokio::test]
     async fn stalled_watch_does_not_block_other_calls_and_cancels_its_target() {

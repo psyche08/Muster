@@ -132,14 +132,14 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         } else {
             state.self_id.clone()
         };
-        let visible_sessions: Vec<_> = state
-            .agents
-            .sessions
-            .iter()
-            .filter(|s| s.device_id == device)
-            .map(|s| s.id.clone())
-            .take(2000)
-            .collect();
+        let visible_sessions = crate::catalog::visible_ids(
+            &state.agents.sessions,
+            &device,
+            *state
+                .agent_catalog_limits
+                .get(crate::catalog::PROVIDER_LIMIT)
+                .unwrap_or(&muster_agent::catalog::PAGE_SIZE),
+        );
         let (watch, token) = state.new_watch();
         state.catalog_watches.insert(device.clone(), watch);
         let backend = ctx.backend.clone();
@@ -158,8 +158,10 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                     active = Some(
                         client
                             .start(Req::AgentWatch(v1::AgentWatchRequest {
+                                diagnostic_id: String::new(),
                                 session: String::new(),
                                 catalog_only: true,
+                                provider_pages: true,
                                 limit: AGENT_LIST_LIMIT,
                                 grouped: true,
                                 visible_sessions: visible_sessions.clone(),
@@ -291,6 +293,8 @@ pub(super) fn open_agent(state: &mut State, ctx: &Ctx, session_id: String) {
 
 /// The chat screen on `session` of `device`, with a fresh watch.
 pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v1::AgentSession) {
+    let entry_trace =
+        crate::session_diagnostics::Trace::new(ctx.shell.clone(), &device, &session.id);
     flush_chat_cache(state, ctx);
     let session_id = session.id.clone();
     // Desktop chats keep one draft across hosts; Agent sessions are host-local.
@@ -310,6 +314,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         .unwrap_or_default();
     super::terminals::detach_session_terminal(state);
     state.chat = Some(Chat {
+        load_trace: None,
         content_revision: crate::state::next_content_revision(),
         cache_dirty: false,
         cache_key: key,
@@ -350,7 +355,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
     state.git = None;
     state.go(Screen::Chat);
     super::admitted::settle(state);
-    watch_agent(state, ctx, device, session_id);
+    watch_agent_traced(state, ctx, device, session_id, Some(entry_trace));
     super::send_recovery::restore(state, ctx);
 }
 
@@ -489,10 +494,23 @@ pub(super) async fn first_watch_event(
 
 /// Streams a session's events into the open chat until its watch ends.
 pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_id: String) {
+    watch_agent_traced(state, ctx, device, session_id, None);
+}
+fn watch_agent_traced(
+    state: &mut State,
+    ctx: &Ctx,
+    device: String,
+    session_id: String,
+    entry: Option<crate::session_diagnostics::Trace>,
+) {
+    let trace = entry.unwrap_or_else(|| {
+        crate::session_diagnostics::Trace::new(ctx.shell.clone(), &device, &session_id)
+    });
     flush_chat_cache(state, ctx);
     let (watch, token) = state.new_watch();
     match &mut state.chat {
         Some(chat) if chat.device == device && chat.session.id == session_id => {
+            chat.load_trace = Some(trace.clone());
             chat.watch = Some(watch);
             chat.approval_refresh_attempted = false;
             chat.approval_refresh_pending = false;
@@ -506,19 +524,34 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
     let tx = ctx.tx.clone();
     tokio::spawn(async move {
         let mut retry = 1;
+        let mut attempt_index = 0u64;
         loop {
+            attempt_index += 1;
+            let request_id = format!("{}-{:x}", trace.id(), attempt_index);
+            trace.record(
+                "attempt_started",
+                serde_json::json!({"attempt":attempt_index}),
+            );
+            let mut phase = "watch_acquire";
             let mut active_call = None;
             let attempt = async {
                 let client = tokio::time::timeout(
                     Duration::from_secs(3),
-                    backend.client_for(&device, &self_id),
+                    backend.client_for_observed(
+                        &device,
+                        &self_id,
+                        Some(trace.observer(format!("watch-{attempt_index}"))),
+                    ),
                 )
                 .await
                 .map_err(|_| Error::Unavailable("session connection timed out".into()))??;
+                trace.record("watch_client_ready", serde_json::json!({"attempt":attempt_index,"route":if backend.is_embedded(){"embedded"}else{"socket_proxy"}}));
+                phase = "watch_first_event";
                 active_call = Some(
                     client
                         .start(Req::AgentWatch(v1::AgentWatchRequest {
                             session: session_id.clone(),
+                            diagnostic_id: request_id.clone(),
                             ..Default::default()
                         }))
                         .await?,
@@ -533,6 +566,10 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     "session watch timed out",
                 )
                 .await?;
+                trace.record(
+                    "watch_first_event",
+                    serde_json::json!({"attempt":attempt_index}),
+                );
                 let call = active_call.as_mut().expect("started watch");
                 // A newly established subscription replays the server's current
                 // pending interactions. Retire the old stream's display IDs
@@ -571,18 +608,39 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                 dispatch(first, &mut queued);
                 // History owns a separate service stream from the live watch;
                 // both reuse the underlying authenticated peer connection.
+                phase = "history_acquire";
+                trace.record(
+                    "history_acquire_started",
+                    serde_json::json!({"attempt":attempt_index}),
+                );
                 let history_client = tokio::time::timeout(
                     Duration::from_secs(3),
-                    backend.client_for(&device, &self_id),
+                    backend.client_for_observed(
+                        &device,
+                        &self_id,
+                        Some(trace.observer(format!("history-open-{attempt_index}"))),
+                    ),
                 )
                 .await
                 .map_err(|_| Error::Unavailable("session history connection timed out".into()))??;
+                trace.record(
+                    "history_client_ready",
+                    serde_json::json!({"attempt":attempt_index}),
+                );
+                let mut page_index = 0u64;
                 let mut retried_overlap = false;
                 let has_more = loop {
-                    let request = catch_up.request(&session_id);
+                    phase = "history_response";
+                    page_index += 1;
+                    let mut request = catch_up.request(&session_id);
+                    request.diagnostic_id = format!("{request_id}-b-{page_index:x}");
+                    trace.record("history_requested",serde_json::json!({"attempt":attempt_index,"page":page_index,"tail":request.tail,"cached_messages":catch_up.messages.len()}));
+                    let snapshot_client = history_client.clone().with_timing_observer(Some(
+                        trace.observer(format!("history-{attempt_index}-{page_index}")),
+                    ));
                     let snapshot = tokio::time::timeout(
                         Duration::from_secs(15),
-                        unary(&history_client, Req::AgentMessages(request)),
+                        unary(&snapshot_client, Req::AgentMessages(request)),
                     );
                     tokio::pin!(snapshot);
                     let response = loop {
@@ -597,6 +655,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     let Resp::AgentMessages(page) = response else {
                         return Err(unexpected());
                     };
+                    trace.record("history_received",serde_json::json!({"attempt":attempt_index,"page":page_index,"messages":page.messages.len(),"reset":page.reset,"has_newer":page.has_newer}));
                     if let Some(has_more) = catch_up.apply(page)? {
                         if reconcile_queued(&mut queued, &catch_up.messages) {
                             break has_more;
@@ -611,6 +670,10 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                                 "session history needs another catch-up".into(),
                             ));
                         }
+                        trace.record(
+                            "reconcile_retry",
+                            serde_json::json!({"attempt":attempt_index,"page":page_index}),
+                        );
                         retried_overlap = true;
                     }
                 };
@@ -618,6 +681,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                 let ChatCatchUp {
                     messages, reset, ..
                 } = catch_up;
+                trace.record("history_reconciled",serde_json::json!({"attempt":attempt_index,"messages":messages.len(),"queued_events":queued.len()}));
                 let _ = tx.send(loop_message(Msg::Chat {
                     token: token.clone(),
                     device: device.clone(),
@@ -626,6 +690,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     reset,
                     result: Ok((messages, has_more)),
                 }));
+                phase = "live_watch";
                 retry = 1;
                 let mut next = queued.pop_front();
                 loop {
@@ -650,9 +715,10 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                 Err::<(), Error>(Error::Unavailable("session watch ended".into()))
             };
             tokio::select! {
-                _ = token.cancelled() => {},
+                _ = token.cancelled() => { trace.record("cancelled",serde_json::json!({"attempt":attempt_index})); },
                 result = attempt => {
                     if let Err(error) = result {
+                        trace.record("attempt_failed",serde_json::json!({"attempt":attempt_index,"phase":phase,"retry_delay_ms":retry*1000,"error_category":match &error { Error::Invalid(_)=>"invalid",Error::Unauthorized(_)=>"unauthorized",Error::Rpc(_)=>"remote",Error::Busy(_)=>"busy",Error::Unavailable(_)=>"unavailable" }}));
                         log::warn!("session live updates interrupted; retrying in {retry}s: {error}");
                         let _ = tx.send(loop_message(Msg::Chat {
                             token: token.clone(), device: device.clone(), session: session_id.clone(),
@@ -1133,6 +1199,12 @@ pub(super) fn msg_chat(
     chat.loading = false;
     match result {
         Ok((messages, has_more)) => {
+            if !earlier && let Some(trace) = &chat.load_trace {
+                trace.record(
+                    "history_applied",
+                    serde_json::json!({"messages":messages.len(),"reset":reset}),
+                );
+            }
             chat.cache_dirty = true;
             chat.content_revision = crate::state::next_content_revision();
             chat.load_error.clear();

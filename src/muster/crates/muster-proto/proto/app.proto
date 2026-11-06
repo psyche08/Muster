@@ -89,8 +89,20 @@ message Intent {
     OpenFileLink open_file_link = 54;
 
     SetPushToken set_push_token = 60;
+    SessionViewApplied session_view_applied = 135;
   }
 }
+
+// Native timing acknowledgement only; never a business-state transition.
+message SessionViewApplied {
+  string trace_id = 1;
+  bool history_ready = 2;
+  bool decoded_only = 3;
+  uint64 decode_us = 4;
+  uint64 queue_us = 5;
+  uint64 apply_us = 6;
+}
+message SessionLoadMarker { string trace_id = 1; bool history_ready = 2; }
 
 message DesktopUpdateAction {
   // AUTO_ON/AUTO_OFF carry the shell's stored preference for unattended
@@ -514,6 +526,7 @@ message ViewModel {
   muster.v1.MulticaPage multica_page = 36;
   muster.v1.VisionStatus vision = 37;
   repeated Screen navigation_path = 34; // visible root through current screen
+  SessionLoadMarker session_load = 38; // opaque, Rust-owned diagnostic marker
 }
 
 // What the selected device's page offers, decided by Shared Rust from the

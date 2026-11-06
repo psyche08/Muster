@@ -370,6 +370,11 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         }
     }
     match it {
+        It::SessionViewApplied(ack) => {
+            if let Some(trace) = state.chat.as_ref().and_then(|c| c.load_trace.as_ref()) {
+                trace.native(&ack);
+            }
+        }
         It::ComposerAction(_) => unreachable!("nested composer action rejected"),
         It::OpenBrowser(open) => network::intent_open_browser(state, ctx, open),
         It::BrowserSetup(r) => browser_setup(state, ctx, r.install),

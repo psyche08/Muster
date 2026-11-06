@@ -7,6 +7,8 @@ use muster_proto::{
 use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::HashSet;
+pub(crate) const PROVIDER_LIMIT: &str = "catalog:providers";
+
 pub(crate) fn row_key(s: &AgentSession) -> String {
     serde_json::to_string(&(&s.device_id, &s.provider, &s.id)).unwrap()
 }
@@ -116,7 +118,22 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
                     || state.agents.device_id == "*"
                     || state.agents.device_id == g.device_id)
             {
-                add(g.clone(), true);
+                if g.kind == "provider" {
+                    for (kind, count) in [
+                        ("pin", g.pinned_count),
+                        ("recent", g.count.saturating_sub(g.pinned_count)),
+                    ] {
+                        let mut display = g.clone();
+                        display.kind = kind.into();
+                        display.count = count;
+                        if count == 0 {
+                            display.next_cursor.clear();
+                        }
+                        add(display, true);
+                    }
+                } else {
+                    add(g.clone(), true);
+                }
             }
         }
     }
@@ -152,6 +169,7 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
         *seen.entry(key).or_default() += 1;
     }
     let mut shown: HashMap<String, usize> = HashMap::new();
+    let mut sources: HashMap<String, usize> = HashMap::new();
     let mut roots: Vec<_> = sessions
         .iter()
         .filter(|s| searching || families[&row_key(s)] == row_key(s))
@@ -159,12 +177,26 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
     sort(&mut roots);
     for root in roots {
         let key = display_key(&group(root, &state.agents.native_sections));
-        let limit = *state.agent_catalog_limits.get(&key).unwrap_or(&PAGE_SIZE);
-        let used = shown.entry(key.clone()).or_default();
+        let budget_key = if searching {
+            key.as_str()
+        } else {
+            PROVIDER_LIMIT
+        };
+        let limit = *state
+            .agent_catalog_limits
+            .get(budget_key)
+            .unwrap_or(&PAGE_SIZE);
+        let source = if searching {
+            key.clone()
+        } else {
+            serde_json::to_string(&(&root.device_id, &root.provider)).unwrap()
+        };
+        let used = sources.entry(source).or_default();
         if *used >= limit {
             continue;
         }
         *used += 1;
+        *shown.entry(key.clone()).or_default() += 1;
         append(
             root,
             0,
@@ -180,7 +212,7 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
         if searching || state.agent_catalog_groups.is_empty() {
             g.count = available as u32;
         }
-        g.has_more |= available > *state.agent_catalog_limits.get(key).unwrap_or(&PAGE_SIZE);
+        g.has_more |= available > shown.get(key).copied().unwrap_or(0);
         for row in &mut g.rows {
             let Some(s) = &row.session else {
                 continue;
@@ -267,6 +299,49 @@ fn append(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn every_device_provider_gets_ten_and_twenty_across_display_sections() {
+        let mut state = State::new(false, None);
+        let mut sessions = Vec::new();
+        for device in ["device-a", "device-b"] {
+            for provider in ["claude", "codex"] {
+                for i in 0..25 {
+                    sessions.push(AgentSession {
+                        id: format!("s-{i:02}"),
+                        device_id: device.into(),
+                        provider: provider.into(),
+                        pinned: i % 2 == 0,
+                        updated_unix: 100 - i,
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+        for limit in [10, 20] {
+            state
+                .agent_catalog_limits
+                .insert(PROVIDER_LIMIT.into(), limit);
+            let sections = project(&state, &sessions);
+            let rows: Vec<_> = sections
+                .iter()
+                .flat_map(|g| &g.rows)
+                .filter_map(|r| r.session.as_ref())
+                .collect();
+            assert_eq!(rows.len(), 4 * limit);
+            assert!(sections.iter().all(|g| g.has_more));
+            for device in ["device-a", "device-b"] {
+                assert_eq!(visible_ids(&sessions, device, limit).len(), 2 * limit);
+                for provider in ["claude", "codex"] {
+                    assert_eq!(
+                        rows.iter()
+                            .filter(|s| s.device_id == device && s.provider == provider)
+                            .count(),
+                        limit
+                    );
+                }
+            }
+        }
+    }
     fn s(id: &str, parent: &str) -> AgentSession {
         AgentSession {
             id: id.into(),
@@ -395,7 +470,7 @@ mod projection_tests {
         assert_eq!(g.rows.len(), 40);
         assert!(g.has_more);
         assert_eq!(g.rows.iter().filter(|r| r.depth == 0).count(), 10);
-        state.agent_catalog_limits.insert(g.key.clone(), 20);
+        state.agent_catalog_limits.insert(PROVIDER_LIMIT.into(), 20);
         let groups = project(&state, &rows);
         let g = recent(&groups);
         assert_eq!(g.rows.len(), 80);
@@ -564,4 +639,36 @@ mod reconcile_tests {
         assert!(reconcile_session(&mut old, &fresh, false));
         assert!(old.subagents.is_empty());
     }
+}
+
+/// Keep only families currently within each source budget when restoring a cache.
+pub(crate) fn visible_ids(sessions: &[AgentSession], device: &str, limit: usize) -> Vec<String> {
+    let families = muster_agent::catalog::family_roots(sessions);
+    let mut roots: Vec<_> = sessions
+        .iter()
+        .filter(|s| s.device_id == device && families[&row_key(s)] == row_key(s))
+        .collect();
+    roots.sort_by(|a, b| {
+        b.updated_unix
+            .cmp(&a.updated_unix)
+            .then_with(|| row_key(a).cmp(&row_key(b)))
+    });
+    let mut counts = HashMap::<String, usize>::new();
+    let chosen: std::collections::HashSet<_> = roots
+        .into_iter()
+        .filter_map(|s| {
+            let count = counts.entry(s.provider.clone()).or_default();
+            if *count >= limit {
+                return None;
+            }
+            *count += 1;
+            Some(row_key(s))
+        })
+        .collect();
+    sessions
+        .iter()
+        .filter(|s| s.device_id == device && chosen.contains(&families[&row_key(s)]))
+        .map(|s| s.id.clone())
+        .take(2000)
+        .collect()
 }

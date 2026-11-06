@@ -87,6 +87,14 @@ fn session_timeline(
 fn project(state: &State, content: bool) -> app::ViewModel {
     let service_devices = state.service_devices();
     let mut vm = app::ViewModel {
+        session_load: state.chat.as_ref().and_then(|chat| {
+            chat.load_trace
+                .as_ref()
+                .map(|trace| app::SessionLoadMarker {
+                    trace_id: trace.id().into(),
+                    history_ready: !chat.loading && chat.load_error.is_empty(),
+                })
+        }),
         browser: Some(state.browser.clone()),
         desktop_setup: Some(desktop_setup(state)),
         desktop_update: Some(state.desktop_update.clone()),
@@ -443,6 +451,11 @@ impl Renderer {
     }
     pub fn push(&mut self, state: &State, ctx: &Ctx) {
         if let Some(bytes) = self.prepare(state) {
+            if let Some(chat) = &state.chat
+                && let Some(trace) = &chat.load_trace
+            {
+                trace.published(!chat.loading && chat.load_error.is_empty(), bytes.len());
+            }
             ctx.shell.on_view(&bytes);
         }
     }

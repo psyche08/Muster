@@ -166,6 +166,22 @@ impl Transport {
     }
 }
 
+/// Local timing observation only; callbacks must not block or affect outcomes.
+#[derive(Clone, Copy, Debug)]
+pub enum OpenPhase {
+    PoolReady,
+    StreamAllocated,
+    ServiceReady,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct OpenTiming {
+    pub phase: OpenPhase,
+    pub elapsed_us: u64,
+    pub reused: bool,
+}
+pub type OpenObserver = Arc<dyn Fn(OpenTiming) + Send + Sync>;
+pub type CloseObserver = Arc<dyn Fn(DeviceId, &'static str) + Send + Sync>;
+
 pub struct Node {
     retries: Mutex<HashMap<DeviceId, Retry>>,
     presence: Arc<crate::presence::Board>,
@@ -186,6 +202,7 @@ pub struct Node {
     adopted: Mutex<HashMap<DeviceId, Instant>>,
     builds: Mutex<HashMap<DeviceId, Build>>,
     handler: Mutex<Option<Arc<dyn ServiceHandler>>>,
+    close_observer: Mutex<Option<CloseObserver>>,
     /// Entries newly accepted, for persistence and UI.
     entries_tx: broadcast::Sender<Entry>,
     /// Inbound vnet datagrams: (peer, raw IPv4 packet).
@@ -240,6 +257,7 @@ impl Node {
             adopted: Mutex::default(),
             builds: Mutex::default(),
             handler: Mutex::new(None),
+            close_observer: Mutex::new(None),
             entries_tx,
             datagram_tx,
             datagram_rx: Mutex::new(datagram_rx),
@@ -698,27 +716,80 @@ impl Node {
         service: &str,
         version: u32,
     ) -> Result<(SendStream, RecvStream), Error> {
+        self.open_observed(peer, service, version, None).await
+    }
+
+    pub fn set_close_observer(&self, observer: CloseObserver) {
+        *self.close_observer.lock().unwrap() = Some(observer);
+    }
+
+    pub async fn open_observed(
+        self: &Arc<Self>,
+        peer: DeviceId,
+        service: &str,
+        version: u32,
+        observer: Option<OpenObserver>,
+    ) -> Result<(SendStream, RecvStream), Error> {
+        let started = Instant::now();
+        let existing = self.connection_to(&peer).map(|c| c.stable_id());
         tokio::time::timeout(CONNECT_TIMEOUT, async {
             let connection = self.connect(peer).await?;
-            self.open_on(&connection, service, version).await
+            let reused = existing == Some(connection.stable_id());
+            if let Some(observer) = &observer {
+                observer(OpenTiming {
+                    phase: OpenPhase::PoolReady,
+                    elapsed_us: started.elapsed().as_micros() as u64,
+                    reused,
+                });
+            }
+            self.open_on_observed(
+                &connection,
+                service,
+                version,
+                started,
+                reused,
+                observer.as_ref(),
+            )
+            .await
         })
         .await
         .map_err(|_| Error::Timeout("connect/service (3 seconds)"))?
     }
 
-    /// Opens a stream, says which service, and waits for the peer to accept
-    /// it, so a refusal (not a member, unknown service) is an error here
-    /// rather than a silently dead stream.
+    /// Opens and admits a service without changing the caller's connection.
     pub async fn open_on(
         &self,
         connection: &Connection,
         service: &str,
         version: u32,
     ) -> Result<(SendStream, RecvStream), Error> {
+        self.open_on_observed(connection, service, version, Instant::now(), true, None)
+            .await
+    }
+
+    async fn open_on_observed(
+        &self,
+        connection: &Connection,
+        service: &str,
+        version: u32,
+        started: Instant,
+        reused: bool,
+        observer: Option<&OpenObserver>,
+    ) -> Result<(SendStream, RecvStream), Error> {
+        let observe = |phase| {
+            if let Some(observer) = observer {
+                observer(OpenTiming {
+                    phase,
+                    elapsed_us: started.elapsed().as_micros() as u64,
+                    reused,
+                });
+            }
+        };
         let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
         let (mut send, mut recv) = tokio::time::timeout_at(deadline, connection.open_bi())
             .await
             .map_err(|_| Error::Timeout("service stream (3 seconds)"))??;
+        observe(OpenPhase::StreamAllocated);
         tokio::time::timeout_at(
             deadline,
             write_hello(&mut send, &Hello::new(service, version)),
@@ -731,7 +802,10 @@ impl Node {
             .map_err(|_| Error::Timeout("service accept"))?
             .map_err(|e| Error::Io(format!("service accept: {e}")))?;
         match ack[0] {
-            ACK_OK => Ok((send, recv)),
+            ACK_OK => {
+                observe(OpenPhase::ServiceReady);
+                Ok((send, recv))
+            }
             ACK_REFUSED => Err(Error::Unauthorized(format!("{service} refused by peer"))),
             other => Err(Error::Protocol(format!("bad service ack {other}"))),
         }
@@ -1206,7 +1280,21 @@ impl Node {
             let (send, mut recv) = match connection.accept_bi().await {
                 Ok(stream) => stream,
                 Err(error) => {
-                    log::debug!("link with {} ended: {error}", peer.short());
+                    let reason = match &error {
+                        quinn::ConnectionError::TimedOut => "idle_timeout",
+                        quinn::ConnectionError::LocallyClosed => "local_close",
+                        quinn::ConnectionError::ApplicationClosed(_) => "peer_application_close",
+                        quinn::ConnectionError::ConnectionClosed(_) => "peer_transport_close",
+                        quinn::ConnectionError::TransportError(_) => "transport_error",
+                        quinn::ConnectionError::Reset => "reset",
+                        quinn::ConnectionError::VersionMismatch => "version_mismatch",
+                        quinn::ConnectionError::CidsExhausted => "connection_ids_exhausted",
+                    };
+                    log::info!("link with {} ended: reason={reason}", peer.short());
+                    let observer = self.close_observer.lock().unwrap().clone();
+                    if let Some(observer) = observer {
+                        observer(peer, reason);
+                    }
                     break;
                 }
             };

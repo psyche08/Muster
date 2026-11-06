@@ -326,6 +326,24 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
     let view = shell
         .wait(|v| v.chat.as_ref().is_some_and(|c| c.message_count == 300))
         .await;
+    let marker = view.session_load.as_ref().expect("correlated load marker");
+    assert!(marker.history_ready);
+    let records = shell.diagnostics.lock().unwrap().clone();
+    for event in [
+        "entered",
+        "watch_first_event",
+        "history_requested",
+        "history_received",
+        "history_reconciled",
+        "history_applied",
+    ] {
+        assert!(
+            records
+                .iter()
+                .any(|r| r["event"] == event && r["trace_id"] == marker.trace_id),
+            "missing correlated {event}"
+        );
+    }
     let messages = common::messages(&view.chat.unwrap());
     assert_eq!(
         messages.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),

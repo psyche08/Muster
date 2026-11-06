@@ -225,7 +225,18 @@ message Event {
     AgentEvent agent_event = 41;
     Ack desktop_update_ready = 57; // local streaming lease; held until cancellation/disconnect
     ForwardOpened forward_opened = 68;
+    RpcTiming rpc_timing = 69; // Optional read-only diagnostics; never a business event.
   }
+}
+
+// Bounded timing markers on requests carrying a valid diagnostic_id. Durations
+// are monotonic within source; never subtract timestamps between devices.
+message RpcTiming {
+  enum Phase { UNSPECIFIED = 0; POOL_READY = 1; STREAM_ALLOCATED = 2; SERVICE_READY = 3; SERVER_RECEIVED = 4; SERVER_FINISHED = 5; }
+  Phase phase = 1;
+  uint64 elapsed_us = 2;
+  bool reused_connection = 3;
+  string diagnostic_id = 4;
 }
 
 // ------------------------------------------------------------------ device
@@ -706,6 +717,7 @@ message AgentOrganizeRequest {
 }
 
 message AgentListRequest {
+  bool provider_pages = 8; // ten roots per provider, independent source cursors
   bool grouped = 5; // native group pages, ten roots per page
   string group_key = 6; // server-issued local group key
   string group_cursor = 7; // bound to group and page boundary
@@ -735,9 +747,12 @@ message AgentCatalogGroup {
   uint32 count = 6; // roots only; Claude descendants do not count
   string next_cursor = 7;
   string device_id = 8; // assigned by the receiving Rust core
+  uint32 pinned_count = 9; // provider-page roots belonging to Pin
 }
 
 message AgentWatchRequest {
+  bool provider_pages = 7;
+  string diagnostic_id = 6; // Optional bounded opaque correlation ID; no authorization meaning.
   bool grouped = 4;
   repeated string visible_sessions = 5; // refresh already loaded rows in addition to the first page
 
@@ -811,6 +826,7 @@ message AgentMessagesRequest {
   string after_id = 4;   // cached tail, inclusive so a streaming message can change
   string first_id = 5;   // first cached message
   bytes prefix_hash = 6; // hash of cached range excluding after_id
+  string diagnostic_id = 7;
 }
 
 message AgentMessagePage {

@@ -228,6 +228,14 @@ impl Handler for MusterHandler {
     }
     /// The app addresses a member: open its "muster" service over the link.
     fn open_target(&self, target: &str) -> muster_rpc::TargetFuture<'_> {
+        self.open_target_observed(target, None)
+    }
+
+    fn open_target_observed(
+        &self,
+        target: &str,
+        observer: Option<muster_rpc::TimingObserver>,
+    ) -> muster_rpc::TargetFuture<'_> {
         let daemon = self.daemon.upgrade();
         let target = target.to_string();
         Box::pin(async move {
@@ -238,7 +246,26 @@ impl Handler for MusterHandler {
                 .map_err(|e| muster_rpc::Error::Protocol(format!("target: {e}")))?;
             let (send, recv) = daemon
                 .node()
-                .open(peer, crate::SERVICE, crate::SERVICE_VERSION)
+                .open_observed(
+                    peer,
+                    crate::SERVICE,
+                    crate::SERVICE_VERSION,
+                    observer.map(|observer| {
+                        Arc::new(move |timing: muster_net::node::OpenTiming| {
+                            use muster_net::node::OpenPhase;
+                            observer(v1::RpcTiming {
+                                phase: match timing.phase {
+                                    OpenPhase::PoolReady => 1,
+                                    OpenPhase::StreamAllocated => 2,
+                                    OpenPhase::ServiceReady => 3,
+                                },
+                                elapsed_us: timing.elapsed_us,
+                                reused_connection: timing.reused,
+                                diagnostic_id: String::new(),
+                            });
+                        }) as muster_net::node::OpenObserver
+                    }),
+                )
                 .await
                 .map_err(|e| muster_rpc::Error::Io(e.to_string()))?;
             Ok(Box::new(tokio::io::join(recv, send)) as Box<dyn muster_rpc::Stream>)
@@ -728,16 +755,16 @@ impl<'a> AgentVisibility<'a> {
         grouped: bool,
         limit: usize,
         visible: &[String],
+        provider_pages: bool,
     ) -> Result<v1::AgentSessionPage, Error> {
         let snapshot = self.snapshot(agent);
         if grouped {
-            Ok(muster_agent::catalog::page(
-                snapshot.sessions,
-                snapshot.sections,
-                "",
-                "",
-                visible,
-            )?)
+            let page = if provider_pages {
+                muster_agent::catalog::provider_page
+            } else {
+                muster_agent::catalog::page
+            };
+            Ok(page(snapshot.sessions, snapshot.sections, "", "", visible)?)
         } else {
             let mut page = snapshot;
             page.sessions.truncate(if limit == 0 { 200 } else { limit });
@@ -1774,13 +1801,12 @@ async fn dispatch(
                     .into_iter()
                     .filter(|s| r.provider.is_empty() || s.provider == r.provider)
                     .collect();
-                let mut page = muster_agent::catalog::page(
-                    sessions,
-                    sections,
-                    &r.group_key,
-                    &r.group_cursor,
-                    &[],
-                )?;
+                let paginate = if r.provider_pages {
+                    muster_agent::catalog::provider_page
+                } else {
+                    muster_agent::catalog::page
+                };
+                let mut page = paginate(sessions, sections, &r.group_key, &r.group_cursor, &[])?;
                 page.notice = snapshot.notice;
                 return Ok(Resp::AgentSessions(page));
             }
@@ -1854,6 +1880,7 @@ async fn dispatch(
                             r.grouped,
                             limit,
                             &r.visible_sessions,
+                            r.provider_pages,
                         )?)),
                     }))
                     .await?;
@@ -1916,6 +1943,7 @@ async fn dispatch(
                                     r.grouped,
                                     limit,
                                     &r.visible_sessions,
+                                    r.provider_pages,
                                 )?)),
                             }))
                             .await?;
@@ -1930,6 +1958,7 @@ async fn dispatch(
                             r.grouped,
                             limit,
                             &r.visible_sessions,
+                            r.provider_pages,
                         )?)
                     }
                     muster_agent::Event::ListChanged => match agent.session(&filter) {

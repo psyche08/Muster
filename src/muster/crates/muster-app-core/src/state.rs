@@ -27,6 +27,7 @@ pub(crate) fn next_content_revision() -> u64 {
 
 #[derive(Default)]
 pub struct Chat {
+    pub load_trace: Option<crate::session_diagnostics::Trace>,
     pub content_revision: u64,
     pub cache_dirty: bool,
     pub device: String,

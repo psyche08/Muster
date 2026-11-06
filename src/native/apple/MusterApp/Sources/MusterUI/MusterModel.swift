@@ -21,6 +21,7 @@ import IOKit.pwr_mgt
 
 @MainActor
 public final class MusterModel: ObservableObject {
+    private var appliedDiagnosticMarker = ""
     @Published public private(set) var vm = ViewModel()
     @Published public private(set) var started = false
     @Published public var startError: String?
@@ -83,7 +84,22 @@ public final class MusterModel: ObservableObject {
                 config: config,
                 keys: keys,
                 onViewModel: { [weak self] vm in
-                    Task { @MainActor [weak self] in self?.vm = vm }
+                    let queued = ProcessInfo.processInfo.systemUptime
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        let started = ProcessInfo.processInfo.systemUptime
+                        self.vm = vm
+                        let applied = ProcessInfo.processInfo.systemUptime
+                        if vm.hasSessionLoad {
+                            let marker = "\(vm.sessionLoad.traceID):\(vm.sessionLoad.historyReady)"
+                            if self.appliedDiagnosticMarker != marker {
+                                self.appliedDiagnosticMarker = marker
+                                self.core?.sessionViewApplied(vm.sessionLoad,
+                                    queueUS: UInt64(max(0, started - queued) * 1_000_000),
+                                    applyUS: UInt64(max(0, applied - started) * 1_000_000))
+                            }
+                        }
+                    }
                 },
                 onEffect: { [weak self] id, effect in
                     Task { @MainActor [weak self] in self?.perform(id: id, effect: effect) }

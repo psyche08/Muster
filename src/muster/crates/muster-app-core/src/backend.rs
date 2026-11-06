@@ -112,6 +112,17 @@ impl Backend {
                     Daemon::start_with(daemon_config, Arc::new(musterd::DefaultPlatform), signer)
                         .await
                         .map_err(|e| Error::Unavailable(format!("start: {e}")))?;
+                let diagnostic_shell = shell.clone();
+                daemon
+                    .node()
+                    .set_close_observer(Arc::new(move |peer, reason| {
+                        crate::session_diagnostics::emit(
+                            diagnostic_shell.as_ref(),
+                            serde_json::json!({
+                        "record_type":"connection_diagnostic","event":"closed","reason":reason,
+                        "target_ref":crate::cache::Cache::key(&[&peer.to_hex()])[..16]}),
+                        );
+                    }));
                 let (app_side, daemon_side) = tokio::io::duplex(1 << 20);
                 let handler: Arc<dyn muster_rpc::Handler> =
                     Arc::new(MusterHandler::new(Arc::downgrade(&daemon)));
@@ -160,6 +171,23 @@ impl Backend {
     /// An operation-owned remote service stream over Node's pooled peer QUIC
     /// connection. Local operations retain their in-process/socket transport.
     pub async fn client_for(&self, device: &str, self_id: &str) -> Result<Client, Error> {
+        self.client_for_observed(device, self_id, None).await
+    }
+    pub async fn client_for_observed(
+        &self,
+        device: &str,
+        self_id: &str,
+        observer: Option<muster_rpc::TimingObserver>,
+    ) -> Result<Client, Error> {
+        let result = self.open_client(device, self_id, observer.clone()).await?;
+        Ok(result.with_timing_observer(observer))
+    }
+    async fn open_client(
+        &self,
+        device: &str,
+        self_id: &str,
+        observer: Option<muster_rpc::TimingObserver>,
+    ) -> Result<Client, Error> {
         if device.is_empty() || device == self_id {
             return Ok(self.local());
         }
@@ -170,9 +198,16 @@ impl Backend {
                     .map_err(|e| Error::Invalid(format!("device: {e}")))?;
                 let (send, recv) = tokio::time::timeout(
                     muster_net::reconnect::CONNECT_TIMEOUT,
-                    daemon
-                        .node()
-                        .open(peer, musterd::SERVICE, musterd::SERVICE_VERSION),
+                    daemon.node().open_observed(
+                        peer,
+                        musterd::SERVICE,
+                        musterd::SERVICE_VERSION,
+                        observer.map(|observer| {
+                            Arc::new(move |timing| {
+                                observer(crate::session_diagnostics::open_timing(timing))
+                            }) as muster_net::node::OpenObserver
+                        }),
+                    ),
                 )
                 .await
                 .map_err(|_| Error::Unavailable("the device did not answer".into()))?

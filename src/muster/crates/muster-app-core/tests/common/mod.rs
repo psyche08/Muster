@@ -14,6 +14,7 @@ use tokio::sync::Notify;
 pub struct TestShell {
     pub latest: Mutex<app::ViewModel>,
     changed: Notify,
+    pub diagnostics: Mutex<Vec<serde_json::Value>>,
 }
 
 impl Shell for TestShell {
@@ -21,7 +22,16 @@ impl Shell for TestShell {
         *self.latest.lock().unwrap() = app::ViewModel::decode(bytes).unwrap();
         self.changed.notify_one();
     }
-    fn on_effect(&self, _: u64, _: &[u8]) {}
+    fn on_effect(&self, _: u64, bytes: &[u8]) {
+        if let Some(app::effect::Ef::SendDiagnostic(record)) =
+            app::Effect::decode(bytes).unwrap().ef
+        {
+            self.diagnostics
+                .lock()
+                .unwrap()
+                .push(serde_json::from_slice(&record.json).unwrap());
+        }
+    }
     fn hw_public_key(&self) -> Option<Vec<u8>> {
         None
     }
