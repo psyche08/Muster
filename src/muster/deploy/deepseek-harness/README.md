@@ -139,3 +139,23 @@ session. It requires no model credentials and does not verify a model answer.
 The host log can contain a local UI token; keep it private. Separate regular
 integration tests simulate a lost reply and reconstruct the plugin link to
 verify recovery with exactly one host send. This is not a physical phone test.
+
+### Multica P0 contract probe
+
+`test/multica-contract-probe.mjs` is an explicit isolated installed-host probe
+(ADR 0149). It refuses any home outside `/private/tmp/muster-dsh-p0-*`.
+Use a fresh `DSH_HOME`, a patch that inserts this fixture, and the installed App
+host with `--profile web --no-open --host 127.0.0.1 --port 0`, as above.
+Set `MUSTER_DSH_PROBE_MODE=create` on the first launch. The fixture records a
+native ID before creating it, submits one synthetic no-tools prompt and writes
+`p0-create.json`. Stop that host, then start the same profile with mode `lookup`.
+It writes `p0-lookup.json` by observing persisted state only; it never creates,
+resumes or sends in lookup mode. Always stop the isolated host after collecting
+the report; host logs stay private because they can include a local UI token.
+
+The report distinguishes accepted prompt evidence from the terminal reason.
+`modelSelectionMethodPresent` is discovery only, not verified model selection;
+`taskCredentialCallbackVerified` remains false. A successful probe does not
+register a Multica executor or authorize a real scheduler task. Copy only
+sanitized outcomes into durable validation records; scratch profiles and build
+directories are not permanent acceptance evidence.

@@ -260,3 +260,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0147](0147-correlated-session-load-diagnostics.md) | Accepted | Correlate session entry, transport, history and native model application |
 
 | [0148](0148-per-device-provider-catalog-pages.md) | Accepted | Load ten conversations per device/provider on entry and continuation |
+
+| [0149](0149-multica-ownership-reservations.md) | Accepted; foundation verified | Durable Multica ownership reservations and isolated DSH App contract probe |
