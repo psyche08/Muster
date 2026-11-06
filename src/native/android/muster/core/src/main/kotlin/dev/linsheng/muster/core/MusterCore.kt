@@ -265,7 +265,7 @@ class MusterCore(config: MusterConfig, val keys: MusterKeys) : AutoCloseable {
     fun agentInterrupt() = send(intent { agentInterrupt = muster.app.AgentInterrupt.getDefaultInstance() })
     fun setDeviceLockedUse(on: Boolean, device: String) = send(intent { setDeviceLockedUse = muster.app.SetDeviceLockedUse.newBuilder().setOn(on).setDeviceId(device).build() })
     fun cancelLockedUse() = send(intent { cancelLockedUse = muster.app.CancelLockedUse.getDefaultInstance() })
-    fun agentLoadEarlier(all: Boolean = false) = send(intent { agentLoadEarlier = agentLoadEarlier { this.all = all } })
+    fun agentLoadEarlier(all: Boolean = false, latest: Boolean = false, newer: Boolean = false) = send(intent { agentLoadEarlier = agentLoadEarlier { this.all = all; this.latest = latest; this.newer = newer } })
 
     fun openTerminals(device: String = "") = send(intent { openTerminals = openTerminals { deviceId = device } })
     fun openTerminal(session: String, device: String = "") =

@@ -823,7 +823,7 @@ message TurnFileChange {
 message AgentMessagesRequest {
   string session = 1;
   uint32 tail = 2;       // last N; 0 = 50
-  string before_id = 3;  // paging backwards
+  string before_id = 3;  // exclusive upper bound, also for validated cached pages
   string after_id = 4;   // cached tail, inclusive so a streaming message can change
   string first_id = 5;   // first cached message
   bytes prefix_hash = 6; // hash of cached range excluding after_id

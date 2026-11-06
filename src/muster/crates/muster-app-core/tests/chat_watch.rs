@@ -528,6 +528,7 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
     core.intent(app::Intent {
         it: Some(app::intent::It::AgentLoadEarlier(app::AgentLoadEarlier {
             all: true,
+            ..Default::default()
         })),
     });
     let view = shell
@@ -538,7 +539,7 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
             .iter()
             .map(|m| m.id.clone())
             .collect::<Vec<_>>(),
-        (0..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
+        (0..200).map(|i| format!("m{i}")).collect::<Vec<_>>()
     );
     assert_eq!(server.watches.load(Ordering::SeqCst), 1);
     core.backend().local().close();
@@ -825,6 +826,7 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     core.intent(app::Intent {
         it: Some(app::intent::It::AgentLoadEarlier(app::AgentLoadEarlier {
             all: true,
+            ..Default::default()
         })),
     });
     let view = shell
@@ -858,7 +860,7 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         .wait(|v| {
             v.chat
                 .as_ref()
-                .is_some_and(|c| c.loading && c.message_count == 1300)
+                .is_some_and(|c| c.loading && c.message_count == 200)
         })
         .await;
     let cached_messages = common::messages(&cached.chat.unwrap());
@@ -870,14 +872,14 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         .wait(|v| {
             v.chat
                 .as_ref()
-                .is_some_and(|c| !c.loading && c.message_count == 1301)
+                .is_some_and(|c| !c.loading && c.message_count == 201)
         })
         .await;
     let messages = common::messages(&view.chat.unwrap());
     assert_eq!(
         messages.len(),
-        201,
-        "Streaming preserves the visible ID anchor"
+        200,
+        "Latest window remains bounded while streaming"
     );
     assert_eq!(
         messages.iter().find(|m| m.id == "m1299").unwrap().text,
@@ -891,7 +893,7 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     );
     assert_eq!(
         server.requests.lock().unwrap().last().unwrap().first_id,
-        "m0"
+        "m1100"
     );
     core.backend().local().close();
     core.shutdown();

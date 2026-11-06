@@ -301,7 +301,7 @@ message AgentRespond {
   repeated muster.v1.QuestionAnswer answers = 4;
 }
 message AgentInterrupt {}
-message AgentLoadEarlier { bool all = 1; }
+message AgentLoadEarlier { bool all = 1; bool latest = 2; bool newer = 3; }
 // Desktop Chat mode on one device: `provider` claude | codex. Lists the
 // conversations the desktop app's sidebar shows (read-only).
 // The Chat tab: `provider`'s conversations (empty = the last one shown,
@@ -699,6 +699,7 @@ message ChatView {
   CodePreview code_preview = 37;
   repeated CodeRunView code_runs = 38;
   string code_error = 39;
+  bool has_newer = 40;
 }
 
 // The shell offers to release the earlier send once the user has checked the

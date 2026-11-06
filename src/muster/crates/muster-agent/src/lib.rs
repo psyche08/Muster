@@ -26,6 +26,7 @@ pub mod desktop_chat;
 pub mod desktop_lock;
 mod discovery;
 pub mod files;
+mod history_store;
 pub mod idle_compact;
 pub mod jsonl;
 pub mod local_input;
@@ -92,6 +93,8 @@ pub enum Error {
 
 #[derive(Clone)]
 pub struct AgentConfig {
+    /// Private, disposable history projections; no source files are modified.
+    pub history_cache: Option<PathBuf>,
     pub codex_home: Option<PathBuf>,
     pub claude_home: Option<PathBuf>,
     /// Claude.app's registry of desktop conversations, read for the
@@ -135,6 +138,7 @@ impl std::fmt::Debug for AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
+            history_cache: None,
             codex_home: codex::home(),
             claude_home: claude::home(),
             claude_desktop: claude::desktop_registry(),
@@ -172,6 +176,7 @@ pub enum Event {
 }
 
 struct Open {
+    history_index: muster_proto::history::Index,
     viewer: Option<Box<dyn Viewer>>,
     generation: Arc<()>,
     meta: model::SessionMeta,
@@ -274,6 +279,8 @@ pub struct AgentService {
     runtime: tokio::runtime::Handle,
     config: AgentConfig,
     queue_reader: Mutex<queue::Reader>,
+    history_warming: Mutex<HashSet<String>>,
+    open_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     chatgpt_catalog: Mutex<chat_catalog::LocalCatalog>,
     inner: Mutex<Inner>,
     events: broadcast::Sender<Event>,
@@ -455,6 +462,8 @@ impl AgentService {
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
+            history_warming: Mutex::new(HashSet::new()),
+            open_locks: Mutex::new(HashMap::new()),
             chatgpt_catalog: Mutex::new(chat_catalog::LocalCatalog::default()),
             config,
             inner: Mutex::new(Inner {
@@ -1446,6 +1455,7 @@ impl AgentService {
                                 session: id.clone(),
                             });
                             open.messages.clear();
+                            open.history_index.clear();
                         }
                         for m in &polled.messages {
                             emitted.push(Event::Message {
@@ -2395,6 +2405,20 @@ impl AgentService {
 
     /// Opens (parses) a session if needed.
     async fn ensure_open(&self, id: &str) -> Result<(), Error> {
+        let opening = {
+            let mut locks = self.open_locks.lock().unwrap();
+            if locks.len() > 128 {
+                locks.retain(|_, lock| lock.strong_count() > 0);
+            }
+            if let Some(lock) = locks.get(id).and_then(std::sync::Weak::upgrade) {
+                lock
+            } else {
+                let lock = Arc::new(tokio::sync::Mutex::new(()));
+                locks.insert(id.into(), Arc::downgrade(&lock));
+                lock
+            }
+        };
+        let _opening = opening.lock().await;
         let discovered = {
             let mut inner = self.inner.lock().unwrap();
             if let Some(open) = inner.open.get_mut(id) {
@@ -2409,7 +2433,20 @@ impl AgentService {
             }
         };
         let source = discovered.clone();
+        let history_cache = self
+            .config
+            .history_cache
+            .as_ref()
+            .map(|root| root.join(discovered.provider.as_str()));
         let parsed = tokio::task::spawn_blocking(move || {
+            let indexed_source =
+                (discovered.path.extension().is_some_and(|e| e == "jsonl")).then(|| {
+                    (
+                        discovered.path.clone(),
+                        discovered.id.clone(),
+                        history_store::stamp(&discovered.path),
+                    )
+                });
             // A JSONL source is read by the engine over its grammar and
             // hooks; a store by its own viewer.
             let mut viewer: Box<dyn Viewer> = if codex_history::is(&discovered) {
@@ -2424,7 +2461,11 @@ impl AgentService {
             };
             let stat = viewer.stamp().map_err(|e| Error::Io(e.to_string()))?;
             let polled = viewer.poll().map_err(|e| Error::Io(e.to_string()))?;
+            if let (Some(root), Some((path, id, Some(stamp)))) = (history_cache, indexed_source) {
+                let _ = history_store::write(&root, &id, &path, &stamp, &polled.messages);
+            }
             Ok::<_, Error>(Open {
+                history_index: Default::default(),
                 meta: viewer.meta().clone(),
                 custom_title: viewer.custom_title(),
                 notice: viewer.transcript_notice().to_owned(),
@@ -2463,7 +2504,7 @@ impl AgentService {
     }
 
     pub async fn history_page(
-        &self,
+        self: &Arc<Self>,
         request: &muster_proto::v1::AgentMessagesRequest,
     ) -> Result<muster_proto::v1::AgentMessagePage, Error> {
         if orca::is_orca(&request.session) {
@@ -2472,9 +2513,80 @@ impl AgentService {
         if cloud::is_cloud(&request.session) {
             self.ensure_cloud_open(&request.session).await?;
         } else if desktop_chat::app_of(&request.session).is_none() {
+            let source = {
+                let inner = self.inner.lock().unwrap();
+                (!inner.open.contains_key(&request.session))
+                    .then(|| inner.catalog.get(&request.session).cloned())
+                    .flatten()
+            };
+            if let (Some(root), Some(source)) = (&self.config.history_cache, source)
+                && source.path.extension().is_some_and(|e| e == "jsonl")
+            {
+                let (root, path, query) = (
+                    root.join(source.provider.as_str()),
+                    source.path.clone(),
+                    request.clone(),
+                );
+                if let Ok(Some((page, stamp))) =
+                    tokio::task::spawn_blocking(move || history_store::read(&root, &path, &query))
+                        .await
+                {
+                    if !self
+                        .inner
+                        .lock()
+                        .unwrap()
+                        .catalog
+                        .get(&request.session)
+                        .is_some_and(|current| {
+                            current.path == source.path && current.provider == source.provider
+                        })
+                    {
+                        return Err(Error::Conflict(
+                            "Session source changed while reading indexed history".into(),
+                        ));
+                    }
+                    let service = self.clone();
+                    let session = request.session.clone();
+                    if self.history_warming.lock().unwrap().insert(session.clone()) {
+                        tokio::spawn(async move {
+                            let opened = service.ensure_open(&session).await;
+                            let still_same = service
+                                .inner
+                                .lock()
+                                .unwrap()
+                                .catalog
+                                .get(&session)
+                                .is_some_and(|current| {
+                                    current.path == source.path
+                                        && current.provider == source.provider
+                                });
+                            if opened.is_err()
+                                || !still_same
+                                || history_store::stamp(&source.path).as_deref() != Some(&stamp)
+                            {
+                                // Initial parsing does not emit replayed messages. A source
+                                // change during that gap must force a fresh history read.
+                                let _ = service.events.send(Event::Reset {
+                                    session: session.clone(),
+                                });
+                            }
+                            service.history_warming.lock().unwrap().remove(&session);
+                        });
+                    }
+                    return Ok(page);
+                }
+            }
             self.ensure_open(&request.session).await?;
         }
-        let inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(open) = inner.open.get_mut(&request.session) {
+            return Ok(open.history_index.page_from(
+                &open.messages,
+                request,
+                |message| &message.id,
+                Message::to_proto,
+            ));
+        }
         let messages = if cloud::is_cloud(&request.session) {
             inner
                 .cloud
@@ -3195,6 +3307,72 @@ mod polling_regressions {
         }
     }
     #[tokio::test]
+    async fn indexed_cold_page_precedes_reader_and_source_change_forces_reconciliation() {
+        use std::io::Write;
+        let temp = tempfile::tempdir().unwrap();
+        let id = "22222222-2222-4222-8222-222222222222";
+        let project = temp.path().join("projects/synthetic");
+        std::fs::create_dir_all(&project).unwrap();
+        let path = project.join(format!("{id}.jsonl"));
+        let records: String = (0..300).map(|i| format!("{{\"type\":\"user\",\"uuid\":\"m{i}\",\"message\":{{\"role\":\"user\",\"content\":\"message {i}\"}}}}\n")).collect();
+        std::fs::write(&path, records).unwrap();
+        let service = AgentService::start(AgentConfig {
+            history_cache: Some(temp.path().join("index")),
+            ..isolated_config()
+        });
+        let held = service.scan_lock.lock().await;
+        let source = claude::scan(temp.path(), &mut claude::Heads::default())
+            .pop()
+            .unwrap();
+        service
+            .inner
+            .lock()
+            .unwrap()
+            .catalog
+            .insert(id.into(), source);
+        service.ensure_open(id).await.unwrap();
+        service.inner.lock().unwrap().open.remove(id);
+        let mut events = service.subscribe();
+        let request = muster_proto::v1::AgentMessagesRequest {
+            session: id.into(),
+            tail: 10,
+            ..Default::default()
+        };
+        let page = service.history_page(&request).await.unwrap();
+        assert_eq!(page.messages.len(), 10);
+        assert_eq!(page.messages.last().unwrap().text, "message 299");
+        assert!(
+            !service.inner.lock().unwrap().open.contains_key(id),
+            "indexed page does not wait for full reader initialization"
+        );
+        // On the current-thread runtime the spawned initializer cannot run
+        // until we yield, making the snapshot/watch gap deterministic.
+        writeln!(std::fs::OpenOptions::new().append(true).open(&path).unwrap(), "{{\"type\":\"user\",\"uuid\":\"later\",\"message\":{{\"role\":\"user\",\"content\":\"later\"}}}}").unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if matches!(events.recv().await.unwrap(), Event::Reset { session } if session == id)
+                {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            service
+                .history_page(&request)
+                .await
+                .unwrap()
+                .messages
+                .last()
+                .unwrap()
+                .text,
+            "later"
+        );
+        drop(held);
+    }
+
+    #[tokio::test]
     async fn slow_poll_releases_catalog_and_cannot_overwrite_replaced_viewer() {
         let service = AgentService::start(AgentConfig {
             codex_home: None,
@@ -3237,6 +3415,7 @@ mod polling_regressions {
             inner.open.insert(
                 "fixture".into(),
                 Open {
+                    history_index: Default::default(),
                     viewer: Some(Box::new(Slow {
                         meta: meta.clone(),
                         entered,

@@ -36,6 +36,9 @@ pub struct Chat {
     pub messages: Vec<v1::AgentMessage>,
     /// First visible transcript ID; full history stays cached for offline paging.
     pub history_start: Option<String>,
+    pub history_browsing: bool,
+    pub history_load_all: bool,
+    pub(crate) timeline_index: std::cell::RefCell<crate::timeline::Index>,
     pub interactions: Vec<v1::PendingInteraction>,
     pub approval_refresh_attempted: bool,
     pub approval_refresh_pending: bool,
@@ -65,6 +68,8 @@ pub struct Chat {
 
 /// Presentation paging is shared across shells; transport history is unchanged.
 pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
+/// Keep boundary rows available for native scroll anchoring across adjacent pages.
+pub(crate) const CHAT_HISTORY_STEP: usize = CHAT_HISTORY_PAGE - 16;
 
 /// One send this client dispatched into a conversation, still unaccounted for
 /// by that conversation's own records.
@@ -91,6 +96,9 @@ pub struct AdmittedSend {
 
 impl Chat {
     pub(crate) fn history_start_index(&self) -> usize {
+        if !self.history_browsing {
+            return self.messages.len().saturating_sub(CHAT_HISTORY_PAGE);
+        }
         self.history_start
             .as_ref()
             .and_then(|id| self.messages.iter().position(|m| &m.id == id))
@@ -98,9 +106,23 @@ impl Chat {
     }
 
     pub(crate) fn visible_messages(&self) -> &[v1::AgentMessage] {
-        &self.messages[self.history_start_index()..]
+        &self.messages[self.history_start_index()..self.history_end_index()]
     }
 
+    pub(crate) fn history_end_index(&self) -> usize {
+        (self.history_start_index() + CHAT_HISTORY_PAGE).min(self.messages.len())
+    }
+    pub(crate) fn advance_history(&mut self, latest: bool) {
+        let next = if latest {
+            self.messages.len().saturating_sub(CHAT_HISTORY_PAGE)
+        } else {
+            (self.history_start_index() + CHAT_HISTORY_STEP)
+                .min(self.messages.len().saturating_sub(CHAT_HISTORY_PAGE))
+        };
+        self.history_browsing = !latest && next + CHAT_HISTORY_PAGE < self.messages.len();
+        self.history_start = self.messages.get(next).map(|m| m.id.clone());
+        self.content_revision = next_content_revision();
+    }
     pub(crate) fn reconcile_history_start(&mut self) {
         self.history_start = self
             .messages
@@ -117,8 +139,9 @@ impl Chat {
         let next = if all {
             0
         } else {
-            start.saturating_sub(CHAT_HISTORY_PAGE)
+            start.saturating_sub(CHAT_HISTORY_STEP)
         };
+        self.history_browsing = true;
         self.history_start = Some(self.messages[next].id.clone());
         self.content_revision = next_content_revision();
         true

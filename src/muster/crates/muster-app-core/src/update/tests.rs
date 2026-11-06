@@ -572,6 +572,9 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
             ..Default::default()
         }],
         history_start: None,
+        history_browsing: false,
+        history_load_all: false,
+        timeline_index: Default::default(),
         interactions: Vec::new(),
         approval_refresh_attempted: false,
         approval_refresh_pending: false,
@@ -1785,20 +1788,28 @@ fn history_window_retains_stream_anchor_and_pages_cached_data_offline() {
     assert_eq!(chat.history_start.as_deref(), Some("300"));
     chat.messages.push(message("500", "assistant"));
     chat.reconcile_history_start();
-    assert_eq!(chat.visible_messages().first().unwrap().id, "300");
-    assert_eq!(chat.visible_messages().len(), 201);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "301");
+    assert_eq!(chat.visible_messages().len(), 200);
+    assert!(chat.reveal_history(false));
+    assert_eq!(chat.history_start.as_deref(), Some("117"));
+    chat.messages.push(message("501", "assistant"));
     chat.messages[499].text = "streamed update".into();
     chat.reconcile_history_start();
-    assert_eq!(chat.history_start.as_deref(), Some("300"));
-    assert!(chat.reveal_history(false));
-    assert_eq!(chat.history_start.as_deref(), Some("100"));
-    assert!(
-        !chat.has_earlier,
-        "all messages are cached; no remote fetch needed"
+    assert_eq!(
+        chat.history_start.as_deref(),
+        Some("117"),
+        "live output preserves an earlier window"
     );
+    assert_eq!(chat.visible_messages().len(), 200);
     assert!(chat.reveal_history(true));
-    assert_eq!(chat.visible_messages().len(), 501);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "0");
+    assert_eq!(chat.visible_messages().len(), 200);
     assert!(!chat.reveal_history(false));
+    chat.advance_history(false);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "184");
+    chat.advance_history(true);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "302");
+    assert_eq!(chat.messages.len(), 502, "receipt history is not evicted");
 }
 
 #[test]
@@ -3006,4 +3017,45 @@ async fn desktop_session_creation_validates_first_and_keeps_only_refused_input()
     );
     let view = crate::render::view_model(&state).agents.unwrap();
     assert!(!view.native_creating && view.native_create_draft.is_none());
+}
+
+#[test]
+fn delayed_cache_seed_cannot_replace_live_or_cancelled_history() {
+    let mut state = running_chat();
+    state.chat.as_mut().unwrap().loading = true;
+    let page = v1::AgentMessagePage {
+        messages: vec![message("cached", "user")],
+        ..Default::default()
+    };
+    let token = CancellationToken::new();
+    token.cancel();
+    agents::msg_chat_cache(&mut state, token, "mac", "s", page.clone());
+    assert!(state.chat.as_ref().unwrap().messages.is_empty());
+    agents::msg_chat_cache(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "other",
+        page.clone(),
+    );
+    assert!(state.chat.as_ref().unwrap().messages.is_empty());
+    agents::msg_chat_cache(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "s",
+        page.clone(),
+    );
+    assert_eq!(state.chat.as_ref().unwrap().messages[0].id, "cached");
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        false,
+        true,
+        Ok((vec![message("live", "user")], false)),
+    );
+    agents::msg_chat_cache(&mut state, CancellationToken::new(), "mac", "s", page);
+    assert_eq!(state.chat.as_ref().unwrap().messages[0].id, "live");
 }

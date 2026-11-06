@@ -564,8 +564,8 @@ struct ChatView: View {
                 }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest,
                 loadEarlier: { earlierRequest += 1; core.agentLoadEarlier() })
                 .overlay(alignment: .bottom) {
-                    if !atLatest {
-                        Button { latestRequest += 1 } label: {
+                    if !atLatest || chat.hasNewer_p {
+                        Button { core.agentLoadEarlier(latest: true); latestRequest += 1 } label: {
                             Image(systemName: "arrow.down").font(.system(size: 19, weight: .medium))
                                 .frame(width: 38, height: 38)
                                 .background(.regularMaterial, in: Circle())
@@ -624,6 +624,10 @@ struct ChatView: View {
             if !chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty {
                 Text(chat.session.transcriptNotice.isEmpty ? "No messages yet" : chat.session.transcriptNotice)
                     .foregroundStyle(.secondary)
+            }
+            if chat.hasNewer_p {
+                Button("Load newer") { core.agentLoadEarlier(newer: true) }.disabled(chat.loading)
+                    .frame(maxWidth: .infinity)
             }
             if chat.hasEarlier_p {
                 Button("Load earlier") {
