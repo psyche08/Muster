@@ -1,7 +1,7 @@
 # ADR 0143: Publish Apple 1.1.23 (113) from main and install the fleet
 
 - Date: 2026-11-06
-- Status: Accepted; published and installed on three Macs; iPhone installation pending
+- Status: Accepted; published and installed on three Macs; iPhone installation deferred by operator
 - Related: ADR 0144 (supersedes physical-path-only installation); ADR 0138; ADR 0139; ADR 0140; ADR 0142; DESKTOP_UPDATES.md
 
 ## Context
@@ -88,3 +88,22 @@ separately after execution. No release or installation result is claimed yet.
 - No TestFlight/external distribution, App Store submission, GitHub release,
   unattended updater acceptance or real-provider Mac/iPhone latency acceptance
   was performed. Existing source regression evidence remains in ADR 0142.
+
+### Authorized retention cleanup (2026-11-06)
+
+The operator explicitly approved deleting the 45 previously previewed superseded
+files, and deferred iPhone installation because the phone cannot currently be
+connected. This resolves the earlier cleanup approval block; physical iPhone
+installation and latency acceptance remain deferred, not verified.
+
+Before deletion, the publisher recomputed the obsolete list and required an exact
+match with the approved 45 paths. It also verified all fourteen current-release
+file hashes against the publication manifest. Only those approved files were
+removed, and all fourteen current hashes were verified again afterward.
+
+Public readback verified all 45 retired URLs: three obsolete macOS packages and
+fourteen obsolete IPAs return HTTP 410; twenty-eight old installation/manifest
+URLs resolve a valid current build 113 manifest. A separate post-cleanup check
+verified current page, manifest and feed/signature hashes, plus HTTP 200 for the
+current iOS IPA, macOS portable and full update package. No current release file,
+application data, or device installation was changed by this cleanup.
