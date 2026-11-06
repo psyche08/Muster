@@ -34,6 +34,12 @@ without starting stopped services. **There is no in-app Multica upgrade, image
 pull, stop or rollback**: those remain manual operator steps documented in
 [DESKTOP_UPDATES.md](../DESKTOP_UPDATES.md) and `deploy/multica/README.md`.
 
+[ADR 0156](../adr/0156-container-process-resource-lifecycle.md) bounds successful
+wrapper reconciliation to five minutes, with immediate invalidation on container
+incarnation, bridge/configuration or provider changes. Daemon health/recovery
+keeps its 15-second cadence. New managed containers use `--init`; existing
+containers and the separately patched Apple runtime need an operator migration.
+
 ### Proposed independent service and DSH App bridge
 
 [ADR 0141](../adr/0141-multica-service-and-dsh-app-bridge-design.md) and the

@@ -271,3 +271,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0153](0153-large-session-history-costs.md) | Accepted; source verified, device acceptance pending | Bound repeated cache, validation, provider history and display work |
 | [0154](0154-wait-for-slow-codex-windows.md) | Accepted; installation and acceptance pending | Wait up to 90 s for slow Codex windows before navigation, and install 1.1.27 (117) |
 | [0155](0155-remove-finish-session-script.md) | Accepted | Remove `scripts/finish-session.sh`; land with the AGENTS.md steps run directly |
+| [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; installation pending | Bound container exec resources and wrapper reconciliation |
