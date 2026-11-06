@@ -1,7 +1,9 @@
 # ADR 0154: Wait for slow Codex windows and install 1.1.27
 
 - Date: 2026-11-06
-- Status: Accepted; installation and acceptance pending
+- Status: Accepted; installed on the operator's Mac and local Codex creation
+  accepted; scheduler recovery, local Claude creation, creation from another
+  Mac and locked creation pending
 - Related: [ADR 0150](0150-remote-desktop-session-creation.md) (desktop
   session creation), [ADR 0152](0152-install-1-1-26-for-desktop-session-acceptance.md)
   (1.1.26 acceptance), [ADR 0153](0153-large-session-history-costs.md),
@@ -111,4 +113,62 @@ After landing, record each of the following separately:
 - local Claude creation once the existing draft is gone;
 - creation from another Mac and on a locked Mac.
 
-No installation or acceptance result is claimed yet.
+### Evidence
+
+Recorded on 2026-11-06 on the operator's Mac.
+
+- **Source and build.**
+  - Built from a clean, detached checkout of merge `7b489084`, the merge that
+    landed this change.
+  - `verify-release.sh` confirmed that the daemon was built from that commit,
+    both before and after packaging.
+  - The presence signing check passed.
+- **Signing, notarization and Gatekeeper.**
+  - The app was signed with the Developer ID presence profile.
+  - Notarization was accepted (`4416b3c1-8613-49b6-81f2-d61df3f45585`) and
+    stapled.
+  - `codesign --verify --deep --strict` passed, and Gatekeeper assessed the app
+    as "Notarized Developer ID".
+  - Install zip SHA-256: `f704746c…ddfaea`. Daemon SHA-256: `875ebb55…34be30`.
+  - Nothing was published.
+- **Installation.**
+  - The one-shot installation job held the desktop update lease, replaced the
+    bundle atomically, and started 1.1.27.
+  - After installation:
+    - version 1.1.27, commit `7b489084`;
+    - the expected daemon hash;
+    - the same device ID, fingerprint and hardware key backend;
+    - Accessibility granted, Relay registered and Vnet up.
+  - The job then failed its last check: the Multica scheduler did not restart.
+- **Scheduler recovery.** Not caused by this release.
+  - About 75 minutes before the installation, a write to the Multica
+    container's root disk failed. The guest kernel logged `I/O error` and
+    `Detected aborted journal`, and remounted that filesystem read-only
+    (`emergency_ro`).
+  - The likely cause is a full system volume: the host hit "no space left on
+    device" that afternoon.
+  - The scheduler that was already running kept working from memory until the
+    installation stopped it.
+  - Afterwards, the daemon's 15 s maintenance loop failed on every pass. It
+    could not reinstall the runtime wrapper inside the container
+    (`Read-only file system`), so it never reached the scheduler start.
+  - This needs the container to restart, which the operator has not yet
+    approved. 1.1.26 had restarted the scheduler on the same Mac earlier that
+    day.
+- **Local Codex creation.** Accepted.
+  - Request `accept-1.1.27-codex-create-1` targeted a new, empty scratch
+    directory. The Mac was unlocked and the operator was away.
+  - The daemon answered `applied` with session `01a1b168` after 66 s, about the
+    time the new window needed to render.
+  - The ledger row was `applied`, with that session as its result.
+  - The Codex session list gained exactly one session, in the scratch
+    directory, created by Codex Desktop.
+  - Its first user message was the requested prompt, and Codex replied `OK`.
+  - Muster's new window stayed open showing that session. No blank window was
+    left, and the operator's existing window, including an open question
+    prompt, was not changed.
+- **Local Claude creation.** Not repeated. Claude's new-session form may still
+  hold the operator's unsent draft from the 1.1.26 attempts. It waits until
+  the operator sends or clears it.
+- **Creation from another Mac and on a locked Mac.** Not run: both other Macs
+  were offline.
