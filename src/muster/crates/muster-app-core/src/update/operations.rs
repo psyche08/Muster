@@ -72,6 +72,8 @@ pub(super) fn op_request_from(
             .as_ref()
             .map(|(provider, _)| provider.clone())
             .unwrap_or_default()
+    } else if let Req::AgentNativeCreate(r) = &req {
+        r.provider.clone()
     } else {
         state
             .chat
@@ -126,6 +128,23 @@ pub(super) fn op_request_from(
                     return Err(Error::Unavailable(
                         "Update Muster on the target Mac to load or send Chat through Locked Use"
                             .into(),
+                    ));
+                }
+            }
+            if matches!(&req, Req::AgentNativeCreate(_)) {
+                let Resp::DeviceInfo(info) = diagnostic
+                    .call(
+                        &client,
+                        Req::DeviceInfo(v1::DeviceInfoRequest {}),
+                        "capability_check",
+                    )
+                    .await?
+                else {
+                    return Err(unexpected());
+                };
+                if !info.services.iter().any(|s| s == "agent.native_create.v1") {
+                    return Err(Error::Unavailable(
+                        "Update Muster on this Mac to create desktop sessions from here".into(),
                     ));
                 }
             }
@@ -300,7 +319,12 @@ pub(super) fn op_request_from(
                 ) => {
                     return Err(error.into());
                 }
-                Err(error) if matches!(what, "respond" | "send" | "terminal_result") => {
+                Err(error)
+                    if matches!(
+                        what,
+                        "respond" | "send" | "terminal_result" | "native_create"
+                    ) =>
+                {
                     v1::OpResult {
                         status: v1::op_result::Status::Unknown as i32,
                         message: format!("Submission acknowledgement unavailable: {error}"),
@@ -408,6 +432,7 @@ pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) 
             Some("send") => "send",
             Some("respond") => "respond",
             Some("terminal_result") => "terminal_result",
+            Some("native_create") => "native_create",
             _ => "other",
         };
         let mut diagnostic =
@@ -415,6 +440,7 @@ pub(super) fn cancel_locked(state: &mut State, ctx: &Ctx, reason: CancelReason) 
         diagnostic.stage("authentication_cancel");
         diagnostic.rejection(reason.as_str());
         state.effects.remove(&p.effect_id);
+        super::native_create::not_dispatched(state, what);
         if what == "send" {
             super::send_recovery::outcome(
                 state,
@@ -533,6 +559,11 @@ pub(super) fn msg_op_done(
     });
     let locked_finished =
         locked_nonce.is_none() || state.finish_locked(&device, locked_nonce.as_deref());
+    // A creation's answer is its own, whichever lease it finished under.
+    if what == "native_create" {
+        super::native_create::done(state, ctx, device, result);
+        return;
+    }
     if what == "terminal_result" {
         super::code_runs::delivery(state, &device, response_origin, result);
         return;
@@ -741,6 +772,7 @@ pub(super) fn msg_presence_needed(
                     super::code_runs::cancelled(state, &device);
                 }
                 super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
+                super::native_create::not_dispatched(state, what);
                 state.toast(e.to_string(), true);
                 return;
             }
@@ -774,6 +806,7 @@ pub(super) fn msg_presence_needed(
                 "authentication_background"
             });
             super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
+            super::native_create::not_dispatched(state, what);
             cancel_challenge(state, ctx, device, nonce.clone(), reason);
             return;
         }
@@ -826,6 +859,7 @@ pub(super) fn msg_presence_needed(
             Err(error) => {
                 diagnostic.failure(&error);
                 super::send_recovery::not_dispatched(state, ctx, what, &device, &response_origin);
+                super::native_create::not_dispatched(state, what);
                 cancel_locked(state, ctx, CancelReason::Authentication);
                 state.toast(error.to_string(), true);
             }

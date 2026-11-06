@@ -268,6 +268,8 @@ impl Daemon {
                 services.push("agent.completion.v1".to_string());
                 services.push("agent.chat.locked.v1".to_string());
                 services.push("agent.approvals.locked.v1".to_string());
+                // Remote desktop (Code mode) session creation (ADR 0150).
+                services.push("agent.native_create.v1".to_string());
             }
         }
         if self.terminal().is_some() {

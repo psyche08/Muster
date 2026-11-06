@@ -61,7 +61,6 @@ fn access_for(req: &Req) -> Access {
     };
     match req {
         Req::Multica(_)
-        | Req::AgentNativeCreate(_)
         | Req::Vision(_)
         | Req::AgentScheduler(_) => Access::LocalOnly,
         Req::MulticaService(r) if r.action == v1::multica_service_request::Action::Save as i32 => Access::LocalOnly,
@@ -125,6 +124,11 @@ fn access_for(req: &Req) -> Access {
         // per session in `dispatch`.
         Req::OrcaCreate(_) => Access::Need(Permission::Agent {
             provider: Some("orca".into()),
+            control: true,
+        }),
+        // A desktop session in the provider's own app (ADR 0150).
+        Req::AgentNativeCreate(r) => Access::Need(Permission::Agent {
+            provider: Some(r.provider.clone()),
             control: true,
         }),
         Req::AgentList(r) if r.provider.is_empty() => agents(false),
@@ -366,7 +370,7 @@ impl Handler for MusterHandler {
             // Serialize all writes against a temporary-unlock transaction.
             // A normal request cannot slip in while its console is unlocked.
             let _console_write = if (access.writes_console()
-                || matches!(request, Req::DeviceSetCover(_) | Req::AgentNativeCreate(_)))
+                || matches!(request, Req::DeviceSetCover(_)))
                 && !independent_session(&daemon, &request)
             {
                 match daemon.locked_use.writes.clone().try_read_owned() {
@@ -2122,6 +2126,15 @@ async fn dispatch(
                 if !visible.allows(provider.as_deref())
                     || (!filter.is_empty() && !visible.session(&agent, &filter))
                 {
+                    if !filter.is_empty() {
+                        events
+                            .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
+                                ev: Some(v1::agent_event::Ev::Unavailable(v1::AgentUnavailable {
+                                    sessions: vec![filter.clone()],
+                                })),
+                            }))
+                            .await?;
+                    }
                     return Err(Error::Unauthorized(
                         "agents: access withdrawn while watching".into(),
                     ));
@@ -2579,6 +2592,13 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         validate_locked_terminal_creation(daemon, &r)?;
         return create_native_terminal(daemon, r).await;
     }
+    // The console is this lease's: the creation looks for its receipt as
+    // briefly as a scheduled one, then read-only after relock (ADR 0150).
+    if let Req::AgentNativeCreate(r) = request {
+        native_creation(daemon, &r)?;
+        return crate::native_create::scheduled(daemon, r, crate::scheduler::IN_LEASE_RECEIPT)
+            .await;
+    }
 
     // A session driven through its app's plugin (DeepSeek Harness, ADR
     // 0074) needs no Accessibility, input quiet or navigation; the queue,
@@ -2942,6 +2962,9 @@ fn chat_app_named(name: &str) -> Option<muster_agent::desktop_chat::ChatApp> {
 }
 
 pub(crate) fn native_provider(daemon: &Daemon, request: &Req) -> Result<String, Error> {
+    if let Req::AgentNativeCreate(r) = request {
+        return native_creation(daemon, r);
+    }
     let direct = match request {
         Req::AgentChats(r) => Some(r.provider.as_str()),
         Req::AgentChatOpen(r) => Some(r.provider.as_str()),
@@ -3034,6 +3057,9 @@ pub(crate) fn native_session(daemon: &Daemon, request: &Req) -> Result<String, E
 /// Checks a Locked Use operation targets a native desktop app this device
 /// allows, and returns the agent provider of its session.
 pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result<String, Error> {
+    if let Req::AgentNativeCreate(r) = request {
+        return native_creation(daemon, r);
+    }
     if matches!(request, Req::AgentRespond(r) if r.session.is_empty()) {
         return Err(Error::Invalid(
             "Locked Use approvals require an explicit session".into(),
@@ -3069,6 +3095,37 @@ pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result
     agent_of(daemon)?.require_desktop_input(&session)?;
     require_capability(agent_of(daemon)?, &session, request)?;
     Ok(provider)
+}
+
+/// Checks a desktop session creation can run here before any unlock: a
+/// well-formed request, an existing directory and an allowlisted app.
+/// Returns its provider. No session exists yet, so nothing else is checked.
+fn native_creation(daemon: &Daemon, r: &v1::AgentNativeCreateRequest) -> Result<String, Error> {
+    crate::native_create::validate(r)?;
+    if r.op_id.len() > 128 {
+        return Err(Error::Invalid("operation id is too long".into()));
+    }
+    let bundle = muster_core::apps::app(&r.provider)
+        .ok_or_else(|| Error::Invalid("provider has no supported native app".into()))?
+        .bundle_id;
+    if !daemon
+        .policy()
+        .read()
+        .unwrap()
+        .ax_allowlist
+        .iter()
+        .any(|x| x == bundle)
+    {
+        return Err(Error::Unauthorized(
+            "native app is not in this device's allowlist".into(),
+        ));
+    }
+    if !std::fs::metadata(&r.directory).is_ok_and(|m| m.is_dir()) {
+        return Err(Error::Invalid(
+            "Native directory must be an existing directory".into(),
+        ));
+    }
+    Ok(r.provider.clone())
 }
 
 /// The bound request runs once after authorization; OS work stays in its work queue.
@@ -3468,12 +3525,19 @@ mod setup_permission_tests {
 mod native_create_access_tests {
     use super::*;
     #[test]
-    fn native_scheduler_creation_is_local_owner_only() {
+    fn desktop_creation_needs_control_of_its_provider() {
+        let access = access_for(&Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
+            provider: "claude".into(),
+            ..Default::default()
+        }));
         assert!(matches!(
-            access_for(&Req::AgentNativeCreate(
-                v1::AgentNativeCreateRequest::default()
-            )),
-            Access::LocalOnly
+            access,
+            Access::Need(Permission::Agent {
+                provider: Some(ref provider),
+                control: true,
+            }) if provider == "claude"
         ));
+        // It acts on the console, so it waits out a Locked Use window.
+        assert!(access.writes_console());
     }
 }

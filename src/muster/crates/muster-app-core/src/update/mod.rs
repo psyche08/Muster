@@ -35,6 +35,7 @@ mod desktop_chats;
 mod files;
 pub(crate) mod manual_locked_use;
 pub(crate) mod multica;
+pub(crate) mod native_create;
 mod network;
 mod operations;
 mod orca;
@@ -90,6 +91,12 @@ pub enum Msg {
         result: Result<Option<v1::NetworkStatus>, Error>,
     },
     OrcaCreated {
+        network: Option<String>,
+        device: String,
+        result: Result<v1::AgentSession, Error>,
+    },
+    /// The session a desktop creation made, as its Mac lists it.
+    NativeCreated {
         network: Option<String>,
         device: String,
         result: Result<v1::AgentSession, Error>,
@@ -411,6 +418,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::SetDeviceLockedUse(r) => manual_locked_use::set(state, ctx, r),
         It::CancelLockedUse(_) => cancel_locked(state, ctx, CancelReason::User),
         It::OrcaCreate(o) => orca::create(state, ctx, o),
+        It::NativeCreate(c) => native_create::create(state, ctx, c),
         It::AgentCatalogAction(a) => catalog::intent(state, ctx, a),
         It::AgentOrganize(a) => catalog::organize(state, ctx, a),
         It::OpenAgents(o) => agents::intent_open_agents(state, ctx, o),
@@ -786,6 +794,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
                 Err(error) => state.toast(error.to_string(), true),
             }
         }
+        Msg::NativeCreated {
+            network,
+            device,
+            result,
+        } => native_create::opened(state, ctx, network, device, result),
         Msg::SessionTerminalReady {
             epoch,
             device,

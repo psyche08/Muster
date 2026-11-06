@@ -263,4 +263,6 @@ superseding decisions get new numbers and bidirectional links.
 
 | [0149](0149-multica-ownership-reservations.md) | Accepted; foundation verified | Durable Multica ownership reservations and isolated DSH App contract probe |
 
+| [0150](0150-remote-desktop-session-creation.md) | Accepted; source, tests and builds verified; device acceptance pending | Create Claude and Codex desktop sessions from another device, including on a locked Mac |
+
 | [0151](0151-multica-task-session-isolation.md) | Accepted; device acceptance pending | Enforce registered task ownership and expose scoped Multica browsing |

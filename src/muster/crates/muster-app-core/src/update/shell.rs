@@ -126,6 +126,7 @@ pub fn effect_result(state: &mut State, ctx: &Ctx, id: u64, result: app::EffectR
                     Some("respond") => "respond",
                     Some("chat") => "chat",
                     Some("manual") => "manual",
+                    Some("native_create") => "native_create",
                     _ => "interrupt",
                 };
                 op_request_from(

@@ -679,6 +679,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .sessionViewApplied(newValue)}
   }
 
+  public var nativeCreate: Muster_App_NativeCreate {
+    get {
+      if case .nativeCreate(let v)? = _storage._it {return v}
+      return Muster_App_NativeCreate()
+    }
+    set {_uniqueStorage()._it = .nativeCreate(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_It: Equatable, Sendable {
@@ -748,6 +756,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case openFileLink(Muster_App_OpenFileLink)
     case setPushToken(Muster_App_SetPushToken)
     case sessionViewApplied(Muster_App_SessionViewApplied)
+    case nativeCreate(Muster_App_NativeCreate)
 
   }
 
@@ -1226,6 +1235,29 @@ public nonisolated struct Muster_App_OrcaCreate: Sendable {
   public var directory: String = String()
 
   public var agent: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A new desktop (Code mode) session in the provider's own app on a Mac,
+/// started by its first message (ADR 0150). It starts no CLI.
+public nonisolated struct Muster_App_NativeCreate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var deviceID: String = String()
+
+  /// codex | claude
+  public var provider: String = String()
+
+  /// absolute, on that Mac
+  public var directory: String = String()
+
+  /// the session's first message
+  public var prompt: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2784,40 +2816,108 @@ public nonisolated struct Muster_App_JoinView: Sendable {
   public init() {}
 }
 
-public nonisolated struct Muster_App_AgentsView: Sendable {
+public nonisolated struct Muster_App_AgentsView: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var nativeSections: [Muster_V1_AgentSection] = []
+  public var nativeSections: [Muster_V1_AgentSection] {
+    get {_storage._nativeSections}
+    set {_uniqueStorage()._nativeSections = newValue}
+  }
 
-  public var sections: [Muster_App_AgentCatalogSection] = []
+  public var sections: [Muster_App_AgentCatalogSection] {
+    get {_storage._sections}
+    set {_uniqueStorage()._sections = newValue}
+  }
 
-  public var query: String = String()
+  public var query: String {
+    get {_storage._query}
+    set {_uniqueStorage()._query = newValue}
+  }
 
-  public var searching: Bool = false
+  public var searching: Bool {
+    get {_storage._searching}
+    set {_uniqueStorage()._searching = newValue}
+  }
 
-  public var searchHasMore: Bool = false
+  public var searchHasMore: Bool {
+    get {_storage._searchHasMore}
+    set {_uniqueStorage()._searchHasMore = newValue}
+  }
 
-  public var searchNotices: [String] = []
+  public var searchNotices: [String] {
+    get {_storage._searchNotices}
+    set {_uniqueStorage()._searchNotices = newValue}
+  }
 
-  public var createHosts: [Muster_V1_MemberView] = []
+  public var createHosts: [Muster_V1_MemberView] {
+    get {_storage._createHosts}
+    set {_uniqueStorage()._createHosts = newValue}
+  }
 
-  public var createAgents: [String] = []
+  public var createAgents: [String] {
+    get {_storage._createAgents}
+    set {_uniqueStorage()._createAgents = newValue}
+  }
 
-  public var creating: Bool = false
+  public var creating: Bool {
+    get {_storage._creating}
+    set {_uniqueStorage()._creating = newValue}
+  }
 
-  public var errors: [String] = []
+  /// Desktop session creation (ADR 0150): the desktops it can target, the
+  /// apps it creates in, whether one is under way, and the input of the last
+  /// one that was refused, to correct and submit again.
+  public var nativeCreateHosts: [Muster_V1_MemberView] {
+    get {_storage._nativeCreateHosts}
+    set {_uniqueStorage()._nativeCreateHosts = newValue}
+  }
 
-  public var deviceID: String = String()
+  public var nativeCreateApps: [String] {
+    get {_storage._nativeCreateApps}
+    set {_uniqueStorage()._nativeCreateApps = newValue}
+  }
 
-  public var sessions: [Muster_V1_AgentSession] = []
+  public var nativeCreating: Bool {
+    get {_storage._nativeCreating}
+    set {_uniqueStorage()._nativeCreating = newValue}
+  }
 
-  public var loading: Bool = false
+  public var nativeCreateDraft: Muster_App_NativeCreate {
+    get {_storage._nativeCreateDraft ?? Muster_App_NativeCreate()}
+    set {_uniqueStorage()._nativeCreateDraft = newValue}
+  }
+  /// Returns true if `nativeCreateDraft` has been explicitly set.
+  public var hasNativeCreateDraft: Bool {_storage._nativeCreateDraft != nil}
+  /// Clears the value of `nativeCreateDraft`. Subsequent reads from it will return its default value.
+  public mutating func clearNativeCreateDraft() {_uniqueStorage()._nativeCreateDraft = nil}
+
+  public var errors: [String] {
+    get {_storage._errors}
+    set {_uniqueStorage()._errors = newValue}
+  }
+
+  public var deviceID: String {
+    get {_storage._deviceID}
+    set {_uniqueStorage()._deviceID = newValue}
+  }
+
+  public var sessions: [Muster_V1_AgentSession] {
+    get {_storage._sessions}
+    set {_uniqueStorage()._sessions = newValue}
+  }
+
+  public var loading: Bool {
+    get {_storage._loading}
+    set {_uniqueStorage()._loading = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Muster_App_ChatView: @unchecked Sendable {
@@ -3794,7 +3894,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4646,6 +4746,19 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .sessionViewApplied(v)
           }
         }()
+        case 136: try {
+          var v: Muster_App_NativeCreate?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .nativeCreate(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .nativeCreate(v)
+          }
+        }()
         default: break
         }
       }
@@ -4910,6 +5023,10 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .sessionViewApplied?: try {
         guard case .sessionViewApplied(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 135)
+      }()
+      case .nativeCreate?: try {
+        guard case .nativeCreate(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 136)
       }()
       case nil: break
       }
@@ -5794,6 +5911,51 @@ nonisolated extension Muster_App_OrcaCreate: SwiftProtobuf.Message, SwiftProtobu
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.directory != rhs.directory {return false}
     if lhs.agent != rhs.agent {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_NativeCreate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".NativeCreate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}provider\0\u{1}directory\0\u{1}prompt\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.provider) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.directory) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    }
+    if !self.provider.isEmpty {
+      try visitor.visitSingularStringField(value: self.provider, fieldNumber: 2)
+    }
+    if !self.directory.isEmpty {
+      try visitor.visitSingularStringField(value: self.directory, fieldNumber: 3)
+    }
+    if !self.prompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_NativeCreate, rhs: Muster_App_NativeCreate) -> Bool {
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.directory != rhs.directory {return false}
+    if lhs.prompt != rhs.prompt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8730,89 +8892,181 @@ nonisolated extension Muster_App_JoinView: SwiftProtobuf.Message, SwiftProtobuf.
 
 nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentsView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0\u{3}native_create_hosts\0\u{3}native_create_apps\0\u{3}native_creating\0\u{3}native_create_draft\0")
+
+  fileprivate class _StorageClass {
+    var _nativeSections: [Muster_V1_AgentSection] = []
+    var _sections: [Muster_App_AgentCatalogSection] = []
+    var _query: String = String()
+    var _searching: Bool = false
+    var _searchHasMore: Bool = false
+    var _searchNotices: [String] = []
+    var _createHosts: [Muster_V1_MemberView] = []
+    var _createAgents: [String] = []
+    var _creating: Bool = false
+    var _nativeCreateHosts: [Muster_V1_MemberView] = []
+    var _nativeCreateApps: [String] = []
+    var _nativeCreating: Bool = false
+    var _nativeCreateDraft: Muster_App_NativeCreate? = nil
+    var _errors: [String] = []
+    var _deviceID: String = String()
+    var _sessions: [Muster_V1_AgentSession] = []
+    var _loading: Bool = false
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _nativeSections = source._nativeSections
+      _sections = source._sections
+      _query = source._query
+      _searching = source._searching
+      _searchHasMore = source._searchHasMore
+      _searchNotices = source._searchNotices
+      _createHosts = source._createHosts
+      _createAgents = source._createAgents
+      _creating = source._creating
+      _nativeCreateHosts = source._nativeCreateHosts
+      _nativeCreateApps = source._nativeCreateApps
+      _nativeCreating = source._nativeCreating
+      _nativeCreateDraft = source._nativeCreateDraft
+      _errors = source._errors
+      _deviceID = source._deviceID
+      _sessions = source._sessions
+      _loading = source._loading
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sessions) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.loading) }()
-      case 4: try { try decoder.decodeRepeatedStringField(value: &self.errors) }()
-      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.createHosts) }()
-      case 6: try { try decoder.decodeRepeatedStringField(value: &self.createAgents) }()
-      case 7: try { try decoder.decodeSingularBoolField(value: &self.creating) }()
-      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.nativeSections) }()
-      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.sections) }()
-      case 10: try { try decoder.decodeSingularStringField(value: &self.query) }()
-      case 11: try { try decoder.decodeSingularBoolField(value: &self.searching) }()
-      case 12: try { try decoder.decodeRepeatedStringField(value: &self.searchNotices) }()
-      case 13: try { try decoder.decodeSingularBoolField(value: &self.searchHasMore) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._deviceID) }()
+        case 2: try { try decoder.decodeRepeatedMessageField(value: &_storage._sessions) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._loading) }()
+        case 4: try { try decoder.decodeRepeatedStringField(value: &_storage._errors) }()
+        case 5: try { try decoder.decodeRepeatedMessageField(value: &_storage._createHosts) }()
+        case 6: try { try decoder.decodeRepeatedStringField(value: &_storage._createAgents) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._creating) }()
+        case 8: try { try decoder.decodeRepeatedMessageField(value: &_storage._nativeSections) }()
+        case 9: try { try decoder.decodeRepeatedMessageField(value: &_storage._sections) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._query) }()
+        case 11: try { try decoder.decodeSingularBoolField(value: &_storage._searching) }()
+        case 12: try { try decoder.decodeRepeatedStringField(value: &_storage._searchNotices) }()
+        case 13: try { try decoder.decodeSingularBoolField(value: &_storage._searchHasMore) }()
+        case 14: try { try decoder.decodeRepeatedMessageField(value: &_storage._nativeCreateHosts) }()
+        case 15: try { try decoder.decodeRepeatedStringField(value: &_storage._nativeCreateApps) }()
+        case 16: try { try decoder.decodeSingularBoolField(value: &_storage._nativeCreating) }()
+        case 17: try { try decoder.decodeSingularMessageField(value: &_storage._nativeCreateDraft) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.deviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
-    }
-    if !self.sessions.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.sessions, fieldNumber: 2)
-    }
-    if self.loading != false {
-      try visitor.visitSingularBoolField(value: self.loading, fieldNumber: 3)
-    }
-    if !self.errors.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.errors, fieldNumber: 4)
-    }
-    if !self.createHosts.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.createHosts, fieldNumber: 5)
-    }
-    if !self.createAgents.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.createAgents, fieldNumber: 6)
-    }
-    if self.creating != false {
-      try visitor.visitSingularBoolField(value: self.creating, fieldNumber: 7)
-    }
-    if !self.nativeSections.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.nativeSections, fieldNumber: 8)
-    }
-    if !self.sections.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.sections, fieldNumber: 9)
-    }
-    if !self.query.isEmpty {
-      try visitor.visitSingularStringField(value: self.query, fieldNumber: 10)
-    }
-    if self.searching != false {
-      try visitor.visitSingularBoolField(value: self.searching, fieldNumber: 11)
-    }
-    if !self.searchNotices.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.searchNotices, fieldNumber: 12)
-    }
-    if self.searchHasMore != false {
-      try visitor.visitSingularBoolField(value: self.searchHasMore, fieldNumber: 13)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._deviceID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 1)
+      }
+      if !_storage._sessions.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._sessions, fieldNumber: 2)
+      }
+      if _storage._loading != false {
+        try visitor.visitSingularBoolField(value: _storage._loading, fieldNumber: 3)
+      }
+      if !_storage._errors.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._errors, fieldNumber: 4)
+      }
+      if !_storage._createHosts.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._createHosts, fieldNumber: 5)
+      }
+      if !_storage._createAgents.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._createAgents, fieldNumber: 6)
+      }
+      if _storage._creating != false {
+        try visitor.visitSingularBoolField(value: _storage._creating, fieldNumber: 7)
+      }
+      if !_storage._nativeSections.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._nativeSections, fieldNumber: 8)
+      }
+      if !_storage._sections.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._sections, fieldNumber: 9)
+      }
+      if !_storage._query.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._query, fieldNumber: 10)
+      }
+      if _storage._searching != false {
+        try visitor.visitSingularBoolField(value: _storage._searching, fieldNumber: 11)
+      }
+      if !_storage._searchNotices.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._searchNotices, fieldNumber: 12)
+      }
+      if _storage._searchHasMore != false {
+        try visitor.visitSingularBoolField(value: _storage._searchHasMore, fieldNumber: 13)
+      }
+      if !_storage._nativeCreateHosts.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._nativeCreateHosts, fieldNumber: 14)
+      }
+      if !_storage._nativeCreateApps.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._nativeCreateApps, fieldNumber: 15)
+      }
+      if _storage._nativeCreating != false {
+        try visitor.visitSingularBoolField(value: _storage._nativeCreating, fieldNumber: 16)
+      }
+      try { if let v = _storage._nativeCreateDraft {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_App_AgentsView, rhs: Muster_App_AgentsView) -> Bool {
-    if lhs.nativeSections != rhs.nativeSections {return false}
-    if lhs.sections != rhs.sections {return false}
-    if lhs.query != rhs.query {return false}
-    if lhs.searching != rhs.searching {return false}
-    if lhs.searchHasMore != rhs.searchHasMore {return false}
-    if lhs.searchNotices != rhs.searchNotices {return false}
-    if lhs.createHosts != rhs.createHosts {return false}
-    if lhs.createAgents != rhs.createAgents {return false}
-    if lhs.creating != rhs.creating {return false}
-    if lhs.errors != rhs.errors {return false}
-    if lhs.deviceID != rhs.deviceID {return false}
-    if lhs.sessions != rhs.sessions {return false}
-    if lhs.loading != rhs.loading {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._nativeSections != rhs_storage._nativeSections {return false}
+        if _storage._sections != rhs_storage._sections {return false}
+        if _storage._query != rhs_storage._query {return false}
+        if _storage._searching != rhs_storage._searching {return false}
+        if _storage._searchHasMore != rhs_storage._searchHasMore {return false}
+        if _storage._searchNotices != rhs_storage._searchNotices {return false}
+        if _storage._createHosts != rhs_storage._createHosts {return false}
+        if _storage._createAgents != rhs_storage._createAgents {return false}
+        if _storage._creating != rhs_storage._creating {return false}
+        if _storage._nativeCreateHosts != rhs_storage._nativeCreateHosts {return false}
+        if _storage._nativeCreateApps != rhs_storage._nativeCreateApps {return false}
+        if _storage._nativeCreating != rhs_storage._nativeCreating {return false}
+        if _storage._nativeCreateDraft != rhs_storage._nativeCreateDraft {return false}
+        if _storage._errors != rhs_storage._errors {return false}
+        if _storage._deviceID != rhs_storage._deviceID {return false}
+        if _storage._sessions != rhs_storage._sessions {return false}
+        if _storage._loading != rhs_storage._loading {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

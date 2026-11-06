@@ -149,6 +149,20 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 })
                 .collect(),
             create_agents: vec!["codex".into(), "claude".into()],
+            native_create_hosts: crate::update::native_create::hosts(state)
+                .into_iter()
+                .map(|m| muster_proto::v1::MemberView {
+                    device_id: m.device_id,
+                    name: m.name,
+                    kind: m.kind,
+                    is_self: m.is_self,
+                    ..Default::default()
+                })
+                .collect(),
+            native_create_apps: crate::update::native_create::APPS
+                .iter()
+                .map(|app| (*app).into())
+                .collect(),
             sessions: state
                 .agents
                 .sessions
