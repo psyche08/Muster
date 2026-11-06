@@ -53,7 +53,7 @@ Apple `container` runtime and provisions both sides:
   host and guest, and `bin/` holds the host-side Multica CLI. The root carries
   a `muster-owned` marker and is created mode `0700`; files Muster writes there
   are mode `0600`.
-- Guest: a Multica CLI installation from the operator-supplied trusted HTTPS
+- Guest: an init process (`--init`) reaps orphaned children; a Multica CLI installation from the operator-supplied trusted HTTPS
   installer, plus `curl`, `ca-certificates`, `socat`, `git` and
   `openssh-client`.
 - Host: the same installer (or an already installed `multica` CLI) copied into
@@ -77,12 +77,19 @@ An existing container is adopted without changing it: Muster reads its id,
 configured mounts and `app_url` / `server_url`, and keeps its tools and login.
 Adoption only adds supervision and, if the host CLI is missing, the host CLI.
 
+See [container lifecycle repair](../container/README.md) for the pinned runtime
+patch and the attended migration of existing containers to `--init`.
+
 ## keep-alive, version and status
 
 - Keep-alive opts the container and daemon into `musterd`'s supervisor. The
   daemon then starts the container runtime and container when stopped,
   reconciles the bridge listener, token and provider wrappers, and starts the
   Multica daemon. Closing the app does not stop any of it.
+- Successful wrapper provisioning is cached per container incarnation and
+  configuration. Unchanged wrappers are rechecked every five minutes; a restart,
+  bridge/configuration/provider change or failed refresh invalidates the cache.
+  Daemon health probes keep their 15-second cadence.
 - With keep-alive off, Muster does not start stopped services; it still
   reconciles the runtime-bridge listener and wrappers without starting them, so
   a running container's next task uses the current bridge instead of a stale

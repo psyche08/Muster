@@ -265,21 +265,24 @@ async fn remove_legacy_alias(manager: &Manager, c: &Config) -> Result<(), Error>
     Ok(())
 }
 
-async fn refresh_wrappers(manager: &Manager, c: &Config) -> Result<(), Error> {
+async fn refresh_wrappers(
+    manager: &Manager,
+    c: &Config,
+    destinations: &[Destination; 2],
+) -> Result<(), Error> {
     let root = Path::new(&c.data_dir);
     let shared = if c.managed {
         PathBuf::from("/muster")
     } else {
         root.to_path_buf()
     };
-    for provider in ["codex", "claude"] {
+    for (provider, dest) in ["codex", "claude"].into_iter().zip(destinations) {
         let command = if provider == "claude" {
             "muster-native-claude"
         } else {
             "codex"
         };
-        let dest = destination(provider)?;
-        if dest == Destination::Unavailable {
+        if *dest == Destination::Unavailable {
             manager.command(&["exec",&c.container_name,"sh","-c","if [ -f \"$1\" ] && grep -q '^# Muster runtime bridge$' \"$1\"; then rm -- \"$1\"; fi","remove",&format!("/usr/local/bin/{command}")],10).await?;
             continue;
         }
@@ -291,7 +294,7 @@ async fn refresh_wrappers(manager: &Manager, c: &Config) -> Result<(), Error> {
                     "2.0.0 (Claude Code; Muster protocol compatibility)".to_string()
                 }
             }
-            Destination::Cli(program) => String::from_utf8(run(&program, &["--version"], 5).await?)
+            Destination::Cli(program) => String::from_utf8(run(program, &["--version"], 5).await?)
                 .map_err(|_| Error::Unavailable("CLI version is unreadable".into()))?,
             Destination::Unavailable => unreachable!(),
         };
@@ -324,6 +327,7 @@ pub(super) async fn ensure(
     c: &Config,
     socket: &Path,
     gateway: &str,
+    incarnation: &str,
 ) -> Result<(), Error> {
     if !Path::new(&c.data_dir).join("bin/multica").is_file() {
         return Err(Error::Unavailable(
@@ -332,7 +336,9 @@ pub(super) async fn ensure(
     }
     let mut bridge = manager.bridge.lock().await;
     let rebound = listen(&mut bridge, c, socket, gateway).await?;
-    refresh_wrappers(manager, c).await?;
+    let destinations = [destination("codex")?, destination("claude")?];
+    let bridge = bridge.as_mut().expect("listen publishes a bridge");
+    reconcile_wrappers(manager, c, incarnation, &destinations, bridge).await?;
     if rebound {
         remove_legacy_alias(manager, c).await?;
     }
@@ -342,7 +348,64 @@ pub(super) async fn ensure(
 /// A bridge listener and the container gateway it is bound to.
 pub(super) struct Bridge {
     gateway: String,
+    context: (String, String, bool, String),
+    wrappers: Option<WrapperRefresh>,
     pub(super) task: tokio::task::JoinHandle<()>,
+}
+
+fn bridge_context(c: &Config) -> (String, String, bool, String) {
+    (
+        c.container_name.clone(),
+        c.data_dir.clone(),
+        c.managed,
+        workspaces(c),
+    )
+}
+
+// Cache only successful provisioning. Never cache authorization or daemon health.
+const WRAPPER_RECHECK: Duration = Duration::from_secs(300);
+#[derive(PartialEq, Eq)]
+struct WrapperKey {
+    container: String,
+    incarnation: String,
+    data_dir: String,
+    managed: bool,
+    destinations: [Destination; 2],
+}
+struct WrapperRefresh {
+    key: WrapperKey,
+    at: std::time::Instant,
+}
+async fn reconcile_wrappers(
+    manager: &Manager,
+    c: &Config,
+    incarnation: &str,
+    destinations: &[Destination; 2],
+    bridge: &mut Bridge,
+) -> Result<(), Error> {
+    let key = WrapperKey {
+        container: c.container_name.clone(),
+        incarnation: incarnation.into(),
+        data_dir: c.data_dir.clone(),
+        managed: c.managed,
+        destinations: destinations.clone(),
+    };
+    // Missing incarnation evidence must not turn a restart into a cache hit.
+    if !incarnation.is_empty()
+        && bridge
+            .wrappers
+            .as_ref()
+            .is_some_and(|saved| saved.key == key && saved.at.elapsed() < WRAPPER_RECHECK)
+    {
+        return Ok(());
+    }
+    bridge.wrappers = None;
+    refresh_wrappers(manager, c, destinations).await?;
+    bridge.wrappers = Some(WrapperRefresh {
+        key,
+        at: std::time::Instant::now(),
+    });
+    Ok(())
 }
 
 /// Keep a listener on the container's current gateway and publish its port and
@@ -356,10 +419,9 @@ async fn listen(
     socket: &Path,
     gateway: &str,
 ) -> Result<bool, Error> {
-    if bridge
-        .as_ref()
-        .is_some_and(|b| b.gateway == gateway && !b.task.is_finished())
-    {
+    if bridge.as_ref().is_some_and(|b| {
+        b.gateway == gateway && b.context == bridge_context(c) && !b.task.is_finished()
+    }) {
         return Ok(false);
     }
     let (listener, port, token) = bind_bridge(gateway).await?;
@@ -374,6 +436,8 @@ async fn listen(
     let allowed = PathBuf::from(workspaces(c));
     *bridge = Some(Bridge {
         gateway: gateway.to_owned(),
+        context: bridge_context(c),
+        wrappers: None,
         task: spawn_bridge(
             listener,
             token,
@@ -494,7 +558,13 @@ async fn forward_cli<R: tokio::io::AsyncRead + Unpin, W: tokio::io::AsyncWrite +
 }
 
 #[cfg(not(unix))]
-pub(super) async fn ensure(_: &Manager, _: &Config, _: &Path, _: &str) -> Result<(), Error> {
+pub(super) async fn ensure(
+    _: &Manager,
+    _: &Config,
+    _: &Path,
+    _: &str,
+    _: &str,
+) -> Result<(), Error> {
     Err(Error::Unavailable("Apple container requires macOS".into()))
 }
 
@@ -862,6 +932,8 @@ mod tests {
         let stale_task = stale.abort_handle();
         let mut bridge = Some(Bridge {
             gateway: "192.168.64.1".into(),
+            context: bridge_context(&c),
+            wrappers: None,
             task: stale,
         });
         let launcher = credentials.join(format!("multica-{}", "b".repeat(32)));
@@ -894,6 +966,108 @@ mod tests {
             codex
         );
 
+        // A migrated root changes credential publication and the allowed root,
+        // even when the gateway stays unchanged.
+        let old_task = bridge.as_ref().unwrap().task.abort_handle();
+        let next_root = dir.path().join("migrated");
+        std::fs::create_dir_all(&next_root).unwrap();
+        let mut migrated = c.clone();
+        migrated.data_dir = next_root.to_string_lossy().into_owned();
+        assert!(
+            listen(&mut bridge, &migrated, &socket, "127.0.0.1")
+                .await
+                .unwrap()
+        );
+        assert!(old_task.is_finished());
+        assert!(next_root.join("bridge-token").is_file());
+        assert!(bridge.as_ref().unwrap().wrappers.is_none());
         bridge.unwrap().task.abort();
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn wrapper_reconciliation_is_bounded_and_retries_changes_and_failures() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("container");
+        std::fs::write(&script, "#!/bin/sh\nroot=$(dirname \"$0\")\nprintf '%s\\n' \"$*\" >> \"$root/calls\"\ntest ! -f \"$root/fail\"\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut manager = Manager::new(dir.path());
+        manager.executable = Some(script);
+        let c = Config {
+            data_dir: dir.path().to_string_lossy().into_owned(),
+            container_name: "test-container".into(),
+            ..Default::default()
+        };
+        let mut bridge = Bridge {
+            gateway: "127.0.0.1".into(),
+            context: bridge_context(&c),
+            wrappers: None,
+            task: tokio::spawn(std::future::pending()),
+        };
+        let available = [Destination::Desktop, Destination::Desktop];
+        let count = || {
+            std::fs::read_to_string(dir.path().join("calls"))
+                .unwrap()
+                .lines()
+                .count()
+        };
+        reconcile_wrappers(&manager, &c, "boot-a", &available, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(count(), 2);
+        for _ in 0..100 {
+            reconcile_wrappers(&manager, &c, "boot-a", &available, &mut bridge)
+                .await
+                .unwrap();
+        }
+        assert_eq!(count(), 2, "unchanged maintenance must not exec");
+        reconcile_wrappers(&manager, &c, "boot-b", &available, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(count(), 4, "same gateway after restart still reprovisions");
+        let unavailable = [Destination::Unavailable, Destination::Desktop];
+        reconcile_wrappers(&manager, &c, "boot-b", &unavailable, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(count(), 6, "provider removal invalidates the cache");
+        bridge.wrappers.as_mut().unwrap().at -= WRAPPER_RECHECK;
+        std::fs::write(dir.path().join("fail"), "").unwrap();
+        assert!(
+            reconcile_wrappers(&manager, &c, "boot-b", &unavailable, &mut bridge)
+                .await
+                .is_err()
+        );
+        assert!(bridge.wrappers.is_none());
+        std::fs::remove_file(dir.path().join("fail")).unwrap();
+        reconcile_wrappers(&manager, &c, "boot-b", &unavailable, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(
+            count(),
+            9,
+            "failed reconciliation retries without waiting five minutes"
+        );
+        bridge.wrappers.as_mut().unwrap().at -= WRAPPER_RECHECK;
+        reconcile_wrappers(&manager, &c, "boot-b", &unavailable, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(count(), 11, "bounded drift repair");
+        for _ in 0..2 {
+            reconcile_wrappers(&manager, &c, "", &available, &mut bridge)
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            count(),
+            15,
+            "unknown incarnation cannot reuse provisioning evidence"
+        );
+        let mut changed = c.clone();
+        changed.managed = true;
+        reconcile_wrappers(&manager, &changed, "boot-b", &available, &mut bridge)
+            .await
+            .unwrap();
+        assert_eq!(count(), 17);
+        bridge.task.abort();
     }
 }

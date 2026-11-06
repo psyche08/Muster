@@ -269,3 +269,5 @@ superseding decisions get new numbers and bidirectional links.
 
 | [0152](0152-install-1-1-26-for-desktop-session-acceptance.md) | Accepted; installation and acceptance pending | Install Apple 1.1.26 (116) to accept desktop session creation on the Macs |
 | [0153](0153-large-session-history-costs.md) | Accepted; source verified, device acceptance pending | Bound repeated cache, validation, provider history and display work |
+
+| [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; installation pending | Bound container exec resources and wrapper reconciliation |
