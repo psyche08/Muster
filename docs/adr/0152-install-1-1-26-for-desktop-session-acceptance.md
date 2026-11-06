@@ -1,7 +1,7 @@
 # ADR 0152: Install Apple 1.1.26 (116) for desktop session acceptance
 
 - Date: 2026-11-06
-- Status: Accepted; installation and acceptance pending
+- Status: Accepted; installed on the operator's Mac, acceptance continued in [ADR 0154](0154-wait-for-slow-codex-windows.md)
 - Related: [ADR 0150](0150-remote-desktop-session-creation.md) (desktop
   session creation), [ADR 0151](0151-session-reconciliation-and-retry-evidence.md),
   [ADR 0144](0144-local-release-and-independent-installation.md) (local build
@@ -103,4 +103,31 @@ After landing, record each of the following separately:
 - local creation in each provider's app;
 - creation from another Mac and on a locked Mac.
 
-No installation or acceptance result is claimed yet.
+### Evidence
+
+- **Source and build.** The build came from a clean, detached checkout of merge
+  `fe94b0c7`, and the daemon's build stamp is that commit.
+  `verify-release.sh` and the Presence signing check passed for both the
+  Xcode build and the packed bundle.
+- **Signing, notarization and Gatekeeper.**
+  - The bundle has the Developer ID signature and the Presence profile.
+  - Notarization was accepted as `ef4c0389-6250-49c0-8b51-a0e9e36f3905`.
+  - Stapling validated.
+  - The strict signature check passed.
+  - Gatekeeper reports "Notarized Developer ID".
+  - Hashes: zip `269884a4…3515`, daemon `982ed8c8…f16e`.
+- **Installation on the operator's Mac.** The ADR 0144 job finished:
+  - version 1.1.26 (116) and commit `fe94b0c7`;
+  - the same device id, fingerprint and Secure Enclave key backend;
+  - Accessibility granted, Relay registered, Vnet up;
+  - the scheduler recovered;
+  - no backup kept;
+  - the daemon now advertises `agent.native_create.v1`.
+- **Local creation.** Neither creation was submitted, and no session appeared
+  in either scratch directory. ADR 0154 records the measurements and the fix:
+  - Codex was rejected because a new ChatGPT window needed about 60 s to
+    render.
+  - Claude was refused because its new-session form held an unsent draft,
+    which was preserved.
+- **From another Mac and on a locked Mac.** Not run. Both remote Macs were
+  still unreachable.
