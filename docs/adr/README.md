@@ -242,6 +242,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0141](0141-multica-service-and-dsh-app-bridge-design.md) | Proposed; design only | Separate Multica session ownership, DSH App bridging and opt-in remote service |
 
+| [0142](0142-session-history-and-live-push-latency.md) | Accepted; source verified, installed acceptance pending | Keep session history and live pushes independent of catalog work |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

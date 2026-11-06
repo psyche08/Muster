@@ -122,6 +122,38 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
     out
 }
 
+pub(crate) fn scan_paths(home: &Path, paths: &[PathBuf]) -> Vec<Discovered> {
+    let archived = archived(home);
+    let root = home.join("sessions");
+    let mut dirs = HashSet::new();
+    for path in paths {
+        if root.starts_with(path) {
+            return scan(home);
+        }
+        let Ok(relative) = path.strip_prefix(&root) else {
+            continue;
+        };
+        let mut parts = relative.components();
+        let Some(project) = parts.next() else {
+            continue;
+        };
+        if let Some(id) = parts.next() {
+            dirs.insert(root.join(project).join(id));
+        } else {
+            dirs.extend(
+                std::fs::read_dir(root.join(project))
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path()),
+            );
+        }
+    }
+    dirs.iter()
+        .filter_map(|dir| session(home, dir, &archived))
+        .collect()
+}
+
 /// A session's id as the app writes it: `session-<uuid>` for a session a
 /// person started, a bare `<uuid>` for a subagent's (its directory carries
 /// the same name).

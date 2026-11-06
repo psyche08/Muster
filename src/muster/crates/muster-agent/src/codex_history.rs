@@ -35,7 +35,7 @@ pub(crate) fn merge(home: &Path, found: &mut Vec<Discovered>) {
         }
     }
 }
-fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
+pub(crate) fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
     let history = home.join("thread_history_1.sqlite");
     if !history.is_file() {
         return Ok(Vec::new());

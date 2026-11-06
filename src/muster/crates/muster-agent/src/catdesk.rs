@@ -90,7 +90,7 @@ pub fn scan(home: &Path) -> Vec<Discovered> {
     }
 }
 
-fn scan_db(db: &Path) -> rusqlite::Result<Vec<Discovered>> {
+pub(crate) fn scan_db(db: &Path) -> rusqlite::Result<Vec<Discovered>> {
     let conn = open(db)?;
     // One read snapshot for the session rows and their message counts.
     let tx = conn.unchecked_transaction()?;

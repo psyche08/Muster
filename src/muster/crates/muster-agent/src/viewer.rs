@@ -124,6 +124,12 @@ impl<T: Clone> HeadCache<T> {
         head
     }
 
+    /// Incremental passes retain only sources still present in the catalog.
+    pub(crate) fn retain(&mut self, paths: &std::collections::HashSet<PathBuf>) {
+        self.last.retain(|path, _| paths.contains(path));
+        self.this.retain(|path, _| paths.contains(path));
+    }
+
     /// Ends a pass: files it did not see are forgotten.
     pub fn finish(&mut self) {
         self.last = std::mem::take(&mut self.this);

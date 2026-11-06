@@ -113,95 +113,98 @@ pub use sessions::apply_desktop_relationships;
 pub struct Heads(HeadCache<Head>);
 
 pub fn scan(home: &Path, heads: &mut Heads) -> Vec<Discovered> {
-    let found = discover(home, &mut heads.0);
+    let found = discover(home, &mut heads.0, None);
     heads.0.finish();
-    found
+    newest(found)
 }
 
-fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
-    let projects = home.join("projects");
-    let Ok(rd) = std::fs::read_dir(&projects) else {
-        return Vec::new();
-    };
+pub(crate) fn newest(found: Vec<Discovered>) -> Vec<Discovered> {
     let mut by_id: HashMap<String, Discovered> = HashMap::new();
-    for project in rd.flatten() {
-        if !project.file_type().is_ok_and(|t| t.is_dir()) {
-            continue;
+    for row in found {
+        if by_id
+            .get(&row.id)
+            .is_none_or(|old| (row.modified, &row.path) > (old.modified, &old.path))
+        {
+            by_id.insert(row.id.clone(), row);
         }
-        let dir = project.path();
-        let archived = load_index(&dir.join("sessions-index.json"));
-        let Ok(files) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        let mut candidates = Vec::new();
-        for file in files.flatten().take(MAX_FILES) {
-            let path = file.path();
-            if file.file_type().is_ok_and(|t| t.is_file()) {
-                if let Some(id) = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .filter(|s| is_uuid(s))
-                    && path.extension().is_some_and(|s| s == "jsonl")
-                {
-                    candidates.push((path.clone(), id.to_ascii_lowercase(), None));
+    }
+    by_id.into_values().collect()
+}
+
+pub(crate) fn retain_heads(heads: &mut Heads, paths: &std::collections::HashSet<PathBuf>) {
+    heads.0.retain(paths);
+}
+
+pub(crate) fn scan_paths(home: &Path, heads: &mut Heads, paths: &[PathBuf]) -> Vec<Discovered> {
+    discover(home, &mut heads.0, Some(paths))
+}
+
+fn discover(
+    home: &Path,
+    heads: &mut HeadCache<Head>,
+    paths: Option<&[PathBuf]>,
+) -> Vec<Discovered> {
+    let projects = home.join("projects");
+    let dirs: HashSet<PathBuf> = match paths {
+        None => std::fs::read_dir(&projects)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .map(|e| e.path())
+            .collect(),
+        Some(paths) => paths
+            .iter()
+            .flat_map(|path| {
+                if projects.starts_with(path) {
+                    std::fs::read_dir(&projects)
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                        .map(|e| e.path())
+                        .collect::<Vec<_>>()
+                } else {
+                    path.strip_prefix(&projects)
+                        .ok()
+                        .and_then(|p| p.components().next())
+                        .map(|part| vec![projects.join(part)])
+                        .unwrap_or_default()
                 }
-            } else if file.file_type().is_ok_and(|t| t.is_dir())
-                && let Some(parent) = file
-                    .file_name()
-                    .to_str()
-                    .filter(|s| is_uuid(s))
-                    .map(str::to_ascii_lowercase)
-            {
-                for child in std::fs::read_dir(path.join("subagents"))
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .take(MAX_FILES)
-                {
-                    if !child.file_type().is_ok_and(|t| t.is_file()) {
-                        continue;
-                    }
-                    let name = child.file_name();
-                    let Some(agent) = name
-                        .to_str()
-                        .and_then(|s| s.strip_prefix("agent-"))
-                        .and_then(|s| s.strip_suffix(".jsonl"))
-                    else {
-                        continue;
-                    };
-                    if agent.is_empty()
-                        || agent.len() > 128
-                        || !agent
-                            .bytes()
-                            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-                    {
-                        continue;
-                    }
-                    candidates.push((
-                        child.path(),
-                        format!("claude-subagent:{parent}:{agent}"),
-                        Some(parent.clone()),
-                    ));
-                    if candidates.len() >= MAX_FILES {
+            })
+            .collect(),
+    };
+    let mut found = Vec::new();
+    for dir in dirs {
+        let archived = load_index(&dir.join("sessions-index.json"));
+        let mut candidates = Vec::new();
+        match paths {
+            None => collect_candidates(&dir, &dir, &mut candidates),
+            Some(paths) => {
+                for path in paths {
+                    if dir.starts_with(path) {
+                        collect_candidates(&dir, &dir, &mut candidates);
                         break;
                     }
+                    if path.starts_with(&dir) {
+                        collect_candidates(&dir, path, &mut candidates);
+                    }
                 }
             }
-            if candidates.len() >= MAX_FILES {
-                break;
-            }
         }
+        candidates.sort();
+        candidates.dedup();
         for (path, id, parent_id) in candidates {
-            if by_id.len() >= MAX_FILES {
+            if paths.is_some_and(|paths| !paths.iter().any(|changed| path.starts_with(changed))) {
+                continue;
+            }
+            if found.len() >= MAX_FILES {
                 break;
             }
             let Ok(meta) = std::fs::metadata(&path) else {
                 continue;
             };
             let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-            if by_id.get(&id).is_some_and(|d| d.modified >= modified) {
-                continue;
-            }
             let head = heads.get(&path, modified, meta.len(), Head::read);
             let title = head
                 .title
@@ -209,32 +212,91 @@ fn discover(home: &Path, heads: &mut HeadCache<Head>) -> Vec<Discovered> {
                 .or(head.first_prompt.clone())
                 .unwrap_or_else(|| format!("session {}", &id[..8]));
             let archived = archived.contains(&id) || head.archived;
-            by_id.insert(
-                id.clone(),
-                Discovered {
-                    id,
-                    provider: Provider::Claude,
-                    modified,
-                    size: meta.len(),
+            found.push(Discovered {
+                id,
+                provider: Provider::Claude,
+                modified,
+                size: meta.len(),
+                archived,
+                hidden: head.sidechain || parent_id.is_some(),
+                relation: if parent_id.is_some() { "subagent" } else { "" },
+                parent_id,
+                custom_title: head.custom_title && head.title.is_some(),
+                meta: SessionMeta {
+                    title,
+                    cwd: head.cwd.clone().unwrap_or_default(),
+                    updated_unix: 0,
                     archived,
-                    hidden: head.sidechain || parent_id.is_some(),
-                    relation: if parent_id.is_some() { "subagent" } else { "" },
-                    parent_id,
-                    custom_title: head.custom_title && head.title.is_some(),
-                    meta: SessionMeta {
-                        title,
-                        cwd: head.cwd.clone().unwrap_or_default(),
-                        updated_unix: 0,
-                        archived,
-                        state: SessionState::Idle,
-                    },
-                    entrypoint: head.entrypoint.clone(),
-                    path,
+                    state: SessionState::Idle,
                 },
-            );
+                entrypoint: head.entrypoint.clone(),
+                path,
+            });
         }
     }
-    by_id.into_values().collect()
+    found
+}
+
+/// A changed file is inspected directly; a created/moved directory is walked
+/// only through the provider's project/session/subagents layout.
+fn collect_candidates(
+    project: &Path,
+    path: &Path,
+    out: &mut Vec<(PathBuf, String, Option<String>)>,
+) {
+    if out.len() >= MAX_FILES {
+        return;
+    }
+    let Ok(relative) = path.strip_prefix(project) else {
+        return;
+    };
+    let parts: Vec<_> = relative.iter().filter_map(|p| p.to_str()).collect();
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return;
+    };
+    if meta.is_dir() {
+        let allowed = parts.is_empty()
+            || (parts.len() == 1 && is_uuid(parts[0]))
+            || (parts.len() == 2 && is_uuid(parts[0]) && parts[1] == "subagents");
+        if allowed {
+            for entry in std::fs::read_dir(path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .take(MAX_FILES)
+            {
+                collect_candidates(project, &entry.path(), out);
+            }
+        }
+    } else if meta.is_file() && path.extension().is_some_and(|s| s == "jsonl") {
+        if parts.len() == 1 {
+            if let Some(id) = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|s| is_uuid(s))
+            {
+                out.push((path.to_owned(), id.to_ascii_lowercase(), None));
+            }
+        } else if parts.len() == 3 && is_uuid(parts[0]) && parts[1] == "subagents" {
+            if let Some(agent) = parts[2]
+                .strip_prefix("agent-")
+                .and_then(|s| s.strip_suffix(".jsonl"))
+                .filter(|s| {
+                    !s.is_empty()
+                        && s.len() <= 128
+                        && s.bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+                })
+            {
+                let parent = parts[0].to_ascii_lowercase();
+                out.push((
+                    path.to_owned(),
+                    format!("claude-subagent:{parent}:{agent}"),
+                    Some(parent),
+                ));
+            }
+        }
+    }
 }
 
 /// Claude.app records every Code conversation it can show under
