@@ -244,6 +244,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0142](0142-session-history-and-live-push-latency.md) | Accepted; source verified, installed acceptance pending | Keep session history and live pushes independent of catalog work |
 
+| [0143](0143-paired-release-1-1-23.md) | Accepted; release execution pending | Publish Apple 1.1.23 (113) from main and install the fleet |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
