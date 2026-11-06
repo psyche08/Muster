@@ -248,6 +248,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0144](0144-local-release-and-independent-installation.md) | Accepted; three Mac installations verified | Local Apple release and independent installation jobs |
 
+| [0145](0145-isolate-slow-subscriptions-and-bound-chat-entry.md) | Accepted; source verified, release pending | Isolate slow subscriptions and bound chat entry history |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;

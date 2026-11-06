@@ -498,7 +498,7 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         .wait(|v| {
             v.chat
                 .as_ref()
-                .is_some_and(|c| !c.loading && c.message_count == 500 && c.has_earlier)
+                .is_some_and(|c| !c.loading && c.message_count == 50 && c.has_earlier)
         })
         .await;
     core.intent(app::Intent {

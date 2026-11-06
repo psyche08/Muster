@@ -1093,7 +1093,7 @@ fn reopening_a_large_gap_reaches_latest_in_two_requests_then_streams_in_order() 
         Some(true)
     );
     assert!(catch_up.reset);
-    assert_eq!(catch_up.messages, all[9_500..]);
+    assert_eq!(catch_up.messages, all[9_950..]);
     // Events that overlapped the catch-up must not duplicate the tail; later
     // messages remain incremental and preserve the stream's order.
     let mut queued = [all[9_999].clone(), message("10000", "assistant")]
@@ -1112,11 +1112,11 @@ fn reopening_a_large_gap_reaches_latest_in_two_requests_then_streams_in_order() 
         &v1::AgentMessagesRequest {
             session: "s".into(),
             tail: 500,
-            before_id: "9500".into(),
+            before_id: "9950".into(),
             ..Default::default()
         },
     );
-    assert_eq!(earlier.messages, all[9_000..9_500]);
+    assert_eq!(earlier.messages, all[9_450..9_950]);
 }
 
 #[test]

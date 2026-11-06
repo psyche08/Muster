@@ -151,7 +151,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                 let attempt = async {
                     let client = tokio::time::timeout(
                         Duration::from_secs(3),
-                        backend.client_for(&device, &self_id),
+                        backend.watch_client_for(&device, &self_id),
                     )
                     .await
                     .map_err(|_| Error::Unavailable("catalog connection timed out".into()))??;
@@ -511,7 +511,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
             let attempt = async {
                 let client = tokio::time::timeout(
                     Duration::from_secs(3),
-                    backend.client_for(&device, &self_id),
+                    backend.watch_client_for(&device, &self_id),
                 )
                 .await
                 .map_err(|_| Error::Unavailable("session connection timed out".into()))??;
@@ -569,11 +569,19 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     }
                 };
                 dispatch(first, &mut queued);
+                // History uses the reusable request stream, independently of
+                // live subscriptions on the same underlying peer connection.
+                let history_client = tokio::time::timeout(
+                    Duration::from_secs(3),
+                    backend.client_for(&device, &self_id),
+                )
+                .await
+                .map_err(|_| Error::Unavailable("session history connection timed out".into()))??;
                 let has_more = loop {
                     let request = catch_up.request(&session_id);
                     let snapshot = tokio::time::timeout(
                         Duration::from_secs(15),
-                        unary(&client, Req::AgentMessages(request)),
+                        unary(&history_client, Req::AgentMessages(request)),
                     );
                     tokio::pin!(snapshot);
                     let response = loop {
@@ -1185,9 +1193,10 @@ pub(super) fn chat_failure(state: &State, device: &str, error: &Error) -> String
 /// The open chat's member came back: a watch waiting out its retry delay
 /// reconnects now instead.
 pub(super) fn rewatch_returned_member(state: &mut State, ctx: &Ctx, returned: &[String]) {
-    let waiting = state.chat.as_ref().is_some_and(|chat| {
-        !chat.load_error.is_empty() && returned.contains(&chat.device)
-    });
+    let waiting = state
+        .chat
+        .as_ref()
+        .is_some_and(|chat| !chat.load_error.is_empty() && returned.contains(&chat.device));
     if waiting
         && state.on_path(Screen::Chat)
         && let Some((device, session)) = state.chat_target()

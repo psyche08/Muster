@@ -43,7 +43,7 @@ pub enum Backend {
     Embedded {
         daemon: Arc<Daemon>,
         local: Client,
-        remotes: Mutex<HashMap<String, Client>>,
+        remotes: muster_rpc::PeerClients,
     },
     Socket {
         path: PathBuf,
@@ -168,6 +168,21 @@ impl Backend {
 
     /// A client for `device` (hex id): this device itself, or a member.
     pub async fn client_for(&self, device: &str, self_id: &str) -> Result<Client, Error> {
+        self.client_for_traffic(device, self_id, muster_rpc::Traffic::Requests)
+            .await
+    }
+
+    pub async fn watch_client_for(&self, device: &str, self_id: &str) -> Result<Client, Error> {
+        self.client_for_traffic(device, self_id, muster_rpc::Traffic::Subscriptions)
+            .await
+    }
+
+    async fn client_for_traffic(
+        &self,
+        device: &str,
+        self_id: &str,
+        traffic: muster_rpc::Traffic,
+    ) -> Result<Client, Error> {
         if device.is_empty() || device == self_id {
             return Ok(self.local());
         }
@@ -176,7 +191,16 @@ impl Backend {
             Backend::Embedded {
                 daemon, remotes, ..
             } => {
-                if let Some(client) = remotes.lock().unwrap().get(device)
+                let slot = remotes
+                    .lock()
+                    .unwrap()
+                    .entry((device.to_owned(), traffic))
+                    .or_default()
+                    .clone();
+                // Only opens in this traffic class wait for one another. Other
+                // classes can open concurrently on the same peer connection.
+                let mut slot = slot.lock().await;
+                if let Some(client) = &*slot
                     && !client.is_closed()
                 {
                     return Ok(client.clone());
@@ -193,10 +217,7 @@ impl Backend {
                 .map_err(|_| Error::Unavailable("the device did not answer".into()))?
                 .map_err(|e| Error::Unavailable(format!("link: {e}")))?;
                 let client = Client::new(tokio::io::join(recv, send));
-                remotes
-                    .lock()
-                    .unwrap()
-                    .insert(device.to_string(), client.clone());
+                *slot = Some(client.clone());
                 Ok(client)
             }
         }
@@ -207,12 +228,15 @@ impl Backend {
     /// desktop's daemon forgets its own forwarding link (muster-rpc `proxy`).
     pub fn discard(&self, device: &str, client: &Client) {
         if let Backend::Embedded { remotes, .. } = self {
-            let mut remotes = remotes.lock().unwrap();
-            if remotes
-                .get(device)
-                .is_some_and(|cached| cached.same_connection(client))
-            {
-                remotes.remove(device);
+            for ((peer, _), slot) in remotes.lock().unwrap().iter() {
+                if peer == device
+                    && let Ok(mut slot) = slot.try_lock()
+                    && slot
+                        .as_ref()
+                        .is_some_and(|cached| cached.same_connection(client))
+                {
+                    *slot = None;
+                }
             }
         }
     }
@@ -250,10 +274,13 @@ impl Backend {
         } = self
         {
             daemon.network_changed();
-            remotes
-                .lock()
-                .unwrap()
-                .retain(|_, client| !client.is_closed());
+            for slot in remotes.lock().unwrap().values() {
+                if let Ok(mut slot) = slot.try_lock()
+                    && slot.as_ref().is_some_and(Client::is_closed)
+                {
+                    *slot = None;
+                }
+            }
         }
     }
 
