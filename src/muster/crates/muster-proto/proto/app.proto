@@ -90,6 +90,7 @@ message Intent {
 
     SetPushToken set_push_token = 60;
     SessionViewApplied session_view_applied = 135;
+    NativeCreate native_create = 136;
   }
 }
 
@@ -209,6 +210,14 @@ message SelectDevice {
 }
 
 message OrcaCreate { string device_id = 1; string directory = 2; string agent = 3; }
+// A new desktop (Code mode) session in the provider's own app on a Mac,
+// started by its first message (ADR 0150). It starts no CLI.
+message NativeCreate {
+  string device_id = 1;
+  string provider = 2;  // codex | claude
+  string directory = 3; // absolute, on that Mac
+  string prompt = 4;    // the session's first message
+}
 message AgentCatalogAction {
   enum Kind { SEARCH = 0; TOGGLE_SECTION = 1; TOGGLE_FAMILY = 2; SEARCH_MORE = 3; LOAD_MORE = 4; }
   Kind kind = 1;
@@ -631,6 +640,13 @@ message AgentsView {
   repeated muster.v1.MemberView create_hosts = 5;
   repeated string create_agents = 6;
   bool creating = 7;
+  // Desktop session creation (ADR 0150): the desktops it can target, the
+  // apps it creates in, whether one is under way, and the input of the last
+  // one that was refused, to correct and submit again.
+  repeated muster.v1.MemberView native_create_hosts = 14;
+  repeated string native_create_apps = 15;
+  bool native_creating = 16;
+  NativeCreate native_create_draft = 17;
   repeated string errors = 4;
   string device_id = 1;
   repeated muster.v1.AgentSession sessions = 2;

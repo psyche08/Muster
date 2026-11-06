@@ -353,6 +353,7 @@ message LockedUseOperation {
     AgentCompleteRequest complete = 12;
     TerminalCreateRequest terminal_create = 13;
     AgentOrganizeRequest organize = 14;
+    AgentNativeCreateRequest native_create = 15;
   }
   // Empty: one operation. Otherwise presence also authorizes this requester's
   // subsequent native operations for this provider during the same lease.
@@ -1170,7 +1171,10 @@ message MulticaPage {
   uint32 next_offset = 12; uint32 previous_offset = 13;
 }
 
-// Local-owner desktop creation used by the scheduler bridge. No CLI fallback.
+// A new desktop (Code mode) session in the provider's own app, from its
+// first message. The scheduler bridge uses it locally; a member with the
+// provider's Agent control uses it remotely, through Locked Use when the Mac
+// is locked (ADR 0150). One submission per op_id; no CLI fallback.
 message AgentNativeCreateRequest {
   string op_id = 1;
   string provider = 2;

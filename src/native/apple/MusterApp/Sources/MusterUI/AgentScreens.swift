@@ -11,6 +11,7 @@ struct AgentsView: View {
     let devices: [Muster_V1_MemberView]
     let shown: String
     @State private var creating = false
+    @State private var creatingDesktop = false
 
     init(core: MusterCore, vm: ViewModel) {
         self.core = core
@@ -27,6 +28,11 @@ struct AgentsView: View {
                 Button { creating = true } label: {
                     Label(agents.creating ? "Creating CLI session…" : "New CLI session", systemImage: "plus.bubble")
                 }.disabled(agents.creating)
+            }
+            if !agents.nativeCreateHosts.isEmpty {
+                Button { creatingDesktop = true } label: {
+                    Label(agents.nativeCreating ? "Creating desktop session…" : "New desktop session", systemImage: "macwindow.badge.plus")
+                }.disabled(agents.nativeCreating)
             }
             if agents.loading || agents.searching {
                 HStack { ProgressView(); Text(agents.searching ? "Searching conversations…" : "Loading sessions…").foregroundStyle(.secondary) }
@@ -60,6 +66,10 @@ struct AgentsView: View {
         .refreshable { core.openAgents(device: agents.deviceID) }
         .sheet(isPresented: $creating) {
             OrcaCreateSheet(core: core, hosts: agents.createHosts, agents: agents.createAgents)
+        }
+        .sheet(isPresented: $creatingDesktop) {
+            NativeCreateSheet(core: core, hosts: agents.nativeCreateHosts, apps: agents.nativeCreateApps,
+                              draft: agents.hasNativeCreateDraft ? agents.nativeCreateDraft : nil)
         }
     }
 
@@ -215,6 +225,60 @@ private struct OrcaCreateSheet: View {
             }
             .onAppear { device = hosts.first?.deviceID ?? ""; agent = agents.first ?? "" }
         }.frame(minWidth: 350, minHeight: 270)
+    }
+}
+
+/// A Code mode session in Claude or Codex on a Mac, started by its first
+/// message. A locked Mac asks for authentication first (ADR 0150).
+private struct NativeCreateSheet: View {
+    let core: MusterCore
+    let hosts: [Muster_V1_MemberView]
+    let apps: [String]
+    let draft: Muster_App_NativeCreate?
+    @Environment(\.dismiss) private var dismiss
+    @State private var device = ""
+    @State private var provider = ""
+    @State private var directory = ""
+    @State private var prompt = ""
+    private var ready: Bool {
+        hosts.contains { $0.deviceID == device } && apps.contains(provider)
+            && directory.trimmingCharacters(in: .whitespaces).hasPrefix("/")
+            && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Mac", selection: $device) {
+                    ForEach(hosts, id: \.deviceID) { Text($0.name).tag($0.deviceID) }
+                }
+                Picker("App", selection: $provider) {
+                    ForEach(apps, id: \.self) { Text($0.capitalized).tag($0) }
+                }
+                TextField("Absolute directory on that Mac", text: $directory)
+                    .autocorrectionDisabled()
+                Section("First message") {
+                    TextEditor(text: $prompt).frame(minHeight: 100)
+                }
+                Text("Opens a new Code session in the app on that Mac and sends the first message. The app must be installed and signed in there, and the directory must exist. A locked Mac asks you to authenticate first; the session is never submitted twice.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .navigationTitle("New desktop session")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        core.createDesktopSession(device: device, provider: provider, directory: directory, prompt: prompt)
+                        dismiss()
+                    }.disabled(!ready)
+                }
+            }
+            .onAppear {
+                device = hosts.first(where: { $0.deviceID == draft?.deviceID })?.deviceID ?? hosts.first?.deviceID ?? ""
+                provider = apps.first(where: { $0 == draft?.provider }) ?? apps.first ?? ""
+                directory = draft?.directory ?? ""
+                prompt = draft?.prompt ?? ""
+            }
+        }.frame(minWidth: 380, minHeight: 360)
     }
 }
 

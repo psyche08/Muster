@@ -12,7 +12,7 @@ use std::time::Duration;
 #[cfg(target_os = "macos")]
 const UNLOCKED_RECEIPT: Duration = Duration::from_secs(15);
 
-fn validate(r: &v1::AgentNativeCreateRequest) -> Result<(), Error> {
+pub(crate) fn validate(r: &v1::AgentNativeCreateRequest) -> Result<(), Error> {
     if r.op_id.is_empty()
         || r.prompt.trim().is_empty()
         || r.prompt.len() > 1024 * 1024

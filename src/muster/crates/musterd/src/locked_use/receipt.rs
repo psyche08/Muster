@@ -1,31 +1,102 @@
 //! Read-only settlement after the owner has returned its result. One-shot
 //! owners return only after their OS-work barrier, relock and cover cleanup.
 //! This holds no console permit and never calls a controller or ledger.begin.
+//! A send settles on its confirmed ledger row. A desktop session creation
+//! also settles on its transcript receipt, the unique new session showing
+//! its first message, which it records in its own ledger row (ADR 0150).
 use super::*;
 use muster_proto::Message;
+
+#[derive(Clone)]
+enum Awaited {
+    Send(v1::AgentSendRequest),
+    /// `lookup` names the directory as transcripts do; `baseline` holds the
+    /// sessions already there, which cannot be this creation's receipt.
+    Create {
+        request: v1::AgentNativeCreateRequest,
+        lookup: v1::AgentNativeCreateRequest,
+        baseline: Vec<String>,
+    },
+}
+
+impl Awaited {
+    fn op_id(&self) -> &str {
+        match self {
+            Awaited::Send(r) => &r.op_id,
+            Awaited::Create { request, .. } => &request.op_id,
+        }
+    }
+
+    fn kind(&self) -> &'static str {
+        match self {
+            Awaited::Send(_) => "agent.send",
+            Awaited::Create { .. } => "agent.native_create",
+        }
+    }
+
+    fn request(&self) -> Req {
+        match self {
+            Awaited::Send(r) => Req::AgentSend(r.clone()),
+            Awaited::Create { request, .. } => Req::AgentNativeCreate(request.clone()),
+        }
+    }
+
+    /// How long, and how often, the receipt is looked for. A new session
+    /// gets the scheduler's read-only window (ADR 0097).
+    fn wait(&self) -> (Duration, Duration) {
+        match self {
+            Awaited::Send(_) => (Duration::from_secs(18), Duration::from_millis(100)),
+            Awaited::Create { .. } => (crate::scheduler::AFTER_RECEIPT, Duration::from_millis(500)),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct ReceiptWait {
     daemon: Weak<Daemon>,
     peer: DeviceId,
-    request: v1::AgentSendRequest,
+    awaited: Awaited,
     hash: [u8; 32],
 }
 impl ReceiptWait {
     pub fn new(daemon: &Arc<Daemon>, peer: DeviceId, req: &Req) -> Option<Self> {
-        let Req::AgentSend(request) = req else {
-            return None;
+        let (awaited, body) = match req {
+            Req::AgentSend(request) => {
+                if request.op_id.is_empty()
+                    || muster_agent::desktop_chat::app_of(&request.session).is_some()
+                {
+                    return None;
+                }
+                (Awaited::Send(request.clone()), request.encode_to_vec())
+            }
+            Req::AgentNativeCreate(request) if !request.op_id.is_empty() => {
+                // Taken before the creation runs, so no session it makes is in it.
+                let directory = std::fs::canonicalize(&request.directory)
+                    .ok()?
+                    .to_str()?
+                    .to_owned();
+                let lookup = v1::AgentNativeCreateRequest {
+                    directory,
+                    ..request.clone()
+                };
+                let baseline =
+                    crate::native_create::baseline(daemon, &lookup.provider, &lookup.directory);
+                (
+                    Awaited::Create {
+                        request: request.clone(),
+                        lookup,
+                        baseline,
+                    },
+                    request.encode_to_vec(),
+                )
+            }
+            _ => return None,
         };
-        if request.op_id.is_empty()
-            || muster_agent::desktop_chat::app_of(&request.session).is_some()
-        {
-            return None;
-        }
         Some(Self {
             daemon: Arc::downgrade(daemon),
             peer,
-            hash: muster_store::Ledger::body_hash(&request.encode_to_vec()),
-            request: request.clone(),
+            hash: muster_store::Ledger::body_hash(&body),
+            awaited,
         })
     }
 
@@ -43,10 +114,9 @@ impl ReceiptWait {
             return result;
         }
         let started = Instant::now();
-        log::info!(
-            "Agent receipt op={:?}: native work ended; waiting read-only",
-            self.request.op_id
-        );
+        let (op_id, kind) = (self.awaited.op_id(), self.awaited.kind());
+        let (budget, interval) = self.awaited.wait();
+        log::info!("Agent receipt op={op_id:?}: native work ended; waiting read-only");
         loop {
             if cancel.is_cancelled() {
                 return result;
@@ -55,10 +125,8 @@ impl ReceiptWait {
                 return result;
             };
             // Reading an outcome must not survive membership/provider revocation.
-            let permission = crate::handler::locked_operation_permission(
-                &daemon,
-                &Req::AgentSend(self.request.clone()),
-            )?;
+            let permission =
+                crate::handler::locked_operation_permission(&daemon, &self.awaited.request())?;
             if muster_core::authorize(
                 daemon.roster().read().unwrap().state(),
                 &self.peer,
@@ -67,18 +135,42 @@ impl ReceiptWait {
                 &muster_core::TargetState { locked: false },
             ) != muster_core::Decision::Allow
             {
-                return Err(Error::Unauthorized("Send receipt access revoked".into()));
+                return Err(Error::Unauthorized(match self.awaited {
+                    Awaited::Send(_) => "Send receipt access revoked".into(),
+                    Awaited::Create { .. } => "Creation receipt access revoked".into(),
+                }));
             }
-            if let Some(bytes) = daemon.store().ledger().confirmed_result(
-                &self.request.op_id,
-                "agent.send",
-                &self.hash,
-            )? {
+            let ledger = daemon.store().ledger();
+            let mut confirmed = ledger.confirmed_result(op_id, kind, &self.hash)?;
+            if confirmed.is_none()
+                && let Awaited::Create {
+                    lookup, baseline, ..
+                } = &self.awaited
+                // Only a creation that reached its still undecided ledger row
+                // can have a receipt.
+                && matches!(ledger.status(op_id)?.as_deref(), Some("pending" | "unknown"))
+            {
+                match crate::native_create::receipt(&daemon, lookup, baseline).await {
+                    Ok(Some(session)) => {
+                        if ledger
+                            .confirm(op_id, kind, &self.hash, session.as_bytes())
+                            .is_ok()
+                        {
+                            confirmed = Some(session.into_bytes());
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        log::warn!("Agent receipt op={op_id:?}: not binding a receipt: {error}");
+                        return result;
+                    }
+                }
+            }
+            if let Some(bytes) = confirmed {
                 let session = String::from_utf8(bytes)
-                    .map_err(|_| Error::Unavailable("Invalid send receipt".into()))?;
+                    .map_err(|_| Error::Unavailable("Invalid receipt".into()))?;
                 log::info!(
-                    "Agent receipt op={:?}: confirmed after native cleanup elapsed_ms={}",
-                    self.request.op_id,
+                    "Agent receipt op={op_id:?}: confirmed after native cleanup elapsed_ms={}",
                     started.elapsed().as_millis()
                 );
                 return Ok(Resp::OpResult(v1::OpResult {
@@ -87,12 +179,12 @@ impl ReceiptWait {
                     ..Default::default()
                 }));
             }
-            if started.elapsed() >= Duration::from_secs(18) {
+            if started.elapsed() >= budget {
                 return result;
             }
             tokio::select! {
                 _ = cancel.cancelled() => return result,
-                _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+                _ = tokio::time::sleep(interval) => {}
             }
         }
     }
@@ -136,7 +228,7 @@ mod tests {
         let wait = ReceiptWait {
             daemon: Arc::downgrade(&daemon),
             peer,
-            request: request.clone(),
+            awaited: Awaited::Send(request.clone()),
             hash,
         };
         let receipt = tokio::spawn(wait.clone().settle(

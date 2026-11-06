@@ -2810,3 +2810,136 @@ fn new_subscription_replaces_stale_card_handles_only_for_its_live_source() {
     assert!(chat.response_unknown);
     assert_eq!(chat.response_interaction, "old-approval");
 }
+
+/// A desktop session is asked for only on an online Mac, in a supported app,
+/// with an absolute directory and a first message. A refusal keeps the input
+/// to correct; an unknown outcome drops it so it is not submitted twice.
+#[tokio::test]
+async fn desktop_session_creation_validates_first_and_keeps_only_refused_input() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.network = Some(network_of(vec![
+        mac("mini", "online"),
+        mac("pro", "offline"),
+        v1::MemberView {
+            kind: "server".into(),
+            ..mac("box", "online")
+        },
+    ]));
+    let view = crate::render::view_model(&state).agents.unwrap();
+    let hosts: Vec<_> = view
+        .native_create_hosts
+        .iter()
+        .map(|m| m.device_id.as_str())
+        .collect();
+    assert_eq!(hosts, ["mini"], "only an online Mac hosts a desktop app");
+    assert_eq!(view.native_create_apps, ["claude", "codex"]);
+    let input = app::NativeCreate {
+        device_id: "mini".into(),
+        provider: "codex".into(),
+        directory: " /srv/example ".into(),
+        prompt: "Synthetic first message".into(),
+    };
+    for invalid in [
+        app::NativeCreate {
+            device_id: "pro".into(),
+            ..input.clone()
+        },
+        app::NativeCreate {
+            device_id: "box".into(),
+            ..input.clone()
+        },
+        app::NativeCreate {
+            provider: "unsupported".into(),
+            ..input.clone()
+        },
+        app::NativeCreate {
+            directory: "example".into(),
+            ..input.clone()
+        },
+        app::NativeCreate {
+            prompt: " \n".into(),
+            ..input.clone()
+        },
+    ] {
+        let toasts = state.toasts.len();
+        native_create::create(&mut state, &ctx, invalid);
+        assert!(!state.agents.native_creating);
+        assert!(state.agents.native_create_draft.is_none());
+        assert_eq!(state.toasts.len(), toasts + 1);
+    }
+    native_create::create(&mut state, &ctx, input.clone());
+    assert!(state.agents.native_creating);
+    assert_eq!(
+        state.agents.native_create_draft.as_ref().unwrap().directory,
+        "/srv/example"
+    );
+    // One creation at a time.
+    let toasts = state.toasts.len();
+    native_create::create(
+        &mut state,
+        &ctx,
+        app::NativeCreate {
+            prompt: "Another message".into(),
+            ..input.clone()
+        },
+    );
+    assert_eq!(state.toasts.len(), toasts);
+    assert_eq!(
+        state.agents.native_create_draft.as_ref().unwrap().prompt,
+        input.prompt
+    );
+    // Another flow's cancelled authentication is not this creation's.
+    native_create::not_dispatched(&mut state, "send");
+    assert!(state.agents.native_creating);
+    let rejected = |message: &str| {
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Rejected as i32,
+            message: message.into(),
+            ..Default::default()
+        })
+    };
+    native_create::done(
+        &mut state,
+        &ctx,
+        "mini".into(),
+        rejected("Native app is not allowlisted"),
+    );
+    assert!(!state.agents.native_creating);
+    assert!(state.agents.native_create_draft.is_some());
+    assert!(
+        state
+            .toasts
+            .last()
+            .unwrap()
+            .text
+            .contains("not allowlisted")
+    );
+    // Authentication that ends before dispatch creates nothing.
+    native_create::create(&mut state, &ctx, input.clone());
+    native_create::not_dispatched(&mut state, "native_create");
+    assert!(!state.agents.native_creating);
+    assert!(state.agents.native_create_draft.is_some());
+    // The app may have the session: its input is not offered again.
+    native_create::create(&mut state, &ctx, input.clone());
+    native_create::done(
+        &mut state,
+        &ctx,
+        "mini".into(),
+        Ok(v1::OpResult {
+            status: v1::op_result::Status::Unknown as i32,
+            ..Default::default()
+        }),
+    );
+    assert!(!state.agents.native_creating);
+    assert!(state.agents.native_create_draft.is_none());
+    assert!(
+        state
+            .toasts
+            .last()
+            .unwrap()
+            .text
+            .contains("not submitted again")
+    );
+    let view = crate::render::view_model(&state).agents.unwrap();
+    assert!(!view.native_creating && view.native_create_draft.is_none());
+}

@@ -179,6 +179,10 @@ public final class MusterCore: MusterShell {
     public func createOrcaSession(device: String, directory: String, agent: String) {
         send(.orcaCreate(Muster_App_OrcaCreate.with { $0.deviceID = device; $0.directory = directory; $0.agent = agent }))
     }
+    /// A new Code mode session in the provider's own desktop app on that Mac, started by its first message.
+    public func createDesktopSession(device: String, provider: String, directory: String, prompt: String) {
+        send(.nativeCreate(Muster_App_NativeCreate.with { $0.deviceID = device; $0.provider = provider; $0.directory = directory; $0.prompt = prompt }))
+    }
     public func openAgent(_ session: String, device: String = "") {
         send(.openAgent(Muster_App_OpenAgent.with { $0.session = session; $0.deviceID = device }))
     }
