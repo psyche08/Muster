@@ -9,6 +9,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// How long a window may take to show its renderer before navigation. A new
+/// ChatGPT window renders only after its feature-flag bootstrap, which reached
+/// its 60 s deadline on every window of one Mac (ADR 0154). Nothing has been
+/// navigated or typed while this runs, and the guard still stops on input.
+const WINDOW_STARTUP: Duration = Duration::from_secs(90);
+
 fn unavailable(s: impl Into<String>) -> Error {
     Error::Unavailable(s.into())
 }
@@ -149,7 +155,7 @@ async fn settled_windows(
     root: &Element,
     require_renderer: bool,
 ) -> Result<Vec<Element>, Error> {
-    let until = Instant::now() + Duration::from_secs(25);
+    let until = Instant::now() + WINDOW_STARTUP;
     let mut previous = windows(root);
     let mut stable = Instant::now();
     let mut accessibility_enabled = false;
@@ -196,7 +202,7 @@ async fn settled_windows(
 // Electron can publish its native window/menu before its renderer subscribes
 // to navigation. Do not dispatch a directory route into that startup interval.
 async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Result<(), Error> {
-    let deadline = Instant::now() + Duration::from_secs(25);
+    let deadline = Instant::now() + WINDOW_STARTUP;
     let mut ready_since = None;
     loop {
         guard.check()?;
