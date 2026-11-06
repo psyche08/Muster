@@ -60,8 +60,12 @@ pub(super) fn cache_chat(ctx: &Ctx, chat: &Chat) {
         chat.cache_key.clone(),
         &v1::AgentMessagePage {
             session: chat.session.id.clone(),
-            messages: chat.messages.clone(),
-            has_more: chat.has_earlier,
+            messages: chat.messages[chat
+                .messages
+                .len()
+                .saturating_sub(crate::state::CHAT_HISTORY_PAGE)..]
+                .to_vec(),
+            has_more: chat.has_earlier || chat.messages.len() > crate::state::CHAT_HISTORY_PAGE,
             ..Default::default()
         },
     );
@@ -307,11 +311,11 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
             key: draft_key,
             ..Default::default()
         });
-    let key = cache_key(state, "messages", &device, &session_id);
-    let cached = ctx
-        .cache
-        .get::<v1::AgentMessagePage>(&key)
-        .unwrap_or_default();
+    // A new namespace avoids synchronously decoding legacy whole-session entries.
+    let key = format!(
+        "history-{}",
+        cache_key(state, "recent-messages-v2", &device, &session_id)
+    );
     super::terminals::detach_session_terminal(state);
     state.chat = Some(Chat {
         load_trace: None,
@@ -320,12 +324,15 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         cache_key: key,
         device: device.clone(),
         session,
-        messages: cached.messages,
+        messages: Vec::new(),
         history_start: None,
+        history_browsing: false,
+        history_load_all: false,
+        timeline_index: Default::default(),
         interactions: Vec::new(),
         approval_refresh_attempted: false,
         approval_refresh_pending: false,
-        has_earlier: cached.has_more,
+        has_earlier: false,
         sending: false,
         responding_interaction: String::new(),
         response_interaction: String::new(),
@@ -534,6 +541,24 @@ fn watch_agent_traced(
     let backend = ctx.backend.clone();
     let tx = ctx.tx.clone();
     let shell = ctx.shell.clone();
+    {
+        let (cache, key, token, device, session) = (
+            cache.clone(),
+            key.clone(),
+            token.clone(),
+            device.clone(),
+            session_id.clone(),
+        );
+        spawn(ctx, async move {
+            let page = cache.history(key).await.unwrap_or_default();
+            Msg::ChatCache {
+                token,
+                device,
+                session,
+                page,
+            }
+        });
+    }
     tokio::spawn(async move {
         let entry_trace_id = trace.id().to_string();
         let mut retry = 1;
@@ -599,7 +624,7 @@ fn watch_agent_traced(
                         provider: initial.provider.clone(),
                     }));
                 }
-                let cached = cache.get::<v1::AgentMessagePage>(&key).unwrap_or_default();
+                let cached = cache.history(key.clone()).await.unwrap_or_default();
                 let mut catch_up = ChatCatchUp::new(cached.messages);
                 let mut queued = std::collections::VecDeque::new();
                 let dispatch = |event, queued: &mut std::collections::VecDeque<_>| {
@@ -1017,6 +1042,10 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     if chat.loading {
         return;
     }
+    if load.latest || load.newer {
+        chat.advance_history(load.latest);
+        return;
+    }
     if chat.reveal_history(load.all) && (!load.all || !chat.has_earlier) {
         return;
     }
@@ -1027,6 +1056,7 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
         return;
     };
     chat.loading = true;
+    chat.history_load_all = load.all;
     let (device, session, before) = (
         chat.device.clone(),
         chat.session.id.clone(),
@@ -1036,44 +1066,76 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     let token = watch.token.clone();
     let self_id = state.self_id.clone();
     let backend = ctx.backend.clone();
+    let cache = ctx.cache.clone();
+    let cache_key = chat.cache_key.clone();
     spawn(ctx, async move {
         let result = async {
             let client = backend.client_for(&device, &self_id).await?;
             let mut cursor = before;
-            let mut earlier = Vec::new();
+            let mut chunks = Vec::new();
             loop {
                 if token.is_cancelled() {
                     return Err(Error::Unavailable("history loading cancelled".into()));
                 }
-                let response = tokio::time::timeout(
-                    Duration::from_secs(8),
-                    unary(
-                        &client,
-                        Req::AgentMessages(v1::AgentMessagesRequest {
+                let key = format!(
+                    "history-{}",
+                    crate::cache::Cache::key(&["history-page-v2", &cache_key, &cursor])
+                );
+                let cached = cache.history(key.clone()).await.unwrap_or_default();
+                let cached_messages = cached.messages;
+                let mut request = muster_proto::history::request(&session, &cached_messages);
+                request.tail = crate::state::CHAT_HISTORY_PAGE as u32;
+                request.before_id = cursor.clone();
+                let fetch = |request| async {
+                    match tokio::time::timeout(
+                        Duration::from_secs(8),
+                        unary(&client, Req::AgentMessages(request)),
+                    )
+                    .await
+                    .map_err(|_| Error::Unavailable("history loading timed out".into()))??
+                    {
+                        Resp::AgentMessages(page) => Ok(page),
+                        _ => Err(unexpected()),
+                    }
+                };
+                let mut page = fetch(request).await?;
+                if !cached_messages.is_empty() {
+                    if page.reset
+                        || page.has_newer
+                        || page.messages.iter().any(|m| m.id == cursor)
+                        || page.messages.first().map(|m| &m.id)
+                            != cached_messages.last().map(|m| &m.id)
+                    {
+                        // An older peer can ignore the upper bound on a proof.
+                        // A changed generation also falls back to a plain page.
+                        page = fetch(v1::AgentMessagesRequest {
                             session: session.clone(),
                             tail: crate::state::CHAT_HISTORY_PAGE as u32,
                             before_id: cursor.clone(),
                             ..Default::default()
-                        }),
-                    ),
-                )
-                .await
-                .map_err(|_| Error::Unavailable("history loading timed out".into()))??;
-                let Resp::AgentMessages(page) = response else {
-                    return Err(unexpected());
-                };
+                        })
+                        .await?;
+                    } else {
+                        let mut validated = cached_messages;
+                        merge_chat_tail(&mut validated, page.messages);
+                        if validated.len() > crate::state::CHAT_HISTORY_PAGE {
+                            validated.drain(..validated.len() - crate::state::CHAT_HISTORY_PAGE);
+                            page.has_more = true;
+                        }
+                        page.messages = validated;
+                    }
+                }
                 if page.reset {
                     return Err(Error::Unavailable(
                         "History changed while loading; reopen the conversation to resynchronize"
                             .into(),
                     ));
                 }
+                cache.put(key, &page);
                 let next = page.messages.first().map(|m| m.id.clone());
-                let mut messages = page.messages;
-                messages.extend(earlier);
-                earlier = messages;
+                chunks.push(page.messages);
                 if !load.all || !page.has_more {
-                    return Ok((earlier, page.has_more));
+                    return Ok((chunks.into_iter().rev().flatten().collect(), page.has_more));
                 }
                 let Some(next) = next.filter(|next| next != &cursor) else {
                     return Err(Error::Unavailable("history cursor did not advance".into()));
@@ -1209,6 +1271,32 @@ pub(super) fn msg_agents(
     }
 }
 
+pub(super) fn msg_chat_cache(
+    state: &mut State,
+    token: CancellationToken,
+    device: &str,
+    session: &str,
+    page: v1::AgentMessagePage,
+) {
+    if token.is_cancelled() {
+        return;
+    }
+    if let Some(chat) = &mut state.chat
+        && chat.device == device
+        && chat.session.id == session
+        && chat.messages.is_empty()
+        && !chat
+            .load_trace
+            .as_ref()
+            .is_some_and(|trace| trace.history_ready())
+    {
+        chat.messages = page.messages;
+        chat.has_earlier = page.has_more;
+        chat.reconcile_history_start();
+        chat.content_revision = crate::state::next_content_revision();
+    }
+}
+
 pub(super) fn msg_chat(
     state: &mut State,
     token: CancellationToken,
@@ -1238,6 +1326,13 @@ pub(super) fn msg_chat(
             if earlier {
                 let messages_ids: std::collections::HashSet<_> =
                     messages.iter().map(|m| m.id.clone()).collect();
+                let first = if chat.history_load_all {
+                    0
+                } else {
+                    messages
+                        .len()
+                        .saturating_sub(crate::state::CHAT_HISTORY_STEP)
+                };
                 let mut merged = messages;
                 merged.extend(
                     chat.messages
@@ -1245,7 +1340,8 @@ pub(super) fn msg_chat(
                         .filter(|m| !messages_ids.contains(&m.id)),
                 );
                 chat.messages = merged;
-                chat.history_start = chat.messages.first().map(|m| m.id.clone());
+                chat.history_start = chat.messages.get(first).map(|m| m.id.clone());
+                chat.history_browsing = true;
                 chat.has_earlier = has_more;
             } else {
                 // Earlier pages may finish while catch-up is in flight.
@@ -1266,7 +1362,9 @@ pub(super) fn msg_chat(
             }
             if reset {
                 chat.history_start = None;
+                chat.history_browsing = false;
             }
+            chat.timeline_index.borrow_mut().invalidate(0);
             chat.reconcile_history_start();
             if !earlier && let Some(trace) = &chat.load_trace {
                 trace.history_applied();
@@ -1378,9 +1476,10 @@ pub(super) fn msg_agent_event(
     match event {
         v1::agent_event::Ev::Message(m) => {
             // Desktop chat replies grow under the same id.
-            if let Some(known) = chat.messages.iter_mut().find(|x| x.id == m.id) {
-                if *known != m {
-                    *known = m;
+            if let Some(index) = chat.messages.iter().position(|x| x.id == m.id) {
+                if chat.messages[index] != m {
+                    chat.timeline_index.borrow_mut().invalidate(index);
+                    chat.messages[index] = m;
                     messages_changed = true;
                 }
             } else {

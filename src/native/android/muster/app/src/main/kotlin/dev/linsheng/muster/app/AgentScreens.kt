@@ -342,6 +342,7 @@ fun ChatScreen(core: MusterCore, vm: ViewModel) {
                 if (!chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty()) {
                     item(key = "empty") { Text("No messages yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
+                if (chat.hasNewer) item { TextButton(onClick = { core.agentLoadEarlier(newer = true) }, enabled = !chat.loading) { Text("Load newer") } }
                 if (chat.hasEarlier) {
                     item(key = "earlier") {
                         TextButton(onClick = { atLatest = false; core.agentLoadEarlier() }, Modifier.fillMaxWidth()) { Text("Load earlier") }
@@ -359,9 +360,9 @@ fun ChatScreen(core: MusterCore, vm: ViewModel) {
                     }
                 }
             }
-            if (!atLatest) {
+            if (!atLatest || chat.hasNewer) {
                 SmallFloatingActionButton(
-                    onClick = { scope.launch { atLatest = true; toLatest() } },
+                    onClick = { core.agentLoadEarlier(latest = true); scope.launch { atLatest = true; toLatest() } },
                     Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
                 ) { Icon(Icons.Default.KeyboardArrowDown, "Jump to latest") }
             }

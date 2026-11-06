@@ -60,9 +60,10 @@ fn session_timeline(
     chat: &crate::state::Chat,
     admitted: &[crate::state::AdmittedSend],
 ) -> Vec<app::ChatBlock> {
-    let mut blocks = crate::timeline::window(
+    let mut blocks = chat.timeline_index.borrow_mut().window(
         &chat.messages,
         chat.history_start_index(),
+        chat.history_end_index(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
         chat.session.mode == "orca",
     );
@@ -256,6 +257,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 outcome_unknown: chat.response_unknown,
             }),
             has_earlier: chat.has_earlier || chat.history_start_index() > 0,
+            has_newer: chat.history_end_index() < chat.messages.len(),
             sending: chat.sending || chat.loading,
             responding_interaction: chat.responding_interaction.clone(),
             response_error: chat.response_error.clone(),
@@ -1481,7 +1483,7 @@ mod history_projection_tests {
         assert_eq!(projected.interactions.len(), 1);
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(false));
-        assert_eq!(chat.visible_messages().len(), 400);
+        assert_eq!(chat.visible_messages().len(), 200);
         let middle = renderer
             .prepare(&state)
             .expect("local reveal invalidates renderer");
@@ -1492,7 +1494,7 @@ mod history_projection_tests {
                 .unwrap()
                 .timeline
                 .len(),
-            400
+            200
         );
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(true));
@@ -1505,9 +1507,15 @@ mod history_projection_tests {
                 .has_earlier
         );
         assert!(
-            small.len() * 2 < full.len(),
-            "recent snapshot should be substantially smaller"
+            full.len() < small.len() * 2,
+            "oldest window remains bounded"
         );
+        let view = app::ViewModel::decode(full.as_slice())
+            .unwrap()
+            .chat
+            .unwrap();
+        assert!(view.has_newer);
+        assert_eq!(view.timeline.len(), 200);
         assert_eq!(state.chat.as_ref().unwrap().messages.len(), 500);
         eprintln!(
             "history snapshot: recent={} bytes full={} bytes",

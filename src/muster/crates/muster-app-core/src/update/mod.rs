@@ -181,6 +181,12 @@ pub enum Msg {
         device: String,
         result: Result<v1::AgentSessionPage, Error>,
     },
+    ChatCache {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        page: v1::AgentMessagePage,
+    },
     Chat {
         token: CancellationToken,
         device: String,
@@ -699,6 +705,12 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             result,
         } => agents::msg_agents(state, ctx, epoch, device, result),
+        Msg::ChatCache {
+            token,
+            device,
+            session,
+            page,
+        } => agents::msg_chat_cache(state, token, &device, &session, page),
         Msg::Chat {
             token,
             device,

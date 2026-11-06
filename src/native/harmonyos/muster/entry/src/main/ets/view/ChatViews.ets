@@ -120,6 +120,9 @@ export struct ChatView {
           if (!this.chat().loading && (this.chat().messageCount ?? 0) === 0 && (this.chat().loadError ?? '') === '') {
             ListItem() { Text(this.chat().session?.transcriptNotice || 'No messages yet').fontSize(14).opacity(0.7) }
           }
+          if (this.chat().hasNewer) {
+            ListItem() { Button('Load newer').enabled(!this.chat().loading).onClick((): void => { this.core.agentLoadEarlier(false, false, true); }) }
+          }
           if (this.chat().hasEarlier) {
             ListItem() {
               Button('Load earlier').buttonStyle(ButtonStyleMode.TEXTUAL)
@@ -139,14 +142,14 @@ export struct ChatView {
         .edgeEffect(EdgeEffect.Spring)
         .onAppear((): void => { this.scroller.scrollEdge(Edge.Bottom); })
         .onDidScroll((): void => { this.atLatest = this.scroller.isAtEnd(); })
-        if (!this.atLatest) {
+        if (!this.atLatest || this.chat().hasNewer) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(18).rotate({ angle: 180 })
               .fontColor([$r('sys.color.font_primary')])
           }
           .width(38).height(38).margin({ bottom: 8 }).backgroundColor($r('sys.color.comp_background_tertiary'))
           .accessibilityText('Jump to latest')
-          .onClick((): void => { this.atLatest = true; this.scroller.scrollEdge(Edge.Bottom); })
+          .onClick((): void => { this.core.agentLoadEarlier(false, true); this.atLatest = true; this.scroller.scrollEdge(Edge.Bottom); })
         }
       }
       .height(this.layout.flex ? this.layout.readingHeight : undefined)

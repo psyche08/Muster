@@ -551,6 +551,9 @@ export namespace muster {
 
             /** Request agentScheduler */
             agentScheduler?: (muster.v1.IAgentSchedulerRequest|null);
+
+            /** Request deviceRequestScreenRecording */
+            deviceRequestScreenRecording?: (muster.v1.IDeviceRequestScreenRecordingRequest|null);
         }
 
         /** Represents a Request. */
@@ -760,8 +763,11 @@ export namespace muster {
             /** Request agentScheduler. */
             public agentScheduler?: (muster.v1.IAgentSchedulerRequest|null);
 
+            /** Request deviceRequestScreenRecording. */
+            public deviceRequestScreenRecording?: (muster.v1.IDeviceRequestScreenRecordingRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -1124,6 +1130,9 @@ export namespace muster {
 
             /** Event forwardOpened */
             forwardOpened?: (muster.v1.IForwardOpened|null);
+
+            /** Event rpcTiming */
+            rpcTiming?: (muster.v1.IRpcTiming|null);
         }
 
         /** Represents an Event. */
@@ -1162,8 +1171,11 @@ export namespace muster {
             /** Event forwardOpened. */
             public forwardOpened?: (muster.v1.IForwardOpened|null);
 
+            /** Event rpcTiming. */
+            public rpcTiming?: (muster.v1.IRpcTiming|null);
+
             /** Event ev. */
-            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened");
+            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming");
 
             /**
              * Creates a new Event instance using the specified properties.
@@ -1196,6 +1208,89 @@ export namespace muster {
              * @returns The default type url
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a RpcTiming. */
+        interface IRpcTiming {
+
+            /** RpcTiming phase */
+            phase?: (muster.v1.RpcTiming.Phase|null);
+
+            /** RpcTiming elapsedUs */
+            elapsedUs?: (number|Long|null);
+
+            /** RpcTiming reusedConnection */
+            reusedConnection?: (boolean|null);
+
+            /** RpcTiming diagnosticId */
+            diagnosticId?: (string|null);
+        }
+
+        /** Represents a RpcTiming. */
+        class RpcTiming implements IRpcTiming {
+
+            /**
+             * Constructs a new RpcTiming.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IRpcTiming);
+
+            /** RpcTiming phase. */
+            public phase: muster.v1.RpcTiming.Phase;
+
+            /** RpcTiming elapsedUs. */
+            public elapsedUs: (number|Long);
+
+            /** RpcTiming reusedConnection. */
+            public reusedConnection: boolean;
+
+            /** RpcTiming diagnosticId. */
+            public diagnosticId: string;
+
+            /**
+             * Creates a new RpcTiming instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns RpcTiming instance
+             */
+            public static create(properties?: muster.v1.IRpcTiming): muster.v1.RpcTiming;
+
+            /**
+             * Encodes the specified RpcTiming message. Does not implicitly {@link muster.v1.RpcTiming.verify|verify} messages.
+             * @param message RpcTiming message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IRpcTiming, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a RpcTiming message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns RpcTiming
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.RpcTiming;
+
+            /**
+             * Gets the default type url for RpcTiming
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace RpcTiming {
+
+            /** Phase enum. */
+            enum Phase {
+                UNSPECIFIED = 0,
+                POOL_READY = 1,
+                STREAM_ALLOCATED = 2,
+                SERVICE_READY = 3,
+                SERVER_RECEIVED = 4,
+                SERVER_FINISHED = 5
+            }
         }
 
         /** Properties of a DeviceInfoRequest. */
@@ -1650,6 +1745,52 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a DeviceRequestScreenRecordingRequest. */
+        interface IDeviceRequestScreenRecordingRequest {
+        }
+
+        /** Represents a DeviceRequestScreenRecordingRequest. */
+        class DeviceRequestScreenRecordingRequest implements IDeviceRequestScreenRecordingRequest {
+
+            /**
+             * Constructs a new DeviceRequestScreenRecordingRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDeviceRequestScreenRecordingRequest);
+
+            /**
+             * Creates a new DeviceRequestScreenRecordingRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DeviceRequestScreenRecordingRequest instance
+             */
+            public static create(properties?: muster.v1.IDeviceRequestScreenRecordingRequest): muster.v1.DeviceRequestScreenRecordingRequest;
+
+            /**
+             * Encodes the specified DeviceRequestScreenRecordingRequest message. Does not implicitly {@link muster.v1.DeviceRequestScreenRecordingRequest.verify|verify} messages.
+             * @param message DeviceRequestScreenRecordingRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDeviceRequestScreenRecordingRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DeviceRequestScreenRecordingRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DeviceRequestScreenRecordingRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DeviceRequestScreenRecordingRequest;
+
+            /**
+             * Gets the default type url for DeviceRequestScreenRecordingRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a DeviceDebugRequest. */
         interface IDeviceDebugRequest {
 
@@ -1862,6 +2003,9 @@ export namespace muster {
 
             /** DeviceState ghosttyAutomation */
             ghosttyAutomation?: (string|null);
+
+            /** DeviceState screenRecording */
+            screenRecording?: (string|null);
         }
 
         /** Represents a DeviceState. */
@@ -1920,6 +2064,9 @@ export namespace muster {
 
             /** DeviceState ghosttyAutomation. */
             public ghosttyAutomation: string;
+
+            /** DeviceState screenRecording. */
+            public screenRecording: string;
 
             /**
              * Creates a new DeviceState instance using the specified properties.
@@ -2048,6 +2195,9 @@ export namespace muster {
             /** LockedUseOperation organize */
             organize?: (muster.v1.IAgentOrganizeRequest|null);
 
+            /** LockedUseOperation nativeCreate */
+            nativeCreate?: (muster.v1.IAgentNativeCreateRequest|null);
+
             /** LockedUseOperation providerQueue */
             providerQueue?: (string|null);
         }
@@ -2100,11 +2250,14 @@ export namespace muster {
             /** LockedUseOperation organize. */
             public organize?: (muster.v1.IAgentOrganizeRequest|null);
 
+            /** LockedUseOperation nativeCreate. */
+            public nativeCreate?: (muster.v1.IAgentNativeCreateRequest|null);
+
             /** LockedUseOperation providerQueue. */
             public providerQueue: string;
 
             /** LockedUseOperation operation. */
-            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize");
+            public operation?: ("send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize"|"nativeCreate");
 
             /**
              * Creates a new LockedUseOperation instance using the specified properties.
@@ -5441,6 +5594,9 @@ export namespace muster {
         /** Properties of an AgentListRequest. */
         interface IAgentListRequest {
 
+            /** AgentListRequest providerPages */
+            providerPages?: (boolean|null);
+
             /** AgentListRequest grouped */
             grouped?: (boolean|null);
 
@@ -5471,6 +5627,9 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.v1.IAgentListRequest);
+
+            /** AgentListRequest providerPages. */
+            public providerPages: boolean;
 
             /** AgentListRequest grouped. */
             public grouped: boolean;
@@ -5634,6 +5793,9 @@ export namespace muster {
 
             /** AgentCatalogGroup deviceId */
             deviceId?: (string|null);
+
+            /** AgentCatalogGroup pinnedCount */
+            pinnedCount?: (number|null);
         }
 
         /** Represents an AgentCatalogGroup. */
@@ -5668,6 +5830,9 @@ export namespace muster {
 
             /** AgentCatalogGroup deviceId. */
             public deviceId: string;
+
+            /** AgentCatalogGroup pinnedCount. */
+            public pinnedCount: number;
 
             /**
              * Creates a new AgentCatalogGroup instance using the specified properties.
@@ -5705,6 +5870,12 @@ export namespace muster {
         /** Properties of an AgentWatchRequest. */
         interface IAgentWatchRequest {
 
+            /** AgentWatchRequest providerPages */
+            providerPages?: (boolean|null);
+
+            /** AgentWatchRequest diagnosticId */
+            diagnosticId?: (string|null);
+
             /** AgentWatchRequest grouped */
             grouped?: (boolean|null);
 
@@ -5729,6 +5900,12 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.v1.IAgentWatchRequest);
+
+            /** AgentWatchRequest providerPages. */
+            public providerPages: boolean;
+
+            /** AgentWatchRequest diagnosticId. */
+            public diagnosticId: string;
 
             /** AgentWatchRequest grouped. */
             public grouped: boolean;
@@ -6234,6 +6411,9 @@ export namespace muster {
 
             /** AgentMessagesRequest prefixHash */
             prefixHash?: (Uint8Array|null);
+
+            /** AgentMessagesRequest diagnosticId */
+            diagnosticId?: (string|null);
         }
 
         /** Represents an AgentMessagesRequest. */
@@ -6262,6 +6442,9 @@ export namespace muster {
 
             /** AgentMessagesRequest prefixHash. */
             public prefixHash: Uint8Array;
+
+            /** AgentMessagesRequest diagnosticId. */
+            public diagnosticId: string;
 
             /**
              * Creates a new AgentMessagesRequest instance using the specified properties.
@@ -10770,6 +10953,9 @@ export namespace muster {
             /** Intent requestAccessibility */
             requestAccessibility?: (muster.app.IRequestAccessibility|null);
 
+            /** Intent requestScreenRecording */
+            requestScreenRecording?: (muster.app.IRequestScreenRecording|null);
+
             /** Intent openBrowser */
             openBrowser?: (muster.app.IOpenBrowser|null);
 
@@ -10884,6 +11070,9 @@ export namespace muster {
             /** Intent sessionTerminalAction */
             sessionTerminalAction?: (muster.app.ISessionTerminalAction|null);
 
+            /** Intent requestTerminalAuthorization */
+            requestTerminalAuthorization?: (muster.app.IRequestTerminalAuthorization|null);
+
             /** Intent codeAction */
             codeAction?: (muster.app.ICodeAction|null);
 
@@ -10904,6 +11093,12 @@ export namespace muster {
 
             /** Intent setPushToken */
             setPushToken?: (muster.app.ISetPushToken|null);
+
+            /** Intent sessionViewApplied */
+            sessionViewApplied?: (muster.app.ISessionViewApplied|null);
+
+            /** Intent nativeCreate */
+            nativeCreate?: (muster.app.INativeCreate|null);
         }
 
         /** Represents an Intent. */
@@ -10953,6 +11148,9 @@ export namespace muster {
 
             /** Intent requestAccessibility. */
             public requestAccessibility?: (muster.app.IRequestAccessibility|null);
+
+            /** Intent requestScreenRecording. */
+            public requestScreenRecording?: (muster.app.IRequestScreenRecording|null);
 
             /** Intent openBrowser. */
             public openBrowser?: (muster.app.IOpenBrowser|null);
@@ -11068,6 +11266,9 @@ export namespace muster {
             /** Intent sessionTerminalAction. */
             public sessionTerminalAction?: (muster.app.ISessionTerminalAction|null);
 
+            /** Intent requestTerminalAuthorization. */
+            public requestTerminalAuthorization?: (muster.app.IRequestTerminalAuthorization|null);
+
             /** Intent codeAction. */
             public codeAction?: (muster.app.ICodeAction|null);
 
@@ -11089,8 +11290,14 @@ export namespace muster {
             /** Intent setPushToken. */
             public setPushToken?: (muster.app.ISetPushToken|null);
 
+            /** Intent sessionViewApplied. */
+            public sessionViewApplied?: (muster.app.ISessionViewApplied|null);
+
+            /** Intent nativeCreate. */
+            public nativeCreate?: (muster.app.INativeCreate|null);
+
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -11119,6 +11326,146 @@ export namespace muster {
 
             /**
              * Gets the default type url for Intent
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a SessionViewApplied. */
+        interface ISessionViewApplied {
+
+            /** SessionViewApplied traceId */
+            traceId?: (string|null);
+
+            /** SessionViewApplied historyReady */
+            historyReady?: (boolean|null);
+
+            /** SessionViewApplied decodedOnly */
+            decodedOnly?: (boolean|null);
+
+            /** SessionViewApplied decodeUs */
+            decodeUs?: (number|Long|null);
+
+            /** SessionViewApplied queueUs */
+            queueUs?: (number|Long|null);
+
+            /** SessionViewApplied applyUs */
+            applyUs?: (number|Long|null);
+        }
+
+        /** Represents a SessionViewApplied. */
+        class SessionViewApplied implements ISessionViewApplied {
+
+            /**
+             * Constructs a new SessionViewApplied.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.ISessionViewApplied);
+
+            /** SessionViewApplied traceId. */
+            public traceId: string;
+
+            /** SessionViewApplied historyReady. */
+            public historyReady: boolean;
+
+            /** SessionViewApplied decodedOnly. */
+            public decodedOnly: boolean;
+
+            /** SessionViewApplied decodeUs. */
+            public decodeUs: (number|Long);
+
+            /** SessionViewApplied queueUs. */
+            public queueUs: (number|Long);
+
+            /** SessionViewApplied applyUs. */
+            public applyUs: (number|Long);
+
+            /**
+             * Creates a new SessionViewApplied instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SessionViewApplied instance
+             */
+            public static create(properties?: muster.app.ISessionViewApplied): muster.app.SessionViewApplied;
+
+            /**
+             * Encodes the specified SessionViewApplied message. Does not implicitly {@link muster.app.SessionViewApplied.verify|verify} messages.
+             * @param message SessionViewApplied message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.ISessionViewApplied, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SessionViewApplied message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SessionViewApplied
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.SessionViewApplied;
+
+            /**
+             * Gets the default type url for SessionViewApplied
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a SessionLoadMarker. */
+        interface ISessionLoadMarker {
+
+            /** SessionLoadMarker traceId */
+            traceId?: (string|null);
+
+            /** SessionLoadMarker historyReady */
+            historyReady?: (boolean|null);
+        }
+
+        /** Represents a SessionLoadMarker. */
+        class SessionLoadMarker implements ISessionLoadMarker {
+
+            /**
+             * Constructs a new SessionLoadMarker.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.ISessionLoadMarker);
+
+            /** SessionLoadMarker traceId. */
+            public traceId: string;
+
+            /** SessionLoadMarker historyReady. */
+            public historyReady: boolean;
+
+            /**
+             * Creates a new SessionLoadMarker instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SessionLoadMarker instance
+             */
+            public static create(properties?: muster.app.ISessionLoadMarker): muster.app.SessionLoadMarker;
+
+            /**
+             * Encodes the specified SessionLoadMarker message. Does not implicitly {@link muster.app.SessionLoadMarker.verify|verify} messages.
+             * @param message SessionLoadMarker message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.ISessionLoadMarker, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SessionLoadMarker message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SessionLoadMarker
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.SessionLoadMarker;
+
+            /**
+             * Gets the default type url for SessionLoadMarker
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -11342,7 +11689,6 @@ export namespace muster {
                 SHOW = 0,
                 DISMISS = 1,
                 INSTALL = 2,
-                ITERM = 3,
                 CHECK = 4,
                 RESTART = 5
             }
@@ -12154,6 +12500,98 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a RequestScreenRecording. */
+        interface IRequestScreenRecording {
+        }
+
+        /** Represents a RequestScreenRecording. */
+        class RequestScreenRecording implements IRequestScreenRecording {
+
+            /**
+             * Constructs a new RequestScreenRecording.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IRequestScreenRecording);
+
+            /**
+             * Creates a new RequestScreenRecording instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns RequestScreenRecording instance
+             */
+            public static create(properties?: muster.app.IRequestScreenRecording): muster.app.RequestScreenRecording;
+
+            /**
+             * Encodes the specified RequestScreenRecording message. Does not implicitly {@link muster.app.RequestScreenRecording.verify|verify} messages.
+             * @param message RequestScreenRecording message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IRequestScreenRecording, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a RequestScreenRecording message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns RequestScreenRecording
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.RequestScreenRecording;
+
+            /**
+             * Gets the default type url for RequestScreenRecording
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a RequestTerminalAuthorization. */
+        interface IRequestTerminalAuthorization {
+        }
+
+        /** Represents a RequestTerminalAuthorization. */
+        class RequestTerminalAuthorization implements IRequestTerminalAuthorization {
+
+            /**
+             * Constructs a new RequestTerminalAuthorization.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IRequestTerminalAuthorization);
+
+            /**
+             * Creates a new RequestTerminalAuthorization instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns RequestTerminalAuthorization instance
+             */
+            public static create(properties?: muster.app.IRequestTerminalAuthorization): muster.app.RequestTerminalAuthorization;
+
+            /**
+             * Encodes the specified RequestTerminalAuthorization message. Does not implicitly {@link muster.app.RequestTerminalAuthorization.verify|verify} messages.
+             * @param message RequestTerminalAuthorization message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IRequestTerminalAuthorization, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a RequestTerminalAuthorization message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns RequestTerminalAuthorization
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.RequestTerminalAuthorization;
+
+            /**
+             * Gets the default type url for RequestTerminalAuthorization
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a SetCover. */
         interface ISetCover {
 
@@ -12374,6 +12812,76 @@ export namespace muster {
 
             /**
              * Gets the default type url for OrcaCreate
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a NativeCreate. */
+        interface INativeCreate {
+
+            /** NativeCreate deviceId */
+            deviceId?: (string|null);
+
+            /** NativeCreate provider */
+            provider?: (string|null);
+
+            /** NativeCreate directory */
+            directory?: (string|null);
+
+            /** NativeCreate prompt */
+            prompt?: (string|null);
+        }
+
+        /** Represents a NativeCreate. */
+        class NativeCreate implements INativeCreate {
+
+            /**
+             * Constructs a new NativeCreate.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.INativeCreate);
+
+            /** NativeCreate deviceId. */
+            public deviceId: string;
+
+            /** NativeCreate provider. */
+            public provider: string;
+
+            /** NativeCreate directory. */
+            public directory: string;
+
+            /** NativeCreate prompt. */
+            public prompt: string;
+
+            /**
+             * Creates a new NativeCreate instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NativeCreate instance
+             */
+            public static create(properties?: muster.app.INativeCreate): muster.app.NativeCreate;
+
+            /**
+             * Encodes the specified NativeCreate message. Does not implicitly {@link muster.app.NativeCreate.verify|verify} messages.
+             * @param message NativeCreate message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.INativeCreate, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NativeCreate message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NativeCreate
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.NativeCreate;
+
+            /**
+             * Gets the default type url for NativeCreate
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -13295,6 +13803,12 @@ export namespace muster {
 
             /** AgentLoadEarlier all */
             all?: (boolean|null);
+
+            /** AgentLoadEarlier latest */
+            latest?: (boolean|null);
+
+            /** AgentLoadEarlier newer */
+            newer?: (boolean|null);
         }
 
         /** Represents an AgentLoadEarlier. */
@@ -13308,6 +13822,12 @@ export namespace muster {
 
             /** AgentLoadEarlier all. */
             public all: boolean;
+
+            /** AgentLoadEarlier latest. */
+            public latest: boolean;
+
+            /** AgentLoadEarlier newer. */
+            public newer: boolean;
 
             /**
              * Creates a new AgentLoadEarlier instance using the specified properties.
@@ -15453,6 +15973,9 @@ export namespace muster {
 
             /** ViewModel navigationPath */
             navigationPath?: (muster.app.Screen[]|null);
+
+            /** ViewModel sessionLoad */
+            sessionLoad?: (muster.app.ISessionLoadMarker|null);
         }
 
         /** Represents a ViewModel. */
@@ -15571,6 +16094,9 @@ export namespace muster {
 
             /** ViewModel navigationPath. */
             public navigationPath: muster.app.Screen[];
+
+            /** ViewModel sessionLoad. */
+            public sessionLoad?: (muster.app.ISessionLoadMarker|null);
 
             /**
              * Creates a new ViewModel instance using the specified properties.
@@ -16058,12 +16584,6 @@ export namespace muster {
             /** DesktopSetupView pluginMessage */
             pluginMessage?: (string|null);
 
-            /** DesktopSetupView itermReady */
-            itermReady?: (boolean|null);
-
-            /** DesktopSetupView itermMessage */
-            itermMessage?: (string|null);
-
             /** DesktopSetupView error */
             error?: (string|null);
 
@@ -16073,14 +16593,14 @@ export namespace muster {
             /** DesktopSetupView canRestart */
             canRestart?: (boolean|null);
 
-            /** DesktopSetupView showIterm */
-            showIterm?: (boolean|null);
-
             /** DesktopSetupView ready */
             ready?: (boolean|null);
 
-            /** DesktopSetupView terminalApp */
-            terminalApp?: (string|null);
+            /** DesktopSetupView screenRecordingReady */
+            screenRecordingReady?: (boolean|null);
+
+            /** DesktopSetupView screenRecordingMessage */
+            screenRecordingMessage?: (string|null);
         }
 
         /** Represents a DesktopSetupView. */
@@ -16110,12 +16630,6 @@ export namespace muster {
             /** DesktopSetupView pluginMessage. */
             public pluginMessage: string;
 
-            /** DesktopSetupView itermReady. */
-            public itermReady: boolean;
-
-            /** DesktopSetupView itermMessage. */
-            public itermMessage: string;
-
             /** DesktopSetupView error. */
             public error: string;
 
@@ -16125,14 +16639,14 @@ export namespace muster {
             /** DesktopSetupView canRestart. */
             public canRestart: boolean;
 
-            /** DesktopSetupView showIterm. */
-            public showIterm: boolean;
-
             /** DesktopSetupView ready. */
             public ready: boolean;
 
-            /** DesktopSetupView terminalApp. */
-            public terminalApp: string;
+            /** DesktopSetupView screenRecordingReady. */
+            public screenRecordingReady: boolean;
+
+            /** DesktopSetupView screenRecordingMessage. */
+            public screenRecordingMessage: string;
 
             /**
              * Creates a new DesktopSetupView instance using the specified properties.
@@ -16377,6 +16891,18 @@ export namespace muster {
             /** AgentsView creating */
             creating?: (boolean|null);
 
+            /** AgentsView nativeCreateHosts */
+            nativeCreateHosts?: (muster.v1.IMemberView[]|null);
+
+            /** AgentsView nativeCreateApps */
+            nativeCreateApps?: (string[]|null);
+
+            /** AgentsView nativeCreating */
+            nativeCreating?: (boolean|null);
+
+            /** AgentsView nativeCreateDraft */
+            nativeCreateDraft?: (muster.app.INativeCreate|null);
+
             /** AgentsView errors */
             errors?: (string[]|null);
 
@@ -16425,6 +16951,18 @@ export namespace muster {
 
             /** AgentsView creating. */
             public creating: boolean;
+
+            /** AgentsView nativeCreateHosts. */
+            public nativeCreateHosts: muster.v1.IMemberView[];
+
+            /** AgentsView nativeCreateApps. */
+            public nativeCreateApps: string[];
+
+            /** AgentsView nativeCreating. */
+            public nativeCreating: boolean;
+
+            /** AgentsView nativeCreateDraft. */
+            public nativeCreateDraft?: (muster.app.INativeCreate|null);
 
             /** AgentsView errors. */
             public errors: string[];
@@ -16587,6 +17125,9 @@ export namespace muster {
 
             /** ChatView codeError */
             codeError?: (string|null);
+
+            /** ChatView hasNewer */
+            hasNewer?: (boolean|null);
         }
 
         /** Represents a ChatView. */
@@ -16711,6 +17252,9 @@ export namespace muster {
 
             /** ChatView codeError. */
             public codeError: string;
+
+            /** ChatView hasNewer. */
+            public hasNewer: boolean;
 
             /**
              * Creates a new ChatView instance using the specified properties.
@@ -17260,6 +17804,9 @@ export namespace muster {
 
             /** TerminalsView sources */
             sources?: (muster.v1.ITerminalSource[]|null);
+
+            /** TerminalsView authorization */
+            authorization?: (muster.app.ITerminalAuthorizationView|null);
         }
 
         /** Represents a TerminalsView. */
@@ -17292,6 +17839,9 @@ export namespace muster {
             /** TerminalsView sources. */
             public sources: muster.v1.ITerminalSource[];
 
+            /** TerminalsView authorization. */
+            public authorization?: (muster.app.ITerminalAuthorizationView|null);
+
             /**
              * Creates a new TerminalsView instance using the specified properties.
              * @param [properties] Properties to set
@@ -17319,6 +17869,76 @@ export namespace muster {
 
             /**
              * Gets the default type url for TerminalsView
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a TerminalAuthorizationView. */
+        interface ITerminalAuthorizationView {
+
+            /** TerminalAuthorizationView app */
+            app?: (string|null);
+
+            /** TerminalAuthorizationView ready */
+            ready?: (boolean|null);
+
+            /** TerminalAuthorizationView message */
+            message?: (string|null);
+
+            /** TerminalAuthorizationView busy */
+            busy?: (boolean|null);
+        }
+
+        /** Represents a TerminalAuthorizationView. */
+        class TerminalAuthorizationView implements ITerminalAuthorizationView {
+
+            /**
+             * Constructs a new TerminalAuthorizationView.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.ITerminalAuthorizationView);
+
+            /** TerminalAuthorizationView app. */
+            public app: string;
+
+            /** TerminalAuthorizationView ready. */
+            public ready: boolean;
+
+            /** TerminalAuthorizationView message. */
+            public message: string;
+
+            /** TerminalAuthorizationView busy. */
+            public busy: boolean;
+
+            /**
+             * Creates a new TerminalAuthorizationView instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TerminalAuthorizationView instance
+             */
+            public static create(properties?: muster.app.ITerminalAuthorizationView): muster.app.TerminalAuthorizationView;
+
+            /**
+             * Encodes the specified TerminalAuthorizationView message. Does not implicitly {@link muster.app.TerminalAuthorizationView.verify|verify} messages.
+             * @param message TerminalAuthorizationView message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.ITerminalAuthorizationView, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TerminalAuthorizationView message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TerminalAuthorizationView
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.TerminalAuthorizationView;
+
+            /**
+             * Gets the default type url for TerminalAuthorizationView
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

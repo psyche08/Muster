@@ -3348,7 +3348,7 @@ public nonisolated struct Muster_V1_AgentMessagesRequest: Sendable {
   /// last N; 0 = 50
   public var tail: UInt32 = 0
 
-  /// paging backwards
+  /// exclusive upper bound, also for validated cached pages
   public var beforeID: String = String()
 
   /// cached tail, inclusive so a streaming message can change

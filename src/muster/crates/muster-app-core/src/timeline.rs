@@ -6,6 +6,73 @@ use muster_proto::{
     v1::AgentMessage,
 };
 
+/// Prefix grouping boundaries, invalidated from the first changed record.
+/// Appends inspect only new records; paging does not rescan completed turns.
+#[derive(Default)]
+pub(crate) struct Index {
+    starts: Vec<usize>,
+    statuses: Vec<usize>,
+    indexed: usize,
+    cli: Option<bool>,
+}
+impl Index {
+    pub(crate) fn invalidate(&mut self, from: usize) {
+        self.indexed = self.indexed.min(from);
+        self.statuses
+            .truncate(self.statuses.partition_point(|&i| i < from));
+        self.starts
+            .truncate(self.starts.partition_point(|&i| i < from));
+    }
+    pub(crate) fn window(
+        &mut self,
+        messages: &[AgentMessage],
+        start: usize,
+        end: usize,
+        running: bool,
+        cli: bool,
+    ) -> Vec<ChatBlock> {
+        if self.cli != Some(cli) || messages.len() < self.indexed {
+            self.invalidate(0);
+            self.cli = Some(cli);
+        }
+        for (i, m) in messages.iter().enumerate().skip(self.indexed) {
+            if m.kind == "turn_status" {
+                self.statuses.push(i);
+            }
+            let boundary = if cli {
+                !matches!(m.kind.as_str(), "tool_call" | "tool_result") || m.tool_name == "diff"
+            } else {
+                m.kind == "turn_summary"
+                    || (m.role == "user"
+                        && m.kind == "text"
+                        && !m.text.trim().is_empty()
+                        && !is_compact_context(m))
+            };
+            if boundary {
+                self.starts.push(i);
+            }
+        }
+        self.indexed = messages.len();
+        let before = self.starts.partition_point(|&i| i <= start);
+        let begin = before.checked_sub(1).map_or(0, |i| self.starts[i]);
+        // Include the next boundary for completion/legacy trailing-prose
+        // semantics, but never project messages outside the requested window.
+        let after = self.starts.partition_point(|&i| i < end);
+        let finish = self.starts.get(after).map_or(messages.len(), |&i| i + 1);
+        window_range(
+            &messages[begin..finish],
+            start.saturating_sub(begin),
+            end.saturating_sub(begin),
+            if cli {
+                running && self.statuses.last().is_none_or(|&i| i < finish)
+            } else {
+                running && finish == messages.len()
+            },
+            cli,
+        )
+    }
+}
+
 /// Orca-style presentation keeps prose in the reading flow and collapses only
 /// the evidence-heavy rows. The native shell never reconstructs turn membership.
 #[cfg(test)]
@@ -15,14 +82,25 @@ pub fn for_session(messages: &[AgentMessage], running: bool, cli: bool) -> Vec<C
 
 /// Keep group identities grounded in cached history while emitting only the
 /// requested window. Native shells must not infer continuity from partial groups.
+#[cfg(test)]
 pub(crate) fn window(
     messages: &[AgentMessage],
     start: usize,
     running: bool,
     cli: bool,
 ) -> Vec<ChatBlock> {
+    window_range(messages, start, messages.len(), running, cli)
+}
+
+fn window_range(
+    messages: &[AgentMessage],
+    start: usize,
+    end: usize,
+    running: bool,
+    cli: bool,
+) -> Vec<ChatBlock> {
     if !cli {
-        return window_blocks(messages, start, running);
+        return window_blocks(messages, start, end, running);
     }
     let mut out = Vec::new();
     let mut activity = Vec::new();
@@ -34,13 +112,13 @@ pub(crate) fn window(
             && message.tool_name != "diff"
         {
             activity_first.get_or_insert_with(|| message.id.clone());
-            if index >= start {
+            if (start..end).contains(&index) {
                 activity.push(message.clone());
             }
             continue;
         }
         flush(&mut activity, activity_first.take(), completed, &mut out);
-        if index < start || message.text.trim().is_empty() {
+        if !(start..end).contains(&index) || message.text.trim().is_empty() {
             continue;
         }
         let (kind, title) = if message.kind == "turn_status" {
@@ -74,10 +152,15 @@ pub(crate) fn window(
 
 #[cfg(test)]
 pub fn blocks(messages: &[AgentMessage], running: bool) -> Vec<ChatBlock> {
-    window_blocks(messages, 0, running)
+    window_blocks(messages, 0, messages.len(), running)
 }
 
-fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Vec<ChatBlock> {
+fn window_blocks(
+    messages: &[AgentMessage],
+    visible: usize,
+    end: usize,
+    running: bool,
+) -> Vec<ChatBlock> {
     let mut out = Vec::new();
     let mut start = 0;
     for (index, message) in messages.iter().enumerate() {
@@ -87,10 +170,10 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
                     &messages[start..index],
                     true,
                     &mut out,
-                    visible.saturating_sub(start),
+                    visible.saturating_sub(start)..end.saturating_sub(start),
                 );
             }
-            if index >= visible {
+            if (visible..end).contains(&index) {
                 out.push(ChatBlock {
                     id: message.id.clone(),
                     kind: "summary".into(),
@@ -112,7 +195,7 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
                     &messages[start..index],
                     true,
                     &mut out,
-                    visible.saturating_sub(start),
+                    visible.saturating_sub(start)..end.saturating_sub(start),
                 );
             }
             start = index;
@@ -123,7 +206,7 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
             &messages[start..],
             !running,
             &mut out,
-            visible.saturating_sub(start),
+            visible.saturating_sub(start)..end.saturating_sub(start),
         );
     }
     out
@@ -158,7 +241,12 @@ pub(crate) fn activity_indicator(out: &mut Vec<ChatBlock>, own: &str, descendant
     });
 }
 
-fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, visible: usize) {
+fn turn(
+    messages: &[AgentMessage],
+    completed: bool,
+    out: &mut Vec<ChatBlock>,
+    visible: std::ops::Range<usize>,
+) {
     let mut work = Vec::new();
     let mut work_first = None;
     let mut activity = Vec::new();
@@ -202,7 +290,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
         }
         if matches!(message.kind.as_str(), "tool_call" | "tool_result") {
             activity_first.get_or_insert_with(|| message.id.clone());
-            if index >= visible {
+            if visible.contains(&index) {
                 activity.push(message.clone());
             }
             continue;
@@ -221,7 +309,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
         // work as a notice.
         if message.kind == "turn_status" {
             flush_work(&mut work, &mut work_first, completed, out);
-            if index >= visible {
+            if visible.contains(&index) {
                 out.push(ChatBlock {
                     id: message.id.clone(),
                     kind: "notice".into(),
@@ -247,7 +335,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
                 completed || message.role == "user",
                 out,
             );
-            if index < visible {
+            if !visible.contains(&index) {
                 continue;
             }
             out.push(ChatBlock {
@@ -271,7 +359,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             });
         } else {
             work_first.get_or_insert_with(|| message.id.clone());
-            if index < visible {
+            if !visible.contains(&index) {
                 continue;
             }
             // A provider's recorded reasoning is its own collapsed row.
@@ -999,5 +1087,58 @@ mod tests {
                 .flat_map(|b| &b.activity)
                 .all(|m| m.id != "call1")
         );
+    }
+}
+
+#[cfg(test)]
+mod indexed_window_tests {
+    use super::*;
+    fn history() -> Vec<AgentMessage> {
+        (0..1000)
+            .map(|i| AgentMessage {
+                id: format!("m{i}"),
+                text: format!("message {i}"),
+                role: if i % 10 == 0 { "user" } else { "assistant" }.into(),
+                kind: match i % 10 {
+                    0 | 8 => "text",
+                    9 => "turn_summary",
+                    _ => "tool_call",
+                }
+                .into(),
+                tool_name: "read_file".into(),
+                ..Default::default()
+            })
+            .collect()
+    }
+    #[test]
+    fn indexed_windows_preserve_group_identity_and_only_project_the_window() {
+        let mut messages = history();
+        for cli in [false, true] {
+            let mut index = Index::default();
+            for start in [0, 3, 8, 9, 199, 400, 793, 800] {
+                // The unindexed bounded algorithm is the semantic reference;
+                // index slicing must retain the full group context.
+                let actual = index.window(&messages, start, start + 200, true, cli);
+                assert!(
+                    actual == window_range(&messages, start, start + 200, true, cli),
+                    "start={start} cli={cli}"
+                );
+                fn count(blocks: &[ChatBlock]) -> usize {
+                    blocks
+                        .iter()
+                        .map(|b| {
+                            usize::from(b.message.is_some()) + b.activity.len() + count(&b.children)
+                        })
+                        .sum()
+                }
+                assert!(count(&actual) <= 200);
+            }
+            messages[900].role = "assistant".into();
+            index.invalidate(900);
+            assert_eq!(
+                index.window(&messages, 903, 1000, true, cli),
+                window_range(&messages, 903, 1000, true, cli)
+            );
+        }
     }
 }

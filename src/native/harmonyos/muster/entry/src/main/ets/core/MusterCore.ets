@@ -200,7 +200,7 @@ export class MusterCore {
   }
   agentInterrupt(): void { this.send({ agentInterrupt: {} }); }
   cancelLockedUse(): void { this.send({ cancelLockedUse: {} }); }
-  agentLoadEarlier(all: boolean = false): void { this.send({ agentLoadEarlier: { all: all } }); }
+  agentLoadEarlier(all: boolean = false, latest: boolean = false, newer: boolean = false): void { this.send({ agentLoadEarlier: { all: all, latest: latest, newer: newer } }); }
   openTerminals(device: string = ''): void { this.send({ openTerminals: { deviceId: device } }); }
   openTerminal(session: string, device: string = ''): void { this.send({ openTerminal: { session: session, deviceId: device } }); }
   terminalKey(key: string): void { this.send({ terminalKey: { key: key } }); }

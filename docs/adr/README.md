@@ -268,3 +268,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0151](0151-session-reconciliation-and-retry-evidence.md) | Accepted; source verified, device acceptance pending | Preserve same-ID updates and prove retry/foreground history application |
 
 | [0152](0152-install-1-1-26-for-desktop-session-acceptance.md) | Accepted; installation and acceptance pending | Install Apple 1.1.26 (116) to accept desktop session creation on the Macs |
+| [0153](0153-large-session-history-costs.md) | Accepted; source verified, device acceptance pending | Bound repeated cache, validation, provider history and display work |
