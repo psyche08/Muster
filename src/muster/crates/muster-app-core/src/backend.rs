@@ -2,9 +2,8 @@
 //! D8); desktops talk to musterd over its socket and reach other members
 //! through it (Envelope.target).
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use muster_core::{DeviceId, HwSigner, PublicKey, SharedSigner};
 use muster_rpc::{Client, Principal};
@@ -40,15 +39,8 @@ impl HwSigner for ShellSigner {
 }
 
 pub enum Backend {
-    Embedded {
-        daemon: Arc<Daemon>,
-        local: Client,
-        remotes: muster_rpc::PeerClients,
-    },
-    Socket {
-        path: PathBuf,
-        local: Client,
-    },
+    Embedded { daemon: Arc<Daemon>, local: Client },
+    Socket { path: PathBuf, local: Client },
 }
 
 impl Backend {
@@ -127,7 +119,6 @@ impl Backend {
                 Ok(Backend::Embedded {
                     daemon,
                     local: Client::new(app_side),
-                    remotes: Mutex::new(HashMap::new()),
                 })
             }
         }
@@ -166,45 +157,15 @@ impl Backend {
         self.daemon().map(|d| d.signer().clone())
     }
 
-    /// A client for `device` (hex id): this device itself, or a member.
+    /// An operation-owned remote service stream over Node's pooled peer QUIC
+    /// connection. Local operations retain their in-process/socket transport.
     pub async fn client_for(&self, device: &str, self_id: &str) -> Result<Client, Error> {
-        self.client_for_traffic(device, self_id, muster_rpc::Traffic::Requests)
-            .await
-    }
-
-    pub async fn watch_client_for(&self, device: &str, self_id: &str) -> Result<Client, Error> {
-        self.client_for_traffic(device, self_id, muster_rpc::Traffic::Subscriptions)
-            .await
-    }
-
-    async fn client_for_traffic(
-        &self,
-        device: &str,
-        self_id: &str,
-        traffic: muster_rpc::Traffic,
-    ) -> Result<Client, Error> {
         if device.is_empty() || device == self_id {
             return Ok(self.local());
         }
         match self {
             Backend::Socket { local, .. } => Ok(local.with_target(device)),
-            Backend::Embedded {
-                daemon, remotes, ..
-            } => {
-                let slot = remotes
-                    .lock()
-                    .unwrap()
-                    .entry((device.to_owned(), traffic))
-                    .or_default()
-                    .clone();
-                // Only opens in this traffic class wait for one another. Other
-                // classes can open concurrently on the same peer connection.
-                let mut slot = slot.lock().await;
-                if let Some(client) = &*slot
-                    && !client.is_closed()
-                {
-                    return Ok(client.clone());
-                }
+            Backend::Embedded { daemon, .. } => {
                 let peer = DeviceId::from_hex(device)
                     .map_err(|e| Error::Invalid(format!("device: {e}")))?;
                 let (send, recv) = tokio::time::timeout(
@@ -217,27 +178,18 @@ impl Backend {
                 .map_err(|_| Error::Unavailable("the device did not answer".into()))?
                 .map_err(|e| Error::Unavailable(format!("link: {e}")))?;
                 let client = Client::new(tokio::io::join(recv, send));
-                *slot = Some(client.clone());
                 Ok(client)
             }
         }
     }
 
-    /// Forgets a cached member link that stopped answering, so the next call
-    /// opens a fresh stream rather than waiting for QUIC's idle timeout. A
-    /// desktop's daemon forgets its own forwarding link (muster-rpc `proxy`).
-    pub fn discard(&self, device: &str, client: &Client) {
-        if let Backend::Embedded { remotes, .. } = self {
-            for ((peer, _), slot) in remotes.lock().unwrap().iter() {
-                if peer == device
-                    && let Ok(mut slot) = slot.try_lock()
-                    && slot
-                        .as_ref()
-                        .is_some_and(|cached| cached.same_connection(client))
-                {
-                    *slot = None;
-                }
-            }
+    /// Retire only the unresponsive operation stream, never the local shared
+    /// transport or the peer's underlying authenticated QUIC connection.
+    pub fn discard(&self, _device: &str, client: &Client) {
+        if let Backend::Embedded { local, .. } = self
+            && !local.same_connection(client)
+        {
+            client.close();
         }
     }
 
@@ -266,21 +218,11 @@ impl Backend {
         }
     }
 
-    /// The platform saw its network change (or the app came back to the
-    /// foreground): discard closed streams and re-register/re-probe.
+    /// Re-register/re-probe the underlying peer transport. Operation streams
+    /// follow their QUIC connection's lifecycle and are not cached here.
     pub fn network_changed(&self) {
-        if let Backend::Embedded {
-            daemon, remotes, ..
-        } = self
-        {
+        if let Backend::Embedded { daemon, .. } = self {
             daemon.network_changed();
-            for slot in remotes.lock().unwrap().values() {
-                if let Ok(mut slot) = slot.try_lock()
-                    && slot.as_ref().is_some_and(Client::is_closed)
-                {
-                    *slot = None;
-                }
-            }
         }
     }
 

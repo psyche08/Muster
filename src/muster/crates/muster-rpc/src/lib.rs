@@ -129,8 +129,6 @@ where
         let _ = writer.shutdown().await;
     });
     let in_flight: Arc<Mutex<HashMap<u64, CancellationToken>>> = Arc::default();
-    // Per-connection clients to the targets this caller addressed.
-    let targets: TargetClients = Arc::default();
     let forwarded: ForwardedCalls = Arc::default();
     let mut buf = Vec::with_capacity(8192);
     let mut chunk = vec![0u8; 65536];
@@ -197,14 +195,9 @@ where
                         .await;
                     continue;
                 }
-                let (handler, targets, forwarded, tx) = (
-                    handler.clone(),
-                    targets.clone(),
-                    forwarded.clone(),
-                    tx.clone(),
-                );
+                let (handler, forwarded, tx) = (handler.clone(), forwarded.clone(), tx.clone());
                 tokio::spawn(async move {
-                    proxy(&handler, &targets, envelope, &tx, &cancel).await;
+                    proxy(&handler, envelope, &tx, &cancel).await;
                     forwarded.lock().unwrap().remove(&key);
                 });
                 continue;
@@ -271,7 +264,6 @@ where
     for token in forwarded.lock().unwrap().values() {
         token.cancel();
     }
-    drop(targets);
     drop(tx);
     writer_task.abort();
     let _ = writer_task.await;
@@ -280,61 +272,19 @@ where
 const MAX_FORWARDED_CALLS: usize = 256;
 type ForwardedCalls = Arc<Mutex<HashMap<(String, u64), CancellationToken>>>;
 
-/// Separate long subscriptions from potentially large unary responses while
-/// reusing the peer's underlying connection and one service stream per class.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Traffic {
-    Requests,
-    Subscriptions,
-}
-impl Traffic {
-    fn of(envelope: &Envelope) -> Self {
-        if matches!(
-            &envelope.msg,
-            Some(Msg::Request(Request {
-                req: Some(v1::request::Req::AgentWatch(_) | v1::request::Req::DeviceWatch(_)),
-                ..
-            }))
-        ) {
-            Self::Subscriptions
-        } else {
-            Self::Requests
-        }
-    }
-}
-pub type PeerClients = Mutex<HashMap<(String, Traffic), Arc<tokio::sync::Mutex<Option<Client>>>>>;
-type TargetClients = Arc<PeerClients>;
-
 /// Forwards one addressed envelope to its target and relays what comes back.
 async fn proxy(
     handler: &Arc<dyn Handler>,
-    targets: &TargetClients,
     mut envelope: Envelope,
     tx: &mpsc::Sender<Envelope>,
     cancel: &CancellationToken,
 ) {
     let id = envelope.id;
     let target = envelope.target.clone();
-    let slot = targets
-        .lock()
-        .unwrap()
-        .entry((target.clone(), Traffic::of(&envelope)))
-        .or_default()
-        .clone();
     let started = std::time::Instant::now();
-    // Only callers of this peer wait on its connection setup. The socket reader
-    // continues to accept local calls, other peers and cancellation.
-    let connect = async {
-        let mut slot = slot.lock().await;
-        if let Some(client) = &*slot
-            && !client.is_closed()
-        {
-            return Ok(client.clone());
-        }
-        let client = Client::new(handler.open_target(&target).await?);
-        *slot = Some(client.clone());
-        Ok::<_, Error>(client)
-    };
+    // One request owns one service stream. The handler/Node reuses the
+    // authenticated QUIC connection; no other operation shares this reader.
+    let connect = async { Ok::<_, Error>(Client::new(handler.open_target(&target).await?)) };
     let client = tokio::select! {
         biased;
         _ = cancel.cancelled() => {
@@ -378,14 +328,12 @@ async fn proxy(
         },
     };
     let mut events_open = true;
-    let mut answered = false;
     let response = loop {
         tokio::select! {
             biased;
             _ = cancel.cancelled() => break None,
             ev = call.events.recv(), if events_open => match ev {
                 Some(ev) => {
-                    answered = true;
                     let sent = tokio::select! {
                         biased;
                         _ = cancel.cancelled() => false,
@@ -415,18 +363,9 @@ async fn proxy(
             .unwrap_or(Err(Error::Closed))
         }
     };
-    if response.is_err() && !answered {
-        // The target answered neither the call nor its cancellation. QUIC
-        // notices a dead path only at its idle timeout, so later calls open a
-        // fresh stream instead of queueing behind this one. Calls already on
-        // it keep it until it ends.
-        if let Ok(mut slot) = slot.try_lock()
-            && slot.as_ref().is_some_and(|c| c.same_connection(&client))
-        {
-            log::warn!("rpc proxy target {target}: link answered nothing; reconnecting next call");
-            *slot = None;
-        }
-    }
+    // Closing this operation's service stream leaves the peer QUIC connection
+    // and every other request/subscription intact.
+    client.close();
     let response = match response {
         Ok(response) => Envelope {
             id,
@@ -931,7 +870,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_peer_reuses_independent_subscription_and_request_streams() {
+    async fn each_forwarded_request_owns_an_independent_stream() {
         let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let handler = Arc::new(DelayedTarget {
             entered: Arc::new(tokio::sync::Notify::new()),
@@ -941,7 +880,7 @@ mod tests {
         let (a, b) = tokio::io::duplex(65536);
         let server = tokio::spawn(serve(b, Principal::Local, handler));
         let client = Client::new(a).with_target("peer");
-        for _ in 0..3 {
+        for round in 0..3 {
             let (info, watch) = tokio::join!(
                 client.call(v1::request::Req::DeviceInfo(v1::DeviceInfoRequest {})),
                 client.call(v1::request::Req::DeviceWatch(v1::DeviceWatchRequest {}))
@@ -950,24 +889,10 @@ mod tests {
             assert!(matches!(watch.unwrap(), v1::response::Resp::Ack(_)));
             assert_eq!(
                 opened.load(Ordering::SeqCst),
-                2,
-                "reuse one stream per traffic class, not one for all or a new one per call"
+                (round + 1) * 2,
+                "each forwarded operation must own a service stream"
             );
         }
-        assert_eq!(
-            Traffic::of(&Envelope::request(
-                1,
-                v1::request::Req::AgentWatch(v1::AgentWatchRequest::default())
-            )),
-            Traffic::Subscriptions
-        );
-        assert_eq!(
-            Traffic::of(&Envelope::request(
-                2,
-                v1::request::Req::AgentMessages(v1::AgentMessagesRequest::default())
-            )),
-            Traffic::Requests
-        );
         client.close();
         server.abort();
     }
@@ -1213,7 +1138,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concurrent_signed_calls_reuse_target_and_preserve_proof() {
+    async fn concurrent_signed_calls_own_streams_and_preserve_proof() {
         let handler = delayed();
         let (a, b) = tokio::io::duplex(65536);
         tokio::spawn(serve(b, Principal::Local, handler.clone()));
@@ -1237,7 +1162,7 @@ mod tests {
         while let Some(result) = tasks.join_next().await {
             assert!(matches!(result.unwrap(), v1::response::Resp::Ack(_)));
         }
-        assert_eq!(handler.forwarded.load(Ordering::SeqCst), 1);
+        assert_eq!(handler.forwarded.load(Ordering::SeqCst), 16);
         client.close();
     }
 
@@ -1425,7 +1350,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eof_invalidates_all_cached_targets_and_pending_calls() {
+    async fn eof_cancels_owned_target_streams_and_pending_calls() {
         let (local, remote) = tokio::io::duplex(65536);
         let client = Client::new(local);
         let target = client.with_target("peer");

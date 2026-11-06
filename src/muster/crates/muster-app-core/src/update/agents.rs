@@ -151,7 +151,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                 let attempt = async {
                     let client = tokio::time::timeout(
                         Duration::from_secs(3),
-                        backend.watch_client_for(&device, &self_id),
+                        backend.client_for(&device, &self_id),
                     )
                     .await
                     .map_err(|_| Error::Unavailable("catalog connection timed out".into()))??;
@@ -511,7 +511,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
             let attempt = async {
                 let client = tokio::time::timeout(
                     Duration::from_secs(3),
-                    backend.watch_client_for(&device, &self_id),
+                    backend.client_for(&device, &self_id),
                 )
                 .await
                 .map_err(|_| Error::Unavailable("session connection timed out".into()))??;
@@ -569,8 +569,8 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     }
                 };
                 dispatch(first, &mut queued);
-                // History uses the reusable request stream, independently of
-                // live subscriptions on the same underlying peer connection.
+                // History owns a separate service stream from the live watch;
+                // both reuse the underlying authenticated peer connection.
                 let history_client = tokio::time::timeout(
                     Duration::from_secs(3),
                     backend.client_for(&device, &self_id),
@@ -614,6 +614,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         retried_overlap = true;
                     }
                 };
+                drop(history_client);
                 let ChatCatchUp {
                     messages, reset, ..
                 } = catch_up;

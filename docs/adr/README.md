@@ -250,6 +250,8 @@ records a specific decision and does not revive code on its delete list.
 
 | [0145](0145-isolate-slow-subscriptions-and-bound-chat-entry.md) | Accepted; source verified, release pending | Isolate slow subscriptions and bound chat entry history |
 
+| [0146](0146-request-streams-over-the-quic-peer-pool.md) | Accepted; verification pending | Requests own service streams over the QUIC peer pool |
+
 Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
