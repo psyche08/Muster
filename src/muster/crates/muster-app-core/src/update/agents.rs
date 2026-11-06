@@ -118,13 +118,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
     // only while there is nothing to list yet.
     state.agents.loading = !devices.is_empty() && state.agents.sessions.is_empty();
     for (device, name, is_self) in devices {
-        if !state.agents.sessions.iter().any(|s| s.device_id == device)
-            && let Some(page) = ctx
-                .cache
-                .get::<v1::AgentSessionPage>(&cache_key(state, "agents", &device, ""))
-        {
-            restore_catalog_cache(state, &device, &name, page);
-        }
+        // Cached catalogs cannot establish current ownership or access. Wait
+        // for the authenticated host snapshot before showing any saved rows.
         // Network state can arrive before DeviceInfo. Route an explicitly
         // local member through the local socket even before self_id is loaded.
         let self_id = if is_self {
@@ -187,6 +182,17 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             call.events.recv().await
                         };
                         let Some(event) = event else { break };
+                        if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                            ev: Some(v1::agent_event::Ev::Unavailable(ref removed)),
+                        }) = event
+                        {
+                            let _ = tx.send(loop_message(Msg::AgentUnavailable {
+                                epoch,
+                                device: device.clone(),
+                                sessions: removed.sessions.clone(),
+                            }));
+                            continue;
+                        }
                         if let v1::event::Ev::AgentEvent(v1::AgentEvent {
                             ev: Some(v1::agent_event::Ev::ListChanged(mut page)),
                         }) = event
@@ -308,10 +314,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
             ..Default::default()
         });
     let key = cache_key(state, "messages", &device, &session_id);
-    let cached = ctx
-        .cache
-        .get::<v1::AgentMessagePage>(&key)
-        .unwrap_or_default();
+
     super::terminals::detach_session_terminal(state);
     state.chat = Some(Chat {
         load_trace: None,
@@ -320,12 +323,12 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         cache_key: key,
         device: device.clone(),
         session,
-        messages: cached.messages,
+        messages: Vec::new(),
         history_start: None,
         interactions: Vec::new(),
         approval_refresh_attempted: false,
         approval_refresh_pending: false,
-        has_earlier: cached.has_more,
+        has_earlier: false,
         sending: false,
         responding_interaction: String::new(),
         response_interaction: String::new(),
@@ -584,6 +587,7 @@ fn watch_agent_traced(
                     serde_json::json!({"attempt":attempt_index}),
                 );
                 let call = active_call.as_mut().expect("started watch");
+                let cached = cache.get::<v1::AgentMessagePage>(&key).unwrap_or_default();
                 // A newly established subscription replays the server's current
                 // pending interactions. Retire the old stream's display IDs
                 // before that replay, not on transient activity changes.
@@ -597,9 +601,9 @@ fn watch_agent_traced(
                         device: device.clone(),
                         session: session_id.clone(),
                         provider: initial.provider.clone(),
+                        cached: Some(cached.clone()),
                     }));
                 }
-                let cached = cache.get::<v1::AgentMessagePage>(&key).unwrap_or_default();
                 let mut catch_up = ChatCatchUp::new(cached.messages);
                 let mut queued = std::collections::VecDeque::new();
                 let dispatch = |event, queued: &mut std::collections::VecDeque<_>| {
@@ -1093,43 +1097,6 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
     });
 }
 
-fn restore_catalog_cache(
-    state: &mut State,
-    device: &str,
-    name: &str,
-    mut page: v1::AgentSessionPage,
-) {
-    // Old cache entries stored only rows. Do not render UUIDs as group names
-    // while waiting for the first complete native snapshot after upgrade.
-    if page.sections.is_empty() && page.sessions.iter().any(|s| !s.section_id.is_empty()) {
-        return;
-    }
-    for session in &mut page.sessions {
-        session.device_id = device.into();
-        session.device_name = name.into();
-    }
-    state.agents.sessions.extend(visible_agents(page.sessions));
-    state
-        .agents
-        .native_sections
-        .retain(|s| s.device_id != device);
-    state
-        .agents
-        .native_sections
-        .extend(page.sections.into_iter().map(|mut s| {
-            s.device_id = device.into();
-            s.device_name = name.into();
-            s
-        }));
-    state.agent_catalog_groups.retain(|g| g.device_id != device);
-    state
-        .agent_catalog_groups
-        .extend(page.groups.into_iter().map(|mut g| {
-            g.device_id = device.into();
-            g
-        }));
-}
-
 pub(super) fn msg_agents(
     state: &mut State,
     ctx: &Ctx,
@@ -1342,6 +1309,7 @@ pub(super) fn msg_agent_stream_started(
     device: &str,
     session: &str,
     provider: &str,
+    cached: Option<v1::AgentMessagePage>,
 ) {
     if token.is_cancelled() {
         return;
@@ -1350,11 +1318,68 @@ pub(super) fn msg_agent_stream_started(
     if chat.device != device || chat.session.id != session || chat.session.provider != provider {
         return;
     }
+    // The current host has admitted this exact ordinary-session subscription.
+    // Cache is display data only: it cannot establish access before this event.
+    if chat.messages.is_empty()
+        && let Some(cached) = cached
+        && cached.session == session
+    {
+        chat.messages = cached.messages;
+        chat.has_earlier = cached.has_more;
+        chat.content_revision = crate::state::next_content_revision();
+        chat.reconcile_history_start();
+    }
     // This drops stale display handles; it does not assert command completion
     // or reset an outstanding/unknown response receipt.
     chat.interactions.retain(|i| i.kind == "queued_message");
     chat.approval_refresh_attempted = false;
     chat.approval_refresh_pending = false;
+}
+
+pub(super) fn remove_unavailable(state: &mut State, ctx: &Ctx, device: &str, sessions: &[String]) {
+    fn retain(rows: &mut Vec<v1::AgentSession>, device: &str, ids: &[String]) {
+        rows.retain_mut(|row| {
+            if (row.device_id.is_empty() || row.device_id == device) && ids.contains(&row.id) {
+                return false;
+            }
+            retain(&mut row.subagents, device, ids);
+            retain(&mut row.subsessions, device, ids);
+            true
+        });
+    }
+    retain(&mut state.agents.sessions, device, sessions);
+    retain(&mut state.agents_search_sessions, device, sessions);
+    state.agents_search_epoch = state.agents_search_epoch.wrapping_add(1);
+    state.agents_search = None;
+    state.agents_search_cursors.clear();
+    state
+        .agent_catalog_pages
+        .retain(|(host, _, _)| host != device);
+    state
+        .agent_catalog_groups
+        .retain(|group| group.device_id != device);
+
+    for id in sessions {
+        ctx.cache.remove(&cache_key(state, "messages", device, id));
+    }
+    ctx.cache.remove(&cache_key(state, "agents", device, ""));
+    if state
+        .chat
+        .as_ref()
+        .is_some_and(|chat| chat.device == device && sessions.contains(&chat.session.id))
+    {
+        if let Some(mut chat) = state.chat.take() {
+            chat.cache_dirty = false;
+            if let Some(watch) = chat.watch.take() {
+                watch.token.cancel();
+            }
+        }
+        state.go(Screen::Agents);
+        state.toast("会话已不在 Agents 中，请从 Multica 任务打开", false);
+    }
+    // Cancel old page/search deliveries and acquire a fresh filtered catalog.
+    // A response queued before the ownership event cannot restore removed rows.
+    load_catalog(state, ctx);
 }
 
 pub(super) fn msg_agent_event(
@@ -1366,6 +1391,10 @@ pub(super) fn msg_agent_event(
     event: v1::agent_event::Ev,
 ) {
     if token.is_cancelled() {
+        return;
+    }
+    if let v1::agent_event::Ev::Unavailable(removed) = &event {
+        remove_unavailable(state, ctx, &device, &removed.sessions);
         return;
     }
     let foreground = state.foreground;
@@ -1459,6 +1488,7 @@ pub(super) fn msg_agent_event(
                 chat.interactions.push(i);
             }
         }
+        v1::agent_event::Ev::Unavailable(_) => unreachable!("handled before borrowing chat"),
         v1::agent_event::Ev::ListChanged(page) => {
             if let Some(s) = page.sessions.into_iter().find(|s| s.id == session) {
                 super::approval_cards::episode_boundary(chat, &s.state);
@@ -1580,37 +1610,56 @@ mod catalog_cache_regressions {
         );
     }
 
-    #[test]
-    fn restored_sessions_keep_native_names_and_page_metadata_in_same_frame() {
+    #[tokio::test]
+    async fn ownership_removal_drops_open_history_and_pending_cache_writes() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: Client::new(socket),
+            }),
+            tx,
+        };
         let mut state = State::new(false, Some("host".into()));
-        restore_catalog_cache(
-            &mut state,
-            "host",
-            "Example Mac",
-            v1::AgentSessionPage {
-                sessions: vec![v1::AgentSession {
-                    id: "session".into(),
-                    section_id: "native-id".into(),
-                    ..Default::default()
-                }],
-                sections: vec![v1::AgentSection {
-                    id: "native-id".into(),
-                    title: "Example group".into(),
-                    ..Default::default()
-                }],
-                groups: vec![v1::AgentCatalogGroup {
-                    key: "native-id".into(),
-                    count: 21,
-                    next_cursor: "next".into(),
-                    ..Default::default()
-                }],
+        let key = cache_key(&state, "messages", "host", "task-session");
+        let message = v1::AgentMessage {
+            text: "synthetic task content".into(),
+            ..Default::default()
+        };
+        ctx.cache.put(
+            key.clone(),
+            &v1::AgentMessagePage {
+                messages: vec![message.clone()],
                 ..Default::default()
             },
         );
-        assert_eq!(state.agents.sessions[0].device_id, "host");
-        assert_eq!(state.agents.native_sections[0].title, "Example group");
-        assert_eq!(state.agents.native_sections[0].device_id, "host");
-        assert_eq!(state.agent_catalog_groups[0].count, 21);
-        assert_eq!(state.agent_catalog_groups[0].device_id, "host");
+        state.chat = Some(Chat {
+            device: "host".into(),
+            session: v1::AgentSession {
+                id: "task-session".into(),
+                ..Default::default()
+            },
+            messages: vec![message],
+            cache_key: key.clone(),
+            cache_dirty: true,
+            ..Default::default()
+        });
+        state
+            .agents_search_sessions
+            .push(state.chat.as_ref().unwrap().session.clone());
+        let previous_epoch = state.agents_epoch;
+        remove_unavailable(&mut state, &ctx, "host", &["task-session".into()]);
+        assert!(state.chat.is_none() && state.agents_search_sessions.is_empty());
+        assert!(state.agents_epoch > previous_epoch);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(ctx.cache.get::<v1::AgentMessagePage>(&key).is_none());
+        assert!(
+            !dir.path().join(&key).exists(),
+            "the old pending write cannot resurrect content"
+        );
     }
 }

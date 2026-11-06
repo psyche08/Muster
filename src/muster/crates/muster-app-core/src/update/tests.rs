@@ -2860,14 +2860,14 @@ fn new_subscription_replaces_stale_card_handles_only_for_its_live_source() {
         (device.as_str(), "other", provider.as_str()),
         (device.as_str(), session.as_str(), "other"),
     ] {
-        agents::msg_agent_stream_started(&mut state, token.clone(), d, s, p);
+        agents::msg_agent_stream_started(&mut state, token.clone(), d, s, p, None);
         assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
     }
     let cancelled = CancellationToken::new();
     cancelled.cancel();
-    agents::msg_agent_stream_started(&mut state, cancelled, &device, &session, &provider);
+    agents::msg_agent_stream_started(&mut state, cancelled, &device, &session, &provider, None);
     assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
-    agents::msg_agent_stream_started(&mut state, token, &device, &session, &provider);
+    agents::msg_agent_stream_started(&mut state, token, &device, &session, &provider, None);
     let chat = state.chat.as_ref().unwrap();
     assert_eq!(chat.interactions.len(), 1);
     assert_eq!(chat.interactions[0].kind, "queued_message");

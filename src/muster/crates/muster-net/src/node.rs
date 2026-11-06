@@ -1319,6 +1319,9 @@ impl Node {
                     (pair::SERVICE, _) => true,
                     (_, false) => false,
                     (gossip::SERVICE | heartbeat::SERVICE, true) => true,
+                    (crate::scope_compat::SERVICE, true) => {
+                        hello.version == crate::scope_compat::VERSION
+                    }
                     (_, true) if !node.is_service_host(&node.device_id()) => false,
                     (forward::SERVICE, true) => true,
                     (_, true) => handler.is_some(),
@@ -1344,6 +1347,7 @@ impl Node {
                     }
                     gossip::SERVICE => gossip::serve(&node, send, recv).await,
                     heartbeat::SERVICE => heartbeat::serve(&node, peer, send, recv).await,
+                    crate::scope_compat::SERVICE => crate::scope_compat::serve(send, recv).await,
                     forward::SERVICE => forward::serve(&node, peer, send, recv).await,
                     _ => {
                         handler

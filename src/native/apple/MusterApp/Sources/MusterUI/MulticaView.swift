@@ -192,13 +192,39 @@ struct MulticaView: View {
     let core: MusterCore
     let status: Muster_V1_MulticaStatus
     let page: Muster_V1_MulticaPage
+    let workspace: Muster_App_MulticaWorkspaceView
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var sharing = false
+    @State private var sharedWorkspaces: Set<String> = []
     @State private var section = 0
+    @State private var editor: MulticaEditor?
     @State private var showInstallation = false
     @State private var installationPreparation = false
     @State private var installationDraft = Muster_V1_MulticaRequest()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Picker("设备", selection: Binding(get: { workspace.selectedDevice }, set: { core.multicaSelect($0) })) {
+                    ForEach(workspace.devices, id: \.deviceID) { target in
+                        Text(target.name + (target.connected ? "" : " · 离线")).tag(target.deviceID)
+                    }
+                }
+                if let target = workspace.devices.first(where: { $0.deviceID == workspace.selectedDevice }) {
+                    Text(target.service.canControl ? "已授予控制权限" : "只读")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if workspace.selectedIsLocal && workspace.localService.canManage { sharingSettings }
+            if workspace.selectedIsLocal && !workspace.mutationMessage.isEmpty {
+                HStack {
+                    Text(workspace.mutationMessage).font(.callout).textSelection(.enabled)
+                    if workspace.mutationBusy { ProgressView().controlSize(.small) }
+                    if workspace.mutationUncertain {
+                        Button("已核对当前结果") { core.multicaAcknowledgeMutation() }
+                    }
+                }
+            }
             HStack {
                 Picker("工作区", selection: Binding(get: { page.workspaceID }, set: { workspace in
                     var request = Muster_V1_MulticaBrowseRequest()
@@ -210,27 +236,29 @@ struct MulticaView: View {
                     }
                 }.frame(maxWidth: 320)
                 Spacer()
-                Label(status.running ? "运行中" : "未运行", systemImage: status.running ? "checkmark.circle" : "pause.circle")
-                    .foregroundStyle(.secondary)
+                if workspace.selectedIsLocal {
+                    Label(status.running ? "运行中" : "未运行", systemImage: status.running ? "checkmark.circle" : "pause.circle")
+                        .foregroundStyle(.secondary)
+                }
                 if page.busy { ProgressView().controlSize(.small) }
                 Button("刷新", systemImage: "arrow.clockwise") { refresh() }.disabled(page.busy)
             }
-            if !status.message.isEmpty {
+            if workspace.selectedIsLocal && !status.message.isEmpty {
                 Text(status.message)
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     .accessibilityIdentifier("multica-status-message")
             }
-            if status.migrationRequired {
+            if workspace.selectedIsLocal && status.migrationRequired {
                 Label("数据目录与容器挂载不一致：请关闭保活、停止容器并完成离线迁移后重新保存设置。", systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(.orange)
                     .accessibilityIdentifier("multica-migration-warning-tab")
             }
-            if !status.version.isEmpty {
+            if workspace.selectedIsLocal && !status.version.isEmpty {
                 Text("Multica 版本：" + status.version)
                     .font(.caption).foregroundStyle(.secondary)
                     .accessibilityIdentifier("multica-version")
             }
-            installationBanner
+            if workspace.selectedIsLocal { installationBanner }
             if !page.error.isEmpty {
                 Label(page.error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange).textSelection(.enabled)
@@ -241,8 +269,14 @@ struct MulticaView: View {
                 Text("运行时").tag(2)
             }.pickerStyle(.segmented)
             if page.workspaces.isEmpty && !page.busy {
-                ContentUnavailableView("没有可用工作区", systemImage: "square.stack", description: Text("请确认容器已启动，并在设置中完成 Multica 登录。"))
+                ContentUnavailableView("没有可用工作区", systemImage: "square.stack", description: Text("请在提供服务的设备上确认运行与登录状态，并检查共享范围和查看权限。"))
             } else {
+                if sizeClass == .compact {
+                    if page.hasIssue || page.hasAgent {
+                        Button("返回列表", systemImage: "chevron.left") { query() }
+                        detail
+                    } else { listing }
+                } else {
                 HStack(alignment: .top, spacing: 16) {
                     listing.frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
                     if page.hasIssue || page.hasAgent {
@@ -250,9 +284,15 @@ struct MulticaView: View {
                         detail.frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                }
             }
         }
         .padding()
+        .sheet(item: $editor) { input in
+            MulticaOperationEditor(core: core, input: input, page: page, workspace: workspace)
+        }
+        .onAppear { loadSharing() }
+        .onChange(of: workspace.localService) { _, _ in loadSharing() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { core.navigate(to: .settings) } label: { Label("Settings", systemImage: "gearshape") }
@@ -261,6 +301,28 @@ struct MulticaView: View {
         .sheet(isPresented: $showInstallation) {
             MulticaInstallationDialog(core: core, status: status, draft: $installationDraft, showPreparation: $installationPreparation)
         }
+    }
+
+    private var sharingSettings: some View {
+        DisclosureGroup("向已授权设备开放 Multica") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("开放共享", isOn: $sharing)
+                Text("共享勾选工作区的任务、代理和运行时信息。其他设备仍需查看权限；会话操作尚不可用。安装、登录和配置只能在本机完成。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                ForEach(page.workspaces, id: \.id) { item in
+                    Toggle(item.name, isOn: Binding(get: { sharedWorkspaces.contains(item.id) }, set: { selected in
+                        if selected { sharedWorkspaces.insert(item.id) } else { sharedWorkspaces.remove(item.id) }
+                    }))
+                }
+                Button("保存共享设置") {
+                    core.multicaService(.with { $0.action = .save; $0.offered = sharing; $0.workspaces = sharedWorkspaces.sorted() })
+                }
+            }.padding(.vertical, 8)
+        }
+    }
+    private func loadSharing() {
+        sharing = workspace.localService.offered
+        sharedWorkspaces = Set(workspace.localService.workspaces)
     }
 
     /// Rust owns the installation projection; the tab only surfaces an
@@ -294,6 +356,11 @@ struct MulticaView: View {
     @ViewBuilder private var listing: some View {
         if section == 0 {
             VStack {
+                if workspace.selectedIsLocal {
+                    Button("新建任务", systemImage: "plus") {
+                        editIssue(.init())
+                    }.disabled(operationsDisabled)
+                }
                 List(page.issues, id: \.id) { issue in
                     Button { query(issue: issue.id) } label: {
                         VStack(alignment: .leading, spacing: 5) {
@@ -349,6 +416,40 @@ struct MulticaView: View {
                     LabeledContent("更新时间", value: page.issue.updatedAt)
                     Divider()
                     Text(page.issue.description_p).frame(maxWidth: .infinity, alignment: .leading)
+                    if workspace.selectedIsLocal {
+                        HStack {
+                            Button("编辑") { editIssue(page.issue) }
+                            Menu("任务操作") {
+                                Button("分派智能体") { issueAction(.assign, title: "分派智能体") }
+                                Button("修改状态") { issueAction(.status, title: "修改任务状态") }
+                                Button("添加评论") { issueAction(.comment, title: "添加评论") }
+                                Button("启动 / 续跑：App 任务桥接待接通") {}.disabled(true)
+                            }
+                        }.disabled(operationsDisabled)
+                    }
+                    Divider()
+                    Text("执行历史（最近 200 条）").font(.headline)
+                    if page.runs.isEmpty { Text("暂无执行记录").foregroundStyle(.secondary) }
+                    ForEach(page.runs, id: \.id) { run in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(run.status).font(.subheadline.bold())
+                            Text(run.createdAt).font(.caption).foregroundStyle(.secondary)
+                            if !run.failureReason.isEmpty { Text(run.failureReason).font(.caption) }
+                            if workspace.selectedIsLocal && run.canCancel {
+                                Button("取消这次执行", role: .destructive) {
+                                    issueAction(.cancel, title: "取消执行", value: run.id)
+                                }.disabled(operationsDisabled)
+                            }
+                        }.padding(.vertical, 4)
+                    }
+                    Divider()
+                    Text("最近评论").font(.headline)
+                    ForEach(page.comments, id: \.id) { comment in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(comment.authorType + " · " + comment.createdAt).font(.caption).foregroundStyle(.secondary)
+                            Text(comment.content)
+                        }.padding(.vertical, 4)
+                    }
                 } else if page.hasAgent {
                     Text(page.agent.name).font(.title2)
                     LabeledContent("状态", value: page.agent.status)
@@ -356,9 +457,41 @@ struct MulticaView: View {
                     LabeledContent("运行时", value: page.agent.runtimeID)
                     Divider()
                     Text(page.agent.description_p).frame(maxWidth: .infinity, alignment: .leading)
+                    if workspace.selectedIsLocal && page.agent.editable {
+                        Button("编辑智能体配置") { editAgent(page.agent) }.disabled(operationsDisabled)
+                    }
                 }
             }.textSelection(.enabled).padding(.trailing, 8)
         }
+    }
+
+    private var operationsDisabled: Bool { page.busy || workspace.mutationBusy || workspace.mutationUncertain }
+    private func editAgent(_ agent: Muster_V1_MulticaAgent) {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.agent = .with {
+                $0.id = agent.id; $0.revision = agent.revision; $0.name = agent.name
+                $0.description_p = agent.description_p; $0.instructions = agent.instructions
+                $0.model = agent.model; $0.maxConcurrentTasks = agent.maxConcurrentTasks
+            }
+        }
+        editor = MulticaEditor(title: "编辑智能体", request: request)
+    }
+    private func editIssue(_ issue: Muster_V1_MulticaIssue) {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.issue = .with {
+                $0.id = issue.id; $0.revision = issue.revision; $0.title = issue.title; $0.description_p = issue.description_p
+            }
+        }
+        editor = MulticaEditor(title: issue.id.isEmpty ? "新建任务" : "编辑任务", request: request)
+    }
+    private func issueAction(_ kind: Muster_V1_MulticaIssueAction.Kind, title: String, value: String = "") {
+        let request = Muster_V1_MulticaMutation.with {
+            $0.workspaceID = page.workspaceID
+            $0.issueAction = .with { $0.kind = kind; $0.id = page.issue.id; $0.revision = page.issue.revision; $0.value = value }
+        }
+        editor = MulticaEditor(title: title, request: request)
     }
 
     private func query(issue: String = "", agent: String = "", offset: UInt32 = 0) {
@@ -370,7 +503,7 @@ struct MulticaView: View {
         core.multicaBrowse(request)
     }
     private func refresh() {
-        core.multica(.init())
+        if workspace.selectedIsLocal { core.multica(.init()) }
         query(issue: page.hasIssue ? page.issue.id : "", agent: page.hasAgent ? page.agent.id : "", offset: page.offset)
     }
 

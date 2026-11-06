@@ -277,6 +277,10 @@ impl Daemon {
             services.push("terminal.create.locked.v1".to_string());
         }
         services.push("presence.enrollment.v1".to_string());
+        services.push("roster.multica.v1".to_string());
+        if cfg!(target_os = "macos") && self.agent().is_some() {
+            services.push("multica.service.v1".to_string());
+        }
         services.push("forward".to_string());
         if self.vnet().is_some() {
             services.push("vnet".to_string());
@@ -455,18 +459,33 @@ impl Daemon {
         let id =
             DeviceId::from_hex(device_id).map_err(|e| Error::Invalid(format!("device id: {e}")))?;
         let mut pending = self.pending.lock().unwrap();
-        let Some(mut join) = pending.remove(&id) else {
+        let Some(join) = pending.get(&id) else {
             return Err(Error::NotFound(format!(
                 "no pending join from {}",
                 id.short()
             )));
         };
-        let reply = join.reply.take().expect("reply present until decided");
-        let verdict = if approve {
+        // Validate before consuming the pending request, so an unsupported
+        // grant can be corrected without making the device pair again.
+        let approved_record = if approve {
             let mut record = join.candidate.record.clone();
             if !scopes.is_empty() {
                 record.scopes = parse_scopes(scopes)?;
             }
+            if record
+                .scopes
+                .iter()
+                .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl))
+            {
+                return Err(Error::Invalid("Join without Multica permissions, then grant them after all members pass compatibility checks".into()));
+            }
+            Some(record)
+        } else {
+            None
+        };
+        let mut join = pending.remove(&id).expect("validated pending request");
+        let reply = join.reply.take().expect("reply present until decided");
+        let verdict = if let Some(record) = approved_record {
             log::info!(
                 "approved {} ({}) with {:?}",
                 record.name,
@@ -514,12 +533,74 @@ impl Daemon {
         Ok(())
     }
 
+    /// Phase two: every active consumer must answer on its authenticated link.
+    /// Offline or old members block new-scope issuance, even when not sharing.
+    pub async fn set_scopes_checked(
+        self: &Arc<Self>,
+        device_id: &str,
+        scopes: &[String],
+        role: &str,
+    ) -> Result<(), Error> {
+        let parsed = parse_scopes(scopes)?;
+        if !parsed
+            .iter()
+            .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl))
+        {
+            return self.set_scopes(device_id, scopes, role);
+        }
+        let snapshot = self.roster().read().unwrap().state().clone();
+        let checks = async {
+            for member in snapshot.active_members() {
+                let peer = member.record.device_id;
+                if peer == self.device_id() {
+                    continue;
+                }
+                muster_net::scope_compat::probe(&self.node(), peer).await
+                    .map_err(|_| Error::Unavailable("All active members must be connected and support the Multica scope encoding".into()))?;
+            }
+            Ok::<_, Error>(())
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(10), checks)
+            .await
+            .map_err(|_| {
+                Error::Unavailable(
+                    "All members must be online and upgraded before granting Multica".into(),
+                )
+            })??;
+        self.set_scopes_inner(device_id, scopes, role, Some(&snapshot))
+    }
+
     pub fn set_scopes(
         self: &Arc<Self>,
         device_id: &str,
         scopes: &[String],
         role: &str,
     ) -> Result<(), Error> {
+        self.set_scopes_inner(device_id, scopes, role, None)
+    }
+
+    fn set_scopes_inner(
+        self: &Arc<Self>,
+        device_id: &str,
+        scopes: &[String],
+        role: &str,
+        compatibility: Option<&muster_core::roster::State>,
+    ) -> Result<(), Error> {
+        let parsed = parse_scopes(scopes)?;
+        if parsed.contains(&Scope::MulticaControl) && !parsed.contains(&Scope::MulticaView) {
+            return Err(Error::Invalid(
+                "multica.control also requires multica.view".into(),
+            ));
+        }
+        if parsed
+            .iter()
+            .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl))
+            && compatibility.is_none()
+        {
+            return Err(Error::Unavailable(
+                "Multica permission issuance requires a network compatibility check".into(),
+            ));
+        }
         let id =
             DeviceId::from_hex(device_id).map_err(|e| Error::Invalid(format!("device id: {e}")))?;
         let role = match role {
@@ -536,6 +617,11 @@ impl Daemon {
         };
         let entry = {
             let roster = self.roster().read().unwrap();
+            if compatibility.is_some_and(|snapshot| snapshot != roster.state()) {
+                return Err(Error::Conflict(
+                    "Membership changed during compatibility checks; retry".into(),
+                ));
+            }
             if roster.state().active(&id).is_none() {
                 return Err(Error::NotFound(format!(
                     "{} is not an active member",
@@ -569,6 +655,7 @@ impl Daemon {
     }
 
     pub fn set_policy(&self, view: &v1::Policy) -> Result<(), Error> {
+        let mut current = self.policy().write().unwrap();
         let policy = LocalPolicy {
             open_ports: view
                 .open_ports
@@ -595,9 +682,11 @@ impl Daemon {
                     })
                 })
                 .transpose()?,
+            offer_multica: current.offer_multica,
+            multica_workspaces: current.multica_workspaces.clone(),
         };
         self.store().set_policy(&policy)?;
-        *self.policy().write().unwrap() = policy;
+        *current = policy;
         let _ = self.changed.send(());
         Ok(())
     }
