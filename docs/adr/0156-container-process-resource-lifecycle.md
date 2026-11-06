@@ -85,6 +85,9 @@ The patch does not change guest page-cache reclamation or lower its RAM limit.
 - Runtime: an isolated 256 MiB Debian container with `--init` reaped eight
   orphaned test children, leaving zero zombies, and was automatically removed.
   The existing Multica container was not stopped or modified.
+- Hosted CI: PR #166 reports no checks; the repository permissions API confirms
+  Actions is disabled under ADR 0016. No hosted run was dispatched or claimed
+  to pass; local checks above are the validation evidence for this merge.
 - Signing, installation, publication, existing-container migration and provider
   end-to-end acceptance have not been performed. A source merge does not claim
   that the currently installed runtime has changed or its accumulated heap has
