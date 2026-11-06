@@ -577,6 +577,7 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                 )
                 .await
                 .map_err(|_| Error::Unavailable("session history connection timed out".into()))??;
+                let mut retried_overlap = false;
                 let has_more = loop {
                     let request = catch_up.request(&session_id);
                     let snapshot = tokio::time::timeout(
@@ -597,13 +598,25 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                         return Err(unexpected());
                     };
                     if let Some(has_more) = catch_up.apply(page)? {
-                        break has_more;
+                        if reconcile_queued(&mut queued, &catch_up.messages) {
+                            break has_more;
+                        }
+                        // A newly appended event can beat an older snapshot
+                        // across the independent streams. Keep its subscription
+                        // and queue for one more snapshot so their overlap can
+                        // establish order, instead of repeating the same race
+                        // on a brand-new subscription during sustained output.
+                        if retried_overlap {
+                            return Err(Error::Unavailable(
+                                "session history needs another catch-up".into(),
+                            ));
+                        }
+                        retried_overlap = true;
                     }
                 };
                 let ChatCatchUp {
                     messages, reset, ..
                 } = catch_up;
-                let reconciled = reconcile_queued(&mut queued, &messages);
                 let _ = tx.send(loop_message(Msg::Chat {
                     token: token.clone(),
                     device: device.clone(),
@@ -612,11 +625,6 @@ pub(super) fn watch_agent(state: &mut State, ctx: &Ctx, device: String, session_
                     reset,
                     result: Ok((messages, has_more)),
                 }));
-                if !reconciled {
-                    return Err(Error::Unavailable(
-                        "session history needs another catch-up".into(),
-                    ));
-                }
                 retry = 1;
                 let mut next = queued.pop_front();
                 loop {

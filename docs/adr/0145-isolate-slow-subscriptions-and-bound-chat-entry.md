@@ -82,3 +82,23 @@ acceptance independently after execution.
   history, cache delta recovery, reconnect and full earlier-history traversal.
 - Strict Clippy passed for all targets of the affected crates. Production
   signing, publication and physical-device acceptance remain separate.
+
+### Snapshot race under concurrent streams
+
+Separate streams can deliver a message appended after a history snapshot before
+that snapshot's response arrives. If the queued message has no snapshot overlap,
+replacing the subscription discards the ordering evidence and repeats the race
+under sustained output. Keep the same subscription and bounded queue for one
+additional history reconciliation. A second unresolved overlap still reconnects;
+never infer order from text or timestamps. Reproduce the stale-snapshot/new-event
+ordering and verify exactly one watch, a bounded second snapshot, ordered unique
+messages and cancellation on foreground replacement before publishing.
+
+The deterministic race test first failed with two subscriptions instead of one.
+A metadata marker after the live event proves the event was queued before the
+stale snapshot is released. With bounded same-subscription reconciliation, the
+newer event is recovered in order using one watch and two snapshots. A second
+case with a permanently unorderable event reconnects after exactly one additional
+snapshot and never displays that stale event. All eight chat-watch integration
+tests, 158 app-core unit tests (one existing ignore), and strict app-core Clippy
+pass. Both cases were added before publishing 1.1.24.
