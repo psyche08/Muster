@@ -6,6 +6,8 @@
 //! decided threat model (same-UID malware out of scope) a plain file is
 //! acceptable for now, and the API does not expose the choice.
 
+pub mod multica;
+
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -95,6 +97,7 @@ impl Store {
 
     fn init(conn: Connection) -> Result<Self> {
         conn.execute_batch(SCHEMA)?;
+        multica::init(&conn)?;
         // A crash mid-operation leaves pending rows; their outcome is now
         // undecidable and must never be retried automatically.
         conn.execute(
