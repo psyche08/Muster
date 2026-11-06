@@ -68,14 +68,17 @@ public repository. No live task is mutated merely to test this implementation.
 ## Verification
 
 - Source tests: the focused daemon Multica suite passed 38 tests (one live test
-  ignored), app-core passed 163 (one ignored), and two real-link access tests
-  passed. Coverage includes stale/wrong-workspace/editor denial, literal stdin
+  ignored), app-core passed 165 (one ignored), ten real-RPC chat-watch tests and
+  two real-link access tests passed. Coverage includes stale/wrong-workspace/editor denial, literal stdin
   and argument preservation, exact run cancellation, no-start assignment/status,
   scheduling refusal, duplicate/conflicting requests and ambiguous results
   without replay. App tests cover host-only, single-flight and late replies.
 - Build: strict Clippy passed for daemon and app-core across all targets.
   `MusterUI` compiled for macOS and arm64 iOS Simulator. Swift protobufs were
   regenerated with the checked-out package's generator.
+  Final post-merge Rust verification used temporary debug-info and incremental
+  cache disablement after disk-full linker failures, retaining the operator's
+  chat-specific target directory. No product build configuration changed.
 - Read-only installed CLI help and response shapes were compared with deployment
   documentation. No real agent, issue or task was changed to obtain evidence;
   subprocess tests use synthetic fixtures. The App's bundled CLI launcher and

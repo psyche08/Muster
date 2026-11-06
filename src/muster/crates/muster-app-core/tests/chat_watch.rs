@@ -24,6 +24,180 @@ struct Server {
 }
 
 #[derive(Default)]
+struct RetryServer {
+    watches: AtomicUsize,
+    snapshots: AtomicUsize,
+    disconnect: Notify,
+    recovering: Notify,
+    release: Notify,
+}
+
+impl Handler for RetryServer {
+    fn call(&self, _: Context, request: v1::request::Req, events: EventSink) -> HandlerFuture<'_> {
+        use v1::{request::Req, response::Resp};
+        Box::pin(async move {
+            match request {
+                Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                    device_id: "self".into(),
+                    ..Default::default()
+                }),
+                Req::NetworkStatus(_) => Resp::NetworkStatus(v1::NetworkStatus {
+                    has_network: true,
+                    ..Default::default()
+                }),
+                Req::AgentWatch(_) => {
+                    let index = self.watches.fetch_add(1, Ordering::SeqCst);
+                    events
+                        .send(event(v1::agent_event::Ev::State(v1::AgentSession {
+                            id: SESSION.into(),
+                            ..Default::default()
+                        })))
+                        .await
+                        .unwrap();
+                    if index == 0 {
+                        self.disconnect.notified().await;
+                        Resp::Error(v1::Error {
+                            code: v1::error::Code::Unavailable as i32,
+                            message: "synthetic disconnect".into(),
+                        })
+                    } else {
+                        events.cancelled().cancelled().await;
+                        Resp::Ack(v1::Ack {})
+                    }
+                }
+                Req::AgentMessages(_) => {
+                    let index = self.snapshots.fetch_add(1, Ordering::SeqCst);
+                    if index > 0 {
+                        self.recovering.notify_one();
+                        self.release.notified().await;
+                    }
+                    Resp::AgentMessages(v1::AgentMessagePage {
+                        session: SESSION.into(),
+                        messages: vec![message(index)],
+                        ..Default::default()
+                    })
+                }
+                _ => Resp::Ack(v1::Ack {}),
+            }
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reconnect_gets_fresh_readiness_and_native_application_evidence() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("rpc.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(RetryServer::default());
+    let handler = server.clone();
+    let task = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        muster_rpc::serve(stream, Principal::Local, handler).await;
+    });
+    let shell = Arc::new(TestShell::default());
+    let core = AppCore::start(
+        AppConfig {
+            dir: dir.path().into(),
+            mode: Mode::Socket { path: socket },
+            allow_loopback: true,
+        },
+        shell.clone(),
+    )
+    .await
+    .unwrap();
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    core.intent(app::Intent {
+        it: Some(app::intent::It::OpenAgent(app::OpenAgent {
+            session: SESSION.into(),
+            ..Default::default()
+        })),
+    });
+    let first = shell
+        .wait(|v| v.session_load.as_ref().is_some_and(|m| m.history_ready))
+        .await;
+    let first = first.session_load.unwrap();
+    let acknowledge = |marker: &app::SessionLoadMarker, apply_us| {
+        core.intent(app::Intent {
+            it: Some(app::intent::It::SessionViewApplied(
+                app::SessionViewApplied {
+                    trace_id: marker.trace_id.clone(),
+                    history_ready: marker.history_ready,
+                    apply_us,
+                    ..Default::default()
+                },
+            )),
+        });
+    };
+    acknowledge(&first, 11);
+    // Intents and diagnostic records are serialized by the core loop. Observe
+    // the acknowledgement before inducing the failure instead of sleeping.
+    shell
+        .wait(|_| {
+            shell
+                .diagnostics
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|r| r["event"] == "native_applied" && r["apply_us"] == 11)
+        })
+        .await;
+    server.disconnect.notify_one();
+    tokio::time::timeout(Duration::from_secs(5), server.recovering.notified())
+        .await
+        .unwrap();
+    let pending = shell.latest.lock().unwrap().session_load.clone().unwrap();
+    assert_ne!(pending.trace_id, first.trace_id);
+    assert!(
+        !pending.history_ready,
+        "cached history must not complete recovery"
+    );
+    acknowledge(&first, 99); // Must be rejected after the generation changed.
+    acknowledge(&pending, 22);
+    shell
+        .wait(|_| {
+            shell
+                .diagnostics
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|r| r["event"] == "native_applied" && r["apply_us"] == 22)
+        })
+        .await;
+    server.release.notify_one();
+    let recovered = shell
+        .wait(|v| {
+            v.session_load
+                .as_ref()
+                .is_some_and(|m| m.trace_id == pending.trace_id && m.history_ready)
+        })
+        .await;
+    assert_eq!(
+        common::messages(recovered.chat.as_ref().unwrap())[0].id,
+        "m1"
+    );
+    acknowledge(recovered.session_load.as_ref().unwrap(), 33);
+    shell
+        .wait(|_| {
+            shell
+                .diagnostics
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|r| r["event"] == "native_applied" && r["apply_us"] == 33)
+        })
+        .await;
+    let records = shell.diagnostics.lock().unwrap().clone();
+    assert!(!records.iter().any(|r| r["apply_us"] == 99));
+    assert!(records.iter().any(|r| r["trace_id"] == pending.trace_id
+        && r["event"] == "retry_of"
+        && r["entry_trace_id"] == first.trace_id));
+    assert_eq!(server.watches.load(Ordering::SeqCst), 2);
+    core.backend().local().close();
+    core.shutdown();
+    task.abort();
+}
+
+#[derive(Default)]
 struct CatalogServer {
     release_info: Notify,
     lists: AtomicUsize,
@@ -432,6 +606,7 @@ async fn stalled_history_reports_error_then_reconnects_without_blank_forever() {
 #[derive(Default)]
 struct HistoryServer {
     stale_event: bool,
+    same_id_update: bool,
     race: std::sync::atomic::AtomicBool,
     watch_count: AtomicUsize,
     snapshot_captured: Notify,
@@ -442,6 +617,10 @@ struct HistoryServer {
     hold: std::sync::atomic::AtomicBool,
     entered: Notify,
     release: Notify,
+    hold_watch: std::sync::atomic::AtomicBool,
+    deny_watch: std::sync::atomic::AtomicBool,
+    watch_entered: Notify,
+    release_watch: Notify,
 }
 impl Handler for HistoryServer {
     fn call(&self, _: Context, request: v1::request::Req, events: EventSink) -> HandlerFuture<'_> {
@@ -458,6 +637,16 @@ impl Handler for HistoryServer {
                 }),
                 Req::AgentWatch(_) => {
                     let index = self.watch_count.fetch_add(1, Ordering::SeqCst);
+                    if self.hold_watch.load(Ordering::SeqCst) {
+                        self.watch_entered.notify_one();
+                        self.release_watch.notified().await;
+                    }
+                    if self.deny_watch.load(Ordering::SeqCst) {
+                        return Resp::Error(v1::Error {
+                            code: v1::error::Code::Unauthorized as i32,
+                            message: "Session belongs to Multica".into(),
+                        });
+                    }
                     let race_watch = self.race.load(Ordering::SeqCst) && index == 0;
                     let _ = events
                         .send(event(v1::agent_event::Ev::State(v1::AgentSession {
@@ -467,11 +656,15 @@ impl Handler for HistoryServer {
                         .await;
                     if race_watch {
                         self.snapshot_captured.notified().await;
-                        if !self.stale_event {
-                            self.messages.lock().unwrap().push(message(1));
+                        let mut live = message(if self.same_id_update { 0 } else { 1 });
+                        if self.same_id_update {
+                            live.text = "completed response".into();
+                            self.messages.lock().unwrap()[0] = live.clone();
+                        } else if !self.stale_event {
+                            self.messages.lock().unwrap().push(live.clone());
                         }
                         events
-                            .send(event(v1::agent_event::Ev::Message(message(1))))
+                            .send(event(v1::agent_event::Ev::Message(live)))
                             .await
                             .unwrap();
                         events
@@ -508,21 +701,27 @@ impl Handler for HistoryServer {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn newer_live_event_before_history_response_keeps_the_same_subscription() {
-    history_event_race(false).await;
+    history_event_race(false, false).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn unorderable_live_event_reconnects_after_one_bounded_reconciliation() {
-    history_event_race(true).await;
+    history_event_race(true, false).await;
 }
 
-async fn history_event_race(stale_event: bool) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn same_id_update_before_old_snapshot_preserves_new_content() {
+    history_event_race(false, true).await;
+}
+
+async fn history_event_race(stale_event: bool, same_id_update: bool) {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
     let listener = tokio::net::UnixListener::bind(&socket).unwrap();
     let server = Arc::new(HistoryServer {
         messages: Mutex::new(vec![message(if stale_event { 10 } else { 0 })]),
         stale_event,
+        same_id_update,
         race: std::sync::atomic::AtomicBool::new(true),
         ..Default::default()
     });
@@ -562,18 +761,21 @@ async fn history_event_race(stale_event: bool) {
     server.race_release.notify_one();
     let view = shell
         .wait(|v| {
-            v.chat
-                .as_ref()
-                .is_some_and(|c| !c.loading && c.message_count == if stale_event { 1 } else { 2 })
+            v.chat.as_ref().is_some_and(|c| {
+                !c.loading && c.message_count == if stale_event || same_id_update { 1 } else { 2 }
+            })
         })
         .await;
+    let messages = common::messages(&view.chat.unwrap());
+    if same_id_update {
+        assert_eq!(messages[0].text, "completed response");
+    }
     assert_eq!(
-        common::messages(&view.chat.unwrap())
-            .iter()
-            .map(|m| m.id.as_str())
-            .collect::<Vec<_>>(),
+        messages.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
         if stale_event {
             vec!["m10"]
+        } else if same_id_update {
+            vec!["m0"]
         } else {
             vec!["m0", "m1"]
         }
@@ -593,7 +795,7 @@ async fn history_event_race(stale_event: bool) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
+async fn cached_reopen_requires_current_access_then_fetches_only_delta_and_loads_all_pages() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
     let listener = tokio::net::UnixListener::bind(&socket).unwrap();
@@ -664,7 +866,23 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         messages.push(message(1300));
     }
     server.hold.store(true, Ordering::SeqCst);
+    server.hold_watch.store(true, Ordering::SeqCst);
+    let requests_before_reopen = server.requests.lock().unwrap().len();
     open();
+    server.watch_entered.notified().await;
+    shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| c.loading && c.message_count == 0)
+        })
+        .await;
+    assert_eq!(
+        server.requests.lock().unwrap().len(),
+        requests_before_reopen
+    );
+    server.hold_watch.store(false, Ordering::SeqCst);
+    server.release_watch.notify_one();
     server.entered.notified().await;
     let cached = shell
         .wait(|v| {
@@ -704,6 +922,27 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     assert_eq!(
         server.requests.lock().unwrap().last().unwrap().first_id,
         "m0"
+    );
+    core.intent(app::Intent {
+        it: Some(app::intent::It::Navigate(app::Navigate {
+            back: true,
+            ..Default::default()
+        })),
+    });
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    server.deny_watch.store(true, Ordering::SeqCst);
+    let requests_before_denial = server.requests.lock().unwrap().len();
+    open();
+    shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| !c.load_error.is_empty() && c.message_count == 0)
+        })
+        .await;
+    assert_eq!(
+        server.requests.lock().unwrap().len(),
+        requests_before_denial
     );
     core.backend().local().close();
     core.shutdown();

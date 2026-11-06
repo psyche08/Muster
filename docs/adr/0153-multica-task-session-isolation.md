@@ -25,6 +25,10 @@ are terminated on ownership changes. Missing discovery can only deny a known
 owned ID, never establish a binding. No classification uses title, prompt or cwd.
 Clients clear revoked catalog/message projections and invalidate outstanding
 requests. Cached history is not shown before an authorized initial watch event.
+After that exact live-source event, cached messages may be displayed while the
+authorized delta request catches up; denied watches never restore the cache or
+start history reads. This preserves ordinary-session reopen performance without
+letting disk contents establish session access.
 
 Add default-off, host-local sharing configuration with explicit workspace IDs.
 Remote browsing uses independent `multica.view` authorization and filters the
@@ -84,3 +88,9 @@ exact authenticated API contract. The user has been asked for this prerequisite.
 - Runtime/device acceptance: no physical Mac-to-Mac/iPhone task session or DSH
   scheduling acceptance is claimed. Prior isolated App evidence remains in ADR
   0149 and does not establish the missing deployed Multica contract.
+
+Follow-up integration with main's session reconciliation changes retains the
+same-ID update and retry/readiness fixes. The real RPC history regression now
+holds initial admission to prove cached content remains absent, then admits it
+to check cached display and delta-only catch-up, and finally denies a reopened
+session to prove neither cached content nor a history request is exposed.

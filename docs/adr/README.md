@@ -265,6 +265,10 @@ superseding decisions get new numbers and bidirectional links.
 
 | [0150](0150-remote-desktop-session-creation.md) | Accepted; source, tests and builds verified; device acceptance pending | Create Claude and Codex desktop sessions from another device, including on a locked Mac |
 
+| [0151](0151-session-reconciliation-and-retry-evidence.md) | Accepted; source verified, device acceptance pending | Preserve same-ID updates and prove retry/foreground history application |
+
+| [0152](0152-install-1-1-26-for-desktop-session-acceptance.md) | Accepted; installation and acceptance pending | Install Apple 1.1.26 (116) to accept desktop session creation on the Macs |
+
 | [0153](0153-multica-task-session-isolation.md) | Accepted; device acceptance pending | Enforce registered task ownership and expose scoped Multica browsing |
 
 | [0154](0154-multica-workbench-operations.md) | Accepted; local slice verified, device acceptance pending | Edit Multica agents and operate issues through the host workbench |

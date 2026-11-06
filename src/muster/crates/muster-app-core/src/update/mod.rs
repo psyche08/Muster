@@ -211,11 +211,18 @@ pub enum Msg {
         session: String,
         result: Result<v1::AgentChatOptions, Error>,
     },
+    AgentLoadStarted {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        trace: crate::session_diagnostics::Trace,
+    },
     AgentStreamStarted {
         token: CancellationToken,
         device: String,
         session: String,
         provider: String,
+        cached: Option<v1::AgentMessagePage>,
     },
     MulticaTick,
     MulticaMutation {
@@ -747,12 +754,19 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             retry,
             result,
         } => desktop_chats::msg_desktop_chat_opened(state, ctx, view, device, retry, result),
+        Msg::AgentLoadStarted {
+            token,
+            device,
+            session,
+            trace,
+        } => agents::msg_agent_load_started(state, token, &device, &session, trace),
         Msg::AgentStreamStarted {
             token,
             device,
             session,
             provider,
-        } => agents::msg_agent_stream_started(state, token, &device, &session, &provider),
+            cached,
+        } => agents::msg_agent_stream_started(state, token, &device, &session, &provider, cached),
         Msg::MulticaTick => multica::discover(state, ctx),
         Msg::MulticaMutation {
             workspace,
