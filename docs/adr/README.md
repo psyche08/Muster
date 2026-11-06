@@ -256,3 +256,7 @@ Copy [template.md](template.md), choose the next unused four-digit number and a
 short descriptive filename, and add it above. Commit the decision alongside its
 implementation. Add later evidence without erasing earlier acceptance limits;
 superseding decisions get new numbers and bidirectional links.
+
+| [0147](0147-correlated-session-load-diagnostics.md) | Accepted | Correlate session entry, transport, history and native model application |
+
+| [0148](0148-per-device-provider-catalog-pages.md) | Accepted | Load ten conversations per device/provider on entry and continuation |

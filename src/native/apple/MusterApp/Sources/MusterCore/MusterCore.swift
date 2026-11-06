@@ -16,6 +16,8 @@ public final class MusterCore: MusterShell {
     private(set) var runtime: MusterRuntime!
     private let onViewModel: (ViewModel) -> Void
     private let onEffect: (UInt64, Effect) -> Void
+    private let diagnosticLock = NSLock()
+    private var decodedMarker = ""
 
     /// Starts a core. `onViewModel` and `onEffect` run on the core's own
     /// threads; hop to the main actor before touching views.
@@ -322,16 +324,37 @@ public final class MusterCore: MusterShell {
     // MARK: MusterShell
 
     public func onView(_ bytes: Data) {
-        #if os(iOS)
-        let diagnostic = PerformanceDiagnostics.shared
         let decodeStart = ProcessInfo.processInfo.systemUptime
-        #endif
         guard let vm = try? ViewModel(serializedBytes: bytes) else { return }
+        let decodeSeconds = ProcessInfo.processInfo.systemUptime - decodeStart
         #if os(iOS)
-        diagnostic.recordView(bytes: bytes.count, decodeSeconds: ProcessInfo.processInfo.systemUptime - decodeStart,
+        PerformanceDiagnostics.shared.recordView(bytes: bytes.count, decodeSeconds: decodeSeconds,
             screen: vm.screen.rawValue, messages: Int(vm.chat.messageCount))
         #endif
+        if vm.hasSessionLoad {
+            let marker = "\(vm.sessionLoad.traceID):\(vm.sessionLoad.historyReady)"
+            diagnosticLock.lock()
+            let first = decodedMarker != marker
+            decodedMarker = marker
+            diagnosticLock.unlock()
+            if first {
+                sessionViewApplied(vm.sessionLoad, decodedOnly: true,
+                    decodeUS: UInt64(max(0, decodeSeconds) * 1_000_000))
+            }
+        }
         onViewModel(vm)
+    }
+
+    /// A native timing observation; Rust validates the token against the active chat.
+    public func sessionViewApplied(_ marker: Muster_App_SessionLoadMarker, decodedOnly: Bool = false,
+                                  decodeUS: UInt64 = 0, queueUS: UInt64 = 0, applyUS: UInt64 = 0) {
+        // Initial onView may run during MusterRuntime construction.
+        guard runtime != nil else { return }
+        send(.sessionViewApplied(Muster_App_SessionViewApplied.with {
+            $0.traceID = marker.traceID; $0.historyReady = marker.historyReady
+            $0.decodedOnly = decodedOnly; $0.decodeUs = decodeUS
+            $0.queueUs = queueUS; $0.applyUs = applyUS
+        }))
     }
 
     public func onEffect(id: UInt64, bytes: Data) {
@@ -342,6 +365,8 @@ public final class MusterCore: MusterShell {
         if case .sendDiagnostic(let record) = effect.ef {
             #if os(iOS)
             PerformanceDiagnostics.shared.recordSendDiagnostic(record.json)
+            #elseif os(macOS)
+            DesktopDiagnostics.shared.append(record.json)
             #endif
             return // Fire-and-forget: never acknowledges an application operation.
         }

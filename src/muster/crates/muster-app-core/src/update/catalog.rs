@@ -41,11 +41,7 @@ pub(super) fn intent(state: &mut State, ctx: &Ctx, a: app::AgentCatalogAction) {
 }
 fn load_more(state: &mut State, ctx: &Ctx, display: String) {
     use muster_agent::catalog::{PAGE_SIZE, display_key};
-    if state
-        .agent_catalog_pending
-        .get(&display)
-        .is_some_and(|n| *n > 0)
-    {
+    if state.agent_catalog_pending.values().any(|n| *n > 0) {
         return;
     }
     let projected = crate::catalog::project(
@@ -59,13 +55,18 @@ fn load_more(state: &mut State, ctx: &Ctx, display: String) {
     if !projected.iter().any(|g| g.key == display && g.has_more) {
         return;
     }
+    let budget = if state.agents.query.trim().is_empty() {
+        crate::catalog::PROVIDER_LIMIT.to_string()
+    } else {
+        display.clone()
+    };
     let current = *state
         .agent_catalog_limits
-        .get(&display)
+        .get(&budget)
         .unwrap_or(&PAGE_SIZE);
     state
         .agent_catalog_limits
-        .insert(display.clone(), current + PAGE_SIZE);
+        .insert(budget, current + PAGE_SIZE);
     if !state.agents.query.trim().is_empty() {
         if state.agents.search_has_more && !state.agents.searching {
             start_search(state, ctx, true);
@@ -76,7 +77,9 @@ fn load_more(state: &mut State, ctx: &Ctx, display: String) {
         .agent_catalog_groups
         .iter()
         .filter(|g| {
-            display_key(g) == display && !g.next_cursor.is_empty() && !state.offline(&g.device_id)
+            (g.kind == "provider" || display_key(g) == display)
+                && !g.next_cursor.is_empty()
+                && !state.offline(&g.device_id)
         })
         .cloned()
         .collect();
@@ -103,6 +106,7 @@ fn load_more(state: &mut State, ctx: &Ctx, display: String) {
                 let response = client
                     .call(Req::AgentList(v1::AgentListRequest {
                         grouped: true,
+                        provider_pages: group.kind == "provider",
                         group_key: group.key.clone(),
                         group_cursor: group.next_cursor.clone(),
                         limit: PAGE_SIZE as u32,

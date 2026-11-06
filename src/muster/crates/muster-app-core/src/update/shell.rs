@@ -201,6 +201,11 @@ pub fn effect_result(state: &mut State, ctx: &Ctx, id: u64, result: app::EffectR
 }
 
 pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
+    crate::session_diagnostics::emit(
+        ctx.shell.as_ref(),
+        serde_json::json!({"record_type":"lifecycle",
+        "event":event.as_str_name(), "trace_id":state.chat.as_ref().and_then(|c| c.load_trace.as_ref()).map(|t| t.id())}),
+    );
     match event {
         app::Lifecycle::Foreground => {
             state.foreground = true;

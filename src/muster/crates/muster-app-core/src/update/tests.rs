@@ -548,6 +548,7 @@ fn file_links_are_relative_to_the_session_and_cannot_escape_it() {
 fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
     let mut state = State::new(false, None);
     state.chat = Some(crate::state::Chat {
+        load_trace: None,
         content_revision: crate::state::next_content_revision(),
         cache_dirty: false,
         device: "remote".into(),

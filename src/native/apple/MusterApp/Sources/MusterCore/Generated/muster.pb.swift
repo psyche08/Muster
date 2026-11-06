@@ -1316,6 +1316,15 @@ public nonisolated struct Muster_V1_Event: Sendable {
     set {ev = .forwardOpened(newValue)}
   }
 
+  /// Optional read-only diagnostics; never a business event.
+  public var rpcTiming: Muster_V1_RpcTiming {
+    get {
+      if case .rpcTiming(let v)? = ev {return v}
+      return Muster_V1_RpcTiming()
+    }
+    set {ev = .rpcTiming(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Ev: Equatable, Sendable {
@@ -1329,6 +1338,78 @@ public nonisolated struct Muster_V1_Event: Sendable {
     /// local streaming lease; held until cancellation/disconnect
     case desktopUpdateReady(Muster_V1_Ack)
     case forwardOpened(Muster_V1_ForwardOpened)
+    /// Optional read-only diagnostics; never a business event.
+    case rpcTiming(Muster_V1_RpcTiming)
+
+  }
+
+  public init() {}
+}
+
+/// Bounded timing markers on requests carrying a valid diagnostic_id. Durations
+/// are monotonic within source; never subtract timestamps between devices.
+public nonisolated struct Muster_V1_RpcTiming: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var phase: Muster_V1_RpcTiming.Phase = .unspecified
+
+  public var elapsedUs: UInt64 = 0
+
+  public var reusedConnection: Bool = false
+
+  public var diagnosticID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Phase: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case poolReady // = 1
+    case streamAllocated // = 2
+    case serviceReady // = 3
+    case serverReceived // = 4
+    case serverFinished // = 5
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .poolReady
+      case 2: self = .streamAllocated
+      case 3: self = .serviceReady
+      case 4: self = .serverReceived
+      case 5: self = .serverFinished
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .poolReady: return 1
+      case .streamAllocated: return 2
+      case .serviceReady: return 3
+      case .serverReceived: return 4
+      case .serverFinished: return 5
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_RpcTiming.Phase] = [
+      .unspecified,
+      .poolReady,
+      .streamAllocated,
+      .serviceReady,
+      .serverReceived,
+      .serverFinished,
+    ]
 
   }
 
@@ -2927,6 +3008,9 @@ public nonisolated struct Muster_V1_AgentListRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// ten roots per provider, independent source cursors
+  public var providerPages: Bool = false
+
   /// native group pages, ten roots per page
   public var grouped: Bool = false
 
@@ -3000,6 +3084,9 @@ public nonisolated struct Muster_V1_AgentCatalogGroup: Sendable {
   /// assigned by the receiving Rust core
   public var deviceID: String = String()
 
+  /// provider-page roots belonging to Pin
+  public var pinnedCount: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3009,6 +3096,11 @@ public nonisolated struct Muster_V1_AgentWatchRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  public var providerPages: Bool = false
+
+  /// Optional bounded opaque correlation ID; no authorization meaning.
+  public var diagnosticID: String = String()
 
   public var grouped: Bool = false
 
@@ -3258,6 +3350,8 @@ public nonisolated struct Muster_V1_AgentMessagesRequest: Sendable {
 
   /// hash of cached range excluding after_id
   public var prefixHash: Data = Data()
+
+  public var diagnosticID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -6936,7 +7030,7 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Event"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0\u{3}rpc_timing\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7061,6 +7155,19 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.ev = .forwardOpened(v)
         }
       }()
+      case 69: try {
+        var v: Muster_V1_RpcTiming?
+        var hadOneofValue = false
+        if let current = self.ev {
+          hadOneofValue = true
+          if case .rpcTiming(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.ev = .rpcTiming(v)
+        }
+      }()
       default: break
       }
     }
@@ -7108,6 +7215,10 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
       guard case .forwardOpened(let v)? = self.ev else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 68)
     }()
+    case .rpcTiming?: try {
+      guard case .rpcTiming(let v)? = self.ev else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 69)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -7118,6 +7229,55 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
+}
+
+nonisolated extension Muster_V1_RpcTiming: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RpcTiming"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{3}elapsed_us\0\u{3}reused_connection\0\u{3}diagnostic_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.elapsedUs) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.reusedConnection) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.diagnosticID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.phase != .unspecified {
+      try visitor.visitSingularEnumField(value: self.phase, fieldNumber: 1)
+    }
+    if self.elapsedUs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.elapsedUs, fieldNumber: 2)
+    }
+    if self.reusedConnection != false {
+      try visitor.visitSingularBoolField(value: self.reusedConnection, fieldNumber: 3)
+    }
+    if !self.diagnosticID.isEmpty {
+      try visitor.visitSingularStringField(value: self.diagnosticID, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_RpcTiming, rhs: Muster_V1_RpcTiming) -> Bool {
+    if lhs.phase != rhs.phase {return false}
+    if lhs.elapsedUs != rhs.elapsedUs {return false}
+    if lhs.reusedConnection != rhs.reusedConnection {return false}
+    if lhs.diagnosticID != rhs.diagnosticID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_RpcTiming.Phase: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}POOL_READY\0\u{1}STREAM_ALLOCATED\0\u{1}SERVICE_READY\0\u{1}SERVER_RECEIVED\0\u{1}SERVER_FINISHED\0")
 }
 
 nonisolated extension Muster_V1_DeviceInfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -10107,7 +10267,7 @@ nonisolated extension Muster_V1_AgentOrganizeRequest.Action: SwiftProtobuf._Prot
 
 nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentListRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}limit\0\u{1}provider\0\u{1}query\0\u{3}search_cursor\0\u{1}grouped\0\u{3}group_key\0\u{3}group_cursor\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}limit\0\u{1}provider\0\u{1}query\0\u{3}search_cursor\0\u{1}grouped\0\u{3}group_key\0\u{3}group_cursor\0\u{3}provider_pages\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10122,6 +10282,7 @@ nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftPr
       case 5: try { try decoder.decodeSingularBoolField(value: &self.grouped) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.groupKey) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.groupCursor) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.providerPages) }()
       default: break
       }
     }
@@ -10149,10 +10310,14 @@ nonisolated extension Muster_V1_AgentListRequest: SwiftProtobuf.Message, SwiftPr
     if !self.groupCursor.isEmpty {
       try visitor.visitSingularStringField(value: self.groupCursor, fieldNumber: 7)
     }
+    if self.providerPages != false {
+      try visitor.visitSingularBoolField(value: self.providerPages, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentListRequest, rhs: Muster_V1_AgentListRequest) -> Bool {
+    if lhs.providerPages != rhs.providerPages {return false}
     if lhs.grouped != rhs.grouped {return false}
     if lhs.groupKey != rhs.groupKey {return false}
     if lhs.groupCursor != rhs.groupCursor {return false}
@@ -10222,7 +10387,7 @@ nonisolated extension Muster_V1_AgentSessionPage: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_AgentCatalogGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentCatalogGroup"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}kind\0\u{1}title\0\u{1}provider\0\u{3}section_id\0\u{1}count\0\u{3}next_cursor\0\u{3}device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}kind\0\u{1}title\0\u{1}provider\0\u{3}section_id\0\u{1}count\0\u{3}next_cursor\0\u{3}device_id\0\u{3}pinned_count\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10238,6 +10403,7 @@ nonisolated extension Muster_V1_AgentCatalogGroup: SwiftProtobuf.Message, SwiftP
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.count) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 9: try { try decoder.decodeSingularUInt32Field(value: &self.pinnedCount) }()
       default: break
       }
     }
@@ -10268,6 +10434,9 @@ nonisolated extension Muster_V1_AgentCatalogGroup: SwiftProtobuf.Message, SwiftP
     if !self.deviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 8)
     }
+    if self.pinnedCount != 0 {
+      try visitor.visitSingularUInt32Field(value: self.pinnedCount, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -10280,6 +10449,7 @@ nonisolated extension Muster_V1_AgentCatalogGroup: SwiftProtobuf.Message, SwiftP
     if lhs.count != rhs.count {return false}
     if lhs.nextCursor != rhs.nextCursor {return false}
     if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.pinnedCount != rhs.pinnedCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -10287,7 +10457,7 @@ nonisolated extension Muster_V1_AgentCatalogGroup: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_AgentWatchRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentWatchRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{3}catalog_only\0\u{1}limit\0\u{1}grouped\0\u{3}visible_sessions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{3}catalog_only\0\u{1}limit\0\u{1}grouped\0\u{3}visible_sessions\0\u{3}diagnostic_id\0\u{3}provider_pages\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10300,6 +10470,8 @@ nonisolated extension Muster_V1_AgentWatchRequest: SwiftProtobuf.Message, SwiftP
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.limit) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.grouped) }()
       case 5: try { try decoder.decodeRepeatedStringField(value: &self.visibleSessions) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.diagnosticID) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.providerPages) }()
       default: break
       }
     }
@@ -10321,10 +10493,18 @@ nonisolated extension Muster_V1_AgentWatchRequest: SwiftProtobuf.Message, SwiftP
     if !self.visibleSessions.isEmpty {
       try visitor.visitRepeatedStringField(value: self.visibleSessions, fieldNumber: 5)
     }
+    if !self.diagnosticID.isEmpty {
+      try visitor.visitSingularStringField(value: self.diagnosticID, fieldNumber: 6)
+    }
+    if self.providerPages != false {
+      try visitor.visitSingularBoolField(value: self.providerPages, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentWatchRequest, rhs: Muster_V1_AgentWatchRequest) -> Bool {
+    if lhs.providerPages != rhs.providerPages {return false}
+    if lhs.diagnosticID != rhs.diagnosticID {return false}
     if lhs.grouped != rhs.grouped {return false}
     if lhs.visibleSessions != rhs.visibleSessions {return false}
     if lhs.session != rhs.session {return false}
@@ -10725,7 +10905,7 @@ nonisolated extension Muster_V1_TurnFileChange: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Muster_V1_AgentMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentMessagesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}tail\0\u{3}before_id\0\u{3}after_id\0\u{3}first_id\0\u{3}prefix_hash\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}tail\0\u{3}before_id\0\u{3}after_id\0\u{3}first_id\0\u{3}prefix_hash\0\u{3}diagnostic_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10739,6 +10919,7 @@ nonisolated extension Muster_V1_AgentMessagesRequest: SwiftProtobuf.Message, Swi
       case 4: try { try decoder.decodeSingularStringField(value: &self.afterID) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.firstID) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.prefixHash) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.diagnosticID) }()
       default: break
       }
     }
@@ -10763,6 +10944,9 @@ nonisolated extension Muster_V1_AgentMessagesRequest: SwiftProtobuf.Message, Swi
     if !self.prefixHash.isEmpty {
       try visitor.visitSingularBytesField(value: self.prefixHash, fieldNumber: 6)
     }
+    if !self.diagnosticID.isEmpty {
+      try visitor.visitSingularStringField(value: self.diagnosticID, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -10773,6 +10957,7 @@ nonisolated extension Muster_V1_AgentMessagesRequest: SwiftProtobuf.Message, Swi
     if lhs.afterID != rhs.afterID {return false}
     if lhs.firstID != rhs.firstID {return false}
     if lhs.prefixHash != rhs.prefixHash {return false}
+    if lhs.diagnosticID != rhs.diagnosticID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

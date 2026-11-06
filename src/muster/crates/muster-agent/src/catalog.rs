@@ -93,6 +93,26 @@ pub fn page(
     after: &str,
     visible: &[String],
 ) -> Result<AgentSessionPage, Error> {
+    page_impl(sessions, sections, requested, after, visible, false)
+}
+
+pub fn provider_page(
+    sessions: Vec<AgentSession>,
+    sections: Vec<AgentSection>,
+    requested: &str,
+    after: &str,
+    visible: &[String],
+) -> Result<AgentSessionPage, Error> {
+    page_impl(sessions, sections, requested, after, visible, true)
+}
+fn page_impl(
+    sessions: Vec<AgentSession>,
+    sections: Vec<AgentSection>,
+    requested: &str,
+    after: &str,
+    visible: &[String],
+    per_provider: bool,
+) -> Result<AgentSessionPage, Error> {
     if after.len() > 2048 || visible.len() > 2000 {
         return Err(Error::Invalid("Catalog request is too large".into()));
     }
@@ -118,7 +138,10 @@ pub fn page(
             .push(s);
     }
     let mut groups: BTreeMap<String, (AgentCatalogGroup, Vec<&AgentSession>)> = BTreeMap::new();
-    for (key, title) in [("pin", "Pin"), ("recent", "Recent")] {
+    for (key, title) in [("pin", "Pin"), ("recent", "Recent")]
+        .into_iter()
+        .filter(|_| !per_provider)
+    {
         groups.insert(
             key.into(),
             (
@@ -136,7 +159,17 @@ pub fn page(
         if roots[&session_key(s)] != session_key(s) {
             continue;
         }
-        let g = group(s, &sections);
+        let g = if per_provider {
+            AgentCatalogGroup {
+                key: format!("provider:{}", s.provider),
+                kind: "provider".into(),
+                provider: s.provider.clone(),
+                title: s.provider.clone(),
+                ..Default::default()
+            }
+        } else {
+            group(s, &sections)
+        };
         groups.entry(g.key.clone()).or_insert((g, vec![])).1.push(s);
     }
     if !requested.is_empty() && !groups.contains_key(requested) {
@@ -146,7 +179,7 @@ pub fn page(
     }
     let visible: HashSet<_> = visible.iter().map(String::as_str).collect();
     let mut out = AgentSessionPage {
-        sections,
+        sections: sections.clone(),
         ..Default::default()
     };
     for (key, (mut group, mut rows)) in groups {
@@ -155,6 +188,12 @@ pub fn page(
         }
         rows.sort_by_key(|s| boundary(s));
         group.count = rows.len() as u32;
+        if per_provider {
+            group.pinned_count = rows
+                .iter()
+                .filter(|s| crate::catalog::group(s, &sections).kind == "pin")
+                .count() as u32;
+        }
         let eligible: Vec<_> = rows
             .iter()
             .copied()
@@ -201,6 +240,79 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn provider_pages_share_pin_budget_and_continue_without_duplicates() {
+        let all: Vec<_> = ["claude", "codex"]
+            .into_iter()
+            .flat_map(|provider| {
+                (0..23).map(move |i| AgentSession {
+                    id: format!("{provider}-{i:02}"),
+                    provider: provider.into(),
+                    updated_unix: 100 - i,
+                    pinned: i % 2 == 0,
+                    ..Default::default()
+                })
+            })
+            .collect();
+        let first = provider_page(all.clone(), vec![], "", "", &[]).unwrap();
+        assert_eq!(first.sessions.len(), 20);
+        assert_eq!(first.groups.len(), 2);
+        for g in &first.groups {
+            assert_eq!(g.count, 23);
+            assert_eq!(g.pinned_count, 12);
+            assert_eq!(
+                first
+                    .sessions
+                    .iter()
+                    .filter(|s| s.provider == g.provider)
+                    .count(),
+                10
+            );
+            let second = provider_page(all.clone(), vec![], &g.key, &g.next_cursor, &[]).unwrap();
+            assert_eq!(second.sessions.len(), 10);
+            assert!(
+                second
+                    .sessions
+                    .iter()
+                    .all(|s| !first.sessions.iter().any(|f| f.id == s.id))
+            );
+            let third = provider_page(
+                all.clone(),
+                vec![],
+                &g.key,
+                &second.groups[0].next_cursor,
+                &[],
+            )
+            .unwrap();
+            assert_eq!(third.sessions.len(), 3);
+            assert!(third.groups[0].next_cursor.is_empty());
+            let visible: Vec<_> = first
+                .sessions
+                .iter()
+                .chain(&second.sessions)
+                .map(|s| s.id.clone())
+                .collect();
+            let refreshed = provider_page(all.clone(), vec![], "", "", &visible).unwrap();
+            assert_eq!(
+                refreshed
+                    .sessions
+                    .iter()
+                    .filter(|s| s.provider == g.provider)
+                    .count(),
+                20
+            );
+        }
+        assert!(
+            provider_page(
+                all,
+                vec![],
+                "provider:codex",
+                &first.groups[0].next_cursor,
+                &[]
+            )
+            .is_err()
+        );
+    }
     fn fixtures() -> Vec<AgentSession> {
         let mut all = Vec::new();
         for i in 0..23 {
