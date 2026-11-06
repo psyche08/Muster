@@ -413,6 +413,11 @@ async fn stalled_history_reports_error_then_reconnects_without_blank_forever() {
 
 #[derive(Default)]
 struct HistoryServer {
+    stale_event: bool,
+    race: std::sync::atomic::AtomicBool,
+    watch_count: AtomicUsize,
+    snapshot_captured: Notify,
+    race_release: Notify,
     messages: Mutex<Vec<v1::AgentMessage>>,
     requests: Mutex<Vec<v1::AgentMessagesRequest>>,
     deliveries: Mutex<Vec<usize>>,
@@ -434,12 +439,32 @@ impl Handler for HistoryServer {
                     ..Default::default()
                 }),
                 Req::AgentWatch(_) => {
+                    let index = self.watch_count.fetch_add(1, Ordering::SeqCst);
+                    let race_watch = self.race.load(Ordering::SeqCst) && index == 0;
                     let _ = events
                         .send(event(v1::agent_event::Ev::State(v1::AgentSession {
                             id: SESSION.into(),
                             ..Default::default()
                         })))
                         .await;
+                    if race_watch {
+                        self.snapshot_captured.notified().await;
+                        if !self.stale_event {
+                            self.messages.lock().unwrap().push(message(1));
+                        }
+                        events
+                            .send(event(v1::agent_event::Ev::Message(message(1))))
+                            .await
+                            .unwrap();
+                        events
+                            .send(event(v1::agent_event::Ev::State(v1::AgentSession {
+                                id: SESSION.into(),
+                                title: "queued-live-message".into(),
+                                ..Default::default()
+                            })))
+                            .await
+                            .unwrap();
+                    }
                     events.cancelled().cancelled().await;
                     Resp::Ack(v1::Ack {})
                 }
@@ -450,6 +475,10 @@ impl Handler for HistoryServer {
                         self.release.notified().await;
                     }
                     let page = muster_proto::history::page(&self.messages.lock().unwrap(), &r);
+                    if self.race.swap(false, Ordering::SeqCst) {
+                        self.snapshot_captured.notify_one();
+                        self.race_release.notified().await;
+                    }
                     self.deliveries.lock().unwrap().push(page.messages.len());
                     Resp::AgentMessages(page)
                 }
@@ -457,6 +486,92 @@ impl Handler for HistoryServer {
             }
         })
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn newer_live_event_before_history_response_keeps_the_same_subscription() {
+    history_event_race(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unorderable_live_event_reconnects_after_one_bounded_reconciliation() {
+    history_event_race(true).await;
+}
+
+async fn history_event_race(stale_event: bool) {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("rpc.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(HistoryServer {
+        messages: Mutex::new(vec![message(if stale_event { 10 } else { 0 })]),
+        stale_event,
+        race: std::sync::atomic::AtomicBool::new(true),
+        ..Default::default()
+    });
+    let handler = server.clone();
+    let task = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        muster_rpc::serve(stream, Principal::Local, handler).await;
+    });
+    let shell = Arc::new(TestShell::default());
+    let core = AppCore::start(
+        AppConfig {
+            dir: dir.path().into(),
+            mode: Mode::Socket { path: socket },
+            allow_loopback: true,
+        },
+        shell.clone(),
+    )
+    .await
+    .unwrap();
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    core.intent(app::Intent {
+        it: Some(app::intent::It::OpenAgent(app::OpenAgent {
+            session: SESSION.into(),
+            ..Default::default()
+        })),
+    });
+    // The metadata marker follows the live message on the event stream, so
+    // observing it proves that message was queued before releasing the snapshot.
+    shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .and_then(|c| c.session.as_ref())
+                .is_some_and(|s| s.title == "queued-live-message")
+        })
+        .await;
+    server.race_release.notify_one();
+    let view = shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| !c.loading && c.message_count == if stale_event { 1 } else { 2 })
+        })
+        .await;
+    assert_eq!(
+        common::messages(&view.chat.unwrap())
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect::<Vec<_>>(),
+        if stale_event {
+            vec!["m10"]
+        } else {
+            vec!["m0", "m1"]
+        }
+    );
+    assert_eq!(
+        server.watch_count.load(Ordering::SeqCst),
+        if stale_event { 2 } else { 1 },
+        "a stale snapshot must not replace the live subscription"
+    );
+    assert_eq!(
+        server.requests.lock().unwrap().len(),
+        if stale_event { 3 } else { 2 }
+    );
+    core.backend().local().close();
+    core.shutdown();
+    task.abort();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
