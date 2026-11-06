@@ -18,6 +18,7 @@ pub fn operation(req: &Req) -> Option<v1::LockedUseOperation> {
             Req::AgentChatOptions(r) => Operation::ChatOptions(r.clone()),
             Req::AgentChatSetOptions(r) => Operation::ChatSetOptions(r.clone()),
             Req::AgentOrganize(r) => Operation::Organize(r.clone()),
+            Req::AgentNativeCreate(r) => Operation::NativeCreate(r.clone()),
             _ => return None,
         }),
     })
@@ -38,6 +39,7 @@ pub fn request(op: &v1::LockedUseOperation) -> Option<Req> {
         Operation::ChatOptions(r) => Req::AgentChatOptions(r.clone()),
         Operation::ChatSetOptions(r) => Req::AgentChatSetOptions(r.clone()),
         Operation::Organize(r) => Req::AgentOrganize(r.clone()),
+        Operation::NativeCreate(r) => Req::AgentNativeCreate(r.clone()),
         Operation::Terminal(_) | Operation::Device(_) => return None,
     })
 }
@@ -68,6 +70,7 @@ pub fn turn(op: &v1::LockedUseOperation) -> Option<&str> {
         Operation::ChatOptions(r) => &r.op_id,
         Operation::ChatSetOptions(r) => &r.op_id,
         Operation::Organize(r) => &r.op_id,
+        Operation::NativeCreate(r) => &r.op_id,
     };
     (!id.is_empty()
         && id.len() <= 128
@@ -360,6 +363,39 @@ mod organization_tests {
             assert_ne!(
                 digest(&original),
                 digest(&operation(&Req::AgentOrganize(changed)).unwrap())
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod native_create_tests {
+    use super::*;
+    #[test]
+    fn creation_provider_directory_and_first_message_are_signed() {
+        let request = v1::AgentNativeCreateRequest {
+            op_id: "operation".into(),
+            provider: "codex".into(),
+            directory: "/Users/example/project".into(),
+            prompt: "Summarize the build".into(),
+        };
+        let original = operation(&Req::AgentNativeCreate(request.clone())).unwrap();
+        assert_eq!(
+            super::request(&original),
+            Some(Req::AgentNativeCreate(request.clone()))
+        );
+        assert_eq!(turn(&original), Some("operation"));
+        for field in 0..4 {
+            let mut changed = request.clone();
+            match field {
+                0 => changed.op_id = "other-operation".into(),
+                1 => changed.provider = "claude".into(),
+                2 => changed.directory = "/Users/example/other".into(),
+                _ => changed.prompt = "Delete the build".into(),
+            };
+            assert_ne!(
+                digest(&original),
+                digest(&operation(&Req::AgentNativeCreate(changed)).unwrap())
             );
         }
     }

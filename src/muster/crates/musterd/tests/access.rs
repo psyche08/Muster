@@ -285,6 +285,20 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             }))
             .await
     ));
+    // A desktop session needs Agent control of its provider (ADR 0150):
+    // Claude is refused before the request is read; Codex passes
+    // authorization and is refused only for its (empty) first message.
+    let create = |provider: &str| {
+        Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
+            op_id: format!("remote-create-{provider}"),
+            provider: provider.into(),
+            directory: dir_a.path().display().to_string(),
+            prompt: String::new(),
+        })
+    };
+    assert!(unauthorized(&remote.call(create("claude")).await));
+    let codex = remote.call(create("codex")).await;
+    assert!(codex.is_err() && !unauthorized(&codex), "{codex:?}");
     assert!(unauthorized(
         &remote
             .call(Req::AgentSend(v1::AgentSendRequest {

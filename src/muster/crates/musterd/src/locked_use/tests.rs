@@ -2280,3 +2280,172 @@ async fn a_scheduled_lease_needs_locked_use_on_this_mac() {
     assert!(owner.writes.clone().try_write_owned().is_ok());
     daemon.shutdown().await;
 }
+
+/// A Codex desktop session in `cwd` whose first user message is `text`.
+fn codex_session(home: &std::path::Path, id: &str, cwd: &std::path::Path, text: &str) {
+    let day = home.join("codex/sessions/2026/11/06");
+    std::fs::create_dir_all(&day).unwrap();
+    let meta = format!(
+        r#"{{"type":"session_meta","payload":{{"id":"{id}","cwd":"{}"}}}}"#,
+        cwd.display()
+    );
+    let user = format!(
+        r#"{{"type":"response_item","payload":{{"type":"message","role":"user","content":[{{"type":"input_text","text":"{text}"}}]}}}}"#
+    );
+    std::fs::write(
+        day.join(format!("rollout-2026-11-06T10-00-00-{id}.jsonl")),
+        format!("{meta}\n{{\"type\":\"turn_context\",\"payload\":{{}}}}\n{user}\n"),
+    )
+    .unwrap();
+}
+
+fn desktop_creation(op_id: &str, directory: &std::path::Path) -> v1::AgentNativeCreateRequest {
+    v1::AgentNativeCreateRequest {
+        op_id: op_id.into(),
+        provider: "codex".into(),
+        directory: directory.display().to_string(),
+        prompt: "Synthetic first message".into(),
+    }
+}
+
+#[tokio::test]
+async fn desktop_creation_is_refused_before_any_unlock_unless_it_can_run() {
+    let (dir, daemon, owner, os, old, _key, peer, old_job) = start().await;
+    owner.cancel(peer, old.nonce(), None).await.unwrap();
+    old_job.await.unwrap();
+    let project = dir.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let request = desktop_creation("create-1", &project);
+    let prepare = |request: v1::AgentNativeCreateRequest, queue: &str| {
+        let mut operation =
+            muster_proto::locked_use::operation(&Req::AgentNativeCreate(request)).unwrap();
+        operation.provider_queue = queue.into();
+        owner.prepare(daemon.clone(), peer, operation)
+    };
+    let refused = [
+        // The requester controls Codex only.
+        (
+            v1::AgentNativeCreateRequest {
+                provider: "claude".into(),
+                ..request.clone()
+            },
+            "",
+        ),
+        (desktop_creation("create-1", &project.join("missing")), ""),
+        (
+            desktop_creation("create-1", std::path::Path::new("project")),
+            "",
+        ),
+        (
+            v1::AgentNativeCreateRequest {
+                prompt: " ".into(),
+                ..request.clone()
+            },
+            "",
+        ),
+        (desktop_creation(&"x".repeat(129), &project), ""),
+        (request.clone(), "claude"),
+    ];
+    for (request, queue) in refused {
+        assert!(
+            prepare(request.clone(), queue).await.is_err(),
+            "{request:?} {queue}"
+        );
+    }
+    let codex = muster_core::apps::app("codex").unwrap().bundle_id;
+    daemon
+        .policy()
+        .write()
+        .unwrap()
+        .ax_allowlist
+        .retain(|bundle| bundle != codex);
+    assert!(matches!(
+        prepare(request.clone(), "codex").await,
+        Err(Error::Unauthorized(_))
+    ));
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    assert!(owner.current.lock().unwrap().is_none());
+    daemon
+        .policy()
+        .write()
+        .unwrap()
+        .ax_allowlist
+        .push(codex.into());
+    let Resp::LockedUseChallenge(prepared) = prepare(request, "codex").await.unwrap() else {
+        panic!()
+    };
+    let c = Challenge::decode(&prepared.challenge).unwrap();
+    assert_eq!(c.turn(), "create-1");
+    owner.cancel(peer, c.nonce(), None).await.unwrap();
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn desktop_creation_settles_read_only_on_its_unique_new_transcript() {
+    use muster_proto::Message;
+    let (dir, daemon, owner, _os, old, _key, peer, old_job) = start().await;
+    owner.cancel(peer, old.nonce(), None).await.unwrap();
+    old_job.await.unwrap();
+    let project = dir.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let canonical = std::fs::canonicalize(&project).unwrap();
+    let home = dir.path();
+    // An earlier session with the same first message is not this receipt.
+    let earlier = "019a5f00-0000-7000-8000-000000000001";
+    codex_session(home, earlier, &canonical, "Synthetic first message");
+    let agent = daemon.agent().unwrap();
+    agent.rescan().await;
+    assert!(agent.session(earlier).is_some());
+    let request = desktop_creation("create-1", &project);
+    let wait = ReceiptWait::new(&daemon, peer, &Req::AgentNativeCreate(request.clone())).unwrap();
+    let body = request.encode_to_vec();
+    let ledger = || daemon.store().ledger();
+    ledger()
+        .begin(&request.op_id, "agent.native_create", &body)
+        .unwrap();
+    let receipt = tokio::spawn(wait.clone().settle(
+        Ok(unknown_result("pending".into())),
+        CancellationToken::new(),
+    ));
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert!(!receipt.is_finished());
+    // The app records the new session: it binds, and the ledger keeps it.
+    let created = "019a5f00-0000-7000-8000-000000000002";
+    codex_session(home, created, &canonical, "Synthetic first message");
+    let Resp::OpResult(result) = tokio::time::timeout(Duration::from_secs(5), receipt)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(result.status, v1::op_result::Status::Applied as i32);
+    assert_eq!(result.result_id, created);
+    assert_eq!(
+        ledger()
+            .outcome(&request.op_id, "agent.native_create", &body)
+            .unwrap(),
+        muster_store::Outcome::Applied(created.as_bytes().to_vec())
+    );
+    // Without its own ledger row a creation binds nothing, even when a
+    // matching session appears.
+    let unledgered = desktop_creation("create-2", &project);
+    let wait = ReceiptWait::new(&daemon, peer, &Req::AgentNativeCreate(unledgered)).unwrap();
+    codex_session(
+        home,
+        "019a5f00-0000-7000-8000-000000000003",
+        &canonical,
+        "Synthetic first message",
+    );
+    let cancel = CancellationToken::new();
+    let receipt = tokio::spawn(wait.settle(Ok(unknown_result("pending".into())), cancel.clone()));
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    cancel.cancel();
+    assert_eq!(
+        status(receipt.await.unwrap().unwrap()),
+        v1::op_result::Status::Unknown
+    );
+    daemon.shutdown().await;
+}

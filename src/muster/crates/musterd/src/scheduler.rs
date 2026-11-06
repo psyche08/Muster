@@ -22,7 +22,7 @@ const KEY: &str = "scheduler.grants";
 pub(crate) const IN_LEASE_RECEIPT: Duration = Duration::from_secs(3);
 /// After the console is given back: how long `operate` looks for a receipt
 /// read-only before answering unknown. No lease is held meanwhile.
-const AFTER_RECEIPT: Duration = Duration::from_secs(45);
+pub(crate) const AFTER_RECEIPT: Duration = Duration::from_secs(45);
 const MAX_TEXT: usize = 1024 * 1024;
 
 pub(crate) struct Scheduler {
