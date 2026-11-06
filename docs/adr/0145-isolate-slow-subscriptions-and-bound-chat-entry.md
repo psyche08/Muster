@@ -1,7 +1,7 @@
 # ADR 0145: Isolate slow subscriptions and bound chat entry history
 
 - Date: 2026-11-06
-- Status: Accepted; source verified, release pending
+- Status: Accepted; release evidence in ADR 0146; physical iPhone acceptance pending
 - Related: ADR 0146 (supersedes two traffic-class streams); ADR 0135; ADR 0142; architecture/services.md; architecture/agent-halo.md
 
 ## Context

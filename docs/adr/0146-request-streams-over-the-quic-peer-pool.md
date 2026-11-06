@@ -1,7 +1,7 @@
 # ADR 0146: Requests own service streams over the QUIC peer pool
 
 - Date: 2026-11-06
-- Status: Accepted; source verified, release pending
+- Status: Accepted; published and installed on desktops; physical iPhone acceptance pending
 - Related: ADR 0145; architecture/network.md; architecture/services.md
 
 ## Context
@@ -64,3 +64,46 @@ round trips completed while the ninth stream waited for input, and that held
 stream remained usable. Signed forwarding, bounded cancellation, confirmed late
 mutation receipts and EOF behavior passed. Strict Clippy and changed-file
 formatting passed. Installation and physical mobile acceptance remain pending.
+
+## Release and installed-runtime evidence
+
+Apple 1.1.24 (114) was built locally from clean main
+`c4f379b7770d0728a11ad927deaaf6d6046ae817`. Developer ID signing,
+Apple notarization (Accepted, `8c3e3e67-a152-4c50-855f-c07c7871cba8`),
+stapling, Gatekeeper assessment and embedded daemon source verification passed.
+The portable app and full update package have matching code-directory hashes.
+The paired iOS archive was signed and packaged for OTA; no TestFlight external
+submission was made.
+
+All 14 public release files passed SHA-256 readback. The compiled public key
+verified the feed signature, and the public page's install link resolved through
+the build-114 manifest to the matching immutable IPA. Cache policy passed.
+After this verification, exactly the four explicitly approved superseded 1.1.23
+files were deleted. Current-file hashes were unchanged; the two old package URLs
+returned 410 and the two old manifest URLs resolved to build 114.
+
+Three installed Macs reported 1.1.24, build 114 and daemon commit `c4f379b` with
+matching daemon hashes. Device IDs, fingerprints and Secure Enclave identities
+were preserved; Accessibility, Relay registration and Vnet recovered. The active
+managed scheduler recovered; stopped containers were left stopped. Old installed
+program copies were removed immediately after atomic replacement; app data was
+preserved.
+
+The same read-only cross-Mac probe started a 500-message history request, then
+started a watch 20 ms later. In six pre-update rounds, first-watch-event latency
+was 1066–1840 ms (median 1183.5); after installation it was 260–667 ms (median
+572). Every updated watch returned before its concurrent history completed
+(1493–2945 ms). History content changed during the work: 401 messages/1,074,347
+protobuf bytes before and 500 messages/1,097,815 bytes after. This is observed
+stream isolation and a latency improvement on this link, not a controlled claim
+about every network or physical iPhone UI.
+
+Separate entry probes for the two reported provider sessions returned all six
+initial states in 134–364 ms and their 50-message histories in 256/268 ms. A
+60-second subscription received 48 state and three message events, ending only
+at the probe's intentional cancellation deadline. That probe's initial event took
+1651 ms including CLI startup/target resolution, so variable connection-entry
+latency remains visible. No message-generation-to-render latency was measured.
+The operator's iPhone must still install build 114 through OTA and validate
+loading and live updates; the previously observed relay outages remain a
+separate unresolved condition.
