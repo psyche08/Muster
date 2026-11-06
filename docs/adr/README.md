@@ -270,3 +270,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0152](0152-install-1-1-26-for-desktop-session-acceptance.md) | Accepted; installed on the operator's Mac, acceptance continued in ADR 0154 | Install Apple 1.1.26 (116) to accept desktop session creation on the Macs |
 | [0153](0153-large-session-history-costs.md) | Accepted; source verified, device acceptance pending | Bound repeated cache, validation, provider history and display work |
 | [0154](0154-wait-for-slow-codex-windows.md) | Accepted; installation and acceptance pending | Wait up to 90 s for slow Codex windows before navigation, and install 1.1.27 (117) |
+| [0155](0155-remove-finish-session-script.md) | Accepted | Remove `scripts/finish-session.sh`; land with the AGENTS.md steps run directly |
