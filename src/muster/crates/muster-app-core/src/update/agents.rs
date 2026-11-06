@@ -376,14 +376,16 @@ pub(super) fn merge_chat_tail(current: &mut Vec<v1::AgentMessage>, tail: Vec<v1:
     current.extend(tail);
 }
 
-/// Drop replayed messages through the snapshot's last queued overlap. Without
-/// overlap their order is unknown, so reconnect/catch up instead of appending
-/// potentially older messages after the authoritative tail.
+/// Drop replayed messages through the snapshot's last queued overlap only when
+/// their final overlapping revisions agree. IDs establish order, not freshness:
+/// a same-ID update can beat an older snapshot across independent streams.
 pub(super) fn reconcile_queued(
     queued: &mut std::collections::VecDeque<v1::event::Ev>,
     messages: &[v1::AgentMessage],
 ) -> bool {
-    let ids: std::collections::HashSet<_> = messages.iter().map(|m| m.id.as_str()).collect();
+    let snapshot: std::collections::HashMap<_, _> =
+        messages.iter().map(|m| (m.id.as_str(), m)).collect();
+    let mut latest = std::collections::HashMap::new();
     let mut has_messages = false;
     let mut through = None;
     for (i, event) in queued.iter().enumerate() {
@@ -392,12 +394,21 @@ pub(super) fn reconcile_queued(
         }) = event
         {
             has_messages = true;
-            if ids.contains(m.id.as_str()) {
+            if snapshot.contains_key(m.id.as_str()) {
                 through = Some(i);
+                latest.insert(m.id.as_str(), m);
             }
         }
     }
     if has_messages && through.is_none() {
+        return false;
+    }
+    if latest
+        .iter()
+        .any(|(id, message)| snapshot.get(id) != Some(message))
+    {
+        // Keep all evidence for the bounded same-subscription retry. Comparing
+        // only the last revision per ID permits ordinary incremental updates.
         return false;
     }
     if let Some(through) = through {
@@ -503,7 +514,7 @@ fn watch_agent_traced(
     session_id: String,
     entry: Option<crate::session_diagnostics::Trace>,
 ) {
-    let trace = entry.unwrap_or_else(|| {
+    let mut trace = entry.unwrap_or_else(|| {
         crate::session_diagnostics::Trace::new(ctx.shell.clone(), &device, &session_id)
     });
     flush_chat_cache(state, ctx);
@@ -522,7 +533,9 @@ fn watch_agent_traced(
     let self_id = state.self_id.clone();
     let backend = ctx.backend.clone();
     let tx = ctx.tx.clone();
+    let shell = ctx.shell.clone();
     tokio::spawn(async move {
+        let entry_trace_id = trace.id().to_string();
         let mut retry = 1;
         let mut attempt_index = 0u64;
         loop {
@@ -730,6 +743,26 @@ fn watch_agent_traced(
             if let Some(call) = active_call {
                 let _ = tokio::time::timeout(Duration::from_secs(1), call.cancel()).await;
             }
+            if token.is_cancelled() {
+                return;
+            }
+            // Publish fresh readiness during backoff, not only after the next
+            // snapshot. The old trace's native acknowledgements stay stale.
+            let previous_trace_id = trace.id().to_string();
+            trace = crate::session_diagnostics::Trace::new(shell.clone(), &device, &session_id);
+            trace.record(
+                "retry_of",
+                serde_json::json!({
+                    "entry_trace_id": entry_trace_id,
+                    "previous_trace_id": previous_trace_id,
+                }),
+            );
+            let _ = tx.send(loop_message(Msg::AgentLoadStarted {
+                token: token.clone(),
+                device: device.clone(),
+                session: session_id.clone(),
+                trace: trace.clone(),
+            }));
             tokio::select! {
                 _ = token.cancelled() => return,
                 _ = tokio::time::sleep(Duration::from_secs(retry)) => {}
@@ -1199,13 +1232,6 @@ pub(super) fn msg_chat(
     chat.loading = false;
     match result {
         Ok((messages, has_more)) => {
-            if !earlier && let Some(trace) = &chat.load_trace {
-                trace.history_applied();
-                trace.record(
-                    "history_applied",
-                    serde_json::json!({"messages":messages.len(),"reset":reset}),
-                );
-            }
             chat.cache_dirty = true;
             chat.content_revision = crate::state::next_content_revision();
             chat.load_error.clear();
@@ -1242,6 +1268,13 @@ pub(super) fn msg_chat(
                 chat.history_start = None;
             }
             chat.reconcile_history_start();
+            if !earlier && let Some(trace) = &chat.load_trace {
+                trace.history_applied();
+                trace.record(
+                    "history_applied",
+                    serde_json::json!({"messages":chat.messages.len(),"reset":reset}),
+                );
+            }
         }
         Err(_) => {
             let failure = failure.unwrap_or_default();
@@ -1284,6 +1317,22 @@ pub(super) fn rewatch_returned_member(state: &mut State, ctx: &Ctx, returned: &[
         && let Some((device, session)) = state.chat_target()
     {
         watch_agent(state, ctx, device, session);
+    }
+}
+
+pub(super) fn msg_agent_load_started(
+    state: &mut State,
+    token: CancellationToken,
+    device: &str,
+    session: &str,
+    trace: crate::session_diagnostics::Trace,
+) {
+    if !token.is_cancelled()
+        && let Some(chat) = &mut state.chat
+        && chat.device == device
+        && chat.session.id == session
+    {
+        chat.load_trace = Some(trace);
     }
 }
 

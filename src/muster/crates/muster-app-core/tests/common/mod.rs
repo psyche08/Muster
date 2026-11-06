@@ -30,6 +30,7 @@ impl Shell for TestShell {
                 .lock()
                 .unwrap()
                 .push(serde_json::from_slice(&record.json).unwrap());
+            self.changed.notify_one();
         }
     }
     fn hw_public_key(&self) -> Option<Vec<u8>> {
