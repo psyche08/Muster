@@ -279,7 +279,31 @@ where
 
 const MAX_FORWARDED_CALLS: usize = 256;
 type ForwardedCalls = Arc<Mutex<HashMap<(String, u64), CancellationToken>>>;
-type TargetClients = Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Option<Client>>>>>>;
+
+/// Separate long subscriptions from potentially large unary responses while
+/// reusing the peer's underlying connection and one service stream per class.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Traffic {
+    Requests,
+    Subscriptions,
+}
+impl Traffic {
+    fn of(envelope: &Envelope) -> Self {
+        if matches!(
+            &envelope.msg,
+            Some(Msg::Request(Request {
+                req: Some(v1::request::Req::AgentWatch(_) | v1::request::Req::DeviceWatch(_)),
+                ..
+            }))
+        ) {
+            Self::Subscriptions
+        } else {
+            Self::Requests
+        }
+    }
+}
+pub type PeerClients = Mutex<HashMap<(String, Traffic), Arc<tokio::sync::Mutex<Option<Client>>>>>;
+type TargetClients = Arc<PeerClients>;
 
 /// Forwards one addressed envelope to its target and relays what comes back.
 async fn proxy(
@@ -294,7 +318,7 @@ async fn proxy(
     let slot = targets
         .lock()
         .unwrap()
-        .entry(target.clone())
+        .entry((target.clone(), Traffic::of(&envelope)))
         .or_default()
         .clone();
     let started = std::time::Instant::now();
@@ -483,6 +507,7 @@ fn into_result(response: Response) -> Result<v1::response::Resp, Error> {
 struct Pending {
     events: mpsc::Sender<v1::event::Ev>,
     response: oneshot::Sender<Response>,
+    target: String,
 }
 
 /// The calling side, usable from many tasks at once.
@@ -526,6 +551,7 @@ impl Client {
         let pending: Arc<Mutex<HashMap<u64, Pending>>> = Arc::default();
         let reader_pending = pending.clone();
         let reader_closed = closed.clone();
+        let reader_cancel_tx = tx.downgrade();
         tokio::spawn(async move {
             let mut buf = Vec::with_capacity(8192);
             let mut chunk = vec![0u8; 65536];
@@ -564,14 +590,40 @@ impl Client {
                                 .get(&envelope.id)
                                 .map(|p| p.events.clone());
                             if let Some(sender) = sender {
-                                tokio::select! {
-                                    _ = reader_closed.cancelled() => {},
-                                    _ = sender.send(ev) => {},
+                                // One slow subscriber must not stop the shared
+                                // reader from delivering other calls' replies.
+                                // Preserve a bounded queue and fail explicitly
+                                // instead of hiding lost stream events.
+                                if let Err(mpsc::error::TrySendError::Full(_)) = sender.try_send(ev)
+                                {
+                                    let pending =
+                                        reader_pending.lock().unwrap().remove(&envelope.id);
+                                    if let Some(pending) = pending {
+                                        log::warn!(
+                                            "rpc call {} event backlog exceeded; resynchronize",
+                                            envelope.id
+                                        );
+                                        let _ = pending.response.send(Response {
+                                            resp: Some(err(v1::error::Code::Unavailable,
+                                                "RPC event backlog exceeded; resynchronize. Operation outcome may be unknown")),
+                                        });
+                                        let mut cancel = Envelope::cancel(envelope.id);
+                                        cancel.target = pending.target;
+                                        if reader_cancel_tx
+                                            .upgrade()
+                                            .is_none_or(|tx| tx.try_send(cancel).is_err())
+                                        {
+                                            reader_closed.cancel();
+                                        }
+                                    }
                                 }
                             }
                         }
                         _ => {}
                     }
+                    // Parsing a buffered burst has no I/O await. Give active
+                    // consumers a chance to drain before treating them as slow.
+                    tokio::task::consume_budget().await;
                 }
             }
             reader_closed.cancel();
@@ -628,6 +680,7 @@ impl Client {
             Pending {
                 events: events_tx,
                 response: response_tx,
+                target: String::new(),
             },
         );
         if self.is_closed() {
@@ -702,6 +755,7 @@ impl Client {
             Pending {
                 events: events_tx,
                 response: response_tx,
+                target: self.target.clone(),
             },
         );
         let mut envelope = Envelope::request(id, req);
@@ -740,6 +794,95 @@ pub fn err(code: v1::error::Code, message: impl Into<String>) -> v1::response::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stalled_watch_does_not_block_other_calls_and_cancels_its_target() {
+        let (a, mut peer) = tokio::io::duplex(65536);
+        let client = Client::new(a);
+        let stalled = client
+            .with_target("peer-a")
+            .start(v1::request::Req::DeviceWatch(v1::DeviceWatchRequest {}))
+            .await
+            .unwrap();
+        let unrelated = client
+            .start(v1::request::Req::DeviceInfo(v1::DeviceInfoRequest {}))
+            .await
+            .unwrap();
+        let mut other_watch = client
+            .start(v1::request::Req::DeviceWatch(v1::DeviceWatchRequest {}))
+            .await
+            .unwrap();
+        for i in 0..257 {
+            peer.write_all(&frame(&Envelope::event(
+                stalled.id,
+                v1::event::Ev::DeviceState(v1::DeviceState {
+                    uptime_secs: i,
+                    ..Default::default()
+                }),
+            )))
+            .await
+            .unwrap();
+        }
+        // A late success must not overwrite the explicit overflow failure.
+        peer.write_all(&frame(&Envelope::response(
+            stalled.id,
+            v1::response::Resp::Ack(v1::Ack {}),
+        )))
+        .await
+        .unwrap();
+        peer.write_all(&frame(&Envelope::response(
+            unrelated.id,
+            v1::response::Resp::DeviceInfo(v1::DeviceInfo {
+                name: "unblocked".into(),
+                ..Default::default()
+            }),
+        )))
+        .await
+        .unwrap();
+        peer.write_all(&frame(&Envelope::event(
+            other_watch.id,
+            v1::event::Ev::DeviceState(v1::DeviceState::default()),
+        )))
+        .await
+        .unwrap();
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), other_watch.events.recv())
+                .await
+                .expect("one full event queue blocked another watch")
+                .is_some()
+        );
+        let response = tokio::time::timeout(std::time::Duration::from_secs(1), unrelated.finish())
+            .await
+            .expect("one full event queue blocked another call")
+            .unwrap();
+        assert!(
+            matches!(response, v1::response::Resp::DeviceInfo(info) if info.name == "unblocked")
+        );
+        let stalled_id = stalled.id;
+        assert!(matches!(stalled.finish().await,
+            Err(Error::Remote { code: v1::error::Code::Unavailable, message })
+                if message.contains("resynchronize")));
+        assert!(!client.is_closed());
+        let mut bytes = Vec::new();
+        let cancel = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                while let Some(envelope) = unframe(&mut bytes).unwrap() {
+                    if matches!(envelope.msg, Some(Msg::Cancel(_))) {
+                        return envelope;
+                    }
+                }
+                let mut chunk = [0; 4096];
+                let n = peer.read(&mut chunk).await.unwrap();
+                assert_ne!(n, 0);
+                bytes.extend_from_slice(&chunk[..n]);
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(cancel.id, stalled_id);
+        assert_eq!(cancel.target, "peer-a");
+        client.close();
+    }
 
     struct EchoHandler;
 
@@ -786,6 +929,49 @@ mod tests {
         release: Arc<tokio::sync::Notify>,
         forwarded: Arc<std::sync::atomic::AtomicUsize>,
     }
+
+    #[tokio::test]
+    async fn a_peer_reuses_independent_subscription_and_request_streams() {
+        let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let handler = Arc::new(DelayedTarget {
+            entered: Arc::new(tokio::sync::Notify::new()),
+            release: Arc::new(tokio::sync::Notify::new()),
+            forwarded: opened.clone(),
+        });
+        let (a, b) = tokio::io::duplex(65536);
+        let server = tokio::spawn(serve(b, Principal::Local, handler));
+        let client = Client::new(a).with_target("peer");
+        for _ in 0..3 {
+            let (info, watch) = tokio::join!(
+                client.call(v1::request::Req::DeviceInfo(v1::DeviceInfoRequest {})),
+                client.call(v1::request::Req::DeviceWatch(v1::DeviceWatchRequest {}))
+            );
+            assert!(matches!(info.unwrap(), v1::response::Resp::DeviceInfo(_)));
+            assert!(matches!(watch.unwrap(), v1::response::Resp::Ack(_)));
+            assert_eq!(
+                opened.load(Ordering::SeqCst),
+                2,
+                "reuse one stream per traffic class, not one for all or a new one per call"
+            );
+        }
+        assert_eq!(
+            Traffic::of(&Envelope::request(
+                1,
+                v1::request::Req::AgentWatch(v1::AgentWatchRequest::default())
+            )),
+            Traffic::Subscriptions
+        );
+        assert_eq!(
+            Traffic::of(&Envelope::request(
+                2,
+                v1::request::Req::AgentMessages(v1::AgentMessagesRequest::default())
+            )),
+            Traffic::Requests
+        );
+        client.close();
+        server.abort();
+    }
+
     impl Handler for DelayedTarget {
         fn call(
             &self,
@@ -871,7 +1057,11 @@ mod tests {
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        assert_eq!(opened.load(Ordering::SeqCst), 2, "the silent link was reused");
+        assert_eq!(
+            opened.load(Ordering::SeqCst),
+            2,
+            "the silent link was reused"
+        );
         drop(again);
         client.close();
         let _ = server.await;

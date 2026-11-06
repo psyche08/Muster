@@ -16,7 +16,9 @@ fn hash_encoded(messages: impl Iterator<Item = Vec<u8>>) -> Vec<u8> {
 pub fn request(session: &str, messages: &[v1::AgentMessage]) -> v1::AgentMessagesRequest {
     v1::AgentMessagesRequest {
         session: session.into(),
-        tail: 500,
+        // Show the current conversation promptly; older tool output remains
+        // available through pagination instead of delaying every chat entry.
+        tail: 50,
         first_id: messages.first().map(|m| m.id.clone()).unwrap_or_default(),
         after_id: messages.last().map(|m| m.id.clone()).unwrap_or_default(),
         prefix_hash: prefix_hash(&messages[..messages.len().saturating_sub(1)]),
