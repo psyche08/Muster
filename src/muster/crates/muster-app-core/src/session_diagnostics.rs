@@ -4,7 +4,7 @@ use muster_proto::{Message, app, v1};
 use serde_json::{Value, json};
 use std::sync::{
     Arc,
-    atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
 };
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -19,6 +19,7 @@ struct Inner {
     records: AtomicUsize,
     native: AtomicU8,
     published: AtomicU8,
+    history_ready: AtomicBool,
 }
 pub(crate) fn emit(shell: &dyn Shell, mut row: Value) {
     row["schema_version"] = json!(1);
@@ -58,9 +59,16 @@ impl Trace {
             records: AtomicUsize::new(0),
             native: AtomicU8::new(0),
             published: AtomicU8::new(0),
+            history_ready: AtomicBool::new(false),
         }));
         trace.record("entered", json!({}));
         trace
+    }
+    pub fn history_ready(&self) -> bool {
+        self.0.history_ready.load(Ordering::Relaxed)
+    }
+    pub fn history_applied(&self) {
+        self.0.history_ready.store(true, Ordering::Relaxed);
     }
     pub fn id(&self) -> &str {
         &self.0.id
@@ -154,6 +162,12 @@ mod tests {
             "synthetic-device-secret",
             "synthetic-session-secret",
         );
+        assert!(!trace.history_ready());
+        trace.history_applied();
+        assert!(trace.history_ready());
+        let next = Trace::new(sink.clone(), "another-device", "another-session");
+        assert!(!next.history_ready());
+        sink.0.lock().unwrap().pop();
         let mut ack = app::SessionViewApplied {
             trace_id: "stale".into(),
             ..Default::default()

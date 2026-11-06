@@ -59,3 +59,11 @@ integration tests, 17 RPC tests, and 11 catalog tests (two existing ignored test
 Three QUIC link tests and strict Clippy also passed. The new live probe exercises shared-core paging and cross-device entry without
 printing conversation content. Native build and two-device acceptance are pending.
 The two-Mac candidate uses 1.1.25 (115); no public OTA is claimed here.
+
+## Acceptance refinement
+
+A live pre-installation probe showed that foreground re-entry preserves the old
+chat contents while reconnecting. Therefore diagnostic readiness is owned by the
+trace and becomes true only when that trace applies its fresh history response;
+a visible cached model must not be reported as a completed foreground refresh.
+The live probe waits for a new trace on the Chat screen before accepting a round.
