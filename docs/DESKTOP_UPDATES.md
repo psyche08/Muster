@@ -241,8 +241,13 @@ down the virtual network, so an SSH session addressed to a member's `192.168.13.
 address is cut at the daemon stop, mid-script: during the 1.0.94 rollout Mac-B
 was left with a replaced bundle, no running daemon and no route back, and had to
 be reached over its physical bridge address. Address each member by an address
-that does not depend on Muster. `launchctl asuser <uid> open` is not an
-alternative from such a session; it needs root and fails with "Could not switch
+that does not depend on Muster. If no independent route is reachable, ADR 0144
+permits staging and verifying all inputs before submitting a one-shot installer
+to the target user's GUI launchd domain. Confirm submission and retain durable
+local results; the job must own the complete stop/replace/start sequence without
+an SSH-session dependency. Never replay an unknown outcome. If the daemon does
+not recover, report it as unverified and use independent physical recovery.
+`launchctl asuser <uid> open` is not an alternative from such a session; it needs root and fails with "Could not switch
 to audit session".
 
 `xcrun stapler validate` can also fail transiently on a bundle whose ticket it

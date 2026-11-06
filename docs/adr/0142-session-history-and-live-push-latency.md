@@ -89,3 +89,11 @@ installation and physical Mac/iPhone acceptance remain separate and unverified.
 - Production builds/signing, publication, installation, and physical macOS/iPhone
   acceptance have not been performed. Cold parsing and network/rendering latency
   remain separate from the eliminated catalog wait and whole-history projection.
+
+### Subsequent release evidence (2026-11-06)
+
+ADR 0143 records local signed/notarized 1.1.23 (113), paired iOS OTA publication,
+and installation on three Macs with unchanged hardware identities and healthy
+relay/Vnet. The physical iPhone is unavailable for installation. These release
+checks do not establish end-to-end session-load or live-update latency on Mac or
+iPhone; that acceptance remains pending separately from source regressions.
