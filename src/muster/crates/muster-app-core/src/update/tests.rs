@@ -642,6 +642,64 @@ fn queued_messages_before_a_shorter_snapshot_are_not_appended_after_it() {
 }
 
 #[test]
+fn late_retry_marker_cannot_replace_a_reopened_or_different_chat() {
+    let mut state = running_chat();
+    let fresh = crate::session_diagnostics::Trace::new(Arc::new(QuietShell), "mac", "s");
+    state.chat.as_mut().unwrap().load_trace = Some(fresh.clone());
+    let old = crate::session_diagnostics::Trace::new(Arc::new(QuietShell), "mac", "s");
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    agents::msg_agent_load_started(&mut state, cancelled, "mac", "s", old.clone());
+    agents::msg_agent_load_started(&mut state, CancellationToken::new(), "other", "s", old);
+    assert_eq!(
+        state
+            .chat
+            .as_ref()
+            .unwrap()
+            .load_trace
+            .as_ref()
+            .unwrap()
+            .id(),
+        fresh.id()
+    );
+}
+
+#[test]
+fn overlapping_revisions_require_content_evidence_without_dropping_the_queue() {
+    let old = message("same-id", "assistant");
+    let mut new = old.clone();
+    new.text = "completed response".into();
+    let tail = message("next-id", "user");
+    let event = |m| {
+        v1::event::Ev::AgentEvent(v1::AgentEvent {
+            ev: Some(v1::agent_event::Ev::Message(m)),
+        })
+    };
+    let mut queued = std::collections::VecDeque::from([
+        event(old.clone()),
+        event(new.clone()),
+        event(tail.clone()),
+    ]);
+    let before = queued.clone();
+    assert!(!reconcile_queued(&mut queued, &[old, tail.clone()]));
+    assert_eq!(
+        queued, before,
+        "a matching later ID must not hide a content conflict"
+    );
+    assert!(reconcile_queued(&mut queued, &[new.clone(), tail.clone()]));
+    assert!(
+        queued.is_empty(),
+        "only the final queued revision must match"
+    );
+
+    let mut older_event = new.clone();
+    older_event.text = "earlier revision".into();
+    let mut queued = std::collections::VecDeque::from([event(older_event)]);
+    assert!(!reconcile_queued(&mut queued, &[new, tail]));
+    assert_eq!(queued.len(), 1, "do not guess cross-stream revision order");
+}
+
+#[test]
 fn disjoint_tail_does_not_hide_an_unloaded_gap() {
     let mut current = vec![message("old", "user")];
     merge_chat_tail(&mut current, vec![message("new", "assistant")]);
@@ -1297,7 +1355,10 @@ async fn a_chat_names_its_offline_mac_and_rewatches_when_it_returns() {
     );
     assert!(!old.is_cancelled());
     network::msg_network(&mut state, &ctx, network_of(vec![member("online")]));
-    assert!(old.is_cancelled(), "the returning Mac did not restart the watch");
+    assert!(
+        old.is_cancelled(),
+        "the returning Mac did not restart the watch"
+    );
     let chat = state.chat.as_ref().unwrap();
     assert!(chat.watch.as_ref().is_some_and(|w| !w.token.is_cancelled()));
 }
@@ -1339,7 +1400,10 @@ async fn a_watch_ended_before_state_reports_the_forwarding_error() {
     let error = agents::first_watch_event(&ctx.backend, "a1b2c3", &client, &mut call, "timed out")
         .await
         .unwrap_err();
-    assert_eq!(error.to_string(), "a1b2c3: io: offline: a1b2c3 is unreachable");
+    assert_eq!(
+        error.to_string(),
+        "a1b2c3: io: offline: a1b2c3 is unreachable"
+    );
     assert!(call.is_none(), "the finished call is not cancelled again");
 }
 

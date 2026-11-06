@@ -211,6 +211,12 @@ pub enum Msg {
         session: String,
         result: Result<v1::AgentChatOptions, Error>,
     },
+    AgentLoadStarted {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        trace: crate::session_diagnostics::Trace,
+    },
     AgentStreamStarted {
         token: CancellationToken,
         device: String,
@@ -721,6 +727,12 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             retry,
             result,
         } => desktop_chats::msg_desktop_chat_opened(state, ctx, view, device, retry, result),
+        Msg::AgentLoadStarted {
+            token,
+            device,
+            session,
+            trace,
+        } => agents::msg_agent_load_started(state, token, &device, &session, trace),
         Msg::AgentStreamStarted {
             token,
             device,
