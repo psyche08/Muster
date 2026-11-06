@@ -46,6 +46,8 @@ message Intent {
     DesktopUpdateAction desktop_update_action = 24;
     muster.v1.MulticaRequest multica = 89;
     muster.v1.MulticaBrowseRequest multica_browse = 90;
+    MulticaSelect multica_select = 96;
+    muster.v1.MulticaServiceRequest multica_service = 97;
     muster.v1.VisionRequest vision = 93;
 
     OpenAgents open_agents = 30;
@@ -484,6 +486,21 @@ enum Screen {
   MULTICA = 15;
 }
 
+message MulticaSelect { string device_id = 1; }
+message MulticaDevice {
+  string device_id = 1;
+  string name = 2;
+  bool connected = 3;
+  muster.v1.MulticaService service = 4;
+}
+message MulticaWorkspaceView {
+  bool visible = 1;
+  string selected_device = 2;
+  repeated MulticaDevice devices = 3;
+  muster.v1.MulticaService local_service = 4;
+  bool selected_is_local = 5;
+}
+
 message ViewModel {
   reserved 14; // The presence handshake: Authenticate effects carry it.
   reserved "presence";
@@ -526,6 +543,7 @@ message ViewModel {
   muster.v1.MulticaPage multica_page = 36;
   muster.v1.VisionStatus vision = 37;
   repeated Screen navigation_path = 34; // visible root through current screen
+  MulticaWorkspaceView multica_workspace = 39;
   SessionLoadMarker session_load = 38; // opaque, Rust-owned diagnostic marker
 }
 

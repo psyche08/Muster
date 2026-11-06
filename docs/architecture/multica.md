@@ -34,11 +34,20 @@ without starting stopped services. **There is no in-app Multica upgrade, image
 pull, stop or rollback**: those remain manual operator steps documented in
 [DESKTOP_UPDATES.md](../DESKTOP_UPDATES.md) and `deploy/multica/README.md`.
 
-### Proposed independent service and DSH App bridge
+### Independent service and DSH App bridge: partial implementation
 
 [ADR 0141](../adr/0141-multica-service-and-dsh-app-bridge-design.md) and the
 [Multica service design](../MULTICA_SERVICE_DESIGN.md) propose task-owned
 sessions outside Agents, a bridge to the existing DSH desktop App, and a
 default-off remote Multica service over PeerLink. Shared Rust owns binding,
-authorization, capability and navigation state. This is design only: the
-current local-only workbench and Codex/Claude bridge above remain unchanged.
+authorization, capability and navigation state. [ADR 0149](../adr/0149-multica-ownership-reservations.md)
+adds durable ownership reservations. [ADR 0151](../adr/0151-multica-task-session-isolation.md)
+enforces registered ownership at Agent/terminal boundaries and adds default-off,
+workspace-selected remote metadata browsing with Mac/iPhone device selection.
+New scope issuance requires all active roster consumers to prove compatibility.
+
+Registry production writers, legacy migration, task transcript access, DSH App
+scheduling and remote control are still pending; existing scheduler sessions are
+not automatically imported. The descriptor does not advertise control. This is
+not full P1/P3 or device acceptance. The Codex/Claude bridge above is unchanged;
+its fallback policy must not be reused for the future DSH App destination.

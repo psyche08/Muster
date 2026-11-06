@@ -10,6 +10,8 @@ mod bridge;
 mod browse;
 mod image;
 mod installation;
+pub(crate) mod ownership;
+pub(crate) mod service;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]

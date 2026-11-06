@@ -30,7 +30,7 @@ struct WorkspaceSwitcher: View {
         })) {
             Text("Agents").tag(Muster_App_Screen.agents)
             Text("Terminals").tag(Muster_App_Screen.terminals)
-            if vm.multica.installed { Text("Multica").tag(Muster_App_Screen.multica) }
+            if vm.multicaWorkspace.visible { Text("Multica").tag(Muster_App_Screen.multica) }
         }
         .pickerStyle(.segmented)
         .frame(width: 270)

@@ -160,6 +160,7 @@ message Request {
     // spoke the old number: the grant has never shipped.
     AgentSchedulerRequest agent_scheduler = 76;
     DeviceRequestScreenRecordingRequest device_request_screen_recording = 77;
+    MulticaServiceRequest multica_service = 78;
   }
 }
 
@@ -209,6 +210,7 @@ message Response {
     PresenceInfo presence_info = 65;
     MulticaStatus multica = 70;
     MulticaPage multica_page = 71;
+    MulticaService multica_service = 78;
     VisionStatus vision = 74;
     AgentSchedulerStatus agent_scheduler = 76;
   }
@@ -873,8 +875,11 @@ message AgentEvent {
     AgentSession state = 3;
     PendingInteraction interaction = 4;
     string interaction_resolved = 5;
+    AgentUnavailable unavailable = 6;
   }
 }
+
+message AgentUnavailable { repeated string sessions = 1; }
 
 message AgentSendRequest {
   string op_id = 1;
@@ -1097,6 +1102,23 @@ message PresenceInfo {
 }
 
 // Container administration and local deployment configuration are local-owner only.
+// Discovery is authenticated member-only; SAVE is trusted-local-owner-only.
+message MulticaServiceRequest {
+  enum Action { GET = 0; SAVE = 1; }
+  Action action = 1;
+  bool offered = 2;
+  repeated string workspaces = 3;
+}
+message MulticaService {
+  uint32 version = 1;
+  bool offered = 2;
+  bool can_view = 3;
+  bool can_control = 4;
+  bool can_manage = 5;
+  repeated string workspaces = 6;
+  string message = 7;
+}
+
 message MulticaRequest {
   enum Action { CHECK = 0; SAVE = 1; INSTALL = 2; PROGRESS = 3; }
   Action action = 1;

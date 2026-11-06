@@ -78,6 +78,19 @@ impl Cache {
             worker,
         }
     }
+    /// Forget a transcript/catalog and its pending write under the same disk
+    /// lock as the worker. A queued old write cannot recreate removed content.
+    pub fn remove(&self, key: &str) {
+        let _disk = self.disk.lock().unwrap();
+        self.pending.lock().unwrap().remove(key);
+        self.memory.lock().unwrap().remove(key);
+        if let Err(error) = std::fs::remove_file(self.root.join(key)) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("Cache removal failed: {error}");
+            }
+        }
+    }
+
     pub fn key(parts: &[&str]) -> String {
         // Length-delimited components prevent collisions between host/session scopes.
         let messages: Vec<_> = parts

@@ -115,7 +115,15 @@ pub(super) fn apply_result(state: &mut State, result: Result<v1::MulticaStatus, 
 }
 
 pub(super) fn browse(state: &mut State, ctx: &Ctx, request: v1::MulticaBrowseRequest) {
-    if state.embedded {
+    let device = state.multica_selected.clone();
+    let local = !state.embedded && state.is_self(&device);
+    if !local
+        && !state
+            .multica_targets
+            .get(&device)
+            .is_some_and(|t| t.connected && t.service.as_ref().is_some_and(|s| s.can_view))
+    {
+        clear_page(state, "目标设备离线或没有 Multica 查看权限");
         return;
     }
     state.multica_generation = state.multica_generation.wrapping_add(1);
@@ -133,9 +141,15 @@ pub(super) fn browse(state: &mut State, ctx: &Ctx, request: v1::MulticaBrowseReq
     state.multica_page.busy = true;
     state.multica_page.error.clear();
     state.multica_query = request.clone();
-    let client = ctx.backend.local().clone();
+    let backend = ctx.backend.clone();
+    let self_id = state.self_id.clone();
     spawn(ctx, async move {
         let result = async {
+            let client = if local {
+                backend.local().clone()
+            } else {
+                backend.client_for(&device, &self_id).await?
+            };
             match unary(&client, Req::MulticaBrowse(request)).await? {
                 Resp::MulticaPage(page) => Ok(page),
                 _ => Err(unexpected()),
@@ -284,5 +298,394 @@ mod tests {
         assert!(state.multica_page.has_more);
         assert_eq!(state.multica_page.issues[0].id, "visible");
         assert_eq!(state.multica_page.issue.unwrap().id, "selected");
+    }
+}
+
+pub(crate) fn view(state: &State) -> app::MulticaWorkspaceView {
+    let mut devices: Vec<_> = state.multica_targets.values().cloned().collect();
+    devices.sort_by(|a, b| a.name.cmp(&b.name).then(a.device_id.cmp(&b.device_id)));
+    app::MulticaWorkspaceView {
+        visible: state.multica.installed || !devices.is_empty(),
+        selected_device: state.multica_selected.clone(),
+        devices,
+        local_service: Some(state.multica_service.clone()),
+        selected_is_local: !state.embedded && state.is_self(&state.multica_selected),
+    }
+}
+fn clear_page(state: &mut State, message: &str) {
+    state.multica_generation = state.multica_generation.wrapping_add(1);
+    state.multica_page = v1::MulticaPage {
+        error: message.into(),
+        ..Default::default()
+    };
+}
+
+pub(super) fn start_discovery(state: &mut State, ctx: &Ctx) {
+    let (watch, token) = state.new_watch();
+    state.multica_discovery = Some(watch);
+    let tx = ctx.tx.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(2));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = token.cancelled() => break,
+                _ = tick.tick() => { if tx.send(loop_message(Msg::MulticaTick)).is_err() { break; } }
+            }
+        }
+    });
+}
+
+pub(super) fn background(state: &mut State) {
+    state.multica_discovery_epoch = state.multica_discovery_epoch.wrapping_add(1);
+    state.multica_probing = false;
+    for target in state.multica_targets.values_mut() {
+        if target.device_id != state.self_id {
+            target.connected = false;
+        }
+    }
+    if state.multica_selected != state.self_id {
+        clear_page(state, "返回前台后重新验证 Multica 权限");
+    }
+}
+
+pub(super) fn discover(state: &mut State, ctx: &Ctx) {
+    if !state.foreground {
+        return;
+    }
+    let members = state.service_devices();
+    let own = state.self_id.clone();
+    let embedded = state.embedded;
+    state.multica_targets.retain(|id, _| {
+        (!embedded && id == &own && state.multica.installed)
+            || members.iter().any(|m| &m.device_id == id && !m.is_self)
+    });
+    if !state.multica_selected.is_empty()
+        && !state.multica_targets.contains_key(&state.multica_selected)
+        && (!state.multica_page.workspaces.is_empty() || state.multica_page.busy)
+    {
+        clear_page(state, "目标设备已移除或停止共享");
+    }
+    for target in state.multica_targets.values_mut() {
+        if members
+            .iter()
+            .any(|m| m.device_id == target.device_id && crate::state::member_offline(m))
+        {
+            target.connected = false;
+        }
+    }
+    if state
+        .multica_targets
+        .get(&state.multica_selected)
+        .is_some_and(|t| !t.connected)
+        && (!state.multica_page.workspaces.is_empty() || state.multica_page.busy)
+    {
+        clear_page(state, "目标设备离线；重新连接后会重新验证权限");
+    }
+    if state.multica_probing {
+        return;
+    }
+    state.multica_probing = true;
+    let epoch = state.multica_discovery_epoch;
+    let mut targets: Vec<_> = members
+        .into_iter()
+        .filter(|m| !m.is_self && !crate::state::member_offline(m))
+        .map(|m| (m.device_id, m.name, false))
+        .collect();
+    if !embedded {
+        targets.push((own.clone(), "本机".into(), true));
+    }
+    let backend = ctx.backend.clone();
+    spawn(ctx, async move {
+        let mut jobs = tokio::task::JoinSet::new();
+        for (device, name, local) in targets {
+            let backend = backend.clone();
+            let own = own.clone();
+            jobs.spawn(async move {
+                let result = tokio::time::timeout(Duration::from_secs(3), async {
+                    let client = if local {
+                        backend.local().clone()
+                    } else {
+                        backend.client_for(&device, &own).await?
+                    };
+                    match unary(
+                        &client,
+                        Req::MulticaService(v1::MulticaServiceRequest::default()),
+                    )
+                    .await?
+                    {
+                        Resp::MulticaService(service) => Ok(service),
+                        _ => Err(unexpected()),
+                    }
+                })
+                .await
+                .unwrap_or_else(|_| Err(Error::Unavailable("Multica 连接超时".into())));
+                (device, name, result)
+            });
+        }
+        let mut results = Vec::new();
+        while let Some(Ok(result)) = jobs.join_next().await {
+            results.push(result);
+        }
+        Msg::MulticaServices { epoch, results }
+    });
+}
+
+pub(super) fn apply_services(
+    state: &mut State,
+    ctx: &Ctx,
+    results: Vec<(String, String, Result<v1::MulticaService, Error>)>,
+) {
+    state.multica_probing = false;
+    let before = state.multica_targets.get(&state.multica_selected).cloned();
+    let members = state.service_devices();
+    for (device, name, result) in results {
+        let local = !state.embedded && state.is_self(&device);
+        if !local && !members.iter().any(|m| m.device_id == device && !m.is_self) {
+            continue;
+        }
+        match result {
+            Ok(service) if service.version == 1 => {
+                if local {
+                    state.multica_service = service.clone();
+                }
+                if service.can_view && (!local || state.multica.installed) {
+                    state.multica_targets.insert(
+                        device.clone(),
+                        app::MulticaDevice {
+                            device_id: device,
+                            name,
+                            connected: true,
+                            service: Some(service),
+                        },
+                    );
+                } else {
+                    state.multica_targets.remove(&device);
+                }
+            }
+            Ok(_) => {
+                state.multica_targets.remove(&device);
+            }
+            Err(_) => {
+                if let Some(target) = state.multica_targets.get_mut(&device) {
+                    target.connected = false;
+                }
+            }
+        }
+    }
+    if !state.multica_targets.contains_key(&state.multica_selected) {
+        state.multica_selected = state
+            .multica_targets
+            .keys()
+            .min()
+            .cloned()
+            .unwrap_or_default();
+        state.multica_query = v1::MulticaBrowseRequest::default();
+    }
+    let after = state.multica_targets.get(&state.multica_selected).cloned();
+    if before != after {
+        clear_page(
+            state,
+            if after.as_ref().is_some_and(|t| t.connected) {
+                ""
+            } else {
+                "Multica 不可用或权限已撤回"
+            },
+        );
+        if state.screen == Screen::Multica && after.as_ref().is_some_and(|t| t.connected) {
+            browse(state, ctx, state.multica_query.clone());
+        }
+    }
+    if state.screen == Screen::Multica && !view(state).visible {
+        state.go(Screen::Agents);
+    }
+}
+
+pub(super) fn select(state: &mut State, ctx: &Ctx, device: String) {
+    if !state.multica_targets.contains_key(&device) {
+        return;
+    }
+    if state.multica_selected != device {
+        state.multica_selected = device;
+        state.multica_query = v1::MulticaBrowseRequest::default();
+        clear_page(state, "");
+    }
+    browse(state, ctx, state.multica_query.clone());
+}
+
+pub(super) fn service_request(state: &mut State, ctx: &Ctx, request: v1::MulticaServiceRequest) {
+    if state.embedded {
+        state.toast("请在安装 Multica 的设备上管理共享", true);
+        return;
+    }
+    let client = ctx.backend.local().clone();
+    spawn(ctx, async move {
+        let result = match unary(&client, Req::MulticaService(request)).await {
+            Ok(Resp::MulticaService(service)) => Ok(service),
+            Ok(_) => Err(unexpected()),
+            Err(error) => Err(error),
+        };
+        Msg::MulticaServiceSaved(result)
+    });
+}
+
+#[cfg(test)]
+mod service_tests {
+    use super::*;
+    #[tokio::test]
+    async fn phone_discovers_remote_workbench_and_clears_content_on_disconnect_and_revocation() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: Client::new(socket),
+            }),
+            tx,
+        };
+        let mut state = State::new(true, Some("phone".into()));
+        state.network = Some(v1::NetworkStatus {
+            members: vec![v1::MemberView {
+                device_id: "host".into(),
+                kind: "desktop".into(),
+                connected: true,
+                presence: "online".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let offered = v1::MulticaService {
+            version: 1,
+            offered: true,
+            can_view: true,
+            workspaces: vec!["workspace-a".into()],
+            ..Default::default()
+        };
+        apply_services(
+            &mut state,
+            &ctx,
+            vec![("host".into(), "Example Mac".into(), Ok(offered.clone()))],
+        );
+        assert!(view(&state).visible && !view(&state).selected_is_local);
+        assert!(
+            !state.multica.installed,
+            "a phone needs no local Multica installation"
+        );
+        assert_eq!(state.multica_selected, "host");
+        state.multica_page = v1::MulticaPage {
+            workspace_id: "workspace-a".into(),
+            issues: vec![v1::MulticaIssue {
+                title: "private task".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let stale_generation = state.multica_generation;
+        apply_services(
+            &mut state,
+            &ctx,
+            vec![(
+                "host".into(),
+                "Example Mac".into(),
+                Err(Error::Unavailable("offline".into())),
+            )],
+        );
+        assert!(
+            view(&state).visible,
+            "offline keeps only the known device entry"
+        );
+        assert!(state.multica_page.issues.is_empty());
+        assert!(!state.multica_targets["host"].connected);
+        apply_page(
+            &mut state,
+            stale_generation,
+            Ok(v1::MulticaPage {
+                issues: vec![v1::MulticaIssue::default()],
+                ..Default::default()
+            }),
+        );
+        assert!(
+            state.multica_page.issues.is_empty(),
+            "late history cannot undo invalidation"
+        );
+        apply_services(
+            &mut state,
+            &ctx,
+            vec![("host".into(), "Example Mac".into(), Ok(offered))],
+        );
+        assert!(state.multica_targets["host"].connected);
+        state.multica_page = v1::MulticaPage {
+            workspaces: vec![v1::MulticaWorkspace::default()],
+            ..Default::default()
+        };
+        let old_epoch = state.multica_discovery_epoch;
+        let old_page = state.multica_generation;
+        state.foreground = false;
+        background(&mut state);
+        assert!(state.multica_page.workspaces.is_empty());
+        assert!(!state.multica_targets["host"].connected);
+        state.foreground = true;
+        super::super::msg(
+            &mut state,
+            &ctx,
+            Msg::MulticaServices {
+                epoch: old_epoch,
+                results: vec![(
+                    "host".into(),
+                    "Example Mac".into(),
+                    Ok(v1::MulticaService {
+                        version: 1,
+                        can_view: true,
+                        ..Default::default()
+                    }),
+                )],
+            },
+        );
+        assert!(
+            !state.multica_targets["host"].connected,
+            "pre-suspension discovery is stale even after foreground"
+        );
+        apply_page(
+            &mut state,
+            old_page,
+            Ok(v1::MulticaPage {
+                workspaces: vec![v1::MulticaWorkspace::default()],
+                ..Default::default()
+            }),
+        );
+        assert!(state.multica_page.workspaces.is_empty());
+        apply_services(
+            &mut state,
+            &ctx,
+            vec![(
+                "host".into(),
+                "Example Mac".into(),
+                Ok(v1::MulticaService {
+                    version: 1,
+                    ..Default::default()
+                }),
+            )],
+        );
+        assert!(!view(&state).visible);
+        assert!(state.multica_targets.is_empty() && state.multica_page.workspaces.is_empty());
+        // A removed roster member's late discovery cannot resurrect its entry.
+        state.network.as_mut().unwrap().members.clear();
+        apply_services(
+            &mut state,
+            &ctx,
+            vec![(
+                "host".into(),
+                "Example Mac".into(),
+                Ok(v1::MulticaService {
+                    version: 1,
+                    can_view: true,
+                    ..Default::default()
+                }),
+            )],
+        );
+        assert!(!view(&state).visible);
     }
 }

@@ -192,6 +192,10 @@ struct MulticaView: View {
     let core: MusterCore
     let status: Muster_V1_MulticaStatus
     let page: Muster_V1_MulticaPage
+    let workspace: Muster_App_MulticaWorkspaceView
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var sharing = false
+    @State private var sharedWorkspaces: Set<String> = []
     @State private var section = 0
     @State private var showInstallation = false
     @State private var installationPreparation = false
@@ -199,6 +203,18 @@ struct MulticaView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Picker("设备", selection: Binding(get: { workspace.selectedDevice }, set: { core.multicaSelect($0) })) {
+                    ForEach(workspace.devices, id: \.deviceID) { target in
+                        Text(target.name + (target.connected ? "" : " · 离线")).tag(target.deviceID)
+                    }
+                }
+                if let target = workspace.devices.first(where: { $0.deviceID == workspace.selectedDevice }) {
+                    Text(target.service.canControl ? "已授予控制权限" : "只读")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if workspace.selectedIsLocal && workspace.localService.canManage { sharingSettings }
             HStack {
                 Picker("工作区", selection: Binding(get: { page.workspaceID }, set: { workspace in
                     var request = Muster_V1_MulticaBrowseRequest()
@@ -210,27 +226,29 @@ struct MulticaView: View {
                     }
                 }.frame(maxWidth: 320)
                 Spacer()
-                Label(status.running ? "运行中" : "未运行", systemImage: status.running ? "checkmark.circle" : "pause.circle")
-                    .foregroundStyle(.secondary)
+                if workspace.selectedIsLocal {
+                    Label(status.running ? "运行中" : "未运行", systemImage: status.running ? "checkmark.circle" : "pause.circle")
+                        .foregroundStyle(.secondary)
+                }
                 if page.busy { ProgressView().controlSize(.small) }
                 Button("刷新", systemImage: "arrow.clockwise") { refresh() }.disabled(page.busy)
             }
-            if !status.message.isEmpty {
+            if workspace.selectedIsLocal && !status.message.isEmpty {
                 Text(status.message)
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     .accessibilityIdentifier("multica-status-message")
             }
-            if status.migrationRequired {
+            if workspace.selectedIsLocal && status.migrationRequired {
                 Label("数据目录与容器挂载不一致：请关闭保活、停止容器并完成离线迁移后重新保存设置。", systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(.orange)
                     .accessibilityIdentifier("multica-migration-warning-tab")
             }
-            if !status.version.isEmpty {
+            if workspace.selectedIsLocal && !status.version.isEmpty {
                 Text("Multica 版本：" + status.version)
                     .font(.caption).foregroundStyle(.secondary)
                     .accessibilityIdentifier("multica-version")
             }
-            installationBanner
+            if workspace.selectedIsLocal { installationBanner }
             if !page.error.isEmpty {
                 Label(page.error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange).textSelection(.enabled)
@@ -241,8 +259,14 @@ struct MulticaView: View {
                 Text("运行时").tag(2)
             }.pickerStyle(.segmented)
             if page.workspaces.isEmpty && !page.busy {
-                ContentUnavailableView("没有可用工作区", systemImage: "square.stack", description: Text("请确认容器已启动，并在设置中完成 Multica 登录。"))
+                ContentUnavailableView("没有可用工作区", systemImage: "square.stack", description: Text("请在提供服务的设备上确认运行与登录状态，并检查共享范围和查看权限。"))
             } else {
+                if sizeClass == .compact {
+                    if page.hasIssue || page.hasAgent {
+                        Button("返回列表", systemImage: "chevron.left") { query() }
+                        detail
+                    } else { listing }
+                } else {
                 HStack(alignment: .top, spacing: 16) {
                     listing.frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
                     if page.hasIssue || page.hasAgent {
@@ -250,9 +274,12 @@ struct MulticaView: View {
                         detail.frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                }
             }
         }
         .padding()
+        .onAppear { loadSharing() }
+        .onChange(of: workspace.localService) { _, _ in loadSharing() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { core.navigate(to: .settings) } label: { Label("Settings", systemImage: "gearshape") }
@@ -261,6 +288,28 @@ struct MulticaView: View {
         .sheet(isPresented: $showInstallation) {
             MulticaInstallationDialog(core: core, status: status, draft: $installationDraft, showPreparation: $installationPreparation)
         }
+    }
+
+    private var sharingSettings: some View {
+        DisclosureGroup("向已授权设备开放 Multica") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("开放共享", isOn: $sharing)
+                Text("共享勾选工作区的任务、代理和运行时信息。其他设备仍需查看权限；会话操作尚不可用。安装、登录和配置只能在本机完成。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                ForEach(page.workspaces, id: \.id) { item in
+                    Toggle(item.name, isOn: Binding(get: { sharedWorkspaces.contains(item.id) }, set: { selected in
+                        if selected { sharedWorkspaces.insert(item.id) } else { sharedWorkspaces.remove(item.id) }
+                    }))
+                }
+                Button("保存共享设置") {
+                    core.multicaService(.with { $0.action = .save; $0.offered = sharing; $0.workspaces = sharedWorkspaces.sorted() })
+                }
+            }.padding(.vertical, 8)
+        }
+    }
+    private func loadSharing() {
+        sharing = workspace.localService.offered
+        sharedWorkspaces = Set(workspace.localService.workspaces)
     }
 
     /// Rust owns the installation projection; the tab only surfaces an
@@ -370,7 +419,7 @@ struct MulticaView: View {
         core.multicaBrowse(request)
     }
     private func refresh() {
-        core.multica(.init())
+        if workspace.selectedIsLocal { core.multica(.init()) }
         query(issue: page.hasIssue ? page.issue.id : "", agent: page.hasAgent ? page.agent.id : "", offset: page.offset)
     }
 

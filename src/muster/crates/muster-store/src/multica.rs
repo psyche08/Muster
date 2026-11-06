@@ -158,6 +158,25 @@ fn read(conn: &Connection, reference: &str) -> Result<Option<Record>> {
 }
 
 impl Store {
+    /// Deny-only fallback when native discovery cannot prove a store identity.
+    /// It must never authorize a session or associate an unknown store with a task.
+    pub fn multica_has_session(&self, device: &str, session: &str) -> Result<bool> {
+        Ok(self.conn.lock().unwrap().query_row(
+            "SELECT EXISTS(SELECT 1 FROM multica_owners WHERE json_extract(native_key, '$.device') = ?1 AND json_extract(native_key, '$.session') = ?2)",
+            params![device, session], |row| row.get(0),
+        )?)
+    }
+
+    /// Ownership is append-only. Watches use this durable revision even when
+    /// another Store connection commits adoption or a pre-create reservation.
+    pub fn multica_ownership_revision(&self) -> Result<u64> {
+        Ok(self.conn.lock().unwrap().query_row(
+            "SELECT COUNT(*) FROM multica_owners",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? as u64)
+    }
+
     /// Returns the existing exact operation without authorizing another create.
     /// The caller must inspect its phase; even Reserved is not replay permission.
     pub fn multica_reserve(&self, reservation: &Reservation) -> Result<Record> {
@@ -338,6 +357,16 @@ mod tests {
         let request = reservation();
         let record = store.multica_reserve(&request).unwrap();
         assert_eq!(record.phase, Phase::Reserved);
+        assert!(
+            store
+                .multica_has_session(&request.native.device, &request.native.session)
+                .unwrap()
+        );
+        assert!(
+            !store
+                .multica_has_session("other-device", &request.native.session)
+                .unwrap()
+        );
         assert_eq!(
             store.multica_owner(&request.native).unwrap(),
             Some(request.task.clone())

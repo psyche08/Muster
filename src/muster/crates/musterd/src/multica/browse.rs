@@ -53,6 +53,13 @@ impl Manager {
     }
 
     pub async fn browse(&self, r: v1::MulticaBrowseRequest) -> Result<v1::MulticaPage, Error> {
+        self.browse_scoped(r, None).await
+    }
+    pub async fn browse_scoped(
+        &self,
+        r: v1::MulticaBrowseRequest,
+        allowed: Option<&std::collections::BTreeSet<String>>,
+    ) -> Result<v1::MulticaPage, Error> {
         if !cfg!(target_os = "macos") {
             return Err(Error::Unavailable(
                 "Multica requires a local Mac container".into(),
@@ -75,6 +82,7 @@ impl Manager {
         let workspace_json = self.query(&c, "", &["workspace", "list"]).await?;
         let workspaces: Vec<_> = array(&workspace_json)?
             .iter()
+            .filter(|w| allowed.is_none_or(|ids| ids.contains(&field(w, "id"))))
             .map(|w| v1::MulticaWorkspace {
                 id: field(w, "id"),
                 name: field(w, "name"),
@@ -325,6 +333,25 @@ esac
         assert_eq!(page.previous_offset, 0);
         assert!(page.has_more);
         assert!(!serde_json::to_string(&page).unwrap().contains("SECRET"));
+        let allowed = ["not-present".into()].into_iter().collect();
+        let hidden = manager
+            .browse_scoped(v1::MulticaBrowseRequest::default(), Some(&allowed))
+            .await
+            .unwrap();
+        assert!(hidden.workspaces.is_empty() && hidden.issues.is_empty());
+        assert!(
+            manager
+                .browse_scoped(
+                    v1::MulticaBrowseRequest {
+                        workspace_id: "w".into(),
+                        ..Default::default()
+                    },
+                    Some(&allowed)
+                )
+                .await
+                .is_err()
+        );
+
         let detail = manager
             .browse(v1::MulticaBrowseRequest {
                 workspace_id: "w".into(),

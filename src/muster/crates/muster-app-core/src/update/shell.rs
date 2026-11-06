@@ -212,12 +212,14 @@ pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
             // Before the reconnect: failures while suspended count again,
             // and members found unreachable meanwhile get another round.
             ctx.backend.suspend(false);
+            multica::discover(state, ctx);
             reconnect(state, ctx);
             terminals::foreground_terminal(state, ctx);
             super::send_recovery::restore(state, ctx);
         }
         app::Lifecycle::Background => {
             state.foreground = false;
+            multica::background(state);
             state.catalog_watches.clear();
             state.agents_search = None;
             state.agents_search_epoch += 1;

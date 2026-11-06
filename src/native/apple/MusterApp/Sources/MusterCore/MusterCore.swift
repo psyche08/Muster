@@ -226,6 +226,9 @@ public final class MusterCore: MusterShell {
         send(intent)
     }
 
+    public func multicaSelect(_ device: String) { send(.multicaSelect(.with { $0.deviceID = device })) }
+    public func multicaService(_ request: Muster_V1_MulticaServiceRequest) { send(.multicaService(request)) }
+
     public func multica(_ request: Muster_V1_MulticaRequest) { send(.multica(request)) }
     public func vision(_ request: Muster_V1_VisionRequest) { send(.vision(request)) }
 

@@ -61,10 +61,14 @@ fn access_for(req: &Req) -> Access {
     };
     match req {
         Req::Multica(_)
-        | Req::MulticaBrowse(_)
         | Req::AgentNativeCreate(_)
         | Req::Vision(_)
         | Req::AgentScheduler(_) => Access::LocalOnly,
+        Req::MulticaService(r) if r.action == v1::multica_service_request::Action::Save as i32 => Access::LocalOnly,
+        Req::MulticaService(_) => Access::Member,
+        Req::MulticaBrowse(r) => Access::Need(Permission::Multica {
+            workspace: (!r.workspace_id.is_empty()).then(|| r.workspace_id.clone()), control: false,
+        }),
         Req::DevicePresence(r) if !r.public_key.is_empty() => Access::LocalOnly,
         Req::DevicePresence(_) | Req::DeviceInstallPresence(_) => Access::Member,
         Req::NetworkPresence(_) => Access::Need(Permission::NetworkAdmin),
@@ -288,6 +292,9 @@ impl Handler for MusterHandler {
                     return fail(error);
                 }
             }
+            if let Err(error) = ordinary_terminal_request(&daemon, &request).await {
+                return fail(error);
+            }
             let access = access_for(&request);
             if let Err(error) = authorize_request(&daemon, &ctx, &request, &access) {
                 return fail(error);
@@ -389,6 +396,7 @@ impl Handler for MusterHandler {
             let look = vision_target(&daemon, &request);
             let cancelled = events.cancelled().clone();
             let work = muster_agent::control_guard::WorkQueue::default();
+            let publication_request = request.clone();
             let reply = work
                 .scope(async {
                     match dispatch(&daemon, &ctx, request, events).await {
@@ -403,6 +411,12 @@ impl Handler for MusterHandler {
                     }
                 })
                 .await;
+            if let Err(error) = ordinary_agent_request(&daemon, &publication_request) {
+                return fail(error);
+            }
+            if let Err(error) = ordinary_terminal_request(&daemon, &publication_request).await {
+                return fail(error);
+            }
             // Look only after the console reservation is released, so a
             // Locked Use transaction never waits for an LLM (ADR 0116).
             drop(_console_write);
@@ -493,6 +507,15 @@ fn authorize_request(
     request: &Req,
     access: &Access,
 ) -> Result<(), Error> {
+    ordinary_agent_request(daemon, request)?;
+    if let Req::MulticaBrowse(r) = request {
+        return crate::multica::service::authorize(
+            daemon,
+            ctx,
+            (!r.workspace_id.is_empty()).then_some(r.workspace_id.as_str()),
+            false,
+        );
+    }
     let Principal::Remote(peer) = ctx.principal else {
         return Ok(());
     };
@@ -603,6 +626,73 @@ fn authorize_request(
             }
         }
     }
+}
+
+async fn terminal_agent(daemon: &Daemon, session: &str) -> Result<Option<String>, Error> {
+    if !session.starts_with("tmux-") {
+        return Ok(None);
+    }
+    #[cfg(unix)]
+    {
+        let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
+            unreachable!()
+        };
+        return Ok(Some(service.agent_session(session).await?));
+    }
+    #[cfg(not(unix))]
+    Err(Error::Unavailable("Managed terminal unavailable".into()))
+}
+async fn ordinary_terminal_request(daemon: &Daemon, request: &Req) -> Result<(), Error> {
+    let session = match request {
+        Req::TerminalAttach(r) => &r.session,
+        Req::TerminalInput(r) => &r.session,
+        Req::TerminalHistory(r) => &r.session,
+        Req::TerminalResize(r) => &r.session,
+        Req::TerminalClose(r) => &r.session,
+        _ => return Ok(()),
+    };
+    if let Some(agent) = terminal_agent(daemon, session).await? {
+        crate::multica::ownership::ordinary(daemon, &agent)?;
+    }
+    Ok(())
+}
+
+/// Ownership is checked for local callers too, before any provider action.
+fn ordinary_agent_request(daemon: &Daemon, request: &Req) -> Result<(), Error> {
+    let session = match request {
+        Req::AgentWatch(r) if r.session.is_empty() => return Ok(()),
+        Req::AgentSendStatus(_)
+        | Req::AgentConfirmDelivered(_)
+        | Req::AgentWatch(_)
+        | Req::AgentMessages(_)
+        | Req::AgentFiles(_)
+        | Req::AgentFile(_)
+        | Req::AgentGit(_)
+        | Req::AgentChatOptions(_)
+        | Req::AgentChatSetOptions(_)
+        | Req::AgentSend(_)
+        | Req::AgentRespond(_)
+        | Req::AgentInterrupt(_)
+        | Req::AgentComplete(_)
+        | Req::AgentOrganize(_)
+        | Req::AgentInspect(_) => session_provider(daemon, request)?.0,
+        Req::AgentChatOpen(r) if !r.chat.is_empty() => native_session(daemon, request)?,
+        Req::AgentTerminal(r) => r.session.clone(),
+        Req::TerminalRun(r) => r.session.clone(),
+        Req::TerminalRuns(r) => r.session.clone(),
+        Req::LockedUsePrepare(r) => {
+            if let Some(inner) = r
+                .operation
+                .as_ref()
+                .and_then(muster_proto::locked_use::request)
+            {
+                ordinary_agent_request(daemon, &inner)?;
+            }
+            return Ok(());
+        }
+        _ => return Ok(()),
+    };
+    crate::multica::ownership::ordinary(daemon, &session)
 }
 
 /// Whether a remote caller must attach a presence proof to `req` because
@@ -719,10 +809,40 @@ impl<'a> AgentVisibility<'a> {
     }
 
     fn session(&self, agent: &muster_agent::AgentService, session: &str) -> bool {
-        self.peer.is_none()
-            || agent
-                .session(session)
-                .is_some_and(|info| self.allows(Some(&info.provider)))
+        crate::multica::ownership::ordinary(self.daemon, session).is_ok()
+            && (self.peer.is_none()
+                || agent
+                    .session(session)
+                    .is_some_and(|info| self.allows(Some(&info.provider))))
+    }
+
+    fn project(
+        &self,
+        agent: &muster_agent::AgentService,
+        mut row: v1::AgentSession,
+    ) -> Option<v1::AgentSession> {
+        if !self.session(agent, &row.id) {
+            return None;
+        }
+        let descendants = row.subagents.len() + row.subsessions.len();
+        row.subagents = row
+            .subagents
+            .into_iter()
+            .filter_map(|child| self.project(agent, child))
+            .collect();
+        row.subsessions = row
+            .subsessions
+            .into_iter()
+            .filter_map(|child| self.project(agent, child))
+            .collect();
+        if descendants != row.subagents.len() + row.subsessions.len() {
+            row.descendant_activity.clear();
+        }
+        if !row.parent_session_id.is_empty() && !self.session(agent, &row.parent_session_id) {
+            row.parent_session_id.clear();
+            row.parent_title.clear();
+        }
+        Some(row)
     }
 
     fn sections(&self, agent: &muster_agent::AgentService) -> Vec<v1::AgentSection> {
@@ -738,7 +858,7 @@ impl<'a> AgentVisibility<'a> {
             sessions: snapshot
                 .sessions
                 .into_iter()
-                .filter(|s| self.allows(Some(&s.provider)))
+                .filter_map(|s| self.project(agent, s))
                 .collect(),
             sections: snapshot
                 .sections
@@ -784,7 +904,7 @@ impl<'a> AgentVisibility<'a> {
         let mut sessions: Vec<_> = agent
             .list(provider, usize::MAX)
             .into_iter()
-            .filter(|session| self.allows(Some(&session.provider)))
+            .filter_map(|session| self.project(agent, session))
             .collect();
         sessions.sort_by(|a, b| {
             b.updated_unix
@@ -793,6 +913,13 @@ impl<'a> AgentVisibility<'a> {
         });
         sessions.truncate(if limit == 0 { 200 } else { limit });
         sessions
+    }
+}
+
+fn session_ids(row: &v1::AgentSession, ids: &mut std::collections::BTreeSet<String>) {
+    ids.insert(row.id.clone());
+    for child in row.subagents.iter().chain(&row.subsessions) {
+        session_ids(child, ids);
     }
 }
 
@@ -1131,7 +1258,31 @@ async fn dispatch(
             };
             daemon.locked_use.extend(peer, r).await?
         }
-        Req::MulticaBrowse(r) => Resp::MulticaPage(daemon.multica.browse(r).await?),
+        Req::MulticaService(r) => {
+            Resp::MulticaService(crate::multica::service::configure(daemon, ctx, r).await?)
+        }
+        Req::MulticaBrowse(r) => {
+            let policy = daemon.policy().read().unwrap().clone();
+            let roster_before = daemon.roster().read().unwrap().state().clone();
+            let allowed =
+                matches!(ctx.principal, Principal::Remote(_)).then_some(&policy.multica_workspaces);
+            let page = daemon.multica.browse_scoped(r.clone(), allowed).await?;
+            crate::multica::service::authorize(
+                daemon,
+                ctx,
+                (!page.workspace_id.is_empty()).then_some(page.workspace_id.as_str()),
+                false,
+            )?;
+            if matches!(ctx.principal, Principal::Remote(_))
+                && (*daemon.policy().read().unwrap() != policy
+                    || daemon.roster().read().unwrap().state() != &roster_before)
+            {
+                return Err(Error::Unauthorized(
+                    "Multica sharing changed during the request; refresh".into(),
+                ));
+            }
+            Resp::MulticaPage(page)
+        }
         Req::Multica(r) => Resp::Multica(daemon.multica.request(r, &daemon.socket_path()).await?),
         Req::Vision(r) => Resp::Vision(crate::vision::request(daemon, r).await?),
         Req::BrowserSetup(r) => {
@@ -1243,7 +1394,9 @@ async fn dispatch(
             Resp::NetworkStatus(daemon.network_status())
         }
         Req::NetworkSetScopes(r) => {
-            daemon.set_scopes(&r.device_id, &r.scopes, &r.role)?;
+            daemon
+                .set_scopes_checked(&r.device_id, &r.scopes, &r.role)
+                .await?;
             Resp::NetworkStatus(daemon.network_status())
         }
         Req::DeviceSetCover(r) => {
@@ -1549,6 +1702,8 @@ async fn dispatch(
             Resp::Ack(v1::Ack {})
         }
         Req::TerminalAttach(r) => {
+            let owner_session = terminal_agent(daemon, &r.session).await?;
+            let mut ownership_tick = tokio::time::interval(Duration::from_millis(250));
             let (terminal, raw) = terminal_for(daemon, &r.session)?;
             let terminal = terminal.clone();
             let session = raw.to_owned();
@@ -1558,8 +1713,12 @@ async fn dispatch(
             loop {
                 tokio::select! {
                     _ = events.cancelled().cancelled() => break,
+                    _ = ownership_tick.tick(), if owner_session.is_some() => {
+                        crate::multica::ownership::ordinary(daemon, owner_session.as_deref().unwrap())?;
+                    }
                     next = rx.recv() => match next {
                         Some(mut frame) => {
+                            if let Some(id) = &owner_session { crate::multica::ownership::ordinary(daemon, id)?; }
                             frame.session = r.session.clone();
                             if frame.full && !frame.desktop_attach_command.is_empty() {
                                 frame.native_sources = crate::native_terminals::sources(daemon).into_iter()
@@ -1826,8 +1985,11 @@ async fn dispatch(
                     )
                     .await?;
                 // Recheck narrowed grants after blocking transcript reads.
-                page.sessions
-                    .retain(|s| AgentVisibility::new(daemon, ctx).allows(Some(&s.provider)));
+                page.sessions = page
+                    .sessions
+                    .into_iter()
+                    .filter_map(|s| AgentVisibility::new(daemon, ctx).project(agent, s))
+                    .collect();
                 return Ok(Resp::AgentSessions(page));
             }
             Resp::AgentSessions(v1::AgentSessionPage {
@@ -1857,6 +2019,13 @@ async fn dispatch(
             let agent = agent_of(daemon)?.clone();
             let visible = AgentVisibility::new(daemon, ctx);
             let mut rx = agent.subscribe();
+            let mut ownership_tick = tokio::time::interval(Duration::from_millis(250));
+            ownership_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut ownership_revision = daemon.store().multica_ownership_revision()?;
+            let mut shown_sessions = std::collections::BTreeSet::new();
+            for row in visible.snapshot(&agent).sessions {
+                session_ids(&row, &mut shown_sessions);
+            }
             let filter = r.session.clone();
             let catalog_only = r.catalog_only && filter.is_empty();
             let limit = if catalog_only {
@@ -1888,6 +2057,9 @@ async fn dispatch(
                 let session = agent
                     .session(&filter)
                     .ok_or_else(|| Error::NotFound(format!("agent session {filter}")))?;
+                let session = visible.project(&agent, session).ok_or_else(|| {
+                    Error::Unauthorized("Task session is unavailable in Agents".into())
+                })?;
                 provider = Some(session.provider.clone());
                 _watch = Some(agent.watch_session(&filter));
                 let refresh = agent.clone();
@@ -1911,6 +2083,22 @@ async fn dispatch(
             loop {
                 let event = tokio::select! {
                     _ = events.cancelled().cancelled() => break,
+                    _ = ownership_tick.tick() => {
+                        if !filter.is_empty() && !visible.session(&agent, &filter) {
+                            events.send(v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(v1::agent_event::Ev::Unavailable(v1::AgentUnavailable { sessions: vec![filter.clone()] })) })).await?;
+                            return Err(Error::Unauthorized("Session ownership or access changed".into()));
+                        }
+                        let revision = daemon.store().multica_ownership_revision()?;
+                        if revision == ownership_revision { continue; }
+                        ownership_revision = revision;
+                        let removed: Vec<_> = shown_sessions.iter().filter(|id| !visible.session(&agent, id)).cloned().collect();
+                        if !removed.is_empty() {
+                            for id in &removed { shown_sessions.remove(id); }
+                            events.send(v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(v1::agent_event::Ev::Unavailable(v1::AgentUnavailable { sessions: removed })) })).await?;
+                        }
+                        for row in visible.snapshot(&agent).sessions { session_ids(&row, &mut shown_sessions); }
+                        muster_agent::Event::ListChanged
+                    }
                     next = rx.recv() => match next {
                         Ok(event) => event,
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
@@ -1924,9 +2112,16 @@ async fn dispatch(
                         Err(_) => break,
                     }
                 };
+                if matches!(event, muster_agent::Event::ListChanged) {
+                    for row in visible.snapshot(&agent).sessions {
+                        session_ids(&row, &mut shown_sessions);
+                    }
+                }
                 // A grant narrowed since the watch opened ends it, or hides
                 // the sessions of providers switched off.
-                if !visible.allows(provider.as_deref()) {
+                if !visible.allows(provider.as_deref())
+                    || (!filter.is_empty() && !visible.session(&agent, &filter))
+                {
                     return Err(Error::Unauthorized(
                         "agents: access withdrawn while watching".into(),
                     ));
@@ -1950,7 +2145,7 @@ async fn dispatch(
                     }
                     continue;
                 }
-                let shown = |session: &str| !filter.is_empty() || visible.session(&agent, session);
+                let shown = |session: &str| visible.session(&agent, session);
                 let ev = match event {
                     muster_agent::Event::ListChanged if filter.is_empty() => {
                         v1::agent_event::Ev::ListChanged(visible.catalog_page(
@@ -1961,7 +2156,10 @@ async fn dispatch(
                             r.provider_pages,
                         )?)
                     }
-                    muster_agent::Event::ListChanged => match agent.session(&filter) {
+                    muster_agent::Event::ListChanged => match agent
+                        .session(&filter)
+                        .and_then(|s| visible.project(&agent, s))
+                    {
                         Some(session) => v1::agent_event::Ev::State(session),
                         None => continue,
                     },
@@ -1972,8 +2170,11 @@ async fn dispatch(
                     }
                     muster_agent::Event::State(session)
                         if (filter.is_empty() || session.id == filter)
-                            && (!filter.is_empty() || visible.allows(Some(&session.provider))) =>
+                            && visible.session(&agent, &session.id) =>
                     {
+                        let Some(session) = visible.project(&agent, session) else {
+                            continue;
+                        };
                         v1::agent_event::Ev::State(session)
                     }
                     muster_agent::Event::Interaction(interaction)
@@ -2839,6 +3040,7 @@ pub(crate) fn require_native_operation(daemon: &Daemon, request: &Req) -> Result
         ));
     }
     let session = native_session(daemon, request)?;
+    crate::multica::ownership::ordinary(daemon, &session)?;
     let provider = native_provider(daemon, request)?;
     let info = agent_of(daemon)?.session(&session);
     let bundle = muster_core::apps::app(&provider)
