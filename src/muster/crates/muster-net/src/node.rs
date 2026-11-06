@@ -1651,6 +1651,51 @@ mod recovery_tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_service_streams_reuse_one_peer_connection() {
+        let (a, b, server) = fixture().await;
+        let peer = b.device_id();
+        let connection = a.connection_to(&peer).unwrap().stable_id();
+        // Leave one service waiting for input while unrelated operations finish.
+        let (mut held_send, mut held_recv) = a.open(peer, "echo", 1).await.unwrap();
+        let held_id = held_send.id();
+        let mut tasks = tokio::task::JoinSet::new();
+        for _ in 0..8 {
+            let a = a.clone();
+            tasks.spawn(async move {
+                let (mut send, mut recv) = a.open(peer, "echo", 1).await.unwrap();
+                let id = send.id();
+                write_message(&mut send, b"independent operation")
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    read_message(&mut recv, 1024).await.unwrap().unwrap(),
+                    b"independent operation"
+                );
+                assert_eq!(a.connection_to(&peer).unwrap().stable_id(), connection);
+                id
+            });
+        }
+        let mut ids = std::collections::HashSet::from([held_id]);
+        tokio::time::timeout(CONNECT_TIMEOUT, async {
+            while let Some(result) = tasks.join_next().await {
+                assert!(ids.insert(result.unwrap()), "service stream IDs are unique");
+            }
+        })
+        .await
+        .expect("an idle service stream does not block other operations");
+        assert_eq!(ids.len(), 9);
+        write_message(&mut held_send, b"still open").await.unwrap();
+        assert_eq!(
+            read_message(&mut held_recv, 1024).await.unwrap().unwrap(),
+            b"still open"
+        );
+        assert_eq!(a.connection_to(&peer).unwrap().stable_id(), connection);
+        a.shutdown().await;
+        b.shutdown().await;
+        server.abort();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn send_only_socket_failure_recovers_without_receive_error() {
         let (a, b, server) = fixture().await;
         let old = a.transport().unwrap();

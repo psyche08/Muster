@@ -2,7 +2,7 @@
 
 - Date: 2026-11-06
 - Status: Accepted; source verified, release pending
-- Related: ADR 0135; ADR 0142; architecture/services.md; architecture/agent-halo.md
+- Related: ADR 0146 (supersedes two traffic-class streams); ADR 0135; ADR 0142; architecture/services.md; architecture/agent-halo.md
 
 ## Context
 

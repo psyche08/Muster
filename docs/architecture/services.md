@@ -10,6 +10,13 @@ App connections to local `musterd` (UDS) and remote `musterd` (PeerLink streams)
 
 Desktop Apps also ask local `musterd` to open PeerLink streams to remote devices. Each desktop thus has one network endpoint and shared links for vnet, forwarding, and services.
 
+Remote operations own independent service streams over Node's authenticated
+per-peer QUIC connection pool ([ADR 0146](../adr/0146-request-streams-over-the-quic-peer-pool.md)).
+The desktop proxy opens one stream per forwarded RPC; embedded clients acquire
+one per remote operation, with watches and history reconciliation on separate
+streams. Ending an operation releases its stream without closing the peer
+connection. Stream admission and connection setup keep their existing bounds.
+
 ```proto
 service Agent {
   rpc ListSessions(ListReq) returns (SessionPage);
