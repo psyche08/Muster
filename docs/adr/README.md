@@ -272,3 +272,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0154](0154-wait-for-slow-codex-windows.md) | Accepted; installed, local Codex creation accepted, scheduler recovered; Claude, remote and locked creation pending | Wait up to 90 s for slow Codex windows before navigation, and install 1.1.27 (117) |
 | [0155](0155-remove-finish-session-script.md) | Accepted | Remove `scripts/finish-session.sh`; land with the AGENTS.md steps run directly |
 | [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; installation pending | Bound container exec resources and wrapper reconciliation |
+| [0157](0157-publish-apple-1-1-27.md) | Accepted | Publish the paired macOS and iOS 1.1.27 (117) OTA release |
