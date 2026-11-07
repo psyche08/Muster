@@ -1,7 +1,7 @@
 # ADR 0160: Page history by turns and load a turn's work on demand
 
 - Date: 2026-11-07
-- Status: Accepted; implementation in progress
+- Status: Accepted; source and tests verified, installation and device acceptance pending
 - Related: [ADR 0153](0153-large-session-history-costs.md), [ADR 0159](0159-grow-the-history-window.md); supersedes the display window of both
 
 ## Context
@@ -68,7 +68,8 @@ the client has not loaded is not collapsed.
 **The window.** Rust keeps ADR 0159's growing window, counted in turns: the
 latest ten turns; Load earlier and Load newer add ten turns, at most 200
 records a step; a browsed window holds at most 1,000 records. With record pages
-(an older Mac, Orca), the same rules apply to records.
+(an older Mac, Orca), the window still counts turns, but every record of a turn
+counts toward the 200-record cap, so a step can hold fewer than ten turns.
 
 **Expanding.** A collapsed Worked group whose work is not loaded is a
 `working` block with no children and `details = "unloaded"`. The shell keeps
@@ -112,13 +113,29 @@ client never sends `turns` and gets record pages as before.
 
 ## Verification
 
-Planned:
-
-- Shared Rust: outline classification matches the presentation for completed,
-  running, interrupted, compacted and card-bearing turns; turn pages and caps;
-  proofs over outlines; work pages and stale spans; the stored outline in the
-  SQLite index; local collapse matching the daemon's outline; window and cache
-  behavior; record mode against an older server.
-- Native: Apple tests and builds; HarmonyOS and Android source updates (no
-  Android SDK on the build Mac).
-- Installation and iPhone acceptance against the reported session.
+- Shared Rust: `cargo test -p muster-proto -p muster-app-core -p muster-agent
+  -p musterd --no-fail-fast` passes. New tests cover the outline (completed
+  turns collapse and the latest stays whole; provider cards, interactions,
+  empty records and an interrupted turn status split nothing they should not;
+  turn summaries end turns), appending matching a fresh outline and the
+  client's local collapse, turn pages and their cap, proofs over outlines, work
+  pages and stale spans, the SQLite index's stored outline, timeline blocks
+  that match whether a span is loaded or not, the omitted-steps notice, live
+  collapse that keeps a turn's work, loading once with a retry after failure,
+  and a watched session that loads a turn's work on expand and serves it from
+  the disk cache after reopening. The render and watch tests were updated for
+  windows counted in turns. One unrelated test,
+  `polling_regressions::slow_poll_releases_catalog_and_cannot_overwrite_replaced_viewer`,
+  failed once on its 2-second bound in the parallel run and passed three
+  times alone. `cargo clippy --tests` on the four crates reports nothing.
+- Apple: Swift and HarmonyOS bindings were regenerated. `swift test` (macOS,
+  which also compiles `MusterUI`) runs 111 tests with no failures. No Xcode
+  app build or iOS build.
+- HarmonyOS: with SDK 26, `CompileArkTS` succeeds and the debug HAP builds.
+  Linking `libmuster.so` needed a temporary local symbol shim that was not
+  committed: `errno` 0.2.8, which `rusty-leveldb` brings in, references
+  `__xpg_strerror_r`, which the OpenHarmony C library does not define. That
+  dependency predates this change; the native build is otherwise unchanged.
+- Android: source only; there is no Android SDK on the build Mac.
+- Not done: signing, installation and acceptance on iPhone against the
+  reported session.

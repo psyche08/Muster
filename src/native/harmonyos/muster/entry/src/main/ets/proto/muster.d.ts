@@ -5987,6 +5987,9 @@ export namespace muster {
 
             /** AgentMessage toolStatus */
             toolStatus?: (string|null);
+
+            /** AgentMessage work */
+            work?: (muster.v1.IAgentWorkSpan|null);
         }
 
         /** Represents an AgentMessage. */
@@ -6028,6 +6031,9 @@ export namespace muster {
             /** AgentMessage toolStatus. */
             public toolStatus: string;
 
+            /** AgentMessage work. */
+            public work?: (muster.v1.IAgentWorkSpan|null);
+
             /**
              * Creates a new AgentMessage instance using the specified properties.
              * @param [properties] Properties to set
@@ -6055,6 +6061,88 @@ export namespace muster {
 
             /**
              * Gets the default type url for AgentMessage
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentWorkSpan. */
+        interface IAgentWorkSpan {
+
+            /** AgentWorkSpan firstId */
+            firstId?: (string|null);
+
+            /** AgentWorkSpan lastId */
+            lastId?: (string|null);
+
+            /** AgentWorkSpan count */
+            count?: (number|null);
+
+            /** AgentWorkSpan hash */
+            hash?: (Uint8Array|null);
+
+            /** AgentWorkSpan firstIsTool */
+            firstIsTool?: (boolean|null);
+
+            /** AgentWorkSpan endUnix */
+            endUnix?: (number|Long|null);
+        }
+
+        /** Represents an AgentWorkSpan. */
+        class AgentWorkSpan implements IAgentWorkSpan {
+
+            /**
+             * Constructs a new AgentWorkSpan.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentWorkSpan);
+
+            /** AgentWorkSpan firstId. */
+            public firstId: string;
+
+            /** AgentWorkSpan lastId. */
+            public lastId: string;
+
+            /** AgentWorkSpan count. */
+            public count: number;
+
+            /** AgentWorkSpan hash. */
+            public hash: Uint8Array;
+
+            /** AgentWorkSpan firstIsTool. */
+            public firstIsTool: boolean;
+
+            /** AgentWorkSpan endUnix. */
+            public endUnix: (number|Long);
+
+            /**
+             * Creates a new AgentWorkSpan instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentWorkSpan instance
+             */
+            public static create(properties?: muster.v1.IAgentWorkSpan): muster.v1.AgentWorkSpan;
+
+            /**
+             * Encodes the specified AgentWorkSpan message. Does not implicitly {@link muster.v1.AgentWorkSpan.verify|verify} messages.
+             * @param message AgentWorkSpan message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentWorkSpan, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentWorkSpan message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentWorkSpan
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentWorkSpan;
+
+            /**
+             * Gets the default type url for AgentWorkSpan
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -6414,6 +6502,15 @@ export namespace muster {
 
             /** AgentMessagesRequest diagnosticId */
             diagnosticId?: (string|null);
+
+            /** AgentMessagesRequest turns */
+            turns?: (number|null);
+
+            /** AgentMessagesRequest workId */
+            workId?: (string|null);
+
+            /** AgentMessagesRequest workHash */
+            workHash?: (Uint8Array|null);
         }
 
         /** Represents an AgentMessagesRequest. */
@@ -6445,6 +6542,15 @@ export namespace muster {
 
             /** AgentMessagesRequest diagnosticId. */
             public diagnosticId: string;
+
+            /** AgentMessagesRequest turns. */
+            public turns: number;
+
+            /** AgentMessagesRequest workId. */
+            public workId: string;
+
+            /** AgentMessagesRequest workHash. */
+            public workHash: Uint8Array;
 
             /**
              * Creates a new AgentMessagesRequest instance using the specified properties.
@@ -6496,6 +6602,9 @@ export namespace muster {
 
             /** AgentMessagePage hasNewer */
             hasNewer?: (boolean|null);
+
+            /** AgentMessagePage outline */
+            outline?: (boolean|null);
         }
 
         /** Represents an AgentMessagePage. */
@@ -6521,6 +6630,9 @@ export namespace muster {
 
             /** AgentMessagePage hasNewer. */
             public hasNewer: boolean;
+
+            /** AgentMessagePage outline. */
+            public outline: boolean;
 
             /**
              * Creates a new AgentMessagePage instance using the specified properties.
@@ -11099,6 +11211,9 @@ export namespace muster {
 
             /** Intent nativeCreate */
             nativeCreate?: (muster.app.INativeCreate|null);
+
+            /** Intent agentLoadWork */
+            agentLoadWork?: (muster.app.IAgentLoadWork|null);
         }
 
         /** Represents an Intent. */
@@ -11296,8 +11411,11 @@ export namespace muster {
             /** Intent nativeCreate. */
             public nativeCreate?: (muster.app.INativeCreate|null);
 
+            /** Intent agentLoadWork. */
+            public agentLoadWork?: (muster.app.IAgentLoadWork|null);
+
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -13856,6 +13974,58 @@ export namespace muster {
 
             /**
              * Gets the default type url for AgentLoadEarlier
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentLoadWork. */
+        interface IAgentLoadWork {
+
+            /** AgentLoadWork block */
+            block?: (string|null);
+        }
+
+        /** Represents an AgentLoadWork. */
+        class AgentLoadWork implements IAgentLoadWork {
+
+            /**
+             * Constructs a new AgentLoadWork.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IAgentLoadWork);
+
+            /** AgentLoadWork block. */
+            public block: string;
+
+            /**
+             * Creates a new AgentLoadWork instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentLoadWork instance
+             */
+            public static create(properties?: muster.app.IAgentLoadWork): muster.app.AgentLoadWork;
+
+            /**
+             * Encodes the specified AgentLoadWork message. Does not implicitly {@link muster.app.AgentLoadWork.verify|verify} messages.
+             * @param message AgentLoadWork message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IAgentLoadWork, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentLoadWork message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentLoadWork
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.AgentLoadWork;
+
+            /**
+             * Gets the default type url for AgentLoadWork
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -17452,6 +17622,12 @@ export namespace muster {
 
             /** ChatBlock parts */
             parts?: (muster.app.IMessagePart[]|null);
+
+            /** ChatBlock details */
+            details?: (string|null);
+
+            /** ChatBlock detailsError */
+            detailsError?: (string|null);
         }
 
         /** Represents a ChatBlock. */
@@ -17495,6 +17671,12 @@ export namespace muster {
 
             /** ChatBlock parts. */
             public parts: muster.app.IMessagePart[];
+
+            /** ChatBlock details. */
+            public details: string;
+
+            /** ChatBlock detailsError. */
+            public detailsError: string;
 
             /**
              * Creates a new ChatBlock instance using the specified properties.
