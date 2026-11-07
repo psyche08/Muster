@@ -11,6 +11,7 @@ use std::{
 
 pub const KIND: &str = "queued_message";
 pub const SEND_NOW: &str = "Send now";
+pub const DELETE: &str = "Delete";
 pub type Source = Arc<dyn Fn() -> Result<Vec<QueuedMessage>, Error> + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,7 +23,26 @@ pub struct QueuedMessage {
     client_source_id: Option<String>,
     pub text: String,
     pub can_send: bool,
+    pub can_delete: bool,
 }
+
+/// What a person can do with a queued message, named by the option they
+/// chose on its interaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
+    SendNow,
+    Delete,
+}
+impl Action {
+    pub fn parse(option: &str) -> Option<Self> {
+        match option {
+            SEND_NOW => Some(Self::SendNow),
+            DELETE => Some(Self::Delete),
+            _ => None,
+        }
+    }
+}
+
 impl QueuedMessage {
     fn identities(&self) -> impl Iterator<Item = &str> {
         std::iter::once(self.source_id.as_str()).chain(self.client_source_id.as_deref())
@@ -35,6 +55,7 @@ impl QueuedMessage {
             client_source_id: None,
             text: text.into(),
             can_send: true,
+            can_delete: true,
         }
     }
     pub fn interaction(&self, session: &str) -> PendingInteraction {
@@ -48,11 +69,11 @@ impl QueuedMessage {
                 crate::text::clip(&self.text, 8192)
             },
             optional: true,
-            options: if self.can_send {
-                vec![SEND_NOW.into()]
-            } else {
-                Vec::new()
-            },
+            options: [(self.can_send, SEND_NOW), (self.can_delete, DELETE)]
+                .into_iter()
+                .filter(|&(offered, _)| offered)
+                .map(|(_, option)| option.into())
+                .collect(),
             ..Default::default()
         }
     }
@@ -99,7 +120,25 @@ impl Reader {
 /// Read them incrementally; never reconstruct acceptance from an AX click.
 struct ClaudeQueue {
     tail: crate::transcript::Tail,
-    pending: Vec<(u64, Option<String>)>,
+    pending: Vec<ClaudeSlot>,
+    /// The slot the last queue operation dequeued, until another follows.
+    dequeued: Option<ClaudeSlot>,
+}
+
+/// A slot in Claude's queue: where it was enqueued, its text (an image-only
+/// prompt has none) and how urgently Claude dequeues it.
+struct ClaudeSlot {
+    offset: u64,
+    text: Option<String>,
+    priority: ClaudePriority,
+}
+
+/// Claude's queue priorities, most urgent first. The records omit them.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ClaudePriority {
+    Now,
+    Next,
+    Later,
 }
 
 pub(crate) fn read_claude(
@@ -116,10 +155,12 @@ pub(crate) fn read_claude(
         .or_insert_with(|| ClaudeQueue {
             tail: crate::transcript::Tail::new(path),
             pending: Vec::new(),
+            dequeued: None,
         });
     let read = state.tail.read().map_err(|e| Error::Io(e.to_string()))?;
     if read.truncated {
         state.pending.clear();
+        state.dequeued = None;
     }
     for (offset, record) in read.records {
         if record["type"] != "queue-operation"
@@ -128,23 +169,62 @@ pub(crate) fn read_claude(
         {
             continue;
         }
+        let dequeued = state.dequeued.take();
         match record["operation"].as_str() {
             Some("enqueue") => {
                 // Keep slots without user text: their dequeue must not remove
-                // the next visible prompt. Never invent an action for Claude.
-                state
-                    .pending
-                    .push((offset, record["content"].as_str().map(str::to_owned)));
-            }
-            Some("dequeue") if !state.pending.is_empty() => {
-                state.pending.remove(0);
-            }
-            Some("remove") => {
-                if let Some(text) = record["content"].as_str()
-                    && let Some(index) = state
+                // the next visible prompt. Wrapped notifications and peer
+                // prompts enqueue as `later`, a person's prompt (with or
+                // without text) as `next`.
+                let text = record["content"].as_str().map(str::to_owned);
+                let mut priority = if text.as_deref().is_some_and(crate::text::is_wrapper) {
+                    ClaudePriority::Later
+                } else {
+                    ClaudePriority::Next
+                };
+                // Send now dequeues its prompt and at once enqueues it again
+                // as `now`. A dequeue counted against another slot gives
+                // that slot back.
+                if let (Some(dequeued), Some(text)) = (dequeued, text.as_deref()) {
+                    if dequeued.text.as_deref() == Some(text) {
+                        priority = ClaudePriority::Now;
+                    } else if let Some(index) = state
                         .pending
                         .iter()
-                        .position(|(_, t)| t.as_deref() == Some(text))
+                        .position(|slot| slot.text.as_deref() == Some(text))
+                    {
+                        state.pending.remove(index);
+                        let at = state
+                            .pending
+                            .partition_point(|slot| slot.offset < dequeued.offset);
+                        state.pending.insert(at, dequeued);
+                        priority = ClaudePriority::Now;
+                    }
+                }
+                state.pending.push(ClaudeSlot {
+                    offset,
+                    text,
+                    priority,
+                });
+            }
+            Some("dequeue") => {
+                // Claude dequeues its most urgent slot first, oldest first
+                // within a priority.
+                if let Some(index) =
+                    (0..state.pending.len()).min_by_key(|&i| (state.pending[i].priority, i))
+                {
+                    state.dequeued = Some(state.pending.remove(index));
+                }
+            }
+            Some("remove") => {
+                // An image prompt enqueues without text but may be removed
+                // with it; an unmatched remove retires such a slot instead.
+                let text = record["content"].as_str();
+                if let Some(index) = state
+                    .pending
+                    .iter()
+                    .position(|slot| text.is_some() && slot.text.as_deref() == text)
+                    .or_else(|| state.pending.iter().position(|slot| slot.text.is_none()))
                 {
                     state.pending.remove(index);
                 }
@@ -161,7 +241,7 @@ pub(crate) fn read_claude(
         .pending
         .iter()
         .enumerate()
-        .filter_map(|(index, (offset, text))| {
+        .filter_map(|(index, ClaudeSlot { offset, text, .. })| {
             let text = text.as_ref()?;
             if text.trim().is_empty() || crate::text::is_wrapper(text) {
                 return None;
@@ -172,7 +252,10 @@ pub(crate) fn read_claude(
                 source_id: format!("claude:{session}:{offset}"),
                 client_source_id: None,
                 text: text.clone(),
-                can_send: false,
+                // The conversation shows it with its own Send now and
+                // Cancel and edit controls.
+                can_send: true,
+                can_delete: true,
             })
         })
         .collect())
@@ -243,6 +326,7 @@ pub fn read_session(
                     hex::encode(Sha256::digest(token))
                 ),
                 can_send: !text.trim().is_empty(),
+                can_delete: !text.trim().is_empty(),
                 text,
             });
         }
@@ -349,9 +433,8 @@ fn parse(bytes: &[u8]) -> Result<HashMap<String, Vec<QueuedMessage>>, Error> {
                 continue;
             }
             let status = entry["submission"]["status"].as_str();
-            let can_send = entry["canSendNow"] != false
-                && status.is_none_or(|s| s == "queued")
-                && !text.trim().is_empty();
+            let can_delete = status.is_none_or(|s| s == "queued") && !text.trim().is_empty();
+            let can_send = entry["canSendNow"] != false && can_delete;
             // Editing text or attachments invalidates previously rendered actions.
             let token = serde_json::to_vec(&(session, id, text, context)).map_err(|_| invalid())?;
             messages.push(QueuedMessage {
@@ -363,6 +446,7 @@ fn parse(bytes: &[u8]) -> Result<HashMap<String, Vec<QueuedMessage>>, Error> {
                 ),
                 text: text.into(),
                 can_send,
+                can_delete,
             });
         }
         result.insert(session.clone(), messages);
@@ -370,15 +454,27 @@ fn parse(bytes: &[u8]) -> Result<HashMap<String, Vec<QueuedMessage>>, Error> {
     Ok(result)
 }
 
-pub fn selected<'a>(messages: &'a [QueuedMessage], id: &str) -> Result<&'a QueuedMessage, Error> {
+pub fn selected<'a>(
+    messages: &'a [QueuedMessage],
+    id: &str,
+    action: Action,
+) -> Result<&'a QueuedMessage, Error> {
     let message = messages
         .iter()
         .find(|m| m.id == id)
         .ok_or_else(|| Error::NotFound("This queued message changed or was already sent".into()))?;
-    if !message.can_send {
-        return Err(Error::Conflict(
-            "This queued message cannot be sent now".into(),
-        ));
+    match action {
+        Action::SendNow if !message.can_send => {
+            return Err(Error::Conflict(
+                "This queued message cannot be sent now".into(),
+            ));
+        }
+        Action::Delete if !message.can_delete => {
+            return Err(Error::Conflict(
+                "This queued message cannot be deleted".into(),
+            ));
+        }
+        _ => {}
     }
     if messages
         .iter()
@@ -391,6 +487,37 @@ pub fn selected<'a>(messages: &'a [QueuedMessage], id: &str) -> Result<&'a Queue
         ));
     }
     Ok(message)
+}
+
+/// A deleted message has left the provider's queue: no item carries its
+/// identity any more. Leaving is not deletion by itself, since a turn may
+/// take the message in the meantime; the send receipt for its text tells
+/// the two apart.
+pub struct Removal {
+    identities: Vec<String>,
+    source: Source,
+}
+impl Removal {
+    pub fn new(source: Source, message: &QueuedMessage) -> Self {
+        Self {
+            identities: message.identities().map(str::to_owned).collect(),
+            source,
+        }
+    }
+    pub fn removed(&self) -> bool {
+        (self.source)().is_ok_and(|items| {
+            !items.iter().any(|m| {
+                m.identities()
+                    .any(|id| self.identities.iter().any(|i| i == id))
+            })
+        })
+    }
+}
+
+/// Whether a composer value is the text a delete returned to it, and so
+/// Muster's to empty again; anything else there is the person's draft.
+pub fn returned_to_composer(value: &str, text: &str) -> bool {
+    !text.trim().is_empty() && normalize(value) == normalize(text)
 }
 
 pub fn ordered_interactions(items: &[PendingInteraction]) -> Vec<PendingInteraction> {
@@ -649,10 +776,30 @@ mod tests {
             q.iter().map(|m| m.text.as_str()).collect::<Vec<_>>(),
             ["one", "two"]
         );
-        assert!(q.iter().all(|m| m.interaction("s").options.is_empty()));
+        // The conversation's own row controls send it now or take it back.
+        assert!(
+            q.iter()
+                .all(|m| m.interaction("s").options == [SEND_NOW, DELETE])
+        );
         assert_eq!(read_claude(&mut reader, &path, "s").unwrap(), q);
+        let reader = Arc::new(std::sync::Mutex::new(reader));
+        let source: Source = {
+            let (reader, path) = (reader.clone(), path.clone());
+            Arc::new(move || read_claude(&mut reader.lock().unwrap(), &path, "s"))
+        };
+        let (one, two) = (
+            Removal::new(source.clone(), &q[0]),
+            Removal::new(source, &q[1]),
+        );
+        assert!(!one.removed() && !two.removed());
         writeln!(f, "{}", row("dequeue", None)).unwrap();
         writeln!(f, "{}", row("remove", Some("two"))).unwrap();
+        // The same text queued again later is a new item, not the removed one.
+        writeln!(f, "{}", row("enqueue", Some("two"))).unwrap();
+        assert!(two.removed() && !one.removed());
+        writeln!(f, "{}", row("remove", Some("two"))).unwrap();
+        drop((one, two));
+        let mut reader = Arc::try_unwrap(reader).ok().unwrap().into_inner().unwrap();
         assert_eq!(read_claude(&mut reader, &path, "s").unwrap()[0].text, "one");
         // A partial event must not retire a pending message yet.
         write!(f, "{}", row("dequeue", None)).unwrap();
@@ -661,6 +808,92 @@ mod tests {
         assert!(read_claude(&mut reader, &path, "s").unwrap().is_empty());
         std::fs::write(&path, format!("{}\n", row("enqueue", Some("new")))).unwrap();
         assert_eq!(read_claude(&mut reader, &path, "s").unwrap()[0].text, "new");
+    }
+
+    #[test]
+    fn claude_queue_dequeues_prompts_before_notifications_and_retires_image_slots() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.jsonl");
+        let mut f = std::fs::File::create(&path).unwrap();
+        let row = |op: &str, text: Option<&str>| {
+            serde_json::json!({
+                "type":"queue-operation", "sessionId":"s", "operation":op, "content":text
+            })
+        };
+        let notice = "<task-notification>\n<task-id>example</task-id>\n</task-notification>";
+        // A prompt queued behind a notification is delivered first; the
+        // notification is then absorbed mid-turn.
+        for value in [
+            row("enqueue", Some(notice)),
+            row("enqueue", Some("Run the example again")),
+            row("dequeue", None),
+            row("remove", Some(notice)),
+        ] {
+            writeln!(f, "{value}").unwrap();
+        }
+        let mut reader = Reader::default();
+        assert!(read_claude(&mut reader, &path, "s").unwrap().is_empty());
+        // Later prompts are not shifted by an earlier misattribution.
+        for value in [
+            row("enqueue", Some("Clean up the build")),
+            row("dequeue", None),
+        ] {
+            writeln!(f, "{value}").unwrap();
+        }
+        assert!(read_claude(&mut reader, &path, "s").unwrap().is_empty());
+        // An image prompt enqueues without text and may be removed with it.
+        for value in [
+            row("enqueue", None),
+            row("enqueue", Some("Second prompt")),
+            row("remove", Some("[Image #1] Compare these")),
+        ] {
+            writeln!(f, "{value}").unwrap();
+        }
+        let q = read_claude(&mut reader, &path, "s").unwrap();
+        assert_eq!(
+            q.iter().map(|m| m.text.as_str()).collect::<Vec<_>>(),
+            ["Second prompt"]
+        );
+        writeln!(f, "{}", row("dequeue", None)).unwrap();
+        assert!(read_claude(&mut reader, &path, "s").unwrap().is_empty());
+        // Send now on the newer of two prompts: Claude dequeues it, enqueues
+        // it again as `now` and dequeues it; the older one is absorbed later.
+        for value in [
+            row("enqueue", Some("Use the other browser")),
+            row("enqueue", Some("Check it there")),
+            row("dequeue", None),
+            row("enqueue", Some("Check it there")),
+        ] {
+            writeln!(f, "{value}").unwrap();
+        }
+        let texts = |reader: &mut Reader| {
+            read_claude(reader, &path, "s")
+                .unwrap()
+                .into_iter()
+                .map(|m| m.text)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            texts(&mut reader),
+            ["Use the other browser", "Check it there"]
+        );
+        writeln!(f, "{}", row("dequeue", None)).unwrap();
+        assert_eq!(texts(&mut reader), ["Use the other browser"]);
+        writeln!(f, "{}", row("remove", Some("Use the other browser"))).unwrap();
+        assert!(texts(&mut reader).is_empty());
+        // Send now on the older one: the dequeue was already counted
+        // against it, and its new slot still goes first.
+        for value in [
+            row("enqueue", Some("First")),
+            row("enqueue", Some("Second")),
+            row("dequeue", None),
+            row("enqueue", Some("First")),
+            row("dequeue", None),
+        ] {
+            writeln!(f, "{value}").unwrap();
+        }
+        assert_eq!(texts(&mut reader), ["Second"]);
     }
 
     #[test]
@@ -690,7 +923,7 @@ mod tests {
             .unwrap();
         let next = read_session(&mut reader, dir.path(), "s").unwrap();
         assert!(
-            selected(&next, &old).is_err(),
+            selected(&next, &old, Action::SendNow).is_err(),
             "reordered rows invalidate stale actions"
         );
         assert_eq!(
@@ -715,6 +948,7 @@ mod tests {
             client_source_id: None,
             text: "before".into(),
             can_send: true,
+            can_delete: true,
         }]));
         let state = current.clone();
         let source: Source = Arc::new(move || Ok(state.lock().unwrap().clone()));
@@ -731,6 +965,7 @@ mod tests {
             client_source_id: None,
             text: "hello".into(),
             can_send: true,
+            can_delete: true,
         });
         assert!(admission.confirmed());
     }
@@ -756,8 +991,8 @@ mod tests {
         changed["queued-follow-ups"]["a"][0]["context"]["fileAttachments"] =
             serde_json::json!([{"path":"new"}]);
         let edited = parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
-        assert!(selected(&edited["a"], &queue["a"][0].id).is_err());
-        assert_eq!(queue["a"][0].interaction("a").options, [SEND_NOW]);
+        assert!(selected(&edited["a"], &queue["a"][0].id, Action::SendNow).is_err());
+        assert_eq!(queue["a"][0].interaction("a").options, [SEND_NOW, DELETE]);
     }
     #[test]
     fn unknown_sending_foreign_host_and_duplicates_do_not_replay() {
@@ -769,13 +1004,15 @@ mod tests {
                     .unwrap(),
             )
             .unwrap();
-            assert!(selected(&q["s"], &q["s"][0].id).is_err());
+            assert!(selected(&q["s"], &q["s"][0].id, Action::SendNow).is_err());
+            assert!(selected(&q["s"], &q["s"][0].id, Action::Delete).is_err());
         }
         let mut foreign = item("3", "remote");
         foreign["submission"] = serde_json::json!({"hostId":"remote"});
         let q = parse(&serde_json::to_vec(&serde_json::json!({"queued-follow-ups":{"s":[item("1","same"),item("2","same"),foreign]}})).unwrap()).unwrap();
         assert_eq!(q["s"].len(), 2);
-        assert!(selected(&q["s"], &q["s"][0].id).is_err());
+        assert!(selected(&q["s"], &q["s"][0].id, Action::SendNow).is_err());
+        assert!(selected(&q["s"], &q["s"][0].id, Action::Delete).is_err());
         assert!(parse(br#"{"queued-follow-ups":{"s":[{}]}}"#).is_err());
     }
 }

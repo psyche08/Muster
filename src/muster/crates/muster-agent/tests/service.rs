@@ -625,7 +625,7 @@ async fn queue_changes_push_without_a_transcript_write_or_visible_controller() {
     .await
     .unwrap();
     assert_eq!(interaction.prompt, "queued follow-up");
-    assert_eq!(interaction.options, ["Send now"]);
+    assert_eq!(interaction.options, ["Send now", "Delete"]);
     assert!(service.pending(session).contains(&interaction));
     db.execute("DELETE FROM queued_items", []).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
@@ -1086,6 +1086,15 @@ async fn claude_queue_is_visible_and_retires_when_provider_dequeues_it() {
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"task\"}}\n",
     )
     .unwrap();
+    // A command-line session queues the same way, but no conversation in
+    // Claude.app shows its row controls.
+    let cli = "22222222-2222-4222-8222-222222222222";
+    let cli_path = project.join(format!("{cli}.jsonl"));
+    std::fs::write(
+        &cli_path,
+        "{\"type\":\"user\",\"entrypoint\":\"sdk-cli\",\"message\":{\"role\":\"user\",\"content\":\"task\"}}\n",
+    )
+    .unwrap();
     let service = AgentService::start(AgentConfig {
         codex_home: None,
         claude_home: Some(dir.path().into()),
@@ -1098,6 +1107,25 @@ async fn claude_queue_is_visible_and_retires_when_provider_dequeues_it() {
     service.rescan().await;
     let mut events = service.subscribe();
     service.messages(session, 1, None).await.unwrap();
+    service.messages(cli, 1, None).await.unwrap();
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&cli_path)
+        .unwrap();
+    writeln!(f, "{}", serde_json::json!({"type":"queue-operation", "operation":"enqueue", "sessionId":cli,"content":"follow up"})).unwrap();
+    let queued = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if let Event::Interaction(q) = events.recv().await.unwrap()
+                && q.kind == "queued_message"
+            {
+                break q;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(queued.session, cli);
+    assert!(queued.options.is_empty(), "no Claude.app row controls");
     let mut f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
     writeln!(f, "{}", serde_json::json!({"type":"queue-operation", "operation":"enqueue", "sessionId":session,"content":"follow up"})).unwrap();
     let queued = tokio::time::timeout(Duration::from_secs(3), async {
@@ -1112,10 +1140,7 @@ async fn claude_queue_is_visible_and_retires_when_provider_dequeues_it() {
     .await
     .unwrap();
     assert_eq!(queued.prompt, "follow up");
-    assert!(
-        queued.options.is_empty(),
-        "no invented Claude queue controls"
-    );
+    assert_eq!(queued.options, ["Send now", "Delete"]);
     assert!(service.pending(session).contains(&queued));
     writeln!(
         f,

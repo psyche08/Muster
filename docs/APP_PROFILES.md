@@ -224,7 +224,7 @@ viewed, or driven through its `[plugin]` (DeepSeek Harness).
 | `approval_scope` | `web-area` (default) or `main-conversation` | Require complete bound ancestry; the latter requires a main landmark and excludes complementary/navigation/tab panels |
 | `permission_card_prefix` | Optional nonempty string | Named permission group; expose only its exact enabled approval controls and include its request text. Multiple cards withhold decisions |
 | `sessions` | table | How sessions are listed (below) |
-| `queue` | table, optional | The app's queue of prompts sent while a turn runs: `row` (a control only a queued row carries), `send_now`, `delete` |
+| `queue` | table, optional | The app's queue of prompts sent while a turn runs: `row` (a control only a queued row carries), `send_now`, `delete`, and `delete_returns_text` (default `false`; `true` when deleting puts the message back into the composer, so a delete needs an empty composer and clears only the returned text) |
 | `questions` | table, optional | Question cards: `submit`, `next`, `back`, `other` labels; `paged` (one page per question), `refresh_renderer` (ask Chromium for a fresh read), `button_choices` (a single-select card of plain buttons answers on press), `immediate_suggestions` (optional suggestion cards answer on press) |
 
 A selector is `roles` (Accessibility roles, e.g. `["AXButton"]`), `attrs`

@@ -130,7 +130,7 @@ final class AgentRenderingTests: XCTestCase {
             $0.id = "queued:one"; $0.kind = "queued_message"
             $0.prompt = "这条排队消息应该始终可见"; $0.optional = true
         }
-        let content = QueuedMessages(messages: [message], submitting: false, error: "", outcomeUnknown: false, sendNow: { _, _ in })
+        let content = QueuedMessages(messages: [message], submitting: false, error: "", outcomeUnknown: false, respond: { _, _ in })
             .frame(width: 390).fixedSize(horizontal: false, vertical: true)
         let host = NSHostingView(rootView: content)
         XCTAssertGreaterThan(host.fittingSize.height, 110)
@@ -147,10 +147,10 @@ final class AgentRenderingTests: XCTestCase {
         let messages = ["请检查 Mac-B 与 Mac-C 的发送日志，修复问题后运行完整验证。", "随后整理修改说明，并提交代码。"].enumerated().map { index, text in
             Muster_V1_PendingInteraction.with {
                 $0.id = "queued:\(index)"; $0.kind = "queued_message"; $0.prompt = text
-                $0.options = ["Send now"]; $0.optional = true
+                $0.options = ["Send now", "Delete"]; $0.optional = true
             }
         }
-        let content = QueuedMessages(messages: messages, submitting: false, error: "", outcomeUnknown: false, sendNow: { _, _ in })
+        let content = QueuedMessages(messages: messages, submitting: false, error: "", outcomeUnknown: false, respond: { _, _ in })
             .padding(12).frame(width: 390).environment(\.colorScheme, .light)
         let host = NSHostingView(rootView: content)
         host.frame = NSRect(origin: .zero, size: host.fittingSize)

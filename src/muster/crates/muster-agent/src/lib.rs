@@ -890,11 +890,19 @@ impl AgentService {
             return Ok(Vec::new());
         };
         if discovered.provider == Provider::Claude {
-            return queue::read_claude(
+            let mut messages = queue::read_claude(
                 &mut self.queue_reader.lock().unwrap(),
                 &discovered.path,
                 session,
-            );
+            )?;
+            // Only a conversation open in Claude.app shows the row controls.
+            if !messages.is_empty() && self.require_desktop_input(session).is_err() {
+                for message in &mut messages {
+                    message.can_send = false;
+                    message.can_delete = false;
+                }
+            }
+            return Ok(messages);
         }
         if discovered.provider != Provider::Codex {
             return Ok(Vec::new());
@@ -1587,12 +1595,17 @@ impl AgentService {
             }
         }
         for (process, path) in files {
-            for (id, d) in catalog.iter().filter(|(_, d)| d.path == path) {
+            // Codex's paginated history lists a thread from its shared SQLite
+            // store, while the worker still writes that thread's own rollout.
+            let thread = codex::filename_id(&path);
+            for (id, d) in catalog.iter().filter(|(id, d)| {
+                d.path == path || (codex_history::is(d) && thread.as_ref() == Some(*id))
+            }) {
                 observed.insert(
                     id.clone(),
                     RuntimeObservation {
                         observed: Instant::now(),
-                        activity: recency::activity(&d.path, d.provider, process.start),
+                        activity: recency::activity(&path, d.provider, process.start),
                         process_state: ProcessState::Running,
                     },
                 );
@@ -3045,12 +3058,12 @@ impl AgentService {
     ) -> Result<(), Error> {
         self.require_writable(session)?;
         if interaction.starts_with("queued:") {
-            if option != queue::SEND_NOW || !answer.is_empty() {
-                return Err(Error::Invalid("Invalid queued message action".into()));
-            }
-            queue::selected(&self.queued_messages(session)?, interaction)?;
+            let action = queue::Action::parse(option)
+                .filter(|_| answer.is_empty())
+                .ok_or_else(|| Error::Invalid("Invalid queued message action".into()))?;
+            queue::selected(&self.queued_messages(session)?, interaction, action)?;
             return entered(self.controller(session)?)
-                .send_queued(interaction)
+                .queued_action(interaction, action)
                 .await;
         }
         let controller = {

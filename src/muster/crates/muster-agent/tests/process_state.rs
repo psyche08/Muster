@@ -249,6 +249,55 @@ async fn worker_file_evidence_tracks_background_turn_without_granting_control() 
 }
 
 #[tokio::test]
+async fn paginated_history_thread_takes_evidence_from_its_open_rollout() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let day = dir.path().join("sessions/2026/09/29");
+    std::fs::create_dir_all(&day).unwrap();
+    let path = day.join(format!("rollout-2026-09-29T01-00-00-{SESSION}.jsonl"));
+    std::fs::write(&path, format!("{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"{SESSION}\"}}}}\n{{\"type\":\"event_msg\",\"timestamp\":\"2026-09-29T01:00:00Z\",\"payload\":{{\"type\":\"task_started\"}}}}\n")).unwrap();
+    let state = rusqlite::Connection::open(dir.path().join("state_5.sqlite")).unwrap();
+    state.execute_batch("CREATE TABLE threads(id TEXT,title TEXT,cwd TEXT,updated_at INTEGER,source TEXT,thread_source TEXT,originator TEXT,history_mode TEXT,attached_thread_parent_id TEXT,archived INTEGER);").unwrap();
+    state.execute("INSERT INTO threads VALUES(?1,'Example task','/workspace/example',10,'vscode','user','Codex Desktop','paginated',NULL,0)", [SESSION]).unwrap();
+    rusqlite::Connection::open(dir.path().join("thread_history_1.sqlite"))
+        .unwrap()
+        .execute_batch("CREATE TABLE thread_items(thread_id TEXT,turn_id TEXT,item_id TEXT,item_json TEXT,created_at_ms INTEGER,rollout_ordinal INTEGER,item_type TEXT);")
+        .unwrap();
+    let service = AgentService::start(AgentConfig {
+        codex_home: Some(dir.path().into()),
+        claude_home: None,
+        catdesk_home: None,
+        deepseek_home: None,
+        claude_desktop: None,
+        ..Default::default()
+    });
+    service.rescan().await;
+    assert_eq!(service.session(SESSION).unwrap().process_state, "unknown");
+    let worker = ProcessIdentity {
+        pid: 42,
+        start: muster_agent::model::parse_ts("2026-09-29T00:00:00Z") * 1_000_000,
+    };
+    service.observe_runtime_files(vec![(worker, path.clone())]);
+    let observed = service.session(SESSION).unwrap();
+    assert_eq!(
+        (observed.process_state.as_str(), observed.state.as_str()),
+        ("running", "running")
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .unwrap();
+    writeln!(file, "{{\"type\":\"event_msg\",\"timestamp\":\"2026-09-29T01:01:00Z\",\"payload\":{{\"type\":\"task_complete\"}}}}").unwrap();
+    service.observe_runtime_files(vec![(worker, path)]);
+    assert_eq!(service.session(SESSION).unwrap().state, "idle");
+    // Another thread's open rollout is not evidence for this one.
+    let other = day.join("rollout-2026-09-29T01-00-00-01a0e659-2de9-7f63-b80b-3b53fc7754e1.jsonl");
+    std::fs::write(&other, "").unwrap();
+    service.observe_runtime_files(vec![(worker, other)]);
+    assert_eq!(service.session(SESSION).unwrap().process_state, "unknown");
+}
+
+#[tokio::test]
 async fn resumed_rollout_is_selected_by_message_time_not_directory_order() {
     let dir = tempfile::tempdir().unwrap();
     let day = dir.path().join("sessions");

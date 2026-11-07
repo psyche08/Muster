@@ -260,6 +260,8 @@ struct QueueSpec {
     row: SelectorSpec,
     send_now: SelectorSpec,
     delete: SelectorSpec,
+    #[serde(default)]
+    delete_returns_text: bool,
 }
 
 #[derive(Deserialize)]
@@ -719,10 +721,11 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let queue = match &spec.queue {
             Some(queue) => format!(
-                "Some(Queue {{ row: {}, send_now: {}, delete: {} }})",
+                "Some(Queue {{ row: {}, send_now: {}, delete: {}, delete_returns_text: {} }})",
                 self.selector(&at, &queue.row),
                 self.selector(&at, &queue.send_now),
-                self.selector(&at, &queue.delete)
+                self.selector(&at, &queue.delete),
+                queue.delete_returns_text
             ),
             None => "None".into(),
         };

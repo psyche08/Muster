@@ -200,7 +200,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn filename_id(path: &Path) -> Option<String> {
+pub(crate) fn filename_id(path: &Path) -> Option<String> {
     let stem = path.file_stem()?.to_str()?;
     if stem.len() < 36 {
         return None;

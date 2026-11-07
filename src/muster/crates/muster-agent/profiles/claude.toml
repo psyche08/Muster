@@ -126,6 +126,38 @@ separate_conversation_views = true
 prefix = "Show "
 suffix = " more in Recents"
 
+# A prompt sent while a turn runs waits in the conversation as an unread
+# message whose toolbar ("Message actions") offers Send now, which stops the
+# current step so Claude reads it next, and Cancel and edit message, which
+# takes it off the queue and puts its text back into the composer (recorded
+# 2026-11-07, Claude desktop Code tab). Prompts that cannot be edited offer
+# Remove queued message instead.
+[controls.queue]
+delete_returns_text = true
+
+[controls.queue.row]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = [
+    "Cancel and edit message",
+    "Cancel and edit message — its attachments can’t come back",
+    "Remove queued message",
+]
+
+[controls.queue.send_now]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = ["Send now"]
+
+[controls.queue.delete]
+roles = ["AXButton"]
+attrs = ["name"]
+labels = [
+    "Cancel and edit message",
+    "Cancel and edit message — its attachments can’t come back",
+    "Remove queued message",
+]
+
 # Question cards (AskUserQuestion): one page per question with Back and
 # Next; attributes may be Chromium's stale cache, so the renderer is asked
 # for a fresh read; a single-select card of plain buttons answers on press.
