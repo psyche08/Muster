@@ -767,12 +767,24 @@ message AgentMessage {
   string role = 2;  // user | assistant | tool | system
   string text = 3;
   uint64 ts_unix = 4;
-  string kind = 5;  // text | tool_call | tool_result | interaction | turn_summary | turn_status
+  string kind = 5;  // text | tool_call | tool_result | interaction | turn_summary | turn_status | provider_card | work
   TurnUsage usage = 6;
   string phase = 7; // commentary | final_answer | reasoning, when the provider records it
   string tool_name = 8;
   string tool_call_id = 9; // provider identity for correlating a call and its output
   string tool_status = 10; // provider-recorded running | completed | failed | interrupted; empty if unknown
+  AgentWorkSpan work = 11; // kind "work": a completed turn's collapsed work (ADR 0160)
+}
+
+// The records a `work` outline record stands for. `hash` is SHA-256 over the
+// span's encoded records in the cache-proof form; it changes with any record.
+message AgentWorkSpan {
+  string first_id = 1;
+  string last_id = 2;
+  uint32 count = 3;
+  bytes hash = 4;
+  bool first_is_tool = 5; // keeps the Worked group's ID once its records load
+  uint64 end_unix = 6;
 }
 
 // Rust computes turn totals and costs; shells only format numbers and local time.
@@ -828,6 +840,13 @@ message AgentMessagesRequest {
   string first_id = 5;   // first cached message
   bytes prefix_hash = 6; // hash of cached range excluding after_id
   string diagnostic_id = 7;
+  // Page the outline (ADR 0160): without a valid proof, the last `turns`
+  // turns before before_id, at most `tail` records (0 = 200).
+  uint32 turns = 8;
+  // The records of this work record's span, newest first before before_id;
+  // a span that no longer matches work_hash resets.
+  string work_id = 9;
+  bytes work_hash = 10;
 }
 
 message AgentMessagePage {
@@ -836,6 +855,7 @@ message AgentMessagePage {
   bool has_more = 3;
   bool reset = 4;       // cached range no longer matches; replace it
   bool has_newer = 5;   // continue incremental catch-up
+  bool outline = 6;     // paged as an outline; false from older servers and Orca
 }
 
 message PendingInteraction {

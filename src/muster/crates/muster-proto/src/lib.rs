@@ -16,6 +16,7 @@ pub use prost::Message;
 pub mod attachments;
 pub mod diagnostics;
 pub mod locked_use;
+pub mod outline;
 
 pub const MAX_ENVELOPE: usize = 8 * 1024 * 1024;
 /// The largest diagnostics upload; fits an envelope with room to spare.

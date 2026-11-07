@@ -91,6 +91,7 @@ message Intent {
     SetPushToken set_push_token = 60;
     SessionViewApplied session_view_applied = 135;
     NativeCreate native_create = 136;
+    AgentLoadWork agent_load_work = 137;
   }
 }
 
@@ -302,6 +303,9 @@ message AgentRespond {
 }
 message AgentInterrupt {}
 message AgentLoadEarlier { bool all = 1; bool latest = 2; bool newer = 3; }
+// A Worked group was expanded: load the work of the block with this ID
+// (ADR 0160). Also the retry after a failed load.
+message AgentLoadWork { string block = 1; }
 // Desktop Chat mode on one device: `provider` claude | codex. Lists the
 // conversations the desktop app's sidebar shows (read-only).
 // The Chat tab: `provider`'s conversations (empty = the last one shown,
@@ -728,6 +732,11 @@ message ChatBlock {
   bool default_expanded = 9;
   repeated ChatDiffFile diffs = 10; // parsed and bounded by Shared Rust
   repeated MessagePart parts = 11;
+  // working only: "" when children are complete; otherwise "unloaded",
+  // "loading" or "failed" (with details_error). An expanded block whose
+  // details are unloaded or failed asks with AgentLoadWork (ADR 0160).
+  string details = 12;
+  string details_error = 13;
 }
 
 // Read-only transcript presentation, prepared by Shared Rust. These labels do

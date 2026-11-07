@@ -16,13 +16,8 @@ impl Index {
     pub fn clear(&mut self) {
         *self = Self::default();
     }
-    pub fn page_from<T>(
-        &mut self,
-        all: &[T],
-        request: &v1::AgentMessagesRequest,
-        id: impl Fn(&T) -> &str,
-        project: impl Fn(&T) -> v1::AgentMessage,
-    ) -> v1::AgentMessagePage {
+    /// Indexes the IDs of records appended since the last call.
+    pub fn extend<'a, T>(&mut self, all: &'a [T], id: impl Fn(&'a T) -> &'a str) {
         if all.len() < self.indexed {
             self.clear();
         }
@@ -30,6 +25,29 @@ impl Index {
             self.positions.entry(id(message).to_owned()).or_insert(i);
         }
         self.indexed = all.len();
+    }
+    /// Forgets the records from `from` on, whose IDs are `ids`, before the
+    /// owner replaces them. Proofs over earlier records stay valid.
+    pub fn truncate<'a>(&mut self, from: usize, ids: impl Iterator<Item = &'a str>) {
+        for id in ids {
+            if self.positions.get(id).is_some_and(|&i| i >= from) {
+                self.positions.remove(id);
+            }
+        }
+        self.indexed = self.indexed.min(from);
+        self.ranges.retain(|(_, end, _)| *end <= from);
+    }
+    pub fn position(&self, id: &str) -> Option<usize> {
+        self.positions.get(id).copied()
+    }
+    pub fn page_from<'a, T>(
+        &mut self,
+        all: &'a [T],
+        request: &v1::AgentMessagesRequest,
+        id: impl Fn(&'a T) -> &'a str,
+        project: impl Fn(&T) -> v1::AgentMessage,
+    ) -> v1::AgentMessagePage {
+        self.extend(all, &id);
         page_with_index(
             all,
             request,
@@ -37,6 +55,8 @@ impl Index {
             |m| project(m).encode_to_vec(),
             &project,
             Some(self),
+            records(request),
+            |_| 0,
         )
     }
     fn hash<T>(
@@ -71,13 +91,22 @@ impl Index {
 pub fn prefix_hash(messages: &[v1::AgentMessage]) -> Vec<u8> {
     hash_encoded(messages.iter().map(Message::encode_to_vec))
 }
-fn hash_encoded(messages: impl Iterator<Item = Vec<u8>>) -> Vec<u8> {
+pub(crate) fn hash_encoded<B: AsRef<[u8]>>(messages: impl Iterator<Item = B>) -> Vec<u8> {
     let mut hash = Sha256::new();
     for bytes in messages {
+        let bytes = bytes.as_ref();
         hash.update((bytes.len() as u64).to_be_bytes());
         hash.update(bytes);
     }
     hash.finalize().to_vec()
+}
+/// Records a record page holds: `tail`, 50 when unset, at most 2,000.
+fn records(request: &v1::AgentMessagesRequest) -> usize {
+    if request.tail == 0 {
+        50
+    } else {
+        request.tail.min(2000) as usize
+    }
 }
 pub fn request(session: &str, messages: &[v1::AgentMessage]) -> v1::AgentMessagesRequest {
     v1::AgentMessagesRequest {
@@ -103,38 +132,48 @@ pub fn page(all: &[v1::AgentMessage], request: &v1::AgentMessagesRequest) -> v1:
 
 /// Select and validate against source IDs before projecting message bodies.
 /// Only the cache proof and the returned page need protobuf conversion.
-pub fn page_from<T>(
-    all: &[T],
+pub fn page_from<'a, T>(
+    all: &'a [T],
     request: &v1::AgentMessagesRequest,
-    id: impl Fn(&T) -> &str,
+    id: impl Fn(&'a T) -> &'a str,
     project: impl Fn(&T) -> v1::AgentMessage,
 ) -> v1::AgentMessagePage {
     page_with(all, request, id, |m| project(m).encode_to_vec(), &project)
 }
 
-fn page_with<T>(
-    all: &[T],
+fn page_with<'a, T>(
+    all: &'a [T],
     request: &v1::AgentMessagesRequest,
-    id: impl Fn(&T) -> &str,
+    id: impl Fn(&'a T) -> &'a str,
     encode: impl Fn(&T) -> Vec<u8>,
     project: impl Fn(&T) -> v1::AgentMessage,
 ) -> v1::AgentMessagePage {
-    page_with_index(all, request, id, encode, project, None)
+    page_with_index(
+        all,
+        request,
+        id,
+        encode,
+        project,
+        None,
+        records(request),
+        |_| 0,
+    )
 }
 
-fn page_with_index<T>(
-    all: &[T],
+/// A page of `all`. With a valid proof, the `count` entries after the cached
+/// ones; otherwise the last `count` before `before_id`, starting no earlier
+/// than `earliest(end)`. `index`, when given, must already be extended.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn page_with_index<'a, T>(
+    all: &'a [T],
     request: &v1::AgentMessagesRequest,
-    id: impl Fn(&T) -> &str,
+    id: impl Fn(&'a T) -> &'a str,
     encode: impl Fn(&T) -> Vec<u8>,
     project: impl Fn(&T) -> v1::AgentMessage,
     mut index: Option<&mut Index>,
+    count: usize,
+    earliest: impl Fn(usize) -> usize,
 ) -> v1::AgentMessagePage {
-    let count = if request.tail == 0 {
-        50
-    } else {
-        request.tail.min(2000)
-    } as usize;
     let cached = (!request.after_id.is_empty())
         .then(|| {
             let position = |key: &str| match &index {
@@ -175,7 +214,7 @@ fn page_with_index<T>(
             None => all.iter().position(|m| id(m) == request.before_id),
         };
         let end = before.unwrap_or(all.len());
-        let start = end.saturating_sub(count);
+        let start = end.saturating_sub(count).max(earliest(end).min(end));
         (
             start,
             end,
@@ -189,6 +228,7 @@ fn page_with_index<T>(
         has_more,
         reset,
         has_newer: cached.is_some() && end < before.unwrap_or(all.len()),
+        ..Default::default()
     }
 }
 #[cfg(test)]
