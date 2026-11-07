@@ -274,3 +274,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; installation pending | Bound container exec resources and wrapper reconciliation |
 | [0157](0157-publish-apple-1-1-27.md) | Accepted | Publish the paired macOS and iOS 1.1.27 (117) OTA release |
 | [0158](0158-queued-message-actions-and-codex-paginated-runtime.md) | Accepted; source and tests verified, installation and runtime acceptance pending | Retire Claude queued prompts by dequeue priority and Send now requeues, add queued Send now and Delete actions, and read paginated Codex runtime state |
+| [0159](0159-grow-the-history-window.md) | Accepted; source and tests verified, installation and device acceptance pending | Grow the conversation history window on earlier and newer navigation, up to 1,000 records, instead of sliding it |

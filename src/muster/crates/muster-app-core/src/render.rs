@@ -1450,7 +1450,7 @@ mod history_projection_tests {
         let mut state = State::new(true, Some("phone".into()));
         state.screen = app::Screen::Chat;
         state.chat = Some(Chat {
-            messages: (0..500)
+            messages: (0..1500)
                 .map(|i| v1::AgentMessage {
                     id: format!("message-{i}"),
                     role: "user".into(),
@@ -1476,14 +1476,14 @@ mod history_projection_tests {
         assert_eq!(projected.timeline.len(), 200);
         assert_eq!(
             projected.timeline[0].message.as_ref().unwrap().id,
-            "message-300"
+            "message-1300"
         );
-        assert_eq!(projected.message_count, 500);
+        assert_eq!(projected.message_count, 1500);
         assert!(projected.has_earlier);
         assert_eq!(projected.interactions.len(), 1);
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(false));
-        assert_eq!(chat.visible_messages().len(), 200);
+        assert_eq!(chat.visible_messages().len(), 400);
         let middle = renderer
             .prepare(&state)
             .expect("local reveal invalidates renderer");
@@ -1494,7 +1494,7 @@ mod history_projection_tests {
                 .unwrap()
                 .timeline
                 .len(),
-            200
+            400
         );
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(true));
@@ -1507,7 +1507,7 @@ mod history_projection_tests {
                 .has_earlier
         );
         assert!(
-            full.len() < small.len() * 2,
+            full.len() < small.len() * 6,
             "oldest window remains bounded"
         );
         let view = app::ViewModel::decode(full.as_slice())
@@ -1515,8 +1515,8 @@ mod history_projection_tests {
             .chat
             .unwrap();
         assert!(view.has_newer);
-        assert_eq!(view.timeline.len(), 200);
-        assert_eq!(state.chat.as_ref().unwrap().messages.len(), 500);
+        assert_eq!(view.timeline.len(), crate::state::CHAT_HISTORY_LIMIT);
+        assert_eq!(state.chat.as_ref().unwrap().messages.len(), 1500);
         eprintln!(
             "history snapshot: recent={} bytes full={} bytes",
             small.len(),
