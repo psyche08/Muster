@@ -572,8 +572,8 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
             ..Default::default()
         }],
         history_start: None,
+        history_end: None,
         history_browsing: false,
-        history_load_all: false,
         timeline_index: Default::default(),
         interactions: Vec::new(),
         approval_refresh_attempted: false,
@@ -1790,26 +1790,123 @@ fn history_window_retains_stream_anchor_and_pages_cached_data_offline() {
     chat.reconcile_history_start();
     assert_eq!(chat.visible_messages().first().unwrap().id, "301");
     assert_eq!(chat.visible_messages().len(), 200);
+    // Earlier history grows the window above the rows the reader is on.
     assert!(chat.reveal_history(false));
-    assert_eq!(chat.history_start.as_deref(), Some("117"));
+    assert_eq!(chat.history_start.as_deref(), Some("101"));
+    assert_eq!(chat.visible_messages().len(), 400);
     chat.messages.push(message("501", "assistant"));
     chat.messages[499].text = "streamed update".into();
     chat.reconcile_history_start();
     assert_eq!(
         chat.history_start.as_deref(),
-        Some("117"),
+        Some("101"),
         "live output preserves an earlier window"
     );
-    assert_eq!(chat.visible_messages().len(), 200);
+    assert_eq!(
+        chat.visible_messages().last().unwrap().id,
+        "501",
+        "a window that reaches the latest record follows live output"
+    );
     assert!(chat.reveal_history(true));
     assert_eq!(chat.visible_messages().first().unwrap().id, "0");
-    assert_eq!(chat.visible_messages().len(), 200);
+    assert_eq!(chat.visible_messages().len(), 502);
     assert!(!chat.reveal_history(false));
-    chat.advance_history(false);
-    assert_eq!(chat.visible_messages().first().unwrap().id, "184");
     chat.advance_history(true);
     assert_eq!(chat.visible_messages().first().unwrap().id, "302");
     assert_eq!(chat.messages.len(), 502, "receipt history is not evicted");
+}
+
+#[test]
+fn history_window_is_bounded_and_drops_the_side_the_reader_left() {
+    let ids = |chat: &Chat| {
+        let visible = chat.visible_messages();
+        (
+            visible.first().unwrap().id.clone(),
+            visible.last().unwrap().id.clone(),
+        )
+    };
+    let pair = |first: &str, last: &str| (first.to_string(), last.to_string());
+    let mut chat = Chat {
+        messages: (0..1500).map(|i| message(&i.to_string(), "user")).collect(),
+        ..Default::default()
+    };
+    chat.reconcile_history_start();
+    for _ in 0..4 {
+        assert!(chat.reveal_history(false));
+    }
+    assert_eq!(ids(&chat), pair("500", "1499"));
+    assert_eq!(
+        chat.visible_messages().len(),
+        crate::state::CHAT_HISTORY_LIMIT
+    );
+    assert!(chat.reveal_history(false));
+    assert_eq!(ids(&chat), pair("300", "1299"));
+    chat.messages.push(message("1500", "assistant"));
+    assert_eq!(
+        ids(&chat),
+        pair("300", "1299"),
+        "live output stays below a window that ends earlier"
+    );
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("500", "1499"));
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("501", "1500"));
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("501", "1500"), "nothing newer to show");
+    chat.advance_history(true);
+    assert_eq!(ids(&chat), pair("1301", "1500"));
+}
+
+#[test]
+fn loading_earlier_history_keeps_the_rows_the_reader_was_on() {
+    // A tool-heavy turn renders 200 records as a few rows, so the reader is at
+    // the top at once. The page loaded above them must not replace them.
+    let tool = |i: usize| v1::AgentMessage {
+        id: i.to_string(),
+        role: "assistant".into(),
+        kind: "tool_call".into(),
+        tool_name: "Bash".into(),
+        text: "Bash".into(),
+        ..Default::default()
+    };
+    let mut tail: Vec<_> = (200..399).map(tool).collect();
+    tail.push(v1::AgentMessage {
+        id: "399".into(),
+        role: "assistant".into(),
+        kind: "text".into(),
+        phase: "final_answer".into(),
+        text: "Done".into(),
+        ..Default::default()
+    });
+    let mut state = State::new(true, Some("phone".into()));
+    state.chat = Some(Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            ..Default::default()
+        },
+        messages: tail,
+        has_earlier: true,
+        ..Default::default()
+    });
+    state.chat.as_mut().unwrap().reconcile_history_start();
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        true,
+        false,
+        Ok(((0..200).map(tool).collect(), true)),
+    );
+    let chat = state.chat.as_ref().unwrap();
+    assert_eq!(chat.visible_messages().first().unwrap().id, "0");
+    assert_eq!(chat.visible_messages().last().unwrap().id, "399");
+    assert_eq!(
+        chat.history_end_index(),
+        chat.messages.len(),
+        "nothing newer is hidden"
+    );
 }
 
 #[test]

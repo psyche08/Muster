@@ -326,8 +326,8 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         session,
         messages: Vec::new(),
         history_start: None,
+        history_end: None,
         history_browsing: false,
-        history_load_all: false,
         timeline_index: Default::default(),
         interactions: Vec::new(),
         approval_refresh_attempted: false,
@@ -1056,7 +1056,6 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
         return;
     };
     chat.loading = true;
-    chat.history_load_all = load.all;
     let (device, session, before) = (
         chat.device.clone(),
         chat.session.id.clone(),
@@ -1326,13 +1325,7 @@ pub(super) fn msg_chat(
             if earlier {
                 let messages_ids: std::collections::HashSet<_> =
                     messages.iter().map(|m| m.id.clone()).collect();
-                let first = if chat.history_load_all {
-                    0
-                } else {
-                    messages
-                        .len()
-                        .saturating_sub(crate::state::CHAT_HISTORY_STEP)
-                };
+                let end = chat.history_end_id();
                 let mut merged = messages;
                 merged.extend(
                     chat.messages
@@ -1340,8 +1333,7 @@ pub(super) fn msg_chat(
                         .filter(|m| !messages_ids.contains(&m.id)),
                 );
                 chat.messages = merged;
-                chat.history_start = chat.messages.get(first).map(|m| m.id.clone());
-                chat.history_browsing = true;
+                chat.show_earlier(end);
                 chat.has_earlier = has_more;
             } else {
                 // Earlier pages may finish while catch-up is in flight.
@@ -1362,6 +1354,7 @@ pub(super) fn msg_chat(
             }
             if reset {
                 chat.history_start = None;
+                chat.history_end = None;
                 chat.history_browsing = false;
             }
             chat.timeline_index.borrow_mut().invalidate(0);

@@ -524,7 +524,8 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
         (100..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
     );
     // The watch must drain all 300 events even though the UI projects only
-    // its recent window. Reveal cached history without another watch.
+    // its recent window. Reveal cached history without another watch; the
+    // window grows up to the rows it showed.
     core.intent(app::Intent {
         it: Some(app::intent::It::AgentLoadEarlier(app::AgentLoadEarlier {
             all: true,
@@ -539,7 +540,7 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
             .iter()
             .map(|m| m.id.clone())
             .collect::<Vec<_>>(),
-        (0..200).map(|i| format!("m{i}")).collect::<Vec<_>>()
+        (0..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
     );
     assert_eq!(server.watches.load(Ordering::SeqCst), 1);
     core.backend().local().close();
