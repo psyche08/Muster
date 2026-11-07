@@ -201,6 +201,8 @@ export class MusterCore {
   agentInterrupt(): void { this.send({ agentInterrupt: {} }); }
   cancelLockedUse(): void { this.send({ cancelLockedUse: {} }); }
   agentLoadEarlier(all: boolean = false, latest: boolean = false, newer: boolean = false): void { this.send({ agentLoadEarlier: { all: all, latest: latest, newer: newer } }); }
+  /** Loads a collapsed turn's steps when its Worked group is expanded (ADR 0160). */
+  agentLoadWork(block: string): void { this.send({ agentLoadWork: { block: block } }); }
   openTerminals(device: string = ''): void { this.send({ openTerminals: { deviceId: device } }); }
   openTerminal(session: string, device: string = ''): void { this.send({ openTerminal: { session: session, deviceId: device } }); }
   terminalKey(key: string): void { this.send({ terminalKey: { key: key } }); }

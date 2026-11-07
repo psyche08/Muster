@@ -177,6 +177,7 @@ pub enum Event {
 
 struct Open {
     history_index: muster_proto::history::Index,
+    outline: muster_proto::outline::Outline,
     viewer: Option<Box<dyn Viewer>>,
     generation: Arc<()>,
     meta: model::SessionMeta,
@@ -1464,6 +1465,7 @@ impl AgentService {
                             });
                             open.messages.clear();
                             open.history_index.clear();
+                            open.outline.clear();
                         }
                         for m in &polled.messages {
                             emitted.push(Event::Message {
@@ -2479,6 +2481,7 @@ impl AgentService {
             }
             Ok::<_, Error>(Open {
                 history_index: Default::default(),
+                outline: Default::default(),
                 meta: viewer.meta().clone(),
                 custom_title: viewer.custom_title(),
                 notice: viewer.transcript_notice().to_owned(),
@@ -2591,14 +2594,20 @@ impl AgentService {
             }
             self.ensure_open(&request.session).await?;
         }
+        let outline = request.turns > 0 || !request.work_id.is_empty();
         let mut inner = self.inner.lock().unwrap();
         if let Some(open) = inner.open.get_mut(&request.session) {
-            return Ok(open.history_index.page_from(
-                &open.messages,
-                request,
-                |message| &message.id,
-                Message::to_proto,
-            ));
+            return Ok(if outline {
+                open.outline
+                    .page(&open.messages, request, Message::to_proto)
+            } else {
+                open.history_index.page_from(
+                    &open.messages,
+                    request,
+                    |message| &message.id,
+                    Message::to_proto,
+                )
+            });
         }
         let messages = if cloud::is_cloud(&request.session) {
             inner
@@ -2626,16 +2635,25 @@ impl AgentService {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            return Ok(muster_proto::history::page(&all, request));
+            return Ok(if outline {
+                muster_proto::outline::Outline::default().page(&all, request, Clone::clone)
+            } else {
+                muster_proto::history::page(&all, request)
+            });
         } else {
             inner.open.get(&request.session).map(|open| &open.messages)
         };
-        Ok(muster_proto::history::page_from(
-            messages.map(Vec::as_slice).unwrap_or_default(),
-            request,
-            |message| &message.id,
-            Message::to_proto,
-        ))
+        let messages = messages.map(Vec::as_slice).unwrap_or_default();
+        Ok(if outline {
+            muster_proto::outline::Outline::default().page(messages, request, Message::to_proto)
+        } else {
+            muster_proto::history::page_from(
+                messages,
+                request,
+                |message| &message.id,
+                Message::to_proto,
+            )
+        })
     }
 
     /// The last `tail` messages before `before` (a message id), oldest first.
@@ -3429,6 +3447,7 @@ mod polling_regressions {
                 "fixture".into(),
                 Open {
                     history_index: Default::default(),
+                    outline: Default::default(),
                     viewer: Some(Box::new(Slow {
                         meta: meta.clone(),
                         entered,

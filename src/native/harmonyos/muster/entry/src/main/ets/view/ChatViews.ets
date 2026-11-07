@@ -782,6 +782,10 @@ export struct WorkingGroup {
   @Local toggled: boolean | null = null;
 
   private expanded(): boolean { return this.toggled ?? (this.block.defaultExpanded === true); }
+  /** Steps exist to show: loaded children, or a collapsed turn's work (ADR 0160). */
+  private foldable(): boolean { return (this.block.children?.length ?? 0) > 0 || !!this.block.details; }
+  /** Rust decides the state; an expanded group asks for steps it does not have. */
+  private load(): void { this.core?.agentLoadWork(this.block.id ?? ''); }
 
   build() {
     Column({ space: 12 }) {
@@ -792,25 +796,40 @@ export struct WorkingGroup {
           LoadingProgress().width(16).height(16)
         }
         Text(this.block.title ?? '').fontSize(14).opacity(0.7).maxLines(1).layoutWeight(1)
-        if ((this.block.children?.length ?? 0) > 0) {
+        if (this.foldable()) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(12).rotate({ angle: this.expanded() ? -90 : 180 })
             .fontColor([$r('sys.color.font_secondary')])
         }
       }
       .width('100%').padding({ top: 4, bottom: 4 })
-      .accessibilityText((this.block.children?.length ?? 0) > 0
+      .accessibilityText(this.foldable()
         ? `${this.block.title}, ${this.expanded() ? 'expanded' : 'collapsed'}` : (this.block.title ?? ''))
       .onClick((): void => {
-        if ((this.block.children?.length ?? 0) > 0) { this.toggled = !this.expanded(); }
+        if (this.foldable()) { this.toggled = !this.expanded(); }
       })
       if (this.expanded()) {
         ForEach(this.block.children ?? [], (child: pb.app.IChatBlock): void => {
           if (child.kind === 'activity') {
             ActivityGroup({ block: child })
+          } else if (child.kind === 'notice') {
+            Text(child.title ?? '').fontSize(12).opacity(0.6)
           } else {
             MessageBubble({ message: child.message ?? pb.v1.AgentMessage.create(), parts: child.parts ?? [], core: this.core })
           }
         }, (child: pb.app.IChatBlock): string => child.id ?? '')
+        if (this.block.details === 'unloaded' || this.block.details === 'loading') {
+          Row({ space: 8 }) {
+            LoadingProgress().width(14).height(14)
+            Text('Loading steps…').fontSize(12).opacity(0.6)
+          }
+          .onAppear((): void => { if (this.block.details === 'unloaded') { this.load(); } })
+        } else if (this.block.details === 'failed') {
+          Row({ space: 8 }) {
+            Text(this.block.detailsError ?? '').fontSize(12).opacity(0.6).maxLines(3).layoutWeight(1)
+            Button('Retry').fontSize(12).onClick((): void => { this.load(); })
+          }
+          .width('100%')
+        }
       }
     }
     .alignItems(HorizontalAlign.Start).width('100%')

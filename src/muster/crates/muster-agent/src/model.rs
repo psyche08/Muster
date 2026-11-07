@@ -212,7 +212,35 @@ impl Message {
             tool_name: self.tool_name.clone(),
             tool_call_id: self.tool_call_id.clone(),
             tool_status: self.tool_status.clone(),
+            work: None,
         }
+    }
+}
+
+impl muster_proto::outline::Record for Message {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn role(&self) -> &str {
+        self.role.as_str()
+    }
+    fn kind(&self) -> &str {
+        self.kind.as_str()
+    }
+    fn phase(&self) -> &str {
+        &self.phase
+    }
+    fn text(&self) -> &str {
+        &self.text
+    }
+    fn tool_name(&self) -> &str {
+        &self.tool_name
+    }
+    fn tool_call_id(&self) -> &str {
+        &self.tool_call_id
+    }
+    fn ts_unix(&self) -> u64 {
+        self.ts_unix
     }
 }
 

@@ -74,7 +74,7 @@ pub(super) fn action(state: &mut State, ctx: &Ctx, action: app::CodeAction) {
             if state.code.starting.contains(&scope) {
                 return;
             }
-            let found = chat.messages.iter().find_map(|message| {
+            let found = chat.records().find_map(|message| {
                 commands::parts(message, true)
                     .into_iter()
                     .find(|p| p.command_id == action.id && !p.command_id.is_empty())
@@ -107,8 +107,7 @@ pub(super) fn action(state: &mut State, ctx: &Ctx, action: app::CodeAction) {
             // Reject stale previews after a streamed edit, workspace change or navigation.
             if prepared.view.cwd != chat.session.cwd
                 || !chat
-                    .messages
-                    .iter()
+                    .records()
                     .flat_map(|m| commands::parts(m, true))
                     .any(|p| p.command_id == action.id)
             {

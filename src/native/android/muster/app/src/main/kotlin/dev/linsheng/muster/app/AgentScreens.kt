@@ -857,7 +857,7 @@ private fun Chevron(expanded: Boolean) {
 /** A turn's working phase: commentary and tool groups, folded once the turn completes. */
 @Composable
 fun WorkingGroup(block: ChatBlock, core: MusterCore?) {
-    if (block.childrenCount == 0) {
+    if (block.childrenCount == 0 && block.details.isEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             Text(block.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -881,9 +881,36 @@ fun WorkingGroup(block: ChatBlock, core: MusterCore?) {
         if (expanded) {
             block.childrenList.forEach { child ->
                 key(child.id) {
-                    if (child.kind == "activity") ActivityGroup(child) else MessageBubble(child.message, core, child.partsList)
+                    when (child.kind) {
+                        "activity" -> ActivityGroup(child)
+                        "notice" -> Text(child.title, style = MaterialTheme.typography.bodySmall, color = secondary)
+                        else -> MessageBubble(child.message, core, child.partsList)
+                    }
                 }
             }
+            WorkDetails(block, core)
+        }
+    }
+}
+
+/**
+ * An expanded group whose steps are not loaded yet (ADR 0160). Rust decides
+ * the state; this asks for the steps when shown and offers a retry.
+ */
+@Composable
+private fun WorkDetails(block: ChatBlock, core: MusterCore?) {
+    val secondary = MaterialTheme.colorScheme.onSurfaceVariant
+    when (block.details) {
+        "unloaded", "loading" -> {
+            if (block.details == "unloaded") LaunchedEffect(block.id) { core?.agentLoadWork(block.id) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                Text("Loading steps…", style = MaterialTheme.typography.bodySmall, color = secondary)
+            }
+        }
+        "failed" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(block.detailsError, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = secondary, maxLines = 3)
+            TextButton(onClick = { core?.agentLoadWork(block.id) }) { Text("Retry") }
         }
     }
 }
