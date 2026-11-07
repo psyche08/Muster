@@ -1,9 +1,9 @@
 # ADR 0154: Wait for slow Codex windows and install 1.1.27
 
 - Date: 2026-11-06
-- Status: Accepted; installed on the operator's Mac and local Codex creation
-  accepted; scheduler recovery, local Claude creation, creation from another
-  Mac and locked creation pending
+- Status: Accepted; installed on the operator's Mac, local Codex creation
+  accepted and the scheduler recovered; local Claude creation, creation from
+  another Mac and locked creation pending
 - Related: [ADR 0150](0150-remote-desktop-session-creation.md) (desktop
   session creation), [ADR 0152](0152-install-1-1-26-for-desktop-session-acceptance.md)
   (1.1.26 acceptance), [ADR 0153](0153-large-session-history-costs.md),
@@ -140,7 +140,8 @@ Recorded on 2026-11-06 on the operator's Mac.
     - the same device ID, fingerprint and hardware key backend;
     - Accessibility granted, Relay registered and Vnet up.
   - The job then failed its last check: the Multica scheduler did not restart.
-- **Scheduler recovery.** Not caused by this release.
+- **Scheduler recovery.** Recovered after a container restart. The failure
+  was not caused by this release.
   - About 75 minutes before the installation, a write to the Multica
     container's root disk failed. The guest kernel logged `I/O error` and
     `Detected aborted journal`, and remounted that filesystem read-only
@@ -152,9 +153,18 @@ Recorded on 2026-11-06 on the operator's Mac.
   - Afterwards, the daemon's 15 s maintenance loop failed on every pass. It
     could not reinstall the runtime wrapper inside the container
     (`Read-only file system`), so it never reached the scheduler start.
-  - This needs the container to restart, which the operator has not yet
-    approved. 1.1.26 had restarted the scheduler on the same Mac earlier that
-    day.
+  - 1.1.26 had restarted the scheduler on the same Mac earlier that day.
+  - The container restarted at 15:09 UTC, outside this session; Muster did
+    not restart it. It came up 7 minutes after the installation.
+    - On boot, the guest kernel recovered the journal and mounted the root
+      disk read-write.
+    - It also warned that the filesystem had an error recorded from the
+      earlier I/O failure, and recommended `e2fsck`. No filesystem check has
+      been run.
+  - Muster's maintenance loop then reinstalled both runtime wrappers and
+    started the scheduler.
+  - Checked on 2026-11-07 at 01:41 UTC: the scheduler was running, with no
+    active tasks, and had been up for about 10.5 hours.
 - **Local Codex creation.** Accepted.
   - Request `accept-1.1.27-codex-create-1` targeted a new, empty scratch
     directory. The Mac was unlocked and the operator was away.
