@@ -91,7 +91,8 @@ impl Index {
 pub fn prefix_hash(messages: &[v1::AgentMessage]) -> Vec<u8> {
     hash_encoded(messages.iter().map(Message::encode_to_vec))
 }
-pub(crate) fn hash_encoded<B: AsRef<[u8]>>(messages: impl Iterator<Item = B>) -> Vec<u8> {
+/// SHA-256 over length-prefixed encoded records: the cache-proof form.
+pub fn hash_encoded<B: AsRef<[u8]>>(messages: impl Iterator<Item = B>) -> Vec<u8> {
     let mut hash = Sha256::new();
     for bytes in messages {
         let bytes = bytes.as_ref();

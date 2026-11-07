@@ -44,6 +44,11 @@ pub struct Chat {
     pub approval_refresh_attempted: bool,
     pub approval_refresh_pending: bool,
     pub has_earlier: bool,
+    /// The history is an outline (ADR 0160): completed turns' work is one
+    /// work record, loaded into `work` when its Worked group is expanded.
+    pub outline: bool,
+    /// Work records' records by work record ID.
+    pub work: HashMap<String, Work>,
     pub sending: bool,
     pub responding_interaction: String,
     /// Interaction owning the current submission status (including a late RPC reply).
@@ -67,8 +72,22 @@ pub struct Chat {
     pub completion_error: String,
 }
 
+/// The records of a completed turn's work, as far as this client has them.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Work {
+    Loading,
+    /// `omitted` earlier records of a long span were not loaded.
+    Loaded {
+        records: Vec<v1::AgentMessage>,
+        omitted: u32,
+    },
+    Failed(String),
+}
+
 /// Presentation paging is shared across shells; transport history is unchanged.
 pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
+/// Turns a window shows, and adds when it grows; each step holds at most a page.
+pub(crate) const CHAT_HISTORY_TURNS: usize = 10;
 /// The most records a browsed window projects. Earlier and newer navigation
 /// grow the window by a page, so the rows the reader was on stay in it; past
 /// this limit the far end, which the reader moved away from, is dropped.
@@ -98,8 +117,49 @@ pub struct AdmittedSend {
 }
 
 impl Chat {
+    /// Every record this client holds: the outline and loaded work.
+    pub(crate) fn records(&self) -> impl Iterator<Item = &v1::AgentMessage> {
+        self.messages
+            .iter()
+            .chain(self.work.values().flat_map(|work| match work {
+                Work::Loaded { records, .. } => records.as_slice(),
+                _ => &[],
+            }))
+    }
+
+    /// Where a window ending at `end` starts: ten turns back, at most a page.
+    fn turns_before(&self, end: usize) -> usize {
+        let floor = end.saturating_sub(CHAT_HISTORY_PAGE);
+        let mut turns = 0;
+        for i in (floor..end).rev() {
+            if muster_proto::outline::starts_turn(&self.messages[i]) {
+                turns += 1;
+                if turns == CHAT_HISTORY_TURNS {
+                    return i;
+                }
+            }
+        }
+        floor
+    }
+
+    /// Where a window that ended at `end` ends after ten more turns, at most a
+    /// page later.
+    fn turns_after(&self, end: usize) -> usize {
+        let ceiling = (end + CHAT_HISTORY_PAGE).min(self.messages.len());
+        let mut turns = 0;
+        for i in end + 1..ceiling {
+            if muster_proto::outline::starts_turn(&self.messages[i]) {
+                turns += 1;
+                if turns == CHAT_HISTORY_TURNS {
+                    return i;
+                }
+            }
+        }
+        ceiling
+    }
+
     pub(crate) fn history_start_index(&self) -> usize {
-        let latest = self.messages.len().saturating_sub(CHAT_HISTORY_PAGE);
+        let latest = self.turns_before(self.messages.len());
         if !self.history_browsing {
             return latest;
         }
@@ -124,7 +184,7 @@ impl Chat {
         let end = if end > start {
             end
         } else {
-            start + CHAT_HISTORY_PAGE
+            self.turns_after(start)
         };
         end.min(start + CHAT_HISTORY_LIMIT).min(len)
     }
@@ -150,7 +210,7 @@ impl Chat {
         if self.history_end_index() == self.messages.len() {
             return;
         }
-        let end = (self.history_end_index() + CHAT_HISTORY_PAGE).min(self.messages.len());
+        let end = self.turns_after(self.history_end_index());
         let start = self
             .history_start_index()
             .max(end.saturating_sub(CHAT_HISTORY_LIMIT));
@@ -185,11 +245,7 @@ impl Chat {
         if start == 0 {
             return false;
         }
-        let next = if all {
-            0
-        } else {
-            start.saturating_sub(CHAT_HISTORY_PAGE)
-        };
+        let next = if all { 0 } else { self.turns_before(start) };
         let end = self.history_end_index().min(next + CHAT_HISTORY_LIMIT);
         self.show_history(next, end);
         true

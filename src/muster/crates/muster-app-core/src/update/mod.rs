@@ -193,7 +193,17 @@ pub enum Msg {
         session: String,
         earlier: bool,
         reset: bool,
+        /// The page came from a server that pages outlines (ADR 0160).
+        outline: bool,
         result: Result<(Vec<v1::AgentMessage>, bool), Error>,
+    },
+    /// A work record's records, loaded when its Worked group was expanded.
+    ChatWork {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        work: String,
+        result: Result<(Vec<v1::AgentMessage>, u32), Error>,
     },
     DesktopChats {
         load: u64,
@@ -431,6 +441,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::AgentRespond(r) => agents::intent_agent_respond(state, ctx, r),
         It::AgentInterrupt(_) => agents::intent_agent_interrupt(state, ctx),
         It::AgentLoadEarlier(load) => agents::intent_agent_load_earlier(state, ctx, load),
+        It::AgentLoadWork(load) => agents::intent_agent_load_work(state, ctx, &load.block),
         It::OpenTerminals(r) => terminals::intent_open_terminals(state, ctx, r),
         It::OpenTerminal(o) => terminals::intent_open_terminal(state, ctx, o),
         It::TerminalKey(k) => terminals::intent_terminal_key(state, ctx, k),
@@ -717,8 +728,18 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             session,
             earlier,
             reset,
+            outline,
             result,
-        } => agents::msg_chat(state, token, device, session, earlier, reset, result),
+        } => agents::msg_chat(
+            state, token, device, session, earlier, reset, outline, result,
+        ),
+        Msg::ChatWork {
+            token,
+            device,
+            session,
+            work,
+            result,
+        } => agents::msg_chat_work(state, token, &device, &session, work, result),
         Msg::Completion {
             device,
             session,

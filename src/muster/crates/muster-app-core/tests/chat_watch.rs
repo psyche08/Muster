@@ -519,9 +519,10 @@ async fn drains_more_than_rpc_queue_capacity_before_snapshot_response() {
         );
     }
     let messages = common::messages(&view.chat.unwrap());
+    // Every other record is a prompt, so the latest ten turns are 20 records.
     assert_eq!(
         messages.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
-        (100..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
+        (280..300).map(|i| format!("m{i}")).collect::<Vec<_>>()
     );
     // The watch must drain all 300 events even though the UI projects only
     // its recent window. Reveal cached history without another watch; the
@@ -619,6 +620,8 @@ struct HistoryServer {
     hold: std::sync::atomic::AtomicBool,
     entered: Notify,
     release: Notify,
+    /// Pages outlines when asked, as a current daemon does (ADR 0160).
+    outline: bool,
 }
 impl Handler for HistoryServer {
     fn call(&self, _: Context, request: v1::request::Req, events: EventSink) -> HandlerFuture<'_> {
@@ -673,7 +676,18 @@ impl Handler for HistoryServer {
                         self.entered.notify_one();
                         self.release.notified().await;
                     }
-                    let page = muster_proto::history::page(&self.messages.lock().unwrap(), &r);
+                    let page = {
+                        let messages = self.messages.lock().unwrap();
+                        if self.outline && (r.turns > 0 || !r.work_id.is_empty()) {
+                            muster_proto::outline::Outline::default().page(
+                                &messages,
+                                &r,
+                                Clone::clone,
+                            )
+                        } else {
+                            muster_proto::history::page(&messages, &r)
+                        }
+                    };
                     if self.race.swap(false, Ordering::SeqCst) {
                         self.snapshot_captured.notify_one();
                         self.race_release.notified().await;
@@ -864,9 +878,10 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
                 .is_some_and(|c| c.loading && c.message_count == 200)
         })
         .await;
+    // The cache holds 200 records; the window shows their latest ten turns.
     let cached_messages = common::messages(&cached.chat.unwrap());
-    assert_eq!(cached_messages.len(), 200);
-    assert_eq!(cached_messages[0].id, "m1100");
+    assert_eq!(cached_messages.len(), 20);
+    assert_eq!(cached_messages[0].id, "m1280");
     server.hold.store(false, Ordering::SeqCst);
     server.release.notify_one();
     let view = shell
@@ -878,9 +893,9 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         .await;
     let messages = common::messages(&view.chat.unwrap());
     assert_eq!(
-        messages.len(),
-        200,
-        "Latest window remains bounded while streaming"
+        messages.first().unwrap().id,
+        "m1282",
+        "Latest window keeps ten turns while streaming"
     );
     assert_eq!(
         messages.iter().find(|m| m.id == "m1299").unwrap().text,
@@ -1043,6 +1058,137 @@ async fn catalog_push_replaces_renamed_and_removed_rows_without_polling() {
         })
         .await;
     assert_eq!(server.lists.load(Ordering::SeqCst), 0);
+    core.backend().local().close();
+    core.shutdown();
+    task.abort();
+}
+
+fn outline_turn(turn: usize) -> Vec<v1::AgentMessage> {
+    let record = |id: String, role: &str, kind: &str| v1::AgentMessage {
+        text: id.clone(),
+        id,
+        role: role.into(),
+        kind: kind.into(),
+        ..Default::default()
+    };
+    let mut out = vec![record(format!("t{turn}-prompt"), "user", "text")];
+    for step in 0..5 {
+        out.push(v1::AgentMessage {
+            tool_name: "Bash".into(),
+            tool_call_id: format!("c{turn}-{step}"),
+            ..record(format!("t{turn}-call{step}"), "assistant", "tool_call")
+        });
+    }
+    out.push(record(format!("t{turn}-answer"), "assistant", "text"));
+    out
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn outline_pages_load_a_turns_work_on_expand_and_cache_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("rpc.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(HistoryServer {
+        messages: Mutex::new((0..30).flat_map(outline_turn).collect()),
+        outline: true,
+        ..Default::default()
+    });
+    let handler = server.clone();
+    let task = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        muster_rpc::serve(stream, Principal::Local, handler).await;
+    });
+    let shell = Arc::new(TestShell::default());
+    let core = AppCore::start(
+        AppConfig {
+            dir: dir.path().into(),
+            mode: Mode::Socket { path: socket },
+            allow_loopback: true,
+        },
+        shell.clone(),
+    )
+    .await
+    .unwrap();
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    let open = || {
+        core.intent(app::Intent {
+            it: Some(app::intent::It::OpenAgent(app::OpenAgent {
+                session: SESSION.into(),
+                ..Default::default()
+            })),
+        })
+    };
+    let group = "working:activity:t25-call0";
+    let block = |v: &app::ViewModel| {
+        v.chat
+            .as_ref()
+            .and_then(|c| c.timeline.iter().find(|b| b.id == group).cloned())
+    };
+    open();
+    // Ten turns of outline: nine collapsed, the latest whole.
+    let view = shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| !c.loading && c.message_count == 34)
+        })
+        .await;
+    assert!(view.chat.as_ref().unwrap().has_earlier);
+    assert_eq!(server.requests.lock().unwrap()[0].turns, 10);
+    let unloaded = block(&view).unwrap();
+    assert_eq!(unloaded.details, "unloaded");
+    assert!(unloaded.children.is_empty());
+    let expand = || {
+        core.intent(app::Intent {
+            it: Some(app::intent::It::AgentLoadWork(app::AgentLoadWork {
+                block: group.into(),
+            })),
+        })
+    };
+    expand();
+    let view = shell
+        .wait(|v| block(v).is_some_and(|b| b.details.is_empty()))
+        .await;
+    let ids: Vec<_> = common::messages(&app::ChatView {
+        timeline: vec![block(&view).unwrap()],
+        ..Default::default()
+    })
+    .into_iter()
+    .map(|m| m.id)
+    .collect();
+    assert_eq!(
+        ids,
+        (0..5).map(|i| format!("t25-call{i}")).collect::<Vec<_>>()
+    );
+    let work_requests = || {
+        server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| !r.work_id.is_empty())
+            .count()
+    };
+    assert_eq!(work_requests(), 1);
+    // Reopened, the work comes from the disk cache without asking the Mac.
+    core.intent(app::Intent {
+        it: Some(app::intent::It::Navigate(app::Navigate {
+            screen: 0,
+            back: true,
+            ..Default::default()
+        })),
+    });
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    open();
+    let view = shell
+        .wait(|v| v.chat.as_ref().is_some_and(|c| !c.loading) && block(v).is_some())
+        .await;
+    assert_eq!(block(&view).unwrap().details, "unloaded");
+    expand();
+    shell
+        .wait(|v| block(v).is_some_and(|b| b.details.is_empty() && !b.children.is_empty()))
+        .await;
+    assert_eq!(work_requests(), 1);
     core.backend().local().close();
     core.shutdown();
     task.abort();

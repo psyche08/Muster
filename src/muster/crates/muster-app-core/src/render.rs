@@ -66,6 +66,7 @@ fn session_timeline(
         chat.history_end_index(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
         chat.session.mode == "orca",
+        &chat.work,
     );
     crate::timeline::activity_indicator(
         &mut blocks,
@@ -1446,7 +1447,7 @@ mod history_projection_tests {
     use muster_proto::v1;
 
     #[test]
-    fn large_cached_transcript_projects_a_recent_page_without_losing_history_or_cards() {
+    fn large_cached_transcript_projects_the_latest_turns_without_losing_history_or_cards() {
         let mut state = State::new(true, Some("phone".into()));
         state.screen = app::Screen::Chat;
         state.chat = Some(Chat {
@@ -1473,17 +1474,18 @@ mod history_projection_tests {
             .unwrap()
             .chat
             .unwrap();
-        assert_eq!(projected.timeline.len(), 200);
+        // Every record is a prompt, so each is a turn: the window holds ten.
+        assert_eq!(projected.timeline.len(), crate::state::CHAT_HISTORY_TURNS);
         assert_eq!(
             projected.timeline[0].message.as_ref().unwrap().id,
-            "message-1300"
+            "message-1490"
         );
         assert_eq!(projected.message_count, 1500);
         assert!(projected.has_earlier);
         assert_eq!(projected.interactions.len(), 1);
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(false));
-        assert_eq!(chat.visible_messages().len(), 400);
+        assert_eq!(chat.visible_messages().len(), 20);
         let middle = renderer
             .prepare(&state)
             .expect("local reveal invalidates renderer");
@@ -1494,7 +1496,7 @@ mod history_projection_tests {
                 .unwrap()
                 .timeline
                 .len(),
-            400
+            20
         );
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(true));
@@ -1506,8 +1508,9 @@ mod history_projection_tests {
                 .unwrap()
                 .has_earlier
         );
+        // The limit is 100 times the ten-turn window; all 1,500 would be 150.
         assert!(
-            full.len() < small.len() * 6,
+            full.len() < small.len() * 120,
             "oldest window remains bounded"
         );
         let view = app::ViewModel::decode(full.as_slice())

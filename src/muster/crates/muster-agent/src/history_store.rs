@@ -1,6 +1,6 @@
 //! Disposable, source-bound projections. Never used for control or authorization.
 use crate::model::Message;
-use muster_proto::{Message as _, v1};
+use muster_proto::{Message as _, outline, v1};
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -84,9 +84,11 @@ pub(crate) fn write(
     options.open(&file).ok()?;
     let mut db = Connection::open(&file).ok()?;
     db.busy_timeout(std::time::Duration::from_secs(1)).ok()?;
-    db.execute_batch("CREATE TABLE IF NOT EXISTS metadata (version INTEGER, stamp TEXT); CREATE TABLE IF NOT EXISTS messages (position INTEGER PRIMARY KEY, id TEXT, body BLOB); CREATE INDEX IF NOT EXISTS message_ids ON messages(id,position);").ok()?;
+    // The outline (ADR 0160) is stored beside the records, with the items
+    // that start a turn marked for turn pages.
+    db.execute_batch("CREATE TABLE IF NOT EXISTS metadata (version INTEGER, stamp TEXT); CREATE TABLE IF NOT EXISTS messages (position INTEGER PRIMARY KEY, id TEXT, body BLOB); CREATE INDEX IF NOT EXISTS message_ids ON messages(id,position); CREATE TABLE IF NOT EXISTS outline (position INTEGER PRIMARY KEY, id TEXT, body BLOB, turn INTEGER); CREATE INDEX IF NOT EXISTS outline_ids ON outline(id,position); CREATE INDEX IF NOT EXISTS outline_turns ON outline(turn,position);").ok()?;
     let existing: Option<String> = db
-        .query_row("SELECT stamp FROM metadata WHERE version=1", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=2", [], |row| {
             row.get(0)
         })
         .optional()
@@ -95,16 +97,41 @@ pub(crate) fn write(
         return Some(());
     }
     let tx = db.transaction().ok()?;
-    tx.execute_batch("DELETE FROM metadata; DELETE FROM messages;")
+    tx.execute_batch("DELETE FROM metadata; DELETE FROM messages; DELETE FROM outline;")
         .ok()?;
     {
+        let encoded: Vec<_> = messages
+            .iter()
+            .map(|message| message.to_proto().encode_to_vec())
+            .collect();
         let mut insert = tx.prepare("INSERT INTO messages VALUES (?1,?2,?3)").ok()?;
-        for (position, message) in messages.iter().enumerate() {
+        for (position, (message, body)) in messages.iter().zip(&encoded).enumerate() {
+            insert
+                .execute(params![position as i64, message.id, body])
+                .ok()?;
+        }
+        let mut outline = outline::Outline::default();
+        outline.update(messages);
+        let mut insert = tx
+            .prepare("INSERT INTO outline VALUES (?1,?2,?3,?4)")
+            .ok()?;
+        for (position, item) in outline.items().iter().enumerate() {
+            let (id, body) = match item {
+                outline::Item::Record(i) => (messages[*i].id.clone(), encoded[*i].clone()),
+                outline::Item::Work(work) => {
+                    work.hash(|| {
+                        muster_proto::history::hash_encoded(encoded[work.range.clone()].iter())
+                    });
+                    let message = outline::message(messages, item, Message::to_proto);
+                    (message.id.clone(), message.encode_to_vec())
+                }
+            };
             insert
                 .execute(params![
                     position as i64,
-                    message.id,
-                    message.to_proto().encode_to_vec()
+                    id,
+                    body,
+                    outline.starts_turn(position)
                 ])
                 .ok()?;
         }
@@ -112,7 +139,7 @@ pub(crate) fn write(
     if stamp(source).as_deref() != Some(expected) {
         return None;
     }
-    tx.execute("INSERT INTO metadata VALUES (1,?1)", [expected])
+    tx.execute("INSERT INTO metadata VALUES (2,?1)", [expected])
         .ok()?;
     tx.commit().ok()?;
     drop(db);
@@ -152,10 +179,17 @@ pub(crate) fn read(
     source: &Path,
     request: &v1::AgentMessagesRequest,
 ) -> Option<(v1::AgentMessagePage, String)> {
-    // Catch-up proofs go to the live reader and its generation-scoped hash index.
-    if !request.after_id.is_empty() {
+    // Catch-up proofs go to the live reader and its generation-scoped hash
+    // index, and so do work pages.
+    if !request.after_id.is_empty() || !request.work_id.is_empty() {
         return None;
     }
+    let (table, count) = match request.turns {
+        0 if request.tail == 0 => ("messages", 50),
+        0 => ("messages", request.tail.min(2000) as i64),
+        _ if request.tail == 0 => ("outline", outline::PAGE as i64),
+        _ => ("outline", request.tail.min(2000) as i64),
+    };
     let expected = stamp(source)?;
     let mut db = Connection::open_with_flags(
         path(root, &request.session, source),
@@ -164,7 +198,7 @@ pub(crate) fn read(
     .ok()?;
     let tx = db.transaction().ok()?;
     let saved: String = tx
-        .query_row("SELECT stamp FROM metadata WHERE version=1", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=2", [], |row| {
             row.get(0)
         })
         .ok()?;
@@ -173,31 +207,40 @@ pub(crate) fn read(
     }
     let end: i64 = if request.before_id.is_empty() {
         tx.query_row(
-            "SELECT COALESCE(MAX(position)+1,0) FROM messages",
+            &format!("SELECT COALESCE(MAX(position)+1,0) FROM {table}"),
             [],
             |r| r.get(0),
         )
         .ok()?
     } else {
         tx.query_row(
-            "SELECT position FROM messages WHERE id=?1 ORDER BY position LIMIT 1",
+            &format!("SELECT position FROM {table} WHERE id=?1 ORDER BY position LIMIT 1"),
             [&request.before_id],
             |r| r.get(0),
         )
         .optional()
         .ok()??
     };
-    let count = if request.tail == 0 {
-        50
+    // A turn page starts at the `turns`-th turn before its end, or earlier
+    // records when there are fewer turns.
+    let earliest: i64 = if request.turns > 0 {
+        tx.query_row(
+            "SELECT position FROM outline WHERE turn=1 AND position<?1 ORDER BY position DESC LIMIT 1 OFFSET ?2",
+            params![end, request.turns as i64 - 1],
+            |r| r.get(0),
+        )
+        .optional()
+        .ok()?
+        .unwrap_or(0)
     } else {
-        request.tail.min(2000)
-    } as i64;
-    let start = (end - count).max(0);
+        0
+    };
+    let start = (end - count).max(earliest).max(0);
     let messages = {
         let mut query = tx
-            .prepare(
-                "SELECT body FROM messages WHERE position>=?1 AND position<?2 ORDER BY position",
-            )
+            .prepare(&format!(
+                "SELECT body FROM {table} WHERE position>=?1 AND position<?2 ORDER BY position"
+            ))
             .ok()?;
         query
             .query_map(params![start, end], |row| row.get::<_, Vec<u8>>(0))
@@ -213,6 +256,7 @@ pub(crate) fn read(
             session: request.session.clone(),
             messages,
             has_more: start > 0,
+            outline: request.turns > 0,
             ..Default::default()
         },
         expected,
@@ -267,5 +311,93 @@ mod tests {
         std::fs::write(&source, "changed").unwrap(); // same length, same inode
         assert!(read(&dir.path().join("index"), &source, &request).is_none());
         assert!(write(&dir.path().join("index"), "s", &source, &saved, &messages).is_none());
+    }
+
+    #[test]
+    fn stored_outlines_match_the_live_outline() {
+        use crate::model::{MessageKind, Role};
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("session.jsonl");
+        std::fs::write(&source, "initial").unwrap();
+        let record = |id: String, role, kind, text: &str| Message {
+            id,
+            role,
+            kind,
+            text: text.into(),
+            ts_unix: 0,
+            usage: None,
+            phase: String::new(),
+            tool_name: String::new(),
+            tool_call_id: String::new(),
+            tool_status: String::new(),
+        };
+        let mut messages = Vec::new();
+        for turn in 0..25 {
+            messages.push(record(
+                format!("p{turn}"),
+                Role::User,
+                MessageKind::Text,
+                "go",
+            ));
+            for step in 0..30 {
+                messages.push(record(
+                    format!("t{turn}-{step}"),
+                    Role::Assistant,
+                    MessageKind::ToolCall,
+                    "{}",
+                ));
+            }
+            messages.push(record(
+                format!("a{turn}"),
+                Role::Assistant,
+                MessageKind::Text,
+                "done",
+            ));
+        }
+        let saved = stamp(&source).unwrap();
+        let root = dir.path().join("index");
+        write(&root, "s", &source, &saved, &messages).unwrap();
+        let mut live = outline::Outline::default();
+        for (before_id, tail) in [("", 0), ("", 12), ("p15", 0), ("p3", 0)] {
+            let request = v1::AgentMessagesRequest {
+                session: "s".into(),
+                turns: 10,
+                tail,
+                before_id: before_id.into(),
+                ..Default::default()
+            };
+            let (stored, _) = read(&root, &source, &request).unwrap();
+            assert!(stored.outline);
+            let live = live.page(&messages, &request, Message::to_proto);
+            assert_eq!(stored.messages, live.messages, "{before_id} {tail}");
+            assert_eq!(stored.has_more, live.has_more, "{before_id} {tail}");
+        }
+        let (latest, _) = read(
+            &root,
+            &source,
+            &v1::AgentMessagesRequest {
+                session: "s".into(),
+                turns: 10,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(latest.messages[0].id, "p15");
+        assert_eq!(latest.messages.len(), 9 * 3 + 32);
+        let work = latest.messages[1].clone();
+        assert!(
+            read(
+                &root,
+                &source,
+                &v1::AgentMessagesRequest {
+                    session: "s".into(),
+                    work_id: work.id,
+                    work_hash: work.work.unwrap().hash,
+                    ..Default::default()
+                },
+            )
+            .is_none(),
+            "work pages are served live"
+        );
     }
 }

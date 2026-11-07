@@ -66,9 +66,108 @@ pub(super) fn cache_chat(ctx: &Ctx, chat: &Chat) {
                 .saturating_sub(crate::state::CHAT_HISTORY_PAGE)..]
                 .to_vec(),
             has_more: chat.has_earlier || chat.messages.len() > crate::state::CHAT_HISTORY_PAGE,
+            outline: chat.outline,
             ..Default::default()
         },
     );
+}
+
+/// Where a work record's loaded records are cached: by its span's hash, so
+/// a changed span is never served from an older load.
+pub(super) fn work_cache_key(cache_key: &str, work: &v1::AgentMessage) -> String {
+    let hash = work
+        .work
+        .as_ref()
+        .map(|w| hex::encode(&w.hash))
+        .unwrap_or_default();
+    format!(
+        "history-{}",
+        crate::cache::Cache::key(&["history-work-v1", cache_key, &work.id, &hash])
+    )
+}
+
+/// The most records one load of a turn's work brings; the group says how many
+/// earlier steps of a longer span it leaves out.
+const WORK_LIMIT: u32 = 2000;
+
+/// A prompt or turn summary just arrived live, so the turn before it is
+/// complete: collapse it as the daemon's outline does and keep its records as
+/// that work's loaded records, so expanding it needs no round trip (ADR 0160).
+fn collapse_completed_turn(chat: &mut Chat, ctx: &Ctx) {
+    let end = chat.messages.len() - 1;
+    let collapsed = muster_proto::outline::collapse(&mut chat.messages, end, !chat.has_earlier);
+    if let Some(at) = collapsed
+        .first()
+        .and_then(|(work, _)| chat.messages.iter().position(|m| m.id == work.id))
+    {
+        chat.timeline_index.borrow_mut().invalidate(at);
+    }
+    for (work, records) in collapsed {
+        // A window bound inside the span now names the work record.
+        for bound in [&mut chat.history_start, &mut chat.history_end] {
+            if bound
+                .as_ref()
+                .is_some_and(|id| records.iter().any(|r| &r.id == id))
+            {
+                *bound = Some(work.id.clone());
+            }
+        }
+        cache_work(ctx, chat, &work, &records);
+        chat.work.insert(
+            work.id.clone(),
+            crate::state::Work::Loaded {
+                records,
+                omitted: 0,
+            },
+        );
+    }
+}
+
+fn cache_work(ctx: &Ctx, chat: &Chat, work: &v1::AgentMessage, records: &[v1::AgentMessage]) {
+    ctx.cache.put(
+        work_cache_key(&chat.cache_key, work),
+        &v1::AgentMessagePage {
+            session: chat.session.id.clone(),
+            messages: records.to_vec(),
+            outline: true,
+            ..Default::default()
+        },
+    );
+}
+
+/// A live update to a record this client collapsed into loaded work. The work
+/// record is rebuilt so its hash keeps matching the daemon's outline. Returns
+/// whether the record was found there.
+fn update_loaded_work(chat: &mut Chat, ctx: &Ctx, message: &v1::AgentMessage) -> bool {
+    let Some((id, i)) = chat.work.iter().find_map(|(id, work)| match work {
+        crate::state::Work::Loaded { records, .. } => records
+            .iter()
+            .position(|r| r.id == message.id)
+            .map(|i| (id.clone(), i)),
+        _ => None,
+    }) else {
+        return false;
+    };
+    let Some(crate::state::Work::Loaded { records, omitted }) = chat.work.get_mut(&id) else {
+        return false;
+    };
+    if records[i] == *message {
+        return true;
+    }
+    records[i] = message.clone();
+    let (records, whole) = (records.clone(), *omitted == 0);
+    if let Some(at) = chat.messages.iter().position(|m| m.id == id) {
+        if whole {
+            let work =
+                muster_proto::outline::stub(&records, muster_proto::history::prefix_hash(&records));
+            cache_work(ctx, chat, &work, &records);
+            chat.messages[at] = work;
+            chat.cache_dirty = true;
+        }
+        chat.timeline_index.borrow_mut().invalidate(at);
+    }
+    chat.content_revision = crate::state::next_content_revision();
+    true
 }
 
 /// Apply the same visibility rule to cached catalogs and live peer responses.
@@ -314,7 +413,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
     // A new namespace avoids synchronously decoding legacy whole-session entries.
     let key = format!(
         "history-{}",
-        cache_key(state, "recent-messages-v2", &device, &session_id)
+        cache_key(state, "recent-outline-v1", &device, &session_id)
     );
     super::terminals::detach_session_terminal(state);
     state.chat = Some(Chat {
@@ -333,6 +432,8 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         approval_refresh_attempted: false,
         approval_refresh_pending: false,
         has_earlier: false,
+        outline: false,
+        work: Default::default(),
         sending: false,
         responding_interaction: String::new(),
         response_interaction: String::new(),
@@ -441,6 +542,8 @@ pub(super) fn reconcile_queued(
 pub(super) struct ChatCatchUp {
     pub messages: Vec<v1::AgentMessage>,
     pub reset: bool,
+    /// The server pages an outline (ADR 0160).
+    pub outline: bool,
     latest: bool,
 }
 impl ChatCatchUp {
@@ -448,13 +551,21 @@ impl ChatCatchUp {
         Self {
             messages,
             reset: false,
+            outline: false,
             latest: false,
         }
     }
     pub fn request(&self, session: &str) -> v1::AgentMessagesRequest {
-        muster_proto::history::request(session, &self.messages)
+        v1::AgentMessagesRequest {
+            // The latest turns, or a page of outline records after a valid
+            // proof; an older server ignores `turns` and sends 50 records.
+            turns: muster_proto::outline::TURNS,
+            tail: 0,
+            ..muster_proto::history::request(session, &self.messages)
+        }
     }
     pub fn apply(&mut self, page: v1::AgentMessagePage) -> Result<Option<bool>, Error> {
+        self.outline = page.outline;
         if page.has_newer {
             if self.latest || self.messages.is_empty() {
                 return Err(Error::Unavailable(
@@ -717,7 +828,10 @@ fn watch_agent_traced(
                 };
                 drop(history_client);
                 let ChatCatchUp {
-                    messages, reset, ..
+                    messages,
+                    reset,
+                    outline,
+                    ..
                 } = catch_up;
                 trace.record("history_reconciled",serde_json::json!({"attempt":attempt_index,"messages":messages.len(),"queued_events":queued.len()}));
                 let _ = tx.send(loop_message(Msg::Chat {
@@ -726,6 +840,7 @@ fn watch_agent_traced(
                     session: session_id.clone(),
                     earlier: false,
                     reset,
+                    outline,
                     result: Ok((messages, has_more)),
                 }));
                 phase = "live_watch";
@@ -760,7 +875,7 @@ fn watch_agent_traced(
                         log::warn!("session live updates interrupted; retrying in {retry}s: {error}");
                         let _ = tx.send(loop_message(Msg::Chat {
                             token: token.clone(), device: device.clone(), session: session_id.clone(),
-                            earlier: false, reset: false, result: Err(error),
+                            earlier: false, reset: false, outline: false, result: Err(error),
                         }));
                     }
                 }
@@ -1078,12 +1193,13 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                 }
                 let key = format!(
                     "history-{}",
-                    crate::cache::Cache::key(&["history-page-v2", &cache_key, &cursor])
+                    crate::cache::Cache::key(&["history-page-v3", &cache_key, &cursor])
                 );
                 let cached = cache.history(key.clone()).await.unwrap_or_default();
                 let cached_messages = cached.messages;
                 let mut request = muster_proto::history::request(&session, &cached_messages);
                 request.tail = crate::state::CHAT_HISTORY_PAGE as u32;
+                request.turns = muster_proto::outline::TURNS;
                 request.before_id = cursor.clone();
                 let fetch = |request| async {
                     match tokio::time::timeout(
@@ -1110,6 +1226,7 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                         page = fetch(v1::AgentMessagesRequest {
                             session: session.clone(),
                             tail: crate::state::CHAT_HISTORY_PAGE as u32,
+                            turns: muster_proto::outline::TURNS,
                             before_id: cursor.clone(),
                             ..Default::default()
                         })
@@ -1134,7 +1251,11 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                 let next = page.messages.first().map(|m| m.id.clone());
                 chunks.push(page.messages);
                 if !load.all || !page.has_more {
-                    return Ok((chunks.into_iter().rev().flatten().collect(), page.has_more));
+                    return Ok((
+                        chunks.into_iter().rev().flatten().collect(),
+                        page.has_more,
+                        page.outline,
+                    ));
                 }
                 let Some(next) = next.filter(|next| next != &cursor) else {
                     return Err(Error::Unavailable("history cursor did not advance".into()));
@@ -1149,9 +1270,137 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
             session,
             earlier: true,
             reset: false,
-            result,
+            outline: result.as_ref().is_ok_and(|(_, _, outline)| *outline),
+            result: result.map(|(messages, has_more, _)| (messages, has_more)),
         }
     });
+}
+
+/// Expanding a Worked group whose work is not loaded: serve it from the disk
+/// cache, else from the Mac, verified against the work record's hash.
+pub(super) fn intent_agent_load_work(state: &mut State, ctx: &Ctx, block: &str) {
+    let Some(chat) = &mut state.chat else { return };
+    let Some(work) = chat
+        .messages
+        .iter()
+        .find(|m| {
+            m.work
+                .as_ref()
+                .is_some_and(|w| muster_proto::outline::group_id(w) == block)
+        })
+        .cloned()
+    else {
+        return;
+    };
+    if matches!(
+        chat.work.get(&work.id),
+        Some(crate::state::Work::Loading | crate::state::Work::Loaded { .. })
+    ) {
+        return;
+    }
+    chat.work
+        .insert(work.id.clone(), crate::state::Work::Loading);
+    if let Some(at) = chat.messages.iter().position(|m| m.id == work.id) {
+        chat.timeline_index.borrow_mut().invalidate(at);
+    }
+    chat.content_revision = crate::state::next_content_revision();
+    let token = chat
+        .watch
+        .as_ref()
+        .map(|watch| watch.token.clone())
+        .unwrap_or_default();
+    let (device, session) = (chat.device.clone(), chat.session.id.clone());
+    let key = work_cache_key(&chat.cache_key, &work);
+    let span = work.work.clone().unwrap_or_default();
+    let self_id = state.self_id.clone();
+    let backend = ctx.backend.clone();
+    let cache = ctx.cache.clone();
+    spawn(ctx, async move {
+        let result = async {
+            let omitted =
+                |page: &v1::AgentMessagePage| span.count.saturating_sub(page.messages.len() as u32);
+            if let Some(page) = cache
+                .history(key.clone())
+                .await
+                .filter(|page| !page.messages.is_empty())
+            {
+                return Ok((omitted(&page), page.messages));
+            }
+            let client = backend.client_for(&device, &self_id).await?;
+            let request = v1::AgentMessagesRequest {
+                session: session.clone(),
+                work_id: work.id.clone(),
+                work_hash: span.hash.clone(),
+                tail: WORK_LIMIT,
+                ..Default::default()
+            };
+            let Resp::AgentMessages(page) = tokio::time::timeout(
+                Duration::from_secs(15),
+                unary(&client, Req::AgentMessages(request)),
+            )
+            .await
+            .map_err(|_| Error::Unavailable("loading this turn's steps timed out".into()))??
+            else {
+                return Err(unexpected());
+            };
+            let changed = || {
+                Error::Unavailable(
+                    "This turn changed on the Mac; reopen the conversation to load it".into(),
+                )
+            };
+            if page.reset
+                || !page.outline
+                || page.messages.is_empty()
+                || (!page.has_more
+                    && muster_proto::history::prefix_hash(&page.messages) != span.hash)
+            {
+                return Err(changed());
+            }
+            cache.put(key, &page);
+            Ok((omitted(&page), page.messages))
+        }
+        .await;
+        Msg::ChatWork {
+            token,
+            device,
+            session,
+            work: work.id,
+            result: result.map(|(omitted, records)| (records, omitted)),
+        }
+    });
+}
+
+pub(super) fn msg_chat_work(
+    state: &mut State,
+    token: CancellationToken,
+    device: &str,
+    session: &str,
+    work: String,
+    result: Result<(Vec<v1::AgentMessage>, u32), Error>,
+) {
+    if token.is_cancelled() {
+        return;
+    }
+    let failure = result
+        .as_ref()
+        .err()
+        .map(|error| chat_failure(state, device, error));
+    let Some(chat) = &mut state.chat else { return };
+    if chat.device != device
+        || chat.session.id != session
+        || chat.work.get(&work) != Some(&crate::state::Work::Loading)
+    {
+        return;
+    }
+    if let Some(at) = chat.messages.iter().position(|m| m.id == work) {
+        chat.timeline_index.borrow_mut().invalidate(at);
+    }
+    let loaded = match result {
+        Ok((records, omitted)) => crate::state::Work::Loaded { records, omitted },
+        Err(_) => crate::state::Work::Failed(failure.unwrap_or_default()),
+    };
+    chat.work.insert(work, loaded);
+    chat.content_revision = crate::state::next_content_revision();
 }
 
 fn restore_catalog_cache(
@@ -1291,11 +1540,13 @@ pub(super) fn msg_chat_cache(
     {
         chat.messages = page.messages;
         chat.has_earlier = page.has_more;
+        chat.outline = page.outline;
         chat.reconcile_history_start();
         chat.content_revision = crate::state::next_content_revision();
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn msg_chat(
     state: &mut State,
     token: CancellationToken,
@@ -1303,6 +1554,7 @@ pub(super) fn msg_chat(
     session: String,
     earlier: bool,
     reset: bool,
+    outline: bool,
     result: Result<(Vec<v1::AgentMessage>, bool), Error>,
 ) {
     if token.is_cancelled() {
@@ -1352,10 +1604,22 @@ pub(super) fn msg_chat(
                     chat.has_earlier = has_more;
                 }
             }
+            if !earlier {
+                chat.outline = outline;
+            }
             if reset {
                 chat.history_start = None;
                 chat.history_end = None;
                 chat.history_browsing = false;
+                chat.work.clear();
+            } else {
+                let held: std::collections::HashSet<_> = chat
+                    .messages
+                    .iter()
+                    .filter(|m| m.kind == muster_proto::outline::KIND)
+                    .map(|m| m.id.as_str())
+                    .collect();
+                chat.work.retain(|id, _| held.contains(id.as_str()));
             }
             chat.timeline_index.borrow_mut().invalidate(0);
             chat.reconcile_history_start();
@@ -1475,9 +1739,16 @@ pub(super) fn msg_agent_event(
                     chat.messages[index] = m;
                     messages_changed = true;
                 }
+            } else if chat.outline && update_loaded_work(chat, ctx, &m) {
             } else {
+                let boundary = chat.outline
+                    && (muster_proto::outline::starts_turn(&m)
+                        || muster_proto::outline::ends_turn(&m));
                 chat.messages.push(m);
                 messages_changed = true;
+                if boundary {
+                    collapse_completed_turn(chat, ctx);
+                }
             }
             if messages_changed {
                 chat.reconcile_history_start();
