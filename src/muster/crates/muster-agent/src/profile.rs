@@ -143,6 +143,10 @@ pub struct Queue {
     pub send_now: Selector,
     /// The row's control that deletes it.
     pub delete: Selector,
+    /// Deleting may put the message back into the composer (Claude's
+    /// "Cancel and edit message"): a delete then needs an empty composer
+    /// and empties it again once the returned text arrives.
+    pub delete_returns_text: bool,
 }
 
 /// The question cards an app shows in its conversation. Labels are matched
@@ -1005,21 +1009,43 @@ mod tests {
     /// Codex's submit controls that `composer_submits` keeps: those in the
     /// composer's branch, never a queued row's.
     fn codex_submits(tree: &AxTree) -> Vec<usize> {
-        let queue = CODEX.queue.as_ref().unwrap();
-        let nodes: Vec<crate::native_send::ControlNode> = tree
-            .nodes
+        crate::native_send::composer_submits(&control_nodes(&CODEX, tree))
+    }
+    fn control_nodes(controls: &Controls, tree: &AxTree) -> Vec<crate::native_send::ControlNode> {
+        let queue = controls.queue.as_ref().unwrap();
+        tree.nodes
             .iter()
             .map(|n| {
-                let composer = CODEX.composer.matches(n);
+                let composer = controls.composer.matches(n);
                 crate::native_send::ControlNode {
                     parent: n.parent,
                     composer,
-                    submit: !composer && CODEX.send.matches(n),
+                    submit: !composer && controls.send.matches(n),
                     queued_delete: queue.row.matches(n),
                 }
             })
-            .collect();
-        crate::native_send::composer_submits(&nodes)
+            .collect()
+    }
+
+    /// Claude's queued rows carry their own Send now, so its sends are kept
+    /// to the composer's branch too: each recorded composer still reaches
+    /// its own Send. (A dump holds every conversation view; a scan holds
+    /// one.)
+    #[test]
+    fn claude_send_stays_in_the_composer_branch() {
+        for dump in [CLAUDE_CODE, CLAUDE_CODE_RUNNING_DRAFT] {
+            let tree = tree(dump);
+            let nodes = control_nodes(&CLAUDE, &tree);
+            let sends: Vec<_> = found(&tree, &CLAUDE.composer)
+                .into_iter()
+                .flat_map(|composer| {
+                    let sends = crate::native_send::composer_submits_for(&nodes, composer);
+                    assert_eq!(sends.len(), 1);
+                    sends
+                })
+                .collect();
+            assert_eq!(sends, found(&tree, &CLAUDE.send));
+        }
     }
 
     /// A running turn with a draft in the composer (recorded 2026-10-03,

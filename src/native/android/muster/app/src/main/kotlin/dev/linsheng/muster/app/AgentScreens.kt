@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Stop
@@ -416,7 +417,7 @@ private fun BlockView(block: ChatBlock, core: MusterCore) {
 
 /** The core supplies the queue, order, actions and outcomes. This card renders it. */
 @Composable
-private fun QueuedMessagesCard(queue: QueuedMessagesView, sendNow: (String, String) -> Unit) {
+private fun QueuedMessagesCard(queue: QueuedMessagesView, respond: (String, String) -> Unit) {
     Column(
         Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -428,10 +429,19 @@ private fun QueuedMessagesCard(queue: QueuedMessagesView, sendNow: (String, Stri
                 Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(message.prompt, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    OutlinedButton(
-                        onClick = { message.optionsList.firstOrNull()?.let { sendNow(message.id, it) } },
-                        enabled = !queue.submitting && !queue.outcomeUnknown && message.optionsList.isNotEmpty(),
-                    ) { Text("Send now", style = MaterialTheme.typography.labelSmall) }
+                    // Each option the core offers, under its own name; Delete is a trash icon.
+                    val enabled = !queue.submitting && !queue.outcomeUnknown
+                    message.optionsList.forEach { option ->
+                        if (option == "Delete") {
+                            IconButton(onClick = { respond(message.id, option) }, enabled = enabled) {
+                                Icon(Icons.Filled.Delete, contentDescription = option)
+                            }
+                        } else {
+                            OutlinedButton(onClick = { respond(message.id, option) }, enabled = enabled) {
+                                Text(option, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                 }
             }
         }

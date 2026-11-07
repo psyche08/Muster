@@ -151,7 +151,13 @@ pub trait Controller: Send + Sync {
             "Question forms are not supported by this controller".into(),
         ))
     }
-    async fn send_queued(&self, _interaction: &str) -> Result<(), Error> {
+    /// Sends a queued message now or deletes it, with the app's own row
+    /// controls.
+    async fn queued_action(
+        &self,
+        _interaction: &str,
+        _action: crate::queue::Action,
+    ) -> Result<(), Error> {
         Err(Error::Unavailable(
             "Queued messages are unavailable for this controller".into(),
         ))

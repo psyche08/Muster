@@ -8,7 +8,8 @@ struct QueuedMessages: View {
     let submitting: Bool
     let error: String
     let outcomeUnknown: Bool
-    let sendNow: (String, String) -> Void
+    /// Answers a message with one of its options (Send now, Delete).
+    let respond: (String, String) -> Void
     @State private var contentHeight: CGFloat = 82
     @Environment(\.colorScheme) private var scheme
     @Environment(\.conversationStyle) private var style
@@ -28,13 +29,11 @@ struct QueuedMessages: View {
                                 .font(.subheadline).foregroundStyle(palette.text)
                                 .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
-                            if !message.options.isEmpty {
-                                Button("Send now") {
-                                    if let option = message.options.first { sendNow(message.id, option) }
-                                }
-                                .font(.caption.weight(.semibold)).buttonStyle(.bordered)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .disabled(submitting || outcomeUnknown)
+                            ForEach(message.options, id: \.self) { option in
+                                QueuedAction(option: option) { respond(message.id, option) }
+                                    .font(.caption.weight(.semibold)).buttonStyle(.bordered)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .disabled(submitting || outcomeUnknown)
                             }
                         }
                         .padding(.vertical, 8)
@@ -57,6 +56,21 @@ struct QueuedMessages: View {
         .padding(12)
         .background(palette.canvas, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.secondary.opacity(0.22)))
+    }
+}
+/// One option the core offers for a queued message, under its own name;
+/// Delete is shown as a trash icon.
+private struct QueuedAction: View {
+    let option: String
+    let action: () -> Void
+
+    var body: some View {
+        if option == "Delete" {
+            Button(role: .destructive, action: action) { Image(systemName: "trash") }
+                .accessibilityLabel(option)
+        } else {
+            Button(option, action: action)
+        }
     }
 }
 private struct QueuedContentHeight: PreferenceKey {
