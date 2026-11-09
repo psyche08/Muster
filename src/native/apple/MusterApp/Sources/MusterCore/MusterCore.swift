@@ -255,7 +255,10 @@ public final class MusterCore: MusterShell {
 
     public func agentInterrupt() { send(.agentInterrupt(Muster_App_AgentInterrupt())) }
 
-    public func agentLoadEarlier(all: Bool = false) { var r = Muster_App_AgentLoadEarlier(); r.all = all; send(.agentLoadEarlier(r)) }
+    public func agentLoadEarlier(all: Bool = false, latest: Bool = false, newer: Bool = false) { var r = Muster_App_AgentLoadEarlier(); r.all = all; r.latest = latest; r.newer = newer; send(.agentLoadEarlier(r)) }
+
+    /// Loads a collapsed turn's steps when its Worked group is expanded (ADR 0160).
+    public func agentLoadWork(_ block: String) { send(.agentLoadWork(Muster_App_AgentLoadWork.with { $0.block = block })) }
 
     public func openTerminals(device: String = "") { send(.openTerminals(Muster_App_OpenTerminals.with { $0.deviceID = device })) }
 

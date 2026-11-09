@@ -36,10 +36,19 @@ pub struct Chat {
     pub messages: Vec<v1::AgentMessage>,
     /// First visible transcript ID; full history stays cached for offline paging.
     pub history_start: Option<String>,
+    /// Last visible transcript ID while browsing; `None` reaches the latest.
+    pub history_end: Option<String>,
+    pub history_browsing: bool,
+    pub(crate) timeline_index: std::cell::RefCell<crate::timeline::Index>,
     pub interactions: Vec<v1::PendingInteraction>,
     pub approval_refresh_attempted: bool,
     pub approval_refresh_pending: bool,
     pub has_earlier: bool,
+    /// The history is an outline (ADR 0160): completed turns' work is one
+    /// work record, loaded into `work` when its Worked group is expanded.
+    pub outline: bool,
+    /// Work records' records by work record ID.
+    pub work: HashMap<String, Work>,
     pub sending: bool,
     pub responding_interaction: String,
     /// Interaction owning the current submission status (including a late RPC reply).
@@ -63,8 +72,26 @@ pub struct Chat {
     pub completion_error: String,
 }
 
+/// The records of a completed turn's work, as far as this client has them.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Work {
+    Loading,
+    /// `omitted` earlier records of a long span were not loaded.
+    Loaded {
+        records: Vec<v1::AgentMessage>,
+        omitted: u32,
+    },
+    Failed(String),
+}
+
 /// Presentation paging is shared across shells; transport history is unchanged.
 pub(crate) const CHAT_HISTORY_PAGE: usize = 200;
+/// Turns a window shows, and adds when it grows; each step holds at most a page.
+pub(crate) const CHAT_HISTORY_TURNS: usize = 10;
+/// The most records a browsed window projects. Earlier and newer navigation
+/// grow the window by a page, so the rows the reader was on stay in it; past
+/// this limit the far end, which the reader moved away from, is dropped.
+pub(crate) const CHAT_HISTORY_LIMIT: usize = 5 * CHAT_HISTORY_PAGE;
 
 /// One send this client dispatched into a conversation, still unaccounted for
 /// by that conversation's own records.
@@ -90,22 +117,126 @@ pub struct AdmittedSend {
 }
 
 impl Chat {
+    /// Every record this client holds: the outline and loaded work.
+    pub(crate) fn records(&self) -> impl Iterator<Item = &v1::AgentMessage> {
+        self.messages
+            .iter()
+            .chain(self.work.values().flat_map(|work| match work {
+                Work::Loaded { records, .. } => records.as_slice(),
+                _ => &[],
+            }))
+    }
+
+    /// Where a window ending at `end` starts: ten turns back, at most a page.
+    fn turns_before(&self, end: usize) -> usize {
+        let floor = end.saturating_sub(CHAT_HISTORY_PAGE);
+        let mut turns = 0;
+        for i in (floor..end).rev() {
+            if muster_proto::outline::starts_turn(&self.messages[i]) {
+                turns += 1;
+                if turns == CHAT_HISTORY_TURNS {
+                    return i;
+                }
+            }
+        }
+        floor
+    }
+
+    /// Where a window that ended at `end` ends after ten more turns, at most a
+    /// page later.
+    fn turns_after(&self, end: usize) -> usize {
+        let ceiling = (end + CHAT_HISTORY_PAGE).min(self.messages.len());
+        let mut turns = 0;
+        for i in end + 1..ceiling {
+            if muster_proto::outline::starts_turn(&self.messages[i]) {
+                turns += 1;
+                if turns == CHAT_HISTORY_TURNS {
+                    return i;
+                }
+            }
+        }
+        ceiling
+    }
+
     pub(crate) fn history_start_index(&self) -> usize {
+        let latest = self.turns_before(self.messages.len());
+        if !self.history_browsing {
+            return latest;
+        }
         self.history_start
             .as_ref()
             .and_then(|id| self.messages.iter().position(|m| &m.id == id))
-            .unwrap_or_else(|| self.messages.len().saturating_sub(CHAT_HISTORY_PAGE))
+            .unwrap_or(latest)
     }
 
     pub(crate) fn visible_messages(&self) -> &[v1::AgentMessage] {
-        &self.messages[self.history_start_index()..]
+        &self.messages[self.history_start_index()..self.history_end_index()]
     }
 
+    pub(crate) fn history_end_index(&self) -> usize {
+        let (start, len) = (self.history_start_index(), self.messages.len());
+        let end = self
+            .history_end
+            .as_ref()
+            .filter(|_| self.history_browsing)
+            .and_then(|id| self.messages.iter().position(|m| &m.id == id))
+            .map_or(len, |i| i + 1);
+        let end = if end > start {
+            end
+        } else {
+            self.turns_after(start)
+        };
+        end.min(start + CHAT_HISTORY_LIMIT).min(len)
+    }
+
+    /// Browse `start..end`; an end at the latest record follows live output.
+    fn show_history(&mut self, start: usize, end: usize) {
+        self.history_browsing = true;
+        self.history_start = self.messages.get(start).map(|m| m.id.clone());
+        self.history_end = (end < self.messages.len())
+            .then(|| end.checked_sub(1).and_then(|i| self.messages.get(i)))
+            .flatten()
+            .map(|m| m.id.clone());
+        self.content_revision = next_content_revision();
+    }
+    pub(crate) fn advance_history(&mut self, latest: bool) {
+        if latest {
+            self.history_browsing = false;
+            self.history_end = None;
+            self.reconcile_history_start();
+            self.content_revision = next_content_revision();
+            return;
+        }
+        if self.history_end_index() == self.messages.len() {
+            return;
+        }
+        let end = self.turns_after(self.history_end_index());
+        let start = self
+            .history_start_index()
+            .max(end.saturating_sub(CHAT_HISTORY_LIMIT));
+        self.show_history(start, end);
+    }
     pub(crate) fn reconcile_history_start(&mut self) {
         self.history_start = self
             .messages
             .get(self.history_start_index())
             .map(|m| m.id.clone());
+    }
+
+    /// The window's last ID when it ends before the latest record.
+    pub(crate) fn history_end_id(&self) -> Option<String> {
+        let end = self.history_end_index();
+        (end < self.messages.len()).then(|| self.messages[end - 1].id.clone())
+    }
+
+    /// Show the records just loaded before every cached one above the window
+    /// that ended at `end` (see `history_end_id`), keeping the rows the reader
+    /// was on.
+    pub(crate) fn show_earlier(&mut self, end: Option<String>) {
+        let end = end
+            .and_then(|id| self.messages.iter().position(|m| m.id == id))
+            .map_or(self.messages.len(), |i| i + 1);
+        self.show_history(0, end.min(CHAT_HISTORY_LIMIT));
     }
 
     /// Reveal already cached history without an RPC, including while offline.
@@ -114,13 +245,9 @@ impl Chat {
         if start == 0 {
             return false;
         }
-        let next = if all {
-            0
-        } else {
-            start.saturating_sub(CHAT_HISTORY_PAGE)
-        };
-        self.history_start = Some(self.messages[next].id.clone());
-        self.content_revision = next_content_revision();
+        let next = if all { 0 } else { self.turns_before(start) };
+        let end = self.history_end_index().min(next + CHAT_HISTORY_LIMIT);
+        self.show_history(next, end);
         true
     }
 }

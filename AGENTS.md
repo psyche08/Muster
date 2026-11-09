@@ -32,7 +32,7 @@ capabilities to code on the delete list. Superseded documents live in
 - Before implementing a change, read the relevant ADRs and record its context, decision, alternatives, consequences, and verification plan. One ADR may cover a coherent group of changes; keep implementation and device acceptance evidence distinct.
 - Update an existing ADR only when continuing the same decision or adding evidence. A changed decision needs a new ADR that links and supersedes the old one; do not rewrite accepted decision history.
 - Update `docs/adr/README.md` when adding an ADR, link the ADR in the PR description, and record unresolved validation or manual prerequisites honestly. Use `docs/adr/template.md`.
-- Run `scripts/check-adr.sh origin/main` before landing. `scripts/finish-session.sh` enforces this requirement; an index/template-only edit does not satisfy it.
+- Run `scripts/check-adr.sh origin/main` before opening and before merging the pull request; an index/template-only edit does not satisfy it.
 
 ## Turn completion and commits
 
@@ -45,7 +45,7 @@ capabilities to code on the delete list. Superseded documents live in
 ## Branches, worktrees, and landing work
 
 - Keep the primary checkout on `main`. Do each session's development in its own linked worktree on a new branch started from `origin/main`; do not switch the primary checkout to a session branch.
-- When the work the user asked for is complete and its verification is reported, land it in the same turn: open a pull request with an English title and description, then run `scripts/finish-session.sh` from the session's worktree. It pushes, waits for CI, merges with a merge commit, deletes the remote branch, and runs `scripts/worktree-gc.sh`.
+- When the work the user asked for is complete and its verification is reported, land it in the same turn from the session's worktree: run `scripts/check-adr.sh origin/main`, push the branch, and open a pull request with an English title and description. Wait for its CI checks (`gh pr checks <number> --watch`), merge it with a merge commit (`gh pr merge <number> --merge`), delete the remote branch (`git push origin --delete <branch>`), then run `scripts/worktree-gc.sh`. "No checks reported" means CI did not answer, not that it passed (ADR 0013); say so in the report.
 - If landing fails (CI failure, merge conflict, missing credentials), fix it, or report the failure and the pull request link in the final response. Do not leave finished work unmerged without saying so.
 - Do not remove worktrees or branches by hand. `scripts/worktree-gc.sh` removes only worktrees that are clean, landed on `origin/main`, not in use, and idle, and deletes their branches; it never discards uncommitted or unmerged work. Run it with `--dry-run` to see what it would do.
 

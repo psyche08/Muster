@@ -1,0 +1,426 @@
+diff --git a/Package.swift b/Package.swift
+index 4182b1e..f919f02 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -444,6 +444,11 @@ let package = Package(
+             path: "Sources/Plugins/RuntimeLinux",
+             exclude: ["config.toml"]
+         ),
++        .testTarget(
++            name: "ContainerRuntimeLifecycleTests",
++            dependencies: ["ContainerRuntimeLinuxServer", "ContainerRuntimeClient",
++                .product(name: "Containerization", package: "containerization")]
++        ),
+         .target(
+             name: "ContainerRuntimeLinuxServer",
+             dependencies: [
+diff --git a/Sources/Services/Runtime/RuntimeClient/ExitMonitor.swift b/Sources/Services/Runtime/RuntimeClient/ExitMonitor.swift
+index 6ac2fa9..7e3a567 100644
+--- a/Sources/Services/Runtime/RuntimeClient/ExitMonitor.swift
++++ b/Sources/Services/Runtime/RuntimeClient/ExitMonitor.swift
+@@ -16,7 +16,6 @@
+
+ import Containerization
+ import ContainerizationError
+-import ContainerizationExtras
+ import Foundation
+ import Logging
+
+@@ -40,6 +39,9 @@ public actor ExitMonitor {
+     private var runningTasks: [String: Task<Void, Never>] = [:]
+     private let log: Logger?
+
++    var trackedProcessCount: Int { runningTasks.count }
++    var registeredCallbackCount: Int { exitCallbacks.count }
++
+     /// Remove tracked work from the monitor.
+     ///
+     /// - Parameters:
+@@ -79,12 +81,22 @@ public actor ExitMonitor {
+             throw ContainerizationError(.invalidState, message: "already have a running task tracking process \(id)")
+         }
+         self.runningTasks[id] = Task {
++            defer {
++                self.exitCallbacks.removeValue(forKey: id)
++                self.runningTasks.removeValue(forKey: id)
++            }
++            let status: ExitStatus
+             do {
+-                let exitStatus = try await waitingOn()
+-                try await onExit(id, exitStatus)
++                status = try await waitingOn()
+             } catch {
+                 self.log?.error("WaitHandler for \(id) threw error \(String(describing: error))")
+-                try? await onExit(id, ExitStatus(exitCode: -1))
++                status = ExitStatus(exitCode: -1)
++            }
++            do {
++                try await onExit(id, status)
++            } catch {
++                // A failed cleanup must not call the exit callback a second time.
++                self.log?.error("ExitCallback for \(id) threw error \(String(describing: error))")
+             }
+         }
+     }
+diff --git a/Sources/Services/RuntimeLinux/Server/ProcessExitRegistry.swift b/Sources/Services/RuntimeLinux/Server/ProcessExitRegistry.swift
+new file mode 100644
+index 0000000..edc3ec8
+--- /dev/null
++++ b/Sources/Services/RuntimeLinux/Server/ProcessExitRegistry.swift
+@@ -0,0 +1,42 @@
++// SPDX-License-Identifier: Apache-2.0
++import Containerization
++
++/// Actor-confined. Live waiters are never evicted; only recent exit values
++/// survive completion, so a late wait cannot retain a process or RPC client.
++struct ProcessExitRegistry {
++    private(set) var pending: [String: [CheckedContinuation<ExitStatus, Never>]] = [:]
++    private(set) var completed: [String: ExitStatus] = [:]
++    private var order: [String] = []
++    let limit: Int
++
++    init(limit: Int = 1024) {
++        precondition(limit > 0)
++        self.limit = limit
++    }
++
++    mutating func register(_ id: String) -> Bool {
++        guard pending[id] == nil, completed[id] == nil else { return false }
++        pending[id] = []
++        return true
++    }
++
++    mutating func wait(_ id: String, _ continuation: CheckedContinuation<ExitStatus, Never>) {
++        if let status = completed[id] {
++            continuation.resume(returning: status)
++        } else if pending[id] != nil {
++            pending[id]!.append(continuation)
++        } else {
++            continuation.resume(returning: ExitStatus(exitCode: -1))
++        }
++    }
++
++    mutating func complete(_ id: String, status: ExitStatus) {
++        guard let waiting = pending.removeValue(forKey: id) else { return }
++        completed[id] = status
++        order.append(id)
++        if order.count > limit {
++            completed.removeValue(forKey: order.removeFirst())
++        }
++        for continuation in waiting { continuation.resume(returning: status) }
++    }
++}
+diff --git a/Sources/Services/RuntimeLinux/Server/RuntimeService.swift b/Sources/Services/RuntimeLinux/Server/RuntimeService.swift
+index 8ecc932..e4b7b19 100644
+--- a/Sources/Services/RuntimeLinux/Server/RuntimeService.swift
++++ b/Sources/Services/RuntimeLinux/Server/RuntimeService.swift
+@@ -44,7 +44,7 @@ public actor RuntimeService {
+     private var container: ContainerInfo?
+     private let monitor: ExitMonitor
+     private let eventLoopGroup: any EventLoopGroup
+-    private var waiters: [String: ExitWaiter] = [:]
++    private var exits = ProcessExitRegistry()
+     private let lock: AsyncLock = AsyncLock()
+     private let log: Logging.Logger
+     private var state: State = .created
+@@ -55,28 +55,6 @@ public actor RuntimeService {
+     private static let sshAuthSocketGuestPath = "/var/host-services/ssh-auth.sock"
+     private static let sshAuthSocketEnvVar = "SSH_AUTH_SOCK"
+
+-    class ExitWaiter {
+-        public var exitStatus: ExitStatus? = nil
+-        public var continuations: [CheckedContinuation<ExitStatus, Never>] = []
+-
+-        public func wait(_ cc: CheckedContinuation<ExitStatus, Never>) {
+-            if let exitStatus = exitStatus {
+-                // `doExit` has already been called for this waiter
+-                cc.resume(returning: exitStatus)
+-                return
+-            }
+-            continuations.append(cc)
+-        }
+-
+-        public func doExit(exitStatus: ExitStatus) {
+-            for cc in continuations {
+-                cc.resume(returning: exitStatus)
+-            }
+-
+-            self.exitStatus = exitStatus
+-        }
+-    }
+-
+     private static func sshAuthSocketHostUrl(
+         config: ContainerConfiguration,
+         dynamicEnv: [String: String] = [:],
+@@ -437,30 +415,39 @@ public actor RuntimeService {
+                 let id = try message.id()
+                 let config = try message.processConfig()
+                 let stdio = message.stdio()
++                // XPC duplicates these descriptors with closeOnDealloc=false.
++                // Until registration succeeds, this call owns their cleanup.
++                var registered = false
++                defer {
++                    if !registered {
++                        for handle in stdio.compactMap({ $0 }) {
++                            handle.readabilityHandler = nil
++                            try? handle.close()
++                        }
++                    }
++                }
+
+                 try await self.addNewProcess(id, config, stdio)
+
+-                try await self.initializeWaiters(for: id)
+                 do {
++                    try await self.initializeWaiters(for: id)
+                     try await self.monitor.registerProcess(
+                         id: id,
+                         onExit: { id, exitStatus in
+                             await self.releaseWaiters(for: id, status: exitStatus)
+
+-                            guard let process = await self.processes[id]?.process else {
+-                                throw ContainerizationError(
+-                                    .invalidState,
+-                                    message: "ProcessInfo missing for process \(id)"
+-                                )
+-                            }
+-                            try await process.delete()
+-                            try await self.setProcessState(id: id, state: .stopped)
++                            // Remove the strong reference even when guest cleanup fails.
++                            // Exit history contains only the status, never the process/agent.
++                            let process = await self.removeProcess(id)?.process
++                            try await process?.delete()
+                         }
+                     )
+                 } catch {
+                     await self.releaseWaiters(for: id, status: ExitStatus(exitCode: -1))
++                    _ = await self.removeProcess(id)
+                     throw error
+                 }
++                registered = true
+
+                 return message.reply()
+             default:
+@@ -987,29 +974,40 @@ public actor RuntimeService {
+             throw ContainerizationError(.notFound, message: "process with id \(id)")
+         }
+
+-        let containerInfo = try self.getContainer()
+-        let czConfig = try self.configureProcessConfig(
+-            config: processInfo.config,
+-            stdio: processInfo.io,
+-            containerConfig: containerInfo.config,
+-        )
+-
+-        let process = try await container.exec(id, configuration: czConfig)
+-        try self.setUnderlyingProcess(id, process)
++        do {
++            let containerInfo = try self.getContainer()
++            let czConfig = try self.configureProcessConfig(
++                config: processInfo.config,
++                stdio: processInfo.io,
++                containerConfig: containerInfo.config,
++            )
+
+-        try await process.start()
++            let process = try await container.exec(id, configuration: czConfig)
++            try self.setUnderlyingProcess(id, process)
++            try await process.start()
+
+-        let waitFunc: ExitMonitor.WaitHandler = {
+-            let code = try await process.wait()
+-            if let out = processInfo.io[1] {
+-                try self.closeHandle(out.fileDescriptor)
++            let waitFunc: ExitMonitor.WaitHandler = {
++                defer {
++                    // stdin is also runtime-owned; close it on success or wait failure.
++                    for handle in processInfo.io.compactMap({ $0 }) {
++                        handle.readabilityHandler = nil
++                        try? handle.close()
++                    }
++                }
++                return try await process.wait()
+             }
+-            if let err = processInfo.io[2] {
+-                try self.closeHandle(err.fileDescriptor)
++            try await self.monitor.track(id: id, waitingOn: waitFunc)
++        } catch {
++            self.releaseWaiters(for: id, status: ExitStatus(exitCode: -1))
++            let process = self.removeProcess(id)?.process
++            await self.monitor.stopTracking(id: id)
++            try? await process?.delete()
++            for handle in processInfo.io.compactMap({ $0 }) {
++                handle.readabilityHandler = nil
++                try? handle.close()
+             }
+-            return code
++            throw error
+         }
+-        try await self.monitor.track(id: id, waitingOn: waitFunc)
+     }
+
+     private func startSocketForwarders(attachment: Attachment, publishedPorts: [PublishPort]) async throws {
+@@ -1587,10 +1585,13 @@ extension FileHandle: @retroactive ReaderStream, @retroactive Writer {
+
+     public func stream() -> AsyncStream<Data> {
+         .init { cont in
++            cont.onTermination = { [weak self] _ in
++                self?.readabilityHandler = nil
++            }
+             self.readabilityHandler = { handle in
+                 let data = handle.availableData
+                 if data.isEmpty {
+-                    self.readabilityHandler = nil
++                    handle.readabilityHandler = nil
+                     cont.finish()
+                     return
+                 }
+@@ -1604,24 +1605,21 @@ extension FileHandle: @retroactive ReaderStream, @retroactive Writer {
+
+ extension RuntimeService {
+     private func initializeWaiters(for id: String) throws {
+-        guard waiters[id] == nil else {
++        guard exits.register(id) else {
+             throw ContainerizationError(.invalidState, message: "waiter for \(id) already initialized")
+         }
+-        waiters[id] = ExitWaiter()
+     }
+
+     private func waitForExit(id: String, cont: CheckedContinuation<ExitStatus, Never>) {
+-        guard let waiter = waiters[id] else {
+-            // No waiter was initialized at all, resume immediately
+-            cont.resume(returning: ExitStatus(exitCode: -1))
+-            return
+-        }
+-
+-        waiter.wait(cont)
++        exits.wait(id, cont)
+     }
+
+     private func releaseWaiters(for id: String, status: ExitStatus) {
+-        waiters[id]?.doExit(exitStatus: status)
++        exits.complete(id, status: status)
++    }
++
++    private func removeProcess(_ id: String) -> ProcessInfo? {
++        processes.removeValue(forKey: id)
+     }
+
+     private func setUnderlyingProcess(_ id: String, _ process: LinuxProcess) throws {
+diff --git a/Tests/ContainerRuntimeLifecycleTests/ProcessExitRegistryTests.swift b/Tests/ContainerRuntimeLifecycleTests/ProcessExitRegistryTests.swift
+new file mode 100644
+index 0000000..4ba253b
+--- /dev/null
++++ b/Tests/ContainerRuntimeLifecycleTests/ProcessExitRegistryTests.swift
+@@ -0,0 +1,111 @@
++// SPDX-License-Identifier: Apache-2.0
++import Containerization
++import Foundation
++import Testing
++@testable import ContainerRuntimeLinuxServer
++@testable import ContainerRuntimeClient
++
++struct ProcessExitRegistryTests {
++    @Test func earlyAndLateWaitsPreserveExitStatus() async {
++        var exits = ProcessExitRegistry(limit: 2)
++        let firstRegistered = exits.register("first")
++        #expect(firstRegistered)
++        let early = await withCheckedContinuation { continuation in
++            exits.wait("first", continuation)
++            exits.complete("first", status: ExitStatus(exitCode: 37))
++            // Duplicate notifications cannot resume a continuation twice.
++            exits.complete("first", status: ExitStatus(exitCode: 99))
++        }
++        #expect(early.exitCode == 37)
++        let late = await withCheckedContinuation { exits.wait("first", $0) }
++        #expect(late.exitCode == 37)
++        #expect(exits.pending.isEmpty)
++    }
++
++    @Test func historyIsBoundedWithoutEvictingLiveWaiters() async {
++        var exits = ProcessExitRegistry(limit: 2)
++        let liveRegistered = exits.register("live")
++        #expect(liveRegistered)
++        for i in 0..<1000 {
++            let id = "exec-\(i)"
++            let registered = exits.register(id)
++            #expect(registered)
++            exits.complete(id, status: ExitStatus(exitCode: 0))
++        }
++        #expect(exits.completed.count == 2)
++        #expect(exits.pending.count == 1)
++        let expired = await withCheckedContinuation { exits.wait("exec-0", $0) }
++        #expect(expired.exitCode == -1)
++        let live = await withCheckedContinuation { continuation in
++            exits.wait("live", continuation)
++            exits.complete("live", status: ExitStatus(exitCode: 42))
++        }
++        #expect(live.exitCode == 42)
++        #expect(exits.pending.isEmpty)
++    }
++
++    @Test func concurrentWaitersAllResume() async {
++        actor Registry {
++            var exits = ProcessExitRegistry()
++            init() { _ = exits.register("task") }
++            func wait() async -> Int32 {
++                await withCheckedContinuation { exits.wait("task", $0) }.exitCode
++            }
++            func complete() { exits.complete("task", status: ExitStatus(exitCode: 7)) }
++            var waiters: Int { exits.pending["task"]?.count ?? 0 }
++        }
++        let registry = Registry()
++        let first = Task { await registry.wait() }
++        let second = Task { await registry.wait() }
++        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
++        while await registry.waiters < 2 && ContinuousClock.now < deadline {
++            await Task.yield()
++        }
++        #expect(await registry.waiters == 2)
++        await registry.complete()
++        #expect(await first.value == 7)
++        #expect(await second.value == 7)
++    }
++
++    @Test(arguments: [0, 1, 2, 3])
++    func monitorReleasesCompletedTasksAndCallsCallbackOnce(mode: Int) async throws {
++        enum Failure: Error { case expected }
++        actor Calls {
++            var count = 0
++            func record() { count += 1 }
++        }
++        let monitor = ExitMonitor()
++        let calls = Calls()
++        for i in 0..<100 {
++            let id = "exec-\(i)"
++            try await monitor.registerProcess(id: id) { _, status in
++                #expect(status.exitCode == (mode & 1 == 1 ? -1 : 0))
++                await calls.record()
++                if mode & 2 == 2 { throw Failure.expected }
++            }
++            try await monitor.track(id: id) {
++                if mode & 1 == 1 { throw Failure.expected }
++                return ExitStatus(exitCode: 0)
++            }
++        }
++        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
++        while await monitor.trackedProcessCount > 0 && ContinuousClock.now < deadline {
++            try await Task.sleep(for: .milliseconds(1))
++        }
++        #expect(await monitor.trackedProcessCount == 0)
++        #expect(await monitor.registeredCallbackCount == 0)
++        #expect(await calls.count == 100)
++    }
++    @Test func stdinStreamClearsItsHandlerAfterCancellation() async throws {
++        let pipe = Pipe()
++        let reader = pipe.fileHandleForReading
++        let stream = reader.stream()
++        let task = Task { for await _ in stream {} }
++        task.cancel()
++        await task.value
++        #expect(reader.readabilityHandler == nil)
++        try reader.close()
++        try pipe.fileHandleForWriting.close()
++    }
++
++}

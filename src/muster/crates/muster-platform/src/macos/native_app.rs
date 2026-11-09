@@ -2614,8 +2614,12 @@ impl Controller for NativeAppController {
         }
     }
 
-    async fn send_queued(&self, interaction: &str) -> Result<(), Error> {
-        self.send_queued_message(&self.queue_source, interaction)
+    async fn queued_action(
+        &self,
+        interaction: &str,
+        action: muster_agent::queue::Action,
+    ) -> Result<(), Error> {
+        self.queued_message_action(&self.queue_source, interaction, action)
             .await
     }
 

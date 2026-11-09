@@ -471,6 +471,7 @@ struct ChatView: View {
         .environment(\.keyboardDock, layout.flex ? keyboardDock : nil)
         #endif
         .environment(\.executeCode, { core.codeAction(.preview, id: $0) })
+        .environment(\.loadWork, { core.agentLoadWork($0) })
         .sheet(isPresented: Binding(get: { chat.hasCodePreview }, set: { if !$0 { core.codeAction(.dismiss) } })) {
             CodeExecutionPreview(preview: chat.codePreview, cancel: { core.codeAction(.dismiss) }, run: {
                 core.codeAction(.run, id: chat.codePreview.id); contentTab = "Terminal"
@@ -564,8 +565,8 @@ struct ChatView: View {
                 }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest,
                 loadEarlier: { earlierRequest += 1; core.agentLoadEarlier() })
                 .overlay(alignment: .bottom) {
-                    if !atLatest {
-                        Button { latestRequest += 1 } label: {
+                    if !atLatest || chat.hasNewer_p {
+                        Button { core.agentLoadEarlier(latest: true); latestRequest += 1 } label: {
                             Image(systemName: "arrow.down").font(.system(size: 19, weight: .medium))
                                 .frame(width: 38, height: 38)
                                 .background(.regularMaterial, in: Circle())
@@ -624,6 +625,10 @@ struct ChatView: View {
             if !chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty {
                 Text(chat.session.transcriptNotice.isEmpty ? "No messages yet" : chat.session.transcriptNotice)
                     .foregroundStyle(.secondary)
+            }
+            if chat.hasNewer_p {
+                Button("Load newer") { core.agentLoadEarlier(newer: true) }.disabled(chat.loading)
+                    .frame(maxWidth: .infinity)
             }
             if chat.hasEarlier_p {
                 Button("Load earlier") {
@@ -770,6 +775,15 @@ struct AdmittedSendRow: View, Equatable {
     }
 }
 
+private struct LoadWorkKey: EnvironmentKey { static let defaultValue: (String) -> Void = { _ in } }
+extension EnvironmentValues {
+    /// Asks Rust for a collapsed turn's steps by Worked block ID (ADR 0160).
+    var loadWork: (String) -> Void {
+        get { self[LoadWorkKey.self] }
+        set { self[LoadWorkKey.self] = newValue }
+    }
+}
+
 struct WorkingGroup: View {
     let block: Muster_App_ChatBlock
     @Environment(\.conversationStyle) private var style
@@ -779,7 +793,7 @@ struct WorkingGroup: View {
 
     var body: some View {
         Group {
-            if block.children.isEmpty {
+            if block.children.isEmpty && block.details.isEmpty {
                 if style == .deepseek {
                     DeepSeekRowTitle(title: block.title, expanded: false, running: !block.completed)
                 } else {
@@ -806,13 +820,7 @@ struct WorkingGroup: View {
             .accessibilityLabel(block.title)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             if expanded {
-                VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) {
-                    ForEach(block.children, id: \.id) { child in
-                        if child.kind == "activity" { ActivityGroup(block: child) }
-                        else if child.kind == "reasoning" { ReasoningRow(block: child) }
-                        else { MessageBubble(message: child.message, parts: child.parts) }
-                    }
-                }
+                VStack(alignment: .leading, spacing: DeepSeekChat.rowGap) { rows }
             }
         }
         .font(.system(size: ChatStyle.bodySize))
@@ -833,17 +841,48 @@ struct WorkingGroup: View {
             .accessibilityLabel(block.title)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             if expanded {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(block.children, id: \.id) { child in
-                        if child.kind == "activity" { ActivityGroup(block: child) }
-                        else if child.kind == "reasoning" { ReasoningRow(block: child) }
-                        else { MessageBubble(message: child.message, parts: child.parts) }
-                    }
-                }
+                VStack(alignment: .leading, spacing: 12) { rows }
             }
         }
         .font(.system(size: ChatStyle.bodySize))
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var rows: some View {
+        ForEach(block.children, id: \.id) { child in
+            if child.kind == "activity" { ActivityGroup(block: child) }
+            else if child.kind == "reasoning" { ReasoningRow(block: child) }
+            else if child.kind == "notice" { Text(child.title).font(.caption).foregroundStyle(.secondary) }
+            else { MessageBubble(message: child.message, parts: child.parts) }
+        }
+        WorkDetails(block: block)
+    }
+}
+
+/// An expanded Worked group whose steps are not loaded yet. Rust decides the
+/// state; this asks for the steps when shown and offers a retry.
+struct WorkDetails: View {
+    let block: Muster_App_ChatBlock
+    @Environment(\.loadWork) private var load
+
+    var body: some View {
+        switch block.details {
+        case "unloaded", "loading":
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Loading steps…")
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            .onAppear { if block.details == "unloaded" { load(block.id) } }
+        case "failed":
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(block.detailsError).lineLimit(3)
+                Button("Retry") { load(block.id) }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        default:
+            EmptyView()
+        }
     }
 }
 

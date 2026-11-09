@@ -572,10 +572,15 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
             ..Default::default()
         }],
         history_start: None,
+        history_end: None,
+        history_browsing: false,
+        timeline_index: Default::default(),
         interactions: Vec::new(),
         approval_refresh_attempted: false,
         approval_refresh_pending: false,
         has_earlier: false,
+        outline: false,
+        work: Default::default(),
         sending: false,
         responding_interaction: String::new(),
         response_interaction: String::new(),
@@ -1340,6 +1345,7 @@ async fn a_chat_names_its_offline_mac_and_rewatches_when_it_returns() {
             "s".into(),
             false,
             false,
+            false,
             Err(Error::Rpc(message.into())),
         );
         state.chat.as_ref().unwrap().load_error.clone()
@@ -1785,20 +1791,126 @@ fn history_window_retains_stream_anchor_and_pages_cached_data_offline() {
     assert_eq!(chat.history_start.as_deref(), Some("300"));
     chat.messages.push(message("500", "assistant"));
     chat.reconcile_history_start();
-    assert_eq!(chat.visible_messages().first().unwrap().id, "300");
-    assert_eq!(chat.visible_messages().len(), 201);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "301");
+    assert_eq!(chat.visible_messages().len(), 200);
+    // Earlier history grows the window above the rows the reader is on.
+    assert!(chat.reveal_history(false));
+    assert_eq!(chat.history_start.as_deref(), Some("101"));
+    assert_eq!(chat.visible_messages().len(), 400);
+    chat.messages.push(message("501", "assistant"));
     chat.messages[499].text = "streamed update".into();
     chat.reconcile_history_start();
-    assert_eq!(chat.history_start.as_deref(), Some("300"));
-    assert!(chat.reveal_history(false));
-    assert_eq!(chat.history_start.as_deref(), Some("100"));
-    assert!(
-        !chat.has_earlier,
-        "all messages are cached; no remote fetch needed"
+    assert_eq!(
+        chat.history_start.as_deref(),
+        Some("101"),
+        "live output preserves an earlier window"
+    );
+    assert_eq!(
+        chat.visible_messages().last().unwrap().id,
+        "501",
+        "a window that reaches the latest record follows live output"
     );
     assert!(chat.reveal_history(true));
-    assert_eq!(chat.visible_messages().len(), 501);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "0");
+    assert_eq!(chat.visible_messages().len(), 502);
     assert!(!chat.reveal_history(false));
+    chat.advance_history(true);
+    assert_eq!(chat.visible_messages().first().unwrap().id, "302");
+    assert_eq!(chat.messages.len(), 502, "receipt history is not evicted");
+}
+
+#[test]
+fn history_window_is_bounded_and_drops_the_side_the_reader_left() {
+    let ids = |chat: &Chat| {
+        let visible = chat.visible_messages();
+        (
+            visible.first().unwrap().id.clone(),
+            visible.last().unwrap().id.clone(),
+        )
+    };
+    let pair = |first: &str, last: &str| (first.to_string(), last.to_string());
+    let mut chat = Chat {
+        messages: (0..1500).map(|i| message(&i.to_string(), "user")).collect(),
+        ..Default::default()
+    };
+    chat.reconcile_history_start();
+    for _ in 0..4 {
+        assert!(chat.reveal_history(false));
+    }
+    assert_eq!(ids(&chat), pair("500", "1499"));
+    assert_eq!(
+        chat.visible_messages().len(),
+        crate::state::CHAT_HISTORY_LIMIT
+    );
+    assert!(chat.reveal_history(false));
+    assert_eq!(ids(&chat), pair("300", "1299"));
+    chat.messages.push(message("1500", "assistant"));
+    assert_eq!(
+        ids(&chat),
+        pair("300", "1299"),
+        "live output stays below a window that ends earlier"
+    );
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("500", "1499"));
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("501", "1500"));
+    chat.advance_history(false);
+    assert_eq!(ids(&chat), pair("501", "1500"), "nothing newer to show");
+    chat.advance_history(true);
+    assert_eq!(ids(&chat), pair("1301", "1500"));
+}
+
+#[test]
+fn loading_earlier_history_keeps_the_rows_the_reader_was_on() {
+    // A tool-heavy turn renders 200 records as a few rows, so the reader is at
+    // the top at once. The page loaded above them must not replace them.
+    let tool = |i: usize| v1::AgentMessage {
+        id: i.to_string(),
+        role: "assistant".into(),
+        kind: "tool_call".into(),
+        tool_name: "Bash".into(),
+        text: "Bash".into(),
+        ..Default::default()
+    };
+    let mut tail: Vec<_> = (200..399).map(tool).collect();
+    tail.push(v1::AgentMessage {
+        id: "399".into(),
+        role: "assistant".into(),
+        kind: "text".into(),
+        phase: "final_answer".into(),
+        text: "Done".into(),
+        ..Default::default()
+    });
+    let mut state = State::new(true, Some("phone".into()));
+    state.chat = Some(Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            ..Default::default()
+        },
+        messages: tail,
+        has_earlier: true,
+        ..Default::default()
+    });
+    state.chat.as_mut().unwrap().reconcile_history_start();
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        true,
+        false,
+        false,
+        Ok(((0..200).map(tool).collect(), true)),
+    );
+    let chat = state.chat.as_ref().unwrap();
+    assert_eq!(chat.visible_messages().first().unwrap().id, "0");
+    assert_eq!(chat.visible_messages().last().unwrap().id, "399");
+    assert_eq!(
+        chat.history_end_index(),
+        chat.messages.len(),
+        "nothing newer is hidden"
+    );
 }
 
 #[test]
@@ -1823,6 +1935,7 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
         "s".into(),
         false,
         true,
+        false,
         Ok((vec![], false)),
     );
     assert_eq!(
@@ -1839,6 +1952,7 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
         "s".into(),
         false,
         true,
+        false,
         Ok((changed, true)),
     );
     assert_eq!(
@@ -1855,6 +1969,7 @@ fn authoritative_history_reset_reanchors_but_stale_results_do_not() {
         "mac".into(),
         "s".into(),
         true,
+        false,
         false,
         Ok((earlier, true)),
     );
@@ -2860,14 +2975,14 @@ fn new_subscription_replaces_stale_card_handles_only_for_its_live_source() {
         (device.as_str(), "other", provider.as_str()),
         (device.as_str(), session.as_str(), "other"),
     ] {
-        agents::msg_agent_stream_started(&mut state, token.clone(), d, s, p, None);
+        agents::msg_agent_stream_started(&mut state, token.clone(), d, s, p);
         assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
     }
     let cancelled = CancellationToken::new();
     cancelled.cancel();
-    agents::msg_agent_stream_started(&mut state, cancelled, &device, &session, &provider, None);
+    agents::msg_agent_stream_started(&mut state, cancelled, &device, &session, &provider);
     assert_eq!(state.chat.as_ref().unwrap().interactions.len(), 2);
-    agents::msg_agent_stream_started(&mut state, token, &device, &session, &provider, None);
+    agents::msg_agent_stream_started(&mut state, token, &device, &session, &provider);
     let chat = state.chat.as_ref().unwrap();
     assert_eq!(chat.interactions.len(), 1);
     assert_eq!(chat.interactions[0].kind, "queued_message");
@@ -3006,4 +3121,245 @@ async fn desktop_session_creation_validates_first_and_keeps_only_refused_input()
     );
     let view = crate::render::view_model(&state).agents.unwrap();
     assert!(!view.native_creating && view.native_create_draft.is_none());
+}
+
+#[test]
+fn delayed_cache_seed_cannot_replace_live_or_cancelled_history() {
+    let mut state = running_chat();
+    state.chat.as_mut().unwrap().loading = true;
+    let page = v1::AgentMessagePage {
+        messages: vec![message("cached", "user")],
+        ..Default::default()
+    };
+    let token = CancellationToken::new();
+    token.cancel();
+    agents::msg_chat_cache(&mut state, token, "mac", "s", page.clone());
+    assert!(state.chat.as_ref().unwrap().messages.is_empty());
+    agents::msg_chat_cache(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "other",
+        page.clone(),
+    );
+    assert!(state.chat.as_ref().unwrap().messages.is_empty());
+    agents::msg_chat_cache(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "s",
+        page.clone(),
+    );
+    assert_eq!(state.chat.as_ref().unwrap().messages[0].id, "cached");
+    agents::msg_chat(
+        &mut state,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        false,
+        true,
+        false,
+        Ok((vec![message("live", "user")], false)),
+    );
+    agents::msg_chat_cache(&mut state, CancellationToken::new(), "mac", "s", page);
+    assert_eq!(state.chat.as_ref().unwrap().messages[0].id, "live");
+}
+
+fn outline_turn(turn: usize) -> Vec<v1::AgentMessage> {
+    let record = |id: String, role: &str, kind: &str| v1::AgentMessage {
+        text: id.clone(),
+        id,
+        role: role.into(),
+        kind: kind.into(),
+        ..Default::default()
+    };
+    let mut out = vec![record(format!("t{turn}-prompt"), "user", "text")];
+    for step in 0..3 {
+        out.push(v1::AgentMessage {
+            tool_name: "Bash".into(),
+            tool_call_id: format!("c{turn}-{step}"),
+            ..record(format!("t{turn}-call{step}"), "assistant", "tool_call")
+        });
+    }
+    out.push(record(format!("t{turn}-answer"), "assistant", "text"));
+    out
+}
+
+/// The outline the daemon pages for `records` (ADR 0160).
+fn daemon_outline(records: &[v1::AgentMessage]) -> Vec<v1::AgentMessage> {
+    muster_proto::outline::Outline::default()
+        .page(
+            records,
+            &v1::AgentMessagesRequest {
+                turns: 100,
+                tail: 2000,
+                ..Default::default()
+            },
+            Clone::clone,
+        )
+        .messages
+}
+
+fn outline_chat(records: &[v1::AgentMessage]) -> Chat {
+    Chat {
+        device: "mac".into(),
+        session: v1::AgentSession {
+            id: "s".into(),
+            ..Default::default()
+        },
+        messages: daemon_outline(records),
+        outline: true,
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn live_turns_collapse_into_the_daemons_outline_and_keep_their_work() {
+    let (_dir, ctx, mut state) = phone().await;
+    let mut all: Vec<_> = (0..3).flat_map(outline_turn).collect();
+    state.chat = Some(outline_chat(&all));
+    let token = CancellationToken::new();
+    let live = |state: &mut State, m: v1::AgentMessage| {
+        agents::msg_agent_event(
+            state,
+            &ctx,
+            token.clone(),
+            "mac".into(),
+            "s".into(),
+            v1::agent_event::Ev::Message(m),
+        )
+    };
+    // The next prompt completes turn 2; a summary completes turn 3.
+    let summary = v1::AgentMessage {
+        id: "summary".into(),
+        role: "system".into(),
+        kind: "turn_summary".into(),
+        text: "usage".into(),
+        ..Default::default()
+    };
+    for m in outline_turn(3).into_iter().chain([summary]) {
+        all.push(m.clone());
+        live(&mut state, m);
+        assert_eq!(state.chat.as_ref().unwrap().messages, daemon_outline(&all));
+    }
+    let chat = state.chat.as_ref().unwrap();
+    let stubs: Vec<_> = chat
+        .messages
+        .iter()
+        .filter(|m| m.kind == muster_proto::outline::KIND)
+        .map(|m| m.id.clone())
+        .collect();
+    assert_eq!(stubs.len(), 4);
+    // Turns completed live keep their records; earlier ones load on expand.
+    assert!(!chat.work.contains_key(&stubs[1]));
+    for id in &stubs[2..] {
+        let Some(crate::state::Work::Loaded {
+            records,
+            omitted: 0,
+        }) = chat.work.get(id)
+        else {
+            panic!("{id} not loaded");
+        };
+        assert_eq!(records.len(), 3);
+    }
+    // A late update to a collapsed record keeps the outline in step.
+    let mut changed = all.iter().find(|m| m.id == "t3-call1").unwrap().clone();
+    changed.text = "updated".into();
+    *all.iter_mut().find(|m| m.id == changed.id).unwrap() = changed.clone();
+    let count = state.chat.as_ref().unwrap().messages.len();
+    live(&mut state, changed);
+    let chat = state.chat.as_ref().unwrap();
+    assert_eq!(chat.messages.len(), count, "not appended");
+    assert_eq!(chat.messages, daemon_outline(&all));
+}
+
+#[tokio::test]
+async fn a_turn_whose_start_is_not_loaded_is_not_collapsed() {
+    let (_dir, ctx, mut state) = phone().await;
+    let all: Vec<_> = (0..2).flat_map(outline_turn).collect();
+    let mut chat = outline_chat(&all);
+    // Only the open turn's tail is held, and earlier history exists.
+    chat.messages.drain(..chat.messages.len() - 3);
+    chat.has_earlier = true;
+    let held = chat.messages.clone();
+    state.chat = Some(chat);
+    let prompt = outline_turn(2).remove(0);
+    agents::msg_agent_event(
+        &mut state,
+        &ctx,
+        CancellationToken::new(),
+        "mac".into(),
+        "s".into(),
+        v1::agent_event::Ev::Message(prompt.clone()),
+    );
+    let chat = state.chat.as_ref().unwrap();
+    assert_eq!(chat.messages[..3], held[..]);
+    assert_eq!(chat.messages[3], prompt);
+    assert!(chat.work.is_empty());
+}
+
+#[tokio::test]
+async fn expanded_work_loads_once_and_reports_failure_for_a_retry() {
+    let (_dir, ctx, mut state) = phone().await;
+    let all: Vec<_> = (0..3).flat_map(outline_turn).collect();
+    state.chat = Some(outline_chat(&all));
+    let stub = state.chat.as_ref().unwrap().messages[1].clone();
+    let block = muster_proto::outline::group_id(stub.work.as_ref().unwrap());
+    let details = |state: &State| {
+        let chat = state.chat.as_ref().unwrap();
+        let blocks = chat.timeline_index.borrow_mut().window(
+            &chat.messages,
+            0,
+            chat.messages.len(),
+            false,
+            false,
+            &chat.work,
+        );
+        let group = blocks.into_iter().find(|b| b.id == block).unwrap();
+        (group.details, group.details_error, group.children.len())
+    };
+    assert_eq!(details(&state), ("unloaded".into(), String::new(), 0));
+    agents::intent_agent_load_work(&mut state, &ctx, &block);
+    assert_eq!(details(&state), ("loading".into(), String::new(), 0));
+    // A second expand while loading starts nothing new.
+    agents::intent_agent_load_work(&mut state, &ctx, &block);
+    assert_eq!(
+        state.chat.as_ref().unwrap().work.get(&stub.id),
+        Some(&crate::state::Work::Loading)
+    );
+    agents::msg_chat_work(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "s",
+        stub.id.clone(),
+        Err(Error::Unavailable("mac is offline".into())),
+    );
+    assert_eq!(
+        details(&state),
+        ("failed".into(), "unavailable: mac is offline".into(), 0)
+    );
+    // Expanding again retries.
+    agents::intent_agent_load_work(&mut state, &ctx, &block);
+    assert_eq!(details(&state).0, "loading");
+    let records = all[1..4].to_vec();
+    agents::msg_chat_work(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "s",
+        stub.id.clone(),
+        Ok((records, 0)),
+    );
+    assert_eq!(details(&state), (String::new(), String::new(), 1));
+    // A late result for work already loaded changes nothing.
+    agents::msg_chat_work(
+        &mut state,
+        CancellationToken::new(),
+        "mac",
+        "s",
+        stub.id.clone(),
+        Err(Error::Unavailable("late".into())),
+    );
+    assert_eq!(details(&state).0, "");
 }

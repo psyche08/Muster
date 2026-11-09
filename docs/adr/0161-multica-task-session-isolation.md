@@ -1,4 +1,4 @@
-# ADR 0153: Enforce registered task ownership and expose scoped Multica browsing
+# ADR 0161: Enforce registered task ownership and expose scoped Multica browsing
 
 - Date: 2026-11-06
 - Status: Accepted for the implementation below; full service and device acceptance pending
@@ -94,3 +94,23 @@ same-ID update and retry/readiness fixes. The real RPC history regression now
 holds initial admission to prove cached content remains absent, then admits it
 to check cached display and delta-only catch-up, and finally denies a reopened
 session to prove neither cached content nor a history request is exposed.
+
+## Integration with turn-paged history
+
+Main added bounded asynchronous outline caches and lazy turn details (ADRs
+0153/0160). Keep these history formats and the released intent numbering.
+Only an admitted subscription can project cached history. Verify held/denied
+admission, delta catch-up, ownership invalidation, outline expansion, protocol
+generation, and Mac/iOS UI compilation on the combined branch.
+
+Recent outlines and their page/work caches share a session-specific key prefix.
+On loss of ownership the client cancels the watch before evicting that session;
+a cancelled page load cannot enqueue a late cache write. Other sessions and
+drafts remain intact. While reading the admitted cache and opening the history
+stream, the client drains the bounded watch queue, preserving metadata updates
+and avoiding a reconnect during a burst.
+
+Integration evidence (2026-11-09): 175 app-core, 25 protocol, 136 daemon unit
+tests, 11 chat-watch and 2 access integration tests passed. The 300-message
+burst also passed five consecutive isolated runs. The shared UI compiled for
+macOS and arm64 iOS Simulator; no device installation or task launch was tested.

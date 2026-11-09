@@ -482,7 +482,14 @@ impl Manager {
             .and_then(|ns| ns.first())
             .and_then(|n| n["ipv4Gateway"].as_str())
             .ok_or_else(|| Error::Unavailable("Container bridge address is unavailable".into()))?;
-        bridge::ensure(self, c, socket, gateway).await
+        bridge::ensure(
+            self,
+            c,
+            socket,
+            gateway,
+            row["status"]["startedDate"].as_str().unwrap_or_default(),
+        )
+        .await
     }
     async fn ensure(&self, c: &Config, socket: &Path) -> Result<(), Error> {
         let (_, row) = match self.observed(c.clone()).await {
@@ -802,6 +809,7 @@ async fn install(manager: &Manager, c: &Config, create: bool) -> Result<(), Erro
                 &[
                     "run",
                     "--detach",
+                    "--init",
                     "--name",
                     &c.container_name,
                     "--cpus",
@@ -1254,6 +1262,12 @@ esac
             ..Default::default()
         };
         install(&manager, &c, true).await.unwrap();
+        let calls = std::fs::read_to_string(dir.path().join("calls")).unwrap();
+        assert!(
+            calls.lines().any(|line| line.starts_with("run ")
+                && line.split_whitespace().any(|arg| arg == "--init")),
+            "new containers need an init to reap orphaned children"
+        );
         assert_eq!(
             std::fs::read(data.join(".muster-owned")).unwrap(),
             b"muster-multica-v1"
@@ -1273,7 +1287,7 @@ esac
             );
         }
         let calls = std::fs::read_to_string(dir.path().join("calls")).unwrap();
-        assert!(calls.contains("run --detach --name muster-multica"));
+        assert!(calls.contains("run --detach --init --name muster-multica"));
         assert!(calls.contains(&format!("{}:/muster", data.display())));
         assert!(calls.contains("bash /tmp/multica-install.sh"));
         let log = manager.installation.snapshot().log;

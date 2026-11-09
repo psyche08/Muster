@@ -65,6 +65,7 @@ impl Cache {
                             writes.lock().unwrap().entry(key).or_insert(bytes);
                         }
                     }
+                    prune(&path, DISK_BYTES);
                 })
                 .await;
             }
@@ -91,6 +92,28 @@ impl Cache {
         }
     }
 
+    /// Purge the recent outline and all pages/turn details of this session.
+    pub fn remove_history(&self, key: &str) {
+        let _disk = self.disk.lock().unwrap();
+        let prefix = format!("{key}-");
+        let belongs = |name: &str| name == key || name.starts_with(&prefix);
+        let mut memory = self.memory.lock().unwrap();
+        memory.retain(|name, _| !belongs(name));
+        self.pending
+            .lock()
+            .unwrap()
+            .retain(|name, _| !belongs(name));
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            for entry in entries.flatten() {
+                if belongs(&entry.file_name().to_string_lossy())
+                    && let Err(error) = std::fs::remove_file(entry.path())
+                {
+                    log::warn!("History cache removal failed: {error}");
+                }
+            }
+        }
+    }
+
     pub fn key(parts: &[&str]) -> String {
         // Length-delimited components prevent collisions between host/session scopes.
         let messages: Vec<_> = parts
@@ -109,19 +132,43 @@ impl Cache {
         memory.insert(key, bytes);
     }
     pub fn get<T: Message + Default>(&self, key: &str) -> Option<T> {
-        let mut memory = self.memory.lock().unwrap();
-        if !memory.contains_key(key) {
-            // A durable entry written before it had its own name is still read
-            // from the plain one.
+        let cached = self.memory.lock().unwrap().get(key).cloned();
+        let bytes = if let Some(bytes) = cached {
+            bytes
+        } else {
+            // A late transcript disk read cannot repopulate a purged session.
+            // Other reads keep their existing latency on the reducer thread.
+            let _disk = key
+                .starts_with("history-")
+                .then(|| self.disk.lock().unwrap());
             let path = [self.root.join(format!("{key}{KEEP}")), self.root.join(key)]
                 .into_iter()
                 .find(|p| p.is_file())?;
             if std::fs::metadata(&path).ok()?.len() > MAX_BYTES as u64 {
                 return None;
             }
-            Self::insert(&mut memory, key.into(), Arc::new(std::fs::read(path).ok()?));
-        }
-        T::decode(memory.get(key)?.as_slice()).ok()
+            let bytes = Arc::new(std::fs::read(path).ok()?);
+            let mut memory = self.memory.lock().unwrap();
+            // A write during disk I/O wins over the older disk snapshot.
+            if let Some(newer) = memory.get(key) {
+                newer.clone()
+            } else {
+                Self::insert(&mut memory, key.into(), bytes.clone());
+                bytes
+            }
+        };
+        T::decode(bytes.as_slice()).ok()
+    }
+    /// Transcript disk reads and decoding never run on the reducer thread.
+    pub async fn history(
+        self: &Arc<Self>,
+        key: String,
+    ) -> Option<muster_proto::v1::AgentMessagePage> {
+        let cache = self.clone();
+        tokio::task::spawn_blocking(move || cache.get(&key))
+            .await
+            .ok()
+            .flatten()
     }
     /// Small user-authored drafts must survive navigation and immediate exit.
     /// Failed writes remain queued and in memory, with the error surfaced by UI.
@@ -152,12 +199,20 @@ impl Cache {
         );
     }
     pub fn put<T: Message>(&self, key: String, value: &T) {
+        self.put_while(key, value, || true);
+    }
+    pub fn put_while<T: Message>(&self, key: String, value: &T, active: impl FnOnce() -> bool) {
         if value.encoded_len() > MAX_BYTES {
             return;
         }
         let bytes = Arc::new(value.encode_to_vec());
-        let _disk = self.disk.lock().unwrap();
+        // History keys cannot alias durable drafts; they only enqueue display
+        // data and must not block the reducer behind disk writes.
+        let _disk = (!key.starts_with("history-")).then(|| self.disk.lock().unwrap());
         let mut memory = self.memory.lock().unwrap();
+        if !active() {
+            return;
+        }
         if memory.get(&key).is_some_and(|old| **old == *bytes) {
             return;
         }
@@ -185,7 +240,10 @@ fn prune(root: &std::path::Path, budget: u64) {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(KEEP) || name.ends_with(".tmp") || metadata.len() < DRAFT_BYTES {
+        if name.ends_with(KEEP)
+            || name.ends_with(".tmp")
+            || (metadata.len() < DRAFT_BYTES && !name.starts_with("history-"))
+        {
             kept += metadata.len();
             continue;
         }

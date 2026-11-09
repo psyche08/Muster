@@ -34,6 +34,12 @@ without starting stopped services. **There is no in-app Multica upgrade, image
 pull, stop or rollback**: those remain manual operator steps documented in
 [DESKTOP_UPDATES.md](../DESKTOP_UPDATES.md) and `deploy/multica/README.md`.
 
+[ADR 0156](../adr/0156-container-process-resource-lifecycle.md) bounds successful
+wrapper reconciliation to five minutes, with immediate invalidation on container
+incarnation, bridge/configuration or provider changes. Daemon health/recovery
+keeps its 15-second cadence. New managed containers use `--init`; existing
+containers and the separately patched Apple runtime need an operator migration.
+
 ### Independent service and DSH App bridge: partial implementation
 
 [ADR 0141](../adr/0141-multica-service-and-dsh-app-bridge-design.md) and the
@@ -41,12 +47,12 @@ pull, stop or rollback**: those remain manual operator steps documented in
 sessions outside Agents, a bridge to the existing DSH desktop App, and a
 default-off remote Multica service over PeerLink. Shared Rust owns binding,
 authorization, capability and navigation state. [ADR 0149](../adr/0149-multica-ownership-reservations.md)
-adds durable ownership reservations. [ADR 0153](../adr/0153-multica-task-session-isolation.md)
+adds durable ownership reservations. [ADR 0161](../adr/0161-multica-task-session-isolation.md)
 enforces registered ownership at Agent/terminal boundaries and adds default-off,
 workspace-selected remote metadata browsing with Mac/iPhone device selection.
 New scope issuance requires all active roster consumers to prove compatibility.
 
-[ADR 0154](../adr/0154-multica-workbench-operations.md) adds typed local-host
+[ADR 0162](../adr/0162-multica-workbench-operations.md) adds typed local-host
 agent edits, backlog issue creation/editing, assignment/status with `--no-start`,
 plain comments, exact-run cancellation, and bounded run/comment history. Rust
 checks exact workspace/resource identity, editable revision and permission,

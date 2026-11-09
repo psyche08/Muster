@@ -73,5 +73,5 @@ This confirms a bundled CLI, not a proven RPC entrypoint into the already-runnin
 Desktop host. No production profile was started, resumed, modified or restarted
 during this inspection. The App plugin remains the integration destination;
 manual reruns must create a new App session while infrastructure recovery must
-recover the verified original binding. See [ADR 0154](../adr/0154-multica-workbench-operations.md)
+recover the verified original binding. See [ADR 0162](../adr/0162-multica-workbench-operations.md)
 for local workbench implementation and its explicit scheduling restrictions.

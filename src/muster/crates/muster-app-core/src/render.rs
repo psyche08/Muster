@@ -60,11 +60,13 @@ fn session_timeline(
     chat: &crate::state::Chat,
     admitted: &[crate::state::AdmittedSend],
 ) -> Vec<app::ChatBlock> {
-    let mut blocks = crate::timeline::window(
+    let mut blocks = chat.timeline_index.borrow_mut().window(
         &chat.messages,
         chat.history_start_index(),
+        chat.history_end_index(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
         chat.session.mode == "orca",
+        &chat.work,
     );
     crate::timeline::activity_indicator(
         &mut blocks,
@@ -257,6 +259,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 outcome_unknown: chat.response_unknown,
             }),
             has_earlier: chat.has_earlier || chat.history_start_index() > 0,
+            has_newer: chat.history_end_index() < chat.messages.len(),
             sending: chat.sending || chat.loading,
             responding_interaction: chat.responding_interaction.clone(),
             response_error: chat.response_error.clone(),
@@ -1445,11 +1448,11 @@ mod history_projection_tests {
     use muster_proto::v1;
 
     #[test]
-    fn large_cached_transcript_projects_a_recent_page_without_losing_history_or_cards() {
+    fn large_cached_transcript_projects_the_latest_turns_without_losing_history_or_cards() {
         let mut state = State::new(true, Some("phone".into()));
         state.screen = app::Screen::Chat;
         state.chat = Some(Chat {
-            messages: (0..500)
+            messages: (0..1500)
                 .map(|i| v1::AgentMessage {
                     id: format!("message-{i}"),
                     role: "user".into(),
@@ -1472,17 +1475,18 @@ mod history_projection_tests {
             .unwrap()
             .chat
             .unwrap();
-        assert_eq!(projected.timeline.len(), 200);
+        // Every record is a prompt, so each is a turn: the window holds ten.
+        assert_eq!(projected.timeline.len(), crate::state::CHAT_HISTORY_TURNS);
         assert_eq!(
             projected.timeline[0].message.as_ref().unwrap().id,
-            "message-300"
+            "message-1490"
         );
-        assert_eq!(projected.message_count, 500);
+        assert_eq!(projected.message_count, 1500);
         assert!(projected.has_earlier);
         assert_eq!(projected.interactions.len(), 1);
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(false));
-        assert_eq!(chat.visible_messages().len(), 400);
+        assert_eq!(chat.visible_messages().len(), 20);
         let middle = renderer
             .prepare(&state)
             .expect("local reveal invalidates renderer");
@@ -1493,7 +1497,7 @@ mod history_projection_tests {
                 .unwrap()
                 .timeline
                 .len(),
-            400
+            20
         );
         let chat = state.chat.as_mut().unwrap();
         assert!(chat.reveal_history(true));
@@ -1505,11 +1509,18 @@ mod history_projection_tests {
                 .unwrap()
                 .has_earlier
         );
+        // The limit is 100 times the ten-turn window; all 1,500 would be 150.
         assert!(
-            small.len() * 2 < full.len(),
-            "recent snapshot should be substantially smaller"
+            full.len() < small.len() * 120,
+            "oldest window remains bounded"
         );
-        assert_eq!(state.chat.as_ref().unwrap().messages.len(), 500);
+        let view = app::ViewModel::decode(full.as_slice())
+            .unwrap()
+            .chat
+            .unwrap();
+        assert!(view.has_newer);
+        assert_eq!(view.timeline.len(), crate::state::CHAT_HISTORY_LIMIT);
+        assert_eq!(state.chat.as_ref().unwrap().messages.len(), 1500);
         eprintln!(
             "history snapshot: recent={} bytes full={} bytes",
             small.len(),

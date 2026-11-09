@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Stop
@@ -342,6 +343,7 @@ fun ChatScreen(core: MusterCore, vm: ViewModel) {
                 if (!chat.loading && chat.messageCount == 0 && chat.loadError.isEmpty()) {
                     item(key = "empty") { Text("No messages yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
+                if (chat.hasNewer) item { TextButton(onClick = { core.agentLoadEarlier(newer = true) }, enabled = !chat.loading) { Text("Load newer") } }
                 if (chat.hasEarlier) {
                     item(key = "earlier") {
                         TextButton(onClick = { atLatest = false; core.agentLoadEarlier() }, Modifier.fillMaxWidth()) { Text("Load earlier") }
@@ -359,9 +361,9 @@ fun ChatScreen(core: MusterCore, vm: ViewModel) {
                     }
                 }
             }
-            if (!atLatest) {
+            if (!atLatest || chat.hasNewer) {
                 SmallFloatingActionButton(
-                    onClick = { scope.launch { atLatest = true; toLatest() } },
+                    onClick = { core.agentLoadEarlier(latest = true); scope.launch { atLatest = true; toLatest() } },
                     Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
                 ) { Icon(Icons.Default.KeyboardArrowDown, "Jump to latest") }
             }
@@ -415,7 +417,7 @@ private fun BlockView(block: ChatBlock, core: MusterCore) {
 
 /** The core supplies the queue, order, actions and outcomes. This card renders it. */
 @Composable
-private fun QueuedMessagesCard(queue: QueuedMessagesView, sendNow: (String, String) -> Unit) {
+private fun QueuedMessagesCard(queue: QueuedMessagesView, respond: (String, String) -> Unit) {
     Column(
         Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -427,10 +429,19 @@ private fun QueuedMessagesCard(queue: QueuedMessagesView, sendNow: (String, Stri
                 Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(message.prompt, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    OutlinedButton(
-                        onClick = { message.optionsList.firstOrNull()?.let { sendNow(message.id, it) } },
-                        enabled = !queue.submitting && !queue.outcomeUnknown && message.optionsList.isNotEmpty(),
-                    ) { Text("Send now", style = MaterialTheme.typography.labelSmall) }
+                    // Each option the core offers, under its own name; Delete is a trash icon.
+                    val enabled = !queue.submitting && !queue.outcomeUnknown
+                    message.optionsList.forEach { option ->
+                        if (option == "Delete") {
+                            IconButton(onClick = { respond(message.id, option) }, enabled = enabled) {
+                                Icon(Icons.Filled.Delete, contentDescription = option)
+                            }
+                        } else {
+                            OutlinedButton(onClick = { respond(message.id, option) }, enabled = enabled) {
+                                Text(option, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -846,7 +857,7 @@ private fun Chevron(expanded: Boolean) {
 /** A turn's working phase: commentary and tool groups, folded once the turn completes. */
 @Composable
 fun WorkingGroup(block: ChatBlock, core: MusterCore?) {
-    if (block.childrenCount == 0) {
+    if (block.childrenCount == 0 && block.details.isEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             Text(block.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -870,9 +881,36 @@ fun WorkingGroup(block: ChatBlock, core: MusterCore?) {
         if (expanded) {
             block.childrenList.forEach { child ->
                 key(child.id) {
-                    if (child.kind == "activity") ActivityGroup(child) else MessageBubble(child.message, core, child.partsList)
+                    when (child.kind) {
+                        "activity" -> ActivityGroup(child)
+                        "notice" -> Text(child.title, style = MaterialTheme.typography.bodySmall, color = secondary)
+                        else -> MessageBubble(child.message, core, child.partsList)
+                    }
                 }
             }
+            WorkDetails(block, core)
+        }
+    }
+}
+
+/**
+ * An expanded group whose steps are not loaded yet (ADR 0160). Rust decides
+ * the state; this asks for the steps when shown and offers a retry.
+ */
+@Composable
+private fun WorkDetails(block: ChatBlock, core: MusterCore?) {
+    val secondary = MaterialTheme.colorScheme.onSurfaceVariant
+    when (block.details) {
+        "unloaded", "loading" -> {
+            if (block.details == "unloaded") LaunchedEffect(block.id) { core?.agentLoadWork(block.id) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                Text("Loading steps…", style = MaterialTheme.typography.bodySmall, color = secondary)
+            }
+        }
+        "failed" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(block.detailsError, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = secondary, maxLines = 3)
+            TextButton(onClick = { core?.agentLoadWork(block.id) }) { Text("Retry") }
         }
     }
 }

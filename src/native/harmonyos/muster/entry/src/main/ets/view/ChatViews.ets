@@ -120,6 +120,9 @@ export struct ChatView {
           if (!this.chat().loading && (this.chat().messageCount ?? 0) === 0 && (this.chat().loadError ?? '') === '') {
             ListItem() { Text(this.chat().session?.transcriptNotice || 'No messages yet').fontSize(14).opacity(0.7) }
           }
+          if (this.chat().hasNewer) {
+            ListItem() { Button('Load newer').enabled(!this.chat().loading).onClick((): void => { this.core.agentLoadEarlier(false, false, true); }) }
+          }
           if (this.chat().hasEarlier) {
             ListItem() {
               Button('Load earlier').buttonStyle(ButtonStyleMode.TEXTUAL)
@@ -139,14 +142,14 @@ export struct ChatView {
         .edgeEffect(EdgeEffect.Spring)
         .onAppear((): void => { this.scroller.scrollEdge(Edge.Bottom); })
         .onDidScroll((): void => { this.atLatest = this.scroller.isAtEnd(); })
-        if (!this.atLatest) {
+        if (!this.atLatest || this.chat().hasNewer) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(18).rotate({ angle: 180 })
               .fontColor([$r('sys.color.font_primary')])
           }
           .width(38).height(38).margin({ bottom: 8 }).backgroundColor($r('sys.color.comp_background_tertiary'))
           .accessibilityText('Jump to latest')
-          .onClick((): void => { this.atLatest = true; this.scroller.scrollEdge(Edge.Bottom); })
+          .onClick((): void => { this.core.agentLoadEarlier(false, true); this.atLatest = true; this.scroller.scrollEdge(Edge.Bottom); })
         }
       }
       .height(this.layout.flex ? this.layout.readingHeight : undefined)
@@ -779,6 +782,10 @@ export struct WorkingGroup {
   @Local toggled: boolean | null = null;
 
   private expanded(): boolean { return this.toggled ?? (this.block.defaultExpanded === true); }
+  /** Steps exist to show: loaded children, or a collapsed turn's work (ADR 0160). */
+  private foldable(): boolean { return (this.block.children?.length ?? 0) > 0 || !!this.block.details; }
+  /** Rust decides the state; an expanded group asks for steps it does not have. */
+  private load(): void { this.core?.agentLoadWork(this.block.id ?? ''); }
 
   build() {
     Column({ space: 12 }) {
@@ -789,25 +796,40 @@ export struct WorkingGroup {
           LoadingProgress().width(16).height(16)
         }
         Text(this.block.title ?? '').fontSize(14).opacity(0.7).maxLines(1).layoutWeight(1)
-        if ((this.block.children?.length ?? 0) > 0) {
+        if (this.foldable()) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(12).rotate({ angle: this.expanded() ? -90 : 180 })
             .fontColor([$r('sys.color.font_secondary')])
         }
       }
       .width('100%').padding({ top: 4, bottom: 4 })
-      .accessibilityText((this.block.children?.length ?? 0) > 0
+      .accessibilityText(this.foldable()
         ? `${this.block.title}, ${this.expanded() ? 'expanded' : 'collapsed'}` : (this.block.title ?? ''))
       .onClick((): void => {
-        if ((this.block.children?.length ?? 0) > 0) { this.toggled = !this.expanded(); }
+        if (this.foldable()) { this.toggled = !this.expanded(); }
       })
       if (this.expanded()) {
         ForEach(this.block.children ?? [], (child: pb.app.IChatBlock): void => {
           if (child.kind === 'activity') {
             ActivityGroup({ block: child })
+          } else if (child.kind === 'notice') {
+            Text(child.title ?? '').fontSize(12).opacity(0.6)
           } else {
             MessageBubble({ message: child.message ?? pb.v1.AgentMessage.create(), parts: child.parts ?? [], core: this.core })
           }
         }, (child: pb.app.IChatBlock): string => child.id ?? '')
+        if (this.block.details === 'unloaded' || this.block.details === 'loading') {
+          Row({ space: 8 }) {
+            LoadingProgress().width(14).height(14)
+            Text('Loading steps…').fontSize(12).opacity(0.6)
+          }
+          .onAppear((): void => { if (this.block.details === 'unloaded') { this.load(); } })
+        } else if (this.block.details === 'failed') {
+          Row({ space: 8 }) {
+            Text(this.block.detailsError ?? '').fontSize(12).opacity(0.6).maxLines(3).layoutWeight(1)
+            Button('Retry').fontSize(12).onClick((): void => { this.load(); })
+          }
+          .width('100%')
+        }
       }
     }
     .alignItems(HorizontalAlign.Start).width('100%')

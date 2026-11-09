@@ -181,13 +181,30 @@ pub enum Msg {
         device: String,
         result: Result<v1::AgentSessionPage, Error>,
     },
+    ChatCache {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        provider: String,
+        page: v1::AgentMessagePage,
+    },
     Chat {
         token: CancellationToken,
         device: String,
         session: String,
         earlier: bool,
         reset: bool,
+        /// The page came from a server that pages outlines (ADR 0160).
+        outline: bool,
         result: Result<(Vec<v1::AgentMessage>, bool), Error>,
+    },
+    /// A work record's records, loaded when its Worked group was expanded.
+    ChatWork {
+        token: CancellationToken,
+        device: String,
+        session: String,
+        work: String,
+        result: Result<(Vec<v1::AgentMessage>, u32), Error>,
     },
     DesktopChats {
         load: u64,
@@ -222,7 +239,6 @@ pub enum Msg {
         device: String,
         session: String,
         provider: String,
-        cached: Option<v1::AgentMessagePage>,
     },
     MulticaTick,
     MulticaMutation {
@@ -452,6 +468,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::AgentRespond(r) => agents::intent_agent_respond(state, ctx, r),
         It::AgentInterrupt(_) => agents::intent_agent_interrupt(state, ctx),
         It::AgentLoadEarlier(load) => agents::intent_agent_load_earlier(state, ctx, load),
+        It::AgentLoadWork(load) => agents::intent_agent_load_work(state, ctx, &load.block),
         It::OpenTerminals(r) => terminals::intent_open_terminals(state, ctx, r),
         It::OpenTerminal(o) => terminals::intent_open_terminal(state, ctx, o),
         It::TerminalKey(k) => terminals::intent_terminal_key(state, ctx, k),
@@ -732,8 +749,18 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             session,
             earlier,
             reset,
+            outline,
             result,
-        } => agents::msg_chat(state, token, device, session, earlier, reset, result),
+        } => agents::msg_chat(
+            state, token, device, session, earlier, reset, outline, result,
+        ),
+        Msg::ChatWork {
+            token,
+            device,
+            session,
+            work,
+            result,
+        } => agents::msg_chat_work(state, token, &device, &session, work, result),
         Msg::Completion {
             device,
             session,
@@ -765,8 +792,22 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             session,
             provider,
-            cached,
-        } => agents::msg_agent_stream_started(state, token, &device, &session, &provider, cached),
+        } => agents::msg_agent_stream_started(state, token, &device, &session, &provider),
+        Msg::ChatCache {
+            token,
+            device,
+            session,
+            provider,
+            page,
+        } => {
+            if state
+                .chat
+                .as_ref()
+                .is_some_and(|c| c.session.provider == provider)
+            {
+                agents::msg_chat_cache(state, token, &device, &session, page);
+            }
+        }
         Msg::MulticaTick => multica::discover(state, ctx),
         Msg::MulticaMutation {
             workspace,

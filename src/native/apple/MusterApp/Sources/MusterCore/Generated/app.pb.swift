@@ -703,6 +703,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .nativeCreate(newValue)}
   }
 
+  public var agentLoadWork: Muster_App_AgentLoadWork {
+    get {
+      if case .agentLoadWork(let v)? = _storage._it {return v}
+      return Muster_App_AgentLoadWork()
+    }
+    set {_uniqueStorage()._it = .agentLoadWork(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_It: Equatable, Sendable {
@@ -775,6 +783,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case setPushToken(Muster_App_SetPushToken)
     case sessionViewApplied(Muster_App_SessionViewApplied)
     case nativeCreate(Muster_App_NativeCreate)
+    case agentLoadWork(Muster_App_AgentLoadWork)
 
   }
 
@@ -1599,6 +1608,24 @@ public nonisolated struct Muster_App_AgentLoadEarlier: Sendable {
   // methods supported on all messages.
 
   public var all: Bool = false
+
+  public var latest: Bool = false
+
+  public var newer: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A Worked group was expanded: load the work of the block with this ID
+/// (ADR 0160). Also the retry after a failed load.
+public nonisolated struct Muster_App_AgentLoadWork: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var block: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3184,6 +3211,11 @@ public nonisolated struct Muster_App_ChatView: @unchecked Sendable {
     set {_uniqueStorage()._codeError = newValue}
   }
 
+  public var hasNewer_p: Bool {
+    get {_storage._hasNewer_p}
+    set {_uniqueStorage()._hasNewer_p = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3291,6 +3323,19 @@ public nonisolated struct Muster_App_ChatBlock: @unchecked Sendable {
   public var parts: [Muster_App_MessagePart] {
     get {_storage._parts}
     set {_uniqueStorage()._parts = newValue}
+  }
+
+  /// working only: "" when children are complete; otherwise "unloaded",
+  /// "loading" or "failed" (with details_error). An expanded block whose
+  /// details are unloaded or failed asks with AgentLoadWork (ADR 0160).
+  public var details: String {
+    get {_storage._details}
+    set {_uniqueStorage()._details = newValue}
+  }
+
+  public var detailsError: String {
+    get {_storage._detailsError}
+    set {_uniqueStorage()._detailsError = newValue}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -3922,7 +3967,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}multica_mutation\0\u{3}multica_mutation_acknowledge\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}agent_load_work\0\u{3}multica_mutation_acknowledge\0\u{3}multica_mutation\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4788,6 +4833,27 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
           }
         }()
         case 137: try {
+          var v: Muster_App_AgentLoadWork?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .agentLoadWork(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .agentLoadWork(v)
+          }
+        }()
+        case 138: try {
+          var v: Bool?
+          try decoder.decodeSingularBoolField(value: &v)
+          if let v = v {
+            if _storage._it != nil {try decoder.handleConflictingOneOf()}
+            _storage._it = .multicaMutationAcknowledge(v)
+          }
+        }()
+        case 139: try {
           var v: Muster_V1_MulticaMutation?
           var hadOneofValue = false
           if let current = _storage._it {
@@ -4798,14 +4864,6 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
           if let v = v {
             if hadOneofValue {try decoder.handleConflictingOneOf()}
             _storage._it = .multicaMutation(v)
-          }
-        }()
-        case 138: try {
-          var v: Bool?
-          try decoder.decodeSingularBoolField(value: &v)
-          if let v = v {
-            if _storage._it != nil {try decoder.handleConflictingOneOf()}
-            _storage._it = .multicaMutationAcknowledge(v)
           }
         }()
         default: break
@@ -5077,13 +5135,17 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
         guard case .nativeCreate(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 136)
       }()
-      case .multicaMutation?: try {
-        guard case .multicaMutation(let v)? = _storage._it else { preconditionFailure() }
+      case .agentLoadWork?: try {
+        guard case .agentLoadWork(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 137)
       }()
       case .multicaMutationAcknowledge?: try {
         guard case .multicaMutationAcknowledge(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularBoolField(value: v, fieldNumber: 138)
+      }()
+      case .multicaMutation?: try {
+        guard case .multicaMutation(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 139)
       }()
       case nil: break
       }
@@ -6639,7 +6701,7 @@ nonisolated extension Muster_App_AgentInterrupt: SwiftProtobuf.Message, SwiftPro
 
 nonisolated extension Muster_App_AgentLoadEarlier: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentLoadEarlier"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}all\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}all\0\u{1}latest\0\u{1}newer\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6648,6 +6710,8 @@ nonisolated extension Muster_App_AgentLoadEarlier: SwiftProtobuf.Message, SwiftP
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBoolField(value: &self.all) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.latest) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.newer) }()
       default: break
       }
     }
@@ -6657,11 +6721,49 @@ nonisolated extension Muster_App_AgentLoadEarlier: SwiftProtobuf.Message, SwiftP
     if self.all != false {
       try visitor.visitSingularBoolField(value: self.all, fieldNumber: 1)
     }
+    if self.latest != false {
+      try visitor.visitSingularBoolField(value: self.latest, fieldNumber: 2)
+    }
+    if self.newer != false {
+      try visitor.visitSingularBoolField(value: self.newer, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_App_AgentLoadEarlier, rhs: Muster_App_AgentLoadEarlier) -> Bool {
     if lhs.all != rhs.all {return false}
+    if lhs.latest != rhs.latest {return false}
+    if lhs.newer != rhs.newer {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_AgentLoadWork: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentLoadWork"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}block\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.block) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.block.isEmpty {
+      try visitor.visitSingularStringField(value: self.block, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_AgentLoadWork, rhs: Muster_App_AgentLoadWork) -> Bool {
+    if lhs.block != rhs.block {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9156,7 +9258,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ChatView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{b}messages\0\u{c}\u{3}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{3}has_newer\0\u{b}messages\0\u{c}\u{3}\u{1}")
 
   fileprivate class _StorageClass {
     var _deviceID: String = String()
@@ -9197,6 +9299,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
     var _codePreview: Muster_App_CodePreview? = nil
     var _codeRuns: [Muster_App_CodeRunView] = []
     var _codeError: String = String()
+    var _hasNewer_p: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -9245,6 +9348,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       _codePreview = source._codePreview
       _codeRuns = source._codeRuns
       _codeError = source._codeError
+      _hasNewer_p = source._hasNewer_p
     }
   }
 
@@ -9301,6 +9405,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         case 37: try { try decoder.decodeSingularMessageField(value: &_storage._codePreview) }()
         case 38: try { try decoder.decodeRepeatedMessageField(value: &_storage._codeRuns) }()
         case 39: try { try decoder.decodeSingularStringField(value: &_storage._codeError) }()
+        case 40: try { try decoder.decodeSingularBoolField(value: &_storage._hasNewer_p) }()
         default: break
         }
       }
@@ -9427,6 +9532,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       if !_storage._codeError.isEmpty {
         try visitor.visitSingularStringField(value: _storage._codeError, fieldNumber: 39)
       }
+      if _storage._hasNewer_p != false {
+        try visitor.visitSingularBoolField(value: _storage._hasNewer_p, fieldNumber: 40)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9474,6 +9582,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         if _storage._codePreview != rhs_storage._codePreview {return false}
         if _storage._codeRuns != rhs_storage._codeRuns {return false}
         if _storage._codeError != rhs_storage._codeError {return false}
+        if _storage._hasNewer_p != rhs_storage._hasNewer_p {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -9565,7 +9674,7 @@ nonisolated extension Muster_App_QueuedMessagesView: SwiftProtobuf.Message, Swif
 
 nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ChatBlock"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}message\0\u{1}activity\0\u{1}completed\0\u{3}activity_rows\0\u{1}children\0\u{1}title\0\u{3}default_expanded\0\u{1}diffs\0\u{1}parts\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}message\0\u{1}activity\0\u{1}completed\0\u{3}activity_rows\0\u{1}children\0\u{1}title\0\u{3}default_expanded\0\u{1}diffs\0\u{1}parts\0\u{1}details\0\u{3}details_error\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -9579,6 +9688,8 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
     var _defaultExpanded: Bool = false
     var _diffs: [Muster_App_ChatDiffFile] = []
     var _parts: [Muster_App_MessagePart] = []
+    var _details: String = String()
+    var _detailsError: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -9600,6 +9711,8 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
       _defaultExpanded = source._defaultExpanded
       _diffs = source._diffs
       _parts = source._parts
+      _details = source._details
+      _detailsError = source._detailsError
     }
   }
 
@@ -9629,6 +9742,8 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
         case 9: try { try decoder.decodeSingularBoolField(value: &_storage._defaultExpanded) }()
         case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._diffs) }()
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._parts) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._details) }()
+        case 13: try { try decoder.decodeSingularStringField(value: &_storage._detailsError) }()
         default: break
         }
       }
@@ -9674,6 +9789,12 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
       if !_storage._parts.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._parts, fieldNumber: 11)
       }
+      if !_storage._details.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._details, fieldNumber: 12)
+      }
+      if !_storage._detailsError.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._detailsError, fieldNumber: 13)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9694,6 +9815,8 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
         if _storage._defaultExpanded != rhs_storage._defaultExpanded {return false}
         if _storage._diffs != rhs_storage._diffs {return false}
         if _storage._parts != rhs_storage._parts {return false}
+        if _storage._details != rhs_storage._details {return false}
+        if _storage._detailsError != rhs_storage._detailsError {return false}
         return true
       }
       if !storagesAreEqual {return false}

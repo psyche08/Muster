@@ -1,9 +1,9 @@
-# ADR 0154: Edit Multica agents and operate issues through the host workbench
+# ADR 0162: Edit Multica agents and operate issues through the host workbench
 
 - Date: 2026-11-06
 - Status: Accepted for the local workbench slice; full service and device acceptance pending
 - Related: [ADR 0141](0141-multica-service-and-dsh-app-bridge-design.md),
-  [ADR 0153](0153-multica-task-session-isolation.md)
+  [ADR 0161](0161-multica-task-session-isolation.md)
 
 ## Context
 
@@ -87,3 +87,9 @@ public repository. No live task is mutated merely to test this implementation.
   cross-device task acceptance. Production task bindings, complete transcripts,
   App scheduling/credentials and remote control remain unimplemented. This is
   not full P0–P4 acceptance.
+
+Main integration (2026-11-09): the existing turn-work intent retains tag 137;
+the unshipped Multica mutation uses 139 and its acknowledgement retains 138.
+Swift bindings were generated from the merged schemas and compiled for both
+Apple targets. See [ADR 0161](0161-multica-task-session-isolation.md) for
+cache and subscription regression results.

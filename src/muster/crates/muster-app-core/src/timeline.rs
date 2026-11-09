@@ -3,8 +3,77 @@ mod diff;
 
 use muster_proto::{
     app::{ChatActivityRow, ChatBlock},
+    outline::{self, Class},
     v1::AgentMessage,
 };
+
+/// Loaded and loading work by work record ID.
+pub(crate) type Work = std::collections::HashMap<String, crate::state::Work>;
+
+/// Prefix grouping boundaries, invalidated from the first changed record.
+/// Appends inspect only new records; paging does not rescan completed turns.
+#[derive(Default)]
+pub(crate) struct Index {
+    starts: Vec<usize>,
+    statuses: Vec<usize>,
+    indexed: usize,
+    cli: Option<bool>,
+}
+impl Index {
+    pub(crate) fn invalidate(&mut self, from: usize) {
+        self.indexed = self.indexed.min(from);
+        self.statuses
+            .truncate(self.statuses.partition_point(|&i| i < from));
+        self.starts
+            .truncate(self.starts.partition_point(|&i| i < from));
+    }
+    pub(crate) fn window(
+        &mut self,
+        messages: &[AgentMessage],
+        start: usize,
+        end: usize,
+        running: bool,
+        cli: bool,
+        work: &Work,
+    ) -> Vec<ChatBlock> {
+        if self.cli != Some(cli) || messages.len() < self.indexed {
+            self.invalidate(0);
+            self.cli = Some(cli);
+        }
+        for (i, m) in messages.iter().enumerate().skip(self.indexed) {
+            if m.kind == "turn_status" {
+                self.statuses.push(i);
+            }
+            let boundary = if cli {
+                !matches!(m.kind.as_str(), "tool_call" | "tool_result") || m.tool_name == "diff"
+            } else {
+                outline::ends_turn(m) || outline::starts_turn(m)
+            };
+            if boundary {
+                self.starts.push(i);
+            }
+        }
+        self.indexed = messages.len();
+        let before = self.starts.partition_point(|&i| i <= start);
+        let begin = before.checked_sub(1).map_or(0, |i| self.starts[i]);
+        // Include the next boundary for completion/legacy trailing-prose
+        // semantics, but never project messages outside the requested window.
+        let after = self.starts.partition_point(|&i| i < end);
+        let finish = self.starts.get(after).map_or(messages.len(), |&i| i + 1);
+        window_range(
+            &messages[begin..finish],
+            start.saturating_sub(begin),
+            end.saturating_sub(begin),
+            if cli {
+                running && self.statuses.last().is_none_or(|&i| i < finish)
+            } else {
+                running && finish == messages.len()
+            },
+            cli,
+            work,
+        )
+    }
+}
 
 /// Orca-style presentation keeps prose in the reading flow and collapses only
 /// the evidence-heavy rows. The native shell never reconstructs turn membership.
@@ -15,14 +84,26 @@ pub fn for_session(messages: &[AgentMessage], running: bool, cli: bool) -> Vec<C
 
 /// Keep group identities grounded in cached history while emitting only the
 /// requested window. Native shells must not infer continuity from partial groups.
+#[cfg(test)]
 pub(crate) fn window(
     messages: &[AgentMessage],
     start: usize,
     running: bool,
     cli: bool,
 ) -> Vec<ChatBlock> {
+    window_range(messages, start, messages.len(), running, cli, &Work::new())
+}
+
+fn window_range(
+    messages: &[AgentMessage],
+    start: usize,
+    end: usize,
+    running: bool,
+    cli: bool,
+    work: &Work,
+) -> Vec<ChatBlock> {
     if !cli {
-        return window_blocks(messages, start, running);
+        return window_blocks(messages, start, end, running, work);
     }
     let mut out = Vec::new();
     let mut activity = Vec::new();
@@ -34,13 +115,13 @@ pub(crate) fn window(
             && message.tool_name != "diff"
         {
             activity_first.get_or_insert_with(|| message.id.clone());
-            if index >= start {
+            if (start..end).contains(&index) {
                 activity.push(message.clone());
             }
             continue;
         }
         flush(&mut activity, activity_first.take(), completed, &mut out);
-        if index < start || message.text.trim().is_empty() {
+        if !(start..end).contains(&index) || message.text.trim().is_empty() {
             continue;
         }
         let (kind, title) = if message.kind == "turn_status" {
@@ -74,10 +155,16 @@ pub(crate) fn window(
 
 #[cfg(test)]
 pub fn blocks(messages: &[AgentMessage], running: bool) -> Vec<ChatBlock> {
-    window_blocks(messages, 0, running)
+    window_blocks(messages, 0, messages.len(), running, &Work::new())
 }
 
-fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Vec<ChatBlock> {
+fn window_blocks(
+    messages: &[AgentMessage],
+    visible: usize,
+    end: usize,
+    running: bool,
+    work: &Work,
+) -> Vec<ChatBlock> {
     let mut out = Vec::new();
     let mut start = 0;
     for (index, message) in messages.iter().enumerate() {
@@ -87,10 +174,11 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
                     &messages[start..index],
                     true,
                     &mut out,
-                    visible.saturating_sub(start),
+                    visible.saturating_sub(start)..end.saturating_sub(start),
+                    work,
                 );
             }
-            if index >= visible {
+            if (visible..end).contains(&index) {
                 out.push(ChatBlock {
                     id: message.id.clone(),
                     kind: "summary".into(),
@@ -100,11 +188,7 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
                 });
             }
             start = index + 1;
-        } else if message.role == "user"
-            && message.kind == "text"
-            && !message.text.trim().is_empty()
-            && !is_compact_context(message)
-        {
+        } else if outline::starts_turn(message) {
             // Legacy transcripts can omit usage footers. A new visible prompt
             // must not pull the previous reply into the next turn's work group.
             if index > visible {
@@ -112,7 +196,8 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
                     &messages[start..index],
                     true,
                     &mut out,
-                    visible.saturating_sub(start),
+                    visible.saturating_sub(start)..end.saturating_sub(start),
+                    work,
                 );
             }
             start = index;
@@ -123,7 +208,8 @@ fn window_blocks(messages: &[AgentMessage], visible: usize, running: bool) -> Ve
             &messages[start..],
             !running,
             &mut out,
-            visible.saturating_sub(start),
+            visible.saturating_sub(start)..end.saturating_sub(start),
+            work,
         );
     }
     out
@@ -158,56 +244,42 @@ pub(crate) fn activity_indicator(out: &mut Vec<ChatBlock>, own: &str, descendant
     });
 }
 
-fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, visible: usize) {
+fn turn(
+    messages: &[AgentMessage],
+    completed: bool,
+    out: &mut Vec<ChatBlock>,
+    visible: std::ops::Range<usize>,
+    loaded: &Work,
+) {
+    // Loaded work follows its work record at the record's position, so a
+    // collapsed turn and a whole one classify and group alike (ADR 0160).
+    let mut rows: Vec<(usize, &AgentMessage)> = Vec::with_capacity(messages.len());
+    for (index, message) in messages.iter().enumerate() {
+        rows.push((index, message));
+        if let Some(crate::state::Work::Loaded { records, .. }) = loaded.get(&message.id)
+            && message.kind == outline::KIND
+        {
+            rows.extend(records.iter().map(|record| (index, record)));
+        }
+    }
+    let classes = outline::classify(
+        &rows.iter().map(|(_, message)| *message).collect::<Vec<_>>(),
+        completed,
+    );
     let mut work = Vec::new();
     let mut work_first = None;
+    let mut details = None;
     let mut activity = Vec::new();
     let mut activity_first = None;
-    // Older transcripts do not label prose phases. Keep the complete trailing
-    // reply (possibly several text blocks) outside Worked. Empty text records
-    // do not hide it; a later tool call still means this prose was work in progress.
-    let trailing_start = if completed {
-        messages
-            .iter()
-            .rposition(|m| {
-                !(m.kind == "turn_status"
-                    || m.kind == "text"
-                        && (m.text.trim().is_empty()
-                            || (m.role == "assistant" && m.phase.is_empty())))
-            })
-            .map_or(0, |index| index + 1)
-    } else {
-        messages.len()
-    };
-    // A partial turn may start far before the visible page. Index provider
-    // replacements once so identity-only prefix traversal remains linear.
-    let card_calls: std::collections::HashSet<_> = messages
-        .iter()
-        .filter(|m| m.kind == "provider_card")
-        .map(|m| m.tool_call_id.as_str())
-        .collect();
-    let latest_plan = messages
-        .iter()
-        .rposition(|m| m.kind == "provider_card" && m.tool_name == "mcp__ccd_turn__update_plan");
-    for (index, message) in messages.iter().enumerate() {
-        if message.kind == "tool_call" && card_calls.contains(message.tool_call_id.as_str()) {
-            continue;
-        }
-        // Incremental plan updates replace the prior snapshot within this turn.
-        if message.kind == "provider_card"
-            && message.tool_name == "mcp__ccd_turn__update_plan"
-            && latest_plan.is_some_and(|latest| latest > index)
-        {
+    for (&(index, message), class) in rows.iter().zip(classes) {
+        if class == Class::Hidden {
             continue;
         }
         if matches!(message.kind.as_str(), "tool_call" | "tool_result") {
             activity_first.get_or_insert_with(|| message.id.clone());
-            if index >= visible {
+            if visible.contains(&index) {
                 activity.push(message.clone());
             }
-            continue;
-        }
-        if message.kind == "text" && message.text.trim().is_empty() {
             continue;
         }
         flush_into_work(
@@ -217,11 +289,47 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             &mut work,
             &mut work_first,
         );
+        if let Some(span) = message
+            .work
+            .as_ref()
+            .filter(|_| message.kind == outline::KIND)
+        {
+            // The group keeps its ID whether or not its records are loaded.
+            work_first.get_or_insert_with(|| {
+                outline::group_id(span)
+                    .trim_start_matches("working:")
+                    .to_owned()
+            });
+            if !visible.contains(&index) {
+                continue;
+            }
+            details = Some(match loaded.get(&message.id) {
+                None => ("unloaded", String::new()),
+                Some(crate::state::Work::Loading) => ("loading", String::new()),
+                Some(crate::state::Work::Failed(error)) => ("failed", error.clone()),
+                Some(crate::state::Work::Loaded { omitted, .. }) => {
+                    if *omitted > 0 {
+                        work.push(ChatBlock {
+                            id: format!("{}:omitted", message.id),
+                            kind: "notice".into(),
+                            title: format!(
+                                "{omitted} earlier {} not shown",
+                                if *omitted == 1 { "step" } else { "steps" }
+                            ),
+                            completed: true,
+                            ..Default::default()
+                        });
+                    }
+                    ("", String::new())
+                }
+            });
+            continue;
+        }
         // How the turn ended, when it did not simply complete, follows its
         // work as a notice.
         if message.kind == "turn_status" {
-            flush_work(&mut work, &mut work_first, completed, out);
-            if index >= visible {
+            flush_work(&mut work, &mut work_first, &mut details, completed, out);
+            if visible.contains(&index) {
                 out.push(ChatBlock {
                     id: message.id.clone(),
                     kind: "notice".into(),
@@ -233,21 +341,15 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             }
             continue;
         }
-        let compact = is_compact_context(message);
-        let boundary = compact
-            || message.role == "user"
-            || message.kind == "interaction"
-            || message.kind == "provider_card"
-            || message.phase == "final_answer"
-            || index >= trailing_start;
-        if boundary {
+        if class == Class::Boundary {
             flush_work(
                 &mut work,
                 &mut work_first,
+                &mut details,
                 completed || message.role == "user",
                 out,
             );
-            if index < visible {
+            if !visible.contains(&index) {
                 continue;
             }
             out.push(ChatBlock {
@@ -259,7 +361,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
                 },
                 kind: if message.kind == "provider_card" {
                     "provider_card"
-                } else if compact {
+                } else if outline::is_compact_context(message) {
                     "compact_context"
                 } else {
                     "message"
@@ -271,7 +373,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
             });
         } else {
             work_first.get_or_insert_with(|| message.id.clone());
-            if index < visible {
+            if !visible.contains(&index) {
                 continue;
             }
             // A provider's recorded reasoning is its own collapsed row.
@@ -293,7 +395,7 @@ fn turn(messages: &[AgentMessage], completed: bool, out: &mut Vec<ChatBlock>, vi
         &mut work,
         &mut work_first,
     );
-    flush_work(&mut work, &mut work_first, completed, out);
+    flush_work(&mut work, &mut work_first, &mut details, completed, out);
 }
 
 fn flush_into_work(
@@ -312,11 +414,14 @@ fn flush_into_work(
 fn flush_work(
     work: &mut Vec<ChatBlock>,
     first: &mut Option<String>,
+    details: &mut Option<(&'static str, String)>,
     completed: bool,
     out: &mut Vec<ChatBlock>,
 ) {
     let id = first.take();
-    if let Some(id) = id.filter(|_| !work.is_empty()) {
+    let (details, details_error) = details.take().unwrap_or_default();
+    // A work record whose records are not loaded still shows its group.
+    if let Some(id) = id.filter(|_| !work.is_empty() || !details.is_empty()) {
         out.push(ChatBlock {
             id: format!("working:{id}"),
             kind: "working".into(),
@@ -324,27 +429,13 @@ fn flush_work(
             children: std::mem::take(work),
             completed,
             default_expanded: !completed,
+            details: details.into(),
+            details_error,
             ..Default::default()
         });
     }
 }
 
-fn is_compact_context(message: &AgentMessage) -> bool {
-    if message.kind == "compact_context" || message.phase == "summary" {
-        return true;
-    }
-    // Older viewers exposed provider continuation summaries as plain user text.
-    // Match the provider preamble, never a casual mention of compaction.
-    message.kind == "text"
-        && message.role == "user"
-        && [
-            "This session is being continued from a previous conversation that ran out of context.",
-            "Another language model started to solve this problem and produced a summary of its thinking process.",
-            "Another language model began solving this problem and produced a summary of its thinking process.",
-        ]
-        .iter()
-        .any(|prefix| message.text.trim_start().starts_with(prefix))
-}
 fn flush(
     activity: &mut Vec<AgentMessage>,
     first: Option<String>,
@@ -765,8 +856,16 @@ mod tests {
             view[2].message.as_ref().unwrap().text,
             "## Context\nKeep this complete."
         );
-        assert!(is_compact_context(&m("typed", "system", "compact_context")));
-        assert!(!is_compact_context(&m("tool", "tool", "tool_result")));
+        assert!(outline::is_compact_context(&m(
+            "typed",
+            "system",
+            "compact_context"
+        )));
+        assert!(!outline::is_compact_context(&m(
+            "tool",
+            "tool",
+            "tool_result"
+        )));
     }
     #[test]
     fn claude_prose_stays_visible_while_only_tools_collapse_during_work() {
@@ -999,5 +1098,226 @@ mod tests {
                 .flat_map(|b| &b.activity)
                 .all(|m| m.id != "call1")
         );
+    }
+}
+
+#[cfg(test)]
+mod indexed_window_tests {
+    use super::*;
+    fn history() -> Vec<AgentMessage> {
+        (0..1000)
+            .map(|i| AgentMessage {
+                id: format!("m{i}"),
+                text: format!("message {i}"),
+                role: if i % 10 == 0 { "user" } else { "assistant" }.into(),
+                kind: match i % 10 {
+                    0 | 8 => "text",
+                    9 => "turn_summary",
+                    _ => "tool_call",
+                }
+                .into(),
+                tool_name: "read_file".into(),
+                ..Default::default()
+            })
+            .collect()
+    }
+    #[test]
+    fn indexed_windows_preserve_group_identity_and_only_project_the_window() {
+        let mut messages = history();
+        for cli in [false, true] {
+            let mut index = Index::default();
+            for start in [0, 3, 8, 9, 199, 400, 793, 800] {
+                // The unindexed bounded algorithm is the semantic reference;
+                // index slicing must retain the full group context.
+                let actual = index.window(&messages, start, start + 200, true, cli, &Work::new());
+                assert!(
+                    actual == window_range(&messages, start, start + 200, true, cli, &Work::new()),
+                    "start={start} cli={cli}"
+                );
+                fn count(blocks: &[ChatBlock]) -> usize {
+                    blocks
+                        .iter()
+                        .map(|b| {
+                            usize::from(b.message.is_some()) + b.activity.len() + count(&b.children)
+                        })
+                        .sum()
+                }
+                assert!(count(&actual) <= 200);
+            }
+            messages[900].role = "assistant".into();
+            index.invalidate(900);
+            assert_eq!(
+                index.window(&messages, 903, 1000, true, cli, &Work::new()),
+                window_range(&messages, 903, 1000, true, cli, &Work::new())
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod outline_tests {
+    use super::*;
+    fn m(id: &str, role: &str, kind: &str) -> AgentMessage {
+        AgentMessage {
+            id: id.into(),
+            role: role.into(),
+            kind: kind.into(),
+            text: id.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Turns with cards, reasoning, interim prose, hidden records and a
+    /// summary, then a running turn (ADR 0160).
+    fn outline_fixture() -> Vec<AgentMessage> {
+        let text = |id: &str, role: &str, phase: &str| AgentMessage {
+            phase: phase.into(),
+            ..m(id, role, "text")
+        };
+        let call = |id: &str, call: &str| AgentMessage {
+            tool_name: "Bash".into(),
+            tool_call_id: call.into(),
+            ..m(id, "assistant", "tool_call")
+        };
+        let result = |id: &str, call: &str| AgentMessage {
+            tool_name: "Bash".into(),
+            tool_call_id: call.into(),
+            ..m(id, "assistant", "tool_result")
+        };
+        let card = AgentMessage {
+            tool_name: "Task".into(),
+            tool_call_id: "c3".into(),
+            ..m("card", "assistant", "provider_card")
+        };
+        let empty = AgentMessage {
+            text: String::new(),
+            ..m("empty", "assistant", "text")
+        };
+        vec![
+            m("u1", "user", "text"),
+            text("think1", "assistant", "reasoning"),
+            call("t1", "c1"),
+            result("r1", "c1"),
+            text("interim1", "assistant", ""),
+            empty,
+            call("t2", "c2"),
+            result("r2", "c2"),
+            text("answer1", "assistant", ""),
+            m("summary1", "system", "turn_summary"),
+            m("u2", "user", "text"),
+            call("t3", "c3"),
+            card,
+            call("t4", "c4"),
+            result("r4", "c4"),
+            text("answer2", "assistant", "final_answer"),
+            m("u3", "user", "text"),
+            call("t5", "c5"),
+            text("interim3", "assistant", ""),
+        ]
+    }
+
+    /// The fixture's outline, and its work as a client holds it once loaded.
+    fn outline_of(records: &[AgentMessage]) -> (Vec<AgentMessage>, Work) {
+        let page = muster_proto::outline::Outline::default().page(
+            records,
+            &muster_proto::v1::AgentMessagesRequest {
+                turns: 100,
+                tail: 2000,
+                ..Default::default()
+            },
+            Clone::clone,
+        );
+        let mut loaded = Work::new();
+        for stub in page.messages.iter().filter(|m| m.kind == outline::KIND) {
+            let span = stub.work.as_ref().unwrap();
+            let first = records.iter().position(|m| m.id == span.first_id).unwrap();
+            let span = records[first..first + span.count as usize].to_vec();
+            loaded.insert(
+                stub.id.clone(),
+                crate::state::Work::Loaded {
+                    records: span,
+                    omitted: 0,
+                },
+            );
+        }
+        (page.messages, loaded)
+    }
+
+    #[test]
+    fn a_loaded_outline_renders_the_same_blocks_as_its_records() {
+        let records = outline_fixture();
+        let (outline, loaded) = outline_of(&records);
+        assert!(outline.len() < records.len());
+        assert_eq!(loaded.len(), 2, "one Worked group in each completed turn");
+        for running in [true, false] {
+            assert_eq!(
+                window_blocks(&outline, 0, outline.len(), running, &loaded),
+                window_blocks(&records, 0, records.len(), running, &Work::new()),
+            );
+        }
+    }
+
+    #[test]
+    fn unloaded_work_keeps_its_group_and_says_what_it_is_waiting_for() {
+        let records = outline_fixture();
+        let (outline, loaded) = outline_of(&records);
+        let full = window_blocks(&records, 0, records.len(), true, &Work::new());
+        let mut work = Work::new();
+        let mut ids = loaded.keys().cloned().collect::<Vec<_>>();
+        ids.sort();
+        work.insert(ids[0].clone(), crate::state::Work::Loading);
+        work.insert(ids[1].clone(), crate::state::Work::Failed("offline".into()));
+        let view = window_blocks(&outline, 0, outline.len(), true, &work);
+        assert_eq!(
+            view.iter().map(|b| (&b.id, &b.kind)).collect::<Vec<_>>(),
+            full.iter().map(|b| (&b.id, &b.kind)).collect::<Vec<_>>()
+        );
+        let details = view
+            .iter()
+            .filter(|b| b.kind == "working")
+            .map(|b| {
+                (
+                    b.details.as_str(),
+                    b.details_error.as_str(),
+                    b.children.len(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let state = |id: &str| match work.get(id) {
+            Some(crate::state::Work::Loading) => ("loading", ""),
+            Some(crate::state::Work::Failed(_)) => ("failed", "offline"),
+            _ => ("unloaded", ""),
+        };
+        let mut expected = outline
+            .iter()
+            .filter(|m| m.kind == outline::KIND)
+            .map(|m| {
+                let (details, error) = state(&m.id);
+                (details, error, 0)
+            })
+            .collect::<Vec<_>>();
+        // The running turn keeps its records, so its group is complete.
+        expected.push(("", "", 2));
+        assert_eq!(details, expected);
+    }
+
+    #[test]
+    fn a_long_span_says_how_many_steps_it_leaves_out() {
+        let records = outline_fixture();
+        let (outline, mut loaded) = outline_of(&records);
+        let stub = outline.iter().find(|m| m.kind == outline::KIND).unwrap();
+        let Some(crate::state::Work::Loaded { records, omitted }) = loaded.get_mut(&stub.id) else {
+            unreachable!()
+        };
+        records.remove(0);
+        *omitted = 1;
+        let view = window_blocks(&outline, 0, outline.len(), false, &loaded);
+        let group = view
+            .iter()
+            .find(|b| b.id == muster_proto::outline::group_id(stub.work.as_ref().unwrap()))
+            .unwrap();
+        assert_eq!(group.details, "");
+        assert_eq!(group.children[0].kind, "notice");
+        assert_eq!(group.children[0].title, "1 earlier step not shown");
     }
 }

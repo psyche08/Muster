@@ -964,6 +964,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IVisionRequest|null} [vision] Request vision
              * @property {muster.v1.IAgentOrganizeRequest|null} [agentOrganize] Request agentOrganize
              * @property {muster.v1.IAgentSchedulerRequest|null} [agentScheduler] Request agentScheduler
+             * @property {muster.v1.IDeviceRequestScreenRecordingRequest|null} [deviceRequestScreenRecording] Request deviceRequestScreenRecording
              */
 
             /**
@@ -1509,17 +1510,25 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.agentScheduler = null;
 
+            /**
+             * Request deviceRequestScreenRecording.
+             * @member {muster.v1.IDeviceRequestScreenRecordingRequest|null|undefined} deviceRequestScreenRecording
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.deviceRequestScreenRecording = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1683,6 +1692,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentOrganizeRequest.encode(message.agentOrganize, writer.uint32(/* id 75, wireType 2 =*/602).fork(), q + 1).ldelim();
                 if (message.agentScheduler != null && Object.hasOwnProperty.call(message, "agentScheduler"))
                     $root.muster.v1.AgentSchedulerRequest.encode(message.agentScheduler, writer.uint32(/* id 76, wireType 2 =*/610).fork(), q + 1).ldelim();
+                if (message.deviceRequestScreenRecording != null && Object.hasOwnProperty.call(message, "deviceRequestScreenRecording"))
+                    $root.muster.v1.DeviceRequestScreenRecordingRequest.encode(message.deviceRequestScreenRecording, writer.uint32(/* id 77, wireType 2 =*/618).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -1982,6 +1993,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 76: {
                             message.agentScheduler = $root.muster.v1.AgentSchedulerRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 77: {
+                            message.deviceRequestScreenRecording = $root.muster.v1.DeviceRequestScreenRecordingRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -2821,6 +2836,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentEvent|null} [agentEvent] Event agentEvent
              * @property {muster.v1.IAck|null} [desktopUpdateReady] Event desktopUpdateReady
              * @property {muster.v1.IForwardOpened|null} [forwardOpened] Event forwardOpened
+             * @property {muster.v1.IRpcTiming|null} [rpcTiming] Event rpcTiming
              */
 
             /**
@@ -2910,17 +2926,25 @@ export const muster = $root.muster = (() => {
              */
             Event.prototype.forwardOpened = null;
 
+            /**
+             * Event rpcTiming.
+             * @member {muster.v1.IRpcTiming|null|undefined} rpcTiming
+             * @memberof muster.v1.Event
+             * @instance
+             */
+            Event.prototype.rpcTiming = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Event ev.
-             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|undefined} ev
+             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming"|undefined} ev
              * @memberof muster.v1.Event
              * @instance
              */
             Object.defineProperty(Event.prototype, "ev", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopUpdateReady", "forwardOpened"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopUpdateReady", "forwardOpened", "rpcTiming"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2970,6 +2994,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.Ack.encode(message.desktopUpdateReady, writer.uint32(/* id 57, wireType 2 =*/458).fork(), q + 1).ldelim();
                 if (message.forwardOpened != null && Object.hasOwnProperty.call(message, "forwardOpened"))
                     $root.muster.v1.ForwardOpened.encode(message.forwardOpened, writer.uint32(/* id 68, wireType 2 =*/546).fork(), q + 1).ldelim();
+                if (message.rpcTiming != null && Object.hasOwnProperty.call(message, "rpcTiming"))
+                    $root.muster.v1.RpcTiming.encode(message.rpcTiming, writer.uint32(/* id 69, wireType 2 =*/554).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -3043,6 +3069,10 @@ export const muster = $root.muster = (() => {
                             message.forwardOpened = $root.muster.v1.ForwardOpened.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 69: {
+                            message.rpcTiming = $root.muster.v1.RpcTiming.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -3072,6 +3102,207 @@ export const muster = $root.muster = (() => {
             };
 
             return Event;
+        })();
+
+        v1.RpcTiming = (function() {
+
+            /**
+             * Properties of a RpcTiming.
+             * @memberof muster.v1
+             * @interface IRpcTiming
+             * @property {muster.v1.RpcTiming.Phase|null} [phase] RpcTiming phase
+             * @property {number|Long|null} [elapsedUs] RpcTiming elapsedUs
+             * @property {boolean|null} [reusedConnection] RpcTiming reusedConnection
+             * @property {string|null} [diagnosticId] RpcTiming diagnosticId
+             */
+
+            /**
+             * Constructs a new RpcTiming.
+             * @memberof muster.v1
+             * @classdesc Represents a RpcTiming.
+             * @implements IRpcTiming
+             * @constructor
+             * @param {muster.v1.IRpcTiming=} [properties] Properties to set
+             */
+            function RpcTiming(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * RpcTiming phase.
+             * @member {muster.v1.RpcTiming.Phase} phase
+             * @memberof muster.v1.RpcTiming
+             * @instance
+             */
+            RpcTiming.prototype.phase = 0;
+
+            /**
+             * RpcTiming elapsedUs.
+             * @member {number|Long} elapsedUs
+             * @memberof muster.v1.RpcTiming
+             * @instance
+             */
+            RpcTiming.prototype.elapsedUs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * RpcTiming reusedConnection.
+             * @member {boolean} reusedConnection
+             * @memberof muster.v1.RpcTiming
+             * @instance
+             */
+            RpcTiming.prototype.reusedConnection = false;
+
+            /**
+             * RpcTiming diagnosticId.
+             * @member {string} diagnosticId
+             * @memberof muster.v1.RpcTiming
+             * @instance
+             */
+            RpcTiming.prototype.diagnosticId = "";
+
+            /**
+             * Creates a new RpcTiming instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.RpcTiming
+             * @static
+             * @param {muster.v1.IRpcTiming=} [properties] Properties to set
+             * @returns {muster.v1.RpcTiming} RpcTiming instance
+             */
+            RpcTiming.create = function create(properties) {
+                return new RpcTiming(properties);
+            };
+
+            /**
+             * Encodes the specified RpcTiming message. Does not implicitly {@link muster.v1.RpcTiming.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.RpcTiming
+             * @static
+             * @param {muster.v1.IRpcTiming} message RpcTiming message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            RpcTiming.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.phase != null && Object.hasOwnProperty.call(message, "phase"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.phase);
+                if (message.elapsedUs != null && Object.hasOwnProperty.call(message, "elapsedUs"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.elapsedUs);
+                if (message.reusedConnection != null && Object.hasOwnProperty.call(message, "reusedConnection"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.reusedConnection);
+                if (message.diagnosticId != null && Object.hasOwnProperty.call(message, "diagnosticId"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.diagnosticId);
+                return writer;
+            };
+
+            /**
+             * Decodes a RpcTiming message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.RpcTiming
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.RpcTiming} RpcTiming
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            RpcTiming.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.RpcTiming();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.phase = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.elapsedUs = reader.uint64();
+                            break;
+                        }
+                    case 3: {
+                            message.reusedConnection = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.diagnosticId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for RpcTiming
+             * @function getTypeUrl
+             * @memberof muster.v1.RpcTiming
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            RpcTiming.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.RpcTiming";
+            };
+
+            /**
+             * Phase enum.
+             * @name muster.v1.RpcTiming.Phase
+             * @enum {number}
+             * @property {number} UNSPECIFIED=0 UNSPECIFIED value
+             * @property {number} POOL_READY=1 POOL_READY value
+             * @property {number} STREAM_ALLOCATED=2 STREAM_ALLOCATED value
+             * @property {number} SERVICE_READY=3 SERVICE_READY value
+             * @property {number} SERVER_RECEIVED=4 SERVER_RECEIVED value
+             * @property {number} SERVER_FINISHED=5 SERVER_FINISHED value
+             */
+            RpcTiming.Phase = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "UNSPECIFIED"] = 0;
+                values[valuesById[1] = "POOL_READY"] = 1;
+                values[valuesById[2] = "STREAM_ALLOCATED"] = 2;
+                values[valuesById[3] = "SERVICE_READY"] = 3;
+                values[valuesById[4] = "SERVER_RECEIVED"] = 4;
+                values[valuesById[5] = "SERVER_FINISHED"] = 5;
+                return values;
+            })();
+
+            return RpcTiming;
         })();
 
         v1.DeviceInfoRequest = (function() {
@@ -4269,6 +4500,125 @@ export const muster = $root.muster = (() => {
             return DeviceRequestAutomationRequest;
         })();
 
+        v1.DeviceRequestScreenRecordingRequest = (function() {
+
+            /**
+             * Properties of a DeviceRequestScreenRecordingRequest.
+             * @memberof muster.v1
+             * @interface IDeviceRequestScreenRecordingRequest
+             */
+
+            /**
+             * Constructs a new DeviceRequestScreenRecordingRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a DeviceRequestScreenRecordingRequest.
+             * @implements IDeviceRequestScreenRecordingRequest
+             * @constructor
+             * @param {muster.v1.IDeviceRequestScreenRecordingRequest=} [properties] Properties to set
+             */
+            function DeviceRequestScreenRecordingRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * Creates a new DeviceRequestScreenRecordingRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DeviceRequestScreenRecordingRequest
+             * @static
+             * @param {muster.v1.IDeviceRequestScreenRecordingRequest=} [properties] Properties to set
+             * @returns {muster.v1.DeviceRequestScreenRecordingRequest} DeviceRequestScreenRecordingRequest instance
+             */
+            DeviceRequestScreenRecordingRequest.create = function create(properties) {
+                return new DeviceRequestScreenRecordingRequest(properties);
+            };
+
+            /**
+             * Encodes the specified DeviceRequestScreenRecordingRequest message. Does not implicitly {@link muster.v1.DeviceRequestScreenRecordingRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DeviceRequestScreenRecordingRequest
+             * @static
+             * @param {muster.v1.IDeviceRequestScreenRecordingRequest} message DeviceRequestScreenRecordingRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DeviceRequestScreenRecordingRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                return writer;
+            };
+
+            /**
+             * Decodes a DeviceRequestScreenRecordingRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DeviceRequestScreenRecordingRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DeviceRequestScreenRecordingRequest} DeviceRequestScreenRecordingRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DeviceRequestScreenRecordingRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DeviceRequestScreenRecordingRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DeviceRequestScreenRecordingRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.DeviceRequestScreenRecordingRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DeviceRequestScreenRecordingRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DeviceRequestScreenRecordingRequest";
+            };
+
+            return DeviceRequestScreenRecordingRequest;
+        })();
+
         v1.DeviceDebugRequest = (function() {
 
             /**
@@ -4708,6 +5058,7 @@ export const muster = $root.muster = (() => {
              * @property {Uint8Array|null} [manualLockedUseNonce] DeviceState manualLockedUseNonce
              * @property {boolean|null} [manualLockedUseActive] DeviceState manualLockedUseActive
              * @property {string|null} [ghosttyAutomation] DeviceState ghosttyAutomation
+             * @property {string|null} [screenRecording] DeviceState screenRecording
              */
 
             /**
@@ -4854,6 +5205,14 @@ export const muster = $root.muster = (() => {
             DeviceState.prototype.ghosttyAutomation = "";
 
             /**
+             * DeviceState screenRecording.
+             * @member {string} screenRecording
+             * @memberof muster.v1.DeviceState
+             * @instance
+             */
+            DeviceState.prototype.screenRecording = "";
+
+            /**
              * Creates a new DeviceState instance using the specified properties.
              * @function create
              * @memberof muster.v1.DeviceState
@@ -4913,6 +5272,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 15, wireType 2 =*/122).bytes(message.manualLockedUseNonce);
                 if (message.manualLockedUseActive != null && Object.hasOwnProperty.call(message, "manualLockedUseActive"))
                     writer.uint32(/* id 16, wireType 0 =*/128).bool(message.manualLockedUseActive);
+                if (message.screenRecording != null && Object.hasOwnProperty.call(message, "screenRecording"))
+                    writer.uint32(/* id 17, wireType 2 =*/138).string(message.screenRecording);
                 return writer;
             };
 
@@ -5012,6 +5373,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 13: {
                             message.ghosttyAutomation = reader.string();
+                            break;
+                        }
+                    case 17: {
+                            message.screenRecording = reader.string();
                             break;
                         }
                     default:
@@ -5198,6 +5563,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentCompleteRequest|null} [complete] LockedUseOperation complete
              * @property {muster.v1.ITerminalCreateRequest|null} [terminalCreate] LockedUseOperation terminalCreate
              * @property {muster.v1.IAgentOrganizeRequest|null} [organize] LockedUseOperation organize
+             * @property {muster.v1.IAgentNativeCreateRequest|null} [nativeCreate] LockedUseOperation nativeCreate
              * @property {string|null} [providerQueue] LockedUseOperation providerQueue
              */
 
@@ -5321,6 +5687,14 @@ export const muster = $root.muster = (() => {
             LockedUseOperation.prototype.organize = null;
 
             /**
+             * LockedUseOperation nativeCreate.
+             * @member {muster.v1.IAgentNativeCreateRequest|null|undefined} nativeCreate
+             * @memberof muster.v1.LockedUseOperation
+             * @instance
+             */
+            LockedUseOperation.prototype.nativeCreate = null;
+
+            /**
              * LockedUseOperation providerQueue.
              * @member {string} providerQueue
              * @memberof muster.v1.LockedUseOperation
@@ -5333,12 +5707,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * LockedUseOperation operation.
-             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize"|undefined} operation
+             * @member {"send"|"respond"|"interrupt"|"inspect"|"terminal"|"chatLoad"|"chatOpen"|"chatOptions"|"chatSetOptions"|"device"|"complete"|"terminalCreate"|"organize"|"nativeCreate"|undefined} operation
              * @memberof muster.v1.LockedUseOperation
              * @instance
              */
             Object.defineProperty(LockedUseOperation.prototype, "operation", {
-                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete", "terminalCreate", "organize"]),
+                get: $util.oneOfGetter($oneOfFields = ["send", "respond", "interrupt", "inspect", "terminal", "chatLoad", "chatOpen", "chatOptions", "chatSetOptions", "device", "complete", "terminalCreate", "organize", "nativeCreate"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -5398,6 +5772,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.TerminalCreateRequest.encode(message.terminalCreate, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                 if (message.organize != null && Object.hasOwnProperty.call(message, "organize"))
                     $root.muster.v1.AgentOrganizeRequest.encode(message.organize, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
+                if (message.nativeCreate != null && Object.hasOwnProperty.call(message, "nativeCreate"))
+                    $root.muster.v1.AgentNativeCreateRequest.encode(message.nativeCreate, writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -5485,6 +5861,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 14: {
                             message.organize = $root.muster.v1.AgentOrganizeRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 15: {
+                            message.nativeCreate = $root.muster.v1.AgentNativeCreateRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 4: {
@@ -14011,6 +14391,7 @@ export const muster = $root.muster = (() => {
              * Properties of an AgentListRequest.
              * @memberof muster.v1
              * @interface IAgentListRequest
+             * @property {boolean|null} [providerPages] AgentListRequest providerPages
              * @property {boolean|null} [grouped] AgentListRequest grouped
              * @property {string|null} [groupKey] AgentListRequest groupKey
              * @property {string|null} [groupCursor] AgentListRequest groupCursor
@@ -14034,6 +14415,14 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * AgentListRequest providerPages.
+             * @member {boolean} providerPages
+             * @memberof muster.v1.AgentListRequest
+             * @instance
+             */
+            AgentListRequest.prototype.providerPages = false;
 
             /**
              * AgentListRequest grouped.
@@ -14133,6 +14522,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.groupKey);
                 if (message.groupCursor != null && Object.hasOwnProperty.call(message, "groupCursor"))
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.groupCursor);
+                if (message.providerPages != null && Object.hasOwnProperty.call(message, "providerPages"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.providerPages);
                 return writer;
             };
 
@@ -14170,6 +14561,10 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 8: {
+                            message.providerPages = reader.bool();
+                            break;
+                        }
                     case 5: {
                             message.grouped = reader.bool();
                             break;
@@ -14464,6 +14859,7 @@ export const muster = $root.muster = (() => {
              * @property {number|null} [count] AgentCatalogGroup count
              * @property {string|null} [nextCursor] AgentCatalogGroup nextCursor
              * @property {string|null} [deviceId] AgentCatalogGroup deviceId
+             * @property {number|null} [pinnedCount] AgentCatalogGroup pinnedCount
              */
 
             /**
@@ -14546,6 +14942,14 @@ export const muster = $root.muster = (() => {
             AgentCatalogGroup.prototype.deviceId = "";
 
             /**
+             * AgentCatalogGroup pinnedCount.
+             * @member {number} pinnedCount
+             * @memberof muster.v1.AgentCatalogGroup
+             * @instance
+             */
+            AgentCatalogGroup.prototype.pinnedCount = 0;
+
+            /**
              * Creates a new AgentCatalogGroup instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentCatalogGroup
@@ -14589,6 +14993,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.nextCursor);
                 if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.deviceId);
+                if (message.pinnedCount != null && Object.hasOwnProperty.call(message, "pinnedCount"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).uint32(message.pinnedCount);
                 return writer;
             };
 
@@ -14658,6 +15064,10 @@ export const muster = $root.muster = (() => {
                             message.deviceId = reader.string();
                             break;
                         }
+                    case 9: {
+                            message.pinnedCount = reader.uint32();
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -14695,6 +15105,8 @@ export const muster = $root.muster = (() => {
              * Properties of an AgentWatchRequest.
              * @memberof muster.v1
              * @interface IAgentWatchRequest
+             * @property {boolean|null} [providerPages] AgentWatchRequest providerPages
+             * @property {string|null} [diagnosticId] AgentWatchRequest diagnosticId
              * @property {boolean|null} [grouped] AgentWatchRequest grouped
              * @property {Array.<string>|null} [visibleSessions] AgentWatchRequest visibleSessions
              * @property {string|null} [session] AgentWatchRequest session
@@ -14717,6 +15129,22 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * AgentWatchRequest providerPages.
+             * @member {boolean} providerPages
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.providerPages = false;
+
+            /**
+             * AgentWatchRequest diagnosticId.
+             * @member {string} diagnosticId
+             * @memberof muster.v1.AgentWatchRequest
+             * @instance
+             */
+            AgentWatchRequest.prototype.diagnosticId = "";
 
             /**
              * AgentWatchRequest grouped.
@@ -14797,6 +15225,10 @@ export const muster = $root.muster = (() => {
                 if (message.visibleSessions != null && message.visibleSessions.length)
                     for (let i = 0; i < message.visibleSessions.length; ++i)
                         writer.uint32(/* id 5, wireType 2 =*/42).string(message.visibleSessions[i]);
+                if (message.diagnosticId != null && Object.hasOwnProperty.call(message, "diagnosticId"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.diagnosticId);
+                if (message.providerPages != null && Object.hasOwnProperty.call(message, "providerPages"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.providerPages);
                 return writer;
             };
 
@@ -14834,6 +15266,14 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 7: {
+                            message.providerPages = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.diagnosticId = reader.string();
+                            break;
+                        }
                     case 4: {
                             message.grouped = reader.bool();
                             break;
@@ -14903,6 +15343,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [toolName] AgentMessage toolName
              * @property {string|null} [toolCallId] AgentMessage toolCallId
              * @property {string|null} [toolStatus] AgentMessage toolStatus
+             * @property {muster.v1.IAgentWorkSpan|null} [work] AgentMessage work
              */
 
             /**
@@ -15001,6 +15442,14 @@ export const muster = $root.muster = (() => {
             AgentMessage.prototype.toolStatus = "";
 
             /**
+             * AgentMessage work.
+             * @member {muster.v1.IAgentWorkSpan|null|undefined} work
+             * @memberof muster.v1.AgentMessage
+             * @instance
+             */
+            AgentMessage.prototype.work = null;
+
+            /**
              * Creates a new AgentMessage instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentMessage
@@ -15048,6 +15497,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 9, wireType 2 =*/74).string(message.toolCallId);
                 if (message.toolStatus != null && Object.hasOwnProperty.call(message, "toolStatus"))
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.toolStatus);
+                if (message.work != null && Object.hasOwnProperty.call(message, "work"))
+                    $root.muster.v1.AgentWorkSpan.encode(message.work, writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -15125,6 +15576,10 @@ export const muster = $root.muster = (() => {
                             message.toolStatus = reader.string();
                             break;
                         }
+                    case 11: {
+                            message.work = $root.muster.v1.AgentWorkSpan.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -15154,6 +15609,215 @@ export const muster = $root.muster = (() => {
             };
 
             return AgentMessage;
+        })();
+
+        v1.AgentWorkSpan = (function() {
+
+            /**
+             * Properties of an AgentWorkSpan.
+             * @memberof muster.v1
+             * @interface IAgentWorkSpan
+             * @property {string|null} [firstId] AgentWorkSpan firstId
+             * @property {string|null} [lastId] AgentWorkSpan lastId
+             * @property {number|null} [count] AgentWorkSpan count
+             * @property {Uint8Array|null} [hash] AgentWorkSpan hash
+             * @property {boolean|null} [firstIsTool] AgentWorkSpan firstIsTool
+             * @property {number|Long|null} [endUnix] AgentWorkSpan endUnix
+             */
+
+            /**
+             * Constructs a new AgentWorkSpan.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentWorkSpan.
+             * @implements IAgentWorkSpan
+             * @constructor
+             * @param {muster.v1.IAgentWorkSpan=} [properties] Properties to set
+             */
+            function AgentWorkSpan(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentWorkSpan firstId.
+             * @member {string} firstId
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.firstId = "";
+
+            /**
+             * AgentWorkSpan lastId.
+             * @member {string} lastId
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.lastId = "";
+
+            /**
+             * AgentWorkSpan count.
+             * @member {number} count
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.count = 0;
+
+            /**
+             * AgentWorkSpan hash.
+             * @member {Uint8Array} hash
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.hash = $util.newBuffer([]);
+
+            /**
+             * AgentWorkSpan firstIsTool.
+             * @member {boolean} firstIsTool
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.firstIsTool = false;
+
+            /**
+             * AgentWorkSpan endUnix.
+             * @member {number|Long} endUnix
+             * @memberof muster.v1.AgentWorkSpan
+             * @instance
+             */
+            AgentWorkSpan.prototype.endUnix = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * Creates a new AgentWorkSpan instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentWorkSpan
+             * @static
+             * @param {muster.v1.IAgentWorkSpan=} [properties] Properties to set
+             * @returns {muster.v1.AgentWorkSpan} AgentWorkSpan instance
+             */
+            AgentWorkSpan.create = function create(properties) {
+                return new AgentWorkSpan(properties);
+            };
+
+            /**
+             * Encodes the specified AgentWorkSpan message. Does not implicitly {@link muster.v1.AgentWorkSpan.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentWorkSpan
+             * @static
+             * @param {muster.v1.IAgentWorkSpan} message AgentWorkSpan message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentWorkSpan.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.firstId != null && Object.hasOwnProperty.call(message, "firstId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.firstId);
+                if (message.lastId != null && Object.hasOwnProperty.call(message, "lastId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.lastId);
+                if (message.count != null && Object.hasOwnProperty.call(message, "count"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.count);
+                if (message.hash != null && Object.hasOwnProperty.call(message, "hash"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).bytes(message.hash);
+                if (message.firstIsTool != null && Object.hasOwnProperty.call(message, "firstIsTool"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.firstIsTool);
+                if (message.endUnix != null && Object.hasOwnProperty.call(message, "endUnix"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).uint64(message.endUnix);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentWorkSpan message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentWorkSpan
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentWorkSpan} AgentWorkSpan
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentWorkSpan.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentWorkSpan();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.firstId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.lastId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.count = reader.uint32();
+                            break;
+                        }
+                    case 4: {
+                            message.hash = reader.bytes();
+                            break;
+                        }
+                    case 5: {
+                            message.firstIsTool = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.endUnix = reader.uint64();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentWorkSpan
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentWorkSpan
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentWorkSpan.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentWorkSpan";
+            };
+
+            return AgentWorkSpan;
         })();
 
         v1.TurnUsage = (function() {
@@ -16009,6 +16673,10 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [afterId] AgentMessagesRequest afterId
              * @property {string|null} [firstId] AgentMessagesRequest firstId
              * @property {Uint8Array|null} [prefixHash] AgentMessagesRequest prefixHash
+             * @property {string|null} [diagnosticId] AgentMessagesRequest diagnosticId
+             * @property {number|null} [turns] AgentMessagesRequest turns
+             * @property {string|null} [workId] AgentMessagesRequest workId
+             * @property {Uint8Array|null} [workHash] AgentMessagesRequest workHash
              */
 
             /**
@@ -16075,6 +16743,38 @@ export const muster = $root.muster = (() => {
             AgentMessagesRequest.prototype.prefixHash = $util.newBuffer([]);
 
             /**
+             * AgentMessagesRequest diagnosticId.
+             * @member {string} diagnosticId
+             * @memberof muster.v1.AgentMessagesRequest
+             * @instance
+             */
+            AgentMessagesRequest.prototype.diagnosticId = "";
+
+            /**
+             * AgentMessagesRequest turns.
+             * @member {number} turns
+             * @memberof muster.v1.AgentMessagesRequest
+             * @instance
+             */
+            AgentMessagesRequest.prototype.turns = 0;
+
+            /**
+             * AgentMessagesRequest workId.
+             * @member {string} workId
+             * @memberof muster.v1.AgentMessagesRequest
+             * @instance
+             */
+            AgentMessagesRequest.prototype.workId = "";
+
+            /**
+             * AgentMessagesRequest workHash.
+             * @member {Uint8Array} workHash
+             * @memberof muster.v1.AgentMessagesRequest
+             * @instance
+             */
+            AgentMessagesRequest.prototype.workHash = $util.newBuffer([]);
+
+            /**
              * Creates a new AgentMessagesRequest instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentMessagesRequest
@@ -16114,6 +16814,14 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.firstId);
                 if (message.prefixHash != null && Object.hasOwnProperty.call(message, "prefixHash"))
                     writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.prefixHash);
+                if (message.diagnosticId != null && Object.hasOwnProperty.call(message, "diagnosticId"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.diagnosticId);
+                if (message.turns != null && Object.hasOwnProperty.call(message, "turns"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).uint32(message.turns);
+                if (message.workId != null && Object.hasOwnProperty.call(message, "workId"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.workId);
+                if (message.workHash != null && Object.hasOwnProperty.call(message, "workHash"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).bytes(message.workHash);
                 return writer;
             };
 
@@ -16175,6 +16883,22 @@ export const muster = $root.muster = (() => {
                             message.prefixHash = reader.bytes();
                             break;
                         }
+                    case 7: {
+                            message.diagnosticId = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.turns = reader.uint32();
+                            break;
+                        }
+                    case 9: {
+                            message.workId = reader.string();
+                            break;
+                        }
+                    case 10: {
+                            message.workHash = reader.bytes();
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -16217,6 +16941,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [hasMore] AgentMessagePage hasMore
              * @property {boolean|null} [reset] AgentMessagePage reset
              * @property {boolean|null} [hasNewer] AgentMessagePage hasNewer
+             * @property {boolean|null} [outline] AgentMessagePage outline
              */
 
             /**
@@ -16276,6 +17001,14 @@ export const muster = $root.muster = (() => {
             AgentMessagePage.prototype.hasNewer = false;
 
             /**
+             * AgentMessagePage outline.
+             * @member {boolean} outline
+             * @memberof muster.v1.AgentMessagePage
+             * @instance
+             */
+            AgentMessagePage.prototype.outline = false;
+
+            /**
              * Creates a new AgentMessagePage instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentMessagePage
@@ -16314,6 +17047,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 4, wireType 0 =*/32).bool(message.reset);
                 if (message.hasNewer != null && Object.hasOwnProperty.call(message, "hasNewer"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.hasNewer);
+                if (message.outline != null && Object.hasOwnProperty.call(message, "outline"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.outline);
                 return writer;
             };
 
@@ -16371,6 +17106,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 5: {
                             message.hasNewer = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.outline = reader.bool();
                             break;
                         }
                     default:
@@ -27604,6 +28343,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.ISelectDevice|null} [selectDevice] Intent selectDevice
              * @property {muster.app.ISetRelay|null} [setRelay] Intent setRelay
              * @property {muster.app.IRequestAccessibility|null} [requestAccessibility] Intent requestAccessibility
+             * @property {muster.app.IRequestScreenRecording|null} [requestScreenRecording] Intent requestScreenRecording
              * @property {muster.app.IOpenBrowser|null} [openBrowser] Intent openBrowser
              * @property {muster.app.IBrowserSetup|null} [browserSetup] Intent browserSetup
              * @property {muster.app.IBrowserRun|null} [browserRun] Intent browserRun
@@ -27642,6 +28382,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.ICloseTerminal|null} [closeTerminal] Intent closeTerminal
              * @property {muster.app.ITerminalPaste|null} [terminalPaste] Intent terminalPaste
              * @property {muster.app.ISessionTerminalAction|null} [sessionTerminalAction] Intent sessionTerminalAction
+             * @property {muster.app.IRequestTerminalAuthorization|null} [requestTerminalAuthorization] Intent requestTerminalAuthorization
              * @property {muster.app.ICodeAction|null} [codeAction] Intent codeAction
              * @property {muster.app.IOpenFiles|null} [openFiles] Intent openFiles
              * @property {muster.app.IOpenFile|null} [openFile] Intent openFile
@@ -27649,6 +28390,9 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IOpenChange|null} [openChange] Intent openChange
              * @property {muster.app.IOpenFileLink|null} [openFileLink] Intent openFileLink
              * @property {muster.app.ISetPushToken|null} [setPushToken] Intent setPushToken
+             * @property {muster.app.ISessionViewApplied|null} [sessionViewApplied] Intent sessionViewApplied
+             * @property {muster.app.INativeCreate|null} [nativeCreate] Intent nativeCreate
+             * @property {muster.app.IAgentLoadWork|null} [agentLoadWork] Intent agentLoadWork
              */
 
             /**
@@ -27769,6 +28513,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.requestAccessibility = null;
+
+            /**
+             * Intent requestScreenRecording.
+             * @member {muster.app.IRequestScreenRecording|null|undefined} requestScreenRecording
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.requestScreenRecording = null;
 
             /**
              * Intent openBrowser.
@@ -28075,6 +28827,14 @@ export const muster = $root.muster = (() => {
             Intent.prototype.sessionTerminalAction = null;
 
             /**
+             * Intent requestTerminalAuthorization.
+             * @member {muster.app.IRequestTerminalAuthorization|null|undefined} requestTerminalAuthorization
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.requestTerminalAuthorization = null;
+
+            /**
              * Intent codeAction.
              * @member {muster.app.ICodeAction|null|undefined} codeAction
              * @memberof muster.app.Intent
@@ -28130,17 +28890,41 @@ export const muster = $root.muster = (() => {
              */
             Intent.prototype.setPushToken = null;
 
+            /**
+             * Intent sessionViewApplied.
+             * @member {muster.app.ISessionViewApplied|null|undefined} sessionViewApplied
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.sessionViewApplied = null;
+
+            /**
+             * Intent nativeCreate.
+             * @member {muster.app.INativeCreate|null|undefined} nativeCreate
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.nativeCreate = null;
+
+            /**
+             * Intent agentLoadWork.
+             * @member {muster.app.IAgentLoadWork|null|undefined} agentLoadWork
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.agentLoadWork = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -28288,6 +29072,16 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.AgentOrganize.encode(message.agentOrganize, writer.uint32(/* id 94, wireType 2 =*/754).fork(), q + 1).ldelim();
                 if (message.codeAction != null && Object.hasOwnProperty.call(message, "codeAction"))
                     $root.muster.app.CodeAction.encode(message.codeAction, writer.uint32(/* id 132, wireType 2 =*/1058).fork(), q + 1).ldelim();
+                if (message.requestScreenRecording != null && Object.hasOwnProperty.call(message, "requestScreenRecording"))
+                    $root.muster.app.RequestScreenRecording.encode(message.requestScreenRecording, writer.uint32(/* id 133, wireType 2 =*/1066).fork(), q + 1).ldelim();
+                if (message.requestTerminalAuthorization != null && Object.hasOwnProperty.call(message, "requestTerminalAuthorization"))
+                    $root.muster.app.RequestTerminalAuthorization.encode(message.requestTerminalAuthorization, writer.uint32(/* id 134, wireType 2 =*/1074).fork(), q + 1).ldelim();
+                if (message.sessionViewApplied != null && Object.hasOwnProperty.call(message, "sessionViewApplied"))
+                    $root.muster.app.SessionViewApplied.encode(message.sessionViewApplied, writer.uint32(/* id 135, wireType 2 =*/1082).fork(), q + 1).ldelim();
+                if (message.nativeCreate != null && Object.hasOwnProperty.call(message, "nativeCreate"))
+                    $root.muster.app.NativeCreate.encode(message.nativeCreate, writer.uint32(/* id 136, wireType 2 =*/1090).fork(), q + 1).ldelim();
+                if (message.agentLoadWork != null && Object.hasOwnProperty.call(message, "agentLoadWork"))
+                    $root.muster.app.AgentLoadWork.encode(message.agentLoadWork, writer.uint32(/* id 137, wireType 2 =*/1098).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -28375,6 +29169,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 20: {
                             message.requestAccessibility = $root.muster.app.RequestAccessibility.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 133: {
+                            message.requestScreenRecording = $root.muster.app.RequestScreenRecording.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 80: {
@@ -28529,6 +29327,10 @@ export const muster = $root.muster = (() => {
                             message.sessionTerminalAction = $root.muster.app.SessionTerminalAction.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 134: {
+                            message.requestTerminalAuthorization = $root.muster.app.RequestTerminalAuthorization.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 132: {
                             message.codeAction = $root.muster.app.CodeAction.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
@@ -28555,6 +29357,18 @@ export const muster = $root.muster = (() => {
                         }
                     case 60: {
                             message.setPushToken = $root.muster.app.SetPushToken.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 135: {
+                            message.sessionViewApplied = $root.muster.app.SessionViewApplied.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 136: {
+                            message.nativeCreate = $root.muster.app.NativeCreate.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 137: {
+                            message.agentLoadWork = $root.muster.app.AgentLoadWork.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -28586,6 +29400,364 @@ export const muster = $root.muster = (() => {
             };
 
             return Intent;
+        })();
+
+        app.SessionViewApplied = (function() {
+
+            /**
+             * Properties of a SessionViewApplied.
+             * @memberof muster.app
+             * @interface ISessionViewApplied
+             * @property {string|null} [traceId] SessionViewApplied traceId
+             * @property {boolean|null} [historyReady] SessionViewApplied historyReady
+             * @property {boolean|null} [decodedOnly] SessionViewApplied decodedOnly
+             * @property {number|Long|null} [decodeUs] SessionViewApplied decodeUs
+             * @property {number|Long|null} [queueUs] SessionViewApplied queueUs
+             * @property {number|Long|null} [applyUs] SessionViewApplied applyUs
+             */
+
+            /**
+             * Constructs a new SessionViewApplied.
+             * @memberof muster.app
+             * @classdesc Represents a SessionViewApplied.
+             * @implements ISessionViewApplied
+             * @constructor
+             * @param {muster.app.ISessionViewApplied=} [properties] Properties to set
+             */
+            function SessionViewApplied(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * SessionViewApplied traceId.
+             * @member {string} traceId
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.traceId = "";
+
+            /**
+             * SessionViewApplied historyReady.
+             * @member {boolean} historyReady
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.historyReady = false;
+
+            /**
+             * SessionViewApplied decodedOnly.
+             * @member {boolean} decodedOnly
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.decodedOnly = false;
+
+            /**
+             * SessionViewApplied decodeUs.
+             * @member {number|Long} decodeUs
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.decodeUs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * SessionViewApplied queueUs.
+             * @member {number|Long} queueUs
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.queueUs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * SessionViewApplied applyUs.
+             * @member {number|Long} applyUs
+             * @memberof muster.app.SessionViewApplied
+             * @instance
+             */
+            SessionViewApplied.prototype.applyUs = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * Creates a new SessionViewApplied instance using the specified properties.
+             * @function create
+             * @memberof muster.app.SessionViewApplied
+             * @static
+             * @param {muster.app.ISessionViewApplied=} [properties] Properties to set
+             * @returns {muster.app.SessionViewApplied} SessionViewApplied instance
+             */
+            SessionViewApplied.create = function create(properties) {
+                return new SessionViewApplied(properties);
+            };
+
+            /**
+             * Encodes the specified SessionViewApplied message. Does not implicitly {@link muster.app.SessionViewApplied.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.SessionViewApplied
+             * @static
+             * @param {muster.app.ISessionViewApplied} message SessionViewApplied message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            SessionViewApplied.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.traceId != null && Object.hasOwnProperty.call(message, "traceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.traceId);
+                if (message.historyReady != null && Object.hasOwnProperty.call(message, "historyReady"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.historyReady);
+                if (message.decodedOnly != null && Object.hasOwnProperty.call(message, "decodedOnly"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.decodedOnly);
+                if (message.decodeUs != null && Object.hasOwnProperty.call(message, "decodeUs"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.decodeUs);
+                if (message.queueUs != null && Object.hasOwnProperty.call(message, "queueUs"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.queueUs);
+                if (message.applyUs != null && Object.hasOwnProperty.call(message, "applyUs"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).uint64(message.applyUs);
+                return writer;
+            };
+
+            /**
+             * Decodes a SessionViewApplied message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.SessionViewApplied
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.SessionViewApplied} SessionViewApplied
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            SessionViewApplied.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.SessionViewApplied();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.traceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.historyReady = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.decodedOnly = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.decodeUs = reader.uint64();
+                            break;
+                        }
+                    case 5: {
+                            message.queueUs = reader.uint64();
+                            break;
+                        }
+                    case 6: {
+                            message.applyUs = reader.uint64();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for SessionViewApplied
+             * @function getTypeUrl
+             * @memberof muster.app.SessionViewApplied
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            SessionViewApplied.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.SessionViewApplied";
+            };
+
+            return SessionViewApplied;
+        })();
+
+        app.SessionLoadMarker = (function() {
+
+            /**
+             * Properties of a SessionLoadMarker.
+             * @memberof muster.app
+             * @interface ISessionLoadMarker
+             * @property {string|null} [traceId] SessionLoadMarker traceId
+             * @property {boolean|null} [historyReady] SessionLoadMarker historyReady
+             */
+
+            /**
+             * Constructs a new SessionLoadMarker.
+             * @memberof muster.app
+             * @classdesc Represents a SessionLoadMarker.
+             * @implements ISessionLoadMarker
+             * @constructor
+             * @param {muster.app.ISessionLoadMarker=} [properties] Properties to set
+             */
+            function SessionLoadMarker(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * SessionLoadMarker traceId.
+             * @member {string} traceId
+             * @memberof muster.app.SessionLoadMarker
+             * @instance
+             */
+            SessionLoadMarker.prototype.traceId = "";
+
+            /**
+             * SessionLoadMarker historyReady.
+             * @member {boolean} historyReady
+             * @memberof muster.app.SessionLoadMarker
+             * @instance
+             */
+            SessionLoadMarker.prototype.historyReady = false;
+
+            /**
+             * Creates a new SessionLoadMarker instance using the specified properties.
+             * @function create
+             * @memberof muster.app.SessionLoadMarker
+             * @static
+             * @param {muster.app.ISessionLoadMarker=} [properties] Properties to set
+             * @returns {muster.app.SessionLoadMarker} SessionLoadMarker instance
+             */
+            SessionLoadMarker.create = function create(properties) {
+                return new SessionLoadMarker(properties);
+            };
+
+            /**
+             * Encodes the specified SessionLoadMarker message. Does not implicitly {@link muster.app.SessionLoadMarker.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.SessionLoadMarker
+             * @static
+             * @param {muster.app.ISessionLoadMarker} message SessionLoadMarker message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            SessionLoadMarker.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.traceId != null && Object.hasOwnProperty.call(message, "traceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.traceId);
+                if (message.historyReady != null && Object.hasOwnProperty.call(message, "historyReady"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.historyReady);
+                return writer;
+            };
+
+            /**
+             * Decodes a SessionLoadMarker message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.SessionLoadMarker
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.SessionLoadMarker} SessionLoadMarker
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            SessionLoadMarker.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.SessionLoadMarker();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.traceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.historyReady = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for SessionLoadMarker
+             * @function getTypeUrl
+             * @memberof muster.app.SessionLoadMarker
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            SessionLoadMarker.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.SessionLoadMarker";
+            };
+
+            return SessionLoadMarker;
         })();
 
         app.DesktopUpdateAction = (function() {
@@ -29119,7 +30291,6 @@ export const muster = $root.muster = (() => {
              * @property {number} SHOW=0 SHOW value
              * @property {number} DISMISS=1 DISMISS value
              * @property {number} INSTALL=2 INSTALL value
-             * @property {number} ITERM=3 ITERM value
              * @property {number} CHECK=4 CHECK value
              * @property {number} RESTART=5 RESTART value
              */
@@ -29128,7 +30299,6 @@ export const muster = $root.muster = (() => {
                 values[valuesById[0] = "SHOW"] = 0;
                 values[valuesById[1] = "DISMISS"] = 1;
                 values[valuesById[2] = "INSTALL"] = 2;
-                values[valuesById[3] = "ITERM"] = 3;
                 values[valuesById[4] = "CHECK"] = 4;
                 values[valuesById[5] = "RESTART"] = 5;
                 return values;
@@ -31234,6 +32404,244 @@ export const muster = $root.muster = (() => {
             return RequestAccessibility;
         })();
 
+        app.RequestScreenRecording = (function() {
+
+            /**
+             * Properties of a RequestScreenRecording.
+             * @memberof muster.app
+             * @interface IRequestScreenRecording
+             */
+
+            /**
+             * Constructs a new RequestScreenRecording.
+             * @memberof muster.app
+             * @classdesc Represents a RequestScreenRecording.
+             * @implements IRequestScreenRecording
+             * @constructor
+             * @param {muster.app.IRequestScreenRecording=} [properties] Properties to set
+             */
+            function RequestScreenRecording(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * Creates a new RequestScreenRecording instance using the specified properties.
+             * @function create
+             * @memberof muster.app.RequestScreenRecording
+             * @static
+             * @param {muster.app.IRequestScreenRecording=} [properties] Properties to set
+             * @returns {muster.app.RequestScreenRecording} RequestScreenRecording instance
+             */
+            RequestScreenRecording.create = function create(properties) {
+                return new RequestScreenRecording(properties);
+            };
+
+            /**
+             * Encodes the specified RequestScreenRecording message. Does not implicitly {@link muster.app.RequestScreenRecording.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.RequestScreenRecording
+             * @static
+             * @param {muster.app.IRequestScreenRecording} message RequestScreenRecording message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            RequestScreenRecording.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                return writer;
+            };
+
+            /**
+             * Decodes a RequestScreenRecording message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.RequestScreenRecording
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.RequestScreenRecording} RequestScreenRecording
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            RequestScreenRecording.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.RequestScreenRecording();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for RequestScreenRecording
+             * @function getTypeUrl
+             * @memberof muster.app.RequestScreenRecording
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            RequestScreenRecording.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.RequestScreenRecording";
+            };
+
+            return RequestScreenRecording;
+        })();
+
+        app.RequestTerminalAuthorization = (function() {
+
+            /**
+             * Properties of a RequestTerminalAuthorization.
+             * @memberof muster.app
+             * @interface IRequestTerminalAuthorization
+             */
+
+            /**
+             * Constructs a new RequestTerminalAuthorization.
+             * @memberof muster.app
+             * @classdesc Represents a RequestTerminalAuthorization.
+             * @implements IRequestTerminalAuthorization
+             * @constructor
+             * @param {muster.app.IRequestTerminalAuthorization=} [properties] Properties to set
+             */
+            function RequestTerminalAuthorization(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * Creates a new RequestTerminalAuthorization instance using the specified properties.
+             * @function create
+             * @memberof muster.app.RequestTerminalAuthorization
+             * @static
+             * @param {muster.app.IRequestTerminalAuthorization=} [properties] Properties to set
+             * @returns {muster.app.RequestTerminalAuthorization} RequestTerminalAuthorization instance
+             */
+            RequestTerminalAuthorization.create = function create(properties) {
+                return new RequestTerminalAuthorization(properties);
+            };
+
+            /**
+             * Encodes the specified RequestTerminalAuthorization message. Does not implicitly {@link muster.app.RequestTerminalAuthorization.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.RequestTerminalAuthorization
+             * @static
+             * @param {muster.app.IRequestTerminalAuthorization} message RequestTerminalAuthorization message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            RequestTerminalAuthorization.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                return writer;
+            };
+
+            /**
+             * Decodes a RequestTerminalAuthorization message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.RequestTerminalAuthorization
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.RequestTerminalAuthorization} RequestTerminalAuthorization
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            RequestTerminalAuthorization.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.RequestTerminalAuthorization();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for RequestTerminalAuthorization
+             * @function getTypeUrl
+             * @memberof muster.app.RequestTerminalAuthorization
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            RequestTerminalAuthorization.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.RequestTerminalAuthorization";
+            };
+
+            return RequestTerminalAuthorization;
+        })();
+
         app.SetCover = (function() {
 
             /**
@@ -31813,6 +33221,185 @@ export const muster = $root.muster = (() => {
             };
 
             return OrcaCreate;
+        })();
+
+        app.NativeCreate = (function() {
+
+            /**
+             * Properties of a NativeCreate.
+             * @memberof muster.app
+             * @interface INativeCreate
+             * @property {string|null} [deviceId] NativeCreate deviceId
+             * @property {string|null} [provider] NativeCreate provider
+             * @property {string|null} [directory] NativeCreate directory
+             * @property {string|null} [prompt] NativeCreate prompt
+             */
+
+            /**
+             * Constructs a new NativeCreate.
+             * @memberof muster.app
+             * @classdesc Represents a NativeCreate.
+             * @implements INativeCreate
+             * @constructor
+             * @param {muster.app.INativeCreate=} [properties] Properties to set
+             */
+            function NativeCreate(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NativeCreate deviceId.
+             * @member {string} deviceId
+             * @memberof muster.app.NativeCreate
+             * @instance
+             */
+            NativeCreate.prototype.deviceId = "";
+
+            /**
+             * NativeCreate provider.
+             * @member {string} provider
+             * @memberof muster.app.NativeCreate
+             * @instance
+             */
+            NativeCreate.prototype.provider = "";
+
+            /**
+             * NativeCreate directory.
+             * @member {string} directory
+             * @memberof muster.app.NativeCreate
+             * @instance
+             */
+            NativeCreate.prototype.directory = "";
+
+            /**
+             * NativeCreate prompt.
+             * @member {string} prompt
+             * @memberof muster.app.NativeCreate
+             * @instance
+             */
+            NativeCreate.prototype.prompt = "";
+
+            /**
+             * Creates a new NativeCreate instance using the specified properties.
+             * @function create
+             * @memberof muster.app.NativeCreate
+             * @static
+             * @param {muster.app.INativeCreate=} [properties] Properties to set
+             * @returns {muster.app.NativeCreate} NativeCreate instance
+             */
+            NativeCreate.create = function create(properties) {
+                return new NativeCreate(properties);
+            };
+
+            /**
+             * Encodes the specified NativeCreate message. Does not implicitly {@link muster.app.NativeCreate.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.NativeCreate
+             * @static
+             * @param {muster.app.INativeCreate} message NativeCreate message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NativeCreate.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.deviceId);
+                if (message.provider != null && Object.hasOwnProperty.call(message, "provider"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.provider);
+                if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.directory);
+                if (message.prompt != null && Object.hasOwnProperty.call(message, "prompt"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.prompt);
+                return writer;
+            };
+
+            /**
+             * Decodes a NativeCreate message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.NativeCreate
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.NativeCreate} NativeCreate
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NativeCreate.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.NativeCreate();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.provider = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.directory = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.prompt = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for NativeCreate
+             * @function getTypeUrl
+             * @memberof muster.app.NativeCreate
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            NativeCreate.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.NativeCreate";
+            };
+
+            return NativeCreate;
         })();
 
         app.AgentCatalogAction = (function() {
@@ -34159,6 +35746,8 @@ export const muster = $root.muster = (() => {
              * @memberof muster.app
              * @interface IAgentLoadEarlier
              * @property {boolean|null} [all] AgentLoadEarlier all
+             * @property {boolean|null} [latest] AgentLoadEarlier latest
+             * @property {boolean|null} [newer] AgentLoadEarlier newer
              */
 
             /**
@@ -34183,6 +35772,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AgentLoadEarlier.prototype.all = false;
+
+            /**
+             * AgentLoadEarlier latest.
+             * @member {boolean} latest
+             * @memberof muster.app.AgentLoadEarlier
+             * @instance
+             */
+            AgentLoadEarlier.prototype.latest = false;
+
+            /**
+             * AgentLoadEarlier newer.
+             * @member {boolean} newer
+             * @memberof muster.app.AgentLoadEarlier
+             * @instance
+             */
+            AgentLoadEarlier.prototype.newer = false;
 
             /**
              * Creates a new AgentLoadEarlier instance using the specified properties.
@@ -34214,6 +35819,10 @@ export const muster = $root.muster = (() => {
                     throw Error("max depth exceeded");
                 if (message.all != null && Object.hasOwnProperty.call(message, "all"))
                     writer.uint32(/* id 1, wireType 0 =*/8).bool(message.all);
+                if (message.latest != null && Object.hasOwnProperty.call(message, "latest"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.latest);
+                if (message.newer != null && Object.hasOwnProperty.call(message, "newer"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.newer);
                 return writer;
             };
 
@@ -34255,6 +35864,14 @@ export const muster = $root.muster = (() => {
                             message.all = reader.bool();
                             break;
                         }
+                    case 2: {
+                            message.latest = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.newer = reader.bool();
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -34284,6 +35901,140 @@ export const muster = $root.muster = (() => {
             };
 
             return AgentLoadEarlier;
+        })();
+
+        app.AgentLoadWork = (function() {
+
+            /**
+             * Properties of an AgentLoadWork.
+             * @memberof muster.app
+             * @interface IAgentLoadWork
+             * @property {string|null} [block] AgentLoadWork block
+             */
+
+            /**
+             * Constructs a new AgentLoadWork.
+             * @memberof muster.app
+             * @classdesc Represents an AgentLoadWork.
+             * @implements IAgentLoadWork
+             * @constructor
+             * @param {muster.app.IAgentLoadWork=} [properties] Properties to set
+             */
+            function AgentLoadWork(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentLoadWork block.
+             * @member {string} block
+             * @memberof muster.app.AgentLoadWork
+             * @instance
+             */
+            AgentLoadWork.prototype.block = "";
+
+            /**
+             * Creates a new AgentLoadWork instance using the specified properties.
+             * @function create
+             * @memberof muster.app.AgentLoadWork
+             * @static
+             * @param {muster.app.IAgentLoadWork=} [properties] Properties to set
+             * @returns {muster.app.AgentLoadWork} AgentLoadWork instance
+             */
+            AgentLoadWork.create = function create(properties) {
+                return new AgentLoadWork(properties);
+            };
+
+            /**
+             * Encodes the specified AgentLoadWork message. Does not implicitly {@link muster.app.AgentLoadWork.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.AgentLoadWork
+             * @static
+             * @param {muster.app.IAgentLoadWork} message AgentLoadWork message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentLoadWork.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.block != null && Object.hasOwnProperty.call(message, "block"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.block);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentLoadWork message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.AgentLoadWork
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.AgentLoadWork} AgentLoadWork
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentLoadWork.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.AgentLoadWork();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.block = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentLoadWork
+             * @function getTypeUrl
+             * @memberof muster.app.AgentLoadWork
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentLoadWork.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.AgentLoadWork";
+            };
+
+            return AgentLoadWork;
         })();
 
         app.OpenDesktopChats = (function() {
@@ -39467,6 +41218,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IMulticaPage|null} [multicaPage] ViewModel multicaPage
              * @property {muster.v1.IVisionStatus|null} [vision] ViewModel vision
              * @property {Array.<muster.app.Screen>|null} [navigationPath] ViewModel navigationPath
+             * @property {muster.app.ISessionLoadMarker|null} [sessionLoad] ViewModel sessionLoad
              */
 
             /**
@@ -39778,6 +41530,14 @@ export const muster = $root.muster = (() => {
             ViewModel.prototype.navigationPath = $util.emptyArray;
 
             /**
+             * ViewModel sessionLoad.
+             * @member {muster.app.ISessionLoadMarker|null|undefined} sessionLoad
+             * @memberof muster.app.ViewModel
+             * @instance
+             */
+            ViewModel.prototype.sessionLoad = null;
+
+            /**
              * Creates a new ViewModel instance using the specified properties.
              * @function create
              * @memberof muster.app.ViewModel
@@ -39885,6 +41645,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.MulticaPage.encode(message.multicaPage, writer.uint32(/* id 36, wireType 2 =*/290).fork(), q + 1).ldelim();
                 if (message.vision != null && Object.hasOwnProperty.call(message, "vision"))
                     $root.muster.v1.VisionStatus.encode(message.vision, writer.uint32(/* id 37, wireType 2 =*/298).fork(), q + 1).ldelim();
+                if (message.sessionLoad != null && Object.hasOwnProperty.call(message, "sessionLoad"))
+                    $root.muster.app.SessionLoadMarker.encode(message.sessionLoad, writer.uint32(/* id 38, wireType 2 =*/306).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -40085,6 +41847,10 @@ export const muster = $root.muster = (() => {
                                 reader.len = end;
                             } else
                                 message.navigationPath.push(reader.int32());
+                            break;
+                        }
+                    case 38: {
+                            message.sessionLoad = $root.muster.app.SessionLoadMarker.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -41246,14 +43012,12 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [checking] DesktopSetupView checking
              * @property {boolean|null} [canInstall] DesktopSetupView canInstall
              * @property {string|null} [pluginMessage] DesktopSetupView pluginMessage
-             * @property {boolean|null} [itermReady] DesktopSetupView itermReady
-             * @property {string|null} [itermMessage] DesktopSetupView itermMessage
              * @property {string|null} [error] DesktopSetupView error
              * @property {boolean|null} [restartRequired] DesktopSetupView restartRequired
              * @property {boolean|null} [canRestart] DesktopSetupView canRestart
-             * @property {boolean|null} [showIterm] DesktopSetupView showIterm
              * @property {boolean|null} [ready] DesktopSetupView ready
-             * @property {string|null} [terminalApp] DesktopSetupView terminalApp
+             * @property {boolean|null} [screenRecordingReady] DesktopSetupView screenRecordingReady
+             * @property {string|null} [screenRecordingMessage] DesktopSetupView screenRecordingMessage
              */
 
             /**
@@ -41320,22 +43084,6 @@ export const muster = $root.muster = (() => {
             DesktopSetupView.prototype.pluginMessage = "";
 
             /**
-             * DesktopSetupView itermReady.
-             * @member {boolean} itermReady
-             * @memberof muster.app.DesktopSetupView
-             * @instance
-             */
-            DesktopSetupView.prototype.itermReady = false;
-
-            /**
-             * DesktopSetupView itermMessage.
-             * @member {string} itermMessage
-             * @memberof muster.app.DesktopSetupView
-             * @instance
-             */
-            DesktopSetupView.prototype.itermMessage = "";
-
-            /**
              * DesktopSetupView error.
              * @member {string} error
              * @memberof muster.app.DesktopSetupView
@@ -41360,14 +43108,6 @@ export const muster = $root.muster = (() => {
             DesktopSetupView.prototype.canRestart = false;
 
             /**
-             * DesktopSetupView showIterm.
-             * @member {boolean} showIterm
-             * @memberof muster.app.DesktopSetupView
-             * @instance
-             */
-            DesktopSetupView.prototype.showIterm = false;
-
-            /**
              * DesktopSetupView ready.
              * @member {boolean} ready
              * @memberof muster.app.DesktopSetupView
@@ -41376,12 +43116,20 @@ export const muster = $root.muster = (() => {
             DesktopSetupView.prototype.ready = false;
 
             /**
-             * DesktopSetupView terminalApp.
-             * @member {string} terminalApp
+             * DesktopSetupView screenRecordingReady.
+             * @member {boolean} screenRecordingReady
              * @memberof muster.app.DesktopSetupView
              * @instance
              */
-            DesktopSetupView.prototype.terminalApp = "";
+            DesktopSetupView.prototype.screenRecordingReady = false;
+
+            /**
+             * DesktopSetupView screenRecordingMessage.
+             * @member {string} screenRecordingMessage
+             * @memberof muster.app.DesktopSetupView
+             * @instance
+             */
+            DesktopSetupView.prototype.screenRecordingMessage = "";
 
             /**
              * Creates a new DesktopSetupView instance using the specified properties.
@@ -41423,22 +43171,18 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.canInstall);
                 if (message.pluginMessage != null && Object.hasOwnProperty.call(message, "pluginMessage"))
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.pluginMessage);
-                if (message.itermReady != null && Object.hasOwnProperty.call(message, "itermReady"))
-                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.itermReady);
-                if (message.itermMessage != null && Object.hasOwnProperty.call(message, "itermMessage"))
-                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.itermMessage);
                 if (message.error != null && Object.hasOwnProperty.call(message, "error"))
                     writer.uint32(/* id 9, wireType 2 =*/74).string(message.error);
                 if (message.restartRequired != null && Object.hasOwnProperty.call(message, "restartRequired"))
                     writer.uint32(/* id 10, wireType 0 =*/80).bool(message.restartRequired);
                 if (message.canRestart != null && Object.hasOwnProperty.call(message, "canRestart"))
                     writer.uint32(/* id 11, wireType 0 =*/88).bool(message.canRestart);
-                if (message.showIterm != null && Object.hasOwnProperty.call(message, "showIterm"))
-                    writer.uint32(/* id 12, wireType 0 =*/96).bool(message.showIterm);
                 if (message.ready != null && Object.hasOwnProperty.call(message, "ready"))
                     writer.uint32(/* id 13, wireType 0 =*/104).bool(message.ready);
-                if (message.terminalApp != null && Object.hasOwnProperty.call(message, "terminalApp"))
-                    writer.uint32(/* id 14, wireType 2 =*/114).string(message.terminalApp);
+                if (message.screenRecordingReady != null && Object.hasOwnProperty.call(message, "screenRecordingReady"))
+                    writer.uint32(/* id 15, wireType 0 =*/120).bool(message.screenRecordingReady);
+                if (message.screenRecordingMessage != null && Object.hasOwnProperty.call(message, "screenRecordingMessage"))
+                    writer.uint32(/* id 16, wireType 2 =*/130).string(message.screenRecordingMessage);
                 return writer;
             };
 
@@ -41500,14 +43244,6 @@ export const muster = $root.muster = (() => {
                             message.pluginMessage = reader.string();
                             break;
                         }
-                    case 7: {
-                            message.itermReady = reader.bool();
-                            break;
-                        }
-                    case 8: {
-                            message.itermMessage = reader.string();
-                            break;
-                        }
                     case 9: {
                             message.error = reader.string();
                             break;
@@ -41520,16 +43256,16 @@ export const muster = $root.muster = (() => {
                             message.canRestart = reader.bool();
                             break;
                         }
-                    case 12: {
-                            message.showIterm = reader.bool();
-                            break;
-                        }
                     case 13: {
                             message.ready = reader.bool();
                             break;
                         }
-                    case 14: {
-                            message.terminalApp = reader.string();
+                    case 15: {
+                            message.screenRecordingReady = reader.bool();
+                            break;
+                        }
+                    case 16: {
+                            message.screenRecordingMessage = reader.string();
                             break;
                         }
                     default:
@@ -42040,6 +43776,10 @@ export const muster = $root.muster = (() => {
              * @property {Array.<muster.v1.IMemberView>|null} [createHosts] AgentsView createHosts
              * @property {Array.<string>|null} [createAgents] AgentsView createAgents
              * @property {boolean|null} [creating] AgentsView creating
+             * @property {Array.<muster.v1.IMemberView>|null} [nativeCreateHosts] AgentsView nativeCreateHosts
+             * @property {Array.<string>|null} [nativeCreateApps] AgentsView nativeCreateApps
+             * @property {boolean|null} [nativeCreating] AgentsView nativeCreating
+             * @property {muster.app.INativeCreate|null} [nativeCreateDraft] AgentsView nativeCreateDraft
              * @property {Array.<string>|null} [errors] AgentsView errors
              * @property {string|null} [deviceId] AgentsView deviceId
              * @property {Array.<muster.v1.IAgentSession>|null} [sessions] AgentsView sessions
@@ -42060,6 +43800,8 @@ export const muster = $root.muster = (() => {
                 this.searchNotices = [];
                 this.createHosts = [];
                 this.createAgents = [];
+                this.nativeCreateHosts = [];
+                this.nativeCreateApps = [];
                 this.errors = [];
                 this.sessions = [];
                 if (properties)
@@ -42139,6 +43881,38 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AgentsView.prototype.creating = false;
+
+            /**
+             * AgentsView nativeCreateHosts.
+             * @member {Array.<muster.v1.IMemberView>} nativeCreateHosts
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.nativeCreateHosts = $util.emptyArray;
+
+            /**
+             * AgentsView nativeCreateApps.
+             * @member {Array.<string>} nativeCreateApps
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.nativeCreateApps = $util.emptyArray;
+
+            /**
+             * AgentsView nativeCreating.
+             * @member {boolean} nativeCreating
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.nativeCreating = false;
+
+            /**
+             * AgentsView nativeCreateDraft.
+             * @member {muster.app.INativeCreate|null|undefined} nativeCreateDraft
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.nativeCreateDraft = null;
 
             /**
              * AgentsView errors.
@@ -42233,6 +44007,16 @@ export const muster = $root.muster = (() => {
                         writer.uint32(/* id 12, wireType 2 =*/98).string(message.searchNotices[i]);
                 if (message.searchHasMore != null && Object.hasOwnProperty.call(message, "searchHasMore"))
                     writer.uint32(/* id 13, wireType 0 =*/104).bool(message.searchHasMore);
+                if (message.nativeCreateHosts != null && message.nativeCreateHosts.length)
+                    for (let i = 0; i < message.nativeCreateHosts.length; ++i)
+                        $root.muster.v1.MemberView.encode(message.nativeCreateHosts[i], writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
+                if (message.nativeCreateApps != null && message.nativeCreateApps.length)
+                    for (let i = 0; i < message.nativeCreateApps.length; ++i)
+                        writer.uint32(/* id 15, wireType 2 =*/122).string(message.nativeCreateApps[i]);
+                if (message.nativeCreating != null && Object.hasOwnProperty.call(message, "nativeCreating"))
+                    writer.uint32(/* id 16, wireType 0 =*/128).bool(message.nativeCreating);
+                if (message.nativeCreateDraft != null && Object.hasOwnProperty.call(message, "nativeCreateDraft"))
+                    $root.muster.app.NativeCreate.encode(message.nativeCreateDraft, writer.uint32(/* id 17, wireType 2 =*/138).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -42314,6 +44098,26 @@ export const muster = $root.muster = (() => {
                         }
                     case 7: {
                             message.creating = reader.bool();
+                            break;
+                        }
+                    case 14: {
+                            if (!(message.nativeCreateHosts && message.nativeCreateHosts.length))
+                                message.nativeCreateHosts = [];
+                            message.nativeCreateHosts.push($root.muster.v1.MemberView.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 15: {
+                            if (!(message.nativeCreateApps && message.nativeCreateApps.length))
+                                message.nativeCreateApps = [];
+                            message.nativeCreateApps.push(reader.string());
+                            break;
+                        }
+                    case 16: {
+                            message.nativeCreating = reader.bool();
+                            break;
+                        }
+                    case 17: {
+                            message.nativeCreateDraft = $root.muster.app.NativeCreate.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 4: {
@@ -42411,6 +44215,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.ICodePreview|null} [codePreview] ChatView codePreview
              * @property {Array.<muster.app.ICodeRunView>|null} [codeRuns] ChatView codeRuns
              * @property {string|null} [codeError] ChatView codeError
+             * @property {boolean|null} [hasNewer] ChatView hasNewer
              */
 
             /**
@@ -42737,6 +44542,14 @@ export const muster = $root.muster = (() => {
             ChatView.prototype.codeError = "";
 
             /**
+             * ChatView hasNewer.
+             * @member {boolean} hasNewer
+             * @memberof muster.app.ChatView
+             * @instance
+             */
+            ChatView.prototype.hasNewer = false;
+
+            /**
              * Creates a new ChatView instance using the specified properties.
              * @function create
              * @memberof muster.app.ChatView
@@ -42844,6 +44657,8 @@ export const muster = $root.muster = (() => {
                         $root.muster.app.CodeRunView.encode(message.codeRuns[i], writer.uint32(/* id 38, wireType 2 =*/306).fork(), q + 1).ldelim();
                 if (message.codeError != null && Object.hasOwnProperty.call(message, "codeError"))
                     writer.uint32(/* id 39, wireType 2 =*/314).string(message.codeError);
+                if (message.hasNewer != null && Object.hasOwnProperty.call(message, "hasNewer"))
+                    writer.uint32(/* id 40, wireType 0 =*/320).bool(message.hasNewer);
                 return writer;
             };
 
@@ -43039,6 +44854,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 39: {
                             message.codeError = reader.string();
+                            break;
+                        }
+                    case 40: {
+                            message.hasNewer = reader.bool();
                             break;
                         }
                     default:
@@ -43421,6 +45240,8 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [defaultExpanded] ChatBlock defaultExpanded
              * @property {Array.<muster.app.IChatDiffFile>|null} [diffs] ChatBlock diffs
              * @property {Array.<muster.app.IMessagePart>|null} [parts] ChatBlock parts
+             * @property {string|null} [details] ChatBlock details
+             * @property {string|null} [detailsError] ChatBlock detailsError
              */
 
             /**
@@ -43532,6 +45353,22 @@ export const muster = $root.muster = (() => {
             ChatBlock.prototype.parts = $util.emptyArray;
 
             /**
+             * ChatBlock details.
+             * @member {string} details
+             * @memberof muster.app.ChatBlock
+             * @instance
+             */
+            ChatBlock.prototype.details = "";
+
+            /**
+             * ChatBlock detailsError.
+             * @member {string} detailsError
+             * @memberof muster.app.ChatBlock
+             * @instance
+             */
+            ChatBlock.prototype.detailsError = "";
+
+            /**
              * Creates a new ChatBlock instance using the specified properties.
              * @function create
              * @memberof muster.app.ChatBlock
@@ -43586,6 +45423,10 @@ export const muster = $root.muster = (() => {
                 if (message.parts != null && message.parts.length)
                     for (let i = 0; i < message.parts.length; ++i)
                         $root.muster.app.MessagePart.encode(message.parts[i], writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
+                if (message.details != null && Object.hasOwnProperty.call(message, "details"))
+                    writer.uint32(/* id 12, wireType 2 =*/98).string(message.details);
+                if (message.detailsError != null && Object.hasOwnProperty.call(message, "detailsError"))
+                    writer.uint32(/* id 13, wireType 2 =*/106).string(message.detailsError);
                 return writer;
             };
 
@@ -43675,6 +45516,14 @@ export const muster = $root.muster = (() => {
                             if (!(message.parts && message.parts.length))
                                 message.parts = [];
                             message.parts.push($root.muster.app.MessagePart.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 12: {
+                            message.details = reader.string();
+                            break;
+                        }
+                    case 13: {
+                            message.detailsError = reader.string();
                             break;
                         }
                     default:
@@ -44367,6 +46216,7 @@ export const muster = $root.muster = (() => {
              * @property {Array.<string>|null} [errors] TerminalsView errors
              * @property {boolean|null} [canCreate] TerminalsView canCreate
              * @property {Array.<muster.v1.ITerminalSource>|null} [sources] TerminalsView sources
+             * @property {muster.app.ITerminalAuthorizationView|null} [authorization] TerminalsView authorization
              */
 
             /**
@@ -44444,6 +46294,14 @@ export const muster = $root.muster = (() => {
             TerminalsView.prototype.sources = $util.emptyArray;
 
             /**
+             * TerminalsView authorization.
+             * @member {muster.app.ITerminalAuthorizationView|null|undefined} authorization
+             * @memberof muster.app.TerminalsView
+             * @instance
+             */
+            TerminalsView.prototype.authorization = null;
+
+            /**
              * Creates a new TerminalsView instance using the specified properties.
              * @function create
              * @memberof muster.app.TerminalsView
@@ -44488,6 +46346,8 @@ export const muster = $root.muster = (() => {
                 if (message.sources != null && message.sources.length)
                     for (let i = 0; i < message.sources.length; ++i)
                         $root.muster.v1.TerminalSource.encode(message.sources[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
+                if (message.authorization != null && Object.hasOwnProperty.call(message, "authorization"))
+                    $root.muster.app.TerminalAuthorizationView.encode(message.authorization, writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -44559,6 +46419,10 @@ export const muster = $root.muster = (() => {
                             message.sources.push($root.muster.v1.TerminalSource.decode(reader, reader.uint32(), undefined, long + 1));
                             break;
                         }
+                    case 8: {
+                            message.authorization = $root.muster.app.TerminalAuthorizationView.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -44588,6 +46452,185 @@ export const muster = $root.muster = (() => {
             };
 
             return TerminalsView;
+        })();
+
+        app.TerminalAuthorizationView = (function() {
+
+            /**
+             * Properties of a TerminalAuthorizationView.
+             * @memberof muster.app
+             * @interface ITerminalAuthorizationView
+             * @property {string|null} [app] TerminalAuthorizationView app
+             * @property {boolean|null} [ready] TerminalAuthorizationView ready
+             * @property {string|null} [message] TerminalAuthorizationView message
+             * @property {boolean|null} [busy] TerminalAuthorizationView busy
+             */
+
+            /**
+             * Constructs a new TerminalAuthorizationView.
+             * @memberof muster.app
+             * @classdesc Represents a TerminalAuthorizationView.
+             * @implements ITerminalAuthorizationView
+             * @constructor
+             * @param {muster.app.ITerminalAuthorizationView=} [properties] Properties to set
+             */
+            function TerminalAuthorizationView(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * TerminalAuthorizationView app.
+             * @member {string} app
+             * @memberof muster.app.TerminalAuthorizationView
+             * @instance
+             */
+            TerminalAuthorizationView.prototype.app = "";
+
+            /**
+             * TerminalAuthorizationView ready.
+             * @member {boolean} ready
+             * @memberof muster.app.TerminalAuthorizationView
+             * @instance
+             */
+            TerminalAuthorizationView.prototype.ready = false;
+
+            /**
+             * TerminalAuthorizationView message.
+             * @member {string} message
+             * @memberof muster.app.TerminalAuthorizationView
+             * @instance
+             */
+            TerminalAuthorizationView.prototype.message = "";
+
+            /**
+             * TerminalAuthorizationView busy.
+             * @member {boolean} busy
+             * @memberof muster.app.TerminalAuthorizationView
+             * @instance
+             */
+            TerminalAuthorizationView.prototype.busy = false;
+
+            /**
+             * Creates a new TerminalAuthorizationView instance using the specified properties.
+             * @function create
+             * @memberof muster.app.TerminalAuthorizationView
+             * @static
+             * @param {muster.app.ITerminalAuthorizationView=} [properties] Properties to set
+             * @returns {muster.app.TerminalAuthorizationView} TerminalAuthorizationView instance
+             */
+            TerminalAuthorizationView.create = function create(properties) {
+                return new TerminalAuthorizationView(properties);
+            };
+
+            /**
+             * Encodes the specified TerminalAuthorizationView message. Does not implicitly {@link muster.app.TerminalAuthorizationView.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.TerminalAuthorizationView
+             * @static
+             * @param {muster.app.ITerminalAuthorizationView} message TerminalAuthorizationView message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            TerminalAuthorizationView.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.app != null && Object.hasOwnProperty.call(message, "app"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.app);
+                if (message.ready != null && Object.hasOwnProperty.call(message, "ready"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.ready);
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.message);
+                if (message.busy != null && Object.hasOwnProperty.call(message, "busy"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.busy);
+                return writer;
+            };
+
+            /**
+             * Decodes a TerminalAuthorizationView message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.TerminalAuthorizationView
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.TerminalAuthorizationView} TerminalAuthorizationView
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            TerminalAuthorizationView.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.TerminalAuthorizationView();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.app = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.ready = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.message = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.busy = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for TerminalAuthorizationView
+             * @function getTypeUrl
+             * @memberof muster.app.TerminalAuthorizationView
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            TerminalAuthorizationView.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.TerminalAuthorizationView";
+            };
+
+            return TerminalAuthorizationView;
         })();
 
         app.TerminalView = (function() {
