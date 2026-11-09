@@ -2,7 +2,11 @@
 
 - Date: 2026-11-05
 - Status: Accepted; source verified, timeline measured and **install
-  acceptance passed** on the owner's Mac — see Verification.
+  acceptance passed** on the owner's Mac — see Verification. Its
+  `TransformProcessType` call is replaced by
+  [ADR 0164](0164-the-daemons-main-thread-serves-the-window-server.md), which
+  keeps the `BackgroundOnly` outcome through AppKit and also reads the event
+  queue whose neglect Activity Monitor reports as "Not Responding".
 - Restores the code ADR 0127 removed, on ADR 0123's reasoning.
 - Related: [ADR 0123](0123-the-daemon-leaves-the-dock.md) (the decision this
   brings back), [ADR 0127](0127-the-daemon-stays-out-of-launch-services.md)

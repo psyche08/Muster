@@ -230,7 +230,7 @@ records a specific decision and does not revive code on its delete list.
 | [0129](0129-ask-ax-for-windows-by-name.md) | Accepted; premise withdrawn by 0131 | Ask the Accessibility API for windows by name, not by walking children |
 | [0130](0130-mount-the-multica-data-image-before-the-container-starts.md) | Accepted; mount step superseded by 0133 after the install acceptance failed | Mount the Multica data image before the container starts |
 | [0131](0131-a-locked-screen-explains-the-missing-windows.md) | Accepted; measured locked and unlocked on three apps | A locked screen explains the missing windows |
-| [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance passed | Restore the daemon's background registration, and the Dock tile goes |
+| [0132](0132-restore-the-daemons-background-registration.md) | Accepted; timeline measured, install acceptance passed; call replaced by 0164 | Restore the daemon's background registration, and the Dock tile goes |
 | [0133](0133-mount-the-multica-data-image-as-the-user.md) | Accepted; source and tests verified, install acceptance passed | Mount the Multica data image as the user, not through diskutil |
 | [0134](0134-activate-claude-next-and-back-by-keyboard-focus.md) | Accepted; installed in 1.1.22 on three Macs, live card acceptance pending | Activate Claude's Next and Back through keyboard focus |
 | [0135](0135-give-session-watches-the-forwarding-budget.md) | Accepted; installed in 1.1.22 on three Macs, runtime acceptance pending | Give session watches the forwarding budget and report why they ended |
@@ -279,3 +279,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0161](0161-multica-task-session-isolation.md) | Accepted; device acceptance pending | Enforce registered task ownership and expose scoped Multica browsing |
 | [0162](0162-multica-workbench-operations.md) | Accepted; local slice verified, device acceptance pending | Edit Multica agents and operate issues through the host workbench |
 | [0163](0163-multica-dsh-task-sessions.md) | Accepted; device acceptance pending | Create and reopen task sessions in the running DSH App |
+| [0164](0164-the-daemons-main-thread-serves-the-window-server.md) | Accepted; scratch-bundle runtime verified, installation pending | The daemon's main thread serves the window server's event queue |
