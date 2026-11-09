@@ -111,6 +111,17 @@ Mac A opened a remote Codex session on Mac B using the installed native app.
 On that trace history applied at 94.35 ms, native decode was acknowledged at
 111.86 ms and main-thread model application at 121.46 ms. The recorded decode,
 main-queue wait and apply durations were 0.903, 9.535 and 0.022 ms. These
-measurements end at model application. The reverse native-window trace is
-pending. Mac B's screen-sharing service was unavailable. Physical iPhone
-lifecycle and first-frame latency are outside this run.
+measurements end at model application.
+
+In the reverse direction, the operator opened a session hosted on Mac A in
+Mac B's installed Muster app and confirmed that the history was visible,
+including after a second entry. A read-only accessibility snapshot taken
+after the second report exposed the catalog's empty-detail prompt and no
+session toolbar. It did not corroborate the displayed detail. The GUI
+process and local daemon were running build 117, and the GUI user matched
+the console user. The cache directory returned by Foundation was writable, but
+its MusterDiagnostics subdirectory and performance log were absent when
+checked after the observation. The cause is undetermined. Reverse native
+decode and main-thread application timings remain unmeasured. The probe
+timings above cover the shared core. Physical iPhone lifecycle and
+first-frame latency are outside this run.
