@@ -114,10 +114,12 @@ main-queue wait and apply durations were 0.903, 9.535 and 0.022 ms. These
 measurements end at model application.
 
 In the reverse direction, the operator opened a session hosted on Mac A in
-Mac B's installed Muster app and confirmed that the history was visible. Both
-native windows have therefore displayed remote history. On Mac B, the GUI
-process and local daemon were running build 117. Its GUI user matched the
-console user. The cache directory returned by Foundation was writable, but
+Mac B's installed Muster app and confirmed that the history was visible,
+including after a second entry. A read-only accessibility snapshot taken
+after the second report exposed the catalog's empty-detail prompt and no
+session toolbar. It did not corroborate the displayed detail. The GUI
+process and local daemon were running build 117, and the GUI user matched
+the console user. The cache directory returned by Foundation was writable, but
 its MusterDiagnostics subdirectory and performance log were absent when
 checked after the observation. The cause is undetermined. Reverse native
 decode and main-thread application timings remain unmeasured. The probe
