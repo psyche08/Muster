@@ -3363,3 +3363,138 @@ async fn expanded_work_loads_once_and_reports_failure_for_a_retry() {
     );
     assert_eq!(details(&state).0, "");
 }
+
+/// A locked target answers a permission-card read and a completion alike with
+/// LockedUseRequired. Only the completion reserves Claude's provider queue:
+/// the target refuses a read-only inspection that names one (ADR 0165).
+#[tokio::test]
+async fn a_locked_permission_card_read_reserves_no_provider_queue() {
+    use std::sync::{Arc, Mutex};
+    use v1::locked_use_operation::Operation;
+    struct Server(Mutex<Vec<v1::LockedUseOperation>>);
+    impl muster_rpc::Handler for Server {
+        fn call(
+            &self,
+            _: muster_rpc::Context,
+            request: Req,
+            _: muster_rpc::EventSink,
+        ) -> muster_rpc::HandlerFuture<'_> {
+            Box::pin(async move {
+                let refuse = |code: v1::error::Code, message: &str| {
+                    Resp::Error(v1::Error {
+                        code: code as i32,
+                        message: message.into(),
+                    })
+                };
+                match request {
+                    Req::DeviceInfo(_) => Resp::DeviceInfo(v1::DeviceInfo {
+                        device_id: "local".into(),
+                        services: vec![
+                            "agent.approvals.locked.v1".into(),
+                            "agent.chat.locked.v1".into(),
+                        ],
+                        ..Default::default()
+                    }),
+                    Req::AgentInspect(_) | Req::AgentComplete(_) => {
+                        refuse(v1::error::Code::LockedUseRequired, "Mac locked")
+                    }
+                    Req::LockedUsePrepare(r) => {
+                        let operation = r.operation.unwrap();
+                        // The target's rule, as musterd's prepare applies it.
+                        let refused = matches!(operation.operation, Some(Operation::Inspect(_)))
+                            && !operation.provider_queue.is_empty();
+                        self.0.lock().unwrap().push(operation);
+                        if refused {
+                            refuse(
+                                v1::error::Code::Invalid,
+                                "inspection cannot authorize a provider queue",
+                            )
+                        } else {
+                            refuse(v1::error::Code::Unauthorized, "Locked Use denied")
+                        }
+                    }
+                    _ => Resp::Ack(v1::Ack {}),
+                }
+            })
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("fixture.sock");
+    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let server = Arc::new(Server(Mutex::new(Vec::new())));
+    let handler = server.clone();
+    let accept = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(muster_rpc::serve(
+                stream,
+                muster_rpc::Principal::Local,
+                handler.clone(),
+            ));
+        }
+    });
+    let shell = Arc::new(QuietShell);
+    let backend = Arc::new(
+        crate::backend::Backend::connect(
+            &crate::AppConfig {
+                dir: dir.path().into(),
+                mode: crate::Mode::Socket { path: socket },
+                allow_loopback: true,
+            },
+            shell.clone(),
+        )
+        .await
+        .unwrap(),
+    );
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell,
+        backend,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = State::new(false, Some("local".into()));
+    for request in [
+        Req::AgentInspect(v1::AgentInspectRequest {
+            session: "claude-session".into(),
+            ..Default::default()
+        }),
+        Req::AgentComplete(v1::AgentCompleteRequest {
+            session: "claude-session".into(),
+            ..Default::default()
+        }),
+    ] {
+        let (reply, result) = tokio::sync::oneshot::channel();
+        let epoch = state.chat_call_epoch;
+        msg(
+            &mut state,
+            &ctx,
+            Msg::ChatControl {
+                epoch,
+                device: "local".into(),
+                provider: "claude".into(),
+                request,
+                reply,
+            },
+        );
+        let Loop::Msg(message) = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .unwrap()
+        else {
+            panic!()
+        };
+        msg(&mut state, &ctx, *message);
+        let error = result.await.unwrap().unwrap_err().to_string();
+        assert!(error.contains("Locked Use denied"), "{error}");
+    }
+    let prepared = server.0.lock().unwrap();
+    assert_eq!(prepared.len(), 2);
+    assert!(matches!(prepared[0].operation, Some(Operation::Inspect(_))));
+    assert_eq!(prepared[0].provider_queue, "");
+    assert!(matches!(
+        prepared[1].operation,
+        Some(Operation::Complete(_))
+    ));
+    assert_eq!(prepared[1].provider_queue, "claude");
+    accept.abort();
+}
