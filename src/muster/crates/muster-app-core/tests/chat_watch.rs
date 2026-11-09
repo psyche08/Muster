@@ -620,6 +620,10 @@ struct HistoryServer {
     hold: std::sync::atomic::AtomicBool,
     entered: Notify,
     release: Notify,
+    hold_watch: std::sync::atomic::AtomicBool,
+    deny_watch: std::sync::atomic::AtomicBool,
+    watch_entered: Notify,
+    release_watch: Notify,
     /// Pages outlines when asked, as a current daemon does (ADR 0160).
     outline: bool,
 }
@@ -638,6 +642,16 @@ impl Handler for HistoryServer {
                 }),
                 Req::AgentWatch(_) => {
                     let index = self.watch_count.fetch_add(1, Ordering::SeqCst);
+                    if self.hold_watch.load(Ordering::SeqCst) {
+                        self.watch_entered.notify_one();
+                        self.release_watch.notified().await;
+                    }
+                    if self.deny_watch.load(Ordering::SeqCst) {
+                        return Resp::Error(v1::Error {
+                            code: v1::error::Code::Unauthorized as i32,
+                            message: "Session belongs to Multica".into(),
+                        });
+                    }
                     let race_watch = self.race.load(Ordering::SeqCst) && index == 0;
                     let _ = events
                         .send(event(v1::agent_event::Ev::State(v1::AgentSession {
@@ -797,7 +811,7 @@ async fn history_event_race(stale_event: bool, same_id_update: bool) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
+async fn cached_reopen_requires_current_access_then_fetches_only_delta_and_loads_all_pages() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
     let listener = tokio::net::UnixListener::bind(&socket).unwrap();
@@ -869,7 +883,23 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
         messages.push(message(1300));
     }
     server.hold.store(true, Ordering::SeqCst);
+    server.hold_watch.store(true, Ordering::SeqCst);
+    let requests_before_reopen = server.requests.lock().unwrap().len();
     open();
+    server.watch_entered.notified().await;
+    shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| c.loading && c.message_count == 0)
+        })
+        .await;
+    assert_eq!(
+        server.requests.lock().unwrap().len(),
+        requests_before_reopen
+    );
+    server.hold_watch.store(false, Ordering::SeqCst);
+    server.release_watch.notify_one();
     server.entered.notified().await;
     let cached = shell
         .wait(|v| {
@@ -910,6 +940,27 @@ async fn cached_reopen_fetches_only_delta_and_jump_to_start_loads_all_pages() {
     assert_eq!(
         server.requests.lock().unwrap().last().unwrap().first_id,
         "m1100"
+    );
+    core.intent(app::Intent {
+        it: Some(app::intent::It::Navigate(app::Navigate {
+            back: true,
+            ..Default::default()
+        })),
+    });
+    shell.wait(|v| v.screen == app::Screen::Agents as i32).await;
+    server.deny_watch.store(true, Ordering::SeqCst);
+    let requests_before_denial = server.requests.lock().unwrap().len();
+    open();
+    shell
+        .wait(|v| {
+            v.chat
+                .as_ref()
+                .is_some_and(|c| !c.load_error.is_empty() && c.message_count == 0)
+        })
+        .await;
+    assert_eq!(
+        server.requests.lock().unwrap().len(),
+        requests_before_denial
     );
     core.backend().local().close();
     core.shutdown();

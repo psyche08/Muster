@@ -60,3 +60,18 @@ the task-session workbench. P2–P4 remain implementation and acceptance work.
 No signing/notarization, application installation, macOS/iOS publication or
 cross-device acceptance is claimed. Do not advertise DSH scheduling from these
 intermediate results or replace it with a CLI success.
+
+## Installed CLI entrypoint follow-up
+
+The App includes `Contents/Resources/runtime/cli/bin/dsh`. Its launcher uses the
+App executable in Node mode and the bundled desktop-host `lib/cli.js`. That
+entrypoint calls `runCli` with desktop-profile management enabled and the
+bundled immutable package manager. Help exposes web/headless/tui profiles,
+`tui --resume`, and profile-targeted plugin installation.
+
+This confirms a bundled CLI, not a proven RPC entrypoint into the already-running
+Desktop host. No production profile was started, resumed, modified or restarted
+during this inspection. The App plugin remains the integration destination;
+manual reruns must create a new App session while infrastructure recovery must
+recover the verified original binding. See [ADR 0162](../adr/0162-multica-workbench-operations.md)
+for local workbench implementation and its explicit scheduling restrictions.

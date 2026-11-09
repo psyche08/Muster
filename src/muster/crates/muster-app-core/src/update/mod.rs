@@ -34,7 +34,7 @@ pub(crate) mod code_runs;
 mod desktop_chats;
 mod files;
 pub(crate) mod manual_locked_use;
-mod multica;
+pub(crate) mod multica;
 pub(crate) mod native_create;
 mod network;
 mod operations;
@@ -185,6 +185,7 @@ pub enum Msg {
         token: CancellationToken,
         device: String,
         session: String,
+        provider: String,
         page: v1::AgentMessagePage,
     },
     Chat {
@@ -238,6 +239,22 @@ pub enum Msg {
         device: String,
         session: String,
         provider: String,
+    },
+    MulticaTick,
+    MulticaMutation {
+        workspace: String,
+        query: v1::MulticaBrowseRequest,
+        result: Result<v1::OpResult, Error>,
+    },
+    MulticaServices {
+        epoch: u64,
+        results: Vec<(String, String, Result<v1::MulticaService, Error>)>,
+    },
+    MulticaServiceSaved(Result<v1::MulticaService, Error>),
+    AgentUnavailable {
+        epoch: u64,
+        device: String,
+        sessions: Vec<String>,
     },
     AgentEvent {
         token: CancellationToken,
@@ -368,6 +385,7 @@ pub fn init(state: &mut State, ctx: &Ctx) {
     activate_network(state, ctx);
     load_basics(state, ctx);
     multica::request(state, ctx, v1::MulticaRequest::default());
+    multica::start_discovery(state, ctx);
     vision::request(state, ctx, v1::VisionRequest::default());
 }
 
@@ -408,7 +426,16 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenBrowser(open) => network::intent_open_browser(state, ctx, open),
         It::BrowserSetup(r) => browser_setup(state, ctx, r.install),
         It::BrowserRun(r) => network::intent_browser_run(state, ctx, r),
+        It::MulticaSelect(request) => multica::select(state, ctx, request.device_id),
+        It::MulticaService(request) => multica::service_request(state, ctx, request),
         It::MulticaBrowse(request) => multica::browse(state, ctx, request),
+        It::MulticaMutation(request) => multica::mutate(state, ctx, request),
+        It::MulticaMutationAcknowledge(ack) => {
+            if ack && !state.multica_mutation_busy {
+                state.multica_mutation_uncertain = false;
+                state.multica_mutation_message.clear();
+            }
+        }
         It::Multica(request) => multica::request(state, ctx, request),
         It::Vision(request) => vision::request(state, ctx, request),
         It::Refresh(_) => intent_refresh(state, ctx),
@@ -520,7 +547,7 @@ fn intent_navigate(state: &mut State, ctx: &Ctx, n: app::Navigate) {
             state.toast("Only an admin device can invite", true);
             return;
         }
-        if screen == Screen::Multica && !state.multica.installed {
+        if screen == Screen::Multica && !multica::view(state).visible {
             return;
         }
         if screen == Screen::Multica {
@@ -716,12 +743,6 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             result,
         } => agents::msg_agents(state, ctx, epoch, device, result),
-        Msg::ChatCache {
-            token,
-            device,
-            session,
-            page,
-        } => agents::msg_chat_cache(state, token, &device, &session, page),
         Msg::Chat {
             token,
             device,
@@ -772,6 +793,48 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             session,
             provider,
         } => agents::msg_agent_stream_started(state, token, &device, &session, &provider),
+        Msg::ChatCache {
+            token,
+            device,
+            session,
+            provider,
+            page,
+        } => {
+            if state
+                .chat
+                .as_ref()
+                .is_some_and(|c| c.session.provider == provider)
+            {
+                agents::msg_chat_cache(state, token, &device, &session, page);
+            }
+        }
+        Msg::MulticaTick => multica::discover(state, ctx),
+        Msg::MulticaMutation {
+            workspace,
+            query,
+            result,
+        } => multica::mutation_result(state, ctx, workspace, query, result),
+        Msg::MulticaServices { epoch, results } => {
+            if epoch == state.multica_discovery_epoch && state.foreground {
+                multica::apply_services(state, ctx, results);
+            }
+        }
+        Msg::MulticaServiceSaved(result) => match result {
+            Ok(service) => {
+                state.multica_service = service;
+                multica::discover(state, ctx);
+            }
+            Err(error) => state.toast(error.to_string(), true),
+        },
+        Msg::AgentUnavailable {
+            epoch,
+            device,
+            sessions,
+        } => {
+            if epoch == state.agents_epoch {
+                agents::remove_unavailable(state, ctx, &device, &sessions);
+            }
+        }
         Msg::AgentEvent {
             token,
             device,

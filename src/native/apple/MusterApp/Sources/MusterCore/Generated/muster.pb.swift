@@ -851,6 +851,22 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .deviceRequestScreenRecording(newValue)}
   }
 
+  public var multicaService: Muster_V1_MulticaServiceRequest {
+    get {
+      if case .multicaService(let v)? = req {return v}
+      return Muster_V1_MulticaServiceRequest()
+    }
+    set {req = .multicaService(newValue)}
+  }
+
+  public var multicaMutation: Muster_V1_MulticaMutation {
+    get {
+      if case .multicaMutation(let v)? = req {return v}
+      return Muster_V1_MulticaMutation()
+    }
+    set {req = .multicaMutation(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Req: Equatable, Sendable {
@@ -934,6 +950,8 @@ public nonisolated struct Muster_V1_Request: Sendable {
     /// spoke the old number: the grant has never shipped.
     case agentScheduler(Muster_V1_AgentSchedulerRequest)
     case deviceRequestScreenRecording(Muster_V1_DeviceRequestScreenRecordingRequest)
+    case multicaService(Muster_V1_MulticaServiceRequest)
+    case multicaMutation(Muster_V1_MulticaMutation)
 
   }
 
@@ -1198,6 +1216,14 @@ public nonisolated struct Muster_V1_Response: Sendable {
     set {resp = .multicaPage(newValue)}
   }
 
+  public var multicaService: Muster_V1_MulticaService {
+    get {
+      if case .multicaService(let v)? = resp {return v}
+      return Muster_V1_MulticaService()
+    }
+    set {resp = .multicaService(newValue)}
+  }
+
   public var vision: Muster_V1_VisionStatus {
     get {
       if case .vision(let v)? = resp {return v}
@@ -1245,6 +1271,7 @@ public nonisolated struct Muster_V1_Response: Sendable {
     case presenceInfo(Muster_V1_PresenceInfo)
     case multica(Muster_V1_MulticaStatus)
     case multicaPage(Muster_V1_MulticaPage)
+    case multicaService(Muster_V1_MulticaService)
     case vision(Muster_V1_VisionStatus)
     case agentScheduler(Muster_V1_AgentSchedulerStatus)
 
@@ -3583,6 +3610,14 @@ public nonisolated struct Muster_V1_AgentEvent: Sendable {
     set {ev = .interactionResolved(newValue)}
   }
 
+  public var unavailable: Muster_V1_AgentUnavailable {
+    get {
+      if case .unavailable(let v)? = ev {return v}
+      return Muster_V1_AgentUnavailable()
+    }
+    set {ev = .unavailable(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Ev: Equatable, Sendable {
@@ -3591,8 +3626,21 @@ public nonisolated struct Muster_V1_AgentEvent: Sendable {
     case state(Muster_V1_AgentSession)
     case interaction(Muster_V1_PendingInteraction)
     case interactionResolved(String)
+    case unavailable(Muster_V1_AgentUnavailable)
 
   }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_AgentUnavailable: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessions: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
@@ -4267,6 +4315,240 @@ public nonisolated struct Muster_V1_PresenceInfo: Sendable {
 }
 
 /// Container administration and local deployment configuration are local-owner only.
+/// Discovery is authenticated member-only; SAVE is trusted-local-owner-only.
+/// Host-local administration; operation ID is required and never replayed.
+public nonisolated struct Muster_V1_MulticaMutation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var opID: String = String()
+
+  public var workspaceID: String = String()
+
+  public var action: Muster_V1_MulticaMutation.OneOf_Action? = nil
+
+  public var agent: Muster_V1_MulticaAgentEdit {
+    get {
+      if case .agent(let v)? = action {return v}
+      return Muster_V1_MulticaAgentEdit()
+    }
+    set {action = .agent(newValue)}
+  }
+
+  public var issue: Muster_V1_MulticaIssueEdit {
+    get {
+      if case .issue(let v)? = action {return v}
+      return Muster_V1_MulticaIssueEdit()
+    }
+    set {action = .issue(newValue)}
+  }
+
+  public var issueAction: Muster_V1_MulticaIssueAction {
+    get {
+      if case .issueAction(let v)? = action {return v}
+      return Muster_V1_MulticaIssueAction()
+    }
+    set {action = .issueAction(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Action: Equatable, Sendable {
+    case agent(Muster_V1_MulticaAgentEdit)
+    case issue(Muster_V1_MulticaIssueEdit)
+    case issueAction(Muster_V1_MulticaIssueAction)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaAgentEdit: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var revision: String = String()
+
+  public var name: String = String()
+
+  public var description_p: String = String()
+
+  public var instructions: String = String()
+
+  public var model: String = String()
+
+  public var maxConcurrentTasks: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Empty id creates an unassigned backlog issue; existing id edits content only.
+public nonisolated struct Muster_V1_MulticaIssueEdit: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var revision: String = String()
+
+  public var title: String = String()
+
+  public var description_p: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaIssueAction: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Muster_V1_MulticaIssueAction.Kind = .unspecified
+
+  public var id: String = String()
+
+  public var revision: String = String()
+
+  public var value: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case assign // = 1
+    case status // = 2
+    case comment // = 3
+    case rerun // = 4
+    case cancel // = 5
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .assign
+      case 2: self = .status
+      case 3: self = .comment
+      case 4: self = .rerun
+      case 5: self = .cancel
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .assign: return 1
+      case .status: return 2
+      case .comment: return 3
+      case .rerun: return 4
+      case .cancel: return 5
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_MulticaIssueAction.Kind] = [
+      .unspecified,
+      .assign,
+      .status,
+      .comment,
+      .rerun,
+      .cancel,
+    ]
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaServiceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var action: Muster_V1_MulticaServiceRequest.Action = .get
+
+  public var offered: Bool = false
+
+  public var workspaces: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Action: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case get // = 0
+    case save // = 1
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .get
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .get
+      case 1: self = .save
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .get: return 0
+      case .save: return 1
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_MulticaServiceRequest.Action] = [
+      .get,
+      .save,
+    ]
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaService: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var version: UInt32 = 0
+
+  public var offered: Bool = false
+
+  public var canView: Bool = false
+
+  public var canControl: Bool = false
+
+  public var canManage: Bool = false
+
+  public var workspaces: [String] = []
+
+  public var message: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Muster_V1_MulticaRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -4505,6 +4787,8 @@ public nonisolated struct Muster_V1_MulticaIssue: Sendable {
 
   public var updatedAt: String = String()
 
+  public var revision: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4527,6 +4811,15 @@ public nonisolated struct Muster_V1_MulticaAgent: Sendable {
 
   public var model: String = String()
 
+  /// Host-local edit projection only; never exposed through remote browsing.
+  public var instructions: String = String()
+
+  public var maxConcurrentTasks: UInt32 = 0
+
+  public var revision: String = String()
+
+  public var editable: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4548,6 +4841,62 @@ public nonisolated struct Muster_V1_MulticaRuntime: Sendable {
   public var lastSeenAt: String = String()
 
   public var deviceInfo: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaStatusChoice: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var key: String = String()
+
+  public var title: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaRun: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var agentID: String = String()
+
+  public var status: String = String()
+
+  public var createdAt: String = String()
+
+  public var completedAt: String = String()
+
+  public var failureReason: String = String()
+
+  public var canCancel: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_MulticaComment: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var content: String = String()
+
+  public var authorType: String = String()
+
+  public var createdAt: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4630,6 +4979,21 @@ public nonisolated struct Muster_V1_MulticaPage: @unchecked Sendable {
   public var previousOffset: UInt32 {
     get {_storage._previousOffset}
     set {_uniqueStorage()._previousOffset = newValue}
+  }
+
+  public var runs: [Muster_V1_MulticaRun] {
+    get {_storage._runs}
+    set {_uniqueStorage()._runs = newValue}
+  }
+
+  public var comments: [Muster_V1_MulticaComment] {
+    get {_storage._comments}
+    set {_uniqueStorage()._comments = newValue}
+  }
+
+  public var statusChoices: [Muster_V1_MulticaStatusChoice] {
+    get {_storage._statusChoices}
+    set {_uniqueStorage()._statusChoices = newValue}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -5392,7 +5756,7 @@ nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{3}agent_scheduler\0\u{3}device_request_screen_recording\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{3}agent_scheduler\0\u{3}device_request_screen_recording\0\u{3}multica_service\0\u{3}multica_mutation\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6271,6 +6635,32 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
           self.req = .deviceRequestScreenRecording(v)
         }
       }()
+      case 78: try {
+        var v: Muster_V1_MulticaServiceRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .multicaService(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .multicaService(v)
+        }
+      }()
+      case 79: try {
+        var v: Muster_V1_MulticaMutation?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .multicaMutation(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .multicaMutation(v)
+        }
+      }()
       default: break
       }
     }
@@ -6550,6 +6940,14 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
       guard case .deviceRequestScreenRecording(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 77)
     }()
+    case .multicaService?: try {
+      guard case .multicaService(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 78)
+    }()
+    case .multicaMutation?: try {
+      guard case .multicaMutation(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 79)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -6609,7 +7007,7 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Response"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0\u{2}\u{3}vision\0\u{4}\u{2}agent_scheduler\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}ack\0\u{3}op_result\0\u{4}\u{7}device_info\0\u{4}\u{4}debug_text\0\u{4}\u{2}locked_use_challenge\0\u{4}\u{4}network_status\0\u{4}\u{2}invite_text\0\u{4}\u{2}pending_joins\0\u{2}\u{4}policy\0\u{4}\u{2}terminal_sessions\0\u{4}\u{3}terminal_session\0\u{4}\u{3}terminal_lines\0\u{4}\u{2}terminal_runs\0\u{4}\u{2}agent_sessions\0\u{4}\u{2}agent_messages\0\u{4}\u{4}agent_session\0\u{3}file_list\0\u{3}file_content\0\u{3}git_log\0\u{4}\u{2}browser_status\0\u{3}agent_chats\0\u{4}\u{2}agent_chat_options\0\u{3}diagnostics_saved\0\u{3}agent_completion\0\u{4}\u{9}presence_info\0\u{2}\u{5}multica\0\u{3}multica_page\0\u{2}\u{3}vision\0\u{4}\u{2}agent_scheduler\0\u{4}\u{2}multica_service\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7007,6 +7405,19 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
           self.resp = .agentScheduler(v)
         }
       }()
+      case 78: try {
+        var v: Muster_V1_MulticaService?
+        var hadOneofValue = false
+        if let current = self.resp {
+          hadOneofValue = true
+          if case .multicaService(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.resp = .multicaService(v)
+        }
+      }()
       default: break
       }
     }
@@ -7137,6 +7548,10 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
     case .agentScheduler?: try {
       guard case .agentScheduler(let v)? = self.resp else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 76)
+    }()
+    case .multicaService?: try {
+      guard case .multicaService(let v)? = self.resp else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 78)
     }()
     case nil: break
     }
@@ -11429,7 +11844,7 @@ nonisolated extension Muster_V1_QuestionAnswer: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Muster_V1_AgentEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}list_changed\0\u{1}message\0\u{1}state\0\u{1}interaction\0\u{3}interaction_resolved\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}list_changed\0\u{1}message\0\u{1}state\0\u{1}interaction\0\u{3}interaction_resolved\0\u{1}unavailable\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -11497,6 +11912,19 @@ nonisolated extension Muster_V1_AgentEvent: SwiftProtobuf.Message, SwiftProtobuf
           self.ev = .interactionResolved(v)
         }
       }()
+      case 6: try {
+        var v: Muster_V1_AgentUnavailable?
+        var hadOneofValue = false
+        if let current = self.ev {
+          hadOneofValue = true
+          if case .unavailable(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.ev = .unavailable(v)
+        }
+      }()
       default: break
       }
     }
@@ -11528,6 +11956,10 @@ nonisolated extension Muster_V1_AgentEvent: SwiftProtobuf.Message, SwiftProtobuf
       guard case .interactionResolved(let v)? = self.ev else { preconditionFailure() }
       try visitor.visitSingularStringField(value: v, fieldNumber: 5)
     }()
+    case .unavailable?: try {
+      guard case .unavailable(let v)? = self.ev else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -11535,6 +11967,36 @@ nonisolated extension Muster_V1_AgentEvent: SwiftProtobuf.Message, SwiftProtobuf
 
   public static func ==(lhs: Muster_V1_AgentEvent, rhs: Muster_V1_AgentEvent) -> Bool {
     if lhs.ev != rhs.ev {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_AgentUnavailable: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AgentUnavailable"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.sessions) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessions.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.sessions, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_AgentUnavailable, rhs: Muster_V1_AgentUnavailable) -> Bool {
+    if lhs.sessions != rhs.sessions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -12957,6 +13419,358 @@ nonisolated extension Muster_V1_PresenceInfo: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
+nonisolated extension Muster_V1_MulticaMutation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaMutation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{3}workspace_id\0\u{1}agent\0\u{1}issue\0\u{3}issue_action\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.opID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.workspaceID) }()
+      case 3: try {
+        var v: Muster_V1_MulticaAgentEdit?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .agent(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .agent(v)
+        }
+      }()
+      case 4: try {
+        var v: Muster_V1_MulticaIssueEdit?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .issue(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .issue(v)
+        }
+      }()
+      case 5: try {
+        var v: Muster_V1_MulticaIssueAction?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .issueAction(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .issueAction(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.opID.isEmpty {
+      try visitor.visitSingularStringField(value: self.opID, fieldNumber: 1)
+    }
+    if !self.workspaceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.workspaceID, fieldNumber: 2)
+    }
+    switch self.action {
+    case .agent?: try {
+      guard case .agent(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .issue?: try {
+      guard case .issue(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case .issueAction?: try {
+      guard case .issueAction(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaMutation, rhs: Muster_V1_MulticaMutation) -> Bool {
+    if lhs.opID != rhs.opID {return false}
+    if lhs.workspaceID != rhs.workspaceID {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaAgentEdit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaAgentEdit"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}revision\0\u{1}name\0\u{1}description\0\u{1}instructions\0\u{1}model\0\u{3}max_concurrent_tasks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.revision) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.instructions) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 7: try { try decoder.decodeSingularUInt32Field(value: &self.maxConcurrentTasks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.revision.isEmpty {
+      try visitor.visitSingularStringField(value: self.revision, fieldNumber: 2)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 3)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 4)
+    }
+    if !self.instructions.isEmpty {
+      try visitor.visitSingularStringField(value: self.instructions, fieldNumber: 5)
+    }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 6)
+    }
+    if self.maxConcurrentTasks != 0 {
+      try visitor.visitSingularUInt32Field(value: self.maxConcurrentTasks, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaAgentEdit, rhs: Muster_V1_MulticaAgentEdit) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.revision != rhs.revision {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.instructions != rhs.instructions {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.maxConcurrentTasks != rhs.maxConcurrentTasks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaIssueEdit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaIssueEdit"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}revision\0\u{1}title\0\u{1}description\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.revision) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.revision.isEmpty {
+      try visitor.visitSingularStringField(value: self.revision, fieldNumber: 2)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 3)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaIssueEdit, rhs: Muster_V1_MulticaIssueEdit) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.revision != rhs.revision {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaIssueAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaIssueAction"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}id\0\u{1}revision\0\u{1}value\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.revision) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 2)
+    }
+    if !self.revision.isEmpty {
+      try visitor.visitSingularStringField(value: self.revision, fieldNumber: 3)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaIssueAction, rhs: Muster_V1_MulticaIssueAction) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.id != rhs.id {return false}
+    if lhs.revision != rhs.revision {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaIssueAction.Kind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}ASSIGN\0\u{1}STATUS\0\u{1}COMMENT\0\u{1}RERUN\0\u{1}CANCEL\0")
+}
+
+nonisolated extension Muster_V1_MulticaServiceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaServiceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}action\0\u{1}offered\0\u{1}workspaces\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.offered) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.workspaces) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.action != .get {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 1)
+    }
+    if self.offered != false {
+      try visitor.visitSingularBoolField(value: self.offered, fieldNumber: 2)
+    }
+    if !self.workspaces.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.workspaces, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaServiceRequest, rhs: Muster_V1_MulticaServiceRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.offered != rhs.offered {return false}
+    if lhs.workspaces != rhs.workspaces {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaServiceRequest.Action: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GET\0\u{1}SAVE\0")
+}
+
+nonisolated extension Muster_V1_MulticaService: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaService"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{1}offered\0\u{3}can_view\0\u{3}can_control\0\u{3}can_manage\0\u{1}workspaces\0\u{1}message\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.version) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.offered) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.canView) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.canControl) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.canManage) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.workspaces) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.version != 0 {
+      try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
+    }
+    if self.offered != false {
+      try visitor.visitSingularBoolField(value: self.offered, fieldNumber: 2)
+    }
+    if self.canView != false {
+      try visitor.visitSingularBoolField(value: self.canView, fieldNumber: 3)
+    }
+    if self.canControl != false {
+      try visitor.visitSingularBoolField(value: self.canControl, fieldNumber: 4)
+    }
+    if self.canManage != false {
+      try visitor.visitSingularBoolField(value: self.canManage, fieldNumber: 5)
+    }
+    if !self.workspaces.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.workspaces, fieldNumber: 6)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaService, rhs: Muster_V1_MulticaService) -> Bool {
+    if lhs.version != rhs.version {return false}
+    if lhs.offered != rhs.offered {return false}
+    if lhs.canView != rhs.canView {return false}
+    if lhs.canControl != rhs.canControl {return false}
+    if lhs.canManage != rhs.canManage {return false}
+    if lhs.workspaces != rhs.workspaces {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_V1_MulticaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}action\0\u{3}data_dir\0\u{3}installer_url\0\u{3}server_url\0\u{3}app_url\0\u{3}keep_alive\0\u{3}container_name\0")
@@ -13321,7 +14135,7 @@ nonisolated extension Muster_V1_MulticaWorkspace: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Muster_V1_MulticaIssue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaIssue"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}identifier\0\u{1}title\0\u{1}description\0\u{1}status\0\u{1}priority\0\u{3}assignee_id\0\u{3}assignee_type\0\u{3}updated_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}identifier\0\u{1}title\0\u{1}description\0\u{1}status\0\u{1}priority\0\u{3}assignee_id\0\u{3}assignee_type\0\u{3}updated_at\0\u{1}revision\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -13338,6 +14152,7 @@ nonisolated extension Muster_V1_MulticaIssue: SwiftProtobuf.Message, SwiftProtob
       case 7: try { try decoder.decodeSingularStringField(value: &self.assigneeID) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.assigneeType) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self.updatedAt) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.revision) }()
       default: break
       }
     }
@@ -13371,6 +14186,9 @@ nonisolated extension Muster_V1_MulticaIssue: SwiftProtobuf.Message, SwiftProtob
     if !self.updatedAt.isEmpty {
       try visitor.visitSingularStringField(value: self.updatedAt, fieldNumber: 9)
     }
+    if !self.revision.isEmpty {
+      try visitor.visitSingularStringField(value: self.revision, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -13384,6 +14202,7 @@ nonisolated extension Muster_V1_MulticaIssue: SwiftProtobuf.Message, SwiftProtob
     if lhs.assigneeID != rhs.assigneeID {return false}
     if lhs.assigneeType != rhs.assigneeType {return false}
     if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.revision != rhs.revision {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -13391,7 +14210,7 @@ nonisolated extension Muster_V1_MulticaIssue: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Muster_V1_MulticaAgent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaAgent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}description\0\u{1}status\0\u{3}runtime_id\0\u{1}model\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}description\0\u{1}status\0\u{3}runtime_id\0\u{1}model\0\u{1}instructions\0\u{3}max_concurrent_tasks\0\u{1}revision\0\u{1}editable\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -13405,6 +14224,10 @@ nonisolated extension Muster_V1_MulticaAgent: SwiftProtobuf.Message, SwiftProtob
       case 4: try { try decoder.decodeSingularStringField(value: &self.status) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.runtimeID) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.instructions) }()
+      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.maxConcurrentTasks) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.revision) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.editable) }()
       default: break
       }
     }
@@ -13429,6 +14252,18 @@ nonisolated extension Muster_V1_MulticaAgent: SwiftProtobuf.Message, SwiftProtob
     if !self.model.isEmpty {
       try visitor.visitSingularStringField(value: self.model, fieldNumber: 6)
     }
+    if !self.instructions.isEmpty {
+      try visitor.visitSingularStringField(value: self.instructions, fieldNumber: 7)
+    }
+    if self.maxConcurrentTasks != 0 {
+      try visitor.visitSingularUInt32Field(value: self.maxConcurrentTasks, fieldNumber: 8)
+    }
+    if !self.revision.isEmpty {
+      try visitor.visitSingularStringField(value: self.revision, fieldNumber: 9)
+    }
+    if self.editable != false {
+      try visitor.visitSingularBoolField(value: self.editable, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -13439,6 +14274,10 @@ nonisolated extension Muster_V1_MulticaAgent: SwiftProtobuf.Message, SwiftProtob
     if lhs.status != rhs.status {return false}
     if lhs.runtimeID != rhs.runtimeID {return false}
     if lhs.model != rhs.model {return false}
+    if lhs.instructions != rhs.instructions {return false}
+    if lhs.maxConcurrentTasks != rhs.maxConcurrentTasks {return false}
+    if lhs.revision != rhs.revision {return false}
+    if lhs.editable != rhs.editable {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -13499,9 +14338,149 @@ nonisolated extension Muster_V1_MulticaRuntime: SwiftProtobuf.Message, SwiftProt
   }
 }
 
+nonisolated extension Muster_V1_MulticaStatusChoice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaStatusChoice"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}title\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.key) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.key.isEmpty {
+      try visitor.visitSingularStringField(value: self.key, fieldNumber: 1)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaStatusChoice, rhs: Muster_V1_MulticaStatusChoice) -> Bool {
+    if lhs.key != rhs.key {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaRun: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaRun"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}agent_id\0\u{1}status\0\u{3}created_at\0\u{3}completed_at\0\u{3}failure_reason\0\u{3}can_cancel\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.agentID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.createdAt) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.completedAt) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.failureReason) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.canCancel) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.agentID.isEmpty {
+      try visitor.visitSingularStringField(value: self.agentID, fieldNumber: 2)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 3)
+    }
+    if !self.createdAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.createdAt, fieldNumber: 4)
+    }
+    if !self.completedAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.completedAt, fieldNumber: 5)
+    }
+    if !self.failureReason.isEmpty {
+      try visitor.visitSingularStringField(value: self.failureReason, fieldNumber: 6)
+    }
+    if self.canCancel != false {
+      try visitor.visitSingularBoolField(value: self.canCancel, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaRun, rhs: Muster_V1_MulticaRun) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.agentID != rhs.agentID {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs.completedAt != rhs.completedAt {return false}
+    if lhs.failureReason != rhs.failureReason {return false}
+    if lhs.canCancel != rhs.canCancel {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_MulticaComment: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MulticaComment"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}content\0\u{3}author_type\0\u{3}created_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.content) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.authorType) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.createdAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.content.isEmpty {
+      try visitor.visitSingularStringField(value: self.content, fieldNumber: 2)
+    }
+    if !self.authorType.isEmpty {
+      try visitor.visitSingularStringField(value: self.authorType, fieldNumber: 3)
+    }
+    if !self.createdAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.createdAt, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_MulticaComment, rhs: Muster_V1_MulticaComment) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.content != rhs.content {return false}
+    if lhs.authorType != rhs.authorType {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaPage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}workspaces\0\u{3}workspace_id\0\u{1}issues\0\u{1}agents\0\u{1}runtimes\0\u{1}offset\0\u{3}has_more\0\u{1}issue\0\u{1}agent\0\u{1}busy\0\u{1}error\0\u{3}next_offset\0\u{3}previous_offset\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}workspaces\0\u{3}workspace_id\0\u{1}issues\0\u{1}agents\0\u{1}runtimes\0\u{1}offset\0\u{3}has_more\0\u{1}issue\0\u{1}agent\0\u{1}busy\0\u{1}error\0\u{3}next_offset\0\u{3}previous_offset\0\u{1}runs\0\u{1}comments\0\u{3}status_choices\0")
 
   fileprivate class _StorageClass {
     var _workspaces: [Muster_V1_MulticaWorkspace] = []
@@ -13517,6 +14496,9 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
     var _error: String = String()
     var _nextOffset: UInt32 = 0
     var _previousOffset: UInt32 = 0
+    var _runs: [Muster_V1_MulticaRun] = []
+    var _comments: [Muster_V1_MulticaComment] = []
+    var _statusChoices: [Muster_V1_MulticaStatusChoice] = []
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -13540,6 +14522,9 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
       _error = source._error
       _nextOffset = source._nextOffset
       _previousOffset = source._previousOffset
+      _runs = source._runs
+      _comments = source._comments
+      _statusChoices = source._statusChoices
     }
   }
 
@@ -13571,6 +14556,9 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
         case 11: try { try decoder.decodeSingularStringField(value: &_storage._error) }()
         case 12: try { try decoder.decodeSingularUInt32Field(value: &_storage._nextOffset) }()
         case 13: try { try decoder.decodeSingularUInt32Field(value: &_storage._previousOffset) }()
+        case 14: try { try decoder.decodeRepeatedMessageField(value: &_storage._runs) }()
+        case 15: try { try decoder.decodeRepeatedMessageField(value: &_storage._comments) }()
+        case 16: try { try decoder.decodeRepeatedMessageField(value: &_storage._statusChoices) }()
         default: break
         }
       }
@@ -13622,6 +14610,15 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
       if _storage._previousOffset != 0 {
         try visitor.visitSingularUInt32Field(value: _storage._previousOffset, fieldNumber: 13)
       }
+      if !_storage._runs.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._runs, fieldNumber: 14)
+      }
+      if !_storage._comments.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._comments, fieldNumber: 15)
+      }
+      if !_storage._statusChoices.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._statusChoices, fieldNumber: 16)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -13644,6 +14641,9 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
         if _storage._error != rhs_storage._error {return false}
         if _storage._nextOffset != rhs_storage._nextOffset {return false}
         if _storage._previousOffset != rhs_storage._previousOffset {return false}
+        if _storage._runs != rhs_storage._runs {return false}
+        if _storage._comments != rhs_storage._comments {return false}
+        if _storage._statusChoices != rhs_storage._statusChoices {return false}
         return true
       }
       if !storagesAreEqual {return false}

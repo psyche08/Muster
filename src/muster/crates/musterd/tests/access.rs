@@ -244,6 +244,11 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
 
     assert!(unauthorized(
         &remote
+            .call(Req::MulticaMutation(v1::MulticaMutation::default()))
+            .await
+    ));
+    assert!(unauthorized(
+        &remote
             .call(Req::MulticaBrowse(v1::MulticaBrowseRequest::default()))
             .await
     ));
@@ -525,4 +530,240 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     assert!(unauthorized(&ended), "{ended:?}");
     assert!(unauthorized(&sessions(&remote, "").await));
     assert!(unauthorized(&read(CODEX).await));
+
+    // Ordinary Agent permission and network connectivity never imply Multica.
+    let Resp::MulticaService(off) = remote
+        .call(Req::MulticaService(v1::MulticaServiceRequest::default()))
+        .await
+        .unwrap()
+    else {
+        panic!("service")
+    };
+    assert!(!off.can_view && off.workspaces.is_empty() && !off.can_manage);
+    let grants = vec![
+        "multica.view".into(),
+        "agents".into(),
+        "agents:codex".into(),
+    ];
+    assert!(
+        a.set_scopes(&pending.device_id, &grants, "").is_err(),
+        "unchecked issuance is rejected"
+    );
+    ca.call(Req::NetworkSetScopes(v1::NetworkSetScopesRequest {
+        device_id: pending.device_id.clone(),
+        scopes: grants.clone(),
+        role: String::new(),
+    }))
+    .await
+    .unwrap();
+    let Resp::MulticaService(off) = remote
+        .call(Req::MulticaService(v1::MulticaServiceRequest::default()))
+        .await
+        .unwrap()
+    else {
+        panic!("service")
+    };
+    assert!(!off.can_view, "a grant does not turn on the host service");
+    {
+        let mut policy = a.policy().write().unwrap();
+        policy.offer_multica = true;
+        policy.multica_workspaces.insert("workspace-a".into());
+    }
+    let Resp::MulticaService(on) = remote
+        .call(Req::MulticaService(v1::MulticaServiceRequest::default()))
+        .await
+        .unwrap()
+    else {
+        panic!("service")
+    };
+    assert!(on.can_view && !on.can_manage && !on.can_control);
+    assert_eq!(on.workspaces, ["workspace-a"]);
+    assert!(unauthorized(
+        &remote
+            .call(Req::MulticaService(v1::MulticaServiceRequest {
+                action: 1,
+                offered: true,
+                workspaces: vec!["other".into()]
+            }))
+            .await
+    ));
+    assert!(unauthorized(
+        &remote
+            .call(Req::MulticaBrowse(v1::MulticaBrowseRequest {
+                workspace_id: "not-shared".into(),
+                ..Default::default()
+            }))
+            .await
+    ));
+    reserve_multica(&a, CODEX);
+    assert!(sessions(&remote, "").await.unwrap().is_empty());
+    assert!(unauthorized(&read(CODEX).await));
+    a.policy().write().unwrap().offer_multica = false;
+    let Resp::MulticaService(off) = remote
+        .call(Req::MulticaService(v1::MulticaServiceRequest::default()))
+        .await
+        .unwrap()
+    else {
+        panic!("service")
+    };
+    assert!(!off.can_view && off.workspaces.is_empty());
+    b.shutdown().await;
+    assert!(
+        a.set_scopes_checked(&pending.device_id, &grants, "")
+            .await
+            .is_err(),
+        "an offline active member blocks new-scope issuance"
+    );
+}
+
+fn reserve_multica(daemon: &Daemon, session: &str) {
+    use muster_store::multica::{NativeSession, Reservation, Task};
+    let agent = daemon.agent().unwrap();
+    let identity = agent.native_lineage(session).unwrap().remove(0);
+    let device = daemon.device_id().to_string();
+    daemon
+        .store()
+        .multica_reserve(&Reservation {
+            task: Task {
+                device: device.clone(),
+                service: "test-service".into(),
+                workspace: "test-workspace".into(),
+                task: "test-task".into(),
+            },
+            run: "run-1".into(),
+            role: "executor".into(),
+            profile: "desktop".into(),
+            generation: 1,
+            native: NativeSession {
+                device,
+                provider: identity.provider,
+                store: identity.store,
+                session: identity.session,
+            },
+            canonical_cwd: agent.session(session).unwrap().cwd,
+            requester: "local-test-owner".into(),
+            operation: "reserve-1".into(),
+            provider_request: "native-1".into(),
+        })
+        .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn multica_reservation_removes_catalog_search_and_child_access_and_ends_idle_watch() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = transcripts(dir.path());
+    let child = "00000000-0000-0000-0000-000000000001";
+    std::fs::write(parent.parent().unwrap().join(format!("rollout-child-{child}.jsonl")),
+        format!("{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"{child}\",\"parent_thread_id\":\"{CODEX}\",\"cwd\":\"{}\"}}}}\n",dir.path().display())).unwrap();
+    let daemon = Daemon::start_with(
+        config(dir.path(), None, "test-host"),
+        std::sync::Arc::new(musterd::DefaultPlatform),
+        None,
+    )
+    .await
+    .unwrap();
+    let local = client(&daemon).await;
+    assert!(sessions(&local, "").await.unwrap().contains(&CODEX.into()));
+    let mut watch = local
+        .start(Req::AgentWatch(v1::AgentWatchRequest {
+            session: CODEX.into(),
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(5), watch.events.recv())
+            .await
+            .unwrap()
+            .is_some()
+    );
+    // No provider event or message follows: the durable ownership revision must
+    // end this already-open watch, including for the trusted local client.
+    reserve_multica(&daemon, CODEX);
+    let ended = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut invalidated = false;
+        while let Some(event) = watch.events.recv().await {
+            if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                ev: Some(v1::agent_event::Ev::Unavailable(removed)),
+            }) = event
+            {
+                invalidated |= removed.sessions.iter().any(|id| id == CODEX);
+            }
+        }
+        assert!(
+            invalidated,
+            "the client must clear content before the stream ends"
+        );
+        watch.finish().await
+    })
+    .await
+    .expect("ownership alone ends the watch");
+    assert!(unauthorized(&ended), "{ended:?}");
+    assert_eq!(sessions(&local, "").await.unwrap(), [CLAUDE]);
+    for grouped in [false, true] {
+        let Resp::AgentSessions(page) = local
+            .call(Req::AgentList(v1::AgentListRequest {
+                grouped,
+                query: if grouped { "" } else { "hello" }.into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap()
+        else {
+            panic!("catalog response")
+        };
+        assert!(page.sessions.iter().all(|s| s.id != CODEX && s.id != child));
+    }
+    for id in [CODEX, child] {
+        for request in [
+            Req::AgentMessages(v1::AgentMessagesRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+            Req::AgentFiles(v1::AgentFilesRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+            Req::AgentFile(v1::AgentFileRequest {
+                session: id.into(),
+                path: "file.txt".into(),
+                ..Default::default()
+            }),
+            Req::AgentGit(v1::AgentGitRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+            Req::AgentSend(v1::AgentSendRequest {
+                session: id.into(),
+                op_id: "denied".into(),
+                text: "not sent".into(),
+                ..Default::default()
+            }),
+            Req::AgentSendStatus(v1::AgentSendRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+            Req::AgentOrganize(v1::AgentOrganizeRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+            Req::AgentInspect(v1::AgentInspectRequest {
+                session: id.into(),
+                ..Default::default()
+            }),
+        ] {
+            let result = local.call(request).await;
+            assert!(unauthorized(&result), "{id}: {result:?}");
+        }
+    }
+    // Sharing a directory and provider never transfers personal ownership.
+    assert!(
+        local
+            .call(Req::AgentMessages(v1::AgentMessagesRequest {
+                session: CLAUDE.into(),
+                ..Default::default()
+            }))
+            .await
+            .is_ok()
+    );
 }

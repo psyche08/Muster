@@ -15,6 +15,7 @@ pub mod presence;
 pub mod reconnect;
 pub mod relay_proto;
 pub mod relay_tls;
+pub mod scope_compat;
 pub mod secure_relay;
 pub mod stream;
 mod system_dns;

@@ -79,6 +79,41 @@ impl Cache {
             worker,
         }
     }
+    /// Forget a transcript/catalog and its pending write under the same disk
+    /// lock as the worker. A queued old write cannot recreate removed content.
+    pub fn remove(&self, key: &str) {
+        let _disk = self.disk.lock().unwrap();
+        self.pending.lock().unwrap().remove(key);
+        self.memory.lock().unwrap().remove(key);
+        if let Err(error) = std::fs::remove_file(self.root.join(key)) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("Cache removal failed: {error}");
+            }
+        }
+    }
+
+    /// Purge the recent outline and all pages/turn details of this session.
+    pub fn remove_history(&self, key: &str) {
+        let _disk = self.disk.lock().unwrap();
+        let prefix = format!("{key}-");
+        let belongs = |name: &str| name == key || name.starts_with(&prefix);
+        let mut memory = self.memory.lock().unwrap();
+        memory.retain(|name, _| !belongs(name));
+        self.pending
+            .lock()
+            .unwrap()
+            .retain(|name, _| !belongs(name));
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            for entry in entries.flatten() {
+                if belongs(&entry.file_name().to_string_lossy())
+                    && let Err(error) = std::fs::remove_file(entry.path())
+                {
+                    log::warn!("History cache removal failed: {error}");
+                }
+            }
+        }
+    }
+
     pub fn key(parts: &[&str]) -> String {
         // Length-delimited components prevent collisions between host/session scopes.
         let messages: Vec<_> = parts
@@ -101,6 +136,11 @@ impl Cache {
         let bytes = if let Some(bytes) = cached {
             bytes
         } else {
+            // A late transcript disk read cannot repopulate a purged session.
+            // Other reads keep their existing latency on the reducer thread.
+            let _disk = key
+                .starts_with("history-")
+                .then(|| self.disk.lock().unwrap());
             let path = [self.root.join(format!("{key}{KEEP}")), self.root.join(key)]
                 .into_iter()
                 .find(|p| p.is_file())?;
@@ -159,6 +199,9 @@ impl Cache {
         );
     }
     pub fn put<T: Message>(&self, key: String, value: &T) {
+        self.put_while(key, value, || true);
+    }
+    pub fn put_while<T: Message>(&self, key: String, value: &T, active: impl FnOnce() -> bool) {
         if value.encoded_len() > MAX_BYTES {
             return;
         }
@@ -167,6 +210,9 @@ impl Cache {
         // data and must not block the reducer behind disk writes.
         let _disk = (!key.starts_with("history-")).then(|| self.disk.lock().unwrap());
         let mut memory = self.memory.lock().unwrap();
+        if !active() {
+            return;
+        }
         if memory.get(&key).is_some_and(|old| **old == *bytes) {
             return;
         }

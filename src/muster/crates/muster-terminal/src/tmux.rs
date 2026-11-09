@@ -202,6 +202,30 @@ impl TmuxService {
         Ok(())
     }
 
+    /// Resolve an opaque terminal handle to the original exact agent identity.
+    /// The managed name is an encoding, never a title/directory heuristic.
+    pub async fn agent_session(&self, handle: &str) -> Result<String, Error> {
+        let target = self.target(handle).await?;
+        let name = self
+            .checked(&["display-message", "-p", "-t", &target, "#{session_name}"])
+            .await?;
+        let encoded = name
+            .strip_prefix("muster-")
+            .filter(|s| !s.is_empty() && s.len() <= 512 && s.len() % 2 == 0)
+            .ok_or_else(|| Error::NotFound("Managed terminal identity unavailable".into()))?;
+        let bytes = encoded
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| {
+                let text = std::str::from_utf8(pair)
+                    .map_err(|_| Error::NotFound("Invalid terminal identity".into()))?;
+                u8::from_str_radix(text, 16)
+                    .map_err(|_| Error::NotFound("Invalid terminal identity".into()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        String::from_utf8(bytes).map_err(|_| Error::NotFound("Invalid terminal identity".into()))
+    }
+
     /// Lookup never creates a shell and never falls back to a title or cwd.
     async fn target(&self, handle: &str) -> Result<String, Error> {
         Self::validate_handle(handle)?;

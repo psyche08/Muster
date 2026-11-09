@@ -37,6 +37,10 @@ pub enum Permission {
     Browser {
         control: bool,
     },
+    Multica {
+        workspace: Option<String>,
+        control: bool,
+    },
     LockedControl,
     NetworkAdmin,
     Net {
@@ -84,6 +88,9 @@ impl Permission {
             } else {
                 Scope::BrowserView
             }),
+            Permission::Multica { control, .. } => {
+                has(Scope::MulticaView) && (!control || has(Scope::MulticaControl))
+            }
             Permission::LockedControl => has(Scope::LockedControl),
             Permission::NetworkAdmin => role == Role::Admin || has(Scope::NetworkAdmin),
             Permission::Net { proto, port } => {
@@ -128,6 +135,7 @@ impl fmt::Display for Permission {
             } => write!(f, "agents:{p} ({})", verb(*control)),
             Permission::Terminal { control } => write!(f, "terminals ({})", verb(*control)),
             Permission::Browser { control } => write!(f, "browser.{}", verb(*control)),
+            Permission::Multica { control, .. } => write!(f, "multica.{}", verb(*control)),
             Permission::LockedControl => f.write_str("locked.control"),
             Permission::NetworkAdmin => f.write_str("network.admin"),
             Permission::Net { proto, port } => write!(
@@ -159,6 +167,11 @@ pub struct LocalPolicy {
     /// the owner makes rather than a default they inherit.
     #[serde(default)]
     pub offer_tasks: bool,
+    /// Local-owner-only, default-off Multica sharing. Empty workspace set offers nothing.
+    #[serde(default)]
+    pub offer_multica: bool,
+    #[serde(default)]
+    pub multica_workspaces: BTreeSet<String>,
     /// The web window (ADR 0049): the one foreign origin this machine serves
     /// on a loopback port, for members with no route to it. `None` is off,
     /// which is how a machine starts — it carries somebody else's site, so
@@ -193,6 +206,8 @@ impl Default for LocalPolicy {
             offer_agent: true,
             offer_terminal: true,
             offer_tasks: false,
+            offer_multica: false,
+            multica_workspaces: BTreeSet::new(),
             web_window: None,
         }
     }
@@ -223,6 +238,13 @@ impl LocalPolicy {
                 self.offer_agent
             }
             Permission::Terminal { .. } => self.offer_terminal,
+            Permission::Multica { workspace, .. } => {
+                self.offer_multica
+                    && !self.multica_workspaces.is_empty()
+                    && workspace
+                        .as_ref()
+                        .is_none_or(|id| self.multica_workspaces.contains(id))
+            }
             Permission::LockedControl => self.allow_locked_control,
             Permission::NetworkAdmin => true,
             Permission::Net { proto, port } => self.port_open(*proto, *port),
@@ -298,6 +320,113 @@ pub fn authorize_port(
 mod tests {
     use super::*;
     use crate::identity::{HwSigner, SoftSigner};
+
+    #[test]
+    fn multica_is_independent_default_off_and_workspace_scoped() {
+        let view = Permission::Multica {
+            workspace: Some("workspace-a".into()),
+            control: false,
+        };
+        let control = Permission::Multica {
+            workspace: Some("workspace-a".into()),
+            control: true,
+        };
+        let (roster, peer) = roster_with(&["multica.view"]);
+        let mut policy = LocalPolicy::default();
+        assert!(
+            !authorize(
+                roster.state(),
+                &peer,
+                &view,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+        policy.offer_multica = true;
+        assert!(
+            !authorize(
+                roster.state(),
+                &peer,
+                &view,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+        policy.multica_workspaces.insert("workspace-a".into());
+        assert!(
+            authorize(
+                roster.state(),
+                &peer,
+                &view,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+        assert!(
+            !authorize(
+                roster.state(),
+                &peer,
+                &control,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+        let other = Permission::Multica {
+            workspace: Some("workspace-b".into()),
+            control: false,
+        };
+        assert!(
+            !authorize(
+                roster.state(),
+                &peer,
+                &other,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+        for scopes in [
+            vec!["agents", "agents:deepseek", "network.admin"],
+            vec!["multica.control"],
+        ] {
+            let (roster, peer) = roster_with(&scopes);
+            assert!(
+                !authorize(
+                    roster.state(),
+                    &peer,
+                    &view,
+                    &policy,
+                    &TargetState::default()
+                )
+                .is_allow()
+            );
+            assert!(
+                !authorize(
+                    roster.state(),
+                    &peer,
+                    &control,
+                    &policy,
+                    &TargetState::default()
+                )
+                .is_allow()
+            );
+        }
+        let (roster, peer) = roster_with(&["multica.view", "multica.control"]);
+        assert!(
+            authorize(
+                roster.state(),
+                &peer,
+                &control,
+                &policy,
+                &TargetState::default()
+            )
+            .is_allow()
+        );
+    }
 
     /// Serving an external scheduler's tasks admits work this machine's owner
     /// did not start, so it waits to be switched on. The two services that

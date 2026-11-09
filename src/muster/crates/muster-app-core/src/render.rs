@@ -101,6 +101,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         desktop_setup: Some(desktop_setup(state)),
         desktop_update: Some(state.desktop_update.clone()),
         multica: Some(state.multica.clone()),
+        multica_workspace: Some(crate::update::multica::view(state)),
         multica_page: Some(state.multica_page.clone()),
         vision: Some(state.vision.clone()),
         selected_device_has_services: service_devices

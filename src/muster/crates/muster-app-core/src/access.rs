@@ -40,7 +40,9 @@ const EARLIER: &[(&str, &str)] = &[
 
 pub fn join_defaults() -> AccessView {
     let held: Vec<String> = JOIN_DEFAULTS.iter().map(|s| s.to_string()).collect();
-    view(&held)
+    let mut result = view(&held);
+    result.sections.retain(|section| section.id != "multica");
+    result
 }
 
 /// The editor for a member holding `scopes` (as the roster reports them).
@@ -110,6 +112,22 @@ pub fn view(scopes: &[String]) -> AccessView {
         "terminals",
     );
 
+    let multica_control = take("multica.control");
+    let mut multica = module(
+        &mut take,
+        "multica",
+        "Multica",
+        "Shared workspaces only. Control also requires the provider permission. Join first; all members must be online and upgraded before these permissions can be granted.",
+        Vec::new(),
+        "multica.view",
+    );
+    multica.items.push(item(
+        "multica.control",
+        "Control task sessions (not yet available)",
+        multica_control,
+        true,
+    ));
+
     let mut earlier_items = Vec::new();
     for (scope, label) in EARLIER {
         if take(scope) {
@@ -127,6 +145,7 @@ pub fn view(scopes: &[String]) -> AccessView {
         chats,
         agents,
         terminals,
+        multica,
         AccessSection {
             id: "other".into(),
             title: "Other".into(),

@@ -65,6 +65,8 @@ pub enum Scope {
     AgentProvider(String),
     /// Every terminal session, to view and to type into.
     Terminals,
+    MulticaView,
+    MulticaControl,
 }
 
 impl Scope {
@@ -133,6 +135,8 @@ impl fmt::Display for Scope {
             Scope::Agents => f.write_str("agents"),
             Scope::AgentProvider(provider) => write!(f, "agents:{provider}"),
             Scope::Terminals => f.write_str("terminals"),
+            Scope::MulticaView => f.write_str("multica.view"),
+            Scope::MulticaControl => f.write_str("multica.control"),
             Scope::Net {
                 proto: Proto::Any,
                 port: None,
@@ -168,6 +172,8 @@ impl FromStr for Scope {
             "chats" => Scope::Chats,
             "agents" => Scope::Agents,
             "terminals" => Scope::Terminals,
+            "multica.view" => Scope::MulticaView,
+            "multica.control" => Scope::MulticaControl,
             "net:*" => Scope::ALL_NET,
             other if other.starts_with("chats:") => Scope::ChatProvider(provider(other, "chats:")?),
             other if other.starts_with("agents:") => {
@@ -245,6 +251,8 @@ mod tests {
             "agents:codex",
             "agents:some-future-app",
             "terminals",
+            "multica.view",
+            "multica.control",
         ] {
             let scope: Scope = text.parse().unwrap();
             assert_eq!(scope.to_string(), text);
@@ -287,6 +295,8 @@ mod tests {
             "agents:claude",
             "agents:codex",
             "terminals",
+            "multica.view",
+            "multica.control",
         ]
         .iter()
         .map(|s| s.parse().unwrap())

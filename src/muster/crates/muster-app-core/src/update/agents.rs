@@ -46,6 +46,13 @@ pub(super) fn cache_key(state: &State, kind: &str, device: &str, id: &str) -> St
     ])
 }
 
+fn history_key(state: &State, device: &str, session: &str) -> String {
+    format!(
+        "history-{}",
+        cache_key(state, "recent-outline-v1", device, session)
+    )
+}
+
 pub(crate) fn flush_chat_cache(state: &mut State, ctx: &Ctx) {
     if let Some(chat) = &mut state.chat
         && chat.cache_dirty
@@ -81,8 +88,8 @@ pub(super) fn work_cache_key(cache_key: &str, work: &v1::AgentMessage) -> String
         .map(|w| hex::encode(&w.hash))
         .unwrap_or_default();
     format!(
-        "history-{}",
-        crate::cache::Cache::key(&["history-work-v1", cache_key, &work.id, &hash])
+        "{cache_key}-{}",
+        crate::cache::Cache::key(&["work", &work.id, &hash])
     )
 }
 
@@ -221,13 +228,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
     // only while there is nothing to list yet.
     state.agents.loading = !devices.is_empty() && state.agents.sessions.is_empty();
     for (device, name, is_self) in devices {
-        if !state.agents.sessions.iter().any(|s| s.device_id == device)
-            && let Some(page) = ctx
-                .cache
-                .get::<v1::AgentSessionPage>(&cache_key(state, "agents", &device, ""))
-        {
-            restore_catalog_cache(state, &device, &name, page);
-        }
+        // Cached catalogs cannot establish current ownership or access. Wait
+        // for the authenticated host snapshot before showing any saved rows.
         // Network state can arrive before DeviceInfo. Route an explicitly
         // local member through the local socket even before self_id is loaded.
         let self_id = if is_self {
@@ -290,6 +292,17 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             call.events.recv().await
                         };
                         let Some(event) = event else { break };
+                        if let v1::event::Ev::AgentEvent(v1::AgentEvent {
+                            ev: Some(v1::agent_event::Ev::Unavailable(ref removed)),
+                        }) = event
+                        {
+                            let _ = tx.send(loop_message(Msg::AgentUnavailable {
+                                epoch,
+                                device: device.clone(),
+                                sessions: removed.sessions.clone(),
+                            }));
+                            continue;
+                        }
                         if let v1::event::Ev::AgentEvent(v1::AgentEvent {
                             ev: Some(v1::agent_event::Ev::ListChanged(mut page)),
                         }) = event
@@ -411,10 +424,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
             ..Default::default()
         });
     // A new namespace avoids synchronously decoding legacy whole-session entries.
-    let key = format!(
-        "history-{}",
-        cache_key(state, "recent-outline-v1", &device, &session_id)
-    );
+    let key = history_key(state, &device, &session_id);
     super::terminals::detach_session_terminal(state);
     state.chat = Some(Chat {
         load_trace: None,
@@ -652,24 +662,6 @@ fn watch_agent_traced(
     let backend = ctx.backend.clone();
     let tx = ctx.tx.clone();
     let shell = ctx.shell.clone();
-    {
-        let (cache, key, token, device, session) = (
-            cache.clone(),
-            key.clone(),
-            token.clone(),
-            device.clone(),
-            session_id.clone(),
-        );
-        spawn(ctx, async move {
-            let page = cache.history(key).await.unwrap_or_default();
-            Msg::ChatCache {
-                token,
-                device,
-                session,
-                page,
-            }
-        });
-    }
     tokio::spawn(async move {
         let entry_trace_id = trace.id().to_string();
         let mut retry = 1;
@@ -720,23 +712,20 @@ fn watch_agent_traced(
                     serde_json::json!({"attempt":attempt_index}),
                 );
                 let call = active_call.as_mut().expect("started watch");
-                // A newly established subscription replays the server's current
-                // pending interactions. Retire the old stream's display IDs
-                // before that replay, not on transient activity changes.
-                if let v1::event::Ev::AgentEvent(v1::AgentEvent {
-                    ev: Some(v1::agent_event::Ev::State(initial)),
-                }) = &first
-                    && initial.id == session_id
-                {
+                let admitted = match &first {
+                    v1::event::Ev::AgentEvent(v1::AgentEvent {
+                        ev: Some(v1::agent_event::Ev::State(initial)),
+                    }) if initial.id == session_id => Some(initial.provider.clone()),
+                    _ => None,
+                };
+                if let Some(provider) = &admitted {
                     let _ = tx.send(loop_message(Msg::AgentStreamStarted {
                         token: token.clone(),
                         device: device.clone(),
                         session: session_id.clone(),
-                        provider: initial.provider.clone(),
+                        provider: provider.clone(),
                     }));
                 }
-                let cached = cache.history(key.clone()).await.unwrap_or_default();
-                let mut catch_up = ChatCatchUp::new(cached.messages);
                 let mut queued = std::collections::VecDeque::new();
                 let dispatch = |event, queued: &mut std::collections::VecDeque<_>| {
                     match event {
@@ -762,16 +751,51 @@ fn watch_agent_traced(
                     "history_acquire_started",
                     serde_json::json!({"attempt":attempt_index}),
                 );
-                let history_client = tokio::time::timeout(
-                    Duration::from_secs(3),
-                    backend.client_for_observed(
-                        &device,
-                        &self_id,
-                        Some(trace.observer(format!("history-open-{attempt_index}"))),
-                    ),
-                )
-                .await
-                .map_err(|_| Error::Unavailable("session history connection timed out".into()))??;
+                // Drain the bounded watch while disk decoding and opening the
+                // second stream. A burst must not force a new subscription.
+                let prepare = async {
+                    let cached = if admitted.is_some() {
+                        cache
+                            .history(key.clone())
+                            .await
+                            .filter(|p| p.session == session_id)
+                    } else {
+                        None
+                    };
+                    let client = tokio::time::timeout(
+                        Duration::from_secs(3),
+                        backend.client_for_observed(
+                            &device,
+                            &self_id,
+                            Some(trace.observer(format!("history-open-{attempt_index}"))),
+                        ),
+                    )
+                    .await
+                    .map_err(|_| {
+                        Error::Unavailable("session history connection timed out".into())
+                    })?;
+                    Ok::<_, Error>((client?, cached))
+                };
+                tokio::pin!(prepare);
+                let (history_client, cached) = loop {
+                    tokio::select! {
+                        prepared = &mut prepare => break prepared?,
+                        event = call.events.recv() => match event {
+                            Some(event) if queued.len() < 2048 => dispatch(event, &mut queued),
+                            _ => return Err(Error::Unavailable("session watch needs resynchronization".into())),
+                        }
+                    }
+                };
+                if let (Some(provider), Some(page)) = (&admitted, &cached) {
+                    let _ = tx.send(loop_message(Msg::ChatCache {
+                        token: token.clone(),
+                        device: device.clone(),
+                        session: session_id.clone(),
+                        provider: provider.clone(),
+                        page: page.clone(),
+                    }));
+                }
+                let mut catch_up = ChatCatchUp::new(cached.unwrap_or_default().messages);
                 trace.record(
                     "history_client_ready",
                     serde_json::json!({"attempt":attempt_index}),
@@ -1192,8 +1216,8 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                     return Err(Error::Unavailable("history loading cancelled".into()));
                 }
                 let key = format!(
-                    "history-{}",
-                    crate::cache::Cache::key(&["history-page-v3", &cache_key, &cursor])
+                    "{cache_key}-{}",
+                    crate::cache::Cache::key(&["page", &cursor])
                 );
                 let cached = cache.history(key.clone()).await.unwrap_or_default();
                 let cached_messages = cached.messages;
@@ -1247,7 +1271,7 @@ pub(super) fn intent_agent_load_earlier(state: &mut State, ctx: &Ctx, load: app:
                             .into(),
                     ));
                 }
-                cache.put(key, &page);
+                cache.put_while(key, &page, || !token.is_cancelled());
                 let next = page.messages.first().map(|m| m.id.clone());
                 chunks.push(page.messages);
                 if !load.all || !page.has_more {
@@ -1356,7 +1380,7 @@ pub(super) fn intent_agent_load_work(state: &mut State, ctx: &Ctx, block: &str) 
             {
                 return Err(changed());
             }
-            cache.put(key, &page);
+            cache.put_while(key, &page, || !token.is_cancelled());
             Ok((omitted(&page), page.messages))
         }
         .await;
@@ -1401,43 +1425,6 @@ pub(super) fn msg_chat_work(
     };
     chat.work.insert(work, loaded);
     chat.content_revision = crate::state::next_content_revision();
-}
-
-fn restore_catalog_cache(
-    state: &mut State,
-    device: &str,
-    name: &str,
-    mut page: v1::AgentSessionPage,
-) {
-    // Old cache entries stored only rows. Do not render UUIDs as group names
-    // while waiting for the first complete native snapshot after upgrade.
-    if page.sections.is_empty() && page.sessions.iter().any(|s| !s.section_id.is_empty()) {
-        return;
-    }
-    for session in &mut page.sessions {
-        session.device_id = device.into();
-        session.device_name = name.into();
-    }
-    state.agents.sessions.extend(visible_agents(page.sessions));
-    state
-        .agents
-        .native_sections
-        .retain(|s| s.device_id != device);
-    state
-        .agents
-        .native_sections
-        .extend(page.sections.into_iter().map(|mut s| {
-            s.device_id = device.into();
-            s.device_name = name.into();
-            s
-        }));
-    state.agent_catalog_groups.retain(|g| g.device_id != device);
-    state
-        .agent_catalog_groups
-        .extend(page.groups.into_iter().map(|mut g| {
-            g.device_id = device.into();
-            g
-        }));
 }
 
 pub(super) fn msg_agents(
@@ -1712,6 +1699,53 @@ pub(super) fn msg_agent_stream_started(
     chat.approval_refresh_pending = false;
 }
 
+pub(super) fn remove_unavailable(state: &mut State, ctx: &Ctx, device: &str, sessions: &[String]) {
+    fn retain(rows: &mut Vec<v1::AgentSession>, device: &str, ids: &[String]) {
+        rows.retain_mut(|row| {
+            if (row.device_id.is_empty() || row.device_id == device) && ids.contains(&row.id) {
+                return false;
+            }
+            retain(&mut row.subagents, device, ids);
+            retain(&mut row.subsessions, device, ids);
+            true
+        });
+    }
+    retain(&mut state.agents.sessions, device, sessions);
+    retain(&mut state.agents_search_sessions, device, sessions);
+    state.agents_search_epoch = state.agents_search_epoch.wrapping_add(1);
+    state.agents_search = None;
+    state.agents_search_cursors.clear();
+    state
+        .agent_catalog_pages
+        .retain(|(host, _, _)| host != device);
+    state
+        .agent_catalog_groups
+        .retain(|group| group.device_id != device);
+
+    if state
+        .chat
+        .as_ref()
+        .is_some_and(|chat| chat.device == device && sessions.contains(&chat.session.id))
+    {
+        if let Some(mut chat) = state.chat.take() {
+            chat.cache_dirty = false;
+            if let Some(watch) = chat.watch.take() {
+                watch.token.cancel();
+            }
+        }
+        state.go(Screen::Agents);
+        state.toast("会话已不在 Agents 中，请从 Multica 任务打开", false);
+    }
+    for id in sessions {
+        ctx.cache.remove(&cache_key(state, "messages", device, id));
+        ctx.cache.remove_history(&history_key(state, device, id));
+    }
+    ctx.cache.remove(&cache_key(state, "agents", device, ""));
+    // Cancel old page/search deliveries and acquire a fresh filtered catalog.
+    // A response queued before the ownership event cannot restore removed rows.
+    load_catalog(state, ctx);
+}
+
 pub(super) fn msg_agent_event(
     state: &mut State,
     ctx: &Ctx,
@@ -1721,6 +1755,10 @@ pub(super) fn msg_agent_event(
     event: v1::agent_event::Ev,
 ) {
     if token.is_cancelled() {
+        return;
+    }
+    if let v1::agent_event::Ev::Unavailable(removed) = &event {
+        remove_unavailable(state, ctx, &device, &removed.sessions);
         return;
     }
     let foreground = state.foreground;
@@ -1822,6 +1860,7 @@ pub(super) fn msg_agent_event(
                 chat.interactions.push(i);
             }
         }
+        v1::agent_event::Ev::Unavailable(_) => unreachable!("handled before borrowing chat"),
         v1::agent_event::Ev::ListChanged(page) => {
             if let Some(s) = page.sessions.into_iter().find(|s| s.id == session) {
                 super::approval_cards::episode_boundary(chat, &s.state);
@@ -1943,37 +1982,68 @@ mod catalog_cache_regressions {
         );
     }
 
-    #[test]
-    fn restored_sessions_keep_native_names_and_page_metadata_in_same_frame() {
+    #[tokio::test]
+    async fn ownership_removal_drops_open_history_and_pending_cache_writes() {
+        let (socket, _peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Ctx {
+            shell: Arc::new(crate::send_diagnostics::tests::Capture::default()),
+            cache: Arc::new(crate::cache::Cache::new(dir.path().into())),
+            backend: Arc::new(crate::backend::Backend::Socket {
+                path: dir.path().into(),
+                local: Client::new(socket),
+            }),
+            tx,
+        };
         let mut state = State::new(false, Some("host".into()));
-        restore_catalog_cache(
-            &mut state,
-            "host",
-            "Example Mac",
-            v1::AgentSessionPage {
-                sessions: vec![v1::AgentSession {
-                    id: "session".into(),
-                    section_id: "native-id".into(),
-                    ..Default::default()
-                }],
-                sections: vec![v1::AgentSection {
-                    id: "native-id".into(),
-                    title: "Example group".into(),
-                    ..Default::default()
-                }],
-                groups: vec![v1::AgentCatalogGroup {
-                    key: "native-id".into(),
-                    count: 21,
-                    next_cursor: "next".into(),
-                    ..Default::default()
-                }],
+        let key = history_key(&state, "host", "task-session");
+        let child = work_cache_key(&key, &v1::AgentMessage::default());
+        let message = v1::AgentMessage {
+            text: "synthetic task content".into(),
+            ..Default::default()
+        };
+        ctx.cache.put(
+            key.clone(),
+            &v1::AgentMessagePage {
+                messages: vec![message.clone()],
                 ..Default::default()
             },
         );
-        assert_eq!(state.agents.sessions[0].device_id, "host");
-        assert_eq!(state.agents.native_sections[0].title, "Example group");
-        assert_eq!(state.agents.native_sections[0].device_id, "host");
-        assert_eq!(state.agent_catalog_groups[0].count, 21);
-        assert_eq!(state.agent_catalog_groups[0].device_id, "host");
+        ctx.cache
+            .put(child.clone(), &v1::AgentMessagePage::default());
+        ctx.cache
+            .put("history-unrelated".into(), &v1::AgentMessagePage::default());
+        state.chat = Some(Chat {
+            device: "host".into(),
+            session: v1::AgentSession {
+                id: "task-session".into(),
+                ..Default::default()
+            },
+            messages: vec![message],
+            cache_key: key.clone(),
+            cache_dirty: true,
+            ..Default::default()
+        });
+        state
+            .agents_search_sessions
+            .push(state.chat.as_ref().unwrap().session.clone());
+        let previous_epoch = state.agents_epoch;
+        remove_unavailable(&mut state, &ctx, "host", &["task-session".into()]);
+        assert!(state.chat.is_none() && state.agents_search_sessions.is_empty());
+        assert!(state.agents_epoch > previous_epoch);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(ctx.cache.get::<v1::AgentMessagePage>(&child).is_none());
+        assert!(!dir.path().join(&child).exists());
+        assert!(
+            ctx.cache
+                .get::<v1::AgentMessagePage>("history-unrelated")
+                .is_some()
+        );
+        assert!(ctx.cache.get::<v1::AgentMessagePage>(&key).is_none());
+        assert!(
+            !dir.path().join(&key).exists(),
+            "the old pending write cannot resurrect content"
+        );
     }
 }
