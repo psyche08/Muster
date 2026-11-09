@@ -1146,7 +1146,7 @@ message MulticaIssueEdit {
   string title = 3; string description = 4;
 }
 message MulticaIssueAction {
-  enum Kind { UNSPECIFIED = 0; ASSIGN = 1; STATUS = 2; COMMENT = 3; RERUN = 4; CANCEL = 5; }
+  enum Kind { UNSPECIFIED = 0; ASSIGN = 1; STATUS = 2; COMMENT = 3; RERUN = 4; CANCEL = 5; CREATE_DSH_SESSION = 6; RESUME_DSH_SESSION = 7; }
   Kind kind = 1; string id = 2; string revision = 3; string value = 4;
 }
 message MulticaServiceRequest {

@@ -24,6 +24,7 @@ fn main() {
         ("LockedUse/Console.m", "console.o"),
         ("Notice/Notice.m", "notice.o"),
         ("Vision/Vision.m", "vision.o"),
+        ("Process/AppHost.m", "apphost.o"),
     ] {
         let shim = sources.join(source);
         println!("cargo:rerun-if-changed={}", shim.display());

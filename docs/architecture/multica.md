@@ -58,10 +58,16 @@ plain comments, exact-run cancellation, and bounded run/comment history. Rust
 checks exact workspace/resource identity, editable revision and permission,
 serializes writes and records no-replay operation results. Agent instructions
 are exposed only in local detail; remote views remain read-only. Starting,
-rerunning and mention scheduling are unavailable until the App binding exists.
+rerunning and mention scheduling require additional execution contracts.
 
-Registry production writers, legacy migration, task transcript access, DSH App
+[ADR 0163](../adr/0163-multica-dsh-task-sessions.md) adds the local workbench's
+first production registry writer. An explicit create reserves one session per
+issue and authenticated account before contacting the running signed DSH App.
+Reopen uses that same native ID, profile and directory; it cannot create a
+replacement or dispatch a run.
+
+Legacy migration, task transcript access, DSH App
 scheduling and remote control are still pending; existing scheduler sessions are
 not automatically imported. The descriptor does not advertise control. This is
 not full P1/P3 or device acceptance. The Codex/Claude bridge above is unchanged;
-its fallback policy must not be reused for the future DSH App destination.
+its fallback policy must not be reused for the DSH App destination.

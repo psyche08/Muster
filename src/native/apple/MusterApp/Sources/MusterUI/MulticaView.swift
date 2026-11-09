@@ -423,7 +423,8 @@ struct MulticaView: View {
                                 Button("分派智能体") { issueAction(.assign, title: "分派智能体") }
                                 Button("修改状态") { issueAction(.status, title: "修改任务状态") }
                                 Button("添加评论") { issueAction(.comment, title: "添加评论") }
-                                Button("启动 / 续跑：App 任务桥接待接通") {}.disabled(true)
+                                Button("在 DSH App 新建任务会话") { issueAction(.createDshSession, title: "新建 DSH App 任务会话") }
+                                Button("在 DSH App 恢复原会话") { issueAction(.resumeDshSession, title: "恢复 DSH App 原会话") }
                             }
                         }.disabled(operationsDisabled)
                     }

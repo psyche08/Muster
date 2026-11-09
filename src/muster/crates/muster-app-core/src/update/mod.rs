@@ -242,6 +242,7 @@ pub enum Msg {
     },
     MulticaTick,
     MulticaMutation {
+        app_session: bool,
         workspace: String,
         query: v1::MulticaBrowseRequest,
         result: Result<v1::OpResult, Error>,
@@ -810,10 +811,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         }
         Msg::MulticaTick => multica::discover(state, ctx),
         Msg::MulticaMutation {
+            app_session,
             workspace,
             query,
             result,
-        } => multica::mutation_result(state, ctx, workspace, query, result),
+        } => multica::mutation_result(state, ctx, workspace, query, app_session, result),
         Msg::MulticaServices { epoch, results } => {
             if epoch == state.multica_discovery_epoch && state.foreground {
                 multica::apply_services(state, ctx, results);

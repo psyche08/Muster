@@ -1,6 +1,6 @@
 {
   "name": "muster-dsh-bridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Lets the Muster daemon on this Mac follow and drive DeepSeek Harness sessions over an owner-only socket.",
   "private": true,
   "license": "MIT",

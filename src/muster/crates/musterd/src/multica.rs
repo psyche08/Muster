@@ -13,6 +13,7 @@ mod installation;
 pub(crate) mod operations;
 pub(crate) mod ownership;
 pub(crate) mod service;
+mod task_session;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -35,6 +36,7 @@ pub struct Manager {
     executable: Option<PathBuf>,
     gate: tokio::sync::Mutex<()>,
     browse_gate: tokio::sync::Semaphore,
+    app_session_gate: std::sync::Arc<tokio::sync::Mutex<()>>,
     bridge: tokio::sync::Mutex<Option<bridge::Bridge>>,
     last_error: std::sync::Mutex<String>,
     // Tests supply the host Multica CLI so installation can be exercised
@@ -59,6 +61,7 @@ impl Manager {
             path: root.join("multica.json"),
             executable: None,
             gate: tokio::sync::Mutex::new(()),
+            app_session_gate: Default::default(),
             browse_gate: tokio::sync::Semaphore::new(2),
             bridge: tokio::sync::Mutex::new(None),
             last_error: std::sync::Mutex::new(String::new()),
