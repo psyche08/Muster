@@ -134,6 +134,20 @@ pub(crate) async fn deepseek_plugin(agent: Arc<AgentService>) {
     }
 }
 
+/// Whether DeepSeek Harness's plugin runs inside the signed desktop App
+/// itself rather than a standalone launch of its host: the only plugin a
+/// session is created or reopened through (ADR 0163, ADR 0167).
+pub(crate) fn deepseek_desktop(
+    platform: &dyn Platform,
+    host: &muster_agent::deepseek_app::TaskHost,
+) -> bool {
+    platform.signed_app_child(
+        host.process.pid,
+        host.process.start,
+        &muster_core::apps::DEEPSEEK.requirement(),
+    )
+}
+
 /// The process serving the plugin socket is DeepSeek Harness when it
 /// satisfies the app's code signing requirement; its launch time, read on
 /// both sides of that check, binds a pid that is not reused meanwhile.

@@ -108,3 +108,11 @@ mutation, real scheduler task or physical end-to-end result is claimed here.
 Documentation validation: relative file links resolve; the staged whitespace
 check passes; the public-content check reports 905 tracked text files and zero
 findings. The committed ADR gate is required again before landing.
+
+Later evidence (2026-11-09): [ADR 0163](0163-multica-dsh-task-sessions.md)
+adds the plugin's task methods for the attended workbench, and
+[ADR 0167](0167-deepseek-harness-native-session-creation.md) reuses
+`task.create.v1` for `agent_native_create`, with a first message. Both are
+verified on an isolated installed App host. That partly meets this design's
+native-creation gate. Task credential delivery remains unimplemented, so this
+ADR stays a proposal.

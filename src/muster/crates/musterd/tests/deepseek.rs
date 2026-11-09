@@ -411,3 +411,200 @@ async fn unchanged_device_rpc_recovers_plugin_receipt_without_replay() {
     assert_eq!(repeated.status, Status::Duplicate as i32);
     assert_eq!(prompts.load(Ordering::SeqCst), 1);
 }
+
+/// An unlocked Mac where this test process stands in for the DSH desktop App
+/// once `.0` is set.
+#[cfg(target_os = "macos")]
+struct Desktop(std::sync::atomic::AtomicBool);
+#[cfg(target_os = "macos")]
+impl muster_platform::Platform for Desktop {
+    fn signed_app_child(&self, pid: u32, start: u64, _: &str) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst) && pid == std::process::id() && start == 1
+    }
+}
+
+/// Native creation goes through the plugin without Accessibility (ADR 0167):
+/// `task.create.v1` makes the session named from the operation, the first
+/// message follows as a prompt, and the receipt is that session showing it.
+/// A refusal before the App is reached leaves no ledger row.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn native_creation_names_the_session_and_creates_it_once() {
+    use muster_agent::controller::ProcessIdentity;
+    use muster_agent::plugin_control::{created_session, prompt_id};
+    use muster_proto::v1::{op_result::Status, response::Resp};
+    use serde_json::{Value, json};
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct Host;
+    impl muster_agent::deepseek_app::Host for Host {
+        fn verify(&self, pid: u32) -> Option<ProcessIdentity> {
+            (pid == std::process::id()).then_some(ProcessIdentity { pid, start: 1 })
+        }
+        fn exited(&self, _: ProcessIdentity) -> bool {
+            false
+        }
+    }
+
+    let platform = Arc::new(Desktop(AtomicBool::new(false)));
+    let (dir, daemon, _) = daemon(platform.clone()).await;
+    let home = dir.path().join("dsh");
+    let store = home.canonicalize().unwrap();
+    let project = dir.path().canonicalize().unwrap();
+    let socket = home.join("muster/bridge.sock");
+    std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
+    let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    let sessions = home.join("sessions/--tmp-project--");
+    let (expected_store, expected_cwd) = (store.clone(), project.clone());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut line = String::new();
+            if BufReader::new(&stream).read_line(&mut line).unwrap_or(0) == 0 {
+                continue;
+            }
+            let r: Value = serde_json::from_str(&line).unwrap();
+            let log = |id: &str| sessions.join(id).join("session.v4.jsonl");
+            let result = match r["op"].as_str().unwrap() {
+                "state" => json!({"protocol":1,"sessions":[{"id":SESSION,"running":false}],
+                    "control":{"version":1,"domain":"app","provider":"deepseek","epoch":"app-launch",
+                        "capabilities":["prompt","prompt.lookup",
+                            "task.create.v1","task.resume.v1","task.inspect.v1"]}}),
+                "task.create.v1" => {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    let id = r["sessionId"].as_str().unwrap();
+                    assert_eq!(r["control"]["sessionId"], id);
+                    assert_eq!(r["control"]["operationId"], "op-create");
+                    assert_eq!(r["cwd"], expected_cwd.to_str().unwrap());
+                    assert_eq!(r["store"], expected_store.to_str().unwrap());
+                    // The App writes the new session's log, still blank.
+                    std::fs::create_dir_all(log(id).parent().unwrap()).unwrap();
+                    let header = json!({"type":"session","version":4,"id":id,"createdAt":1,
+                        "cwd":r["cwd"],"isSeeded":false});
+                    std::fs::write(log(id), format!("{header}\n")).unwrap();
+                    json!({"sessionId":id,"cwd":r["cwd"],"store":r["store"]})
+                }
+                "prompt" => {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    let id = r["sessionId"].as_str().unwrap();
+                    assert_eq!(r["requestId"], prompt_id(id, "op-create"));
+                    let message = json!({"type":"user/message","seq":1,"time":2,"data":{"role":"user",
+                        "id":"u1","content":[{"type":"text","text":r["text"]}],
+                        "source":{"kind":"user","rpcId":r["requestId"]}}});
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(log(id))
+                        .unwrap();
+                    writeln!(file, "{message}").unwrap();
+                    json!({"accepted":true})
+                }
+                op => panic!("unexpected request {op}"),
+            };
+            let mut reply = json!({"id":r["id"],"ok":true,"result":result});
+            if let Some(control) = r.get("control") {
+                reply["control"] = control.clone();
+            }
+            let _ = writeln!(stream, "{reply}");
+        }
+    });
+
+    let (a, b) = tokio::io::duplex(1024 * 1024);
+    tokio::spawn(muster_rpc::serve(
+        b,
+        Principal::Local,
+        Arc::new(musterd::MusterHandler::new(Arc::downgrade(&daemon))),
+    ));
+    let local = Client::new(a);
+    let request = v1::AgentNativeCreateRequest {
+        op_id: "op-create".into(),
+        provider: "deepseek".into(),
+        directory: project.to_string_lossy().into_owned(),
+        prompt: "Triage the sandbox mention".into(),
+    };
+    let create = || local.call(Req::AgentNativeCreate(request.clone()));
+
+    // Neither a Mac that does not offer control of the app, an App that is
+    // not running, nor a plugin outside the desktop App reaches the ledger:
+    // the operation stays retryable.
+    let error = create().await.unwrap_err().to_string();
+    assert!(error.contains("allowlisted"), "{error}");
+    daemon
+        .policy()
+        .write()
+        .unwrap()
+        .ax_allowlist
+        .push(muster_core::apps::DEEPSEEK.bundle_id.into());
+    let error = create().await.unwrap_err().to_string();
+    assert!(error.contains("Open DSH App"), "{error}");
+    let agent = daemon.agent().unwrap().clone();
+    let link = agent.deepseek_link().unwrap();
+    let service = agent.clone();
+    tokio::task::spawn_blocking(move || {
+        muster_agent::deepseek_app::refresh(&service, &link, &Host)
+    })
+    .await
+    .unwrap();
+    let error = create().await.unwrap_err().to_string();
+    assert!(error.contains("desktop App"), "{error}");
+    assert!(
+        daemon
+            .store()
+            .ledger()
+            .status("op-create")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    platform.0.store(true, Ordering::SeqCst);
+    let named = created_session("op-create");
+    let Resp::OpResult(result) = create().await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(result.status, Status::Applied as i32, "{}", result.message);
+    assert_eq!(result.result_id, named);
+    let session = agent.session(&named).expect("the new session is listed");
+    assert_eq!(std::path::Path::new(&session.cwd), project);
+    // The same operation again is answered from the ledger, not the App.
+    let Resp::OpResult(repeated) = create().await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(repeated.status, Status::Duplicate as i32);
+    assert_eq!(repeated.result_id, named);
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "one create, one prompt");
+}
+
+/// A locked Mac refuses a direct creation, as for any native app.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn a_locked_mac_refuses_native_creation() {
+    let (dir, daemon, _) = daemon(Arc::new(Locked)).await;
+    let (a, b) = tokio::io::duplex(1024 * 1024);
+    tokio::spawn(muster_rpc::serve(
+        b,
+        Principal::Local,
+        Arc::new(musterd::MusterHandler::new(Arc::downgrade(&daemon))),
+    ));
+    let error = Client::new(a)
+        .call(Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
+            op_id: "op-create".into(),
+            provider: "deepseek".into(),
+            directory: dir.path().to_string_lossy().into_owned(),
+            prompt: "Triage".into(),
+        }))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("unlocked desktop"), "{error}");
+    assert!(
+        daemon
+            .store()
+            .ledger()
+            .status("op-create")
+            .unwrap()
+            .is_none()
+    );
+}

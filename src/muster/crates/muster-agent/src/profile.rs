@@ -557,6 +557,9 @@ pub struct TurnRule {
     pub user_text_starts: bool,
     /// The text of the record that ends a turn is the final answer.
     pub mark_final: bool,
+    /// The text of an assistant message without tool calls is the final
+    /// answer: the source's turns end on the step that calls no tool.
+    pub final_without_calls: bool,
     /// Any message record counts as activity (the source has no events).
     pub activity_on_messages: bool,
     /// A message in this phase ends the turn (recency only).

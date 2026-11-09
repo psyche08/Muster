@@ -172,6 +172,8 @@ struct TurnSpec {
     #[serde(default)]
     mark_final: bool,
     #[serde(default)]
+    final_without_calls: bool,
+    #[serde(default)]
     activity_on_messages: bool,
     final_phase: Option<String>,
 }
@@ -551,7 +553,7 @@ impl Generator<'_> {
         }
         let _ = write!(
             self.out,
-            "/// The record grammar of the {name} transcripts.\npub static {name}_RECORDS: Records = Records {{\n    home: Home {{ env: {}, dir: {} }},\n    timestamp: {},\n    cwd: {},\n    skip: &[{}],\n    bootstrap_until: {},\n    summary_before: {},\n    message: MessageRule {{\n        when: {},\n        envelope: {},\n        role: {},\n        role_fallback: {},\n        other_roles: {other_roles},\n        content: {},\n        text_blocks: {},\n        media_blocks: {},\n        reasoning_blocks: {},\n        block_ids: {block_ids},\n        phase: {},\n    }},\n    tool_call: ToolCallRule {{ at: {}, name: {}, id: {}, arguments: {} }},\n    tool_result: ToolResultRule {{ at: {}, id: {}, output: {}, error: {}, interaction_tools: {} }},\n    turn: TurnRule {{\n        started: {},\n        ended: {},\n        ended_also: &[{}],\n        user_text_starts: {},\n        mark_final: {},\n        activity_on_messages: {},\n        final_phase: {},\n    }},\n}};\n\n",
+            "/// The record grammar of the {name} transcripts.\npub static {name}_RECORDS: Records = Records {{\n    home: Home {{ env: {}, dir: {} }},\n    timestamp: {},\n    cwd: {},\n    skip: &[{}],\n    bootstrap_until: {},\n    summary_before: {},\n    message: MessageRule {{\n        when: {},\n        envelope: {},\n        role: {},\n        role_fallback: {},\n        other_roles: {other_roles},\n        content: {},\n        text_blocks: {},\n        media_blocks: {},\n        reasoning_blocks: {},\n        block_ids: {block_ids},\n        phase: {},\n    }},\n    tool_call: ToolCallRule {{ at: {}, name: {}, id: {}, arguments: {} }},\n    tool_result: ToolResultRule {{ at: {}, id: {}, output: {}, error: {}, interaction_tools: {} }},\n    turn: TurnRule {{\n        started: {},\n        ended: {},\n        ended_also: &[{}],\n        user_text_starts: {},\n        mark_final: {},\n        final_without_calls: {},\n        activity_on_messages: {},\n        final_phase: {},\n    }},\n}};\n\n",
             lit(&spec.home.env),
             lit(&spec.home.dir),
             lit(&spec.timestamp),
@@ -587,6 +589,7 @@ impl Generator<'_> {
                 .join(", "),
             spec.turn.user_text_starts,
             spec.turn.mark_final,
+            spec.turn.final_without_calls,
             spec.turn.activity_on_messages,
             string_option(&spec.turn.final_phase),
         );

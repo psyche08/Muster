@@ -27,6 +27,11 @@ including after a restart. A missing App, outdated plugin or missing original
 is an error. Neither action sends a prompt or launches a CLI. To enable the
 actions, install/update this plugin in the desktop profile as described below.
 
+Muster's native creation (`agent_native_create` with provider `deepseek`)
+uses `task.create.v1` too, in a session named from its ledger operation, and
+then sends its first message as a `prompt`
+([ADR 0167](../../../../docs/adr/0167-deepseek-harness-native-session-creation.md)).
+
 Approvals and question cards still appear in the app's window. Whichever
 side answers first wins, and an answer from Muster withdraws the window's
 prompt. With no window open, the plugin waits for a Muster daemon that has

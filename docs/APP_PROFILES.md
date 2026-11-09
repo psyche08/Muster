@@ -141,6 +141,7 @@ are the agent asking the person something).
 | `ended_also` | Additional explicit end-record matchers, such as Claude `toolEndsTurn` results |
 | `user_text_starts` | A user message with text starts a turn (a source without events) |
 | `mark_final` | The text of the record that ends a turn is the final answer |
+| `final_without_calls` | The text of an assistant message that calls no tool is the final answer (DeepSeek Harness, whose turns end on such a step) |
 | `activity_on_messages` | Any message record counts as activity (recency) |
 | `final_phase` | A message in this phase ends the turn (recency) |
 
