@@ -5,6 +5,7 @@
 pub mod ax;
 pub mod bundle;
 pub mod codesign;
+pub mod events;
 pub mod ghostty;
 pub mod input;
 pub mod lock;

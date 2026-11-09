@@ -62,9 +62,54 @@ fn main() -> anyhow::Result<()> {
     // running application under the app's bundle id, which is how the app's
     // windows went missing from the Accessibility API. They are the
     // `muster-panel` helper in `Contents/Helpers` now (ADR 0128).
-    tokio::runtime::Runtime::new()?.block_on(run())
+    //
+    // The daemon itself is still registered that way, and with the
+    // registration comes a window-server connection whose event queue the
+    // window server expects the main thread to read. A main thread parked in
+    // `block_on` never reads it, so the window server flags the daemon
+    // unresponsive and Activity Monitor shows it "Not Responding". Inside the
+    // bundle the runtime moves to its own thread and the main thread serves
+    // that queue until the runtime ends the process (ADR 0164).
+    #[cfg(target_os = "macos")]
+    if let Some(events) = muster_platform::macos::events::AppEvents::take() {
+        let left_the_dock = events.leave_the_dock();
+        std::thread::Builder::new()
+            .name("musterd-runtime".into())
+            // The main thread's size: the daemon's future was sized for it.
+            .stack_size(8 << 20)
+            .spawn(move || {
+                let outcome = std::panic::catch_unwind(move || run_daemon(Some(left_the_dock)));
+                let code = exit_code(outcome);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                std::process::exit(code);
+            })?;
+        events.serve();
+    }
+    run_daemon(None)
 }
-async fn run() -> anyhow::Result<()> {
+
+/// `left_the_dock` is `None` when the main thread is not serving AppKit
+/// events (outside an app bundle, or not macOS).
+fn run_daemon(left_the_dock: Option<bool>) -> anyhow::Result<()> {
+    tokio::runtime::Runtime::new()?.block_on(run(left_the_dock))
+}
+
+/// The status `main` returning `outcome` would have exited with: Rust prints
+/// `Error: {e:?}` and exits 1 for an error, and exits 101 after a panic, whose
+/// message the panic hook has already printed.
+#[cfg(target_os = "macos")]
+fn exit_code(outcome: std::thread::Result<anyhow::Result<()>>) -> i32 {
+    match outcome {
+        Ok(Ok(())) => 0,
+        Ok(Err(e)) => {
+            eprintln!("Error: {e:?}");
+            1
+        }
+        Err(_) => 101,
+    }
+}
+
+async fn run(left_the_dock: Option<bool>) -> anyhow::Result<()> {
     let args = Args::parse();
     let mut logger =
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
@@ -79,16 +124,17 @@ async fn run() -> anyhow::Result<()> {
         logger.target(env_logger::Target::Pipe(Box::new(file)));
     }
     logger.init();
-    // Drop the Dock tile. The daemon ships inside Muster.app/Contents/MacOS,
-    // so Launch Services registers it under the app's bundle id about three
-    // seconds into startup and, left alone, as a `Foreground` application —
-    // a tile a headless process can never service. The duplicate record is
-    // there either way; this only sets its type, and the type is what decides
-    // whether there is a tile. Runs before that registration appears, and a
-    // failure is logged rather than fatal (ADR 0132 restores ADR 0123).
-    #[cfg(target_os = "macos")]
-    if let Err(status) = muster_platform::macos::procs::leave_the_dock() {
-        log::warn!("could not leave the Dock: TransformProcessType returned {status}");
+    // The Dock tile went in `main`, before the runtime started: the
+    // prohibited activation policy is recorded as `BackgroundOnly`, which has
+    // no tile (ADR 0132's outcome, now through AppKit; ADR 0164). A refusal is
+    // logged rather than fatal, as before.
+    match left_the_dock {
+        Some(true) => log::info!("main thread serving window-server events; out of the Dock"),
+        Some(false) => log::warn!(
+            "main thread serving window-server events; could not leave the Dock: \
+             setActivationPolicy(prohibited) was refused"
+        ),
+        None => {}
     }
     let dir = args
         .dir
@@ -155,4 +201,16 @@ async fn run() -> anyhow::Result<()> {
     log::info!("musterd stopping");
     daemon.shutdown().await;
     Ok(())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::exit_code;
+
+    #[test]
+    fn exits_as_main_returning_the_outcome_would() {
+        assert_eq!(exit_code(Ok(Ok(()))), 0);
+        assert_eq!(exit_code(Ok(Err(anyhow::anyhow!("no --dir")))), 1);
+        assert_eq!(exit_code(Err(Box::new("a panic"))), 101);
+    }
 }
