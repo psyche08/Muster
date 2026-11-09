@@ -1265,6 +1265,9 @@ async fn main() -> anyhow::Result<()> {
                             "interaction {} [{}]: {} options {:?}",
                             i.id, i.kind, i.prompt, i.options
                         ),
+                        v1::agent_event::Ev::Unavailable(u) => {
+                            println!("unavailable: {}", u.sessions.join(", "))
+                        }
                     }
                 }
             }
