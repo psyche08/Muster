@@ -24,13 +24,22 @@ offer the new build as an update.
 No iPhone is connected to the release Mac, so the only route to the phones is
 the registered-device OTA page.
 
+The first release build of the bumped commit failed: `muster-cli` did not
+compile. ADR 0161 (`d2c59e49`) added `AgentEvent.unavailable`, but the CLI's
+`agent-watch` match was not updated. CI is disabled for the repository, so no
+check caught it. `main` has not built the bundled CLI since then, and a release
+bundle cannot be built without it.
+
 ## Decision
 
 - **Version.** Set `MARKETING_VERSION: 1.1.28` and
   `CURRENT_PROJECT_VERSION: 118` in `project.yml`, and regenerate the committed
   Xcode project with xcodegen 2.46.0.
+- **CLI build fix.** `muster agent-watch` prints an `unavailable` event as
+  `unavailable: <session ids>`. Like the other events, it is only reported;
+  the CLI has no session list to update.
 - **Source.** Build both platforms only from a clean, detached checkout of the
-  merge commit that lands this change. The daemon's build stamp must equal that
+  merge commit that lands the CLI fix. The daemon's build stamp must equal that
   commit.
 - **macOS.** Follow the ADR 0143/0144 process: release Rust binaries, the Apple
   FFI, a Developer ID build with the Presence provisioning profile,
