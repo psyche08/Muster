@@ -1,6 +1,7 @@
 #if canImport(SwiftUI)
 import MusterCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Presentation identity and user input only. Rust validates and submits it.
 struct MulticaEditor: Identifiable {
@@ -16,6 +17,7 @@ struct MulticaOperationEditor: View {
     let workspace: Muster_App_MulticaWorkspaceView
     @Environment(\.dismiss) private var dismiss
     @State private var submitted = false
+    @State private var choosingFolder = false
     @State private var request: Muster_V1_MulticaMutation
 
     init(core: MusterCore, input: MulticaEditor, page: Muster_V1_MulticaPage, workspace: Muster_App_MulticaWorkspaceView) {
@@ -61,6 +63,9 @@ struct MulticaOperationEditor: View {
         }
         .padding(20)
         .frame(idealWidth: 580, idealHeight: 560)
+        .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result { request.issueAction.value = url.path }
+        }
         .interactiveDismissDisabled(workspace.mutationBusy)
         .onChange(of: workspace.mutationResult) { _, _ in
             if workspace.mutationApplied || workspace.mutationUncertain { dismiss() }
@@ -86,6 +91,12 @@ struct MulticaOperationEditor: View {
         case .comment:
             Section("评论") { TextEditor(text: $request.issueAction.value).frame(minHeight: 180) }
             Text("目前支持普通评论。@提及调度将在 App 任务桥接接通后开放。")
+        case .createDshSession:
+            TextField("本机工作目录（绝对路径）", text: $request.issueAction.value)
+            Button("选取目录…") { choosingFolder = true }
+            Text("在这台 Mac 已打开的 DSH App 中创建空会话，归入当前任务。不会发送提示或启动任务执行。")
+        case .resumeDshSession:
+            Text("在这台 Mac 的 DSH App 中恢复当前任务绑定的原会话。原会话不存在时会停止，不会新建替代会话。")
         case .rerun:
             Text("重新排队当前分配智能体的任务，使用全新会话，不继承上次上下文。该智能体在此任务中已有的排队或运行会被取消。")
         case .cancel:

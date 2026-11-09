@@ -278,3 +278,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0160](0160-turn-pages-and-work-on-demand.md) | Accepted; source and tests verified, installation and device acceptance pending | Page conversation history by turns as an outline, and load a completed turn's work only when its Worked group is expanded |
 | [0161](0161-multica-task-session-isolation.md) | Accepted; device acceptance pending | Enforce registered task ownership and expose scoped Multica browsing |
 | [0162](0162-multica-workbench-operations.md) | Accepted; local slice verified, device acceptance pending | Edit Multica agents and operate issues through the host workbench |
+| [0163](0163-multica-dsh-task-sessions.md) | Accepted; device acceptance pending | Create and reopen task sessions in the running DSH App |

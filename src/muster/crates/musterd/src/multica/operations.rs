@@ -35,7 +35,7 @@ async fn tracked(
         &request.workspace_id,
         false,
         &body,
-        manager.mutate(&request),
+        manager.mutate(daemon, &request),
     )
     .await
 }
@@ -113,7 +113,10 @@ fn validate(request: &v1::MulticaMutation) -> Result<(), Error> {
                         return Err(Error::Unavailable("@ scheduling requires a verified App task binding; submit a plain comment instead".into()));
                     }
                 }
-                Ok(Kind::Rerun) if action.value.is_empty() => {}
+                Ok(Kind::CreateDshSession) if Path::new(&action.value).is_absolute() => {
+                    text(&action.value, 1024, true)?
+                }
+                Ok(Kind::Rerun | Kind::ResumeDshSession) if action.value.is_empty() => {}
                 _ => return Err(Error::Invalid("Unsupported Multica issue operation".into())),
             }
         }
@@ -146,7 +149,7 @@ impl Prepared {
 }
 
 impl Manager {
-    async fn resource(
+    pub(super) async fn resource(
         &self,
         c: &Config,
         workspace: &str,
@@ -281,13 +284,17 @@ impl Manager {
                         p.flag("issue", &action.id);
                         p
                     }
-                    Kind::Unspecified => unreachable!(),
+                    Kind::CreateDshSession | Kind::ResumeDshSession | Kind::Unspecified => unreachable!(),
                 };
                 Ok(p)
             }
         }
     }
-    async fn mutate(&self, r: &v1::MulticaMutation) -> Result<String, Error> {
+    async fn mutate(
+        &self,
+        daemon: &crate::Daemon,
+        r: &v1::MulticaMutation,
+    ) -> Result<String, Error> {
         if !cfg!(target_os = "macos") {
             return Err(Error::Unavailable(
                 "Multica host operations require macOS".into(),
@@ -306,6 +313,15 @@ impl Manager {
             return Err(Error::Unavailable(
                 "Start the Multica container first".into(),
             ));
+        }
+        if let Some(Action::IssueAction(a)) = &r.action {
+            use v1::multica_issue_action::Kind;
+            if matches!(
+                Kind::try_from(a.kind),
+                Ok(Kind::CreateDshSession | Kind::ResumeDshSession)
+            ) {
+                return self.task_session(daemon, &c, r, a).await;
+            }
         }
         let prepared = self.prepare(&c, r).await?;
         self.submit(&c, &r.workspace_id, prepared).await

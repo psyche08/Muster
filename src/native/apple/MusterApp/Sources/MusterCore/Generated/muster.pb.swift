@@ -4430,6 +4430,8 @@ public nonisolated struct Muster_V1_MulticaIssueAction: Sendable {
     case comment // = 3
     case rerun // = 4
     case cancel // = 5
+    case createDshSession // = 6
+    case resumeDshSession // = 7
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -4444,6 +4446,8 @@ public nonisolated struct Muster_V1_MulticaIssueAction: Sendable {
       case 3: self = .comment
       case 4: self = .rerun
       case 5: self = .cancel
+      case 6: self = .createDshSession
+      case 7: self = .resumeDshSession
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -4456,6 +4460,8 @@ public nonisolated struct Muster_V1_MulticaIssueAction: Sendable {
       case .comment: return 3
       case .rerun: return 4
       case .cancel: return 5
+      case .createDshSession: return 6
+      case .resumeDshSession: return 7
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -4468,6 +4474,8 @@ public nonisolated struct Muster_V1_MulticaIssueAction: Sendable {
       .comment,
       .rerun,
       .cancel,
+      .createDshSession,
+      .resumeDshSession,
     ]
 
   }
@@ -13664,7 +13672,7 @@ nonisolated extension Muster_V1_MulticaIssueAction: SwiftProtobuf.Message, Swift
 }
 
 nonisolated extension Muster_V1_MulticaIssueAction.Kind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}ASSIGN\0\u{1}STATUS\0\u{1}COMMENT\0\u{1}RERUN\0\u{1}CANCEL\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}ASSIGN\0\u{1}STATUS\0\u{1}COMMENT\0\u{1}RERUN\0\u{1}CANCEL\0\u{1}CREATE_DSH_SESSION\0\u{1}RESUME_DSH_SESSION\0")
 }
 
 nonisolated extension Muster_V1_MulticaServiceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

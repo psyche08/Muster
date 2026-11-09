@@ -146,7 +146,7 @@ fn call(
     }
     let mutation = matches!(
         request["op"].as_str(),
-        Some("prompt" | "cancel" | "approve" | "answer")
+        Some("prompt" | "cancel" | "approve" | "answer" | "task.create.v1" | "task.resume.v1")
     );
     if mutation {
         crate::control_guard::check().map_err(|e| CallError::NotSent(e.to_string()))?;
@@ -391,6 +391,23 @@ enum Status {
     Gone(ProcessIdentity),
 }
 
+/// A plugin capability contract bound to a specific process launch.
+pub struct TaskHost {
+    pub process: ProcessIdentity,
+    contract: Contract,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskAction {
+    Create,
+    Resume,
+    Inspect,
+}
+
+pub fn fresh_task_session() -> String {
+    format!("session-{}", request_id())
+}
+
 /// The plugin as last read, shared by the controllers of its sessions.
 pub struct Link {
     socket: PathBuf,
@@ -508,6 +525,52 @@ impl Link {
         Ok(true)
     }
 
+    /// Negotiate the exact signed App instance before the caller reserves an ID.
+    pub fn task_host(&self) -> Result<TaskHost, Error> {
+        let Status::Live(process, snapshot) = self.status.lock().unwrap().clone() else {
+            return Err(Error::Unavailable(
+                "Open DSH App with the Muster plugin".into(),
+            ));
+        };
+        let contract = snapshot
+            .contract
+            .filter(|c| {
+                ["task.create.v1", "task.resume.v1", "task.inspect.v1"]
+                    .iter()
+                    .all(|op| c.offers(op))
+            })
+            .ok_or_else(|| {
+                Error::Unavailable("Update the DSH desktop profile's Muster plugin".into())
+            })?;
+        Ok(TaskHost { process, contract })
+    }
+
+    /// Blocking, addressed only to the peer PID and epoch verified for this request.
+    pub fn task_session(
+        &self,
+        host: &TaskHost,
+        action: TaskAction,
+        session: &str,
+        operation: &str,
+        cwd: &str,
+        store: &str,
+    ) -> Result<(), Error> {
+        let op = match action {
+            TaskAction::Create => "task.create.v1",
+            TaskAction::Resume => "task.resume.v1",
+            TaskAction::Inspect => "task.inspect.v1",
+        };
+        let mut request =
+            json!({"id":request_id(), "op":op, "sessionId":session, "cwd":cwd, "store":store});
+        host.contract.bind(session, operation, &mut request)?;
+        let result = self.operate(host.process, request, PROMPT_TIMEOUT)?;
+        if result["sessionId"] != session || result["cwd"] != cwd || result["store"] != store {
+            return Err(Error::UnknownOutcome(
+                "DSH App did not confirm the reserved identity and directory".into(),
+            ));
+        }
+        Ok(())
+    }
     fn confirm_pending(&self, session: &str, operation: &str) -> Result<(), Error> {
         let mut pending = self.pending.lock().unwrap();
         if let Some(row) = pending
@@ -970,6 +1033,62 @@ mod tests {
             }
             line
         })
+    }
+
+    #[test]
+    fn task_session_requires_live_capabilities_and_an_exact_receipt() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("bridge.sock");
+        let link = Link::new(socket.clone());
+        assert!(link.task_host().is_err());
+        let process = ProcessIdentity {
+            pid: std::process::id(),
+            start: 1,
+        };
+        *link.status.lock().unwrap() = Status::Live(process, Snapshot::default());
+        assert!(link.task_host().is_err());
+        let contract = Contract::parse(
+            &json!({"control":{"version":1,"domain":"app","provider":"deepseek",
+            "epoch":"test","capabilities":["task.create.v1","task.inspect.v1","task.resume.v1"]}}),
+            "deepseek",
+        )
+        .unwrap();
+        *link.status.lock().unwrap() = Status::Live(
+            process,
+            Snapshot {
+                contract,
+                ..Default::default()
+            },
+        );
+        let host = link.task_host().unwrap();
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let thread = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new(&stream).read_line(&mut line).unwrap();
+            let request: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(request["op"], "task.resume.v1");
+            assert_eq!(request["control"]["sessionId"], request["sessionId"]);
+            writeln!(
+                stream,
+                "{}",
+                json!({"id":request["id"],"ok":true,"control":request["control"],
+                "result":{"sessionId":request["sessionId"],"cwd":"/original","store":"other"}})
+            )
+            .unwrap();
+        });
+        assert!(matches!(
+            link.task_session(
+                &host,
+                TaskAction::Resume,
+                &fresh_task_session(),
+                "op",
+                "/original",
+                "expected"
+            ),
+            Err(Error::UnknownOutcome(_))
+        ));
+        thread.join().unwrap();
     }
 
     #[test]

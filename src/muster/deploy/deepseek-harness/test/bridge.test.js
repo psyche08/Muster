@@ -345,3 +345,45 @@ test('a question card is answered through the socket', async () => {
   await close()
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('task methods require a desktop host, fresh binding and matching native facts', async () => {
+  const saved = process.env.DSH_HOME
+  const store = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-task-')))
+  process.env.DSH_HOME = store
+  try {
+    const id = 'session-aaaaaaaa-abcd-4abc-8abc-0123456789ab'
+    let creates = 0
+    let resolves = 0
+    let header = { id, cwd: store }
+    const ctx = { agents: { get: () => ({ session: { header } }) },
+      sessionQuery: { observeSession: async () => ({ header, [Symbol.dispose]() {} }) },
+      sessionController: {
+        create: async () => { creates++; return { sessionId: id } },
+        resolveAgent: async () => { resolves++; return { agent: { session: { header } } } },
+      } }
+    const bridge = new Bridge(ctx, true)
+    const other = new Bridge(ctx, false)
+    const request = { op: 'task.create.v1', sessionId: id, cwd: store, store }
+    const bound = (b, op = request.op) => ({ ...request, op, control: { version: CONTROL_VERSION,
+      domain: 'app', epoch: b.epoch, operationId: 'local-operation', sessionId: id } })
+    await assert.rejects(bridge.handle(request), /binding/)
+    await assert.rejects(other.handle(bound(other)), /not offered/)
+    await assert.rejects(bridge.handle(bound(other)), /expired/)
+    await assert.rejects(bridge.handle({ ...bound(bridge), store: store + '/other' }), /profile/)
+    await assert.rejects(bridge.handle(bound(bridge)), /already exists/)
+    header = { id, cwd: store + '/different' }
+    await assert.rejects(bridge.handle(bound(bridge, 'task.resume.v1')), /identity differs/)
+    assert.equal(creates + resolves, 0)
+    ctx.sessionQuery.observeSession = async () => { throw new Error('storage offline') }
+    await assert.rejects(bridge.handle(bound(bridge)), /storage offline/)
+    assert.equal(creates, 0)
+    ctx.sessionQuery.observeSession = async () => { throw Object.assign(new Error('missing'), { code: 'SESSION_QUERY_SESSION_NOT_FOUND' }) }
+    await assert.rejects(bridge.handle(bound(bridge)), err => err.delivery === 'unknown')
+    assert.equal(creates, 1)
+    assert.equal(resolves, 0)
+  } finally {
+    if (saved === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = saved
+    fs.rmSync(store, { recursive: true, force: true })
+  }
+})

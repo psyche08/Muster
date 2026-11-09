@@ -9,6 +9,15 @@ pub struct NativeIdentity {
 }
 
 impl AgentService {
+    pub fn deepseek_task_store(&self) -> Result<String, Error> {
+        self.config
+            .deepseek_home
+            .as_ref()
+            .and_then(|p| p.canonicalize().ok())
+            .and_then(|p| p.to_str().map(str::to_owned))
+            .ok_or_else(|| Error::Unavailable("Original DSH App store is unavailable".into()))
+    }
+
     /// Exact configured native store plus provider-declared parent identities.
     /// A missing parent transcript does not erase the declared parent identity.
     pub fn native_lineage(&self, id: &str) -> Result<Vec<NativeIdentity>, Error> {

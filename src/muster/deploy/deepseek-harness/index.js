@@ -33,7 +33,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 export const name = 'muster-dsh-bridge'
-export const inject = ['agents', 'sessionController']
+export const inject = ['agents', 'sessionController', 'sessionQuery']
 
 /** The wire protocol; Muster refuses a bridge that speaks another. */
 export const PROTOCOL = 1
@@ -68,7 +68,8 @@ export function socketPath(env = process.env) {
 
 /** The bridge's state and operations, apart from the socket. */
 export class Bridge {
-  constructor(ctx) {
+  constructor(ctx, desktopHost = process.argv[1]?.endsWith('/@deepseek-ai/dsh-desktop-host/lib/index.js') === true) {
+    this.desktopHost = desktopHost
     this.ctx = ctx
     this.epoch = randomUUID()
     /** Waiting approvals and question cards by their bridge id. */
@@ -84,7 +85,9 @@ export class Bridge {
 
   contract() {
     return { version: CONTROL_VERSION, domain: 'app', provider: 'deepseek',
-      epoch: this.epoch, capabilities: [...CAPABILITIES] }
+      epoch: this.epoch, capabilities: [...CAPABILITIES, ...(this.desktopHost && this.ctx.sessionQuery?.observeSession &&
+        this.ctx.sessionController?.create && this.ctx.sessionController?.resolveAgent
+        ? ['task.create.v1', 'task.resume.v1', 'task.inspect.v1'] : [])] }
   }
 
   // Read host-owned facts only. Never resume a cold session or call prompt.
@@ -111,13 +114,14 @@ export class Bridge {
 
   validateControl(request) {
     const control = request.control
+    if (control === undefined && request.op?.startsWith('task.')) throw new Error('task session requires an App operation binding')
     if (control === undefined) return // Existing daemon's local protocol.
     if (control?.version !== CONTROL_VERSION || control.domain !== 'app' ||
         control.epoch !== this.epoch || typeof control.operationId !== 'string' ||
         !control.operationId || control.operationId.length > 256 ||
         typeof control.sessionId !== 'string' || !control.sessionId ||
         control.sessionId.length > 128) throw new Error('invalid or expired App operation binding')
-    if (!CAPABILITIES.includes(request.op)) throw new Error('capability is not offered')
+    if (!this.contract().capabilities.includes(request.op)) throw new Error('capability is not offered')
     if (request.sessionId !== undefined && request.sessionId !== control.sessionId) {
       throw new Error('operation addresses another session')
     }
@@ -152,6 +156,8 @@ export class Bridge {
     switch (request.op) {
       case 'hello':
         return { protocol: PROTOCOL, pid: process.pid, control: this.contract() }
+      case 'task.create.v1': case 'task.resume.v1': case 'task.inspect.v1':
+        return this.taskSession(request)
       case 'prompt.lookup':
         return this.lookup(request.sessionId, request.requestId)
       case 'state':
@@ -192,6 +198,40 @@ export class Bridge {
       default:
         throw new Error(`unknown op ${request.op}`)
     }
+  }
+
+  async taskSession({ op, sessionId, cwd, store }) {
+    if (!/^session-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(sessionId) ||
+        typeof cwd !== 'string' || !path.isAbsolute(cwd) || fs.realpathSync(cwd) !== cwd ||
+        !fs.statSync(cwd).isDirectory() || store !== fs.realpathSync(path.dirname(path.dirname(socketPath())))) {
+      throw new Error('Task profile or directory does not match')
+    }
+    const check = header => {
+      if (header?.id !== sessionId || header?.cwd !== cwd) throw new Error('Native session identity differs')
+      return { sessionId: header.id, cwd: header.cwd, store }
+    }
+    const observe = async () => {
+      const observation = await this.ctx.sessionQuery.observeSession(sessionId)
+      try { return check(observation.header) } finally { observation[Symbol.dispose]() }
+    }
+    if (op === 'task.create.v1') {
+      // Only a definite not-found permits create. Never reuse a blank personal
+      // session or mistake storage/observation failure for a fresh identity.
+      try { await observe(); throw new Error('Native session already exists') }
+      catch (error) { if (error.code !== 'SESSION_QUERY_SESSION_NOT_FOUND') throw error }
+      return hostCall(async () => {
+        const result = await this.ctx.sessionController.create({ sessionId, cwd })
+        if (result?.sessionId !== sessionId) throw new Error('Host created a different identity')
+        return check(this.ctx.agents.get(sessionId)?.session?.header)
+      })
+    }
+    const facts = await observe()
+    if (op === 'task.inspect.v1') return facts
+    return hostCall(async () => {
+      const result = await this.ctx.sessionController.resolveAgent(sessionId)
+      if (result?.error) throw new Error('Original App session cannot be restored')
+      return check(result?.agent?.session?.header)
+    })
   }
 
   /**

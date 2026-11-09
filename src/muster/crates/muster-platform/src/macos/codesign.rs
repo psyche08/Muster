@@ -36,6 +36,23 @@ unsafe extern "C" {
     fn CFRelease(cf: CFTypeRef);
 }
 
+/// The child is still the verified launch and belongs to a signed, registered
+/// foreground-capable desktop application, not a standalone Node/CLI launch.
+pub fn signed_gui_child(pid: u32, start: u64, requirement: &str) -> bool {
+    unsafe extern "C" {
+        fn muster_regular_app_parent(pid: i32) -> i32;
+    }
+    // SAFETY: takes a scalar process ID; the shim only queries OS metadata.
+    let parent = || unsafe { muster_regular_app_parent(pid as i32) };
+    let gui = parent();
+    gui > 1
+        && process_start(pid) == Some(start)
+        && process_satisfies(gui as u32, requirement)
+        && process_satisfies(pid, requirement)
+        && gui == parent()
+        && process_start(pid) == Some(start)
+}
+
 /// Whether the running process `pid` satisfies `requirement` (a Security
 /// framework requirement string). Anything unexpected is `false`.
 pub fn process_satisfies(pid: u32, requirement: &str) -> bool {

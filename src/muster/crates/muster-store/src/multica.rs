@@ -241,6 +241,17 @@ impl Store {
         Ok(record)
     }
 
+    pub fn multica_task_slot(&self, task: &Task, run: &str, role: &str) -> Result<Option<Record>> {
+        let conn = self.conn.lock().unwrap();
+        let reference: Option<String> = conn.query_row(
+            "SELECT reference FROM multica_reservations WHERE task_key = ?1 AND run = ?2 AND role = ?3",
+            params![serde_json::to_string(task)?, run, role], |r| r.get(0)).optional()?;
+        match reference {
+            Some(id) => read(&conn, &id),
+            None => Ok(None),
+        }
+    }
+
     pub fn multica_record(&self, reference: &str) -> Result<Option<Record>> {
         read(&self.conn.lock().unwrap(), reference)
     }

@@ -19,6 +19,14 @@ on one owner-only socket, `$DSH_HOME/muster/bridge.sock` (by default under
 | `approve`, `answer` | Answers a waiting approval or question card |
 | `prompt.lookup` | Reads an existing inbox/event receipt by session and native request ID, without resuming or sending |
 
+The desktop plugin also offers `task.create.v1`, `task.inspect.v1` and
+`task.resume.v1` to the local Multica workbench. On the unlocked host Mac,
+open an issue, choose **在 DSH App 新建任务会话** and select its working
+directory. Choose **在 DSH App 恢复原会话** to reopen that same native ID,
+including after a restart. A missing App, outdated plugin or missing original
+is an error. Neither action sends a prompt or launches a CLI. To enable the
+actions, install/update this plugin in the desktop profile as described below.
+
 Approvals and question cards still appear in the app's window. Whichever
 side answers first wins, and an answer from Muster withdraws the window's
 prompt. With no window open, the plugin waits for a Muster daemon that has

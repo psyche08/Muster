@@ -711,6 +711,9 @@ pub(super) fn mutate(state: &mut State, ctx: &Ctx, mut request: v1::MulticaMutat
         state.toast("工作区已改变，请重新打开详情", true);
         return;
     }
+    use v1::multica_issue_action::Kind;
+    let app_session = matches!(&request.action, Some(v1::multica_mutation::Action::IssueAction(a))
+        if matches!(Kind::try_from(a.kind), Ok(Kind::CreateDshSession | Kind::ResumeDshSession)));
     request.op_id = state.op_id();
     state.multica_mutation_busy = true;
     state.multica_mutation_message = "正在提交…".into();
@@ -725,6 +728,7 @@ pub(super) fn mutate(state: &mut State, ctx: &Ctx, mut request: v1::MulticaMutat
             Err(error) => Err(error),
         };
         Msg::MulticaMutation {
+            app_session,
             workspace,
             query,
             result,
@@ -737,6 +741,7 @@ pub(super) fn mutation_result(
     ctx: &Ctx,
     workspace: String,
     query: v1::MulticaBrowseRequest,
+    app_session: bool,
     result: Result<v1::OpResult, Error>,
 ) {
     use v1::op_result::Status;
@@ -752,10 +757,19 @@ pub(super) fn mutation_result(
             (
                 true,
                 false,
-                "已提交；任务执行结果请查看执行历史和评论".into(),
+                if app_session {
+                    "DSH App 已确认任务会话；未启动任务执行。".into()
+                } else {
+                    "已提交；任务执行结果请查看执行历史和评论".into()
+                },
             )
         }
         Ok(r) if r.status == Status::Rejected as i32 => (false, false, r.message),
+        _ if app_session => (
+            false,
+            true,
+            "会话结果尚未确认。请刷新详情，再使用「恢复原会话」核对；不会自动重新创建。".into(),
+        ),
         _ => (
             false,
             true,
@@ -819,9 +833,11 @@ mod mutation_tests {
             &ctx,
             "workspace-a".into(),
             v1::MulticaBrowseRequest::default(),
+            true,
             Err(Error::Unavailable("lost reply".into())),
         );
         assert!(state.multica_mutation_uncertain && !state.multica_mutation_busy);
+        assert!(state.multica_mutation_message.contains("恢复原会话"));
         mutate(&mut state, &ctx, request);
         assert_eq!(state.next_op, op, "an ambiguous write is not retried");
         // A late success must not replace another target's selected page.
@@ -833,6 +849,7 @@ mod mutation_tests {
             &ctx,
             "workspace-a".into(),
             v1::MulticaBrowseRequest::default(),
+            false,
             Ok(v1::OpResult {
                 status: v1::op_result::Status::Applied as i32,
                 ..Default::default()
