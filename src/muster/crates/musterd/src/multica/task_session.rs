@@ -68,19 +68,6 @@ fn service_id(
     Ok(hex::encode(h.finalize()))
 }
 
-#[cfg(target_os = "macos")]
-fn gui_host(host: &deepseek_app::TaskHost) -> bool {
-    muster_platform::macos::codesign::signed_gui_child(
-        host.process.pid,
-        host.process.start,
-        &muster_core::apps::DEEPSEEK.requirement(),
-    )
-}
-#[cfg(not(target_os = "macos"))]
-fn gui_host(_: &deepseek_app::TaskHost) -> bool {
-    false
-}
-
 impl Manager {
     async fn account(&self, c: &Config) -> Result<(String, String), Error> {
         let bytes = self
@@ -143,7 +130,7 @@ impl Manager {
             .deepseek_link()
             .ok_or_else(|| Error::Unavailable("Open DSH App with its desktop plugin".into()))?;
         let host = link.task_host()?;
-        if !gui_host(&host) {
+        if !crate::agent_bridge::deepseek_desktop(daemon.platform().as_ref(), &host) {
             return Err(Error::Unavailable(
                 "The plugin is not hosted by the running DSH desktop App".into(),
             ));
@@ -162,7 +149,9 @@ impl Manager {
                 &op,
                 create_cwd.as_deref(),
                 |action, reservation| {
-                    if platform.locked() || !gui_host(&host) {
+                    if platform.locked()
+                        || !crate::agent_bridge::deepseek_desktop(platform.as_ref(), &host)
+                    {
                         return Err(Error::Unavailable(
                             "Original unlocked DSH App is unavailable".into(),
                         ));

@@ -571,6 +571,48 @@ impl Link {
         }
         Ok(())
     }
+
+    /// Creates `session` in `cwd` through `task.create.v1`, then sends
+    /// `text` as its first message under the request id
+    /// `prompt_id(session, operation)` (ADR 0167). Blocking, addressed only to
+    /// `host`'s launch. Until the App confirms the session, a refusal is "not
+    /// sent" and a lost reply unknown. After it, a refused first message
+    /// names the blank session left behind, and a lost one is unknown unless
+    /// the App's own record shows it. Nothing is ever replayed.
+    pub fn create(
+        &self,
+        host: &TaskHost,
+        session: &str,
+        operation: &str,
+        cwd: &str,
+        store: &str,
+        text: &str,
+    ) -> Result<(), Error> {
+        self.task_session(host, TaskAction::Create, session, operation, cwd, store)?;
+        let mut request = json!({
+            "id": request_id(),
+            "op": "prompt",
+            "sessionId": session,
+            "requestId": plugin_control::prompt_id(session, operation),
+            "text": text,
+            "mode": "queue",
+        });
+        host.contract.bind(session, operation, &mut request)?;
+        match self.operate(host.process, request, PROMPT_TIMEOUT) {
+            Ok(result) if result["accepted"] == true => Ok(()),
+            Err(CallError::NotSent(why) | CallError::Refused(why)) => {
+                Err(Error::Unavailable(format!(
+                    "DeepSeek Harness created {session}, but its first message was not \
+                     sent ({why})"
+                )))
+            }
+            _ if self.lookup(host.process, session, operation)? => Ok(()),
+            _ => Err(Error::UnknownOutcome(
+                "DeepSeek Harness did not acknowledge the first message; no replay".into(),
+            )),
+        }
+    }
+
     fn confirm_pending(&self, session: &str, operation: &str) -> Result<(), Error> {
         let mut pending = self.pending.lock().unwrap();
         if let Some(row) = pending
@@ -1113,6 +1155,182 @@ mod tests {
         let mut written = Vec::new();
         let _ = (&stream).read_to_end(&mut written);
         assert!(written.is_empty(), "nothing reached the other process");
+    }
+
+    /// A plugin stand-in that answers each of `replies` connections from
+    /// the request it read, echoing its id and binding; the requests read.
+    fn serve(
+        socket: &Path,
+        replies: Vec<fn(&Value) -> Value>,
+    ) -> std::thread::JoinHandle<Vec<Value>> {
+        let listener = std::os::unix::net::UnixListener::bind(socket).unwrap();
+        std::thread::spawn(move || {
+            let mut read = Vec::new();
+            for reply in replies {
+                let (stream, _) = listener.accept().unwrap();
+                let mut line = String::new();
+                BufReader::new(&stream).read_line(&mut line).unwrap();
+                let request: Value = serde_json::from_str(&line).unwrap();
+                let mut answer = reply(&request);
+                answer["id"] = request["id"].clone();
+                answer["control"] = request["control"].clone();
+                (&stream)
+                    .write_all(format!("{answer}\n").as_bytes())
+                    .unwrap();
+                read.push(request);
+            }
+            read
+        })
+    }
+
+    fn creating(socket: &Path, capabilities: Value) -> Arc<Link> {
+        let link = Link::new(socket.to_path_buf());
+        let state = json!({"control":{"version":1,"domain":"app","provider":"deepseek",
+            "epoch":"launch-a","capabilities":capabilities}});
+        let snapshot = Snapshot {
+            contract: Contract::parse(&state, "deepseek").unwrap(),
+            ..Snapshot::default()
+        };
+        let process = ProcessIdentity {
+            pid: std::process::id(),
+            start: 1,
+        };
+        *link.status.lock().unwrap() = Status::Live(process, snapshot);
+        link
+    }
+
+    const TASKS: [&str; 5] = [
+        "prompt",
+        "prompt.lookup",
+        "task.create.v1",
+        "task.resume.v1",
+        "task.inspect.v1",
+    ];
+
+    /// One creation of `session-a` against a stand-in answering `replies`:
+    /// its result and the operations the stand-in read.
+    fn create_against(
+        link: &Link,
+        socket: &Path,
+        replies: Vec<fn(&Value) -> Value>,
+    ) -> (Result<(), Error>, Vec<String>) {
+        let _ = std::fs::remove_file(socket);
+        let server = serve(socket, replies);
+        let host = link.task_host().unwrap();
+        let result = link.create(&host, "session-a", "op-1", "/tmp/tasks", "/store", "hi");
+        let read = server.join().unwrap();
+        let ops = read.iter().map(|r| r["op"].as_str().unwrap().to_owned());
+        (result, ops.collect())
+    }
+
+    /// The App's confirmation of the session a `task.create.v1` asked for.
+    fn made(r: &Value) -> Value {
+        json!({"ok":true,"result":{"sessionId":r["sessionId"],"cwd":r["cwd"],"store":r["store"]}})
+    }
+
+    #[test]
+    fn a_session_is_created_through_the_task_contract_then_prompted() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("bridge.sock");
+        assert!(matches!(
+            Link::new(socket.clone()).task_host(),
+            Err(Error::Unavailable(_))
+        ));
+        let old = creating(&socket, json!(["prompt", "prompt.lookup"]));
+        assert!(matches!(old.task_host(), Err(Error::Unavailable(_))));
+
+        let link = creating(&socket, json!(TASKS));
+        let host = link.task_host().unwrap();
+        let server = serve(
+            &socket,
+            vec![made, |_| json!({"ok":true,"result":{"accepted":true}})],
+        );
+        link.create(
+            &host,
+            "session-a",
+            "op-1",
+            "/tmp/tasks",
+            "/store",
+            "read the task",
+        )
+        .unwrap();
+        let [create, prompt] = &server.join().unwrap()[..] else {
+            panic!("two requests")
+        };
+        assert_eq!(create["op"], "task.create.v1");
+        assert_eq!(
+            (&create["sessionId"], &create["cwd"], &create["store"]),
+            (&json!("session-a"), &json!("/tmp/tasks"), &json!("/store"))
+        );
+        assert_eq!(prompt["op"], "prompt");
+        assert_eq!(
+            (&prompt["sessionId"], &prompt["text"], &prompt["mode"]),
+            (
+                &json!("session-a"),
+                &json!("read the task"),
+                &json!("queue")
+            )
+        );
+        assert_eq!(
+            prompt["requestId"],
+            plugin_control::prompt_id("session-a", "op-1")
+        );
+        for request in [create, prompt] {
+            assert_eq!(request["control"]["sessionId"], "session-a");
+            assert_eq!(request["control"]["operationId"], "op-1");
+        }
+    }
+
+    #[test]
+    fn a_refused_creation_is_not_sent_and_a_lost_one_is_never_replayed() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("bridge.sock");
+        let link = creating(&socket, json!(TASKS));
+        let refused: fn(&Value) -> Value =
+            |_| json!({"ok":false,"delivery":"not_started","error":"session/conflict"});
+        let lost: fn(&Value) -> Value =
+            |_| json!({"ok":false,"delivery":"unknown","error":"lost host response"});
+
+        // Until the App confirms the session, nothing is prompted.
+        let (result, ops) = create_against(&link, &socket, vec![refused]);
+        assert!(matches!(result, Err(Error::Unavailable(m)) if m.contains("session/conflict")));
+        assert_eq!(ops, ["task.create.v1"]);
+        let (result, ops) = create_against(&link, &socket, vec![lost]);
+        assert!(matches!(result, Err(Error::UnknownOutcome(_))));
+        assert_eq!(ops, ["task.create.v1"]);
+        let (result, ops) = create_against(
+            &link,
+            &socket,
+            vec![
+                |r| json!({"ok":true,"result":{"sessionId":"session-other","cwd":r["cwd"],"store":r["store"]}}),
+            ],
+        );
+        assert!(matches!(result, Err(Error::UnknownOutcome(_))));
+        assert_eq!(ops, ["task.create.v1"]);
+
+        // A refused first message names the blank session; nothing else is sent.
+        let (result, ops) = create_against(&link, &socket, vec![made, refused]);
+        assert!(matches!(result, Err(Error::Unavailable(m)) if m.contains("session-a")));
+        assert_eq!(ops, ["task.create.v1", "prompt"]);
+
+        // A lost first message: only the App's own record settles it.
+        let (result, ops) = create_against(
+            &link,
+            &socket,
+            vec![made, lost, |_| json!({"ok":true,"result":{"records":[]}})],
+        );
+        assert!(matches!(result, Err(Error::UnknownOutcome(_))));
+        assert_eq!(ops, ["task.create.v1", "prompt", "prompt.lookup"]);
+        let (result, ops) = create_against(
+            &link,
+            &socket,
+            vec![made, lost, |r| {
+                json!({"ok":true,"result":{"sessionId":r["sessionId"],"requestId":r["requestId"],
+                "records":[{"source":{"kind":"user","rpcId":r["requestId"]},"location":"session-event"}]}})
+            }],
+        );
+        result.unwrap();
+        assert_eq!(ops, ["task.create.v1", "prompt", "prompt.lookup"]);
     }
 
     #[test]

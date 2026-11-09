@@ -37,6 +37,13 @@ pub trait Platform: Send + Sync {
     fn request_accessibility(&self) -> Option<bool> {
         self.accessibility()
     }
+    /// Whether `pid`, still the launch that began at `start`, is the child of
+    /// a registered desktop application and both satisfy `requirement` (a
+    /// code signing requirement): the app's own helper, not a standalone
+    /// launch of its binary. `false` where this cannot be known.
+    fn signed_app_child(&self, _pid: u32, _start: u64, _requirement: &str) -> bool {
+        false
+    }
     /// A diagnostic for the desktop's own user (`muster debug <what> [arg]`):
     /// macOS knows `ax-dump <pid|Claude>`, `ax-windows <pid|App> [x,y]` and
     /// `ax-sessions <pid|Claude>`.

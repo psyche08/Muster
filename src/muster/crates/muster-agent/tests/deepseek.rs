@@ -353,6 +353,8 @@ async fn lists_reads_and_follows_deepseek_sessions() {
     .await
     .expect("the completed frame was not pushed");
     assert_eq!(pushed[0].text, "It says x.");
+    // The step that calls no tool ends the turn: its reply is the answer.
+    assert_eq!(pushed[0].phase, "final_answer");
     assert_eq!(pushed[1].kind, "turn_summary");
     let usage = pushed[1].usage.as_ref().unwrap();
     assert_eq!((usage.input_tokens, usage.cache_read_tokens), (240, 40));

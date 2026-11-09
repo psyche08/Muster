@@ -547,7 +547,10 @@ impl Reader {
             if role == Role::User && messages.iter().any(|m| m.kind == MessageKind::Text) {
                 user_sent = true;
             }
-            if ends && records.turn.mark_final {
+            let last_step = records.turn.final_without_calls
+                && role == Role::Assistant
+                && !messages.iter().any(|m| m.kind == MessageKind::ToolCall);
+            if (ends && records.turn.mark_final) || last_step {
                 for message in messages
                     .iter_mut()
                     .filter(|m| m.kind == MessageKind::Text && m.phase != "reasoning")

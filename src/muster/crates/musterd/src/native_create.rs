@@ -3,6 +3,9 @@
 //! unique new session whose transcript shows the exact prompt. When that
 //! receipt is not seen while the console is owned, `receipt` looks for it
 //! later from transcripts alone, never touching the desktop (ADR 0097).
+//! DeepSeek Harness is created through Muster's plugin inside it instead,
+//! without Accessibility and only on a direct request to an unlocked Mac, in
+//! a session named from the operation (ADR 0167).
 use crate::{Daemon, Error};
 use muster_proto::v1::{self, response::Resp};
 use std::sync::Arc;
@@ -12,11 +15,23 @@ use std::time::Duration;
 #[cfg(target_os = "macos")]
 const UNLOCKED_RECEIPT: Duration = Duration::from_secs(15);
 
+/// A creation through the app's windows (Codex, Claude): the only kind the
+/// scheduler and Locked Use run.
 pub(crate) fn validate(r: &v1::AgentNativeCreateRequest) -> Result<(), Error> {
+    if through_plugin_app(&r.provider) {
+        return Err(Error::Unavailable(
+            "DeepSeek Harness sessions are created only on a direct request to an unlocked Mac"
+                .into(),
+        ));
+    }
+    well_formed(r, &["codex", "claude"])
+}
+
+fn well_formed(r: &v1::AgentNativeCreateRequest, providers: &[&str]) -> Result<(), Error> {
     if r.op_id.is_empty()
         || r.prompt.trim().is_empty()
         || r.prompt.len() > 1024 * 1024
-        || !matches!(r.provider.as_str(), "codex" | "claude")
+        || !providers.contains(&r.provider.as_str())
         || !std::path::Path::new(&r.directory).is_absolute()
     {
         return Err(Error::Invalid(
@@ -26,11 +41,22 @@ pub(crate) fn validate(r: &v1::AgentNativeCreateRequest) -> Result<(), Error> {
     Ok(())
 }
 
+/// Whether the provider's sessions are created through Muster's plugin
+/// inside its app rather than its windows (DeepSeek Harness, ADR 0167).
+fn through_plugin_app(provider: &str) -> bool {
+    muster_agent::profile::app(provider).is_some_and(|app| app.plugin.is_some())
+}
+
 pub(crate) async fn create(
     daemon: &Arc<Daemon>,
     r: v1::AgentNativeCreateRequest,
 ) -> Result<Resp, Error> {
-    validate(&r)?;
+    let windows = !through_plugin_app(&r.provider);
+    if windows {
+        validate(&r)?;
+    } else {
+        well_formed(&r, &["deepseek"])?;
+    }
     #[cfg(not(target_os = "macos"))]
     {
         let _ = daemon;
@@ -40,10 +66,14 @@ pub(crate) async fn create(
     }
     #[cfg(target_os = "macos")]
     {
-        if daemon.platform().accessibility() != Some(true) || daemon.platform().locked() {
-            return Err(Error::Unavailable(
-                "Native creation requires an unlocked desktop with Accessibility".into(),
-            ));
+        if (windows && daemon.platform().accessibility() != Some(true))
+            || daemon.platform().locked()
+        {
+            return Err(Error::Unavailable(if windows {
+                "Native creation requires an unlocked desktop with Accessibility".into()
+            } else {
+                "Native creation requires an unlocked desktop".into()
+            }));
         }
         let console = daemon
             .locked_use
@@ -114,6 +144,9 @@ async fn owned(
         .agent()
         .ok_or_else(|| Error::Unavailable("Agent service unavailable".into()))?
         .clone();
+    if app.plugin.is_some() {
+        return through_plugin(daemon, r, agent, path, receipt_budget, console).await;
+    }
     let provider_lock = crate::agent_bridge::hold(
         daemon,
         app,
@@ -138,6 +171,123 @@ async fn owned(
     }).await
 }
 
+/// Creation through Muster's plugin inside the app (ADR 0167): the plugin's
+/// `task.create.v1` makes the session named from the operation in the
+/// canonical directory, then its first message is sent as any prompt is. The
+/// receipt is exact, and a retry of the operation can only name the same
+/// session. No window is touched.
+#[cfg(target_os = "macos")]
+async fn through_plugin(
+    daemon: &Arc<Daemon>,
+    r: v1::AgentNativeCreateRequest,
+    agent: Arc<muster_agent::AgentService>,
+    path: std::path::PathBuf,
+    receipt_budget: Duration,
+    console: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+) -> Result<Resp, Error> {
+    use crate::agent_bridge::deepseek_desktop;
+    use muster_agent::{control_guard, desktop_lock::LockKind};
+    use muster_proto::Message;
+    let app = muster_agent::profile::app(&r.provider).unwrap();
+    let cwd = path
+        .to_str()
+        .ok_or_else(|| Error::Invalid("Native directory is not UTF-8".into()))?
+        .to_owned();
+    let store = agent.deepseek_task_store()?;
+    let link = agent
+        .deepseek_link()
+        .ok_or_else(|| Error::Unavailable("DeepSeek Harness is not set up for Muster".into()))?;
+    // Before the ledger: while the App, its desktop plugin or the task
+    // contract is missing, the operation stays retryable.
+    let host = link.task_host()?;
+    if !deepseek_desktop(daemon.platform().as_ref(), &host) {
+        return Err(Error::Unavailable(
+            "The plugin is not hosted by the running DSH desktop App".into(),
+        ));
+    }
+    let provider_lock =
+        crate::agent_bridge::hold(daemon, app, LockKind::Agent, "create native session").await?;
+    let session = muster_agent::plugin_control::created_session(&r.op_id);
+    let body = r.encode_to_vec();
+    crate::handler::ledgered(
+        daemon,
+        &r.op_id,
+        "agent.native_create",
+        &r.provider,
+        true,
+        &body,
+        async {
+            let held = (provider_lock, console);
+            let platform = daemon.platform().clone();
+            let (named, operation, prompt) = (session.clone(), r.op_id.clone(), r.prompt.clone());
+            let created = control_guard::spawn_blocking(move || {
+                let _held = held;
+                // The queue may have waited: check the Mac and the App again
+                // just before the App is touched.
+                if platform.locked() || !deepseek_desktop(platform.as_ref(), &host) {
+                    return Err(muster_agent::Error::Unavailable(
+                        "The unlocked DSH desktop App is no longer available".into(),
+                    ));
+                }
+                link.create(&host, &named, &operation, &cwd, &store, &prompt)
+            })
+            .await
+            .map_err(|e| Error::UnknownOutcome(e.to_string()))?;
+            let created = match created {
+                Ok(()) => Ok(session.clone()),
+                Err(muster_agent::Error::UnknownOutcome(why)) => Err(Error::UnknownOutcome(why)),
+                Err(refused) => return Err(refused.into()),
+            };
+            // Wait for the app's transcript, which the session's later reads
+            // need; an acknowledged creation is applied even before it shows,
+            // and an unacknowledged one is applied once it does.
+            let deadline = tokio::time::Instant::now() + receipt_budget;
+            loop {
+                if shows(&agent, &session, &path, &r.prompt).await {
+                    return Ok(session);
+                }
+                if tokio::time::Instant::now() >= deadline || control_guard::check().is_err() {
+                    return created;
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        },
+    )
+    .await
+}
+
+/// Whether `session` is listed in this directory with the prompt as its
+/// first user message.
+#[cfg(target_os = "macos")]
+async fn shows(
+    agent: &Arc<muster_agent::AgentService>,
+    session: &str,
+    path: &std::path::Path,
+    prompt: &str,
+) -> bool {
+    agent.rescan().await;
+    agent
+        .session(session)
+        .is_some_and(|s| std::path::Path::new(&s.cwd) == path)
+        && first_message_is(agent, session, prompt).await
+}
+
+async fn first_message_is(
+    agent: &Arc<muster_agent::AgentService>,
+    session: &str,
+    prompt: &str,
+) -> bool {
+    agent
+        .messages(session, 2000, None)
+        .await
+        .is_ok_and(|(messages, _)| {
+            messages
+                .iter()
+                .find(|m| m.role == "user")
+                .is_some_and(|m| m.text.trim_end() == prompt.trim_end())
+        })
+}
+
 /// New sessions of this provider in this directory, outside `exclude`, whose
 /// first user message is exactly the prompt.
 async fn candidates(
@@ -157,12 +307,7 @@ async fn candidates(
         {
             continue;
         }
-        if let Ok((messages, _)) = agent.messages(&s.id, 2000, None).await
-            && messages
-                .iter()
-                .find(|m| m.role == "user")
-                .is_some_and(|m| m.text.trim_end() == prompt.trim_end())
-        {
+        if first_message_is(agent, &s.id, prompt).await {
             matches.push(s.id)
         }
     }
@@ -205,5 +350,36 @@ pub(crate) async fn receipt(
         _ => Err(Error::Conflict(
             "more than one new session shows this creation's prompt; not binding any".into(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(provider: &str) -> v1::AgentNativeCreateRequest {
+        v1::AgentNativeCreateRequest {
+            op_id: "op".into(),
+            provider: provider.into(),
+            directory: "/tmp".into(),
+            prompt: "hi".into(),
+        }
+    }
+
+    /// The scheduler and Locked Use run only the windows path; DeepSeek
+    /// Harness is created through its plugin on a direct request alone.
+    #[test]
+    fn only_window_providers_pass_the_shared_validation() {
+        for provider in ["codex", "claude"] {
+            validate(&request(provider)).unwrap();
+        }
+        assert!(matches!(
+            validate(&request("deepseek")),
+            Err(Error::Unavailable(_))
+        ));
+        assert!(matches!(
+            validate(&request("gemini")),
+            Err(Error::Invalid(_))
+        ));
     }
 }

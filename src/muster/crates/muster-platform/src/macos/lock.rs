@@ -167,6 +167,9 @@ impl Platform for MacPlatform {
     fn request_accessibility(&self) -> Option<bool> {
         Some(super::ax::request_trust())
     }
+    fn signed_app_child(&self, pid: u32, start: u64, requirement: &str) -> bool {
+        super::codesign::signed_gui_child(pid, start, requirement)
+    }
     fn debug(&self, what: &str, arg: &str) -> Result<String, String> {
         let pid = |arg: &str| -> Result<u32, String> {
             if let Ok(pid) = arg.parse::<u32>() {

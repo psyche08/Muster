@@ -247,6 +247,34 @@ providers; retired wire field decoding is tested. Android/Harmony app builds,
 new signing/installations and physical AX end-to-end checks were not run for
 this source cleanup. Existing installed versions still need this update.
 
+### DeepSeek Harness native creation (2026-11-09)
+
+`agent_native_create` with provider `deepseek` creates the session through
+Muster's plugin inside the app, not through Accessibility
+([ADR 0167](adr/0167-deepseek-harness-native-session-creation.md)). It uses
+the plugin's `task.create.v1` from
+[ADR 0163](adr/0163-multica-dsh-task-sessions.md), then sends the prompt as
+the session's first message. Muster names the session from the operation;
+its `result_id` is that session. Only a direct request on an unlocked Mac
+creates one: the scheduler and Locked Use refuse `deepseek`.
+
+These preconditions are checked before the ledger, so a refused operation can
+be retried:
+
+- an unlocked Mac;
+- the app on the allowlist;
+- an existing directory;
+- a live plugin offering ADR 0163's task methods, inside the signed desktop
+  App.
+
+After the ledger, the outcome is one of these:
+
+- `applied`: the app acknowledged the first message, or its receipt or
+  transcript shows it.
+- `rejected`: refused before the session existed, or its first message was
+  definitely not sent; the reason then names the blank session.
+- `unknown`: never replayed.
+
 ### Independent Accessibility step timeouts (2026-10-10)
 
 Native operations use per-step readiness budgets (`muster-agent::native_step`),

@@ -73,3 +73,6 @@ interaction_tools = ["ask_user_question"]
 [source.turn]
 started = { type = "turn/start" }
 ended = { type = "turn/end" }
+# A turn's last step is the assistant message that calls no tool; its reply
+# is the final answer (the app records no phase of its own).
+final_without_calls = true

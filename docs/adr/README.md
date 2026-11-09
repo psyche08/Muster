@@ -282,3 +282,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0164](0164-the-daemons-main-thread-serves-the-window-server.md) | Accepted; scratch-bundle runtime verified, installation pending | The daemon's main thread serves the window server's event queue |
 | [0165](0165-a-locked-permission-card-read-reserves-no-provider-queue.md) | Accepted; source verified, locked-device acceptance pending | A locked permission-card read reserves no provider queue |
 | [0166](0166-release-apple-1-1-28.md) | Accepted; published and installed on three Macs; iPhone installation pending | Release Apple 1.1.28 (118) from `main` to every Mac and iPhone, after fixing the CLI build |
+| [0167](0167-deepseek-harness-native-session-creation.md) | Accepted; source and isolated App host verified, release pending | Create DeepSeek Harness sessions through Muster's plugin, on ADR 0163's task contract |
