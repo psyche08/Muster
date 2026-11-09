@@ -212,7 +212,12 @@ pub(super) fn op_request_from(
                         "Cannot determine this operation's provider for Locked Use".into(),
                     ));
                 }
-                operation.provider_queue = provider;
+                // A read-only inspection reserves no provider queue: its lease
+                // is scoped to the session's provider, and the target refuses
+                // one that names a queue (ADR 0165).
+                if !matches!(&req, Req::AgentInspect(_)) {
+                    operation.provider_queue = provider;
+                }
                 match diagnostic
                     .call(
                         &client,

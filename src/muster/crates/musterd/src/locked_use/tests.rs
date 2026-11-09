@@ -2449,3 +2449,59 @@ async fn desktop_creation_settles_read_only_on_its_unique_new_transcript() {
     );
     daemon.shutdown().await;
 }
+
+/// A permission-card read while locked is a read-only inspection of its
+/// session's provider. One that names a provider queue is refused before any
+/// OS work; without one it is issued a challenge (ADR 0165).
+#[tokio::test]
+async fn a_locked_inspection_is_prepared_only_without_a_provider_queue() {
+    use muster_agent::controller::Controller;
+    use muster_agent::desktop_chat::{ChatApp, ChatKey};
+    let (_dir, daemon, owner, os, old, _key, peer, old_job) = start().await;
+    owner.cancel(peer, old.nonce(), None).await.unwrap();
+    old_job.await.unwrap();
+    let agent = daemon.agent().unwrap();
+    let session = agent
+        .chat_observed(
+            ChatApp::ChatGpt,
+            None,
+            ChatKey::Id("inspected".into()),
+            "Inspected",
+            Vec::new(),
+        )
+        .unwrap();
+    agent.attach(Arc::new(QueueController {
+        session: session.clone(),
+        run: Arc::new(QueueRun {
+            entered: Default::default(),
+            changed: Default::default(),
+            permits: tokio::sync::Semaphore::new(0),
+        }),
+        tracked: false,
+    }) as Arc<dyn Controller>);
+    let mut operation =
+        muster_proto::locked_use::operation(&Req::AgentInspect(v1::AgentInspectRequest {
+            session,
+            op_id: "inspect-1".into(),
+        }))
+        .unwrap();
+    operation.provider_queue = "codex".into();
+    assert!(matches!(
+        owner.prepare(daemon.clone(), peer, operation.clone()).await,
+        Err(Error::Invalid(m)) if m.contains("inspection cannot authorize")
+    ));
+    assert!(owner.current.lock().unwrap().is_none());
+    operation.provider_queue.clear();
+    let Resp::LockedUseChallenge(prepared) = owner
+        .prepare(daemon.clone(), peer, operation)
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let c = Challenge::decode(&prepared.challenge).unwrap();
+    assert_eq!(c.turn(), "inspect-1");
+    owner.cancel(peer, c.nonce(), None).await.unwrap();
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    daemon.shutdown().await;
+}

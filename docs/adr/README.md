@@ -280,3 +280,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0162](0162-multica-workbench-operations.md) | Accepted; local slice verified, device acceptance pending | Edit Multica agents and operate issues through the host workbench |
 | [0163](0163-multica-dsh-task-sessions.md) | Accepted; device acceptance pending | Create and reopen task sessions in the running DSH App |
 | [0164](0164-the-daemons-main-thread-serves-the-window-server.md) | Accepted; scratch-bundle runtime verified, installation pending | The daemon's main thread serves the window server's event queue |
+| [0165](0165-a-locked-permission-card-read-reserves-no-provider-queue.md) | Accepted; source verified, locked-device acceptance pending | A locked permission-card read reserves no provider queue |
