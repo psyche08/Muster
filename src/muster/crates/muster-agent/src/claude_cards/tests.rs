@@ -431,6 +431,24 @@ fn tracked_file_retries_partial_records_and_resets_after_truncation() {
             .pending
             .is_none()
     );
+    // A larger replacement at the same path starts an independent transcript.
+    let replacement = dir.path().join("replacement");
+    std::fs::write(&replacement, format!("{c}\n")).unwrap();
+    std::fs::rename(&replacement, &path).unwrap();
+    assert!(
+        t.read(&path, "fixture-no-registry")
+            .unwrap()
+            .pending
+            .is_some()
+    );
+    std::fs::write(&replacement, format!("{}\n", " ".repeat(4096))).unwrap();
+    std::fs::rename(&replacement, &path).unwrap();
+    assert!(
+        t.read(&path, "fixture-no-registry")
+            .unwrap()
+            .pending
+            .is_none()
+    );
 }
 #[test]
 fn registry_is_scoped_to_cli_session_and_refreshes_without_transcript_changes() {

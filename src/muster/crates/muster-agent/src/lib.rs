@@ -199,6 +199,8 @@ struct ChatEntry {
     updated_unix: u64,
 }
 
+const RUNTIME_FRESHNESS: Duration = Duration::from_secs(10);
+
 struct RuntimeObservation {
     observed: Instant,
     activity: SessionState,
@@ -282,6 +284,8 @@ pub struct AgentService {
     runtime: tokio::runtime::Handle,
     config: AgentConfig,
     queue_reader: Mutex<queue::Reader>,
+    activity_reader: Mutex<recency::ActivityReader>,
+    pending_readers: questions::PendingReaders,
     history_warming: Mutex<HashSet<String>>,
     open_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     chatgpt_catalog: Mutex<chat_catalog::LocalCatalog>,
@@ -465,6 +469,8 @@ impl AgentService {
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
+            activity_reader: Default::default(),
+            pending_readers: Default::default(),
             history_warming: Mutex::new(HashSet::new()),
             open_locks: Mutex::new(HashMap::new()),
             chatgpt_catalog: Mutex::new(chat_catalog::LocalCatalog::default()),
@@ -995,6 +1001,9 @@ impl AgentService {
         Arc::new(move || {
             let agent = agent.upgrade()?;
             let d = agent.inner.lock().ok()?.catalog.get(&session)?.clone();
+            if codex_history::is(&d) {
+                return None;
+            }
             if d.provider == Provider::Claude {
                 let mut reader = claude.lock().ok()?;
                 return reader
@@ -1585,6 +1594,7 @@ impl AgentService {
         catdesk: Option<catdesk_app::Runtime>,
     ) {
         let catalog = self.inner.lock().unwrap().catalog.clone();
+        let mut reader = self.activity_reader.lock().unwrap();
         let mut observed = HashMap::new();
         let mut projects = Vec::new();
         for session in catdesk.iter().flat_map(|r| r.sessions.iter()) {
@@ -1616,7 +1626,7 @@ impl AgentService {
                     id.clone(),
                     RuntimeObservation {
                         observed: Instant::now(),
-                        activity: recency::activity(&path, d.provider, process.start),
+                        activity: reader.read(id, &path, d.provider, process.start, false).0,
                         process_state: ProcessState::Running,
                     },
                 );
@@ -1629,8 +1639,13 @@ impl AgentService {
             else {
                 continue;
             };
-            let (transcript, timestamp) =
-                recency::activity_at(&d.path, d.provider, registration.process.start);
+            let (transcript, timestamp) = reader.read(
+                &registration.session,
+                &d.path,
+                d.provider,
+                registration.process.start,
+                false,
+            );
             // An assistant end_turn finishes its reply, not the worker's
             // lifecycle: Stop hooks, queued continuations and approvals can
             // still be active. A verified busy/waiting worker owns that phase.
@@ -1660,12 +1675,15 @@ impl AgentService {
                     child.id.clone(),
                     RuntimeObservation {
                         observed: Instant::now(),
-                        activity: recency::subagent_activity_at(
-                            &child.path,
-                            child.provider,
-                            registration.process.start,
-                        )
-                        .0,
+                        activity: reader
+                            .read(
+                                &child.id,
+                                &child.path,
+                                child.provider,
+                                registration.process.start,
+                                true,
+                            )
+                            .0,
                         process_state,
                     },
                 );
@@ -1679,17 +1697,31 @@ impl AgentService {
                 },
             );
         }
-        {
+        reader.retain(|id| observed.contains_key(id));
+        let changed = {
             let mut inner = self.inner.lock().unwrap();
+            let mut changed = inner.runtime.len() != observed.len()
+                || observed.iter().any(|(id, new)| {
+                    inner.runtime.get(id).is_none_or(|old| {
+                        old.observed.elapsed() >= RUNTIME_FRESHNESS
+                            || old.activity != new.activity
+                            || old.process_state != new.process_state
+                    })
+                });
             inner.runtime = observed;
             for (id, project) in projects {
                 if let Some(d) = inner.catalog.get_mut(&id) {
+                    changed |= d.meta.cwd != project;
                     d.meta.cwd = project.clone();
                 }
                 inner.projects.insert(id, project);
             }
+            changed
+        };
+        drop(reader);
+        if changed {
+            let _ = self.events.send(Event::ListChanged);
         }
-        let _ = self.events.send(Event::ListChanged);
     }
 
     // Codex's index is read on every scan. A viewer opened before its rename
@@ -1937,7 +1969,7 @@ impl AgentService {
         let runtime = inner
             .runtime
             .get(id)
-            .filter(|r| r.observed.elapsed() < Duration::from_secs(10));
+            .filter(|r| r.observed.elapsed() < RUNTIME_FRESHNESS);
         let process_state = if let Some(runtime) = runtime {
             runtime.process_state
         } else {
@@ -2733,10 +2765,7 @@ impl AgentService {
         };
         let mut pending = controller.map(|c| c.pending()).unwrap_or_default();
         if let Some(d) = discovered {
-            if let Some(mut snapshot) = questions::read_snapshot(&d.path, d.provider, id) {
-                if d.provider == Provider::Claude {
-                    claude_cards::desktop_tasks(&mut snapshot, id);
-                }
+            if let Some(snapshot) = self.pending_readers.read(&d, id) {
                 pending.retain(|q| {
                     !snapshot.retired.contains(&q.id)
                         && !snapshot.resolved.contains(&q.id)

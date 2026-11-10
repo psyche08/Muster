@@ -28,6 +28,65 @@ impl Snapshot {
 }
 pub type Source = std::sync::Arc<dyn Fn() -> Option<Snapshot> + Send + Sync>;
 
+#[derive(Default)]
+struct PendingReader {
+    claude: Option<crate::claude_cards::TrackedFile>,
+    jsonl: Option<(std::path::PathBuf, crate::recency::FileStamp, Snapshot)>,
+}
+type SharedReader = std::sync::Arc<std::sync::Mutex<PendingReader>>;
+#[derive(Default)]
+pub(crate) struct PendingReaders {
+    // Bound passive RPC state. Controllers retain their own operation-time reader.
+    sessions: std::sync::Mutex<HashMap<String, (std::time::Instant, SharedReader)>>,
+}
+impl PendingReaders {
+    pub(crate) fn read(&self, source: &crate::viewer::Discovered, id: &str) -> Option<Snapshot> {
+        if !source.provider.file_transcripts() || crate::codex_history::is(source) {
+            return None;
+        }
+        let reader = {
+            let mut readers = self.sessions.lock().ok()?;
+            if readers.len() >= 16
+                && !readers.contains_key(id)
+                && let Some(oldest) = readers
+                    .iter()
+                    .min_by_key(|(_, (at, _))| *at)
+                    .map(|(key, _)| key.clone())
+            {
+                readers.remove(&oldest);
+            }
+            let (last, reader) = readers
+                .entry(id.to_owned())
+                .or_insert_with(|| (std::time::Instant::now(), Default::default()));
+            *last = std::time::Instant::now();
+            reader.clone()
+        };
+        let mut reader = reader.lock().ok()?;
+        let path = &source.path;
+        if source.provider == Provider::Claude {
+            return reader
+                .claude
+                .get_or_insert_with(|| crate::claude_cards::TrackedFile::new(path, id))
+                .read(path, id);
+        }
+        let stamp = crate::recency::FileStamp::read(path);
+        if let Some((old_path, old_stamp, value)) = &reader.jsonl
+            && old_path == path
+            && Some(*old_stamp) == stamp
+        {
+            return Some(value.clone());
+        }
+        reader.jsonl = None;
+        let snapshot = read_snapshot(path, source.provider, id)?;
+        if let Some(stamp) = stamp
+            && crate::recency::FileStamp::read(path) == Some(stamp)
+        {
+            reader.jsonl = Some((path.clone(), stamp, snapshot.clone()));
+        }
+        Some(snapshot)
+    }
+}
+
 pub fn read_snapshot(path: &Path, provider: Provider, session: &str) -> Option<Snapshot> {
     // CatDesk question cards are not read yet; its store is not JSONL.
     if !provider.file_transcripts() {

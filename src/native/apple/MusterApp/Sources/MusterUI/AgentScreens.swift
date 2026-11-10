@@ -83,7 +83,8 @@ private struct CatalogSessionGroup: View {
     var body: some View {
         Section {
             ForEach(section.rows, id: \.key) { row in
-                CatalogSessionRow(core: core, row: row, shown: shown)
+                CatalogSessionRow(core: core, row: row, displayMinute: Int(Date().timeIntervalSince1970 / 60))
+                    .equatable()
                     .listRowBackground(shown == row.session.sourceKey ? Color.accentColor.opacity(0.15) : nil)
             }
             if section.expanded && section.hasMore_p {
@@ -117,10 +118,14 @@ private struct CatalogSessionGroup: View {
     }
 }
 
-private struct CatalogSessionRow: View {
+private struct CatalogSessionRow: View, Equatable {
     let core: MusterCore
     let row: Muster_App_AgentCatalogRow
-    let shown: String
+    let displayMinute: Int
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.core === rhs.core && lhs.row == rhs.row && lhs.displayMinute == rhs.displayMinute
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
