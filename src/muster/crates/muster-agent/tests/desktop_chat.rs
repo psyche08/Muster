@@ -182,6 +182,10 @@ async fn chat_sessions_without_a_controller_explain_how_to_open_them() {
     let service = service();
     let new = muster_agent::desktop_chat::new_session_id(ChatApp::Claude);
     let session = service.session(&new).unwrap();
+    assert_eq!(
+        service.session_provider(&new),
+        Some(session.provider.clone())
+    );
     assert_eq!(session.title, "New Claude chat");
     assert_eq!(session.state, "unknown");
     let (messages, more) = service.messages(&new, 0, None).await.unwrap();
@@ -195,5 +199,8 @@ async fn chat_sessions_without_a_controller_explain_how_to_open_them() {
         Err(Error::Unavailable(_))
     ));
     // Transcript ids never look like chat ids.
-    assert!(service.session(UUID).is_none());
+    for id in [UUID, "cloud:claude:missing", "orca:missing"] {
+        assert_eq!(service.session_provider(id), None);
+        assert!(service.session(id).is_none());
+    }
 }

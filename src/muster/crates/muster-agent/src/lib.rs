@@ -2258,6 +2258,23 @@ impl AgentService {
         (messages, start > 0)
     }
 
+    /// Resolve the provider for access checks without constructing a detail tree.
+    pub fn session_provider(&self, id: &str) -> Option<String> {
+        if orca::is_orca(id) {
+            return self.orca.as_ref()?.session_provider(id);
+        }
+        if let Some(app) = desktop_chat::app_of(id) {
+            return Some(app.provider().as_str().into());
+        }
+        let inner = self.inner.lock().unwrap();
+        let provider = if cloud::is_cloud(id) {
+            inner.cloud.get(id)?.provider
+        } else {
+            inner.catalog.get(id)?.provider
+        };
+        Some(provider.as_str().into())
+    }
+
     pub fn session(&self, id: &str) -> Option<AgentSession> {
         if orca::is_orca(id) {
             return self.orca.as_ref()?.session(id);

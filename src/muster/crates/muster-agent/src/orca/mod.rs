@@ -117,6 +117,13 @@ impl Source {
     pub fn session(&self, id: &str) -> Option<AgentSession> {
         self.entries.lock().unwrap().get(id).map(|e| e.info.clone())
     }
+    pub fn session_provider(&self, id: &str) -> Option<String> {
+        self.entries
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|e| e.info.provider.clone())
+    }
     pub fn pending(&self, id: &str) -> Vec<PendingInteraction> {
         self.entries
             .lock()

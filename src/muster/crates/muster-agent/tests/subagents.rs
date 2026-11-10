@@ -101,6 +101,12 @@ async fn codex_subagents_have_bounded_direct_relationships_and_read_only_history
             .iter()
             .all(|s| s.subagents.is_empty() && !s.read_only)
     );
+    for id in [PARENT, CHILD] {
+        assert_eq!(
+            service.session_provider(id),
+            service.session(id).map(|s| s.provider)
+        );
+    }
     let parent = service.session(PARENT).unwrap();
     assert_eq!(parent.subagents.len(), 1);
     assert_eq!(parent.subagents[0].id, CHILD);
