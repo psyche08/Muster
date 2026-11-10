@@ -369,6 +369,7 @@ struct SessionRow: View {
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 2) {
                     StateBadge(state: session.state)
+                        .labelStyle(.titleAndIcon)
                     if session.processState == "running" && session.state == "unknown" {
                         Text("process alive").font(.caption2).foregroundStyle(.secondary)
                     }
