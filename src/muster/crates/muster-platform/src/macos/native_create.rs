@@ -345,7 +345,7 @@ impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> 
 /// Submits the first message of a new session. A requested `model` or
 /// `effort` (names as the app shows them; empty keeps the app's choice) is
 /// chosen and read back on the new session's form first; one the app does
-/// not offer or confirm refuses before anything is drafted (ADR 0177).
+/// not offer or confirm refuses before anything is drafted (ADR 0180).
 pub async fn submit(
     provider: &str,
     cwd: &Path,

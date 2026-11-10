@@ -254,7 +254,7 @@ rejected before anything moves on the Mac, with the app's reason.
 ### New desktop sessions
 
 `AgentNativeCreate` can also name the new session's `model` and `effort`
-(ADR 0177; service `agent.native_create.options.v1`). The daemon chooses them
+(ADR 0180; service `agent.native_create.options.v1`). The daemon chooses them
 on the new session's form and reads them back before the first message is
 drafted. It re-reads the picker's label just before pressing send. A name
 the app does not offer, or a choice it does not confirm, refuses the creation
@@ -280,7 +280,7 @@ status is read after every key, each key must move exactly one level, and a
 name no level has walks back to the starting level before the creation is
 refused. Existing sessions keep the Power rules above.
 
-The effort keys are not yet verified on a device (ADR 0177).
+The effort keys are not yet verified on a device (ADR 0180).
 
 Middle-level check (2026-09-30, Mac-C): two conversations stated High (3 of
 5) and Extra High (4 of 5), and the new-chat page High; none offered

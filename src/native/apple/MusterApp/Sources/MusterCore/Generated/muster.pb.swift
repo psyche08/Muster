@@ -5082,7 +5082,7 @@ public nonisolated struct Muster_V1_AgentNativeCreateRequest: Sendable {
   /// own picker names them ("Opus 5.5", "High"). Empty keeps the app's current
   /// choice. Both are chosen and read back on the new session's form before
   /// the first message is sent; one that cannot be chosen or confirmed refuses
-  /// the creation and sends nothing (ADR 0177). A Mac without the service
+  /// the creation and sends nothing (ADR 0180). A Mac without the service
   /// "agent.native_create.options.v1" ignores these fields.
   public var model: String = String()
 
