@@ -5078,6 +5078,16 @@ public nonisolated struct Muster_V1_AgentNativeCreateRequest: Sendable {
 
   public var prompt: String = String()
 
+  /// The new session's model and reasoning effort, named exactly as the app's
+  /// own picker names them ("Opus 5.5", "High"). Empty keeps the app's current
+  /// choice. Both are chosen and read back on the new session's form before
+  /// the first message is sent; one that cannot be chosen or confirmed refuses
+  /// the creation and sends nothing (ADR 0177). A Mac without the service
+  /// "agent.native_create.options.v1" ignores these fields.
+  public var model: String = String()
+
+  public var effort: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -14795,7 +14805,7 @@ nonisolated extension Muster_V1_MulticaPage: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Muster_V1_AgentNativeCreateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentNativeCreateRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{1}provider\0\u{1}directory\0\u{1}prompt\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{1}provider\0\u{1}directory\0\u{1}prompt\0\u{1}model\0\u{1}effort\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -14807,6 +14817,8 @@ nonisolated extension Muster_V1_AgentNativeCreateRequest: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeSingularStringField(value: &self.provider) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.directory) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.model) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.effort) }()
       default: break
       }
     }
@@ -14825,6 +14837,12 @@ nonisolated extension Muster_V1_AgentNativeCreateRequest: SwiftProtobuf.Message,
     if !self.prompt.isEmpty {
       try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 4)
     }
+    if !self.model.isEmpty {
+      try visitor.visitSingularStringField(value: self.model, fieldNumber: 5)
+    }
+    if !self.effort.isEmpty {
+      try visitor.visitSingularStringField(value: self.effort, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -14833,6 +14851,8 @@ nonisolated extension Muster_V1_AgentNativeCreateRequest: SwiftProtobuf.Message,
     if lhs.provider != rhs.provider {return false}
     if lhs.directory != rhs.directory {return false}
     if lhs.prompt != rhs.prompt {return false}
+    if lhs.model != rhs.model {return false}
+    if lhs.effort != rhs.effort {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

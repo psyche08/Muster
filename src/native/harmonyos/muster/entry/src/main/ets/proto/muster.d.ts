@@ -11008,6 +11008,12 @@ export namespace muster {
 
             /** AgentNativeCreateRequest prompt */
             prompt?: (string|null);
+
+            /** AgentNativeCreateRequest model */
+            model?: (string|null);
+
+            /** AgentNativeCreateRequest effort */
+            effort?: (string|null);
         }
 
         /** Represents an AgentNativeCreateRequest. */
@@ -11030,6 +11036,12 @@ export namespace muster {
 
             /** AgentNativeCreateRequest prompt. */
             public prompt: string;
+
+            /** AgentNativeCreateRequest model. */
+            public model: string;
+
+            /** AgentNativeCreateRequest effort. */
+            public effort: string;
 
             /**
              * Creates a new AgentNativeCreateRequest instance using the specified properties.

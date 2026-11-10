@@ -28273,6 +28273,8 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [provider] AgentNativeCreateRequest provider
              * @property {string|null} [directory] AgentNativeCreateRequest directory
              * @property {string|null} [prompt] AgentNativeCreateRequest prompt
+             * @property {string|null} [model] AgentNativeCreateRequest model
+             * @property {string|null} [effort] AgentNativeCreateRequest effort
              */
 
             /**
@@ -28323,6 +28325,22 @@ export const muster = $root.muster = (() => {
             AgentNativeCreateRequest.prototype.prompt = "";
 
             /**
+             * AgentNativeCreateRequest model.
+             * @member {string} model
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.model = "";
+
+            /**
+             * AgentNativeCreateRequest effort.
+             * @member {string} effort
+             * @memberof muster.v1.AgentNativeCreateRequest
+             * @instance
+             */
+            AgentNativeCreateRequest.prototype.effort = "";
+
+            /**
              * Creates a new AgentNativeCreateRequest instance using the specified properties.
              * @function create
              * @memberof muster.v1.AgentNativeCreateRequest
@@ -28358,6 +28376,10 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.directory);
                 if (message.prompt != null && Object.hasOwnProperty.call(message, "prompt"))
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.prompt);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.model);
+                if (message.effort != null && Object.hasOwnProperty.call(message, "effort"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.effort);
                 return writer;
             };
 
@@ -28409,6 +28431,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 4: {
                             message.prompt = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.effort = reader.string();
                             break;
                         }
                     default:
