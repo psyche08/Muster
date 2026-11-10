@@ -6076,6 +6076,9 @@ export namespace muster {
             /** AgentMessage toolStatus */
             toolStatus?: (string|null);
 
+            /** AgentMessage previewJpegs */
+            previewJpegs?: (Uint8Array[]|null);
+
             /** AgentMessage work */
             work?: (muster.v1.IAgentWorkSpan|null);
         }
@@ -6118,6 +6121,9 @@ export namespace muster {
 
             /** AgentMessage toolStatus. */
             public toolStatus: string;
+
+            /** AgentMessage previewJpegs. */
+            public previewJpegs: Uint8Array[];
 
             /** AgentMessage work. */
             public work?: (muster.v1.IAgentWorkSpan|null);

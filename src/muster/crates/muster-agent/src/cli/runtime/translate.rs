@@ -1,5 +1,6 @@
 //! Native provider frames -> revisioned CLI journal, wholly in Rust.
 use super::*;
+use base64::{Engine, engine::general_purpose::STANDARD};
 pub(super) fn event(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
     if s.agent == "codex" {
         codex(rt, s, f)
@@ -9,6 +10,10 @@ pub(super) fn event(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Er
 }
 fn message(role: &str, text: &str) -> Value {
     json!({"kind":"message","role":role,"blocks":[{"type":"text","text":text}]})
+}
+fn image_block(preview: Option<Vec<u8>>) -> Value {
+    json!({"type":"image-ref","alt":if preview.is_some() {"Image"} else {crate::inline_image::UNAVAILABLE},
+        "previewJpeg":preview.map(|jpeg| STANDARD.encode(jpeg))})
 }
 fn codex(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
     let method = f["method"].as_str().unwrap_or_default();
@@ -83,7 +88,23 @@ fn codex(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
         "item/started" | "item/completed" => {
             let item=&p["item"];let key=format!("{}:{}",p["turnId"].as_str().unwrap_or(&s.turn),item["id"].as_str().unwrap_or("item"));
             let body=match item["type"].as_str() {
-                Some("userMessage")=>return Ok(()),
+                Some("userMessage") => {
+                    // The send receipt already records the user's text.
+                    let blocks: Vec<_> = item["content"].as_array().into_iter().flatten()
+                        .filter(|b| matches!(b["type"].as_str(), Some("localImage" | "image")))
+                        .take(crate::inline_image::MAX_PREVIEWS)
+                        .map(|b| image_block(crate::inline_image::codex(b, Some(Path::new(&s.cwd)))))
+                        .collect();
+                    if blocks.is_empty() { return Ok(()); }
+                    json!({"kind":"message","role":"user","blocks":blocks})
+                }
+                Some("imageView") => json!({"kind":"message","role":"system","blocks":[image_block(crate::inline_image::codex(item, Some(Path::new(&s.cwd))))]}),
+                Some("functionCallOutput" | "sleep" | "subAgentActivity" | "hookPrompt") => {
+                    let Some(m) = crate::codex_history::project(&key, item, 0, None) else {return Ok(());};
+                    if m.kind == crate::model::MessageKind::ToolResult {
+                        json!({"kind":"message","role":"tool","blocks":[{"type":"tool-result","text":m.text,"toolUseId":item["id"]}]})
+                    } else { message(m.role.as_str(), &m.text) }
+                }
                 Some("agentMessage"|"plan")=>message("assistant",item["text"].as_str().unwrap_or_default()),
                 Some("reasoning")=>message("reasoning",&item["summary"].as_array().map(|a|a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n")).unwrap_or_default()),
                 Some("commandExecution")=>json!({"kind":"tool-call","name":"shell","callId":key,"input":item["command"],"state":if item["exitCode"].as_i64().is_some_and(|code| code != 0) { json!("failed") } else { item["status"].clone() },"output":{"head":item["aggregatedOutput"].as_str().unwrap_or_default(),"truncated":false}}),
@@ -193,6 +214,10 @@ fn claude(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
             {
                 let key = format!("{key}:{index}");
                 let body = match block["type"].as_str() {
+                    Some("image") => {
+                        json!({"kind":"message","role":f["type"],"blocks":[image_block(crate::inline_image::claude(block))]})
+                    }
+                    Some("fallback") => message("system", &crate::claude_cards::fallback(block)),
                     Some("text") if f["type"] == "assistant" => {
                         message("assistant", block["text"].as_str().unwrap_or_default())
                     }
@@ -203,7 +228,19 @@ fn claude(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
                         json!({"kind":"tool-call","name":block["name"],"callId":block["id"],"input":block["input"],"state":"running"})
                     }
                     Some("tool_result") => {
-                        json!({"kind":"message","role":"tool","blocks":[{"type":"tool-result","toolUseId":block["tool_use_id"],"state":if block["is_error"]==true{"failed"}else{"completed"},"text":block["content"].as_str().map(str::to_owned).unwrap_or_else(||block["content"].to_string())}]})
+                        let mut blocks = Vec::new();
+                        if let Some(parts) = block["content"].as_array() {
+                            for part in parts {
+                                match part["type"].as_str() {
+                                    Some("image") => blocks.push(image_block(crate::inline_image::claude(part))),
+                                    Some("text") => blocks.push(json!({"type":"tool-result","toolUseId":block["tool_use_id"],"state":if block["is_error"]==true{"failed"}else{"completed"},"text":part["text"]})),
+                                    _ => {}
+                                }
+                            }
+                        } else {
+                            blocks.push(json!({"type":"tool-result","toolUseId":block["tool_use_id"],"state":if block["is_error"]==true{"failed"}else{"completed"},"text":block["content"]}));
+                        }
+                        json!({"kind":"message","role":"tool","blocks":blocks})
                     }
                     _ => continue,
                 };

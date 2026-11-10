@@ -3,6 +3,9 @@ use crate::{Message, v1};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 
+/// Leave room in the transport frame for the response envelope and metadata.
+pub const PAGE_BYTES: usize = 2 * 1024 * 1024;
+
 /// Index for one append-only source generation. The owner MUST clear it before
 /// replacing, editing or truncating any existing message. Never use a file stamp
 /// alone as permission to retain this index across a source rewrite.
@@ -223,14 +226,44 @@ pub(crate) fn page_with_index<'a, T>(
             !request.after_id.is_empty() || (!request.before_id.is_empty() && before.is_none()),
         )
     };
+    let forward = cached.is_some();
+    let messages = bounded_page(&all[start..end], forward, project);
+    let capped = messages.len() < end - start;
     v1::AgentMessagePage {
         session: request.session.clone(),
-        messages: all[start..end].iter().map(project).collect(),
-        has_more,
+        messages,
+        has_more: has_more || (!forward && capped),
         reset,
-        has_newer: cached.is_some() && end < before.unwrap_or(all.len()),
+        has_newer: forward && (capped || end < before.unwrap_or(all.len())),
         ..Default::default()
     }
+}
+pub(crate) fn bounded_page<T>(
+    records: &[T],
+    forward: bool,
+    project: impl Fn(&T) -> v1::AgentMessage,
+) -> Vec<v1::AgentMessage> {
+    let mut bytes = 0;
+    let mut messages = Vec::new();
+    for offset in 0..records.len() {
+        let index = if forward {
+            offset
+        } else {
+            records.len() - 1 - offset
+        };
+        let message = project(&records[index]);
+        bytes += message.encoded_len() + 5;
+        // A forward delta includes its existing anchor as its first record.
+        // Include at least one new record to advance that cursor.
+        if messages.len() > usize::from(forward) && bytes > PAGE_BYTES {
+            break;
+        }
+        messages.push(message);
+    }
+    if !forward {
+        messages.reverse();
+    }
+    messages
 }
 #[cfg(test)]
 mod tests {
@@ -241,6 +274,44 @@ mod tests {
             text: text.into(),
             ..Default::default()
         }
+    }
+    #[test]
+    fn thumbnail_pages_resume_in_both_directions() {
+        let all: Vec<_> = (0..120)
+            .map(|i| v1::AgentMessage {
+                preview_jpegs: vec![vec![0; 16384]; 2],
+                ..msg(&i.to_string(), "Image")
+            })
+            .collect();
+        let request_all = v1::AgentMessagesRequest {
+            tail: 200,
+            ..Default::default()
+        };
+        let latest = page(&all, &request_all);
+        assert!(latest.has_more && latest.encoded_len() < PAGE_BYTES + 100);
+        let older = page(
+            &all,
+            &v1::AgentMessagesRequest {
+                before_id: latest.messages[0].id.clone(),
+                ..request_all
+            },
+        );
+        assert_eq!([older.messages, latest.messages].concat(), all);
+        let mut cached = all[..1].to_vec();
+        while cached.len() < all.len() {
+            let delta = page(
+                &all,
+                &v1::AgentMessagesRequest {
+                    tail: 200,
+                    ..request("s", &cached)
+                },
+            );
+            assert!(!delta.reset && delta.encoded_len() < PAGE_BYTES + 100);
+            assert_eq!(delta.messages[0], *cached.last().unwrap());
+            assert!(delta.messages.len() > 1);
+            cached.extend(delta.messages.into_iter().skip(1));
+        }
+        assert_eq!(cached, all);
     }
     #[test]
     fn checkpoints_reuse_encoded_prefixes_and_reset_after_rewrites() {

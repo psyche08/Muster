@@ -1084,6 +1084,11 @@ export struct MessageBubble {
     Row() {
       if (this.isUser()) { Blank().constraintSize({ minWidth: 64 }) }
       Column({ space: 4 }) {
+        ForEach(this.message.previewJpegs ?? [], (jpeg: Uint8Array): void => {
+          Image('data:image/jpeg;base64,' + new util.Base64Helper().encodeToStringSync(jpeg))
+            .width('100%').constraintSize({ maxWidth: 320, maxHeight: 260 }).objectFit(ImageFit.Contain)
+            .accessibilityText('Image preview')
+        })
         if (this.parts.some((p: pb.app.IMessagePart): boolean => p.kind === 'code')) {
           ForEach(this.parts, (part: pb.app.IMessagePart): void => {
             if (part.kind === 'code') {

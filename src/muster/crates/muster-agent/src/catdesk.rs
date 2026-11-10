@@ -442,6 +442,7 @@ fn text_message(id: String, role: Role, text: String, ts_unix: u64) -> Message {
         phase: String::new(),
         tool_name: String::new(),
         tool_call_id: String::new(),
+        preview_jpegs: Vec::new(),
         tool_status: String::new(),
     }
 }
@@ -465,6 +466,7 @@ fn tool_messages(
         phase: String::new(),
         tool_name: name.to_string(),
         tool_call_id: call_id.to_string(),
+        preview_jpegs: Vec::new(),
         tool_status: String::new(),
     };
     let mut out = vec![tool(
@@ -613,6 +615,7 @@ fn legacy_messages(item: &Value) -> Vec<Message> {
                     phase: String::new(),
                     tool_name: name.to_string(),
                     tool_call_id: part["toolCallId"].as_str().unwrap_or("").to_string(),
+                    preview_jpegs: Vec::new(),
                     tool_status: String::new(),
                 });
             }

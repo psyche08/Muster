@@ -34,74 +34,59 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated struct Muster_V1_Envelope: @unchecked Sendable {
+public nonisolated struct Muster_V1_Envelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: UInt64 {
-    get {_storage._id}
-    set {_uniqueStorage()._id = newValue}
-  }
+  public var id: UInt64 = 0
 
-  public var msg: OneOf_Msg? {
-    get {return _storage._msg}
-    set {_uniqueStorage()._msg = newValue}
-  }
+  public var msg: Muster_V1_Envelope.OneOf_Msg? = nil
 
   public var request: Muster_V1_Request {
     get {
-      if case .request(let v)? = _storage._msg {return v}
+      if case .request(let v)? = msg {return v}
       return Muster_V1_Request()
     }
-    set {_uniqueStorage()._msg = .request(newValue)}
+    set {msg = .request(newValue)}
   }
 
   public var response: Muster_V1_Response {
     get {
-      if case .response(let v)? = _storage._msg {return v}
+      if case .response(let v)? = msg {return v}
       return Muster_V1_Response()
     }
-    set {_uniqueStorage()._msg = .response(newValue)}
+    set {msg = .response(newValue)}
   }
 
   public var event: Muster_V1_Event {
     get {
-      if case .event(let v)? = _storage._msg {return v}
+      if case .event(let v)? = msg {return v}
       return Muster_V1_Event()
     }
-    set {_uniqueStorage()._msg = .event(newValue)}
+    set {msg = .event(newValue)}
   }
 
   public var cancel: Muster_V1_Cancel {
     get {
-      if case .cancel(let v)? = _storage._msg {return v}
+      if case .cancel(let v)? = msg {return v}
       return Muster_V1_Cancel()
     }
-    set {_uniqueStorage()._msg = .cancel(newValue)}
+    set {msg = .cancel(newValue)}
   }
 
   /// Presence proof for high-risk scopes (§3.4): the caller's presence key
   /// signs "MUSTER-PRESENCE-V1" || id (8 bytes BE) || Request bytes, after
   /// local authentication. Empty when the call needs none.
-  public var presence: Data {
-    get {_storage._presence}
-    set {_uniqueStorage()._presence = newValue}
-  }
+  public var presence: Data = Data()
 
   /// When set on a request to a device's own daemon, that daemon forwards
   /// the envelope to this member (device id, hex) over the link and relays
   /// the events and response back under the same id. Local callers only.
-  public var target: String {
-    get {_storage._target}
-    set {_uniqueStorage()._target = newValue}
-  }
+  public var target: String = String()
 
   /// Admin-signed public enrollment plus accepted roster evidence; no private key.
-  public var presenceEnrollment: Data {
-    get {_storage._presenceEnrollment}
-    set {_uniqueStorage()._presenceEnrollment = newValue}
-  }
+  public var presenceEnrollment: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -114,8 +99,6 @@ public nonisolated struct Muster_V1_Envelope: @unchecked Sendable {
   }
 
   public init() {}
-
-  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Muster_V1_Cancel: Sendable {
@@ -3209,59 +3192,91 @@ public nonisolated struct Muster_V1_AgentWatchRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Muster_V1_AgentMessage: Sendable {
+public nonisolated struct Muster_V1_AgentMessage: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
+  public var id: String {
+    get {_storage._id}
+    set {_uniqueStorage()._id = newValue}
+  }
 
   /// user | assistant | tool | system
-  public var role: String = String()
+  public var role: String {
+    get {_storage._role}
+    set {_uniqueStorage()._role = newValue}
+  }
 
-  public var text: String = String()
+  public var text: String {
+    get {_storage._text}
+    set {_uniqueStorage()._text = newValue}
+  }
 
-  public var tsUnix: UInt64 = 0
+  public var tsUnix: UInt64 {
+    get {_storage._tsUnix}
+    set {_uniqueStorage()._tsUnix = newValue}
+  }
 
   /// text | tool_call | tool_result | interaction | turn_summary | turn_status | provider_card | work
-  public var kind: String = String()
+  public var kind: String {
+    get {_storage._kind}
+    set {_uniqueStorage()._kind = newValue}
+  }
 
   public var usage: Muster_V1_TurnUsage {
-    get {_usage ?? Muster_V1_TurnUsage()}
-    set {_usage = newValue}
+    get {_storage._usage ?? Muster_V1_TurnUsage()}
+    set {_uniqueStorage()._usage = newValue}
   }
   /// Returns true if `usage` has been explicitly set.
-  public var hasUsage: Bool {self._usage != nil}
+  public var hasUsage: Bool {_storage._usage != nil}
   /// Clears the value of `usage`. Subsequent reads from it will return its default value.
-  public mutating func clearUsage() {self._usage = nil}
+  public mutating func clearUsage() {_uniqueStorage()._usage = nil}
 
   /// commentary | final_answer | reasoning, when the provider records it
-  public var phase: String = String()
+  public var phase: String {
+    get {_storage._phase}
+    set {_uniqueStorage()._phase = newValue}
+  }
 
-  public var toolName: String = String()
+  public var toolName: String {
+    get {_storage._toolName}
+    set {_uniqueStorage()._toolName = newValue}
+  }
 
   /// provider identity for correlating a call and its output
-  public var toolCallID: String = String()
+  public var toolCallID: String {
+    get {_storage._toolCallID}
+    set {_uniqueStorage()._toolCallID = newValue}
+  }
 
   /// provider-recorded running | completed | failed | interrupted; empty if unknown
-  public var toolStatus: String = String()
+  public var toolStatus: String {
+    get {_storage._toolStatus}
+    set {_uniqueStorage()._toolStatus = newValue}
+  }
+
+  /// bounded thumbnails in provider order
+  public var previewJpegs: [Data] {
+    get {_storage._previewJpegs}
+    set {_uniqueStorage()._previewJpegs = newValue}
+  }
 
   /// kind "work": a completed turn's collapsed work (ADR 0160)
   public var work: Muster_V1_AgentWorkSpan {
-    get {_work ?? Muster_V1_AgentWorkSpan()}
-    set {_work = newValue}
+    get {_storage._work ?? Muster_V1_AgentWorkSpan()}
+    set {_uniqueStorage()._work = newValue}
   }
   /// Returns true if `work` has been explicitly set.
-  public var hasWork: Bool {self._work != nil}
+  public var hasWork: Bool {_storage._work != nil}
   /// Clears the value of `work`. Subsequent reads from it will return its default value.
-  public mutating func clearWork() {self._work = nil}
+  public mutating func clearWork() {_uniqueStorage()._work = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _usage: Muster_V1_TurnUsage? = nil
-  fileprivate var _work: Muster_V1_AgentWorkSpan? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// The records a `work` outline record stands for. `hash` is SHA-256 over the
@@ -5510,162 +5525,118 @@ nonisolated extension Muster_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}request\0\u{1}response\0\u{1}event\0\u{1}cancel\0\u{1}presence\0\u{1}target\0\u{3}presence_enrollment\0")
 
-  fileprivate class _StorageClass {
-    var _id: UInt64 = 0
-    var _msg: Muster_V1_Envelope.OneOf_Msg?
-    var _presence: Data = Data()
-    var _target: String = String()
-    var _presenceEnrollment: Data = Data()
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _id = source._id
-      _msg = source._msg
-      _presence = source._presence
-      _target = source._target
-      _presenceEnrollment = source._presenceEnrollment
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
-
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._id) }()
-        case 2: try {
-          var v: Muster_V1_Request?
-          var hadOneofValue = false
-          if let current = _storage._msg {
-            hadOneofValue = true
-            if case .request(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._msg = .request(v)
-          }
-        }()
-        case 3: try {
-          var v: Muster_V1_Response?
-          var hadOneofValue = false
-          if let current = _storage._msg {
-            hadOneofValue = true
-            if case .response(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._msg = .response(v)
-          }
-        }()
-        case 4: try {
-          var v: Muster_V1_Event?
-          var hadOneofValue = false
-          if let current = _storage._msg {
-            hadOneofValue = true
-            if case .event(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._msg = .event(v)
-          }
-        }()
-        case 5: try {
-          var v: Muster_V1_Cancel?
-          var hadOneofValue = false
-          if let current = _storage._msg {
-            hadOneofValue = true
-            if case .cancel(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._msg = .cancel(v)
-          }
-        }()
-        case 6: try { try decoder.decodeSingularBytesField(value: &_storage._presence) }()
-        case 7: try { try decoder.decodeSingularStringField(value: &_storage._target) }()
-        case 8: try { try decoder.decodeSingularBytesField(value: &_storage._presenceEnrollment) }()
-        default: break
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.id) }()
+      case 2: try {
+        var v: Muster_V1_Request?
+        var hadOneofValue = false
+        if let current = self.msg {
+          hadOneofValue = true
+          if case .request(let m) = current {v = m}
         }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.msg = .request(v)
+        }
+      }()
+      case 3: try {
+        var v: Muster_V1_Response?
+        var hadOneofValue = false
+        if let current = self.msg {
+          hadOneofValue = true
+          if case .response(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.msg = .response(v)
+        }
+      }()
+      case 4: try {
+        var v: Muster_V1_Event?
+        var hadOneofValue = false
+        if let current = self.msg {
+          hadOneofValue = true
+          if case .event(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.msg = .event(v)
+        }
+      }()
+      case 5: try {
+        var v: Muster_V1_Cancel?
+        var hadOneofValue = false
+        if let current = self.msg {
+          hadOneofValue = true
+          if case .cancel(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.msg = .cancel(v)
+        }
+      }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self.presence) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.target) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.presenceEnrollment) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._id != 0 {
-        try visitor.visitSingularUInt64Field(value: _storage._id, fieldNumber: 1)
-      }
-      switch _storage._msg {
-      case .request?: try {
-        guard case .request(let v)? = _storage._msg else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-      }()
-      case .response?: try {
-        guard case .response(let v)? = _storage._msg else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      }()
-      case .event?: try {
-        guard case .event(let v)? = _storage._msg else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      }()
-      case .cancel?: try {
-        guard case .cancel(let v)? = _storage._msg else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-      }()
-      case nil: break
-      }
-      if !_storage._presence.isEmpty {
-        try visitor.visitSingularBytesField(value: _storage._presence, fieldNumber: 6)
-      }
-      if !_storage._target.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._target, fieldNumber: 7)
-      }
-      if !_storage._presenceEnrollment.isEmpty {
-        try visitor.visitSingularBytesField(value: _storage._presenceEnrollment, fieldNumber: 8)
-      }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.id != 0 {
+      try visitor.visitSingularUInt64Field(value: self.id, fieldNumber: 1)
+    }
+    switch self.msg {
+    case .request?: try {
+      guard case .request(let v)? = self.msg else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .response?: try {
+      guard case .response(let v)? = self.msg else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .event?: try {
+      guard case .event(let v)? = self.msg else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case .cancel?: try {
+      guard case .cancel(let v)? = self.msg else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
+    if !self.presence.isEmpty {
+      try visitor.visitSingularBytesField(value: self.presence, fieldNumber: 6)
+    }
+    if !self.target.isEmpty {
+      try visitor.visitSingularStringField(value: self.target, fieldNumber: 7)
+    }
+    if !self.presenceEnrollment.isEmpty {
+      try visitor.visitSingularBytesField(value: self.presenceEnrollment, fieldNumber: 8)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_Envelope, rhs: Muster_V1_Envelope) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._id != rhs_storage._id {return false}
-        if _storage._msg != rhs_storage._msg {return false}
-        if _storage._presence != rhs_storage._presence {return false}
-        if _storage._target != rhs_storage._target {return false}
-        if _storage._presenceEnrollment != rhs_storage._presenceEnrollment {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.id != rhs.id {return false}
+    if lhs.msg != rhs.msg {return false}
+    if lhs.presence != rhs.presence {return false}
+    if lhs.target != rhs.target {return false}
+    if lhs.presenceEnrollment != rhs.presenceEnrollment {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -11177,83 +11148,146 @@ nonisolated extension Muster_V1_AgentWatchRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}role\0\u{1}text\0\u{3}ts_unix\0\u{1}kind\0\u{1}usage\0\u{1}phase\0\u{3}tool_name\0\u{3}tool_call_id\0\u{3}tool_status\0\u{1}work\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}role\0\u{1}text\0\u{3}ts_unix\0\u{1}kind\0\u{1}usage\0\u{1}phase\0\u{3}tool_name\0\u{3}tool_call_id\0\u{3}tool_status\0\u{1}work\0\u{3}preview_jpegs\0")
+
+  fileprivate class _StorageClass {
+    var _id: String = String()
+    var _role: String = String()
+    var _text: String = String()
+    var _tsUnix: UInt64 = 0
+    var _kind: String = String()
+    var _usage: Muster_V1_TurnUsage? = nil
+    var _phase: String = String()
+    var _toolName: String = String()
+    var _toolCallID: String = String()
+    var _toolStatus: String = String()
+    var _previewJpegs: [Data] = []
+    var _work: Muster_V1_AgentWorkSpan? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _id = source._id
+      _role = source._role
+      _text = source._text
+      _tsUnix = source._tsUnix
+      _kind = source._kind
+      _usage = source._usage
+      _phase = source._phase
+      _toolName = source._toolName
+      _toolCallID = source._toolCallID
+      _toolStatus = source._toolStatus
+      _previewJpegs = source._previewJpegs
+      _work = source._work
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.text) }()
-      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.tsUnix) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.kind) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._usage) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.phase) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.toolName) }()
-      case 9: try { try decoder.decodeSingularStringField(value: &self.toolCallID) }()
-      case 10: try { try decoder.decodeSingularStringField(value: &self.toolStatus) }()
-      case 11: try { try decoder.decodeSingularMessageField(value: &self._work) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._id) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._role) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._text) }()
+        case 4: try { try decoder.decodeSingularUInt64Field(value: &_storage._tsUnix) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._kind) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._usage) }()
+        case 7: try { try decoder.decodeSingularStringField(value: &_storage._phase) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._toolName) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._toolCallID) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._toolStatus) }()
+        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._work) }()
+        case 12: try { try decoder.decodeRepeatedBytesField(value: &_storage._previewJpegs) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._id.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._id, fieldNumber: 1)
+      }
+      if !_storage._role.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._role, fieldNumber: 2)
+      }
+      if !_storage._text.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._text, fieldNumber: 3)
+      }
+      if _storage._tsUnix != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._tsUnix, fieldNumber: 4)
+      }
+      if !_storage._kind.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._kind, fieldNumber: 5)
+      }
+      try { if let v = _storage._usage {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      if !_storage._phase.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._phase, fieldNumber: 7)
+      }
+      if !_storage._toolName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._toolName, fieldNumber: 8)
+      }
+      if !_storage._toolCallID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._toolCallID, fieldNumber: 9)
+      }
+      if !_storage._toolStatus.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._toolStatus, fieldNumber: 10)
+      }
+      try { if let v = _storage._work {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      } }()
+      if !_storage._previewJpegs.isEmpty {
+        try visitor.visitRepeatedBytesField(value: _storage._previewJpegs, fieldNumber: 12)
+      }
     }
-    if !self.role.isEmpty {
-      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
-    }
-    if !self.text.isEmpty {
-      try visitor.visitSingularStringField(value: self.text, fieldNumber: 3)
-    }
-    if self.tsUnix != 0 {
-      try visitor.visitSingularUInt64Field(value: self.tsUnix, fieldNumber: 4)
-    }
-    if !self.kind.isEmpty {
-      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 5)
-    }
-    try { if let v = self._usage {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    } }()
-    if !self.phase.isEmpty {
-      try visitor.visitSingularStringField(value: self.phase, fieldNumber: 7)
-    }
-    if !self.toolName.isEmpty {
-      try visitor.visitSingularStringField(value: self.toolName, fieldNumber: 8)
-    }
-    if !self.toolCallID.isEmpty {
-      try visitor.visitSingularStringField(value: self.toolCallID, fieldNumber: 9)
-    }
-    if !self.toolStatus.isEmpty {
-      try visitor.visitSingularStringField(value: self.toolStatus, fieldNumber: 10)
-    }
-    try { if let v = self._work {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_AgentMessage, rhs: Muster_V1_AgentMessage) -> Bool {
-    if lhs.id != rhs.id {return false}
-    if lhs.role != rhs.role {return false}
-    if lhs.text != rhs.text {return false}
-    if lhs.tsUnix != rhs.tsUnix {return false}
-    if lhs.kind != rhs.kind {return false}
-    if lhs._usage != rhs._usage {return false}
-    if lhs.phase != rhs.phase {return false}
-    if lhs.toolName != rhs.toolName {return false}
-    if lhs.toolCallID != rhs.toolCallID {return false}
-    if lhs.toolStatus != rhs.toolStatus {return false}
-    if lhs._work != rhs._work {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._id != rhs_storage._id {return false}
+        if _storage._role != rhs_storage._role {return false}
+        if _storage._text != rhs_storage._text {return false}
+        if _storage._tsUnix != rhs_storage._tsUnix {return false}
+        if _storage._kind != rhs_storage._kind {return false}
+        if _storage._usage != rhs_storage._usage {return false}
+        if _storage._phase != rhs_storage._phase {return false}
+        if _storage._toolName != rhs_storage._toolName {return false}
+        if _storage._toolCallID != rhs_storage._toolCallID {return false}
+        if _storage._toolStatus != rhs_storage._toolStatus {return false}
+        if _storage._previewJpegs != rhs_storage._previewJpegs {return false}
+        if _storage._work != rhs_storage._work {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

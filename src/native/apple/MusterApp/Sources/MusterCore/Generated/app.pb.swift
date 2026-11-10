@@ -3287,91 +3287,55 @@ public nonisolated struct Muster_App_QueuedMessagesView: Sendable {
   public init() {}
 }
 
-public nonisolated struct Muster_App_ChatBlock: @unchecked Sendable {
+public nonisolated struct Muster_App_ChatBlock: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String {
-    get {_storage._id}
-    set {_uniqueStorage()._id = newValue}
-  }
+  public var id: String = String()
 
   /// message | working | activity | summary | compact_context | reasoning | diff | notice
-  public var kind: String {
-    get {_storage._kind}
-    set {_uniqueStorage()._kind = newValue}
-  }
+  public var kind: String = String()
 
   public var message: Muster_V1_AgentMessage {
-    get {_storage._message ?? Muster_V1_AgentMessage()}
-    set {_uniqueStorage()._message = newValue}
+    get {_message ?? Muster_V1_AgentMessage()}
+    set {_message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
-  public var hasMessage: Bool {_storage._message != nil}
+  public var hasMessage: Bool {self._message != nil}
   /// Clears the value of `message`. Subsequent reads from it will return its default value.
-  public mutating func clearMessage() {_uniqueStorage()._message = nil}
+  public mutating func clearMessage() {self._message = nil}
 
-  public var activity: [Muster_V1_AgentMessage] {
-    get {_storage._activity}
-    set {_uniqueStorage()._activity = newValue}
-  }
+  public var activity: [Muster_V1_AgentMessage] = []
 
-  public var completed: Bool {
-    get {_storage._completed}
-    set {_uniqueStorage()._completed = newValue}
-  }
+  public var completed: Bool = false
 
-  public var activityRows: [Muster_App_ChatActivityRow] {
-    get {_storage._activityRows}
-    set {_uniqueStorage()._activityRows = newValue}
-  }
+  public var activityRows: [Muster_App_ChatActivityRow] = []
 
   /// ordered prose and consecutive tool groups within Working
-  public var children: [Muster_App_ChatBlock] {
-    get {_storage._children}
-    set {_uniqueStorage()._children = newValue}
-  }
+  public var children: [Muster_App_ChatBlock] = []
 
-  public var title: String {
-    get {_storage._title}
-    set {_uniqueStorage()._title = newValue}
-  }
+  public var title: String = String()
 
-  public var defaultExpanded: Bool {
-    get {_storage._defaultExpanded}
-    set {_uniqueStorage()._defaultExpanded = newValue}
-  }
+  public var defaultExpanded: Bool = false
 
   /// parsed and bounded by Shared Rust
-  public var diffs: [Muster_App_ChatDiffFile] {
-    get {_storage._diffs}
-    set {_uniqueStorage()._diffs = newValue}
-  }
+  public var diffs: [Muster_App_ChatDiffFile] = []
 
-  public var parts: [Muster_App_MessagePart] {
-    get {_storage._parts}
-    set {_uniqueStorage()._parts = newValue}
-  }
+  public var parts: [Muster_App_MessagePart] = []
 
   /// working only: "" when children are complete; otherwise "unloaded",
   /// "loading" or "failed" (with details_error). An expanded block whose
   /// details are unloaded or failed asks with AgentLoadWork (ADR 0160).
-  public var details: String {
-    get {_storage._details}
-    set {_uniqueStorage()._details = newValue}
-  }
+  public var details: String = String()
 
-  public var detailsError: String {
-    get {_storage._detailsError}
-    set {_uniqueStorage()._detailsError = newValue}
-  }
+  public var detailsError: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _message: Muster_V1_AgentMessage? = nil
 }
 
 /// Read-only transcript presentation, prepared by Shared Rust. These labels do
@@ -9738,151 +9702,91 @@ nonisolated extension Muster_App_ChatBlock: SwiftProtobuf.Message, SwiftProtobuf
   public static let protoMessageName: String = _protobuf_package + ".ChatBlock"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}message\0\u{1}activity\0\u{1}completed\0\u{3}activity_rows\0\u{1}children\0\u{1}title\0\u{3}default_expanded\0\u{1}diffs\0\u{1}parts\0\u{1}details\0\u{3}details_error\0")
 
-  fileprivate class _StorageClass {
-    var _id: String = String()
-    var _kind: String = String()
-    var _message: Muster_V1_AgentMessage? = nil
-    var _activity: [Muster_V1_AgentMessage] = []
-    var _completed: Bool = false
-    var _activityRows: [Muster_App_ChatActivityRow] = []
-    var _children: [Muster_App_ChatBlock] = []
-    var _title: String = String()
-    var _defaultExpanded: Bool = false
-    var _diffs: [Muster_App_ChatDiffFile] = []
-    var _parts: [Muster_App_MessagePart] = []
-    var _details: String = String()
-    var _detailsError: String = String()
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _id = source._id
-      _kind = source._kind
-      _message = source._message
-      _activity = source._activity
-      _completed = source._completed
-      _activityRows = source._activityRows
-      _children = source._children
-      _title = source._title
-      _defaultExpanded = source._defaultExpanded
-      _diffs = source._diffs
-      _parts = source._parts
-      _details = source._details
-      _detailsError = source._detailsError
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
-
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularStringField(value: &_storage._id) }()
-        case 2: try { try decoder.decodeSingularStringField(value: &_storage._kind) }()
-        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._message) }()
-        case 4: try { try decoder.decodeRepeatedMessageField(value: &_storage._activity) }()
-        case 5: try { try decoder.decodeSingularBoolField(value: &_storage._completed) }()
-        case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._activityRows) }()
-        case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._children) }()
-        case 8: try { try decoder.decodeSingularStringField(value: &_storage._title) }()
-        case 9: try { try decoder.decodeSingularBoolField(value: &_storage._defaultExpanded) }()
-        case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._diffs) }()
-        case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._parts) }()
-        case 12: try { try decoder.decodeSingularStringField(value: &_storage._details) }()
-        case 13: try { try decoder.decodeSingularStringField(value: &_storage._detailsError) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._message) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.activity) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.completed) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.activityRows) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.children) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.defaultExpanded) }()
+      case 10: try { try decoder.decodeRepeatedMessageField(value: &self.diffs) }()
+      case 11: try { try decoder.decodeRepeatedMessageField(value: &self.parts) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.details) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.detailsError) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._id.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._id, fieldNumber: 1)
-      }
-      if !_storage._kind.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._kind, fieldNumber: 2)
-      }
-      try { if let v = _storage._message {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
-      if !_storage._activity.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._activity, fieldNumber: 4)
-      }
-      if _storage._completed != false {
-        try visitor.visitSingularBoolField(value: _storage._completed, fieldNumber: 5)
-      }
-      if !_storage._activityRows.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._activityRows, fieldNumber: 6)
-      }
-      if !_storage._children.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._children, fieldNumber: 7)
-      }
-      if !_storage._title.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._title, fieldNumber: 8)
-      }
-      if _storage._defaultExpanded != false {
-        try visitor.visitSingularBoolField(value: _storage._defaultExpanded, fieldNumber: 9)
-      }
-      if !_storage._diffs.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._diffs, fieldNumber: 10)
-      }
-      if !_storage._parts.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._parts, fieldNumber: 11)
-      }
-      if !_storage._details.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._details, fieldNumber: 12)
-      }
-      if !_storage._detailsError.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._detailsError, fieldNumber: 13)
-      }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 2)
+    }
+    try { if let v = self._message {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if !self.activity.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.activity, fieldNumber: 4)
+    }
+    if self.completed != false {
+      try visitor.visitSingularBoolField(value: self.completed, fieldNumber: 5)
+    }
+    if !self.activityRows.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.activityRows, fieldNumber: 6)
+    }
+    if !self.children.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.children, fieldNumber: 7)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 8)
+    }
+    if self.defaultExpanded != false {
+      try visitor.visitSingularBoolField(value: self.defaultExpanded, fieldNumber: 9)
+    }
+    if !self.diffs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.diffs, fieldNumber: 10)
+    }
+    if !self.parts.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.parts, fieldNumber: 11)
+    }
+    if !self.details.isEmpty {
+      try visitor.visitSingularStringField(value: self.details, fieldNumber: 12)
+    }
+    if !self.detailsError.isEmpty {
+      try visitor.visitSingularStringField(value: self.detailsError, fieldNumber: 13)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_App_ChatBlock, rhs: Muster_App_ChatBlock) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._id != rhs_storage._id {return false}
-        if _storage._kind != rhs_storage._kind {return false}
-        if _storage._message != rhs_storage._message {return false}
-        if _storage._activity != rhs_storage._activity {return false}
-        if _storage._completed != rhs_storage._completed {return false}
-        if _storage._activityRows != rhs_storage._activityRows {return false}
-        if _storage._children != rhs_storage._children {return false}
-        if _storage._title != rhs_storage._title {return false}
-        if _storage._defaultExpanded != rhs_storage._defaultExpanded {return false}
-        if _storage._diffs != rhs_storage._diffs {return false}
-        if _storage._parts != rhs_storage._parts {return false}
-        if _storage._details != rhs_storage._details {return false}
-        if _storage._detailsError != rhs_storage._detailsError {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.id != rhs.id {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs._message != rhs._message {return false}
+    if lhs.activity != rhs.activity {return false}
+    if lhs.completed != rhs.completed {return false}
+    if lhs.activityRows != rhs.activityRows {return false}
+    if lhs.children != rhs.children {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.defaultExpanded != rhs.defaultExpanded {return false}
+    if lhs.diffs != rhs.diffs {return false}
+    if lhs.parts != rhs.parts {return false}
+    if lhs.details != rhs.details {return false}
+    if lhs.detailsError != rhs.detailsError {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -88,7 +88,7 @@ pub(crate) fn write(
     // that start a turn marked for turn pages.
     db.execute_batch("CREATE TABLE IF NOT EXISTS metadata (version INTEGER, stamp TEXT); CREATE TABLE IF NOT EXISTS messages (position INTEGER PRIMARY KEY, id TEXT, body BLOB); CREATE INDEX IF NOT EXISTS message_ids ON messages(id,position); CREATE TABLE IF NOT EXISTS outline (position INTEGER PRIMARY KEY, id TEXT, body BLOB, turn INTEGER); CREATE INDEX IF NOT EXISTS outline_ids ON outline(id,position); CREATE INDEX IF NOT EXISTS outline_turns ON outline(turn,position);").ok()?;
     let existing: Option<String> = db
-        .query_row("SELECT stamp FROM metadata WHERE version=2", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=3", [], |row| {
             row.get(0)
         })
         .optional()
@@ -139,7 +139,7 @@ pub(crate) fn write(
     if stamp(source).as_deref() != Some(expected) {
         return None;
     }
-    tx.execute("INSERT INTO metadata VALUES (2,?1)", [expected])
+    tx.execute("INSERT INTO metadata VALUES (3,?1)", [expected])
         .ok()?;
     tx.commit().ok()?;
     drop(db);
@@ -198,7 +198,7 @@ pub(crate) fn read(
     .ok()?;
     let tx = db.transaction().ok()?;
     let saved: String = tx
-        .query_row("SELECT stamp FROM metadata WHERE version=2", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=3", [], |row| {
             row.get(0)
         })
         .ok()?;
@@ -236,26 +236,37 @@ pub(crate) fn read(
         0
     };
     let start = (end - count).max(earliest).max(0);
-    let messages = {
+    let mut messages = Vec::new();
+    let mut bytes = 0;
+    let mut capped = false;
+    {
         let mut query = tx
             .prepare(&format!(
-                "SELECT body FROM {table} WHERE position>=?1 AND position<?2 ORDER BY position"
+                "SELECT body FROM {table} WHERE position>=?1 AND position<?2 ORDER BY position DESC"
             ))
             .ok()?;
-        query
-            .query_map(params![start, end], |row| row.get::<_, Vec<u8>>(0))
-            .ok()?
-            .map(|row| v1::AgentMessage::decode(row.ok()?.as_slice()).ok())
-            .collect::<Option<Vec<_>>>()?
-    };
-    if messages.len() != (end - start) as usize || stamp(source).as_deref() != Some(&expected) {
+        let mut rows = query.query(params![start, end]).ok()?;
+        while let Some(row) = rows.next().ok()? {
+            let body = row.get_ref(0).ok()?.as_blob().ok()?;
+            bytes += body.len() + 5;
+            if !messages.is_empty() && bytes > muster_proto::history::PAGE_BYTES {
+                capped = true;
+                break;
+            }
+            messages.push(v1::AgentMessage::decode(body).ok()?);
+        }
+    }
+    messages.reverse();
+    if (!capped && messages.len() != (end - start) as usize)
+        || stamp(source).as_deref() != Some(&expected)
+    {
         return None;
     }
     Some((
         v1::AgentMessagePage {
             session: request.session.clone(),
             messages,
-            has_more: start > 0,
+            has_more: start > 0 || capped,
             outline: request.turns > 0,
             ..Default::default()
         },
@@ -282,6 +293,7 @@ mod tests {
                 phase: String::new(),
                 tool_name: String::new(),
                 tool_call_id: String::new(),
+                preview_jpegs: Vec::new(),
                 tool_status: String::new(),
             })
             .collect();
@@ -329,6 +341,7 @@ mod tests {
             phase: String::new(),
             tool_name: String::new(),
             tool_call_id: String::new(),
+            preview_jpegs: Vec::new(),
             tool_status: String::new(),
         };
         let mut messages = Vec::new();

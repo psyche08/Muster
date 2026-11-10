@@ -1117,6 +1117,13 @@ struct MessageBubble: View, Equatable {
         HStack(alignment: .top) {
             if isUser { Spacer(minLength: style == .deepseek ? 56 : 76) }
             VStack(alignment: .leading, spacing: 4) {
+                ForEach(message.previewJpegs.indices, id: \.self) { index in
+                    if let image = rasterThumbnail(message.previewJpegs[index], size: 480) {
+                        Image(decorative: image, scale: 1).resizable().scaledToFit()
+                            .frame(maxWidth: 320, maxHeight: 260, alignment: .leading)
+                            .accessibilityLabel("Image preview")
+                    }
+                }
                 if parts.contains(where: { $0.kind == "code" }) {
                     ConversationText(text: message.text, parts: parts)
                 } else if isUser {

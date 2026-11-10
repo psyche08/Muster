@@ -783,6 +783,7 @@ message AgentMessage {
   string tool_name = 8;
   string tool_call_id = 9; // provider identity for correlating a call and its output
   string tool_status = 10; // provider-recorded running | completed | failed | interrupted; empty if unknown
+  repeated bytes preview_jpegs = 12; // bounded thumbnails in provider order
   AgentWorkSpan work = 11; // kind "work": a completed turn's collapsed work (ADR 0160)
 }
 

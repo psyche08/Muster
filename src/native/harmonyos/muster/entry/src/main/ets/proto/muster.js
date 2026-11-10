@@ -15567,6 +15567,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [toolName] AgentMessage toolName
              * @property {string|null} [toolCallId] AgentMessage toolCallId
              * @property {string|null} [toolStatus] AgentMessage toolStatus
+             * @property {Array.<Uint8Array>|null} [previewJpegs] AgentMessage previewJpegs
              * @property {muster.v1.IAgentWorkSpan|null} [work] AgentMessage work
              */
 
@@ -15579,6 +15580,7 @@ export const muster = $root.muster = (() => {
              * @param {muster.v1.IAgentMessage=} [properties] Properties to set
              */
             function AgentMessage(properties) {
+                this.previewJpegs = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -15666,6 +15668,14 @@ export const muster = $root.muster = (() => {
             AgentMessage.prototype.toolStatus = "";
 
             /**
+             * AgentMessage previewJpegs.
+             * @member {Array.<Uint8Array>} previewJpegs
+             * @memberof muster.v1.AgentMessage
+             * @instance
+             */
+            AgentMessage.prototype.previewJpegs = $util.emptyArray;
+
+            /**
              * AgentMessage work.
              * @member {muster.v1.IAgentWorkSpan|null|undefined} work
              * @memberof muster.v1.AgentMessage
@@ -15723,6 +15733,9 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.toolStatus);
                 if (message.work != null && Object.hasOwnProperty.call(message, "work"))
                     $root.muster.v1.AgentWorkSpan.encode(message.work, writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
+                if (message.previewJpegs != null && message.previewJpegs.length)
+                    for (let i = 0; i < message.previewJpegs.length; ++i)
+                        writer.uint32(/* id 12, wireType 2 =*/98).bytes(message.previewJpegs[i]);
                 return writer;
             };
 
@@ -15798,6 +15811,12 @@ export const muster = $root.muster = (() => {
                         }
                     case 10: {
                             message.toolStatus = reader.string();
+                            break;
+                        }
+                    case 12: {
+                            if (!(message.previewJpegs && message.previewJpegs.length))
+                                message.previewJpegs = [];
+                            message.previewJpegs.push(reader.bytes());
                             break;
                         }
                     case 11: {

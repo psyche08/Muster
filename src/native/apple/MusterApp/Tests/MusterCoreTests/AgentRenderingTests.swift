@@ -7,6 +7,34 @@ import MusterCore
 
 final class AgentRenderingTests: XCTestCase {
     @MainActor
+    func testInlineThumbnailIsVisibleInPhoneAndDesktopBubbles() throws {
+        let source = NSImage(size: NSSize(width: 80, height: 40), flipped: false) { rect in
+            NSColor.red.setFill()
+            rect.fill()
+            return true
+        }
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(source.tiffRepresentation)))
+        let jpeg = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [:]))
+        let message = Muster_V1_AgentMessage.with {
+            $0.id = "photo"; $0.role = "user"; $0.text = "Image"; $0.previewJpegs = [jpeg]
+        }
+        for width in [CGFloat(320), 736] {
+            let renderer = ImageRenderer(content: MessageBubble(message: message).frame(width: width))
+            let result = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            var redPixels = 0
+            for y in stride(from: 0, to: result.pixelsHigh, by: 4) {
+                for x in stride(from: 0, to: result.pixelsWide, by: 4) {
+                    if let c = result.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                       c.redComponent > 0.8, c.greenComponent < 0.2, c.blueComponent < 0.2 {
+                        redPixels += 1
+                    }
+                }
+            }
+            XCTAssertGreaterThan(redPixels, 50)
+        }
+    }
+
+    @MainActor
     func testRenderWorkingAndWrappedToolContentAtPhoneWidth() throws {
         let code = "{\n  \"command\": \"cargo test --offline -p muster-agent -p muster-platform --lib\",\n  \"message\": \"中文和 emoji 🛠️ 同样换行，保留原始内容和行号\",\n  \"enabled\": true,\n  \"timeout_ms\": 10000\n}\n\n# A comment\nexport TARGET=\"mac-c\"\n@@ -1 +1 @@\n-old_value\n+new_value\n" + String(repeating: "long_unbroken_path/", count: 12)
         // The core always prepares activity rows (muster-app-core timeline).

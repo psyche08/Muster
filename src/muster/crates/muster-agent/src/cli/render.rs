@@ -63,9 +63,19 @@ pub(super) fn project(
                             part.tool_status = tool_status(&block["state"]).into();
                         }
                         Some("image-ref") => {
+                            use base64::{Engine, engine::general_purpose::STANDARD};
+                            if let Some(bytes) = block["previewJpeg"]
+                                .as_str()
+                                .filter(|s| s.len() <= 24 * 1024)
+                                .and_then(|s| STANDARD.decode(s).ok())
+                            {
+                                part.preview_jpegs.push(bytes);
+                            }
                             part.text = format!(
-                                "[Image: {}]",
-                                block["alt"].as_str().unwrap_or("not rendered")
+                                "[{}]",
+                                block["alt"]
+                                    .as_str()
+                                    .unwrap_or(crate::inline_image::UNAVAILABLE)
                             )
                         }
                         _ => part.text = "[Additional session content not rendered]".into(),

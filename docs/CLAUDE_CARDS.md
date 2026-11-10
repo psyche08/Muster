@@ -17,6 +17,7 @@ use the existing guarded native Accessibility path.
 | Task lifetime | Successful start/dismiss records, desktop registry started/dismissed/expired states, and seven-day expiry retire proposals |
 | Plan | Full item lists, done/start updates, boolean/string advance, and successful wrap-up completion |
 | Chapter | Title and summary remain in the transcript reading flow |
+| Handoff and start targets | A successful handoff shows the title and remaining plan. Target discovery shows the returned targets. |
 | File delivery | Caption and confirmed attachment links; only a successful matching `SendUserFile` result with a validated path enables preview |
 | Artifact | Successful `https://claude.ai/code/artifact/…` delivery links |
 
