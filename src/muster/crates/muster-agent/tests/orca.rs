@@ -131,6 +131,10 @@ async fn structured_history_send_and_runtime_restart_are_isolated() {
             .is_err()
     );
     source.discover().await.unwrap();
+    assert_eq!(
+        source.session_provider(&id),
+        source.session(&id).map(|row| row.provider)
+    );
     assert!(source.session(&id).unwrap().read_only);
     assert!(source.list().iter().any(|s| s.id != id && !s.read_only));
 }

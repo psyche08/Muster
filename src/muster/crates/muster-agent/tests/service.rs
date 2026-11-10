@@ -843,6 +843,12 @@ async fn cloud_sessions_are_listed_read_and_written_through_the_provider_api() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
+    for row in &listed {
+        assert_eq!(
+            service.session_provider(&row.id).as_deref(),
+            Some(row.provider.as_str())
+        );
+    }
     let claude_id = "cloud:claude:session_cloud1";
     let codex_id = "cloud:codex:task_e_9";
     let by_id = |id: &str| listed.iter().find(|s| s.id == id).cloned().unwrap();

@@ -764,9 +764,7 @@ fn session_provider(daemon: &Daemon, request: &Req) -> Result<(String, Option<St
         | Req::AgentInspect(_) => native_session(daemon, request)?,
         _ => return Err(Error::Invalid("not an agent session request".into())),
     };
-    let provider = agent_of(daemon)?
-        .session(&session)
-        .map(|info| info.provider);
+    let provider = agent_of(daemon)?.session_provider(&session);
     Ok((session, provider))
 }
 
@@ -817,8 +815,8 @@ impl<'a> AgentVisibility<'a> {
         crate::multica::ownership::ordinary(self.daemon, session).is_ok()
             && (self.peer.is_none()
                 || agent
-                    .session(session)
-                    .is_some_and(|info| self.allows(Some(&info.provider))))
+                    .session_provider(session)
+                    .is_some_and(|provider| self.allows(Some(&provider))))
     }
 
     fn project(
