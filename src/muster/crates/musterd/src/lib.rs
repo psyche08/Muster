@@ -6,6 +6,7 @@
 
 pub mod agent_bridge;
 pub mod authorized_keys;
+mod blackout;
 pub mod browser;
 pub mod build_info;
 pub mod cloud_http;
@@ -201,6 +202,7 @@ struct VnetStartup {
 }
 
 pub struct Daemon {
+    blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
     plugin_setup: std::sync::atomic::AtomicU8,
@@ -344,7 +346,16 @@ impl Daemon {
             )
         });
         let scheduler = scheduler::Scheduler::load(&store);
+        #[cfg(target_os = "macos")]
+        let blackout = if config.listen && kind == DeviceKind::Desktop {
+            Some(blackout::Blackout::start(&store)?)
+        } else {
+            None
+        };
+        #[cfg(not(target_os = "macos"))]
+        let blackout = None;
         let daemon = Arc::new(Self {
+            blackout,
             locked_use,
             scheduler,
             multica: multica::Manager::new(&config.dir),
@@ -890,6 +901,9 @@ impl Daemon {
             if let Ok(orca) = agent.orca_source() {
                 orca.shutdown();
             }
+        }
+        if let Some(blackout) = &self.blackout {
+            blackout.stop().await;
         }
         self.locked_use.shutdown();
         for task in self.tasks.lock().unwrap().drain(..) {

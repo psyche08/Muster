@@ -22,6 +22,7 @@ fn main() {
     let mut objects = Vec::new();
     for (source, object) in [
         ("LockedUse/Console.m", "console.o"),
+        ("Display/Blackout.m", "blackout.o"),
         ("Notice/Notice.m", "notice.o"),
         ("Vision/Vision.m", "vision.o"),
         ("Process/AppHost.m", "apphost.o"),

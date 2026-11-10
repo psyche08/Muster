@@ -150,6 +150,10 @@ public final class MusterCore: MusterShell {
         send(.requestTerminalAuthorization(Muster_App_RequestTerminalAuthorization()))
     }
 
+    public func setBlackout(_ on: Bool, device: String) {
+        send(.setBlackout(Muster_App_SetCover.with { $0.on = on; $0.deviceID = device }))
+    }
+
     /// The privacy cover: this desktop's (device empty) or a member's.
     public func setCover(_ on: Bool, device: String = "") {
         send(.setCover(Muster_App_SetCover.with { $0.on = on; $0.deviceID = device }))

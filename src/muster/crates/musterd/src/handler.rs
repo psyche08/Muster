@@ -97,7 +97,7 @@ fn access_for(req: &Req) -> Access {
         // A forward makes this machine reach into a member's loopback, so it
         // is the local owner's to ask for; the member decides its own side.
         | Req::ForwardOpen(_) => Access::LocalOnly,
-        Req::DeviceSetCover(_) => Access::Need(Permission::LockedControl),
+        Req::DeviceSetCover(_) | Req::DeviceSetBlackout(_) => Access::Need(Permission::LockedControl),
         Req::LockedUsePrepare(_)
         | Req::LockedUseExecute(_)
         | Req::LockedUseCancel(_)
@@ -522,6 +522,11 @@ fn authorize_request(
         );
     }
     let Principal::Remote(peer) = ctx.principal else {
+        if matches!(request, Req::DeviceSetBlackout(_)) {
+            return Err(Error::Unauthorized(
+                "blackout requires a paired phone".into(),
+            ));
+        }
         return Ok(());
     };
     {
@@ -530,6 +535,13 @@ fn authorize_request(
         let Some(member) = state.active(&peer) else {
             return Err(Error::Unauthorized("not an active member".into()));
         };
+        if matches!(request, Req::DeviceSetBlackout(_))
+            && member.record.kind != muster_core::DeviceKind::Phone
+        {
+            return Err(Error::Unauthorized(
+                "blackout requires a paired phone".into(),
+            ));
+        }
         if matches!(request, Req::NetworkInvite(_)) && !member.is_admin() {
             return Err(Error::Unauthorized("only an admin can invite".into()));
         }
@@ -1406,6 +1418,14 @@ async fn dispatch(
                 .set_scopes_checked(&r.device_id, &r.scopes, &r.role)
                 .await?;
             Resp::NetworkStatus(daemon.network_status())
+        }
+        Req::DeviceSetBlackout(r) => {
+            let mode = daemon
+                .blackout
+                .as_ref()
+                .ok_or_else(|| Error::Unavailable("display blackout unavailable".into()))?;
+            mode.set(daemon.store(), r.on, daemon.platform().locked())?;
+            Resp::Ack(v1::Ack {})
         }
         Req::DeviceSetCover(r) => {
             daemon.set_cover(r.on);

@@ -222,6 +222,7 @@ class MusterCore(config: MusterConfig, val keys: MusterKeys) : AutoCloseable {
         send(intent { setScopes = setScopes { deviceId = device; this.scopes.addAll(scopes); this.role = role } })
     fun setRelay(relay: String) = send(intent { setRelay = setRelay { this.relay = relay } })
     /** Covers (or uncovers) a desktop's screen; device "" for this one. The core checks who may. */
+    fun setBlackout(on: Boolean, device: String) = send(intent { setBlackout = setCover { this.on = on; deviceId = device } })
     fun setCover(on: Boolean, device: String = "") = send(intent { setCover = setCover { this.on = on; deviceId = device } })
     fun setPolicy(policy: Policy) = send(intent { setPolicy = setPolicy { this.policy = policy } })
     fun selectDevice(device: String) = send(intent { selectDevice = selectDevice { deviceId = device } })

@@ -328,6 +328,11 @@ fun DeviceScreen(core: MusterCore, vm: ViewModel) {
         // From the link heartbeat; empty until the device reports it.
         item { ListItem(headlineContent = { Text("Version") }, supportingContent = { Text(member.version.ifEmpty { "not reported" }) }) }
         item { ListItem(headlineContent = { Text("Commit") }, supportingContent = { Text(member.commit.ifEmpty { "not reported" }, fontFamily = FontFamily.Monospace) }) }
+        if (actions.hasBlackout()) {
+            val mode = actions.blackout
+            item { ListItem(headlineContent = { Text("黑屏模式") }, supportingContent = { Text(mode.status) },
+                trailingContent = { Switch(mode.enabled, { core.setBlackout(it, member.deviceId) }) }) }
+        }
         vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }?.let { item { DeviceLockedUseToggle(core, it) } }
         if (vm.selectedDeviceHasServices) {
             item { SectionHeader("Use") }

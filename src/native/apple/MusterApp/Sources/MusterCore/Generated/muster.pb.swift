@@ -867,6 +867,14 @@ public nonisolated struct Muster_V1_Request: Sendable {
     set {req = .multicaMutation(newValue)}
   }
 
+  public var deviceSetBlackout: Muster_V1_DeviceSetCoverRequest {
+    get {
+      if case .deviceSetBlackout(let v)? = req {return v}
+      return Muster_V1_DeviceSetCoverRequest()
+    }
+    set {req = .deviceSetBlackout(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Req: Equatable, Sendable {
@@ -952,6 +960,7 @@ public nonisolated struct Muster_V1_Request: Sendable {
     case deviceRequestScreenRecording(Muster_V1_DeviceRequestScreenRecordingRequest)
     case multicaService(Muster_V1_MulticaServiceRequest)
     case multicaMutation(Muster_V1_MulticaMutation)
+    case deviceSetBlackout(Muster_V1_DeviceSetCoverRequest)
 
   }
 
@@ -1754,11 +1763,37 @@ public nonisolated struct Muster_V1_DeviceState: @unchecked Sendable {
     set {_uniqueStorage()._screenRecording = newValue}
   }
 
+  /// present when this desktop offers the mode
+  public var blackout: Muster_V1_DisplayBlackout {
+    get {_storage._blackout ?? Muster_V1_DisplayBlackout()}
+    set {_uniqueStorage()._blackout = newValue}
+  }
+  /// Returns true if `blackout` has been explicitly set.
+  public var hasBlackout: Bool {_storage._blackout != nil}
+  /// Clears the value of `blackout`. Subsequent reads from it will return its default value.
+  public mutating func clearBlackout() {_uniqueStorage()._blackout = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Muster_V1_DisplayBlackout: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// persisted choice; remains switchable while recovering
+  public var enabled: Bool = false
+
+  /// actual display condition for the device page
+  public var status: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 /// Raise or drop the privacy cover. Local, or a member holding
@@ -5764,7 +5799,7 @@ nonisolated extension Muster_V1_OpResult.Status: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Request"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{3}agent_scheduler\0\u{3}device_request_screen_recording\0\u{3}multica_service\0\u{3}multica_mutation\0\u{b}agent_create\0\u{c}.\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_info\0\u{3}device_watch\0\u{3}device_set_relay\0\u{3}device_request_accessibility\0\u{3}device_debug\0\u{3}device_set_cover\0\u{3}locked_use_prepare\0\u{3}locked_use_execute\0\u{3}locked_use_cancel\0\u{3}device_request_automation\0\u{3}network_status\0\u{3}network_create\0\u{3}network_invite\0\u{3}network_join\0\u{3}network_pending\0\u{3}network_decide\0\u{3}network_remove\0\u{3}network_set_scopes\0\u{3}policy_get\0\u{3}policy_set\0\u{3}terminal_sessions\0\u{3}terminal_attach\0\u{3}terminal_input\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}terminal_close\0\u{3}terminal_history\0\u{3}agent_terminal\0\u{3}terminal_run\0\u{3}terminal_runs\0\u{3}agent_list\0\u{3}agent_watch\0\u{3}agent_messages\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_files\0\u{3}agent_file\0\u{3}agent_git\0\u{3}browser_call\0\u{3}browser_setup\0\u{3}agent_chats\0\u{3}agent_chat_open\0\u{3}agent_chat_options\0\u{3}agent_chat_set_options\0\u{3}network_readdress\0\u{3}desktop_update_lease\0\u{3}agent_inspect\0\u{3}diagnostics_upload\0\u{3}locked_use_renew\0\u{3}locked_use_extend\0\u{3}network_refresh\0\u{3}orca_create\0\u{3}agent_complete\0\u{3}device_presence\0\u{3}network_presence\0\u{3}device_install_presence\0\u{3}agent_send_status\0\u{3}forward_open\0\u{1}multica\0\u{3}multica_browse\0\u{3}agent_native_create\0\u{3}agent_confirm_delivered\0\u{1}vision\0\u{3}agent_organize\0\u{3}agent_scheduler\0\u{3}device_request_screen_recording\0\u{3}multica_service\0\u{3}multica_mutation\0\u{3}device_set_blackout\0\u{b}agent_create\0\u{c}.\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6669,6 +6704,19 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
           self.req = .multicaMutation(v)
         }
       }()
+      case 80: try {
+        var v: Muster_V1_DeviceSetCoverRequest?
+        var hadOneofValue = false
+        if let current = self.req {
+          hadOneofValue = true
+          if case .deviceSetBlackout(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.req = .deviceSetBlackout(v)
+        }
+      }()
       default: break
       }
     }
@@ -6955,6 +7003,10 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
     case .multicaMutation?: try {
       guard case .multicaMutation(let v)? = self.req else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 79)
+    }()
+    case .deviceSetBlackout?: try {
+      guard case .deviceSetBlackout(let v)? = self.req else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 80)
     }()
     case nil: break
     }
@@ -8179,7 +8231,7 @@ nonisolated extension Muster_V1_DeviceSetRelayRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceState"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}locked\0\u{3}on_console\0\u{1}vip\0\u{3}vnet_up\0\u{1}relay\0\u{3}uptime_secs\0\u{1}accessibility\0\u{1}covered\0\u{3}locked_use_setup\0\u{3}iterm2_automation\0\u{3}iterm2_api_available\0\u{3}terminal_source\0\u{3}ghostty_automation\0\u{3}manual_locked_use_owner\0\u{3}manual_locked_use_nonce\0\u{3}manual_locked_use_active\0\u{3}screen_recording\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}locked\0\u{3}on_console\0\u{1}vip\0\u{3}vnet_up\0\u{1}relay\0\u{3}uptime_secs\0\u{1}accessibility\0\u{1}covered\0\u{3}locked_use_setup\0\u{3}iterm2_automation\0\u{3}iterm2_api_available\0\u{3}terminal_source\0\u{3}ghostty_automation\0\u{3}manual_locked_use_owner\0\u{3}manual_locked_use_nonce\0\u{3}manual_locked_use_active\0\u{3}screen_recording\0\u{1}blackout\0")
 
   fileprivate class _StorageClass {
     var _locked: Bool = false
@@ -8199,6 +8251,7 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
     var _manualLockedUseActive: Bool = false
     var _ghosttyAutomation: String = String()
     var _screenRecording: String = String()
+    var _blackout: Muster_V1_DisplayBlackout? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -8226,6 +8279,7 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
       _manualLockedUseActive = source._manualLockedUseActive
       _ghosttyAutomation = source._ghosttyAutomation
       _screenRecording = source._screenRecording
+      _blackout = source._blackout
     }
   }
 
@@ -8261,6 +8315,7 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
         case 15: try { try decoder.decodeSingularBytesField(value: &_storage._manualLockedUseNonce) }()
         case 16: try { try decoder.decodeSingularBoolField(value: &_storage._manualLockedUseActive) }()
         case 17: try { try decoder.decodeSingularStringField(value: &_storage._screenRecording) }()
+        case 18: try { try decoder.decodeSingularMessageField(value: &_storage._blackout) }()
         default: break
         }
       }
@@ -8269,6 +8324,10 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
       if _storage._locked != false {
         try visitor.visitSingularBoolField(value: _storage._locked, fieldNumber: 1)
       }
@@ -8320,6 +8379,9 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
       if !_storage._screenRecording.isEmpty {
         try visitor.visitSingularStringField(value: _storage._screenRecording, fieldNumber: 17)
       }
+      try { if let v = _storage._blackout {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -8346,10 +8408,46 @@ nonisolated extension Muster_V1_DeviceState: SwiftProtobuf.Message, SwiftProtobu
         if _storage._manualLockedUseActive != rhs_storage._manualLockedUseActive {return false}
         if _storage._ghosttyAutomation != rhs_storage._ghosttyAutomation {return false}
         if _storage._screenRecording != rhs_storage._screenRecording {return false}
+        if _storage._blackout != rhs_storage._blackout {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_DisplayBlackout: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DisplayBlackout"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}enabled\0\u{1}status\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 1)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_DisplayBlackout, rhs: Muster_V1_DisplayBlackout) -> Bool {
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.status != rhs.status {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

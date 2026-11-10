@@ -350,6 +350,18 @@ struct DeviceView: View {
                         Text(member.commit.isEmpty ? "not reported" : member.commit).font(.system(.body, design: .monospaced))
                     }
                 }
+                if vm.deviceActions.hasBlackout {
+                    let mode = vm.deviceActions.blackout
+                    Section {
+                        Toggle(isOn: Binding(get: { mode.enabled }, set: { core.setBlackout($0, device: member.deviceID) })) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Label("黑屏模式", systemImage: "display")
+                                Text(mode.status).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("device-blackout")
+                    }
+                }
                 if let control = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID }) {
                     Section("Locked Use") { DeviceLockedUseToggle(core: core, control: control) }
                 }

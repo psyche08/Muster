@@ -162,6 +162,7 @@ message Request {
     DeviceRequestScreenRecordingRequest device_request_screen_recording = 77;
     MulticaServiceRequest multica_service = 78;
     MulticaMutation multica_mutation = 79;
+    DeviceSetCoverRequest device_set_blackout = 80;
   }
 }
 
@@ -332,6 +333,12 @@ message DeviceState {
   // (Screen Recording: what lets the daemon read an app's window pixels when
   // a native send fails, ADR 0116).
   string screen_recording = 17;
+  DisplayBlackout blackout = 18; // present when this desktop offers the mode
+}
+
+message DisplayBlackout {
+  bool enabled = 1; // persisted choice; remains switchable while recovering
+  string status = 2; // actual display condition for the device page
 }
 
 // Raise or drop the privacy cover. Local, or a member holding

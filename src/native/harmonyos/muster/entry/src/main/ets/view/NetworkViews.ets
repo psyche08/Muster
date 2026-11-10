@@ -391,6 +391,18 @@ export struct DeviceView {
           // From the link heartbeat; empty until the device reports it.
           ListItem() { this.row('Version', this.member()?.version || 'not reported') }
           ListItem() { this.row('Commit', this.member()?.commit || 'not reported') }
+          if (this.actions().blackout) {
+            ListItem() {
+              Row() {
+                Column() {
+                  Text('黑屏模式')
+                  Text(this.actions().blackout?.status ?? '').fontSize(13).opacity(0.7)
+                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.actions().blackout?.enabled ?? false })
+                  .onChange((on: boolean): void => { this.core.setBlackout(on, this.member()?.deviceId ?? ''); })
+              }.padding(16)
+            }
+          }
           if (this.vm.selectedDeviceHasServices) {
             ListItem() { SectionHeader('Use') }
             ListItem() { this.action('Chrome browser', (): void => { this.core.openBrowser(this.member()?.deviceId ?? ''); }) }

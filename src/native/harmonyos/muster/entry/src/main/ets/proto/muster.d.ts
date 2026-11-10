@@ -554,6 +554,15 @@ export namespace muster {
 
             /** Request deviceRequestScreenRecording */
             deviceRequestScreenRecording?: (muster.v1.IDeviceRequestScreenRecordingRequest|null);
+
+            /** Request multicaService */
+            multicaService?: (muster.v1.IMulticaServiceRequest|null);
+
+            /** Request multicaMutation */
+            multicaMutation?: (muster.v1.IMulticaMutation|null);
+
+            /** Request deviceSetBlackout */
+            deviceSetBlackout?: (muster.v1.IDeviceSetCoverRequest|null);
         }
 
         /** Represents a Request. */
@@ -766,8 +775,17 @@ export namespace muster {
             /** Request deviceRequestScreenRecording. */
             public deviceRequestScreenRecording?: (muster.v1.IDeviceRequestScreenRecordingRequest|null);
 
+            /** Request multicaService. */
+            public multicaService?: (muster.v1.IMulticaServiceRequest|null);
+
+            /** Request multicaMutation. */
+            public multicaMutation?: (muster.v1.IMulticaMutation|null);
+
+            /** Request deviceSetBlackout. */
+            public deviceSetBlackout?: (muster.v1.IDeviceSetCoverRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -959,6 +977,9 @@ export namespace muster {
             /** Response multicaPage */
             multicaPage?: (muster.v1.IMulticaPage|null);
 
+            /** Response multicaService */
+            multicaService?: (muster.v1.IMulticaService|null);
+
             /** Response vision */
             vision?: (muster.v1.IVisionStatus|null);
 
@@ -1059,6 +1080,9 @@ export namespace muster {
             /** Response multicaPage. */
             public multicaPage?: (muster.v1.IMulticaPage|null);
 
+            /** Response multicaService. */
+            public multicaService?: (muster.v1.IMulticaService|null);
+
             /** Response vision. */
             public vision?: (muster.v1.IVisionStatus|null);
 
@@ -1066,7 +1090,7 @@ export namespace muster {
             public agentScheduler?: (muster.v1.IAgentSchedulerStatus|null);
 
             /** Response resp. */
-            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"vision"|"agentScheduler");
+            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler");
 
             /**
              * Creates a new Response instance using the specified properties.
@@ -2006,6 +2030,9 @@ export namespace muster {
 
             /** DeviceState screenRecording */
             screenRecording?: (string|null);
+
+            /** DeviceState blackout */
+            blackout?: (muster.v1.IDisplayBlackout|null);
         }
 
         /** Represents a DeviceState. */
@@ -2068,6 +2095,9 @@ export namespace muster {
             /** DeviceState screenRecording. */
             public screenRecording: string;
 
+            /** DeviceState blackout. */
+            public blackout?: (muster.v1.IDisplayBlackout|null);
+
             /**
              * Creates a new DeviceState instance using the specified properties.
              * @param [properties] Properties to set
@@ -2095,6 +2125,64 @@ export namespace muster {
 
             /**
              * Gets the default type url for DeviceState
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a DisplayBlackout. */
+        interface IDisplayBlackout {
+
+            /** DisplayBlackout enabled */
+            enabled?: (boolean|null);
+
+            /** DisplayBlackout status */
+            status?: (string|null);
+        }
+
+        /** Represents a DisplayBlackout. */
+        class DisplayBlackout implements IDisplayBlackout {
+
+            /**
+             * Constructs a new DisplayBlackout.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDisplayBlackout);
+
+            /** DisplayBlackout enabled. */
+            public enabled: boolean;
+
+            /** DisplayBlackout status. */
+            public status: string;
+
+            /**
+             * Creates a new DisplayBlackout instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DisplayBlackout instance
+             */
+            public static create(properties?: muster.v1.IDisplayBlackout): muster.v1.DisplayBlackout;
+
+            /**
+             * Encodes the specified DisplayBlackout message. Does not implicitly {@link muster.v1.DisplayBlackout.verify|verify} messages.
+             * @param message DisplayBlackout message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDisplayBlackout, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DisplayBlackout message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DisplayBlackout
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DisplayBlackout;
+
+            /**
+             * Gets the default type url for DisplayBlackout
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -6982,6 +7070,9 @@ export namespace muster {
 
             /** AgentEvent interactionResolved */
             interactionResolved?: (string|null);
+
+            /** AgentEvent unavailable */
+            unavailable?: (muster.v1.IAgentUnavailable|null);
         }
 
         /** Represents an AgentEvent. */
@@ -7008,8 +7099,11 @@ export namespace muster {
             /** AgentEvent interactionResolved. */
             public interactionResolved?: (string|null);
 
+            /** AgentEvent unavailable. */
+            public unavailable?: (muster.v1.IAgentUnavailable|null);
+
             /** AgentEvent ev. */
-            public ev?: ("listChanged"|"message"|"state"|"interaction"|"interactionResolved");
+            public ev?: ("listChanged"|"message"|"state"|"interaction"|"interactionResolved"|"unavailable");
 
             /**
              * Creates a new AgentEvent instance using the specified properties.
@@ -7038,6 +7132,58 @@ export namespace muster {
 
             /**
              * Gets the default type url for AgentEvent
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentUnavailable. */
+        interface IAgentUnavailable {
+
+            /** AgentUnavailable sessions */
+            sessions?: (string[]|null);
+        }
+
+        /** Represents an AgentUnavailable. */
+        class AgentUnavailable implements IAgentUnavailable {
+
+            /**
+             * Constructs a new AgentUnavailable.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentUnavailable);
+
+            /** AgentUnavailable sessions. */
+            public sessions: string[];
+
+            /**
+             * Creates a new AgentUnavailable instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentUnavailable instance
+             */
+            public static create(properties?: muster.v1.IAgentUnavailable): muster.v1.AgentUnavailable;
+
+            /**
+             * Encodes the specified AgentUnavailable message. Does not implicitly {@link muster.v1.AgentUnavailable.verify|verify} messages.
+             * @param message AgentUnavailable message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentUnavailable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentUnavailable message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentUnavailable
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentUnavailable;
+
+            /**
+             * Gets the default type url for AgentUnavailable
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -9268,6 +9414,489 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a MulticaMutation. */
+        interface IMulticaMutation {
+
+            /** MulticaMutation opId */
+            opId?: (string|null);
+
+            /** MulticaMutation workspaceId */
+            workspaceId?: (string|null);
+
+            /** MulticaMutation agent */
+            agent?: (muster.v1.IMulticaAgentEdit|null);
+
+            /** MulticaMutation issue */
+            issue?: (muster.v1.IMulticaIssueEdit|null);
+
+            /** MulticaMutation issueAction */
+            issueAction?: (muster.v1.IMulticaIssueAction|null);
+        }
+
+        /** Represents a MulticaMutation. */
+        class MulticaMutation implements IMulticaMutation {
+
+            /**
+             * Constructs a new MulticaMutation.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaMutation);
+
+            /** MulticaMutation opId. */
+            public opId: string;
+
+            /** MulticaMutation workspaceId. */
+            public workspaceId: string;
+
+            /** MulticaMutation agent. */
+            public agent?: (muster.v1.IMulticaAgentEdit|null);
+
+            /** MulticaMutation issue. */
+            public issue?: (muster.v1.IMulticaIssueEdit|null);
+
+            /** MulticaMutation issueAction. */
+            public issueAction?: (muster.v1.IMulticaIssueAction|null);
+
+            /** MulticaMutation action. */
+            public action?: ("agent"|"issue"|"issueAction");
+
+            /**
+             * Creates a new MulticaMutation instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaMutation instance
+             */
+            public static create(properties?: muster.v1.IMulticaMutation): muster.v1.MulticaMutation;
+
+            /**
+             * Encodes the specified MulticaMutation message. Does not implicitly {@link muster.v1.MulticaMutation.verify|verify} messages.
+             * @param message MulticaMutation message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaMutation, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaMutation message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaMutation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaMutation;
+
+            /**
+             * Gets the default type url for MulticaMutation
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaAgentEdit. */
+        interface IMulticaAgentEdit {
+
+            /** MulticaAgentEdit id */
+            id?: (string|null);
+
+            /** MulticaAgentEdit revision */
+            revision?: (string|null);
+
+            /** MulticaAgentEdit name */
+            name?: (string|null);
+
+            /** MulticaAgentEdit description */
+            description?: (string|null);
+
+            /** MulticaAgentEdit instructions */
+            instructions?: (string|null);
+
+            /** MulticaAgentEdit model */
+            model?: (string|null);
+
+            /** MulticaAgentEdit maxConcurrentTasks */
+            maxConcurrentTasks?: (number|null);
+        }
+
+        /** Represents a MulticaAgentEdit. */
+        class MulticaAgentEdit implements IMulticaAgentEdit {
+
+            /**
+             * Constructs a new MulticaAgentEdit.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaAgentEdit);
+
+            /** MulticaAgentEdit id. */
+            public id: string;
+
+            /** MulticaAgentEdit revision. */
+            public revision: string;
+
+            /** MulticaAgentEdit name. */
+            public name: string;
+
+            /** MulticaAgentEdit description. */
+            public description: string;
+
+            /** MulticaAgentEdit instructions. */
+            public instructions: string;
+
+            /** MulticaAgentEdit model. */
+            public model: string;
+
+            /** MulticaAgentEdit maxConcurrentTasks. */
+            public maxConcurrentTasks: number;
+
+            /**
+             * Creates a new MulticaAgentEdit instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaAgentEdit instance
+             */
+            public static create(properties?: muster.v1.IMulticaAgentEdit): muster.v1.MulticaAgentEdit;
+
+            /**
+             * Encodes the specified MulticaAgentEdit message. Does not implicitly {@link muster.v1.MulticaAgentEdit.verify|verify} messages.
+             * @param message MulticaAgentEdit message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaAgentEdit, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaAgentEdit message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaAgentEdit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaAgentEdit;
+
+            /**
+             * Gets the default type url for MulticaAgentEdit
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaIssueEdit. */
+        interface IMulticaIssueEdit {
+
+            /** MulticaIssueEdit id */
+            id?: (string|null);
+
+            /** MulticaIssueEdit revision */
+            revision?: (string|null);
+
+            /** MulticaIssueEdit title */
+            title?: (string|null);
+
+            /** MulticaIssueEdit description */
+            description?: (string|null);
+        }
+
+        /** Represents a MulticaIssueEdit. */
+        class MulticaIssueEdit implements IMulticaIssueEdit {
+
+            /**
+             * Constructs a new MulticaIssueEdit.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaIssueEdit);
+
+            /** MulticaIssueEdit id. */
+            public id: string;
+
+            /** MulticaIssueEdit revision. */
+            public revision: string;
+
+            /** MulticaIssueEdit title. */
+            public title: string;
+
+            /** MulticaIssueEdit description. */
+            public description: string;
+
+            /**
+             * Creates a new MulticaIssueEdit instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaIssueEdit instance
+             */
+            public static create(properties?: muster.v1.IMulticaIssueEdit): muster.v1.MulticaIssueEdit;
+
+            /**
+             * Encodes the specified MulticaIssueEdit message. Does not implicitly {@link muster.v1.MulticaIssueEdit.verify|verify} messages.
+             * @param message MulticaIssueEdit message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaIssueEdit, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaIssueEdit message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaIssueEdit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaIssueEdit;
+
+            /**
+             * Gets the default type url for MulticaIssueEdit
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaIssueAction. */
+        interface IMulticaIssueAction {
+
+            /** MulticaIssueAction kind */
+            kind?: (muster.v1.MulticaIssueAction.Kind|null);
+
+            /** MulticaIssueAction id */
+            id?: (string|null);
+
+            /** MulticaIssueAction revision */
+            revision?: (string|null);
+
+            /** MulticaIssueAction value */
+            value?: (string|null);
+        }
+
+        /** Represents a MulticaIssueAction. */
+        class MulticaIssueAction implements IMulticaIssueAction {
+
+            /**
+             * Constructs a new MulticaIssueAction.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaIssueAction);
+
+            /** MulticaIssueAction kind. */
+            public kind: muster.v1.MulticaIssueAction.Kind;
+
+            /** MulticaIssueAction id. */
+            public id: string;
+
+            /** MulticaIssueAction revision. */
+            public revision: string;
+
+            /** MulticaIssueAction value. */
+            public value: string;
+
+            /**
+             * Creates a new MulticaIssueAction instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaIssueAction instance
+             */
+            public static create(properties?: muster.v1.IMulticaIssueAction): muster.v1.MulticaIssueAction;
+
+            /**
+             * Encodes the specified MulticaIssueAction message. Does not implicitly {@link muster.v1.MulticaIssueAction.verify|verify} messages.
+             * @param message MulticaIssueAction message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaIssueAction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaIssueAction message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaIssueAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaIssueAction;
+
+            /**
+             * Gets the default type url for MulticaIssueAction
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace MulticaIssueAction {
+
+            /** Kind enum. */
+            enum Kind {
+                UNSPECIFIED = 0,
+                ASSIGN = 1,
+                STATUS = 2,
+                COMMENT = 3,
+                RERUN = 4,
+                CANCEL = 5,
+                CREATE_DSH_SESSION = 6,
+                RESUME_DSH_SESSION = 7
+            }
+        }
+
+        /** Properties of a MulticaServiceRequest. */
+        interface IMulticaServiceRequest {
+
+            /** MulticaServiceRequest action */
+            action?: (muster.v1.MulticaServiceRequest.Action|null);
+
+            /** MulticaServiceRequest offered */
+            offered?: (boolean|null);
+
+            /** MulticaServiceRequest workspaces */
+            workspaces?: (string[]|null);
+        }
+
+        /** Represents a MulticaServiceRequest. */
+        class MulticaServiceRequest implements IMulticaServiceRequest {
+
+            /**
+             * Constructs a new MulticaServiceRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaServiceRequest);
+
+            /** MulticaServiceRequest action. */
+            public action: muster.v1.MulticaServiceRequest.Action;
+
+            /** MulticaServiceRequest offered. */
+            public offered: boolean;
+
+            /** MulticaServiceRequest workspaces. */
+            public workspaces: string[];
+
+            /**
+             * Creates a new MulticaServiceRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaServiceRequest instance
+             */
+            public static create(properties?: muster.v1.IMulticaServiceRequest): muster.v1.MulticaServiceRequest;
+
+            /**
+             * Encodes the specified MulticaServiceRequest message. Does not implicitly {@link muster.v1.MulticaServiceRequest.verify|verify} messages.
+             * @param message MulticaServiceRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaServiceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaServiceRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaServiceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaServiceRequest;
+
+            /**
+             * Gets the default type url for MulticaServiceRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace MulticaServiceRequest {
+
+            /** Action enum. */
+            enum Action {
+                GET = 0,
+                SAVE = 1
+            }
+        }
+
+        /** Properties of a MulticaService. */
+        interface IMulticaService {
+
+            /** MulticaService version */
+            version?: (number|null);
+
+            /** MulticaService offered */
+            offered?: (boolean|null);
+
+            /** MulticaService canView */
+            canView?: (boolean|null);
+
+            /** MulticaService canControl */
+            canControl?: (boolean|null);
+
+            /** MulticaService canManage */
+            canManage?: (boolean|null);
+
+            /** MulticaService workspaces */
+            workspaces?: (string[]|null);
+
+            /** MulticaService message */
+            message?: (string|null);
+        }
+
+        /** Represents a MulticaService. */
+        class MulticaService implements IMulticaService {
+
+            /**
+             * Constructs a new MulticaService.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaService);
+
+            /** MulticaService version. */
+            public version: number;
+
+            /** MulticaService offered. */
+            public offered: boolean;
+
+            /** MulticaService canView. */
+            public canView: boolean;
+
+            /** MulticaService canControl. */
+            public canControl: boolean;
+
+            /** MulticaService canManage. */
+            public canManage: boolean;
+
+            /** MulticaService workspaces. */
+            public workspaces: string[];
+
+            /** MulticaService message. */
+            public message: string;
+
+            /**
+             * Creates a new MulticaService instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaService instance
+             */
+            public static create(properties?: muster.v1.IMulticaService): muster.v1.MulticaService;
+
+            /**
+             * Encodes the specified MulticaService message. Does not implicitly {@link muster.v1.MulticaService.verify|verify} messages.
+             * @param message MulticaService message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaService, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaService message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaService
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaService;
+
+            /**
+             * Gets the default type url for MulticaService
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a MulticaRequest. */
         interface IMulticaRequest {
 
@@ -9736,6 +10365,9 @@ export namespace muster {
 
             /** MulticaIssue updatedAt */
             updatedAt?: (string|null);
+
+            /** MulticaIssue revision */
+            revision?: (string|null);
         }
 
         /** Represents a MulticaIssue. */
@@ -9773,6 +10405,9 @@ export namespace muster {
 
             /** MulticaIssue updatedAt. */
             public updatedAt: string;
+
+            /** MulticaIssue revision. */
+            public revision: string;
 
             /**
              * Creates a new MulticaIssue instance using the specified properties.
@@ -9827,6 +10462,18 @@ export namespace muster {
 
             /** MulticaAgent model */
             model?: (string|null);
+
+            /** MulticaAgent instructions */
+            instructions?: (string|null);
+
+            /** MulticaAgent maxConcurrentTasks */
+            maxConcurrentTasks?: (number|null);
+
+            /** MulticaAgent revision */
+            revision?: (string|null);
+
+            /** MulticaAgent editable */
+            editable?: (boolean|null);
         }
 
         /** Represents a MulticaAgent. */
@@ -9855,6 +10502,18 @@ export namespace muster {
 
             /** MulticaAgent model. */
             public model: string;
+
+            /** MulticaAgent instructions. */
+            public instructions: string;
+
+            /** MulticaAgent maxConcurrentTasks. */
+            public maxConcurrentTasks: number;
+
+            /** MulticaAgent revision. */
+            public revision: string;
+
+            /** MulticaAgent editable. */
+            public editable: boolean;
 
             /**
              * Creates a new MulticaAgent instance using the specified properties.
@@ -9971,6 +10630,222 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a MulticaStatusChoice. */
+        interface IMulticaStatusChoice {
+
+            /** MulticaStatusChoice key */
+            key?: (string|null);
+
+            /** MulticaStatusChoice title */
+            title?: (string|null);
+        }
+
+        /** Represents a MulticaStatusChoice. */
+        class MulticaStatusChoice implements IMulticaStatusChoice {
+
+            /**
+             * Constructs a new MulticaStatusChoice.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaStatusChoice);
+
+            /** MulticaStatusChoice key. */
+            public key: string;
+
+            /** MulticaStatusChoice title. */
+            public title: string;
+
+            /**
+             * Creates a new MulticaStatusChoice instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaStatusChoice instance
+             */
+            public static create(properties?: muster.v1.IMulticaStatusChoice): muster.v1.MulticaStatusChoice;
+
+            /**
+             * Encodes the specified MulticaStatusChoice message. Does not implicitly {@link muster.v1.MulticaStatusChoice.verify|verify} messages.
+             * @param message MulticaStatusChoice message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaStatusChoice, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaStatusChoice message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaStatusChoice
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaStatusChoice;
+
+            /**
+             * Gets the default type url for MulticaStatusChoice
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaRun. */
+        interface IMulticaRun {
+
+            /** MulticaRun id */
+            id?: (string|null);
+
+            /** MulticaRun agentId */
+            agentId?: (string|null);
+
+            /** MulticaRun status */
+            status?: (string|null);
+
+            /** MulticaRun createdAt */
+            createdAt?: (string|null);
+
+            /** MulticaRun completedAt */
+            completedAt?: (string|null);
+
+            /** MulticaRun failureReason */
+            failureReason?: (string|null);
+
+            /** MulticaRun canCancel */
+            canCancel?: (boolean|null);
+        }
+
+        /** Represents a MulticaRun. */
+        class MulticaRun implements IMulticaRun {
+
+            /**
+             * Constructs a new MulticaRun.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaRun);
+
+            /** MulticaRun id. */
+            public id: string;
+
+            /** MulticaRun agentId. */
+            public agentId: string;
+
+            /** MulticaRun status. */
+            public status: string;
+
+            /** MulticaRun createdAt. */
+            public createdAt: string;
+
+            /** MulticaRun completedAt. */
+            public completedAt: string;
+
+            /** MulticaRun failureReason. */
+            public failureReason: string;
+
+            /** MulticaRun canCancel. */
+            public canCancel: boolean;
+
+            /**
+             * Creates a new MulticaRun instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaRun instance
+             */
+            public static create(properties?: muster.v1.IMulticaRun): muster.v1.MulticaRun;
+
+            /**
+             * Encodes the specified MulticaRun message. Does not implicitly {@link muster.v1.MulticaRun.verify|verify} messages.
+             * @param message MulticaRun message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaRun, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaRun message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaRun
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaRun;
+
+            /**
+             * Gets the default type url for MulticaRun
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaComment. */
+        interface IMulticaComment {
+
+            /** MulticaComment id */
+            id?: (string|null);
+
+            /** MulticaComment content */
+            content?: (string|null);
+
+            /** MulticaComment authorType */
+            authorType?: (string|null);
+
+            /** MulticaComment createdAt */
+            createdAt?: (string|null);
+        }
+
+        /** Represents a MulticaComment. */
+        class MulticaComment implements IMulticaComment {
+
+            /**
+             * Constructs a new MulticaComment.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IMulticaComment);
+
+            /** MulticaComment id. */
+            public id: string;
+
+            /** MulticaComment content. */
+            public content: string;
+
+            /** MulticaComment authorType. */
+            public authorType: string;
+
+            /** MulticaComment createdAt. */
+            public createdAt: string;
+
+            /**
+             * Creates a new MulticaComment instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaComment instance
+             */
+            public static create(properties?: muster.v1.IMulticaComment): muster.v1.MulticaComment;
+
+            /**
+             * Encodes the specified MulticaComment message. Does not implicitly {@link muster.v1.MulticaComment.verify|verify} messages.
+             * @param message MulticaComment message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IMulticaComment, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaComment message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaComment
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.MulticaComment;
+
+            /**
+             * Gets the default type url for MulticaComment
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a MulticaPage. */
         interface IMulticaPage {
 
@@ -10012,6 +10887,15 @@ export namespace muster {
 
             /** MulticaPage previousOffset */
             previousOffset?: (number|null);
+
+            /** MulticaPage runs */
+            runs?: (muster.v1.IMulticaRun[]|null);
+
+            /** MulticaPage comments */
+            comments?: (muster.v1.IMulticaComment[]|null);
+
+            /** MulticaPage statusChoices */
+            statusChoices?: (muster.v1.IMulticaStatusChoice[]|null);
         }
 
         /** Represents a MulticaPage. */
@@ -10061,6 +10945,15 @@ export namespace muster {
 
             /** MulticaPage previousOffset. */
             public previousOffset: number;
+
+            /** MulticaPage runs. */
+            public runs: muster.v1.IMulticaRun[];
+
+            /** MulticaPage comments. */
+            public comments: muster.v1.IMulticaComment[];
+
+            /** MulticaPage statusChoices. */
+            public statusChoices: muster.v1.IMulticaStatusChoice[];
 
             /**
              * Creates a new MulticaPage instance using the specified properties.
@@ -11080,6 +11973,9 @@ export namespace muster {
             /** Intent setCover */
             setCover?: (muster.app.ISetCover|null);
 
+            /** Intent setBlackout */
+            setBlackout?: (muster.app.ISetCover|null);
+
             /** Intent cancelLockedUse */
             cancelLockedUse?: (muster.app.ICancelLockedUse|null);
 
@@ -11097,6 +11993,18 @@ export namespace muster {
 
             /** Intent multicaBrowse */
             multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
+
+            /** Intent multicaSelect */
+            multicaSelect?: (muster.app.IMulticaSelect|null);
+
+            /** Intent multicaService */
+            multicaService?: (muster.v1.IMulticaServiceRequest|null);
+
+            /** Intent multicaMutation */
+            multicaMutation?: (muster.v1.IMulticaMutation|null);
+
+            /** Intent multicaMutationAcknowledge */
+            multicaMutationAcknowledge?: (boolean|null);
 
             /** Intent vision */
             vision?: (muster.v1.IVisionRequest|null);
@@ -11279,6 +12187,9 @@ export namespace muster {
             /** Intent setCover. */
             public setCover?: (muster.app.ISetCover|null);
 
+            /** Intent setBlackout. */
+            public setBlackout?: (muster.app.ISetCover|null);
+
             /** Intent cancelLockedUse. */
             public cancelLockedUse?: (muster.app.ICancelLockedUse|null);
 
@@ -11296,6 +12207,18 @@ export namespace muster {
 
             /** Intent multicaBrowse. */
             public multicaBrowse?: (muster.v1.IMulticaBrowseRequest|null);
+
+            /** Intent multicaSelect. */
+            public multicaSelect?: (muster.app.IMulticaSelect|null);
+
+            /** Intent multicaService. */
+            public multicaService?: (muster.v1.IMulticaServiceRequest|null);
+
+            /** Intent multicaMutation. */
+            public multicaMutation?: (muster.v1.IMulticaMutation|null);
+
+            /** Intent multicaMutationAcknowledge. */
+            public multicaMutationAcknowledge?: (boolean|null);
 
             /** Intent vision. */
             public vision?: (muster.v1.IVisionRequest|null);
@@ -11415,7 +12338,7 @@ export namespace muster {
             public agentLoadWork?: (muster.app.IAgentLoadWork|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -16033,6 +16956,234 @@ export namespace muster {
             MULTICA = 15
         }
 
+        /** Properties of a MulticaSelect. */
+        interface IMulticaSelect {
+
+            /** MulticaSelect deviceId */
+            deviceId?: (string|null);
+        }
+
+        /** Represents a MulticaSelect. */
+        class MulticaSelect implements IMulticaSelect {
+
+            /**
+             * Constructs a new MulticaSelect.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IMulticaSelect);
+
+            /** MulticaSelect deviceId. */
+            public deviceId: string;
+
+            /**
+             * Creates a new MulticaSelect instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaSelect instance
+             */
+            public static create(properties?: muster.app.IMulticaSelect): muster.app.MulticaSelect;
+
+            /**
+             * Encodes the specified MulticaSelect message. Does not implicitly {@link muster.app.MulticaSelect.verify|verify} messages.
+             * @param message MulticaSelect message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IMulticaSelect, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaSelect message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaSelect
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.MulticaSelect;
+
+            /**
+             * Gets the default type url for MulticaSelect
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaDevice. */
+        interface IMulticaDevice {
+
+            /** MulticaDevice deviceId */
+            deviceId?: (string|null);
+
+            /** MulticaDevice name */
+            name?: (string|null);
+
+            /** MulticaDevice connected */
+            connected?: (boolean|null);
+
+            /** MulticaDevice service */
+            service?: (muster.v1.IMulticaService|null);
+        }
+
+        /** Represents a MulticaDevice. */
+        class MulticaDevice implements IMulticaDevice {
+
+            /**
+             * Constructs a new MulticaDevice.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IMulticaDevice);
+
+            /** MulticaDevice deviceId. */
+            public deviceId: string;
+
+            /** MulticaDevice name. */
+            public name: string;
+
+            /** MulticaDevice connected. */
+            public connected: boolean;
+
+            /** MulticaDevice service. */
+            public service?: (muster.v1.IMulticaService|null);
+
+            /**
+             * Creates a new MulticaDevice instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaDevice instance
+             */
+            public static create(properties?: muster.app.IMulticaDevice): muster.app.MulticaDevice;
+
+            /**
+             * Encodes the specified MulticaDevice message. Does not implicitly {@link muster.app.MulticaDevice.verify|verify} messages.
+             * @param message MulticaDevice message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IMulticaDevice, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaDevice message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaDevice
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.MulticaDevice;
+
+            /**
+             * Gets the default type url for MulticaDevice
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MulticaWorkspaceView. */
+        interface IMulticaWorkspaceView {
+
+            /** MulticaWorkspaceView visible */
+            visible?: (boolean|null);
+
+            /** MulticaWorkspaceView selectedDevice */
+            selectedDevice?: (string|null);
+
+            /** MulticaWorkspaceView devices */
+            devices?: (muster.app.IMulticaDevice[]|null);
+
+            /** MulticaWorkspaceView localService */
+            localService?: (muster.v1.IMulticaService|null);
+
+            /** MulticaWorkspaceView selectedIsLocal */
+            selectedIsLocal?: (boolean|null);
+
+            /** MulticaWorkspaceView mutationBusy */
+            mutationBusy?: (boolean|null);
+
+            /** MulticaWorkspaceView mutationMessage */
+            mutationMessage?: (string|null);
+
+            /** MulticaWorkspaceView mutationResult */
+            mutationResult?: (number|Long|null);
+
+            /** MulticaWorkspaceView mutationApplied */
+            mutationApplied?: (boolean|null);
+
+            /** MulticaWorkspaceView mutationUncertain */
+            mutationUncertain?: (boolean|null);
+        }
+
+        /** Represents a MulticaWorkspaceView. */
+        class MulticaWorkspaceView implements IMulticaWorkspaceView {
+
+            /**
+             * Constructs a new MulticaWorkspaceView.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.IMulticaWorkspaceView);
+
+            /** MulticaWorkspaceView visible. */
+            public visible: boolean;
+
+            /** MulticaWorkspaceView selectedDevice. */
+            public selectedDevice: string;
+
+            /** MulticaWorkspaceView devices. */
+            public devices: muster.app.IMulticaDevice[];
+
+            /** MulticaWorkspaceView localService. */
+            public localService?: (muster.v1.IMulticaService|null);
+
+            /** MulticaWorkspaceView selectedIsLocal. */
+            public selectedIsLocal: boolean;
+
+            /** MulticaWorkspaceView mutationBusy. */
+            public mutationBusy: boolean;
+
+            /** MulticaWorkspaceView mutationMessage. */
+            public mutationMessage: string;
+
+            /** MulticaWorkspaceView mutationResult. */
+            public mutationResult: (number|Long);
+
+            /** MulticaWorkspaceView mutationApplied. */
+            public mutationApplied: boolean;
+
+            /** MulticaWorkspaceView mutationUncertain. */
+            public mutationUncertain: boolean;
+
+            /**
+             * Creates a new MulticaWorkspaceView instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MulticaWorkspaceView instance
+             */
+            public static create(properties?: muster.app.IMulticaWorkspaceView): muster.app.MulticaWorkspaceView;
+
+            /**
+             * Encodes the specified MulticaWorkspaceView message. Does not implicitly {@link muster.app.MulticaWorkspaceView.verify|verify} messages.
+             * @param message MulticaWorkspaceView message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.IMulticaWorkspaceView, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MulticaWorkspaceView message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MulticaWorkspaceView
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.MulticaWorkspaceView;
+
+            /**
+             * Gets the default type url for MulticaWorkspaceView
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a ViewModel. */
         interface IViewModel {
 
@@ -16143,6 +17294,9 @@ export namespace muster {
 
             /** ViewModel navigationPath */
             navigationPath?: (muster.app.Screen[]|null);
+
+            /** ViewModel multicaWorkspace */
+            multicaWorkspace?: (muster.app.IMulticaWorkspaceView|null);
 
             /** ViewModel sessionLoad */
             sessionLoad?: (muster.app.ISessionLoadMarker|null);
@@ -16265,6 +17419,9 @@ export namespace muster {
             /** ViewModel navigationPath. */
             public navigationPath: muster.app.Screen[];
 
+            /** ViewModel multicaWorkspace. */
+            public multicaWorkspace?: (muster.app.IMulticaWorkspaceView|null);
+
             /** ViewModel sessionLoad. */
             public sessionLoad?: (muster.app.ISessionLoadMarker|null);
 
@@ -16318,6 +17475,9 @@ export namespace muster {
 
             /** DeviceActions canRemove */
             canRemove?: (boolean|null);
+
+            /** DeviceActions blackout */
+            blackout?: (muster.v1.IDisplayBlackout|null);
         }
 
         /** Represents a DeviceActions. */
@@ -16343,6 +17503,9 @@ export namespace muster {
 
             /** DeviceActions canRemove. */
             public canRemove: boolean;
+
+            /** DeviceActions blackout. */
+            public blackout?: (muster.v1.IDisplayBlackout|null);
 
             /**
              * Creates a new DeviceActions instance using the specified properties.
