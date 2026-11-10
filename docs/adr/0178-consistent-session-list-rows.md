@@ -1,4 +1,4 @@
-# ADR 0177: Use one session row across providers
+# ADR 0178: Use one session row across providers
 
 - Date: 2026-11-10
 - Status: Accepted

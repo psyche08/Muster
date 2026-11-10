@@ -286,7 +286,7 @@ final class AgentRenderingTests: XCTestCase {
                         $0.searchSnippet = "One matching line from the conversation"
                     }
                 }
-                let view = CatalogSessionRow(core: core, row: row).frame(width: width)
+                let view = CatalogSessionRow(core: core, row: row, displayMinute: 0).frame(width: width)
                 let image = try XCTUnwrap(ImageRenderer(content: view).cgImage)
                 XCTAssertEqual(image.width, Int(width))
                 heights.append(image.height)

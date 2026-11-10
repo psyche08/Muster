@@ -673,6 +673,11 @@ mod store_tests {
         let mut found = Vec::new();
         merge(dir.path(), &mut found);
         assert_eq!(found.len(), 1);
+        assert!(
+            crate::questions::PendingReaders::default()
+                .read(&found[0], ID)
+                .is_none()
+        );
         assert_eq!(found[0].meta.title, "Same title");
         assert_eq!(
             found[0].meta.updated_unix, 1,
