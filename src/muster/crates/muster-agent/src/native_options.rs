@@ -150,7 +150,10 @@ pub fn choices(tree: &AxTree, menu: usize, kind: Kind) -> Result<Vec<ChatChoice>
                     || (!e.label.starts_with("Effort")
                         && e.label != chat::MORE_MODELS
                         && e.label != "Select model"
-                        && e.label != "Power"))
+                        && e.label != "Power"
+                        // Claude's Code-mode panel ends with a paid "Enable
+                        // fast mode" toggle; it is never a model.
+                        && !e.label.to_ascii_lowercase().contains("fast mode")))
         })
         .map(|e| chat::choice(tree, e))
         .filter(|c| !c.name.is_empty())
@@ -200,6 +203,110 @@ pub fn confirmed(choices: &[ChatChoice], kind: Kind, name: &str) -> bool {
     } else {
         choose(choices, name).is_ok_and(|c| c.selected)
     }
+}
+
+/// The stable start of every refusal of a new session's requested model or
+/// effort (ADR 0177). Such a creation sent nothing, and asking again
+/// unchanged is refused again, so callers treat it as final.
+pub const CREATE_REFUSED: &str = "The new session's model and effort were not set";
+
+/// A refusal of a new session's model or effort: nothing was drafted or sent.
+pub fn create_refused(why: impl std::fmt::Display) -> Error {
+    Error::Invalid(format!("{CREATE_REFUSED}: {why}; nothing was sent"))
+}
+
+/// Whether a requested model or effort name may be sent to a Mac: empty
+/// (keep the app's choice), or a short name exactly as the app shows it.
+pub fn valid_name(name: &str) -> bool {
+    name.len() <= 128 && name.trim() == name && !name.chars().any(char::is_control)
+}
+
+/// What a picker shows, part by part: Claude's "Model: Opus 5.5 High · Ultracode"
+/// renders its parts as separate texts ("Opus 5.5", "High", "Ultracode").
+/// A picker without texts shows its label, less a "Model:" prefix.
+pub fn shown(tree: &AxTree, picker: usize) -> Vec<String> {
+    let parts: Vec<String> = tree
+        .preorder(picker)
+        .into_iter()
+        .skip(1)
+        .filter(|&i| tree.nodes[i].role == "AXStaticText")
+        .map(|i| tree.text_of(i).trim().to_string())
+        .filter(|t| t.chars().any(char::is_alphanumeric))
+        .collect();
+    if !parts.is_empty() {
+        return parts;
+    }
+    let label = tree.nodes[picker].label();
+    let label = label.strip_prefix("Model:").unwrap_or(label).trim();
+    if label.is_empty() {
+        Vec::new()
+    } else {
+        vec![label.to_string()]
+    }
+}
+
+/// The effort Claude's model panel names on its "Effort <level>" entry. Its
+/// levels open on hover only, so this is read, never chosen.
+pub fn submenu_effort(tree: &AxTree, panel: usize) -> Option<String> {
+    let entries = chat::menu_entries(tree, panel);
+    let entry = chat::effort_entry(&entries)?;
+    let level = entry.label.strip_prefix("Effort")?.trim();
+    (!level.is_empty()).then(|| level.to_string())
+}
+
+/// The choice a new session's form must press, or `None` when it already
+/// shows `name`. A name the live menu does not offer refuses the creation.
+pub fn create_choice<'a>(
+    choices: &'a [ChatChoice],
+    kind: Kind,
+    name: &str,
+) -> Result<Option<&'a ChatChoice>, Error> {
+    match choose(choices, name) {
+        Ok(choice) => Ok((!choice.selected).then_some(choice)),
+        Err(Error::Invalid(_)) => Err(create_refused(match kind {
+            Kind::Model => format!(
+                "model {name:?} is not offered (the app offers {})",
+                offered(choices)
+            ),
+            // The ChatGPT app's Power slider: only its current level and
+            // a raise to the middle are reachable without a pointer.
+            Kind::Effort => format!(
+                "effort {name:?} cannot be chosen through Accessibility (it can choose {}); choose it once in the app",
+                offered(choices)
+            ),
+        })),
+        Err(other) => Err(other),
+    }
+}
+
+/// Whether a fresh read of the form shows `name`: the menu marks it
+/// selected, or the picker names it first (Claude marks no menu entry).
+pub fn create_model_confirmed(choices: &[ChatChoice], shown: &[String], name: &str) -> bool {
+    shown.first().is_some_and(|first| first == name) || confirmed(choices, Kind::Model, name)
+}
+
+/// The refusal for an effort Claude's form cannot choose: its levels open
+/// on hover only, which Accessibility cannot do.
+pub fn create_effort_differs(name: &str, current: Option<&str>) -> Error {
+    match current {
+        Some(current) => create_refused(format!(
+            "effort {name:?} cannot be chosen through Accessibility and the app's effort is {current:?}; choose it once in the app"
+        )),
+        None => create_refused(format!(
+            "effort {name:?} cannot be chosen: the app shows no effort for this model"
+        )),
+    }
+}
+
+fn offered(choices: &[ChatChoice]) -> String {
+    if choices.is_empty() {
+        return "none".into();
+    }
+    choices
+        .iter()
+        .map(|c| format!("{:?}", c.name))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[cfg(test)]
@@ -288,6 +395,127 @@ mod tests {
                 position == 3
             );
             assert!(choices(&t, panel, Kind::Model).unwrap().is_empty());
+        }
+    }
+
+    /// Claude 4.23118 (Code mode): the composer's "Model:" button names model
+    /// and effort; it opens a group titled like it, whose models are plain
+    /// menu items (the current one carries AXValue 1 and a check mark, not
+    /// AXSelected), then "Effort <level>" (a hover submenu), "More models"
+    /// and a paid fast-mode toggle.
+    const CLAUDE_FORM: &str = "AXWebArea url=\"https://claude.ai/epitaxy\"
+  AXTextArea desc=\"Prompt\"
+  AXPopUpButton desc=\"Model: Fable 5.2 High · Ultracode\"
+    AXStaticText value=\"Fable 5.2\"
+    AXStaticText value=\" \"
+    AXStaticText value=\"High\"
+    AXStaticText value=\" · \"
+    AXStaticText value=\"Ultracode\"
+  AXGroup
+    AXGroup title=\"Model: Fable 5.2 High · Ultracode\"
+      AXGroup
+        AXGroup/AXApplicationGroup
+          AXMenuItem title=\"Opus 5.5\"
+          AXMenuItem title=\"Fable 5.2\"
+          AXMenuItem title=\"Sonnet 5.5\"
+          AXMenuItem title=\"Haiku 5.5\"
+        AXSplitter
+        AXMenuItem title=\"Effort High\"
+        AXSplitter
+        AXMenuItem title=\"More models\"
+        AXStaticText value=\"Fast mode\"
+        AXGroup
+          AXMenuItem title=\"Enable fast mode Requires usage credits Buy credits\"
+            AXStaticText value=\"Enable fast mode\"
+            AXStaticText value=\"Requires usage credits\"
+            AXStaticText value=\"Buy credits\"
+  AXPopUpButton title=\"Auto\"";
+
+    #[test]
+    fn claude_code_form_names_model_and_effort_and_offers_only_models() {
+        let t = tree(CLAUDE_FORM);
+        let model = picker(&t, Kind::Model).unwrap();
+        assert_eq!(shown(&t, model), ["Fable 5.2", "High", "Ultracode"]);
+        // Claude has no effort picker of its own: its effort is read only.
+        assert!(matches!(picker(&t, Kind::Effort), Err(Error::Unavailable(_))));
+        let picker_ = chat::Picker {
+            node: model,
+            label: t.nodes[model].label().into(),
+        };
+        let panel = panel(&t, &picker_).unwrap().unwrap();
+        let models = choices(&t, panel, Kind::Model).unwrap();
+        let names: Vec<_> = models.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["Opus 5.5", "Fable 5.2", "Sonnet 5.5", "Haiku 5.5"]);
+        assert!(models.iter().all(|c| !c.selected));
+        assert_eq!(submenu_effort(&t, panel).as_deref(), Some("High"));
+
+        // The current model needs no press; another one does; an unknown
+        // or paid toggle is refused with the stable wording.
+        let shown = shown(&t, model);
+        assert!(create_model_confirmed(&models, &shown, "Fable 5.2"));
+        assert!(!create_model_confirmed(&models, &shown, "Opus 5.5"));
+        assert_eq!(
+            create_choice(&models, Kind::Model, "Opus 5.5")
+                .unwrap()
+                .unwrap()
+                .name,
+            "Opus 5.5"
+        );
+        for refused in ["Opus 9", "Enable fast mode", "opus 5.5"] {
+            let Err(Error::Invalid(message)) = create_choice(&models, Kind::Model, refused) else {
+                panic!("{refused} must be refused");
+            };
+            assert_eq!(
+                message,
+                format!(
+                    "{CREATE_REFUSED}: model {refused:?} is not offered (the app offers \"Opus 5.5\", \"Fable 5.2\", \"Sonnet 5.5\", \"Haiku 5.5\"); nothing was sent"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn claude_effort_is_checked_not_chosen() {
+        let Error::Invalid(message) = create_effort_differs("Max", Some("High")) else {
+            panic!()
+        };
+        assert_eq!(
+            message,
+            "The new session's model and effort were not set: effort \"Max\" cannot be chosen through Accessibility and the app's effort is \"High\"; choose it once in the app; nothing was sent"
+        );
+        let Error::Invalid(message) = create_effort_differs("Max", None) else {
+            panic!()
+        };
+        assert!(message.starts_with(CREATE_REFUSED) && message.ends_with("nothing was sent"));
+        // A model without effort shows no entry.
+        let t = tree("AXGroup title=\"Model: Haiku 5.5\"\n  AXMenuItem title=\"Haiku 5.5\"");
+        assert_eq!(submenu_effort(&t, 0), None);
+    }
+
+    #[test]
+    fn effort_choices_keep_the_current_power_level_without_a_press() {
+        let t = tree(
+            "AXWebArea\n  AXPopUpButton desc=\"Select effort\"\n  AXGroup title=\"Select effort\"\n    AXStaticText/AXApplicationStatus value=\"High, 3 of 5.\"\n    AXMenuItem title=\"Select model\"\n    AXMenuItem title=\"Power\"\n      AXGroup/AXEmptyGroup",
+        );
+        let efforts = choices(&t, 2, Kind::Effort).unwrap();
+        assert!(create_choice(&efforts, Kind::Effort, "High").unwrap().is_none());
+        let Err(Error::Invalid(message)) = create_choice(&efforts, Kind::Effort, "Extra High")
+        else {
+            panic!()
+        };
+        assert_eq!(
+            message,
+            "The new session's model and effort were not set: effort \"Extra High\" cannot be chosen through Accessibility (it can choose \"High\"); choose it once in the app; nothing was sent"
+        );
+    }
+
+    #[test]
+    fn requested_names_are_short_exact_and_printable() {
+        for good in ["", "Opus 5.5", "Extra high", "GPT-6.1 Sol"] {
+            assert!(valid_name(good), "{good:?}");
+        }
+        for bad in [" Opus 5.5", "Opus 5.5 ", "Opus\n5.5", &"x".repeat(129)] {
+            assert!(!valid_name(bad), "{bad:?}");
         }
     }
 }

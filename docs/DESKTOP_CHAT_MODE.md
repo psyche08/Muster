@@ -251,6 +251,26 @@ Any other effort change in either app would need synthetic keyboard or
 pointer input, which the Accessibility-only rule excludes; such a request is
 rejected before anything moves on the Mac, with the app's reason.
 
+### New desktop sessions
+
+`AgentNativeCreate` can also name the new session's `model` and `effort`
+(ADR 0177; service `agent.native_create.options.v1`). The daemon chooses them
+on the new session's form and reads them back before the first message is
+drafted. It re-reads the picker's label just before pressing send. A name
+that cannot be chosen or confirmed refuses the creation with an `invalid:`
+message that ends in "nothing was sent".
+
+On Claude 4.23118.1 in Code mode, the form's picker is described as
+`Model: <model> <effort>` (for example `Model: Opus 5.5 Extra`). It opens a
+group titled the same way. The current model there carries `AXValue` 1 and a
+`✓` mark rather than `AXSelected`. The group also offers `Effort <level>`,
+`More models` and a paid fast-mode toggle, which is never offered as a model.
+The effort names are the picker's own: `High` for `--effort=high` and `Extra`
+for `--effort=xhigh`. `AXShowMenu` on the `Effort` entry opens the web view's
+own context menu (Copy, Select All), not the levels. So Claude's effort is
+only compared with the request: a different level is refused before anything
+is pressed. Codex follows the Power rules above.
+
 Middle-level check (2026-09-30, Mac-C): two conversations stated High (3 of
 5) and Extra High (4 of 5), and the new-chat page High; none offered
 "Middle". A "Middle" request was refused above the middle and a no-op at it,

@@ -26,7 +26,7 @@ use super::input::{element_input_generation, modifiers_held, target_input_genera
 #[path = "native_diagnostics.rs"]
 mod diagnostics;
 #[path = "native_options.rs"]
-mod native_options;
+pub(super) mod native_options;
 #[path = "native_organization.rs"]
 mod native_organization;
 #[path = "native_queue.rs"]

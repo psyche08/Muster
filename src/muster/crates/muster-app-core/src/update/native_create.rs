@@ -43,6 +43,8 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::NativeCreate) {
         provider: input.provider,
         directory,
         prompt: input.prompt,
+        // The apps' creation form keeps the Mac app's current choice.
+        ..Default::default()
     };
     super::operations::op_request_from(
         state,

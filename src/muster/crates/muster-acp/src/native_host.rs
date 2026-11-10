@@ -194,6 +194,7 @@ impl Host for NativeHost {
                     provider: b.provider.clone(),
                     directory: b.cwd.clone(),
                     prompt: prompt.clone(),
+                    ..Default::default()
                 }))
                 .await?;
             if b.session.is_empty() {

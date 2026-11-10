@@ -523,8 +523,27 @@ async fn native_creation_names_the_session_and_creates_it_once() {
         provider: "deepseek".into(),
         directory: project.to_string_lossy().into_owned(),
         prompt: "Triage the sandbox mention".into(),
+        ..Default::default()
     };
     let create = || local.call(Req::AgentNativeCreate(request.clone()));
+
+    // The plugin's task contract takes no model or effort: asking for one
+    // is refused first, with the stable wording, and reaches nothing.
+    for (model, effort) in [("DeepSeek V4", ""), ("", "High")] {
+        let error = local
+            .call(Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
+                model: model.into(),
+                effort: effort.into(),
+                ..request.clone()
+            }))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(muster_agent::native_options::CREATE_REFUSED),
+            "{error}"
+        );
+    }
 
     // Neither a Mac that does not offer control of the app, an App that is
     // not running, nor a plugin outside the desktop App reaches the ledger:
@@ -594,6 +613,7 @@ async fn a_locked_mac_refuses_native_creation() {
             provider: "deepseek".into(),
             directory: dir.path().to_string_lossy().into_owned(),
             prompt: "Triage".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err()
