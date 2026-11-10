@@ -1204,7 +1204,7 @@ impl AgentService {
             (
                 Self::scan_all(&config, &cache, &heads, &sources, &changes),
                 if changes.metadata_changed(&config) {
-                    sections::read(&config)
+                    sections::read_changed(&config, &changes, &previous_sections)
                 } else {
                     previous_sections
                 },
@@ -1361,6 +1361,16 @@ impl AgentService {
                 .is_some_and(|(at, _)| Instant::now() >= *at)
             {
                 dirty.merge(followup.take().unwrap().1);
+            }
+            if let Some(home) = &self.config.codex_home
+                && let Ok(mut sources) = self.sources.try_lock()
+                && sources
+                    .history
+                    .deadline
+                    .is_some_and(|at| at <= Instant::now())
+            {
+                sources.history.deadline = None;
+                dirty.paths.insert(home.join("thread_history_1.sqlite"));
             }
             if !complete && last_scan.elapsed() >= self.config.rescan {
                 dirty.merge(discovery::Changes::full());

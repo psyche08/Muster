@@ -21,8 +21,8 @@ settings:
     # number edited in the generated project is reverted the next time
     # anyone builds (ADR 0121). 110 shipped to the fleet from a hand-edited
     # project; 111 is the first build this file produces on its own.
-    MARKETING_VERSION: "1.1.31"
-    CURRENT_PROJECT_VERSION: "121"
+    MARKETING_VERSION: "1.1.32"
+    CURRENT_PROJECT_VERSION: "122"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     # Where cargo left the Rust outputs this project links and bundles: the
     # caller's CARGO_TARGET_DIR (xcodebuild reads its environment as the

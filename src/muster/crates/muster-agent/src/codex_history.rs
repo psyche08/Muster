@@ -7,9 +7,9 @@ use crate::{
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 fn open(path: &Path) -> rusqlite::Result<Connection> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
@@ -23,7 +23,7 @@ pub(crate) fn is(d: &Discovered) -> bool {
             .is_some_and(|n| n == "thread_history_1.sqlite")
 }
 pub(crate) fn merge(home: &Path, found: &mut Vec<Discovered>) {
-    if let Ok(rows) = scan(home) {
+    if let Ok(rows) = RecencyCache::default().scan(home) {
         for d in rows {
             if let Some(existing) = found.iter_mut().find(|s| s.id == d.id) {
                 if d.entrypoint.as_deref() == Some("paginated") {
@@ -35,68 +35,167 @@ pub(crate) fn merge(home: &Path, found: &mut Vec<Discovered>) {
         }
     }
 }
-pub(crate) fn scan(home: &Path) -> rusqlite::Result<Vec<Discovered>> {
-    let history = home.join("thread_history_1.sqlite");
-    if !history.is_file() {
-        return Ok(Vec::new());
-    }
-    let db = open(&home.join("state_5.sqlite"))?;
-    let mut q=db.prepare("SELECT id, title, cwd, updated_at, source, thread_source, originator, history_mode, attached_thread_parent_id FROM threads WHERE archived = 0 ORDER BY updated_at DESC LIMIT 10000")?;
-    let mut rows = q.query([])?;
-    let history_db = open(&history)?;
-    let titles = crate::codex::load_index(&home.join("session_index.jsonl"));
-    let mut out = Vec::new();
-    while let Some(r) = rows.next()? {
-        let id: String = r.get(0)?;
-        if !is_uuid(&id) {
-            continue;
-        }
-        let source: String = r.get(4)?;
-        let thread_source: Option<String> = r.get(5)?;
-        let origin: Option<String> = r.get(6)?;
-        if origin.as_deref() == Some("muster") {
-            continue;
-        }
-        let source_json: Value = serde_json::from_str(&source).unwrap_or(Value::Null);
-        let hidden = source_json.get("subagent").is_some()
-            || matches!(
-                thread_source.as_deref(),
-                Some("guardian_review" | "subagent")
-            );
-        let parent = source_json["subagent"]["thread_spawn"]["parent_thread_id"]
-            .as_str()
-            .map(str::to_owned)
-            .or(r.get::<_, Option<String>>(8)?)
-            .filter(|s| is_uuid(s));
-        let updated = r.get::<_, i64>(3)?.max(0) as u64;
-        let message_time = last_message_time_from(&history_db, &id).unwrap_or(0);
-        let title = titles
-            .get(&id)
-            .filter(|s| !s.is_empty())
-            .cloned()
-            .unwrap_or(r.get(1)?);
-        out.push(Discovered {
-            id,
-            provider: Provider::Codex,
-            path: history.clone(),
-            modified: UNIX_EPOCH + Duration::from_secs(updated),
-            size: 0,
-            archived: false,
-            hidden,
-            parent_id: parent,
-            relation: if hidden { "subagent" } else { "" },
-            meta: SessionMeta {
-                title,
-                cwd: PathBuf::from(r.get::<_, String>(2)?),
-                updated_unix: message_time,
-                ..Default::default()
-            },
-            custom_title: true,
-            entrypoint: r.get(7)?,
-        });
-    }
-    Ok(out)
+const RECONCILE: Duration = Duration::from_secs(60);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct StoreStamp {
+    file: (SystemTime, u64),
+    #[cfg(unix)]
+    inode: (u64, u64),
 }
+fn store_stamp(path: &Path) -> Option<StoreStamp> {
+    Some(StoreStamp {
+        file: crate::catdesk::stamp(path).ok()?,
+        #[cfg(unix)]
+        inode: {
+            use std::os::unix::fs::MetadataExt;
+            let m = std::fs::metadata(path).ok()?;
+            (m.dev(), m.ino())
+        },
+    })
+}
+type Cursor = (i64, i64);
+struct Recency {
+    stamp: StoreStamp,
+    cursor: Option<Cursor>,
+    verified: Instant,
+    time: u64,
+}
+#[derive(Default)]
+pub(crate) struct RecencyCache {
+    entries: HashMap<String, Recency>,
+    pub(crate) deadline: Option<Instant>,
+}
+impl RecencyCache {
+    pub(crate) fn scan(&mut self, home: &Path) -> rusqlite::Result<Vec<Discovered>> {
+        let history = home.join("thread_history_1.sqlite");
+        if !history.is_file() {
+            *self = Self::default();
+            return Ok(Vec::new());
+        }
+        let db = open(&home.join("state_5.sqlite"))?;
+        let mut q=db.prepare("SELECT id, title, cwd, updated_at, source, thread_source, originator, history_mode, attached_thread_parent_id FROM threads WHERE archived = 0 ORDER BY updated_at DESC LIMIT 10000")?;
+        let mut rows = q.query([])?;
+        let stamp = store_stamp(&history);
+        let mut connection = open(&history)?;
+        let history_db = connection.transaction()?;
+        let cursors = std::cell::OnceCell::new();
+        let now = Instant::now();
+        let mut next = HashMap::new();
+        let mut deadline: Option<Instant> = None;
+        let titles = crate::codex::load_index(&home.join("session_index.jsonl"));
+        let mut out = Vec::new();
+        while let Some(r) = rows.next()? {
+            let id: String = r.get(0)?;
+            if !is_uuid(&id) {
+                continue;
+            }
+            let source: String = r.get(4)?;
+            let thread_source: Option<String> = r.get(5)?;
+            let origin: Option<String> = r.get(6)?;
+            if origin.as_deref() == Some("muster") {
+                continue;
+            }
+            let source_json: Value = serde_json::from_str(&source).unwrap_or(Value::Null);
+            let hidden = source_json.get("subagent").is_some()
+                || matches!(
+                    thread_source.as_deref(),
+                    Some("guardian_review" | "subagent")
+                );
+            let parent = source_json["subagent"]["thread_spawn"]["parent_thread_id"]
+                .as_str()
+                .map(str::to_owned)
+                .or(r.get::<_, Option<String>>(8)?)
+                .filter(|s| is_uuid(s));
+            let updated = r.get::<_, i64>(3)?.max(0) as u64;
+            let cursor = || {
+                cursors
+                    .get_or_init(|| projection_cursors(&history_db))
+                    .get(&id)
+                    .copied()
+            };
+            let cached = self.entries.remove(&id).filter(|e| {
+                if Some(e.stamp) == stamp {
+                    return true;
+                }
+                #[cfg(unix)]
+                if stamp.is_none_or(|s| s.inode != e.stamp.inode) {
+                    return false;
+                }
+                if stamp.is_some()
+                    && e.cursor.is_some()
+                    && e.cursor == cursor()
+                    && now < e.verified + RECONCILE
+                {
+                    let due = e.verified + RECONCILE;
+                    deadline = Some(deadline.map_or(due, |d| d.min(due)));
+                    return true;
+                }
+                false
+            });
+            let message_time = if let Some(entry) = cached {
+                let time = entry.time;
+                next.insert(id.clone(), entry);
+                time
+            } else if let Ok(time) = last_message_time_from(&history_db, &id) {
+                if let Some(stamp) = stamp {
+                    next.insert(
+                        id.clone(),
+                        Recency {
+                            stamp,
+                            cursor: cursor(),
+                            verified: now,
+                            time,
+                        },
+                    );
+                }
+                time
+            } else {
+                0
+            };
+            let title = titles
+                .get(&id)
+                .filter(|s| !s.is_empty())
+                .cloned()
+                .unwrap_or(r.get(1)?);
+            out.push(Discovered {
+                id,
+                provider: Provider::Codex,
+                path: history.clone(),
+                modified: UNIX_EPOCH + Duration::from_secs(updated),
+                size: 0,
+                archived: false,
+                hidden,
+                parent_id: parent,
+                relation: if hidden { "subagent" } else { "" },
+                meta: SessionMeta {
+                    title,
+                    cwd: PathBuf::from(r.get::<_, String>(2)?),
+                    updated_unix: message_time,
+                    ..Default::default()
+                },
+                custom_title: true,
+                entrypoint: r.get(7)?,
+            });
+        }
+        self.entries = next;
+        self.deadline = deadline;
+        Ok(out)
+    }
+}
+fn projection_cursors(db: &Connection) -> HashMap<String, Cursor> {
+    let read = || -> rusqlite::Result<_> {
+        let mut query = db.prepare(
+            "SELECT thread_id, next_rollout_byte_offset, next_rollout_ordinal
+             FROM thread_history_projection_state LIMIT 10000",
+        )?;
+        query
+            .query_map([], |row| Ok((row.get(0)?, (row.get(1)?, row.get(2)?))))?
+            .collect()
+    };
+    read().unwrap_or_default()
+}
+
 /// Native thread updated_at includes renames and metadata changes. Only a
 /// supported user/assistant message supplies the displayed conversation time.
 pub(crate) fn last_message_time(path: &Path, id: &str) -> rusqlite::Result<u64> {
@@ -230,7 +329,8 @@ pub(crate) struct History {
     d: Discovered,
     previous: Vec<Message>,
     cursor: Option<(i64, i64)>,
-    last_full: Option<std::time::Instant>,
+    last_full: Option<Instant>,
+    unchanged: std::cell::Cell<Option<(SystemTime, u64)>>,
     notice: String,
 }
 impl History {
@@ -240,6 +340,7 @@ impl History {
             previous: Vec::new(),
             cursor: None,
             last_full: None,
+            unchanged: Default::default(),
             notice: String::new(),
         }
     }
@@ -280,10 +381,16 @@ impl Viewer for History {
             && self
                 .last_full
                 .is_some_and(|at| at.elapsed() < Duration::from_secs(10))
-            && let Ok(db) = open(&self.d.path)
-            && projection_cursor(&db, &self.d.id) == Some(cursor)
         {
-            return Ok(None);
+            if self.unchanged.get() == Some(current) {
+                return Ok(None);
+            }
+            if let Ok(db) = open(&self.d.path)
+                && projection_cursor(&db, &self.d.id) == Some(cursor)
+            {
+                self.unchanged.set(Some(current));
+                return Ok(None);
+            }
         }
         Ok(Some(current))
     }
@@ -292,6 +399,7 @@ impl Viewer for History {
         let tx = db.transaction().map_err(std::io::Error::other)?;
         let cursor = projection_cursor(&tx, &self.d.id);
         let (messages, partial) = read(&tx, &self.d).map_err(std::io::Error::other)?;
+        self.unchanged.set(None);
         self.cursor = cursor;
         self.last_full = Some(std::time::Instant::now());
         self.notice = if partial {
@@ -506,6 +614,30 @@ mod store_tests {
         assert!(changed.reset);
         assert_eq!(changed.messages[0].text, "Updated answer");
         db.execute("DELETE FROM thread_items", []).unwrap();
+        let mut cache = RecencyCache::default();
+        let time = |cache: &mut RecencyCache| cache.scan(dir.path()).unwrap()[0].meta.updated_unix;
+        assert_eq!(time(&mut cache), 0);
+        let verified = cache.entries[ID].verified;
+        assert_eq!(time(&mut cache), 0);
+        assert_eq!(cache.entries[ID].verified, verified);
+        db.execute(
+            "INSERT INTO thread_items VALUES(?1,'turn','next',?2,2000,2,'userMessage')",
+            [ID, raw],
+        )
+        .unwrap();
+        assert_eq!(time(&mut cache), 0);
+        assert!(cache.deadline.is_some());
+        cache.entries.get_mut(ID).unwrap().verified -= RECONCILE;
+        assert_eq!(time(&mut cache), 2);
+        assert!(cache.deadline.is_none());
+        db.execute_batch("UPDATE thread_items SET created_at_ms=3000; UPDATE thread_history_projection_state SET next_rollout_ordinal=3").unwrap();
+        assert_eq!(time(&mut cache), 3);
+        db.execute_batch("DROP TABLE thread_history_projection_state; DELETE FROM thread_items")
+            .unwrap();
+        assert_eq!(time(&mut cache), 0);
+        state.execute("UPDATE threads SET archived=1", []).unwrap();
+        assert!(cache.scan(dir.path()).unwrap().is_empty());
+        assert!(cache.entries.is_empty());
         let deleted = viewer.poll().unwrap();
         assert!(deleted.reset);
         assert!(deleted.messages.is_empty());
