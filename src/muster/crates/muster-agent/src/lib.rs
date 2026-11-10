@@ -16,6 +16,7 @@ pub mod claude;
 pub mod claude_cards;
 pub mod claude_identity;
 pub mod claude_runtime;
+pub mod cli;
 pub mod cloud;
 pub mod codex;
 mod codex_history;
@@ -41,7 +42,6 @@ pub mod native_send;
 pub mod native_sidebar;
 pub mod native_step;
 pub mod native_tree;
-pub mod orca;
 pub mod organization;
 pub mod plugin_control;
 pub mod prediction;
@@ -112,8 +112,8 @@ pub struct AgentConfig {
     /// The HTTPS transport for the providers' cloud sessions (`cloud`);
     /// `None` keeps the service to local sessions.
     pub cloud_http: Option<Arc<dyn cloud::Http>>,
-    /// Independent Rust CLI runtime (Orca port); never an AX fallback.
-    pub orca_rpc: Option<Arc<dyn orca::Rpc>>,
+    /// Owned native CLI runtime, separate from desktop controls.
+    pub cli_runtime: Option<Arc<cli::runtime::NativeRuntime>>,
     /// Suggests the next message after a watched Codex session's completed
     /// turn (the composer placeholder); `None` suggests nothing.
     pub predictor: Option<Arc<dyn prediction::Predictor>>,
@@ -149,7 +149,7 @@ impl Default for AgentConfig {
             rescan: Duration::from_secs(5),
             idle_evict: Duration::from_secs(30 * 60),
             cloud_http: None,
-            orca_rpc: None,
+            cli_runtime: None,
             predictor: None,
         }
     }
@@ -296,7 +296,7 @@ pub struct AgentService {
     sources: Arc<Mutex<discovery::Sources>>,
     scan_lock: tokio::sync::Mutex<()>,
     metadata_lock: tokio::sync::Mutex<()>,
-    orca: Option<Arc<orca::Source>>,
+    cli: Option<Arc<cli::Source>>,
     /// DeepSeek Harness's Muster plugin, when the app's home is known.
     deepseek: Option<Arc<deepseek_app::Link>>,
     /// Sessions whose suggestion may be due; `None` without a predictor.
@@ -445,10 +445,10 @@ impl AgentService {
         let (events, _) = broadcast::channel(1024);
         let (ctl_tx, ctl_rx) = mpsc::channel(256);
         let cloud = Self::cloud_sources(&config);
-        let orca = config
-            .orca_rpc
+        let cli = config
+            .cli_runtime
             .clone()
-            .map(|rpc| orca::Source::new(rpc, events.clone()));
+            .map(|runtime| cli::Source::new(runtime, events.clone()));
         let (predict, predict_rx) = match config.predictor {
             Some(_) => {
                 let (tx, rx) = mpsc::unbounded_channel();
@@ -492,7 +492,7 @@ impl AgentService {
             sources: Default::default(),
             scan_lock: Default::default(),
             metadata_lock: Default::default(),
-            orca,
+            cli,
             deepseek,
             predict,
         });
@@ -511,7 +511,7 @@ impl AgentService {
         if !service.cloud.is_empty() {
             tokio::spawn(service.clone().cloud_loop());
         }
-        if let Some(source) = service.orca.clone() {
+        if let Some(source) = service.cli.clone() {
             let weak = Arc::downgrade(&service);
             tokio::spawn(async move {
                 let mut tick = 0u64;
@@ -528,7 +528,7 @@ impl AgentService {
                         .unwrap()
                         .watching
                         .keys()
-                        .filter(|id| orca::is_orca(id))
+                        .filter(|id| cli::is_cli(id))
                         .cloned()
                         .collect();
                     for id in watched {
@@ -543,8 +543,8 @@ impl AgentService {
         service
     }
 
-    pub fn orca_source(&self) -> Result<&Arc<orca::Source>, Error> {
-        self.orca
+    pub fn cli_source(&self) -> Result<&Arc<cli::Source>, Error> {
+        self.cli
             .as_ref()
             .ok_or_else(|| Error::Unavailable("CLI sessions are unavailable on this device".into()))
     }
@@ -2257,8 +2257,8 @@ impl AgentService {
 
     /// Resolve the provider for access checks without constructing a detail tree.
     pub fn session_provider(&self, id: &str) -> Option<String> {
-        if orca::is_orca(id) {
-            return self.orca.as_ref()?.session_provider(id);
+        if cli::is_cli(id) {
+            return self.cli.as_ref()?.session_provider(id);
         }
         if let Some(app) = desktop_chat::app_of(id) {
             return Some(app.provider().as_str().into());
@@ -2273,8 +2273,8 @@ impl AgentService {
     }
 
     pub fn session(&self, id: &str) -> Option<AgentSession> {
-        if orca::is_orca(id) {
-            return self.orca.as_ref()?.session(id);
+        if cli::is_cli(id) {
+            return self.cli.as_ref()?.session(id);
         }
         Self::project_locked(&self.inner.lock().unwrap(), id)
     }
@@ -2299,9 +2299,9 @@ impl AgentService {
     /// Refuses before any unlock or Accessibility work when no desktop input
     /// channel exists. Claude records which client wrote a session.
     pub fn require_desktop_input(&self, id: &str) -> Result<(), Error> {
-        if orca::is_orca(id) {
+        if cli::is_cli(id) {
             return Err(Error::Unavailable(
-                "Orca sessions use their independent runtime adapter".into(),
+                "CLI sessions use their native provider process".into(),
             ));
         }
         self.require_writable(id)?;
@@ -2419,8 +2419,8 @@ impl AgentService {
             )
             .collect();
         if provider.is_none() {
-            if let Some(orca) = &self.orca {
-                sessions.extend(orca.list());
+            if let Some(cli) = &self.cli {
+                sessions.extend(cli.list());
             }
         }
         sessions.sort_by(|a, b| {
@@ -2538,8 +2538,8 @@ impl AgentService {
         self: &Arc<Self>,
         request: &muster_proto::v1::AgentMessagesRequest,
     ) -> Result<muster_proto::v1::AgentMessagePage, Error> {
-        if orca::is_orca(&request.session) {
-            return self.orca_source()?.history(request).await;
+        if cli::is_cli(&request.session) {
+            return self.cli_source()?.history(request).await;
         }
         if cloud::is_cloud(&request.session) {
             self.ensure_cloud_open(&request.session).await?;
@@ -2710,12 +2710,8 @@ impl AgentService {
     }
 
     pub fn pending(&self, id: &str) -> Vec<PendingInteraction> {
-        if orca::is_orca(id) {
-            return self
-                .orca
-                .as_ref()
-                .map(|o| o.pending(id))
-                .unwrap_or_default();
+        if cli::is_cli(id) {
+            return self.cli.as_ref().map(|o| o.pending(id)).unwrap_or_default();
         }
         let (controller, discovered) = {
             let inner = self.inner.lock().unwrap();

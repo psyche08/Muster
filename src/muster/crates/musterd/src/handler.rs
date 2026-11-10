@@ -1854,8 +1854,8 @@ async fn dispatch(
                 let agent = agent_of(daemon)?;
                 // The final text may arrive before turn completion. Refresh the
                 // CLI provider before allowing automatic result delivery.
-                if muster_agent::orca::is_orca(&r.session) {
-                    agent.orca_source()?.refresh(&r.session).await?;
+                if muster_agent::cli::is_cli(&r.session) {
+                    agent.cli_source()?.refresh(&r.session).await?;
                 }
                 let return_ready = agent
                     .session(&r.session)
@@ -1942,10 +1942,10 @@ async fn dispatch(
             use muster_proto::Message as _;
             if r.op_id.is_empty() {
                 return Err(Error::Invalid(
-                    "Orca creation requires an operation id".into(),
+                    "CLI creation requires an operation id".into(),
                 ));
             }
-            let source = agent_of(daemon)?.orca_source()?.clone();
+            let source = agent_of(daemon)?.cli_source()?.clone();
             let body = r.encode_to_vec();
             ledgered(
                 daemon,
@@ -2321,9 +2321,9 @@ async fn dispatch(
         | Req::AgentInterrupt(_)
         | Req::AgentComplete(_)
         | Req::AgentInspect(_))
-            if orca_session(daemon, &request) =>
+            if cli_session(daemon, &request) =>
         {
-            orca_operation(daemon, request).await?
+            cli_operation(daemon, request).await?
         }
         request @ (Req::AgentSend(_)
         | Req::AgentRespond(_)
@@ -2368,23 +2368,23 @@ impl From<muster_rpc::Error> for Error {
 /// Ordinary callers reach it only while holding the shared write reservation.
 /// Whether the request acts on a cloud session (`muster_agent::cloud`).
 fn independent_session(daemon: &Daemon, request: &Req) -> bool {
-    tmux_request(request) || cloud_session(daemon, request) || orca_session(daemon, request)
+    tmux_request(request) || cloud_session(daemon, request) || cli_session(daemon, request)
 }
-fn orca_session(daemon: &Daemon, request: &Req) -> bool {
+fn cli_session(daemon: &Daemon, request: &Req) -> bool {
     native_session(daemon, request)
         .ok()
-        .is_some_and(|s| muster_agent::orca::is_orca(&s))
+        .is_some_and(|s| muster_agent::cli::is_cli(&s))
 }
-async fn orca_operation(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
-    use muster_agent::orca::Action;
+async fn cli_operation(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
+    use muster_agent::cli::Action;
     use muster_proto::Message as _;
-    let source = agent_of(daemon)?.orca_source()?.clone();
+    let source = agent_of(daemon)?.cli_source()?.clone();
     let (session, op, kind, body, action) = match request {
         Req::AgentSend(r) => {
             muster_proto::attachments::validate(&r.text, &r.attachments).map_err(Error::Invalid)?;
             if !r.attachments.is_empty() {
                 return Err(Error::Invalid(
-                    "Orca currently accepts text only; nothing was sent".into(),
+                    "The CLI currently accepts text only; nothing was sent".into(),
                 ));
             }
             let body = r.encode_to_vec();
@@ -2420,7 +2420,7 @@ async fn orca_operation(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Erro
         }
         _ => {
             return Err(Error::Unavailable(
-                "Orca does not offer desktop inspection".into(),
+                "The CLI does not offer desktop inspection".into(),
             ));
         }
     };

@@ -62,7 +62,7 @@ pub fn cli(provider: &str) -> Option<PathBuf> {
     if !matches!(provider, "codex" | "claude") {
         return None;
     }
-    if let Some(path) = crate::orca::runtime::program::resolve(provider) {
+    if let Some(path) = crate::cli::runtime::program::resolve(provider) {
         return Some(path);
     }
     let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")

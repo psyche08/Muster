@@ -1,10 +1,9 @@
-//! Rust port of Orca's host responsibilities: durable journal, process ownership,
-//! generation fencing, and exact approval responses. The installed native CLI
-//! provides inference; no Electron, JavaScript, Orca service or SDK is launched.
+//! Owns native provider children and their durable CLI session journal.
 mod process;
 pub(crate) mod program;
 mod translate;
-use super::{Error, Reply, Rpc, diagnostic, fingerprint, string};
+use super::{Action, Error, diagnostic, render, string};
+use muster_proto::v1::{AgentSession, QuestionAnswer};
 use process::Process;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
@@ -39,7 +38,7 @@ pub struct NativeRuntime {
     store: Mutex<Store>,
     running: tokio::sync::Mutex<HashMap<String, Arc<Process>>>,
     runtime: String,
-    fence: u64,
+    mutations: tokio::sync::Mutex<()>,
     stopped: AtomicBool,
     owner: Weak<Self>,
     programs: HashMap<String, PathBuf>,
@@ -85,7 +84,6 @@ impl NativeRuntime {
                 r.get(0)
             })
             .map_err(db_error)?;
-        let fence = (rand::random::<u64>() & ((1_u64 << 53) - 1)).max(1);
         let sessions = {
             let mut query = db.prepare("SELECT data FROM sessions").map_err(db_error)?;
             query
@@ -106,7 +104,7 @@ impl NativeRuntime {
             store: Mutex::new(Store { db, sessions }),
             running: tokio::sync::Mutex::new(HashMap::new()),
             runtime,
-            fence,
+            mutations: Default::default(),
             stopped: AtomicBool::new(false),
             owner: owner.clone(),
             programs,
@@ -177,7 +175,9 @@ impl NativeRuntime {
         Ok(())
     }
     fn items(&self, session: &str) -> Result<Vec<Value>, Error> {
-        let store = self.store.lock().unwrap();
+        Self::read_items(&self.store.lock().unwrap(), session)
+    }
+    fn read_items(store: &Store, session: &str) -> Result<Vec<Value>, Error> {
         let mut q = store.db.prepare("SELECT id,seq,revision,observed,body FROM items WHERE session=? ORDER BY seq LIMIT 10001").map_err(db_error)?;
         let rows = q
             .query_map([session], |r| {
@@ -209,13 +209,20 @@ impl NativeRuntime {
         }
         Ok(())
     }
-    fn create(&self, params: &Value) -> Result<Value, Error> {
-        let agent = string(params, "agent")?;
-        self.program(&agent)?;
-        let directory = string(params, "directory")?;
-        let operation = string(params, "operation")?;
-        let env = session_env(&params["env"])?;
-        let path = Path::new(&directory);
+    pub(super) fn create(
+        &self,
+        directory: &str,
+        agent: &str,
+        operation: &str,
+        vars: &HashMap<String, String>,
+    ) -> Result<String, Error> {
+        self.ensure_active()?;
+        if operation.is_empty() || operation.len() > 8192 {
+            return Err(Error::Invalid("Invalid CLI creation operation id".into()));
+        }
+        self.program(agent)?;
+        let env = session_env(vars)?;
+        let path = Path::new(directory);
         if !path.is_absolute() || !path.is_dir() {
             return Err(Error::Invalid(
                 "Choose an existing absolute directory on the target device".into(),
@@ -231,7 +238,7 @@ impl NativeRuntime {
             .db
             .query_row(
                 "SELECT directory,agent,session FROM creates WHERE operation=?",
-                [&operation],
+                [operation],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()
@@ -249,7 +256,7 @@ impl NativeRuntime {
                         .unwrap()
                         .insert(id.clone(), env.clone());
                 }
-                Ok(json!({"sessionId":id}))
+                Ok(id)
             } else {
                 Err(Error::Conflict("Creation operation was reused".into()))
             };
@@ -257,7 +264,7 @@ impl NativeRuntime {
         let id = random();
         let s = Session {
             id: id.clone(),
-            agent: agent.clone(),
+            agent: agent.to_owned(),
             cwd: cwd.clone(),
             provider_id: String::new(),
             stream_message: String::new(),
@@ -282,7 +289,7 @@ impl NativeRuntime {
         if !env.is_empty() {
             self.session_env.lock().unwrap().insert(id.clone(), env);
         }
-        Ok(json!({"sessionId":id}))
+        Ok(id)
     }
     async fn process(&self, id: &str) -> Result<Arc<Process>, Error> {
         let mut running = self.running.lock().await;
@@ -337,18 +344,41 @@ impl NativeRuntime {
         self.update(id, |s| s.generation = process.generation.clone())?;
         let result = async {
             if s.agent == "codex" {
-                process.request("initialize",json!({"clientInfo":{"name":"muster","title":"Muster","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
-                process.write(json!({"method":"initialized","params":{}})).await?;
-                let mut params=json!({"cwd":s.cwd,"approvalPolicy":"on-request","sandbox":"workspace-write"});
-                let method=if s.provider_id.is_empty(){"thread/start"}else{params["threadId"]=json!(s.provider_id);"thread/resume"};
-                let reply=process.request(method,params).await?;
-                let thread=string(&reply["thread"],"id")?;
-                self.update(id,|s|s.provider_id=thread)?;
+                process
+                    .request(
+                        "initialize",
+                        json!({
+                            "clientInfo": {"name":"muster","title":"Muster","version":"0.1.0"},
+                            "capabilities": {"experimentalApi":true}
+                        }),
+                    )
+                    .await?;
+                process
+                    .write(json!({"method":"initialized","params":{}}))
+                    .await?;
+                let mut params = json!({
+                    "cwd":s.cwd, "approvalPolicy":"on-request", "sandbox":"workspace-write"
+                });
+                let method = if s.provider_id.is_empty() {
+                    "thread/start"
+                } else {
+                    params["threadId"] = json!(s.provider_id);
+                    "thread/resume"
+                };
+                let reply = process.request(method, params).await?;
+                let thread = string(&reply["thread"], "id")?;
+                if !s.provider_id.is_empty() && thread != s.provider_id {
+                    return Err(Error::Conflict("Codex resumed a different thread".into()));
+                }
+                self.update(id, |s| s.provider_id = thread)?;
             } else {
-                process.request("initialize",json!({"subtype":"initialize","hooks":{}})).await?;
+                process
+                    .request("initialize", json!({"subtype":"initialize","hooks":{}}))
+                    .await?;
             }
-            Ok::<_,Error>(())
-        }.await;
+            Ok::<_, Error>(())
+        }
+        .await;
         if let Err(error) = result {
             process.stop();
             return Err(error);
@@ -386,16 +416,7 @@ const MAX_ENV_VALUE: usize = 4096;
 /// variables are refused outright: they change which code *every* binary the
 /// child starts will load, which is a different and larger power than running
 /// a command inside the session the caller already controls.
-fn session_env(value: &Value) -> Result<Vec<(String, String)>, Error> {
-    let map = match value {
-        Value::Null => return Ok(Vec::new()),
-        Value::Object(map) => map,
-        _ => {
-            return Err(Error::Invalid(
-                "Session environment must be an object".into(),
-            ));
-        }
-    };
+fn session_env(map: &HashMap<String, String>) -> Result<Vec<(String, String)>, Error> {
     if map.len() > MAX_ENV_ENTRIES {
         return Err(Error::Invalid(format!(
             "Session environment holds at most {MAX_ENV_ENTRIES} entries"
@@ -416,9 +437,7 @@ fn session_env(value: &Value) -> Result<Vec<(String, String)>, Error> {
                 "Environment name {name:?} would redirect dynamic linking and is refused"
             )));
         }
-        let text = value.as_str().ok_or_else(|| {
-            Error::Invalid(format!("Environment value for {name:?} must be text"))
-        })?;
+        let text = value;
         if text.len() > MAX_ENV_VALUE {
             return Err(Error::Invalid(format!(
                 "Environment value for {name:?} exceeds {MAX_ENV_VALUE} bytes"
@@ -439,17 +458,20 @@ fn session_env(value: &Value) -> Result<Vec<(String, String)>, Error> {
 #[cfg(test)]
 mod env_tests {
     use super::*;
+    fn env(value: Value) -> HashMap<String, String> {
+        serde_json::from_value(value).unwrap()
+    }
 
     #[test]
-    fn an_absent_environment_is_empty_not_an_error() {
-        assert_eq!(session_env(&Value::Null).unwrap(), Vec::new());
-        assert_eq!(session_env(&json!({})).unwrap(), Vec::new());
+    fn an_empty_environment_is_valid() {
+        assert_eq!(session_env(&env(json!({}))).unwrap(), Vec::new());
     }
 
     #[test]
     fn entries_are_returned_in_one_order() {
         // A replay and a restart must build the same child environment.
-        let env = session_env(&json!({"MULTICA_TOKEN": "t", "MULTICA_AGENT_ID": "a"})).unwrap();
+        let env =
+            session_env(&env(json!({"MULTICA_TOKEN": "t", "MULTICA_AGENT_ID": "a"}))).unwrap();
         assert_eq!(
             env,
             vec![
@@ -464,24 +486,22 @@ mod env_tests {
         // These change what every binary the child starts will load, which is
         // a larger power than running a command in the caller's own session.
         for name in ["DYLD_INSERT_LIBRARIES", "LD_PRELOAD", "LD_LIBRARY_PATH"] {
-            let error = session_env(&json!({name: "/tmp/x"})).unwrap_err();
+            let error = session_env(&env(json!({name: "/tmp/x"}))).unwrap_err();
             assert!(
                 format!("{error:?}").contains("dynamic linking"),
                 "{name} should be refused for redirecting dynamic linking, got {error:?}"
             );
         }
         // PATH is allowed: a caller's own session command has to be findable.
-        assert!(session_env(&json!({"PATH": "/usr/bin"})).is_ok());
+        assert!(session_env(&env(json!({"PATH": "/usr/bin"}))).is_ok());
     }
 
     #[test]
     fn malformed_names_and_values_are_refused() {
-        assert!(session_env(&json!({"": "v"})).is_err());
-        assert!(session_env(&json!({"2COOL": "v"})).is_err());
-        assert!(session_env(&json!({"HAS-DASH": "v"})).is_err());
-        assert!(session_env(&json!({"OK": 7})).is_err());
-        assert!(session_env(&json!({"OK": "a\0b"})).is_err());
-        assert!(session_env(&json!("not an object")).is_err());
+        assert!(session_env(&env(json!({"": "v"}))).is_err());
+        assert!(session_env(&env(json!({"2COOL": "v"}))).is_err());
+        assert!(session_env(&env(json!({"HAS-DASH": "v"}))).is_err());
+        assert!(session_env(&env(json!({"OK": "a\0b"}))).is_err());
     }
 
     #[test]
@@ -490,9 +510,9 @@ mod env_tests {
         for index in 0..=MAX_ENV_ENTRIES {
             many.insert(format!("V{index}"), json!("x"));
         }
-        assert!(session_env(&Value::Object(many)).is_err());
+        assert!(session_env(&env(Value::Object(many))).is_err());
         let long = "x".repeat(MAX_ENV_VALUE + 1);
-        assert!(session_env(&json!({"OK": long})).is_err());
+        assert!(session_env(&env(json!({"OK": long}))).is_err());
     }
 }
 
@@ -517,9 +537,8 @@ fn db_error(_: rusqlite::Error) -> Error {
     unavailable("CLI session store unavailable")
 }
 
-#[async_trait::async_trait]
-impl Rpc for NativeRuntime {
-    fn shutdown(&self) {
+impl NativeRuntime {
+    pub fn shutdown(&self) {
         self.stopped.store(true, Ordering::Release);
         // Nothing will be spawned again, so the callers' credentials have no
         // further use here.
@@ -532,161 +551,212 @@ impl Rpc for NativeRuntime {
             });
         }
     }
-    async fn call(
+    fn ensure_active(&self) -> Result<(), Error> {
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(unavailable("CLI runtime has stopped"));
+        }
+        Ok(())
+    }
+    pub(super) fn session_key(&self, id: &str) -> String {
+        format!("orca:{}:{}", hex::encode(&self.runtime), hex::encode(id))
+    }
+    pub(super) fn catalog(&self) -> Result<Vec<(String, AgentSession)>, Error> {
+        self.ensure_active()?;
+        let store = self.store.lock().unwrap();
+        let mut query = store
+            .db
+            .prepare("SELECT session, MAX(observed) FROM items GROUP BY session")
+            .map_err(db_error)?;
+        let updated: HashMap<String, u64> = query
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get::<_, i64>(1)?.max(0) as u64))
+            })
+            .map_err(db_error)?
+            .collect::<Result<_, _>>()
+            .map_err(db_error)?;
+        Ok(store
+            .sessions
+            .values()
+            .map(|s| {
+                let title = Path::new(&s.cwd)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("CLI session");
+                (
+                    s.id.clone(),
+                    AgentSession {
+                        id: self.session_key(&s.id),
+                        title: format!("{} · {title}", s.agent),
+                        cwd: s.cwd.clone(),
+                        updated_unix: updated.get(&s.id).copied().unwrap_or(s.created_at) / 1000,
+                        // Stable across mixed-version peers and existing access grants.
+                        provider: "orca".into(),
+                        mode: "orca".into(),
+                        controller: "orca".into(),
+                        process_state: "unknown".into(),
+                        state: "unknown".into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect())
+    }
+    pub(super) fn snapshot(&self, id: &str) -> Result<(String, Vec<Value>), Error> {
+        self.ensure_active()?;
+        let store = self.store.lock().unwrap();
+        let state = store
+            .sessions
+            .get(id)
+            .ok_or_else(|| Error::NotFound("CLI session".into()))?
+            .state
+            .clone();
+        Ok((state, Self::read_items(&store, id)?))
+    }
+    pub(super) async fn apply(
         &self,
-        runtime: Option<&str>,
-        method: &str,
-        params: Value,
-        _mutation: bool,
-    ) -> Result<Reply, Error> {
-        if runtime.is_some_and(|r| r != self.runtime) {
-            return Err(unavailable("CLI runtime identity changed"));
-        }
-        let result = match method {
-            "muster.session.create" => self.create(&params)?,
-            "session.tabs.listAll" => {
-                let store = self.store.lock().unwrap();
-                let mut query = store
-                    .db
-                    .prepare("SELECT session, MAX(observed) FROM items GROUP BY session")
-                    .map_err(db_error)?;
-                let updated: HashMap<String, u64> = query
-                    .query_map([], |row| {
-                        Ok((row.get(0)?, row.get::<_, i64>(1)?.max(0) as u64))
-                    })
-                    .map_err(db_error)?
-                    .collect::<Result<_, _>>()
-                    .map_err(db_error)?;
-                let snapshots: Vec<_> = store.sessions.values().map(|s| json!({"worktree":s.cwd,"tabs":[{"type":"agent-session","sessionId":s.id,"agent":s.agent,"updatedAt":updated.get(&s.id).copied().unwrap_or(s.created_at),"title":Path::new(&s.cwd).file_name().and_then(|s|s.to_str()).unwrap_or("CLI session") }]})).collect();
-                json!({"snapshots":snapshots})
-            }
-            "agentSession.history" => {
-                let id = string(&params, "sessionId")?;
-                let s = self.session(&id)?;
-                // Revisions can change before the newest sequence: replay all bounded rows.
-                let items = self.items(&id)?;
-                json!({"ok":true,"page":{"sessionId":id,"epoch":self.runtime,"fence":self.fence,"items":items,"removedItemIds":[],"window":{"oldest":{"epoch":self.runtime,"sequence":0},"nextCursor":{"epoch":self.runtime,"sequence":now()}},"hasOlder":false,"hasNewer":false,"latestTurn":{"turn":{"state":s.state}}}})
-            }
-            "agentSession.send"
-            | "agentSession.cancel"
-            | "agentSession.respondToApproval"
-            | "agentSession.respondToQuestion" => self.mutate(method, params).await?,
-            _ => return Err(unavailable("Unsupported Rust CLI adapter method")),
-        };
-        Ok(Reply {
-            runtime: self.runtime.clone(),
-            result,
-        })
-    }
-}
-impl NativeRuntime {
-    async fn mutate(&self, method: &str, params: Value) -> Result<Value, Error> {
-        let envelope = &params["envelope"];
-        let id = string(envelope, "sessionId")?;
-        let operation = string(envelope, "clientOperationId")?;
-        let mut fields = params.clone();
-        fields
-            .as_object_mut()
-            .ok_or_else(unknown)?
-            .remove("envelope");
-        if envelope["expectedRuntimeFence"].as_u64() != Some(self.fence)
-            || envelope["payloadFingerprint"] != fingerprint(method, &id, &fields)
-        {
-            return Err(Error::Conflict("Stale CLI operation".into()));
-        }
-        let value = match method {
-            "agentSession.send" => {
-                if self.session(&id)?.state == "running"
-                    || self
-                        .items(&id)?
-                        .iter()
-                        .any(|i| i["body"]["resolution"]["state"] == "pending")
-                {
-                    return Err(Error::Conflict(
-                        "Wait for the current turn, answer its prompt, or interrupt it".into(),
-                    ));
-                }
-                let process = self.process(&id).await?;
-                let s = self.session(&id)?;
-                let text = params["body"]["blocks"][0]["text"]
-                    .as_str()
-                    .filter(|s| !s.is_empty() && s.len() <= 256 * 1024)
-                    .ok_or_else(|| Error::Invalid("Invalid CLI message".into()))?;
-                self.item(&id, &format!("user:{operation}"), params["body"].clone())?;
-                self.update(&id, |s| s.state = "running".into())?;
-                let sent = if s.agent == "codex" {
-                    process
-                        .request(
-                            "turn/start",
-                            json!({"threadId":s.provider_id,"input":[{"type":"text","text":text}]}),
-                        )
-                        .await
-                        .map(|r| r["turn"]["id"].as_str().is_some())
-                } else {
-                    let token = random();
-                    let uuid = format!(
-                        "{}-{}-{}-{}-{}",
-                        &token[..8],
-                        &token[8..12],
-                        &token[12..16],
-                        &token[16..20],
-                        &token[20..]
-                    );
-                    process.exchange(format!("echo:{uuid}"), json!({"type":"user","uuid":uuid,"session_id":s.provider_id,"message":{"role":"user","content":[{"type":"text","text":text}]},"parent_tool_use_id":null})).await.map(|_| true)
-                };
-                if !matches!(sent, Ok(true)) {
-                    process.stop();
-                    self.update(&id, |s| s.state = "unknown".into())?;
-                    return match sent {
-                        Err(Error::Conflict(e)) => Err(Error::Conflict(e)),
-                        _ => Err(unknown()),
-                    };
-                }
-                json!({"clientMessageId":operation,"submission":{"dispatchState":"accepted"}})
-            }
-            "agentSession.cancel" => {
-                let process = self
-                    .running
-                    .lock()
+        id: &str,
+        operation: &str,
+        action: Action,
+    ) -> Result<(), Error> {
+        let _guard = self.mutations.lock().await;
+        self.ensure_active()?;
+        match action {
+            Action::Send(text) => self.send(id, operation, &text).await,
+            Action::Interrupt => self.interrupt(id).await,
+            Action::Respond {
+                interaction,
+                option,
+            } => {
+                self.respond(id, &interaction, PromptReply::Approval(&option))
                     .await
-                    .get(&id)
-                    .cloned()
-                    .ok_or_else(|| unavailable("No live CLI turn"))?;
-                let s = self.session(&id)?;
-                if s.agent == "codex" {
-                    if s.turn.is_empty() {
-                        return Err(unavailable("The CLI has not identified an active turn"));
-                    }
-                    process
-                        .request(
-                            "turn/interrupt",
-                            json!({"threadId":s.provider_id,"turnId":s.turn}),
-                        )
-                        .await?;
-                } else {
-                    process
-                        .request("interrupt", json!({"subtype":"interrupt"}))
-                        .await?;
-                }
-                json!({"cancelled":true})
             }
-            _ => self.respond(&id, &params).await?,
-        };
-        Ok(json!({"ok":true,"fence":self.fence,"value":value}))
+            Action::Answers {
+                interaction,
+                answers,
+            } => {
+                self.respond(id, &interaction, PromptReply::Answers(&answers))
+                    .await
+            }
+        }
     }
-    async fn respond(&self, id: &str, params: &Value) -> Result<Value, Error> {
-        let item_id = string(params, "itemId")?;
+    async fn send(&self, id: &str, operation: &str, text: &str) -> Result<(), Error> {
+        if text.trim().is_empty() || text.len() > 256 * 1024 {
+            return Err(Error::Invalid(
+                "CLI messages must contain text and fit within 256 KiB".into(),
+            ));
+        }
+        if self.session(id)?.state == "running"
+            || self
+                .items(id)?
+                .iter()
+                .any(|i| i["body"]["resolution"]["state"] == "pending")
+        {
+            return Err(Error::Conflict(
+                "Wait for the current turn, answer its prompt, or interrupt it".into(),
+            ));
+        }
+        let process = self.process(id).await?;
+        let s = self.session(id)?;
+        self.item(
+            id,
+            &format!("user:{operation}"),
+            json!({"kind":"message","role":"user","blocks":[{"type":"text","text":text}]}),
+        )?;
+        self.update(id, |s| s.state = "running".into())?;
+        let sent = if s.agent == "codex" {
+            process
+                .request(
+                    "turn/start",
+                    json!({"threadId":s.provider_id,"input":[{"type":"text","text":text}]}),
+                )
+                .await
+                .map(|r| r["turn"]["id"].as_str().is_some())
+        } else {
+            let token = random();
+            let uuid = format!(
+                "{}-{}-{}-{}-{}",
+                &token[..8],
+                &token[8..12],
+                &token[12..16],
+                &token[16..20],
+                &token[20..]
+            );
+            process.exchange(format!("echo:{uuid}"), json!({"type":"user","uuid":uuid,"session_id":s.provider_id,"message":{"role":"user","content":[{"type":"text","text":text}]},"parent_tool_use_id":null})).await.map(|_| true)
+        };
+        if !matches!(sent, Ok(true)) {
+            process.stop();
+            self.update(id, |s| s.state = "unknown".into())?;
+            return match sent {
+                Err(Error::Conflict(e)) => Err(Error::Conflict(e)),
+                _ => Err(unknown()),
+            };
+        }
+        Ok(())
+    }
+    async fn interrupt(&self, id: &str) -> Result<(), Error> {
+        let process = self
+            .running
+            .lock()
+            .await
+            .get(id)
+            .cloned()
+            .ok_or_else(|| unavailable("No live CLI turn"))?;
+        let s = self.session(id)?;
+        if s.agent == "codex" {
+            if s.turn.is_empty() {
+                return Err(unavailable("The CLI has not identified an active turn"));
+            }
+            process
+                .request(
+                    "turn/interrupt",
+                    json!({"threadId":s.provider_id,"turnId":s.turn}),
+                )
+                .await?;
+        } else {
+            process
+                .request("interrupt", json!({"subtype":"interrupt"}))
+                .await?;
+        }
+        Ok(())
+    }
+    async fn respond(
+        &self,
+        id: &str,
+        interaction: &str,
+        reply: PromptReply<'_>,
+    ) -> Result<(), Error> {
         let item = self
             .items(id)?
             .into_iter()
-            .find(|i| i["itemId"] == item_id)
-            .ok_or_else(|| Error::Conflict("Prompt is gone".into()))?;
+            .find(|item| render::interaction_id(item) == interaction)
+            .ok_or_else(|| Error::Conflict("Prompt changed or was already answered".into()))?;
+        let item_id = string(&item, "itemId")?;
+        let (_, prompts) = render::project(&self.session_key(id), std::slice::from_ref(&item))?;
+        let prompt = prompts
+            .first()
+            .ok_or_else(|| Error::Conflict("Prompt is no longer actionable".into()))?;
+        let option = match reply {
+            PromptReply::Approval(label) if prompt.kind == "approval" => {
+                let options = item["body"]["options"]
+                    .as_array()
+                    .ok_or_else(super::invalid)?;
+                let mut matches = options
+                    .iter()
+                    .filter(|o| o["label"].as_str() == Some(label));
+                let choice = matches
+                    .next()
+                    .filter(|_| matches.next().is_none())
+                    .ok_or_else(|| {
+                        Error::Invalid("Choose one of the offered approval options".into())
+                    })?;
+                Some(string(choice, "id")?)
+            }
+            PromptReply::Answers(_) if prompt.kind == "question" => None,
+            _ => return Err(Error::Invalid("Reply does not match this prompt".into())),
+        };
         let mut body = item["body"].clone();
         let s = self.session(id)?;
-        if item["revision"] != params["expectedRevision"]
-            || body["resolution"]["state"] != "pending"
-            || body["generation"] != s.generation
-        {
+        if body["resolution"]["state"] != "pending" || body["generation"] != s.generation {
             return Err(Error::Conflict(
                 "Prompt changed or its process ended".into(),
             ));
@@ -698,10 +768,16 @@ impl NativeRuntime {
             .get(id)
             .cloned()
             .ok_or_else(|| unavailable("Prompt process exited"))?;
-        let result = translate::response(&s, &body, params)?;
+        if s.generation.is_empty()
+            || process.generation != s.generation
+            || process.dead.load(Ordering::Acquire)
+        {
+            return Err(Error::Conflict("Prompt process changed".into()));
+        }
+        let result = translate::response(&s, &body, option.as_deref(), reply)?;
         // Consume the callback before writing; an ambiguous write cannot enable a second answer.
         body["resolution"]["state"] = json!("resolved");
-        body["resolution"]["selectedOptionId"] = params["optionId"].clone();
+        body["resolution"]["selectedOptionId"] = json!(option);
         {
             let store = self.store.lock().unwrap();
             let changed = store.db.execute(
@@ -713,9 +789,7 @@ impl NativeRuntime {
             }
         }
         process.write(result).await.map_err(|_| unknown())?;
-        Ok(
-            json!({"itemId":item_id,"revision":item["revision"].as_u64().unwrap_or(0)+1,"resolution":body["resolution"]}),
-        )
+        Ok(())
     }
     fn event(&self, id: &str, generation: &str, frame: &Value) -> Result<(), Error> {
         let s = self.session(id)?;
@@ -738,16 +812,27 @@ mod tests {
         assert!(NativeRuntime::open(dir.path()).is_ok());
     }
     #[tokio::test]
-    #[ignore = "requires installed native CLIs; run with isolated CODEX_HOME and CLAUDE_CONFIG_DIR"]
+    #[ignore = "requires installed native Codex and Claude CLIs"]
     async fn installed_native_cli_handshakes_without_inference() {
         let dir = tempfile::tempdir().unwrap();
         let cwd = tempfile::tempdir().unwrap();
         let rt = NativeRuntime::open(dir.path()).unwrap();
         for agent in ["codex", "claude"] {
-            let reply=rt.create(&json!({"agent":agent,"directory":cwd.path().to_str().unwrap(),"operation":agent})).unwrap();
-            let id = reply["sessionId"].as_str().unwrap();
+            let home = tempfile::tempdir().unwrap();
+            let variable = if agent == "codex" {
+                "CODEX_HOME"
+            } else {
+                "CLAUDE_CONFIG_DIR"
+            };
+            let vars = HashMap::from([(
+                variable.to_owned(),
+                home.path().to_str().unwrap().to_owned(),
+            )]);
+            let id = rt
+                .create(cwd.path().to_str().unwrap(), agent, agent, &vars)
+                .unwrap();
             let p = rt
-                .process(id)
+                .process(&id)
                 .await
                 .unwrap_or_else(|e| panic!("{agent} handshake: {e}"));
             assert!(!p.dead.load(Ordering::Acquire));
@@ -755,4 +840,10 @@ mod tests {
         }
         rt.shutdown();
     }
+}
+
+#[derive(Clone, Copy)]
+enum PromptReply<'a> {
+    Approval(&'a str),
+    Answers(&'a [QuestionAnswer]),
 }

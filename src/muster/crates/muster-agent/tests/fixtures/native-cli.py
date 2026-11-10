@@ -27,6 +27,8 @@ def end():
         emit({'method':'turn/completed','params':{'threadId':'thread-1','turn':{'id':'turn-1','status':'completed'}}})
 # Report the session environment this child was given, so a test can check
 # that it crossed from the create request into the spawned process.
+if claude and '--resume' in sys.argv:
+    note({'resume': sys.argv[sys.argv.index('--resume') + 1]})
 note({'env': {k: v for k, v in os.environ.items() if k.startswith('MUSTER_TEST_')}})
 for line in sys.stdin:
     f = json.loads(line)

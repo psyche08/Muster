@@ -254,7 +254,7 @@ fn provider_title(provider: &str) -> String {
         "claude" => "Claude",
         "deepseek" => "DeepSeek",
         "catdesk" => "Catdesk",
-        "orca" => "Orca",
+        "orca" => "CLI",
         other => other,
     }
     .into()

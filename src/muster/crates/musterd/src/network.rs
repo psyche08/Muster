@@ -253,7 +253,7 @@ impl Daemon {
         }
         if self.agent().is_some() {
             services.push("agent".to_string());
-            if self.agent().is_some_and(|a| a.orca_source().is_ok()) {
+            if self.agent().is_some_and(|a| a.cli_source().is_ok()) {
                 services.push("agent.orca.v1".to_string());
             }
             services.push("agent.attachments".to_string());

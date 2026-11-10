@@ -1,4 +1,4 @@
-//! Normalize Orca's journal into Muster's existing native timeline. No HTML,
+//! Project the CLI session journal into Muster's existing native timeline. No HTML,
 //! JavaScript renderer or terminal screen scraping crosses the App ABI.
 use super::*;
 
@@ -214,7 +214,7 @@ pub(super) fn project(
                     row.text.push_str(&detail);
                 }
             }
-            _ => row.text = "[Unsupported Orca journal item]".into(),
+            _ => row.text = "[Unsupported CLI journal item]".into(),
         }
         if let Some(agent) = item["agentId"].as_str() {
             row.text = format!("[Subagent {agent}]\n{}", row.text);
@@ -226,7 +226,7 @@ pub(super) fn project(
 fn bounded(value: &Value) -> String {
     let mut text = value["head"].as_str().unwrap_or_default().to_string();
     if value["truncated"] == true {
-        text.push_str("\n[Output truncated by Orca]");
+        text.push_str("\n[Output truncated]");
     }
     text
 }
@@ -245,6 +245,7 @@ fn tool_status(value: &Value) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn failed_turn_displays_provider_message() {
         let item = json!({"itemId":"end","body":{"kind":"turn","state":"failed","error":{"message":"Please upgrade Codex."}}});
