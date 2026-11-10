@@ -295,3 +295,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0177](0177-reuse-runtime-transcript-observations.md) | Accepted | Reuse passive transcript observations and publish changed runtime state |
 | [0178](0178-consistent-session-list-rows.md) | Accepted | Use one session row across providers |
 | [0179](0179-publish-unified-apple-catalog.md) | Accepted | Publish the unified Apple catalog as 1.1.34 (124) |
+| [0180](0180-compact-ios-catalog-status.md) | Accepted | Keep iPhone catalog status on the title line |

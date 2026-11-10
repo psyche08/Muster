@@ -6,6 +6,50 @@ import SwiftProtobuf
 
 final class ConversationLayoutTests: XCTestCase {
     @MainActor
+    func testCatalogStatesFitTwoLinesInPhoneList() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let core = try MusterCore(config: .phone(dir: directory, name: "Catalog fixture"), keys: SoftwareKeys(),
+                                  onViewModel: { _ in }, onEffect: { _, _ in })
+        defer { core.shutdown() }
+        let rows = [("Claude", "running"), ("Codex", "idle"), ("DeepSeek", "waiting_approval")].map { provider, state in
+            Muster_App_AgentCatalogRow.fixture {
+                $0.key = state
+                $0.sourceLabel = "\(provider) · Desktop"
+                $0.expandable = state == "running"
+                $0.expanded = $0.expandable
+                $0.depth = state == "idle" ? 1 : 0
+                $0.session = .fixture {
+                    $0.id = state; $0.provider = provider.lowercased(); $0.state = state
+                    $0.title = "Review the latest project changes"
+                    $0.cwd = "/Projects/Example/Components"; $0.updatedUnix = 1_790_572_800
+                }
+            }
+        }
+        for width: CGFloat in [320, 390] {
+            var heights: [String: CGFloat] = [:]
+            let list = List {
+                Section("Recent") {
+                    ForEach(rows, id: \.key) { row in
+                        CatalogSessionRow(core: core, row: row, displayMinute: 0)
+                            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+                                heights[row.key] = height
+                            }
+                    }
+                }
+            }.listStyle(.insetGrouped)
+            try snapshot(list, name: "catalog-status-\(Int(width))", width: width)
+            let idle = try XCTUnwrap(heights["idle"])
+            for state in ["running", "waiting_approval"] {
+                let height = try XCTUnwrap(heights[state])
+                XCTAssertEqual(height, idle, accuracy: 3, "\(state) at \(width) points: \(heights)")
+            }
+            XCTAssertLessThan(idle, 64)
+        }
+    }
+
+    @MainActor
     func testPhoneConversationAndCompactComposer() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
