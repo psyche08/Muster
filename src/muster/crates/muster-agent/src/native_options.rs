@@ -4,6 +4,7 @@ use crate::{
     Error,
     desktop_chat::{self as chat, AxTree, ChatChoice},
 };
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -245,13 +246,136 @@ pub fn shown(tree: &AxTree, picker: usize) -> Vec<String> {
     }
 }
 
-/// The effort Claude's model panel names on its "Effort <level>" entry. Its
-/// levels open on hover only, so this is read, never chosen.
+/// The effort Claude's model panel names on its "Effort <level>" entry.
+/// Reading it back is how a chosen level is confirmed.
 pub fn submenu_effort(tree: &AxTree, panel: usize) -> Option<String> {
     let entries = chat::menu_entries(tree, panel);
     let entry = chat::effort_entry(&entries)?;
     let level = entry.label.strip_prefix("Effort")?.trim();
     (!level.is_empty()).then(|| level.to_string())
+}
+
+/// Claude's effort levels, once its "Effort <level>" entry opened them: the
+/// enabled entries the model panel did not list before (`panel_labels`),
+/// wherever the app renders them. The entry itself never counts as a level.
+pub fn effort_levels(tree: &AxTree, panel_labels: &[String]) -> Vec<ChatChoice> {
+    chat::menu_entries(tree, 0)
+        .iter()
+        .filter(|e| e.enabled && !panel_labels.contains(&e.label) && !e.label.starts_with("Effort"))
+        .map(|e| chat::choice(tree, e))
+        .filter(|c| !c.name.is_empty())
+        .collect()
+}
+
+/// The ChatGPT app's "Power" item: its slider takes arrow keys while the
+/// item itself is focused.
+pub fn power_entry(tree: &AxTree, panel: usize) -> Option<usize> {
+    chat::menu_entries(tree, panel)
+        .iter()
+        .find(|e| e.label == "Power" && e.enabled)
+        .map(|e| e.node)
+}
+
+/// One arrow key on the focused Power item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PowerStep {
+    Lower,
+    Higher,
+}
+
+/// Walks the ChatGPT app's Power slider to a level known only by name: the
+/// app states only the level it shows ("High, 3 of 5."). The walk reads
+/// every level downwards first, then upwards, and stops on the first that
+/// has the name. A name no level has walks back to the starting level and
+/// refuses the creation. Every key must move exactly one level.
+#[derive(Debug)]
+pub struct PowerWalk {
+    start: chat::PowerLevel,
+    target: String,
+    seen: BTreeMap<u32, String>,
+    last: Option<(u32, PowerStep)>,
+    keys: u32,
+    restoring: bool,
+}
+
+impl PowerWalk {
+    pub fn new(start: &chat::PowerLevel, target: &str) -> Self {
+        Self {
+            start: start.clone(),
+            target: target.to_owned(),
+            seen: BTreeMap::new(),
+            last: None,
+            keys: 0,
+            restoring: false,
+        }
+    }
+
+    /// The next key after reading `level`, the level the app states now;
+    /// `None` once it states the requested name.
+    pub fn next(&mut self, level: &chat::PowerLevel) -> Result<Option<PowerStep>, Error> {
+        if let Some((from, step)) = self.last.take() {
+            let expected = match step {
+                PowerStep::Lower => from.checked_sub(1),
+                PowerStep::Higher => from.checked_add(1),
+            };
+            if Some(level.position) != expected || level.total != self.start.total {
+                return Err(create_unavailable(format!(
+                    "the Power slider moved from {from} to {} of {} on one key",
+                    level.position, level.total
+                )));
+            }
+        }
+        self.seen.insert(level.position, level.name.clone());
+        loop {
+            let target = if self.restoring {
+                &self.start.name
+            } else {
+                &self.target
+            };
+            if level.name == *target {
+                return if self.restoring {
+                    Err(not_offered(
+                        Kind::Effort,
+                        &self.target,
+                        self.seen.values().map(String::as_str),
+                    ))
+                } else {
+                    Ok(None)
+                };
+            }
+            let unseen = |mut range: std::ops::RangeInclusive<u32>| {
+                range.any(|p| !self.seen.contains_key(&p))
+            };
+            let step = match self.seen.iter().find(|(_, name)| *name == target) {
+                Some((&p, _)) if p < level.position => Some(PowerStep::Lower),
+                Some((&p, _)) if p > level.position => Some(PowerStep::Higher),
+                Some(_) => None,
+                None if unseen(1..=level.position.saturating_sub(1)) => Some(PowerStep::Lower),
+                None if unseen(level.position + 1..=level.total) => Some(PowerStep::Higher),
+                None => None,
+            };
+            match step {
+                Some(step) => {
+                    self.keys += 1;
+                    if self.keys > 3 * level.total {
+                        return Err(create_unavailable(
+                            "the Power slider did not settle on a level",
+                        ));
+                    }
+                    self.last = Some((level.position, step));
+                    return Ok(Some(step));
+                }
+                None if !self.restoring => self.restoring = true,
+                None => {
+                    return Err(not_offered(
+                        Kind::Effort,
+                        &self.target,
+                        self.seen.values().map(String::as_str),
+                    ));
+                }
+            }
+        }
+    }
 }
 
 /// The choice a new session's form must press, or `None` when it already
@@ -263,18 +387,11 @@ pub fn create_choice<'a>(
 ) -> Result<Option<&'a ChatChoice>, Error> {
     match choose(choices, name) {
         Ok(choice) => Ok((!choice.selected).then_some(choice)),
-        Err(Error::Invalid(_)) => Err(create_refused(match kind {
-            Kind::Model => format!(
-                "model {name:?} is not offered (the app offers {})",
-                offered(choices)
-            ),
-            // The ChatGPT app's Power slider: only its current level and
-            // a raise to the middle are reachable without a pointer.
-            Kind::Effort => format!(
-                "effort {name:?} cannot be chosen through Accessibility (it can choose {}); choose it once in the app",
-                offered(choices)
-            ),
-        })),
+        Err(Error::Invalid(_)) => Err(not_offered(
+            kind,
+            name,
+            choices.iter().map(|c| c.name.as_str()),
+        )),
         Err(other) => Err(other),
     }
 }
@@ -285,28 +402,41 @@ pub fn create_model_confirmed(choices: &[ChatChoice], shown: &[String], name: &s
     shown.first().is_some_and(|first| first == name) || confirmed(choices, Kind::Model, name)
 }
 
-/// The refusal for an effort Claude's form cannot choose: its levels open
-/// on hover only, which Accessibility cannot do.
-pub fn create_effort_differs(name: &str, current: Option<&str>) -> Error {
-    match current {
-        Some(current) => create_refused(format!(
-            "effort {name:?} cannot be chosen through Accessibility and the app's effort is {current:?}; choose it once in the app"
-        )),
-        None => create_refused(format!(
-            "effort {name:?} cannot be chosen: the app shows no effort for this model"
-        )),
-    }
+/// The refusal of an effort for a model whose form shows none.
+pub fn create_no_effort(name: &str) -> Error {
+    create_refused(format!(
+        "effort {name:?} cannot be chosen: the app shows no effort for this model"
+    ))
 }
 
-fn offered(choices: &[ChatChoice]) -> String {
-    if choices.is_empty() {
-        return "none".into();
-    }
-    choices
-        .iter()
-        .map(|c| format!("{:?}", c.name))
-        .collect::<Vec<_>>()
-        .join(", ")
+/// The app did not open Claude's effort levels for its focused "Effort"
+/// entry. Nothing was chosen; a later attempt may succeed.
+pub fn create_levels_closed(name: &str) -> Error {
+    create_unavailable(format!(
+        "effort {name:?} could not be chosen: the app did not open its effort levels"
+    ))
+}
+
+/// Like [`create_refused`], for a step the app did not complete: the same
+/// request may succeed later.
+pub fn create_unavailable(why: impl std::fmt::Display) -> Error {
+    Error::Unavailable(format!("{CREATE_REFUSED}: {why}; nothing was sent"))
+}
+
+fn not_offered<'a>(kind: Kind, name: &str, offered: impl Iterator<Item = &'a str>) -> Error {
+    let offered: Vec<_> = offered.map(|n| format!("{n:?}")).collect();
+    create_refused(format!(
+        "{} {name:?} is not offered (the app offers {})",
+        match kind {
+            Kind::Model => "model",
+            Kind::Effort => "effort",
+        },
+        if offered.is_empty() {
+            "none".to_string()
+        } else {
+            offered.join(", ")
+        }
+    ))
 }
 
 #[cfg(test)]
@@ -437,7 +567,10 @@ mod tests {
         let model = picker(&t, Kind::Model).unwrap();
         assert_eq!(shown(&t, model), ["Fable 5.2", "High", "Ultracode"]);
         // Claude has no effort picker of its own: its effort is read only.
-        assert!(matches!(picker(&t, Kind::Effort), Err(Error::Unavailable(_))));
+        assert!(matches!(
+            picker(&t, Kind::Effort),
+            Err(Error::Unavailable(_))
+        ));
         let picker_ = chat::Picker {
             node: model,
             label: t.nodes[model].label().into(),
@@ -474,39 +607,141 @@ mod tests {
         }
     }
 
+    /// Claude's effort levels open beside the model panel once its focused
+    /// "Effort High" entry takes the Right arrow key.
     #[test]
-    fn claude_effort_is_checked_not_chosen() {
-        let Error::Invalid(message) = create_effort_differs("Max", Some("High")) else {
-            panic!()
-        };
+    fn claude_effort_levels_are_the_entries_the_panel_did_not_list() {
+        let closed = tree(CLAUDE_FORM);
+        let model = picker(&closed, Kind::Model).unwrap();
+        let panel_ = panel(
+            &closed,
+            &chat::Picker {
+                node: model,
+                label: closed.nodes[model].label().into(),
+            },
+        )
+        .unwrap()
+        .unwrap();
+        let labels: Vec<String> = chat::menu_entries(&closed, panel_)
+            .into_iter()
+            .map(|e| e.label)
+            .collect();
+        assert!(effort_levels(&closed, &labels).is_empty());
+        let open = tree(&format!(
+            "{CLAUDE_FORM}
+  AXGroup
+    AXMenu
+      AXMenuItem title=\"Low\"
+      AXMenuItem title=\"Medium\"
+      AXMenuItem title=\"High\"
+      AXMenuItem title=\"Extra\"
+      AXMenuItem title=\"Max\"
+      AXMenuItem title=\"Ultra\" enabled=\"0\""
+        ));
+        let levels = effort_levels(&open, &labels);
+        let names: Vec<_> = levels.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["Low", "Medium", "High", "Extra", "Max"]);
         assert_eq!(
-            message,
-            "The new session's model and effort were not set: effort \"Max\" cannot be chosen through Accessibility and the app's effort is \"High\"; choose it once in the app; nothing was sent"
+            create_choice(&levels, Kind::Effort, "Extra")
+                .unwrap()
+                .unwrap()
+                .name,
+            "Extra"
         );
-        let Error::Invalid(message) = create_effort_differs("Max", None) else {
-            panic!()
-        };
-        assert!(message.starts_with(CREATE_REFUSED) && message.ends_with("nothing was sent"));
-        // A model without effort shows no entry.
-        let t = tree("AXGroup title=\"Model: Haiku 5.5\"\n  AXMenuItem title=\"Haiku 5.5\"");
-        assert_eq!(submenu_effort(&t, 0), None);
-    }
-
-    #[test]
-    fn effort_choices_keep_the_current_power_level_without_a_press() {
-        let t = tree(
-            "AXWebArea\n  AXPopUpButton desc=\"Select effort\"\n  AXGroup title=\"Select effort\"\n    AXStaticText/AXApplicationStatus value=\"High, 3 of 5.\"\n    AXMenuItem title=\"Select model\"\n    AXMenuItem title=\"Power\"\n      AXGroup/AXEmptyGroup",
-        );
-        let efforts = choices(&t, 2, Kind::Effort).unwrap();
-        assert!(create_choice(&efforts, Kind::Effort, "High").unwrap().is_none());
-        let Err(Error::Invalid(message)) = create_choice(&efforts, Kind::Effort, "Extra High")
+        let Err(Error::Invalid(message)) = create_choice(&levels, Kind::Effort, "Extra high")
         else {
             panic!()
         };
         assert_eq!(
             message,
-            "The new session's model and effort were not set: effort \"Extra High\" cannot be chosen through Accessibility (it can choose \"High\"); choose it once in the app; nothing was sent"
+            "The new session's model and effort were not set: effort \"Extra high\" is not offered (the app offers \"Low\", \"Medium\", \"High\", \"Extra\", \"Max\"); nothing was sent"
         );
+        // A model without effort shows no entry.
+        let t = tree("AXGroup title=\"Model: Haiku 5.5\"\n  AXMenuItem title=\"Haiku 5.5\"");
+        assert_eq!(submenu_effort(&t, 0), None);
+        let Error::Invalid(message) = create_no_effort("Max") else {
+            panic!()
+        };
+        assert_eq!(
+            message,
+            "The new session's model and effort were not set: effort \"Max\" cannot be chosen: the app shows no effort for this model; nothing was sent"
+        );
+        let Error::Unavailable(message) = create_levels_closed("Max") else {
+            panic!()
+        };
+        assert!(message.starts_with(CREATE_REFUSED) && message.ends_with("; nothing was sent"));
+    }
+
+    const POWER: [&str; 5] = ["Low", "Medium", "High", "Extra High", "Max"];
+
+    /// Plays `walk` against a slider that starts at `start` (1-based) and
+    /// moves one level per key; returns the keys and where it stopped.
+    fn walk(start: u32, target: &str) -> (Vec<PowerStep>, u32, Result<(), Error>) {
+        let level = |p: u32| chat::PowerLevel {
+            name: POWER[p as usize - 1].into(),
+            position: p,
+            total: 5,
+        };
+        let mut position = start;
+        let mut walk = PowerWalk::new(&level(start), target);
+        let mut keys = Vec::new();
+        loop {
+            match walk.next(&level(position)) {
+                Ok(Some(step)) => {
+                    keys.push(step);
+                    position = match step {
+                        PowerStep::Lower => position - 1,
+                        PowerStep::Higher => position + 1,
+                    };
+                }
+                Ok(None) => return (keys, position, Ok(())),
+                Err(error) => return (keys, position, Err(error)),
+            }
+        }
+    }
+
+    #[test]
+    fn power_walk_reaches_any_level_by_name() {
+        use PowerStep::{Higher, Lower};
+        assert_eq!(walk(3, "High").0, []);
+        assert_eq!(walk(3, "Low").0, [Lower, Lower]);
+        let (keys, at, done) = walk(3, "Extra High");
+        assert_eq!((keys, at), (vec![Lower, Lower, Higher, Higher, Higher], 4));
+        assert!(done.is_ok());
+        let (keys, at, done) = walk(1, "Max");
+        assert_eq!((keys.len(), at), (4, 5));
+        assert!(done.is_ok());
+    }
+
+    #[test]
+    fn power_walk_restores_the_start_before_refusing_an_unknown_name() {
+        let (keys, at, done) = walk(3, "Middle");
+        assert_eq!(at, 3, "walked back to the starting level: {keys:?}");
+        let Err(Error::Invalid(message)) = done else {
+            panic!()
+        };
+        assert_eq!(
+            message,
+            "The new session's model and effort were not set: effort \"Middle\" is not offered (the app offers \"Low\", \"Medium\", \"High\", \"Extra High\", \"Max\"); nothing was sent"
+        );
+    }
+
+    #[test]
+    fn power_walk_stops_when_a_key_does_not_move_one_level() {
+        let level = |name: &str, position| chat::PowerLevel {
+            name: name.into(),
+            position,
+            total: 5,
+        };
+        let mut walk = PowerWalk::new(&level("High", 3), "Low");
+        assert_eq!(
+            walk.next(&level("High", 3)).unwrap(),
+            Some(PowerStep::Lower)
+        );
+        let Err(Error::Unavailable(message)) = walk.next(&level("Low", 1)) else {
+            panic!()
+        };
+        assert!(message.contains("moved from 3 to 1 of 5"), "{message}");
     }
 
     #[test]

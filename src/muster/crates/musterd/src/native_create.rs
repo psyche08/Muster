@@ -424,7 +424,10 @@ mod tests {
                 effort: effort.into(),
                 ..request("codex")
             };
-            assert!(matches!(validate(&r), Err(Error::Invalid(_))), "{model:?} {effort:?}");
+            assert!(
+                matches!(validate(&r), Err(Error::Invalid(_))),
+                "{model:?} {effort:?}"
+            );
         }
     }
 }

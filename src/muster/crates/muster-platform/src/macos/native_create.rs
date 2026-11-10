@@ -328,6 +328,7 @@ impl Submitted {
 struct Form<'a, F: Fn() -> Result<(), Error> + Sync> {
     check: &'a F,
     page: &'a Element,
+    app: &'a Element,
 }
 impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> {
     fn check(&self) -> Result<(), Error> {
@@ -335,6 +336,9 @@ impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> 
     }
     fn web(&self) -> &Element {
         self.page
+    }
+    fn app(&self) -> &Element {
+        self.app
     }
 }
 
@@ -579,6 +583,7 @@ pub async fn submit(
     let options = Form {
         check: &form,
         page: &page,
+        app: &root,
     };
     let shown = native_options::prepare_new(&options, model, effort).await?;
     // Opening and closing the pickers must not have typed anything.

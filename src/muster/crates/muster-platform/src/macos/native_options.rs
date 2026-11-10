@@ -17,6 +17,8 @@ const NO_EFFORT_CONTROLS: &str = "This model picker exposes no effort controls";
 pub(in crate::macos) trait Scope: Sync {
     fn check(&self) -> Result<(), Error>;
     fn web(&self) -> &Element;
+    /// The application element that application-directed keys go to.
+    fn app(&self) -> &Element;
 }
 
 /// A session's web area in a controller's window.
@@ -47,6 +49,9 @@ impl Scope for SessionScope<'_> {
     }
     fn web(&self) -> &Element {
         &self.web
+    }
+    fn app(&self) -> &Element {
+        &self.controller.app
     }
 }
 
@@ -265,11 +270,189 @@ async fn submenu_effort(scope: &impl Scope) -> Result<Option<String>, Error> {
     .await
 }
 
+/// One application-directed key on an exactly focused control.
+#[derive(Clone, Copy)]
+enum Key {
+    OpenSubmenu,
+    Power(options::PowerStep),
+}
+
+/// Focuses `item`, proves that the app's focused element and window are
+/// exactly it and the scope's window, and posts one key to the app with
+/// `AXUIElementPostKeyboardEvent`: application-directed Accessibility input,
+/// never global input or the pointer (the route `native_organization`
+/// opens its submenus by).
+async fn focused_key(scope: &impl Scope, item: &Element, key: Key) -> Result<(), Error> {
+    scope.check()?;
+    let web = scope.web();
+    if !web.contains(item) {
+        return Err(Error::Conflict(
+            "The option left the requested session".into(),
+        ));
+    }
+    let window = web
+        .element("AXWindow")
+        .ok_or_else(|| Error::Unavailable("The session exposes no AX window".into()))?;
+    let app = scope.app();
+    item.set_bool("AXFocused", true)
+        .map_err(|e| Error::Unavailable(format!("Model/effort focus: {e}")))?;
+    let step = Step::new("focus model/effort control", Duration::from_secs(1));
+    loop {
+        step.check()?;
+        scope.check()?;
+        if app.element("AXFocusedUIElement").as_ref() == Some(item)
+            && app.element("AXFocusedWindow").as_ref() == Some(&window)
+            && item.bool("AXFocused") == Some(true)
+            && web.contains(item)
+        {
+            break;
+        }
+        tokio::time::sleep(ECHO_POLL).await;
+    }
+    // The key reaches the app, not the HID stream, so a held modifier could
+    // still turn it into a shortcut.
+    if modifiers_held() {
+        return Err(Error::Conflict(
+            "A modifier key is held; no model/effort key was sent".into(),
+        ));
+    }
+    scope.check()?;
+    match key {
+        Key::OpenSubmenu => app.submenu_right(),
+        Key::Power(options::PowerStep::Lower) => app.slider_lower(),
+        Key::Power(options::PowerStep::Higher) => app.slider_higher(),
+    }
+    .map_err(|e| Error::Unavailable(format!("Model/effort key: {e}")))
+}
+
+/// Claude: the model panel's "Effort <level>" entry opens its levels on
+/// hover, or on the Right arrow key while it is focused. Opens them that
+/// way, presses `effort` and closes the panel. Success is only ever decided
+/// by a later read.
+async fn press_submenu_effort(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+    let (panel, (tree, elements)) = open(scope, Kind::Model).await?;
+    let result = submenu_level(scope, effort, &tree, &elements, panel).await;
+    if result.as_ref().is_ok_and(|pressed| *pressed) {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    let close = close(scope, Kind::Model).await;
+    result?;
+    close
+}
+
+async fn submenu_level(
+    scope: &impl Scope,
+    effort: &str,
+    tree: &chat::AxTree,
+    elements: &[Element],
+    panel: usize,
+) -> Result<bool, Error> {
+    let entries = chat::menu_entries(tree, panel);
+    let Some(entry) = chat::effort_entry(&entries) else {
+        return Err(options::create_no_effort(effort));
+    };
+    if options::submenu_effort(tree, panel).as_deref() == Some(effort) {
+        return Ok(false);
+    }
+    let labels: Vec<String> = entries.iter().map(|e| e.label.clone()).collect();
+    focused_key(scope, &elements[entry.node], Key::OpenSubmenu).await?;
+    // Decide on a list two reads agree on: levels may still be mounting.
+    let step = Step::new("effort levels", Duration::from_secs(2));
+    let mut previous: Option<Vec<String>> = None;
+    loop {
+        let (tree, elements) = snapshot(scope).await?;
+        let levels = options::effort_levels(&tree, &labels);
+        let names: Vec<String> = levels.iter().map(|c| c.name.clone()).collect();
+        if !levels.is_empty() && previous.as_ref() == Some(&names) {
+            return match options::create_choice(&levels, Kind::Effort, effort)? {
+                Some(level) => press(scope, &elements[level.node]).map(|()| true),
+                None => Ok(false),
+            };
+        }
+        previous = Some(names);
+        if step.expired() {
+            return Err(options::create_levels_closed(effort));
+        }
+        step.check()?;
+        tokio::time::sleep(ECHO_POLL).await;
+    }
+}
+
+/// The level the ChatGPT app's open Power panel states, and its "Power"
+/// item, from a fresh read. The picker is found afresh too: a combined
+/// picker's label names the level ("GPT-6 Astra High"), and so does its
+/// panel's title.
+async fn read_power(scope: &impl Scope) -> Result<(chat::PowerLevel, Element), Error> {
+    let (tree, elements) = snapshot(scope).await?;
+    let index = options::picker(&tree, Kind::Effort)?;
+    let picker = chat::Picker {
+        node: index,
+        label: tree.nodes[index].label().to_owned(),
+    };
+    options::panel(&tree, &picker)?
+        .and_then(|panel| {
+            let (level, _) = options::power(&tree, panel)?;
+            Some((level, elements[options::power_entry(&tree, panel)?].clone()))
+        })
+        .ok_or_else(|| options::create_unavailable("the Power panel closed"))
+}
+
+/// The ChatGPT app's Power slider: walks it with arrow keys on its exactly
+/// focused "Power" item, reading the level the app states after each key,
+/// until it states `effort` ([`options::PowerWalk`]).
+async fn walk_power(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+    let (mut level, mut item) = read_power(scope).await?;
+    let mut walk = options::PowerWalk::new(&level, effort);
+    while let Some(step) = walk.next(&level)? {
+        focused_key(scope, &item, Key::Power(step)).await?;
+        let wait = Step::new("Power level", Duration::from_secs(2));
+        loop {
+            let (now, now_item) = read_power(scope).await?;
+            if now.position != level.position {
+                (level, item) = (now, now_item);
+                break;
+            }
+            if wait.expired() {
+                return Err(options::create_unavailable(format!(
+                    "the Power slider stayed at {:?}",
+                    level.name
+                )));
+            }
+            wait.check()?;
+            tokio::time::sleep(ECHO_POLL).await;
+        }
+    }
+    Ok(())
+}
+
+/// A form's own effort picker (the ChatGPT app): its Power slider, or a
+/// menu of levels. Presses or walks to `effort` and closes the panel.
+async fn press_effort(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+    let (panel, (tree, elements)) = open(scope, Kind::Effort).await?;
+    let result = if options::power(&tree, panel).is_some() {
+        walk_power(scope, effort).await
+    } else {
+        let pressed = options::choices(&tree, panel, Kind::Effort).and_then(|choices| {
+            match options::create_choice(&choices, Kind::Effort, effort)? {
+                Some(choice) => press(scope, &elements[choice.node]).map(|()| true),
+                None => Ok(false),
+            }
+        });
+        if pressed.as_ref().is_ok_and(|pressed| *pressed) {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+        pressed.map(|_| ())
+    };
+    let close = close(scope, Kind::Effort).await;
+    result?;
+    close
+}
+
 /// Chooses a new session's model and effort on its form and reads both back
 /// before anything is drafted (ADR 0177). Empty names keep the app's choice.
-/// A name the app does not offer, or an effort it offers only on hover,
-/// refuses with `options::CREATE_REFUSED`. Returns what the pickers show,
-/// for one last read-only comparison just before the first message.
+/// A name the app does not offer refuses with `options::CREATE_REFUSED`.
+/// Returns what the pickers show, for one last read-only comparison just
+/// before the first message.
 pub(in crate::macos) async fn prepare_new(
     scope: &impl Scope,
     model: &str,
@@ -277,14 +460,6 @@ pub(in crate::macos) async fn prepare_new(
 ) -> Result<Option<String>, Error> {
     if model.is_empty() && effort.is_empty() {
         return Ok(None);
-    }
-    let selectable_effort = effort_picker(scope).await?;
-    // Claude: check the effort it cannot change before pressing anything.
-    if !effort.is_empty() && !selectable_effort {
-        let current = submenu_effort(scope).await?;
-        if current.as_deref() != Some(effort) {
-            return Err(options::create_effort_differs(effort, current.as_deref()));
-        }
     }
     if !model.is_empty() {
         let (shown, _) = shown(scope).await?;
@@ -298,21 +473,25 @@ pub(in crate::macos) async fn prepare_new(
         })
         .await?;
     }
-    // The model can change the offered efforts: decide on a fresh menu.
-    if !effort.is_empty() && selectable_effort {
-        press_choice(scope, Kind::Effort, |choices| {
-            Ok(options::create_choice(choices, Kind::Effort, effort)?.map(|c| c.node))
-        })
-        .await
-        .map_err(|error| match error {
-            // A model-only picker: asking again cannot find an effort.
-            Error::Unavailable(why) if why == NO_EFFORT_CONTROLS => {
-                options::create_effort_differs(effort, None)
-            }
-            other => other,
-        })?;
+    // The model can change the offered efforts, and Codex's picker labels:
+    // decide on fresh reads.
+    let selectable_effort = effort_picker(scope).await?;
+    if !effort.is_empty() {
+        if selectable_effort {
+            press_effort(scope, effort)
+                .await
+                .map_err(|error| match error {
+                    // A model-only picker: asking again cannot find an effort.
+                    Error::Unavailable(why) if why == NO_EFFORT_CONTROLS => {
+                        options::create_no_effort(effort)
+                    }
+                    other => other,
+                })?;
+        } else {
+            press_submenu_effort(scope, effort).await?;
+        }
     }
-    // Read both back; never infer success from a press.
+    // Read both back; never infer success from a press or a key.
     if !model.is_empty() {
         let (shown, _) = shown(scope).await?;
         let confirmed = options::create_model_confirmed(&[], &shown, model)
@@ -325,18 +504,19 @@ pub(in crate::macos) async fn prepare_new(
         }
     }
     if !effort.is_empty() {
-        if selectable_effort {
+        let (confirmed, current) = if selectable_effort {
             let choices = read(scope, Kind::Effort).await?;
-            if !options::confirmed(&choices, Kind::Effort, effort) {
-                return Err(options::create_refused(format!(
-                    "the app did not confirm effort {effort:?}"
-                )));
-            }
+            let current = choices.iter().find(|c| c.selected).map(|c| c.name.clone());
+            (options::confirmed(&choices, Kind::Effort, effort), current)
         } else {
             let current = submenu_effort(scope).await?;
-            if current.as_deref() != Some(effort) {
-                return Err(options::create_effort_differs(effort, current.as_deref()));
-            }
+            (current.as_deref() == Some(effort), current)
+        };
+        if !confirmed {
+            return Err(options::create_refused(format!(
+                "the app did not confirm effort {effort:?} (it shows {:?})",
+                current.unwrap_or_default()
+            )));
         }
     }
     let (_, labels) = shown(scope).await?;

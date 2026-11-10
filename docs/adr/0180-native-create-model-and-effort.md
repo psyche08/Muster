@@ -2,9 +2,11 @@
 
 - Date: 2026-11-10
 - Status: Accepted; source and tests verified, the Claude form read on a Mac
-  without sending. No daemon-to-app creation run, release, installation or
-  device acceptance.
+  without sending. The effort keys, a daemon-to-app creation run, release,
+  installation and device acceptance are not verified.
 - Related: [ADR 0097](0097-task-scoped-scheduler-grant-for-locked-use.md),
+  [ADR 0111](0111-native-organization-ax-and-file-confirmation.md),
+  [ADR 0115](0115-target-scoped-local-input.md),
   [ADR 0116](0116-failure-screenshot-analysis.md),
   [ADR 0150](0150-remote-desktop-session-creation.md),
   [ADR 0167](0167-deepseek-harness-native-session-creation.md),
@@ -33,16 +35,23 @@ Facts about the form, read on Claude 4.23118.1 in Code mode:
   check mark `✓`, not `AXSelected`.
 - After the models come `Effort <level>`, `More models`, and a paid
   `Enable fast mode` toggle.
-- The effort levels are a hover-only submenu. `AXPress` and `AXShowMenu`
-  leave it closed. `AXShowMenu` on the entry opened the web view's own
-  context menu (Copy, Select All) instead.
+- The effort levels are a submenu of the `Effort <level>` entry that opens on
+  hover. `AXPress` leaves it closed. `AXShowMenu` on the entry opened the web
+  view's own context menu (Copy, Select All) instead.
 - The picker names the effort as the app's own picker does: `High` for
   `--effort=high` and `Extra` for `--effort=xhigh`.
 
 The Codex composer shows one combined popup named by model and Power level
-(`GPT-6 Astra High`). Its Power slider has the limits recorded in
-DESKTOP_CHAT_MODE.md: Accessibility can keep the current level, or raise a
-lower level to the middle.
+(`GPT-6 Astra High`). Its panel states the level as `High, 3 of 5.`, and the
+slider takes arrow keys on its focused `Power` item. `AXPress` on its track
+clicks the centre, so Accessibility alone can only reach the middle level
+(DESKTOP_CHAT_MODE.md).
+
+ADR 0111 already opens an Electron submenu whose trigger ignores `AXPress`:
+it focuses the exact menu item, reads back that the app's focused element and
+window are that item and window, and posts one application-directed Right
+Arrow with `AXUIElementPostKeyboardEvent`. ADR 0115 refuses such posted keys
+while a modifier is held.
 
 ## Decision
 
@@ -66,51 +75,77 @@ lower level to the middle.
   2. `native_options::prepare_new` chooses the model through the form's
      picker. It presses an entry only if the picker does not already show
      that model.
-  3. On Codex, it chooses the effort from a fresh menu, because the model
-     can change the offered levels.
+  3. It chooses the effort on fresh reads, because the model can change the
+     offered levels and Codex's picker label.
   4. It reads both back: the model from the picker's label or a fresh menu
-     read, the effort from the menu's selection or Claude's `Effort <level>`
-     entry.
+     read, the effort from the Power status, the menu's selection, or
+     Claude's `Effort <level>` entry.
   5. It drafts the first message and finds the send button.
   6. Just before pressing send, `still_shown` re-reads the picker's label. A
      label that changed since step 4 refuses the creation.
 
   The same `native_options` code serves existing sessions and the new form
   through a `Scope` trait. `SessionScope` keeps the session checks. The form's
-  scope reuses the creation's own guard (unlocked, idle, identity and draft
-  checks) and its web area.
-- **Claude's effort is checked, not chosen.** Synthetic pointer or keyboard
-  input stays out of scope. Before anything is pressed, the daemon reads the
-  form's `Effort <level>`. If it differs from the request, the creation is
-  refused without opening or pressing anything else.
-- **Codex.** Models are chosen as on existing sessions. The effort follows the
-  Power rules: the current level is kept, and `Middle` raises a lower level.
-  Any other level is refused, and the refusal names the levels that can be
-  chosen.
+  scope reuses the creation's own guard (unlocked console, idle input,
+  process identity, exact window, page, directory and empty form) and its web
+  area and application element.
+- **Effort keys.** An effort that `AXPress` cannot reach is chosen with
+  application-directed Accessibility keys, the route ADR 0111 uses for
+  submenus. Each key:
+  1. sets `AXFocused` on the exact control inside the form's web area;
+  2. waits until the app's `AXFocusedUIElement` is that control, its
+     `AXFocusedWindow` is the form's window, and the control reads
+     `AXFocused`;
+  3. is refused while a modifier is held (ADR 0115);
+  4. re-checks the scope, then posts one key down/up pair to the app with
+     `AXUIElementPostKeyboardEvent`.
+
+  No pointer event, no global or HID-level input, and no key outside that
+  application. Every step re-checks the creation guard, so local input
+  anywhere stops the walk.
+- **Claude's effort.** If the panel's `Effort <level>` entry already names the
+  request, nothing is pressed. Otherwise the entry gets one Right Arrow. The
+  levels are the enabled menu entries that the panel did not list before the
+  key and that are not the entry itself. They count once two reads agree.
+  The level named exactly like the request is pressed, and the panel is
+  closed by toggling its picker. A name the levels do not have is refused
+  with the levels in the message. Levels that do not open within 2 seconds
+  refuse the creation as unavailable.
+- **Codex's effort.** Power is walked one level per key: Left Arrow lowers,
+  Right Arrow raises. After every key the panel's status is read again, and
+  the key must move exactly one level, within 2 seconds. Because the app
+  states only the level it shows, the walk goes down to the lowest level
+  first, then up, and stops on the first level with the requested name. A
+  name no level has walks back to the starting level and is refused with
+  every level's name. A Codex form whose effort picker is a plain menu has
+  the level pressed as on existing sessions.
 - **DeepSeek Harness.** The plugin path (ADR 0167) has no model picker. A
   non-empty `model` or `effort` is refused before the ledger, the plugin or the
   App host is involved.
 - **Refusal.** Nothing is sent when a name cannot be chosen or confirmed. The
-  ledgered creation settles as `Rejected` (status 2), and nothing is
-  submitted to the provider. Every refusal is an `Error::Invalid`, so it is
-  final rather than retried. Each message starts with
-  `invalid: The new session's model and effort were not set: ` and ends with
-  `; nothing was sent`. The reason between them is one of:
-  - `model "X" is not offered (the app offers "A", "B")`
-  - `effort "X" cannot be chosen through Accessibility and the app's effort
-    is "Y"; choose it once in the app` (Claude)
-  - `effort "X" cannot be chosen through Accessibility (it can choose "Y");
-    choose it once in the app` (Codex)
-  - `effort "X" cannot be chosen: the app shows no effort for this model`
-  - `the app did not confirm model "X" (it shows "Y")`
-  - `the app did not confirm effort "X"`
-  - `the model picker changed from "A" to "B" before the first message`
-  - `DeepSeek Harness sessions take no model or effort from Muster`
-    (returned before the ledger as an `Invalid` RPC error)
+  ledgered creation settles as `Rejected` (status 2). Each message starts
+  with `The new session's model and effort were not set: ` after the error
+  kind, and ends with `; nothing was sent`.
+  - Final (`invalid:`), refused again if asked again unchanged:
+    - `model "X" is not offered (the app offers "A", "B")`
+    - `effort "X" is not offered (the app offers "A", "B")`
+    - `effort "X" cannot be chosen: the app shows no effort for this model`
+    - `the app did not confirm model "X" (it shows "Y")`
+    - `the app did not confirm effort "X" (it shows "Y")`
+    - `the model picker changed from "A" to "B" before the first message`
+  - Retryable later (`unavailable:`), when the app did not respond as read:
+    - `effort "X" could not be chosen: the app did not open its effort levels`
+    - `the Power slider moved from 3 to 1 of 5 on one key`
+    - `the Power slider stayed at "High"`
+    - `the Power slider did not settle on a level`
+    - `the Power panel closed`
+  - `DeepSeek Harness sessions take no model or effort from Muster` is
+    returned before the ledger as an `Invalid` RPC error.
 
   A malformed name is refused before the ledger with
   `invalid: Native creation model and effort must be names of at most 128
-  bytes, without control characters or surrounding spaces`.
+  bytes, without control characters or surrounding spaces`. Guard refusals
+  (local input, lock, identity) keep their existing `conflict:` messages.
 - **Model list.** The paid fast-mode toggle is never offered as a model.
 
 The scheduler grant (ADR 0097) and the apps' "New desktop session" form leave
@@ -120,13 +155,19 @@ both fields empty and keep the app's choice.
 
 - **Change the model after the first message.** This is what callers could
   already do. The first answer would still come from the wrong model.
-- **Synthetic input for Claude's effort.** A synthetic hover or click would
-  open the effort submenu. It would move the real pointer, need the window
-  frontmost and visible, and cannot run on a locked Mac or in Locked Use,
-  where remote creations usually happen. ADR 0116 allows synthetic input only
-  as a later stage with its own idle, stop-on-input and restore rules. The
-  read-and-refuse check is needed in any case as the fallback for locked Macs.
-  Adding synthetic input is a separate decision.
+- **Check Claude's effort and refuse any other level.** This was the first
+  version of this decision. It left callers unable to choose an effort other
+  than the one last used in the app.
+- **Synthetic pointer input.** A posted mouse move over the `Effort` entry
+  (`CGEventPostToPid`) or a click would open the levels. It depends on window
+  coordinates and visibility, and ADR 0116 allows pointer input only as a
+  later stage with its own idle, stop-on-input and restore rules. The focused
+  key needs neither coordinates nor a visible pointer.
+- **Global keyboard events (`CGEventPost`).** They would reach whatever app is
+  frontmost. The application-directed key reaches only the app whose focused
+  element was read back.
+- **Codex Power by pressing the track.** `AXPress` clicks the centre, so it
+  reaches only the middle level.
 - **Map effort names to CLI flags (`xhigh`).** The picker names are what the
   person sees and what Accessibility reads back. Mapping would add a second
   vocabulary that the app does not show.
@@ -137,18 +178,20 @@ both fields empty and keep the app's choice.
 
 ## Consequences
 
-- A caller can pin a new Claude Code session to a model before the first
-  message. It can pin Claude's effort only to the level the app already
-  shows. A different level is refused with the app's current effort in the
-  message, so the person can choose it once in the app and retry.
-- Choosing a model on the new form can also change the model the app proposes
-  for later new sessions, as choosing it by hand can.
+- A caller can pin a new Claude or Codex Code session to any model and
+  effort the app offers before the first message.
+- Choosing on the new form can also change the model and effort the app
+  proposes for later new sessions, as choosing them by hand can.
+- Walking Codex's Power can pass through other levels on the form before it
+  settles. Nothing is drafted or sent meanwhile. If local input stops the
+  walk, the form keeps the level it reached, and the creation is refused.
 - Callers must check `agent.native_create.options.v1`. Without the service,
   they must not send the fields.
-- Refusals are final (`invalid:`), so callers that retry `busy:` or
-  `unavailable:` refusals will not retry these.
-- The existing-session path keeps its behaviour. Its Claude confirmation by
-  picker label is unchanged.
+- `invalid:` refusals are final. `unavailable:` refusals may be retried later
+  by callers that retry that kind.
+- The existing-session path (`AgentChatSetOptions`) keeps its behaviour: it
+  still cannot choose Claude's effort, and Power still only keeps a level or
+  raises it to `Middle`.
 
 ## Verification
 
@@ -157,9 +200,11 @@ both fields empty and keep the app's choice.
     `effort` and clears `effort`, and each change alters the digest.
   - `muster-agent`: fixtures modelled on the Claude 4.23118.1 form cover:
     - reading the shown model and effort, without offering fast mode;
-    - checking but not choosing Claude's effort;
-    - the exact Power refusal message;
-    - name validation.
+    - finding Claude's effort levels once they open, and refusing a name
+      they do not have;
+    - walking Power to every level by name, walking back before refusing an
+      unknown name, and stopping on a key that moves more than one level;
+    - name validation and the refusal messages.
   - `musterd`: tests cover the request shape check and a DeepSeek Harness
     refusal with no ledger row and no plugin call.
 - **Mac read (2026-11-10).** A read-only probe opened and closed the form's
@@ -167,10 +212,13 @@ both fields empty and keep the app's choice.
   `AXPress` and `AXShowMenu` leave the effort levels closed. No message was
   sent, and the model was not changed.
 - **Not verified.**
+  - That Claude's focused `Effort` entry opens its levels on the Right Arrow,
+    and what the levels are named. ADR 0111's submenu key is also still
+    pending device acceptance.
+  - That Codex's focused `Power` item moves one level per arrow key on the
+    new-session form.
   - A daemon-driven creation with `model` and `effort` on Claude or Codex,
     unlocked or in Locked Use.
-  - Codex's new-session form. The combined popup was read on an existing
-    session only.
   - Signed build, release and installation.
 - **Device acceptance (pending).** This needs an unlocked Mac and the
   person's approval to send one test message from a new session in a scratch
@@ -178,12 +226,11 @@ both fields empty and keep the app's choice.
   1. Through a development daemon with its own state directory, run
      `muster rpc '{"device_info":{}}'` and check that it lists
      `agent.native_create.options.v1`.
-  2. Request a Claude creation with a model other than the current one and
-     with the current effort. Expect `Applied`, a new session whose picker
-     shows that model, and a transcript with the first message.
-  3. Request a Claude creation with a different effort. Expect `Rejected`
-     with the Claude effort message, and no new session.
-  4. Repeat steps 2 and 3 for Codex with a model and `Middle` or the current
-     Power level.
+  2. Request a Claude creation with a model and an effort other than the
+     current ones. Expect `Applied`, a new session whose picker shows both,
+     and a transcript with the first message.
+  3. Request a Claude creation with an effort the app does not offer. Expect
+     `Rejected` with the levels in the message, and no new session.
+  4. Repeat steps 2 and 3 for Codex, with a Power level two levels away.
   5. Repeat step 2 on a locked Mac through Locked Use.
-  6. Restore each app's previous model.
+  6. Restore each app's previous model and effort.

@@ -155,6 +155,17 @@ impl Element {
         self.keyboard_pair(124) // kVK_RightArrow
     }
 
+    /// Move a slider one step only after the caller verifies the exact
+    /// focused control. Application-directed AX keyboard input, never global.
+    pub fn slider_lower(&self) -> Result<(), AXError> {
+        self.keyboard_pair(123) // kVK_LeftArrow
+    }
+
+    /// See [`Self::slider_lower`].
+    pub fn slider_higher(&self) -> Result<(), AXError> {
+        self.keyboard_pair(124) // kVK_RightArrow
+    }
+
     /// Delete only after the caller proves the exact focused editor's full range.
     pub fn backspace(&self) -> Result<(), AXError> {
         self.keyboard_pair(51) // kVK_Delete; application-directed, never Return.
