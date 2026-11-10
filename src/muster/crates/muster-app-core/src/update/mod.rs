@@ -484,6 +484,19 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenChange(o) => open_change(state, o),
         It::OpenFileLink(o) => files::intent_open_file_link(state, ctx, o),
         It::OpenGit(o) => open_git(state, ctx, o.diff_commit),
+        It::SetBlackout(c) => {
+            if c.device_id == state.target()
+                && crate::render::device_actions(state).blackout.is_some()
+            {
+                network::admin_request(
+                    state,
+                    ctx,
+                    "Blackout",
+                    c.device_id,
+                    Req::DeviceSetBlackout(v1::DeviceSetCoverRequest { on: c.on }),
+                );
+            }
+        }
         It::SetCover(c) => network::intent_set_cover(state, ctx, c),
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)

@@ -103,30 +103,36 @@ bool muster_console_sample(uint32_t *uid, uint32_t *asid, bool *locked) {
     return true;
 }
 
+// The caller chooses whether its visual cover receives pointer events.
+NSPanel *muster_black_panel(NSScreen *screen, BOOL ignoresMouse) {
+    // initWithContentRect:...screen: interprets the origin relative to
+    // that screen. Passing its global origin adds the offset twice.
+    NSRect local = NSMakeRect(0, 0, screen.frame.size.width, screen.frame.size.height);
+    NSPanel *panel = [[NSPanel alloc] initWithContentRect:local
+        styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+        backing:NSBackingStoreBuffered defer:NO screen:screen];
+    [panel setFrame:screen.frame display:NO];
+    panel.level = CGShieldingWindowLevel() + 1;
+    panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces |
+        NSWindowCollectionBehaviorFullScreenAuxiliary | NSWindowCollectionBehaviorStationary;
+    panel.backgroundColor = NSColor.blackColor;
+    panel.opaque = YES;
+    panel.hasShadow = NO;
+    panel.hidesOnDeactivate = NO;
+    panel.ignoresMouseEvents = ignoresMouse;
+    panel.sharingType = NSWindowSharingNone;
+    panel.releasedWhenClosed = NO;
+    [panel orderFrontRegardless];
+    return panel;
+}
+
 bool muster_console_cover(void) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     if (panels) return false;
     panels = [NSMutableArray array];
     for (NSScreen *screen in NSScreen.screens) {
-        // initWithContentRect:...screen: interprets the origin relative to
-        // that screen. Passing its global origin adds the offset twice.
-        NSRect local = NSMakeRect(0, 0, screen.frame.size.width, screen.frame.size.height);
-        NSPanel *panel = [[NSPanel alloc] initWithContentRect:local
-            styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
-            backing:NSBackingStoreBuffered defer:NO screen:screen];
-        [panel setFrame:screen.frame display:NO];
-        panel.level = CGShieldingWindowLevel() + 1;
-        panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces |
-            NSWindowCollectionBehaviorFullScreenAuxiliary | NSWindowCollectionBehaviorStationary;
-        panel.backgroundColor = NSColor.blackColor;
-        panel.opaque = YES;
-        panel.hasShadow = NO;
-        panel.hidesOnDeactivate = NO;
-        panel.ignoresMouseEvents = NO;
-        panel.sharingType = NSWindowSharingNone;
-        panel.releasedWhenClosed = NO;
-        [panel orderFrontRegardless];
+        NSPanel *panel = muster_black_panel(screen, NO);
         [panels addObject:panel];
     }
     [NSApp finishLaunching];

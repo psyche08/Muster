@@ -168,6 +168,7 @@ export class MusterCore {
   setRelay(relay: string): void { this.send({ setRelay: { relay: relay } }); }
   /** Covers (or uncovers) a desktop's screen; device "" for this one. The core checks who may. */
   setDeviceLockedUse(on: boolean, device: string): void { this.send({ setDeviceLockedUse: { on: on, deviceId: device } }); }
+  setBlackout(on: boolean, device: string): void { this.send({ setBlackout: { on: on, deviceId: device } }); }
   setCover(on: boolean, device: string = ''): void { this.send({ setCover: { on: on, deviceId: device } }); }
   setPolicy(policy: pb.v1.IPolicy): void { this.send({ setPolicy: { policy: policy } }); }
   selectDevice(device: string): void { this.send({ selectDevice: { deviceId: device } }); }

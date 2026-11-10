@@ -939,6 +939,41 @@ mod tests {
     }
 
     #[test]
+    fn blackout_switch_requires_live_status_from_the_selected_mac() {
+        let mut phone = State::new(true, Some("phone".into()));
+        let mut mac = member("mac", "desktop", "member", false);
+        mac.connected = true;
+        phone.network = Some(v1::NetworkStatus {
+            members: vec![mac],
+            ..Default::default()
+        });
+        phone.selected = "mac".into();
+        assert!(device_actions(&phone).blackout.is_none());
+        let mode = v1::DisplayBlackout {
+            enabled: true,
+            status: "active".into(),
+        };
+        phone.manual_devices.insert(
+            "mac".into(),
+            v1::DeviceInfo {
+                device_id: "mac".into(),
+                platform: "macos".into(),
+                state: Some(v1::DeviceState {
+                    blackout: Some(mode.clone()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+        assert_eq!(device_actions(&phone).blackout, Some(mode));
+        phone.embedded = false;
+        assert!(device_actions(&phone).blackout.is_none());
+        phone.embedded = true;
+        phone.network.as_mut().unwrap().members[0].connected = false;
+        assert!(device_actions(&phone).blackout.is_none());
+    }
+
+    #[test]
     fn device_page_actions_follow_role_kind_and_mode() {
         let mut phone = State::new(true, Some("phone".into()));
         phone.network = Some(v1::NetworkStatus {
@@ -1154,7 +1189,7 @@ fn composer_placeholder(session: &muster_proto::v1::AgentSession, has_messages: 
 
 /// What the selected device's page offers (ARCHITECTURE §3.7: decided here,
 /// rendered by the shells; the target still authorizes every call).
-fn device_actions(state: &State) -> app::DeviceActions {
+pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
     let Some(network) = &state.network else {
         return app::DeviceActions::default();
     };
@@ -1168,6 +1203,18 @@ fn device_actions(state: &State) -> app::DeviceActions {
         .any(|m| m.is_self && m.role == "admin");
     let other = !member.is_self;
     app::DeviceActions {
+        blackout: state
+            .manual_devices
+            .get(&target)
+            .filter(|i| {
+                state.embedded
+                    && other
+                    && member.connected
+                    && member.kind == "desktop"
+                    && i.device_id == target
+                    && i.platform == "macos"
+            })
+            .and_then(|i| i.state.as_ref()?.blackout.clone()),
         can_cover: other && member.kind == "desktop",
         can_ssh: other && state.embedded,
         show_access: !member.scopes.is_empty() || admin,

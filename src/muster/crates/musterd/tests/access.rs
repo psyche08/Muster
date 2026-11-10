@@ -635,6 +635,18 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         panic!("service")
     };
     assert!(!off.can_view && off.workspaces.is_empty());
+    #[cfg(target_os = "macos")]
+    {
+        // Exercise the release command without covering the test machine.
+        let release = Req::DeviceSetBlackout(v1::DeviceSetCoverRequest { on: false });
+        assert!(unauthorized(&remote.call(release.clone()).await));
+        a.set_scopes(&pending.device_id, &["locked.control".into()], "")
+            .unwrap();
+        a.policy().write().unwrap().allow_locked_control = false;
+        assert!(unauthorized(&remote.call(release.clone()).await));
+        a.policy().write().unwrap().allow_locked_control = true;
+        assert!(matches!(remote.call(release).await.unwrap(), Resp::Ack(_)));
+    }
     b.shutdown().await;
     assert!(
         a.set_scopes_checked(&pending.device_id, &grants, "")

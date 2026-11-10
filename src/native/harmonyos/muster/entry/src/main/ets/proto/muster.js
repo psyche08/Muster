@@ -965,6 +965,9 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentOrganizeRequest|null} [agentOrganize] Request agentOrganize
              * @property {muster.v1.IAgentSchedulerRequest|null} [agentScheduler] Request agentScheduler
              * @property {muster.v1.IDeviceRequestScreenRecordingRequest|null} [deviceRequestScreenRecording] Request deviceRequestScreenRecording
+             * @property {muster.v1.IMulticaServiceRequest|null} [multicaService] Request multicaService
+             * @property {muster.v1.IMulticaMutation|null} [multicaMutation] Request multicaMutation
+             * @property {muster.v1.IDeviceSetCoverRequest|null} [deviceSetBlackout] Request deviceSetBlackout
              */
 
             /**
@@ -1518,17 +1521,41 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.deviceRequestScreenRecording = null;
 
+            /**
+             * Request multicaService.
+             * @member {muster.v1.IMulticaServiceRequest|null|undefined} multicaService
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.multicaService = null;
+
+            /**
+             * Request multicaMutation.
+             * @member {muster.v1.IMulticaMutation|null|undefined} multicaMutation
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.multicaMutation = null;
+
+            /**
+             * Request deviceSetBlackout.
+             * @member {muster.v1.IDeviceSetCoverRequest|null|undefined} deviceSetBlackout
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.deviceSetBlackout = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1694,6 +1721,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentSchedulerRequest.encode(message.agentScheduler, writer.uint32(/* id 76, wireType 2 =*/610).fork(), q + 1).ldelim();
                 if (message.deviceRequestScreenRecording != null && Object.hasOwnProperty.call(message, "deviceRequestScreenRecording"))
                     $root.muster.v1.DeviceRequestScreenRecordingRequest.encode(message.deviceRequestScreenRecording, writer.uint32(/* id 77, wireType 2 =*/618).fork(), q + 1).ldelim();
+                if (message.multicaService != null && Object.hasOwnProperty.call(message, "multicaService"))
+                    $root.muster.v1.MulticaServiceRequest.encode(message.multicaService, writer.uint32(/* id 78, wireType 2 =*/626).fork(), q + 1).ldelim();
+                if (message.multicaMutation != null && Object.hasOwnProperty.call(message, "multicaMutation"))
+                    $root.muster.v1.MulticaMutation.encode(message.multicaMutation, writer.uint32(/* id 79, wireType 2 =*/634).fork(), q + 1).ldelim();
+                if (message.deviceSetBlackout != null && Object.hasOwnProperty.call(message, "deviceSetBlackout"))
+                    $root.muster.v1.DeviceSetCoverRequest.encode(message.deviceSetBlackout, writer.uint32(/* id 80, wireType 2 =*/642).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -1999,6 +2032,18 @@ export const muster = $root.muster = (() => {
                             message.deviceRequestScreenRecording = $root.muster.v1.DeviceRequestScreenRecordingRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 78: {
+                            message.multicaService = $root.muster.v1.MulticaServiceRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 79: {
+                            message.multicaMutation = $root.muster.v1.MulticaMutation.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 80: {
+                            message.deviceSetBlackout = $root.muster.v1.DeviceSetCoverRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -2272,6 +2317,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IPresenceInfo|null} [presenceInfo] Response presenceInfo
              * @property {muster.v1.IMulticaStatus|null} [multica] Response multica
              * @property {muster.v1.IMulticaPage|null} [multicaPage] Response multicaPage
+             * @property {muster.v1.IMulticaService|null} [multicaService] Response multicaService
              * @property {muster.v1.IVisionStatus|null} [vision] Response vision
              * @property {muster.v1.IAgentSchedulerStatus|null} [agentScheduler] Response agentScheduler
              */
@@ -2516,6 +2562,14 @@ export const muster = $root.muster = (() => {
             Response.prototype.multicaPage = null;
 
             /**
+             * Response multicaService.
+             * @member {muster.v1.IMulticaService|null|undefined} multicaService
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.multicaService = null;
+
+            /**
              * Response vision.
              * @member {muster.v1.IVisionStatus|null|undefined} vision
              * @memberof muster.v1.Response
@@ -2536,12 +2590,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Response resp.
-             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"vision"|"agentScheduler"|undefined} resp
+             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler"|undefined} resp
              * @memberof muster.v1.Response
              * @instance
              */
             Object.defineProperty(Response.prototype, "resp", {
-                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage", "vision", "agentScheduler"]),
+                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage", "multicaService", "vision", "agentScheduler"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2633,6 +2687,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.VisionStatus.encode(message.vision, writer.uint32(/* id 74, wireType 2 =*/594).fork(), q + 1).ldelim();
                 if (message.agentScheduler != null && Object.hasOwnProperty.call(message, "agentScheduler"))
                     $root.muster.v1.AgentSchedulerStatus.encode(message.agentScheduler, writer.uint32(/* id 76, wireType 2 =*/610).fork(), q + 1).ldelim();
+                if (message.multicaService != null && Object.hasOwnProperty.call(message, "multicaService"))
+                    $root.muster.v1.MulticaService.encode(message.multicaService, writer.uint32(/* id 78, wireType 2 =*/626).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2780,6 +2836,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 71: {
                             message.multicaPage = $root.muster.v1.MulticaPage.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 78: {
+                            message.multicaService = $root.muster.v1.MulticaService.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 74: {
@@ -5059,6 +5119,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [manualLockedUseActive] DeviceState manualLockedUseActive
              * @property {string|null} [ghosttyAutomation] DeviceState ghosttyAutomation
              * @property {string|null} [screenRecording] DeviceState screenRecording
+             * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceState blackout
              */
 
             /**
@@ -5213,6 +5274,14 @@ export const muster = $root.muster = (() => {
             DeviceState.prototype.screenRecording = "";
 
             /**
+             * DeviceState blackout.
+             * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
+             * @memberof muster.v1.DeviceState
+             * @instance
+             */
+            DeviceState.prototype.blackout = null;
+
+            /**
              * Creates a new DeviceState instance using the specified properties.
              * @function create
              * @memberof muster.v1.DeviceState
@@ -5274,6 +5343,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 16, wireType 0 =*/128).bool(message.manualLockedUseActive);
                 if (message.screenRecording != null && Object.hasOwnProperty.call(message, "screenRecording"))
                     writer.uint32(/* id 17, wireType 2 =*/138).string(message.screenRecording);
+                if (message.blackout != null && Object.hasOwnProperty.call(message, "blackout"))
+                    $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -5379,6 +5450,10 @@ export const muster = $root.muster = (() => {
                             message.screenRecording = reader.string();
                             break;
                         }
+                    case 18: {
+                            message.blackout = $root.muster.v1.DisplayBlackout.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -5408,6 +5483,155 @@ export const muster = $root.muster = (() => {
             };
 
             return DeviceState;
+        })();
+
+        v1.DisplayBlackout = (function() {
+
+            /**
+             * Properties of a DisplayBlackout.
+             * @memberof muster.v1
+             * @interface IDisplayBlackout
+             * @property {boolean|null} [enabled] DisplayBlackout enabled
+             * @property {string|null} [status] DisplayBlackout status
+             */
+
+            /**
+             * Constructs a new DisplayBlackout.
+             * @memberof muster.v1
+             * @classdesc Represents a DisplayBlackout.
+             * @implements IDisplayBlackout
+             * @constructor
+             * @param {muster.v1.IDisplayBlackout=} [properties] Properties to set
+             */
+            function DisplayBlackout(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DisplayBlackout enabled.
+             * @member {boolean} enabled
+             * @memberof muster.v1.DisplayBlackout
+             * @instance
+             */
+            DisplayBlackout.prototype.enabled = false;
+
+            /**
+             * DisplayBlackout status.
+             * @member {string} status
+             * @memberof muster.v1.DisplayBlackout
+             * @instance
+             */
+            DisplayBlackout.prototype.status = "";
+
+            /**
+             * Creates a new DisplayBlackout instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DisplayBlackout
+             * @static
+             * @param {muster.v1.IDisplayBlackout=} [properties] Properties to set
+             * @returns {muster.v1.DisplayBlackout} DisplayBlackout instance
+             */
+            DisplayBlackout.create = function create(properties) {
+                return new DisplayBlackout(properties);
+            };
+
+            /**
+             * Encodes the specified DisplayBlackout message. Does not implicitly {@link muster.v1.DisplayBlackout.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DisplayBlackout
+             * @static
+             * @param {muster.v1.IDisplayBlackout} message DisplayBlackout message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DisplayBlackout.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.enabled != null && Object.hasOwnProperty.call(message, "enabled"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.enabled);
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.status);
+                return writer;
+            };
+
+            /**
+             * Decodes a DisplayBlackout message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DisplayBlackout
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DisplayBlackout} DisplayBlackout
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DisplayBlackout.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DisplayBlackout();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.enabled = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            message.status = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DisplayBlackout
+             * @function getTypeUrl
+             * @memberof muster.v1.DisplayBlackout
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DisplayBlackout.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DisplayBlackout";
+            };
+
+            return DisplayBlackout;
         })();
 
         v1.DeviceSetCoverRequest = (function() {
@@ -17931,6 +18155,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentSession|null} [state] AgentEvent state
              * @property {muster.v1.IPendingInteraction|null} [interaction] AgentEvent interaction
              * @property {string|null} [interactionResolved] AgentEvent interactionResolved
+             * @property {muster.v1.IAgentUnavailable|null} [unavailable] AgentEvent unavailable
              */
 
             /**
@@ -17988,17 +18213,25 @@ export const muster = $root.muster = (() => {
              */
             AgentEvent.prototype.interactionResolved = null;
 
+            /**
+             * AgentEvent unavailable.
+             * @member {muster.v1.IAgentUnavailable|null|undefined} unavailable
+             * @memberof muster.v1.AgentEvent
+             * @instance
+             */
+            AgentEvent.prototype.unavailable = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * AgentEvent ev.
-             * @member {"listChanged"|"message"|"state"|"interaction"|"interactionResolved"|undefined} ev
+             * @member {"listChanged"|"message"|"state"|"interaction"|"interactionResolved"|"unavailable"|undefined} ev
              * @memberof muster.v1.AgentEvent
              * @instance
              */
             Object.defineProperty(AgentEvent.prototype, "ev", {
-                get: $util.oneOfGetter($oneOfFields = ["listChanged", "message", "state", "interaction", "interactionResolved"]),
+                get: $util.oneOfGetter($oneOfFields = ["listChanged", "message", "state", "interaction", "interactionResolved", "unavailable"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -18040,6 +18273,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.PendingInteraction.encode(message.interaction, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
                 if (message.interactionResolved != null && Object.hasOwnProperty.call(message, "interactionResolved"))
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.interactionResolved);
+                if (message.unavailable != null && Object.hasOwnProperty.call(message, "unavailable"))
+                    $root.muster.v1.AgentUnavailable.encode(message.unavailable, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -18097,6 +18332,10 @@ export const muster = $root.muster = (() => {
                             message.interactionResolved = reader.string();
                             break;
                         }
+                    case 6: {
+                            message.unavailable = $root.muster.v1.AgentUnavailable.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -18126,6 +18365,144 @@ export const muster = $root.muster = (() => {
             };
 
             return AgentEvent;
+        })();
+
+        v1.AgentUnavailable = (function() {
+
+            /**
+             * Properties of an AgentUnavailable.
+             * @memberof muster.v1
+             * @interface IAgentUnavailable
+             * @property {Array.<string>|null} [sessions] AgentUnavailable sessions
+             */
+
+            /**
+             * Constructs a new AgentUnavailable.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentUnavailable.
+             * @implements IAgentUnavailable
+             * @constructor
+             * @param {muster.v1.IAgentUnavailable=} [properties] Properties to set
+             */
+            function AgentUnavailable(properties) {
+                this.sessions = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentUnavailable sessions.
+             * @member {Array.<string>} sessions
+             * @memberof muster.v1.AgentUnavailable
+             * @instance
+             */
+            AgentUnavailable.prototype.sessions = $util.emptyArray;
+
+            /**
+             * Creates a new AgentUnavailable instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentUnavailable
+             * @static
+             * @param {muster.v1.IAgentUnavailable=} [properties] Properties to set
+             * @returns {muster.v1.AgentUnavailable} AgentUnavailable instance
+             */
+            AgentUnavailable.create = function create(properties) {
+                return new AgentUnavailable(properties);
+            };
+
+            /**
+             * Encodes the specified AgentUnavailable message. Does not implicitly {@link muster.v1.AgentUnavailable.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentUnavailable
+             * @static
+             * @param {muster.v1.IAgentUnavailable} message AgentUnavailable message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentUnavailable.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.sessions != null && message.sessions.length)
+                    for (let i = 0; i < message.sessions.length; ++i)
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.sessions[i]);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentUnavailable message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentUnavailable
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentUnavailable} AgentUnavailable
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentUnavailable.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentUnavailable();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            if (!(message.sessions && message.sessions.length))
+                                message.sessions = [];
+                            message.sessions.push(reader.string());
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentUnavailable
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentUnavailable
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentUnavailable.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentUnavailable";
+            };
+
+            return AgentUnavailable;
         })();
 
         v1.AgentSendRequest = (function() {
@@ -23847,6 +24224,1232 @@ export const muster = $root.muster = (() => {
             return PresenceInfo;
         })();
 
+        v1.MulticaMutation = (function() {
+
+            /**
+             * Properties of a MulticaMutation.
+             * @memberof muster.v1
+             * @interface IMulticaMutation
+             * @property {string|null} [opId] MulticaMutation opId
+             * @property {string|null} [workspaceId] MulticaMutation workspaceId
+             * @property {muster.v1.IMulticaAgentEdit|null} [agent] MulticaMutation agent
+             * @property {muster.v1.IMulticaIssueEdit|null} [issue] MulticaMutation issue
+             * @property {muster.v1.IMulticaIssueAction|null} [issueAction] MulticaMutation issueAction
+             */
+
+            /**
+             * Constructs a new MulticaMutation.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaMutation.
+             * @implements IMulticaMutation
+             * @constructor
+             * @param {muster.v1.IMulticaMutation=} [properties] Properties to set
+             */
+            function MulticaMutation(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaMutation opId.
+             * @member {string} opId
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            MulticaMutation.prototype.opId = "";
+
+            /**
+             * MulticaMutation workspaceId.
+             * @member {string} workspaceId
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            MulticaMutation.prototype.workspaceId = "";
+
+            /**
+             * MulticaMutation agent.
+             * @member {muster.v1.IMulticaAgentEdit|null|undefined} agent
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            MulticaMutation.prototype.agent = null;
+
+            /**
+             * MulticaMutation issue.
+             * @member {muster.v1.IMulticaIssueEdit|null|undefined} issue
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            MulticaMutation.prototype.issue = null;
+
+            /**
+             * MulticaMutation issueAction.
+             * @member {muster.v1.IMulticaIssueAction|null|undefined} issueAction
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            MulticaMutation.prototype.issueAction = null;
+
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            /**
+             * MulticaMutation action.
+             * @member {"agent"|"issue"|"issueAction"|undefined} action
+             * @memberof muster.v1.MulticaMutation
+             * @instance
+             */
+            Object.defineProperty(MulticaMutation.prototype, "action", {
+                get: $util.oneOfGetter($oneOfFields = ["agent", "issue", "issueAction"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
+            /**
+             * Creates a new MulticaMutation instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaMutation
+             * @static
+             * @param {muster.v1.IMulticaMutation=} [properties] Properties to set
+             * @returns {muster.v1.MulticaMutation} MulticaMutation instance
+             */
+            MulticaMutation.create = function create(properties) {
+                return new MulticaMutation(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaMutation message. Does not implicitly {@link muster.v1.MulticaMutation.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaMutation
+             * @static
+             * @param {muster.v1.IMulticaMutation} message MulticaMutation message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaMutation.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.opId);
+                if (message.workspaceId != null && Object.hasOwnProperty.call(message, "workspaceId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.workspaceId);
+                if (message.agent != null && Object.hasOwnProperty.call(message, "agent"))
+                    $root.muster.v1.MulticaAgentEdit.encode(message.agent, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.issue != null && Object.hasOwnProperty.call(message, "issue"))
+                    $root.muster.v1.MulticaIssueEdit.encode(message.issue, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                if (message.issueAction != null && Object.hasOwnProperty.call(message, "issueAction"))
+                    $root.muster.v1.MulticaIssueAction.encode(message.issueAction, writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaMutation message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaMutation
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaMutation} MulticaMutation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaMutation.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaMutation();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.workspaceId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.agent = $root.muster.v1.MulticaAgentEdit.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 4: {
+                            message.issue = $root.muster.v1.MulticaIssueEdit.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 5: {
+                            message.issueAction = $root.muster.v1.MulticaIssueAction.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaMutation
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaMutation
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaMutation.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaMutation";
+            };
+
+            return MulticaMutation;
+        })();
+
+        v1.MulticaAgentEdit = (function() {
+
+            /**
+             * Properties of a MulticaAgentEdit.
+             * @memberof muster.v1
+             * @interface IMulticaAgentEdit
+             * @property {string|null} [id] MulticaAgentEdit id
+             * @property {string|null} [revision] MulticaAgentEdit revision
+             * @property {string|null} [name] MulticaAgentEdit name
+             * @property {string|null} [description] MulticaAgentEdit description
+             * @property {string|null} [instructions] MulticaAgentEdit instructions
+             * @property {string|null} [model] MulticaAgentEdit model
+             * @property {number|null} [maxConcurrentTasks] MulticaAgentEdit maxConcurrentTasks
+             */
+
+            /**
+             * Constructs a new MulticaAgentEdit.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaAgentEdit.
+             * @implements IMulticaAgentEdit
+             * @constructor
+             * @param {muster.v1.IMulticaAgentEdit=} [properties] Properties to set
+             */
+            function MulticaAgentEdit(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaAgentEdit id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.id = "";
+
+            /**
+             * MulticaAgentEdit revision.
+             * @member {string} revision
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.revision = "";
+
+            /**
+             * MulticaAgentEdit name.
+             * @member {string} name
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.name = "";
+
+            /**
+             * MulticaAgentEdit description.
+             * @member {string} description
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.description = "";
+
+            /**
+             * MulticaAgentEdit instructions.
+             * @member {string} instructions
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.instructions = "";
+
+            /**
+             * MulticaAgentEdit model.
+             * @member {string} model
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.model = "";
+
+            /**
+             * MulticaAgentEdit maxConcurrentTasks.
+             * @member {number} maxConcurrentTasks
+             * @memberof muster.v1.MulticaAgentEdit
+             * @instance
+             */
+            MulticaAgentEdit.prototype.maxConcurrentTasks = 0;
+
+            /**
+             * Creates a new MulticaAgentEdit instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaAgentEdit
+             * @static
+             * @param {muster.v1.IMulticaAgentEdit=} [properties] Properties to set
+             * @returns {muster.v1.MulticaAgentEdit} MulticaAgentEdit instance
+             */
+            MulticaAgentEdit.create = function create(properties) {
+                return new MulticaAgentEdit(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaAgentEdit message. Does not implicitly {@link muster.v1.MulticaAgentEdit.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaAgentEdit
+             * @static
+             * @param {muster.v1.IMulticaAgentEdit} message MulticaAgentEdit message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaAgentEdit.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.revision != null && Object.hasOwnProperty.call(message, "revision"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.revision);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.name);
+                if (message.description != null && Object.hasOwnProperty.call(message, "description"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.description);
+                if (message.instructions != null && Object.hasOwnProperty.call(message, "instructions"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.instructions);
+                if (message.model != null && Object.hasOwnProperty.call(message, "model"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.model);
+                if (message.maxConcurrentTasks != null && Object.hasOwnProperty.call(message, "maxConcurrentTasks"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).uint32(message.maxConcurrentTasks);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaAgentEdit message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaAgentEdit
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaAgentEdit} MulticaAgentEdit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaAgentEdit.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaAgentEdit();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.revision = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.description = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.instructions = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.model = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.maxConcurrentTasks = reader.uint32();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaAgentEdit
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaAgentEdit
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaAgentEdit.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaAgentEdit";
+            };
+
+            return MulticaAgentEdit;
+        })();
+
+        v1.MulticaIssueEdit = (function() {
+
+            /**
+             * Properties of a MulticaIssueEdit.
+             * @memberof muster.v1
+             * @interface IMulticaIssueEdit
+             * @property {string|null} [id] MulticaIssueEdit id
+             * @property {string|null} [revision] MulticaIssueEdit revision
+             * @property {string|null} [title] MulticaIssueEdit title
+             * @property {string|null} [description] MulticaIssueEdit description
+             */
+
+            /**
+             * Constructs a new MulticaIssueEdit.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaIssueEdit.
+             * @implements IMulticaIssueEdit
+             * @constructor
+             * @param {muster.v1.IMulticaIssueEdit=} [properties] Properties to set
+             */
+            function MulticaIssueEdit(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaIssueEdit id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaIssueEdit
+             * @instance
+             */
+            MulticaIssueEdit.prototype.id = "";
+
+            /**
+             * MulticaIssueEdit revision.
+             * @member {string} revision
+             * @memberof muster.v1.MulticaIssueEdit
+             * @instance
+             */
+            MulticaIssueEdit.prototype.revision = "";
+
+            /**
+             * MulticaIssueEdit title.
+             * @member {string} title
+             * @memberof muster.v1.MulticaIssueEdit
+             * @instance
+             */
+            MulticaIssueEdit.prototype.title = "";
+
+            /**
+             * MulticaIssueEdit description.
+             * @member {string} description
+             * @memberof muster.v1.MulticaIssueEdit
+             * @instance
+             */
+            MulticaIssueEdit.prototype.description = "";
+
+            /**
+             * Creates a new MulticaIssueEdit instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaIssueEdit
+             * @static
+             * @param {muster.v1.IMulticaIssueEdit=} [properties] Properties to set
+             * @returns {muster.v1.MulticaIssueEdit} MulticaIssueEdit instance
+             */
+            MulticaIssueEdit.create = function create(properties) {
+                return new MulticaIssueEdit(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaIssueEdit message. Does not implicitly {@link muster.v1.MulticaIssueEdit.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaIssueEdit
+             * @static
+             * @param {muster.v1.IMulticaIssueEdit} message MulticaIssueEdit message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaIssueEdit.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.revision != null && Object.hasOwnProperty.call(message, "revision"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.revision);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.title);
+                if (message.description != null && Object.hasOwnProperty.call(message, "description"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.description);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaIssueEdit message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaIssueEdit
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaIssueEdit} MulticaIssueEdit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaIssueEdit.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaIssueEdit();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.revision = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.description = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaIssueEdit
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaIssueEdit
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaIssueEdit.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaIssueEdit";
+            };
+
+            return MulticaIssueEdit;
+        })();
+
+        v1.MulticaIssueAction = (function() {
+
+            /**
+             * Properties of a MulticaIssueAction.
+             * @memberof muster.v1
+             * @interface IMulticaIssueAction
+             * @property {muster.v1.MulticaIssueAction.Kind|null} [kind] MulticaIssueAction kind
+             * @property {string|null} [id] MulticaIssueAction id
+             * @property {string|null} [revision] MulticaIssueAction revision
+             * @property {string|null} [value] MulticaIssueAction value
+             */
+
+            /**
+             * Constructs a new MulticaIssueAction.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaIssueAction.
+             * @implements IMulticaIssueAction
+             * @constructor
+             * @param {muster.v1.IMulticaIssueAction=} [properties] Properties to set
+             */
+            function MulticaIssueAction(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaIssueAction kind.
+             * @member {muster.v1.MulticaIssueAction.Kind} kind
+             * @memberof muster.v1.MulticaIssueAction
+             * @instance
+             */
+            MulticaIssueAction.prototype.kind = 0;
+
+            /**
+             * MulticaIssueAction id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaIssueAction
+             * @instance
+             */
+            MulticaIssueAction.prototype.id = "";
+
+            /**
+             * MulticaIssueAction revision.
+             * @member {string} revision
+             * @memberof muster.v1.MulticaIssueAction
+             * @instance
+             */
+            MulticaIssueAction.prototype.revision = "";
+
+            /**
+             * MulticaIssueAction value.
+             * @member {string} value
+             * @memberof muster.v1.MulticaIssueAction
+             * @instance
+             */
+            MulticaIssueAction.prototype.value = "";
+
+            /**
+             * Creates a new MulticaIssueAction instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaIssueAction
+             * @static
+             * @param {muster.v1.IMulticaIssueAction=} [properties] Properties to set
+             * @returns {muster.v1.MulticaIssueAction} MulticaIssueAction instance
+             */
+            MulticaIssueAction.create = function create(properties) {
+                return new MulticaIssueAction(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaIssueAction message. Does not implicitly {@link muster.v1.MulticaIssueAction.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaIssueAction
+             * @static
+             * @param {muster.v1.IMulticaIssueAction} message MulticaIssueAction message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaIssueAction.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.kind != null && Object.hasOwnProperty.call(message, "kind"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.kind);
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.id);
+                if (message.revision != null && Object.hasOwnProperty.call(message, "revision"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.revision);
+                if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.value);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaIssueAction message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaIssueAction
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaIssueAction} MulticaIssueAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaIssueAction.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaIssueAction();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.kind = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.revision = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.value = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaIssueAction
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaIssueAction
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaIssueAction.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaIssueAction";
+            };
+
+            /**
+             * Kind enum.
+             * @name muster.v1.MulticaIssueAction.Kind
+             * @enum {number}
+             * @property {number} UNSPECIFIED=0 UNSPECIFIED value
+             * @property {number} ASSIGN=1 ASSIGN value
+             * @property {number} STATUS=2 STATUS value
+             * @property {number} COMMENT=3 COMMENT value
+             * @property {number} RERUN=4 RERUN value
+             * @property {number} CANCEL=5 CANCEL value
+             * @property {number} CREATE_DSH_SESSION=6 CREATE_DSH_SESSION value
+             * @property {number} RESUME_DSH_SESSION=7 RESUME_DSH_SESSION value
+             */
+            MulticaIssueAction.Kind = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "UNSPECIFIED"] = 0;
+                values[valuesById[1] = "ASSIGN"] = 1;
+                values[valuesById[2] = "STATUS"] = 2;
+                values[valuesById[3] = "COMMENT"] = 3;
+                values[valuesById[4] = "RERUN"] = 4;
+                values[valuesById[5] = "CANCEL"] = 5;
+                values[valuesById[6] = "CREATE_DSH_SESSION"] = 6;
+                values[valuesById[7] = "RESUME_DSH_SESSION"] = 7;
+                return values;
+            })();
+
+            return MulticaIssueAction;
+        })();
+
+        v1.MulticaServiceRequest = (function() {
+
+            /**
+             * Properties of a MulticaServiceRequest.
+             * @memberof muster.v1
+             * @interface IMulticaServiceRequest
+             * @property {muster.v1.MulticaServiceRequest.Action|null} [action] MulticaServiceRequest action
+             * @property {boolean|null} [offered] MulticaServiceRequest offered
+             * @property {Array.<string>|null} [workspaces] MulticaServiceRequest workspaces
+             */
+
+            /**
+             * Constructs a new MulticaServiceRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaServiceRequest.
+             * @implements IMulticaServiceRequest
+             * @constructor
+             * @param {muster.v1.IMulticaServiceRequest=} [properties] Properties to set
+             */
+            function MulticaServiceRequest(properties) {
+                this.workspaces = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaServiceRequest action.
+             * @member {muster.v1.MulticaServiceRequest.Action} action
+             * @memberof muster.v1.MulticaServiceRequest
+             * @instance
+             */
+            MulticaServiceRequest.prototype.action = 0;
+
+            /**
+             * MulticaServiceRequest offered.
+             * @member {boolean} offered
+             * @memberof muster.v1.MulticaServiceRequest
+             * @instance
+             */
+            MulticaServiceRequest.prototype.offered = false;
+
+            /**
+             * MulticaServiceRequest workspaces.
+             * @member {Array.<string>} workspaces
+             * @memberof muster.v1.MulticaServiceRequest
+             * @instance
+             */
+            MulticaServiceRequest.prototype.workspaces = $util.emptyArray;
+
+            /**
+             * Creates a new MulticaServiceRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaServiceRequest
+             * @static
+             * @param {muster.v1.IMulticaServiceRequest=} [properties] Properties to set
+             * @returns {muster.v1.MulticaServiceRequest} MulticaServiceRequest instance
+             */
+            MulticaServiceRequest.create = function create(properties) {
+                return new MulticaServiceRequest(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaServiceRequest message. Does not implicitly {@link muster.v1.MulticaServiceRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaServiceRequest
+             * @static
+             * @param {muster.v1.IMulticaServiceRequest} message MulticaServiceRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaServiceRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.action);
+                if (message.offered != null && Object.hasOwnProperty.call(message, "offered"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.offered);
+                if (message.workspaces != null && message.workspaces.length)
+                    for (let i = 0; i < message.workspaces.length; ++i)
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.workspaces[i]);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaServiceRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaServiceRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaServiceRequest} MulticaServiceRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaServiceRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaServiceRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 2: {
+                            message.offered = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            if (!(message.workspaces && message.workspaces.length))
+                                message.workspaces = [];
+                            message.workspaces.push(reader.string());
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaServiceRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaServiceRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaServiceRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaServiceRequest";
+            };
+
+            /**
+             * Action enum.
+             * @name muster.v1.MulticaServiceRequest.Action
+             * @enum {number}
+             * @property {number} GET=0 GET value
+             * @property {number} SAVE=1 SAVE value
+             */
+            MulticaServiceRequest.Action = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "GET"] = 0;
+                values[valuesById[1] = "SAVE"] = 1;
+                return values;
+            })();
+
+            return MulticaServiceRequest;
+        })();
+
+        v1.MulticaService = (function() {
+
+            /**
+             * Properties of a MulticaService.
+             * @memberof muster.v1
+             * @interface IMulticaService
+             * @property {number|null} [version] MulticaService version
+             * @property {boolean|null} [offered] MulticaService offered
+             * @property {boolean|null} [canView] MulticaService canView
+             * @property {boolean|null} [canControl] MulticaService canControl
+             * @property {boolean|null} [canManage] MulticaService canManage
+             * @property {Array.<string>|null} [workspaces] MulticaService workspaces
+             * @property {string|null} [message] MulticaService message
+             */
+
+            /**
+             * Constructs a new MulticaService.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaService.
+             * @implements IMulticaService
+             * @constructor
+             * @param {muster.v1.IMulticaService=} [properties] Properties to set
+             */
+            function MulticaService(properties) {
+                this.workspaces = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaService version.
+             * @member {number} version
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.version = 0;
+
+            /**
+             * MulticaService offered.
+             * @member {boolean} offered
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.offered = false;
+
+            /**
+             * MulticaService canView.
+             * @member {boolean} canView
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.canView = false;
+
+            /**
+             * MulticaService canControl.
+             * @member {boolean} canControl
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.canControl = false;
+
+            /**
+             * MulticaService canManage.
+             * @member {boolean} canManage
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.canManage = false;
+
+            /**
+             * MulticaService workspaces.
+             * @member {Array.<string>} workspaces
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.workspaces = $util.emptyArray;
+
+            /**
+             * MulticaService message.
+             * @member {string} message
+             * @memberof muster.v1.MulticaService
+             * @instance
+             */
+            MulticaService.prototype.message = "";
+
+            /**
+             * Creates a new MulticaService instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaService
+             * @static
+             * @param {muster.v1.IMulticaService=} [properties] Properties to set
+             * @returns {muster.v1.MulticaService} MulticaService instance
+             */
+            MulticaService.create = function create(properties) {
+                return new MulticaService(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaService message. Does not implicitly {@link muster.v1.MulticaService.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaService
+             * @static
+             * @param {muster.v1.IMulticaService} message MulticaService message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaService.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.version != null && Object.hasOwnProperty.call(message, "version"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.version);
+                if (message.offered != null && Object.hasOwnProperty.call(message, "offered"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.offered);
+                if (message.canView != null && Object.hasOwnProperty.call(message, "canView"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.canView);
+                if (message.canControl != null && Object.hasOwnProperty.call(message, "canControl"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.canControl);
+                if (message.canManage != null && Object.hasOwnProperty.call(message, "canManage"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.canManage);
+                if (message.workspaces != null && message.workspaces.length)
+                    for (let i = 0; i < message.workspaces.length; ++i)
+                        writer.uint32(/* id 6, wireType 2 =*/50).string(message.workspaces[i]);
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.message);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaService message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaService
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaService} MulticaService
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaService.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaService();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.version = reader.uint32();
+                            break;
+                        }
+                    case 2: {
+                            message.offered = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.canView = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.canControl = reader.bool();
+                            break;
+                        }
+                    case 5: {
+                            message.canManage = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            if (!(message.workspaces && message.workspaces.length))
+                                message.workspaces = [];
+                            message.workspaces.push(reader.string());
+                            break;
+                        }
+                    case 7: {
+                            message.message = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaService
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaService
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaService.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaService";
+            };
+
+            return MulticaService;
+        })();
+
         v1.MulticaRequest = (function() {
 
             /**
@@ -24970,6 +26573,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [assigneeId] MulticaIssue assigneeId
              * @property {string|null} [assigneeType] MulticaIssue assigneeType
              * @property {string|null} [updatedAt] MulticaIssue updatedAt
+             * @property {string|null} [revision] MulticaIssue revision
              */
 
             /**
@@ -25060,6 +26664,14 @@ export const muster = $root.muster = (() => {
             MulticaIssue.prototype.updatedAt = "";
 
             /**
+             * MulticaIssue revision.
+             * @member {string} revision
+             * @memberof muster.v1.MulticaIssue
+             * @instance
+             */
+            MulticaIssue.prototype.revision = "";
+
+            /**
              * Creates a new MulticaIssue instance using the specified properties.
              * @function create
              * @memberof muster.v1.MulticaIssue
@@ -25105,6 +26717,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.assigneeType);
                 if (message.updatedAt != null && Object.hasOwnProperty.call(message, "updatedAt"))
                     writer.uint32(/* id 9, wireType 2 =*/74).string(message.updatedAt);
+                if (message.revision != null && Object.hasOwnProperty.call(message, "revision"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.revision);
                 return writer;
             };
 
@@ -25178,6 +26792,10 @@ export const muster = $root.muster = (() => {
                             message.updatedAt = reader.string();
                             break;
                         }
+                    case 10: {
+                            message.revision = reader.string();
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -25221,6 +26839,10 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [status] MulticaAgent status
              * @property {string|null} [runtimeId] MulticaAgent runtimeId
              * @property {string|null} [model] MulticaAgent model
+             * @property {string|null} [instructions] MulticaAgent instructions
+             * @property {number|null} [maxConcurrentTasks] MulticaAgent maxConcurrentTasks
+             * @property {string|null} [revision] MulticaAgent revision
+             * @property {boolean|null} [editable] MulticaAgent editable
              */
 
             /**
@@ -25287,6 +26909,38 @@ export const muster = $root.muster = (() => {
             MulticaAgent.prototype.model = "";
 
             /**
+             * MulticaAgent instructions.
+             * @member {string} instructions
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.instructions = "";
+
+            /**
+             * MulticaAgent maxConcurrentTasks.
+             * @member {number} maxConcurrentTasks
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.maxConcurrentTasks = 0;
+
+            /**
+             * MulticaAgent revision.
+             * @member {string} revision
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.revision = "";
+
+            /**
+             * MulticaAgent editable.
+             * @member {boolean} editable
+             * @memberof muster.v1.MulticaAgent
+             * @instance
+             */
+            MulticaAgent.prototype.editable = false;
+
+            /**
              * Creates a new MulticaAgent instance using the specified properties.
              * @function create
              * @memberof muster.v1.MulticaAgent
@@ -25326,6 +26980,14 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.runtimeId);
                 if (message.model != null && Object.hasOwnProperty.call(message, "model"))
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.model);
+                if (message.instructions != null && Object.hasOwnProperty.call(message, "instructions"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.instructions);
+                if (message.maxConcurrentTasks != null && Object.hasOwnProperty.call(message, "maxConcurrentTasks"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).uint32(message.maxConcurrentTasks);
+                if (message.revision != null && Object.hasOwnProperty.call(message, "revision"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.revision);
+                if (message.editable != null && Object.hasOwnProperty.call(message, "editable"))
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.editable);
                 return writer;
             };
 
@@ -25385,6 +27047,22 @@ export const muster = $root.muster = (() => {
                         }
                     case 6: {
                             message.model = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.instructions = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.maxConcurrentTasks = reader.uint32();
+                            break;
+                        }
+                    case 9: {
+                            message.revision = reader.string();
+                            break;
+                        }
+                    case 10: {
+                            message.editable = reader.bool();
                             break;
                         }
                     default:
@@ -25627,6 +27305,558 @@ export const muster = $root.muster = (() => {
             return MulticaRuntime;
         })();
 
+        v1.MulticaStatusChoice = (function() {
+
+            /**
+             * Properties of a MulticaStatusChoice.
+             * @memberof muster.v1
+             * @interface IMulticaStatusChoice
+             * @property {string|null} [key] MulticaStatusChoice key
+             * @property {string|null} [title] MulticaStatusChoice title
+             */
+
+            /**
+             * Constructs a new MulticaStatusChoice.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaStatusChoice.
+             * @implements IMulticaStatusChoice
+             * @constructor
+             * @param {muster.v1.IMulticaStatusChoice=} [properties] Properties to set
+             */
+            function MulticaStatusChoice(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaStatusChoice key.
+             * @member {string} key
+             * @memberof muster.v1.MulticaStatusChoice
+             * @instance
+             */
+            MulticaStatusChoice.prototype.key = "";
+
+            /**
+             * MulticaStatusChoice title.
+             * @member {string} title
+             * @memberof muster.v1.MulticaStatusChoice
+             * @instance
+             */
+            MulticaStatusChoice.prototype.title = "";
+
+            /**
+             * Creates a new MulticaStatusChoice instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaStatusChoice
+             * @static
+             * @param {muster.v1.IMulticaStatusChoice=} [properties] Properties to set
+             * @returns {muster.v1.MulticaStatusChoice} MulticaStatusChoice instance
+             */
+            MulticaStatusChoice.create = function create(properties) {
+                return new MulticaStatusChoice(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaStatusChoice message. Does not implicitly {@link muster.v1.MulticaStatusChoice.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaStatusChoice
+             * @static
+             * @param {muster.v1.IMulticaStatusChoice} message MulticaStatusChoice message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaStatusChoice.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
+                if (message.title != null && Object.hasOwnProperty.call(message, "title"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.title);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaStatusChoice message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaStatusChoice
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaStatusChoice} MulticaStatusChoice
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaStatusChoice.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaStatusChoice();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.key = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.title = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaStatusChoice
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaStatusChoice
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaStatusChoice.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaStatusChoice";
+            };
+
+            return MulticaStatusChoice;
+        })();
+
+        v1.MulticaRun = (function() {
+
+            /**
+             * Properties of a MulticaRun.
+             * @memberof muster.v1
+             * @interface IMulticaRun
+             * @property {string|null} [id] MulticaRun id
+             * @property {string|null} [agentId] MulticaRun agentId
+             * @property {string|null} [status] MulticaRun status
+             * @property {string|null} [createdAt] MulticaRun createdAt
+             * @property {string|null} [completedAt] MulticaRun completedAt
+             * @property {string|null} [failureReason] MulticaRun failureReason
+             * @property {boolean|null} [canCancel] MulticaRun canCancel
+             */
+
+            /**
+             * Constructs a new MulticaRun.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaRun.
+             * @implements IMulticaRun
+             * @constructor
+             * @param {muster.v1.IMulticaRun=} [properties] Properties to set
+             */
+            function MulticaRun(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaRun id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.id = "";
+
+            /**
+             * MulticaRun agentId.
+             * @member {string} agentId
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.agentId = "";
+
+            /**
+             * MulticaRun status.
+             * @member {string} status
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.status = "";
+
+            /**
+             * MulticaRun createdAt.
+             * @member {string} createdAt
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.createdAt = "";
+
+            /**
+             * MulticaRun completedAt.
+             * @member {string} completedAt
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.completedAt = "";
+
+            /**
+             * MulticaRun failureReason.
+             * @member {string} failureReason
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.failureReason = "";
+
+            /**
+             * MulticaRun canCancel.
+             * @member {boolean} canCancel
+             * @memberof muster.v1.MulticaRun
+             * @instance
+             */
+            MulticaRun.prototype.canCancel = false;
+
+            /**
+             * Creates a new MulticaRun instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaRun
+             * @static
+             * @param {muster.v1.IMulticaRun=} [properties] Properties to set
+             * @returns {muster.v1.MulticaRun} MulticaRun instance
+             */
+            MulticaRun.create = function create(properties) {
+                return new MulticaRun(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaRun message. Does not implicitly {@link muster.v1.MulticaRun.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaRun
+             * @static
+             * @param {muster.v1.IMulticaRun} message MulticaRun message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaRun.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.agentId != null && Object.hasOwnProperty.call(message, "agentId"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.agentId);
+                if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.status);
+                if (message.createdAt != null && Object.hasOwnProperty.call(message, "createdAt"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.createdAt);
+                if (message.completedAt != null && Object.hasOwnProperty.call(message, "completedAt"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.completedAt);
+                if (message.failureReason != null && Object.hasOwnProperty.call(message, "failureReason"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.failureReason);
+                if (message.canCancel != null && Object.hasOwnProperty.call(message, "canCancel"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.canCancel);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaRun message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaRun
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaRun} MulticaRun
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaRun.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaRun();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.agentId = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.status = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.createdAt = reader.string();
+                            break;
+                        }
+                    case 5: {
+                            message.completedAt = reader.string();
+                            break;
+                        }
+                    case 6: {
+                            message.failureReason = reader.string();
+                            break;
+                        }
+                    case 7: {
+                            message.canCancel = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaRun
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaRun
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaRun.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaRun";
+            };
+
+            return MulticaRun;
+        })();
+
+        v1.MulticaComment = (function() {
+
+            /**
+             * Properties of a MulticaComment.
+             * @memberof muster.v1
+             * @interface IMulticaComment
+             * @property {string|null} [id] MulticaComment id
+             * @property {string|null} [content] MulticaComment content
+             * @property {string|null} [authorType] MulticaComment authorType
+             * @property {string|null} [createdAt] MulticaComment createdAt
+             */
+
+            /**
+             * Constructs a new MulticaComment.
+             * @memberof muster.v1
+             * @classdesc Represents a MulticaComment.
+             * @implements IMulticaComment
+             * @constructor
+             * @param {muster.v1.IMulticaComment=} [properties] Properties to set
+             */
+            function MulticaComment(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaComment id.
+             * @member {string} id
+             * @memberof muster.v1.MulticaComment
+             * @instance
+             */
+            MulticaComment.prototype.id = "";
+
+            /**
+             * MulticaComment content.
+             * @member {string} content
+             * @memberof muster.v1.MulticaComment
+             * @instance
+             */
+            MulticaComment.prototype.content = "";
+
+            /**
+             * MulticaComment authorType.
+             * @member {string} authorType
+             * @memberof muster.v1.MulticaComment
+             * @instance
+             */
+            MulticaComment.prototype.authorType = "";
+
+            /**
+             * MulticaComment createdAt.
+             * @member {string} createdAt
+             * @memberof muster.v1.MulticaComment
+             * @instance
+             */
+            MulticaComment.prototype.createdAt = "";
+
+            /**
+             * Creates a new MulticaComment instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.MulticaComment
+             * @static
+             * @param {muster.v1.IMulticaComment=} [properties] Properties to set
+             * @returns {muster.v1.MulticaComment} MulticaComment instance
+             */
+            MulticaComment.create = function create(properties) {
+                return new MulticaComment(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaComment message. Does not implicitly {@link muster.v1.MulticaComment.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.MulticaComment
+             * @static
+             * @param {muster.v1.IMulticaComment} message MulticaComment message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaComment.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+                if (message.content != null && Object.hasOwnProperty.call(message, "content"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.content);
+                if (message.authorType != null && Object.hasOwnProperty.call(message, "authorType"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.authorType);
+                if (message.createdAt != null && Object.hasOwnProperty.call(message, "createdAt"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.createdAt);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaComment message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.MulticaComment
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.MulticaComment} MulticaComment
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaComment.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.MulticaComment();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.id = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.content = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.authorType = reader.string();
+                            break;
+                        }
+                    case 4: {
+                            message.createdAt = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaComment
+             * @function getTypeUrl
+             * @memberof muster.v1.MulticaComment
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaComment.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.MulticaComment";
+            };
+
+            return MulticaComment;
+        })();
+
         v1.MulticaPage = (function() {
 
             /**
@@ -25646,6 +27876,9 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [error] MulticaPage error
              * @property {number|null} [nextOffset] MulticaPage nextOffset
              * @property {number|null} [previousOffset] MulticaPage previousOffset
+             * @property {Array.<muster.v1.IMulticaRun>|null} [runs] MulticaPage runs
+             * @property {Array.<muster.v1.IMulticaComment>|null} [comments] MulticaPage comments
+             * @property {Array.<muster.v1.IMulticaStatusChoice>|null} [statusChoices] MulticaPage statusChoices
              */
 
             /**
@@ -25661,6 +27894,9 @@ export const muster = $root.muster = (() => {
                 this.issues = [];
                 this.agents = [];
                 this.runtimes = [];
+                this.runs = [];
+                this.comments = [];
+                this.statusChoices = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -25772,6 +28008,30 @@ export const muster = $root.muster = (() => {
             MulticaPage.prototype.previousOffset = 0;
 
             /**
+             * MulticaPage runs.
+             * @member {Array.<muster.v1.IMulticaRun>} runs
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.runs = $util.emptyArray;
+
+            /**
+             * MulticaPage comments.
+             * @member {Array.<muster.v1.IMulticaComment>} comments
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.comments = $util.emptyArray;
+
+            /**
+             * MulticaPage statusChoices.
+             * @member {Array.<muster.v1.IMulticaStatusChoice>} statusChoices
+             * @memberof muster.v1.MulticaPage
+             * @instance
+             */
+            MulticaPage.prototype.statusChoices = $util.emptyArray;
+
+            /**
              * Creates a new MulticaPage instance using the specified properties.
              * @function create
              * @memberof muster.v1.MulticaPage
@@ -25829,6 +28089,15 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 12, wireType 0 =*/96).uint32(message.nextOffset);
                 if (message.previousOffset != null && Object.hasOwnProperty.call(message, "previousOffset"))
                     writer.uint32(/* id 13, wireType 0 =*/104).uint32(message.previousOffset);
+                if (message.runs != null && message.runs.length)
+                    for (let i = 0; i < message.runs.length; ++i)
+                        $root.muster.v1.MulticaRun.encode(message.runs[i], writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
+                if (message.comments != null && message.comments.length)
+                    for (let i = 0; i < message.comments.length; ++i)
+                        $root.muster.v1.MulticaComment.encode(message.comments[i], writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
+                if (message.statusChoices != null && message.statusChoices.length)
+                    for (let i = 0; i < message.statusChoices.length; ++i)
+                        $root.muster.v1.MulticaStatusChoice.encode(message.statusChoices[i], writer.uint32(/* id 16, wireType 2 =*/130).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -25924,6 +28193,24 @@ export const muster = $root.muster = (() => {
                         }
                     case 13: {
                             message.previousOffset = reader.uint32();
+                            break;
+                        }
+                    case 14: {
+                            if (!(message.runs && message.runs.length))
+                                message.runs = [];
+                            message.runs.push($root.muster.v1.MulticaRun.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 15: {
+                            if (!(message.comments && message.comments.length))
+                                message.comments = [];
+                            message.comments.push($root.muster.v1.MulticaComment.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 16: {
+                            if (!(message.statusChoices && message.statusChoices.length))
+                                message.statusChoices = [];
+                            message.statusChoices.push($root.muster.v1.MulticaStatusChoice.decode(reader, reader.uint32(), undefined, long + 1));
                             break;
                         }
                     default:
@@ -28348,12 +30635,17 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IBrowserSetup|null} [browserSetup] Intent browserSetup
              * @property {muster.app.IBrowserRun|null} [browserRun] Intent browserRun
              * @property {muster.app.ISetCover|null} [setCover] Intent setCover
+             * @property {muster.app.ISetCover|null} [setBlackout] Intent setBlackout
              * @property {muster.app.ICancelLockedUse|null} [cancelLockedUse] Intent cancelLockedUse
              * @property {muster.app.ISetDeviceLockedUse|null} [setDeviceLockedUse] Intent setDeviceLockedUse
              * @property {muster.app.IDesktopSetupAction|null} [desktopSetupAction] Intent desktopSetupAction
              * @property {muster.app.IDesktopUpdateAction|null} [desktopUpdateAction] Intent desktopUpdateAction
              * @property {muster.v1.IMulticaRequest|null} [multica] Intent multica
              * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Intent multicaBrowse
+             * @property {muster.app.IMulticaSelect|null} [multicaSelect] Intent multicaSelect
+             * @property {muster.v1.IMulticaServiceRequest|null} [multicaService] Intent multicaService
+             * @property {muster.v1.IMulticaMutation|null} [multicaMutation] Intent multicaMutation
+             * @property {boolean|null} [multicaMutationAcknowledge] Intent multicaMutationAcknowledge
              * @property {muster.v1.IVisionRequest|null} [vision] Intent vision
              * @property {muster.app.IOpenAgents|null} [openAgents] Intent openAgents
              * @property {muster.app.IAgentCatalogAction|null} [agentCatalogAction] Intent agentCatalogAction
@@ -28555,6 +30847,14 @@ export const muster = $root.muster = (() => {
             Intent.prototype.setCover = null;
 
             /**
+             * Intent setBlackout.
+             * @member {muster.app.ISetCover|null|undefined} setBlackout
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.setBlackout = null;
+
+            /**
              * Intent cancelLockedUse.
              * @member {muster.app.ICancelLockedUse|null|undefined} cancelLockedUse
              * @memberof muster.app.Intent
@@ -28601,6 +30901,38 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.multicaBrowse = null;
+
+            /**
+             * Intent multicaSelect.
+             * @member {muster.app.IMulticaSelect|null|undefined} multicaSelect
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multicaSelect = null;
+
+            /**
+             * Intent multicaService.
+             * @member {muster.v1.IMulticaServiceRequest|null|undefined} multicaService
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multicaService = null;
+
+            /**
+             * Intent multicaMutation.
+             * @member {muster.v1.IMulticaMutation|null|undefined} multicaMutation
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multicaMutation = null;
+
+            /**
+             * Intent multicaMutationAcknowledge.
+             * @member {boolean|null|undefined} multicaMutationAcknowledge
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.multicaMutationAcknowledge = null;
 
             /**
              * Intent vision.
@@ -28919,12 +31251,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setCover", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -29070,6 +31402,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.VisionRequest.encode(message.vision, writer.uint32(/* id 93, wireType 2 =*/746).fork(), q + 1).ldelim();
                 if (message.agentOrganize != null && Object.hasOwnProperty.call(message, "agentOrganize"))
                     $root.muster.app.AgentOrganize.encode(message.agentOrganize, writer.uint32(/* id 94, wireType 2 =*/754).fork(), q + 1).ldelim();
+                if (message.multicaSelect != null && Object.hasOwnProperty.call(message, "multicaSelect"))
+                    $root.muster.app.MulticaSelect.encode(message.multicaSelect, writer.uint32(/* id 96, wireType 2 =*/770).fork(), q + 1).ldelim();
+                if (message.multicaService != null && Object.hasOwnProperty.call(message, "multicaService"))
+                    $root.muster.v1.MulticaServiceRequest.encode(message.multicaService, writer.uint32(/* id 97, wireType 2 =*/778).fork(), q + 1).ldelim();
                 if (message.codeAction != null && Object.hasOwnProperty.call(message, "codeAction"))
                     $root.muster.app.CodeAction.encode(message.codeAction, writer.uint32(/* id 132, wireType 2 =*/1058).fork(), q + 1).ldelim();
                 if (message.requestScreenRecording != null && Object.hasOwnProperty.call(message, "requestScreenRecording"))
@@ -29082,6 +31418,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.NativeCreate.encode(message.nativeCreate, writer.uint32(/* id 136, wireType 2 =*/1090).fork(), q + 1).ldelim();
                 if (message.agentLoadWork != null && Object.hasOwnProperty.call(message, "agentLoadWork"))
                     $root.muster.app.AgentLoadWork.encode(message.agentLoadWork, writer.uint32(/* id 137, wireType 2 =*/1098).fork(), q + 1).ldelim();
+                if (message.multicaMutationAcknowledge != null && Object.hasOwnProperty.call(message, "multicaMutationAcknowledge"))
+                    writer.uint32(/* id 138, wireType 0 =*/1104).bool(message.multicaMutationAcknowledge);
+                if (message.multicaMutation != null && Object.hasOwnProperty.call(message, "multicaMutation"))
+                    $root.muster.v1.MulticaMutation.encode(message.multicaMutation, writer.uint32(/* id 139, wireType 2 =*/1114).fork(), q + 1).ldelim();
+                if (message.setBlackout != null && Object.hasOwnProperty.call(message, "setBlackout"))
+                    $root.muster.app.SetCover.encode(message.setBlackout, writer.uint32(/* id 140, wireType 2 =*/1122).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -29191,6 +31533,10 @@ export const muster = $root.muster = (() => {
                             message.setCover = $root.muster.app.SetCover.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 140: {
+                            message.setBlackout = $root.muster.app.SetCover.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 22: {
                             message.cancelLockedUse = $root.muster.app.CancelLockedUse.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
@@ -29213,6 +31559,22 @@ export const muster = $root.muster = (() => {
                         }
                     case 90: {
                             message.multicaBrowse = $root.muster.v1.MulticaBrowseRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 96: {
+                            message.multicaSelect = $root.muster.app.MulticaSelect.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 97: {
+                            message.multicaService = $root.muster.v1.MulticaServiceRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 139: {
+                            message.multicaMutation = $root.muster.v1.MulticaMutation.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 138: {
+                            message.multicaMutationAcknowledge = reader.bool();
                             break;
                         }
                     case 93: {
@@ -41176,6 +43538,592 @@ export const muster = $root.muster = (() => {
             return values;
         })();
 
+        app.MulticaSelect = (function() {
+
+            /**
+             * Properties of a MulticaSelect.
+             * @memberof muster.app
+             * @interface IMulticaSelect
+             * @property {string|null} [deviceId] MulticaSelect deviceId
+             */
+
+            /**
+             * Constructs a new MulticaSelect.
+             * @memberof muster.app
+             * @classdesc Represents a MulticaSelect.
+             * @implements IMulticaSelect
+             * @constructor
+             * @param {muster.app.IMulticaSelect=} [properties] Properties to set
+             */
+            function MulticaSelect(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaSelect deviceId.
+             * @member {string} deviceId
+             * @memberof muster.app.MulticaSelect
+             * @instance
+             */
+            MulticaSelect.prototype.deviceId = "";
+
+            /**
+             * Creates a new MulticaSelect instance using the specified properties.
+             * @function create
+             * @memberof muster.app.MulticaSelect
+             * @static
+             * @param {muster.app.IMulticaSelect=} [properties] Properties to set
+             * @returns {muster.app.MulticaSelect} MulticaSelect instance
+             */
+            MulticaSelect.create = function create(properties) {
+                return new MulticaSelect(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaSelect message. Does not implicitly {@link muster.app.MulticaSelect.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.MulticaSelect
+             * @static
+             * @param {muster.app.IMulticaSelect} message MulticaSelect message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaSelect.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.deviceId);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaSelect message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.MulticaSelect
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.MulticaSelect} MulticaSelect
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaSelect.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.MulticaSelect();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaSelect
+             * @function getTypeUrl
+             * @memberof muster.app.MulticaSelect
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaSelect.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.MulticaSelect";
+            };
+
+            return MulticaSelect;
+        })();
+
+        app.MulticaDevice = (function() {
+
+            /**
+             * Properties of a MulticaDevice.
+             * @memberof muster.app
+             * @interface IMulticaDevice
+             * @property {string|null} [deviceId] MulticaDevice deviceId
+             * @property {string|null} [name] MulticaDevice name
+             * @property {boolean|null} [connected] MulticaDevice connected
+             * @property {muster.v1.IMulticaService|null} [service] MulticaDevice service
+             */
+
+            /**
+             * Constructs a new MulticaDevice.
+             * @memberof muster.app
+             * @classdesc Represents a MulticaDevice.
+             * @implements IMulticaDevice
+             * @constructor
+             * @param {muster.app.IMulticaDevice=} [properties] Properties to set
+             */
+            function MulticaDevice(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaDevice deviceId.
+             * @member {string} deviceId
+             * @memberof muster.app.MulticaDevice
+             * @instance
+             */
+            MulticaDevice.prototype.deviceId = "";
+
+            /**
+             * MulticaDevice name.
+             * @member {string} name
+             * @memberof muster.app.MulticaDevice
+             * @instance
+             */
+            MulticaDevice.prototype.name = "";
+
+            /**
+             * MulticaDevice connected.
+             * @member {boolean} connected
+             * @memberof muster.app.MulticaDevice
+             * @instance
+             */
+            MulticaDevice.prototype.connected = false;
+
+            /**
+             * MulticaDevice service.
+             * @member {muster.v1.IMulticaService|null|undefined} service
+             * @memberof muster.app.MulticaDevice
+             * @instance
+             */
+            MulticaDevice.prototype.service = null;
+
+            /**
+             * Creates a new MulticaDevice instance using the specified properties.
+             * @function create
+             * @memberof muster.app.MulticaDevice
+             * @static
+             * @param {muster.app.IMulticaDevice=} [properties] Properties to set
+             * @returns {muster.app.MulticaDevice} MulticaDevice instance
+             */
+            MulticaDevice.create = function create(properties) {
+                return new MulticaDevice(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaDevice message. Does not implicitly {@link muster.app.MulticaDevice.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.MulticaDevice
+             * @static
+             * @param {muster.app.IMulticaDevice} message MulticaDevice message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaDevice.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.deviceId);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+                if (message.connected != null && Object.hasOwnProperty.call(message, "connected"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.connected);
+                if (message.service != null && Object.hasOwnProperty.call(message, "service"))
+                    $root.muster.v1.MulticaService.encode(message.service, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaDevice message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.MulticaDevice
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.MulticaDevice} MulticaDevice
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaDevice.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.MulticaDevice();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.connected = reader.bool();
+                            break;
+                        }
+                    case 4: {
+                            message.service = $root.muster.v1.MulticaService.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaDevice
+             * @function getTypeUrl
+             * @memberof muster.app.MulticaDevice
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaDevice.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.MulticaDevice";
+            };
+
+            return MulticaDevice;
+        })();
+
+        app.MulticaWorkspaceView = (function() {
+
+            /**
+             * Properties of a MulticaWorkspaceView.
+             * @memberof muster.app
+             * @interface IMulticaWorkspaceView
+             * @property {boolean|null} [visible] MulticaWorkspaceView visible
+             * @property {string|null} [selectedDevice] MulticaWorkspaceView selectedDevice
+             * @property {Array.<muster.app.IMulticaDevice>|null} [devices] MulticaWorkspaceView devices
+             * @property {muster.v1.IMulticaService|null} [localService] MulticaWorkspaceView localService
+             * @property {boolean|null} [selectedIsLocal] MulticaWorkspaceView selectedIsLocal
+             * @property {boolean|null} [mutationBusy] MulticaWorkspaceView mutationBusy
+             * @property {string|null} [mutationMessage] MulticaWorkspaceView mutationMessage
+             * @property {number|Long|null} [mutationResult] MulticaWorkspaceView mutationResult
+             * @property {boolean|null} [mutationApplied] MulticaWorkspaceView mutationApplied
+             * @property {boolean|null} [mutationUncertain] MulticaWorkspaceView mutationUncertain
+             */
+
+            /**
+             * Constructs a new MulticaWorkspaceView.
+             * @memberof muster.app
+             * @classdesc Represents a MulticaWorkspaceView.
+             * @implements IMulticaWorkspaceView
+             * @constructor
+             * @param {muster.app.IMulticaWorkspaceView=} [properties] Properties to set
+             */
+            function MulticaWorkspaceView(properties) {
+                this.devices = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * MulticaWorkspaceView visible.
+             * @member {boolean} visible
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.visible = false;
+
+            /**
+             * MulticaWorkspaceView selectedDevice.
+             * @member {string} selectedDevice
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.selectedDevice = "";
+
+            /**
+             * MulticaWorkspaceView devices.
+             * @member {Array.<muster.app.IMulticaDevice>} devices
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.devices = $util.emptyArray;
+
+            /**
+             * MulticaWorkspaceView localService.
+             * @member {muster.v1.IMulticaService|null|undefined} localService
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.localService = null;
+
+            /**
+             * MulticaWorkspaceView selectedIsLocal.
+             * @member {boolean} selectedIsLocal
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.selectedIsLocal = false;
+
+            /**
+             * MulticaWorkspaceView mutationBusy.
+             * @member {boolean} mutationBusy
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.mutationBusy = false;
+
+            /**
+             * MulticaWorkspaceView mutationMessage.
+             * @member {string} mutationMessage
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.mutationMessage = "";
+
+            /**
+             * MulticaWorkspaceView mutationResult.
+             * @member {number|Long} mutationResult
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.mutationResult = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * MulticaWorkspaceView mutationApplied.
+             * @member {boolean} mutationApplied
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.mutationApplied = false;
+
+            /**
+             * MulticaWorkspaceView mutationUncertain.
+             * @member {boolean} mutationUncertain
+             * @memberof muster.app.MulticaWorkspaceView
+             * @instance
+             */
+            MulticaWorkspaceView.prototype.mutationUncertain = false;
+
+            /**
+             * Creates a new MulticaWorkspaceView instance using the specified properties.
+             * @function create
+             * @memberof muster.app.MulticaWorkspaceView
+             * @static
+             * @param {muster.app.IMulticaWorkspaceView=} [properties] Properties to set
+             * @returns {muster.app.MulticaWorkspaceView} MulticaWorkspaceView instance
+             */
+            MulticaWorkspaceView.create = function create(properties) {
+                return new MulticaWorkspaceView(properties);
+            };
+
+            /**
+             * Encodes the specified MulticaWorkspaceView message. Does not implicitly {@link muster.app.MulticaWorkspaceView.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.MulticaWorkspaceView
+             * @static
+             * @param {muster.app.IMulticaWorkspaceView} message MulticaWorkspaceView message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            MulticaWorkspaceView.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.visible != null && Object.hasOwnProperty.call(message, "visible"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.visible);
+                if (message.selectedDevice != null && Object.hasOwnProperty.call(message, "selectedDevice"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.selectedDevice);
+                if (message.devices != null && message.devices.length)
+                    for (let i = 0; i < message.devices.length; ++i)
+                        $root.muster.app.MulticaDevice.encode(message.devices[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.localService != null && Object.hasOwnProperty.call(message, "localService"))
+                    $root.muster.v1.MulticaService.encode(message.localService, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                if (message.selectedIsLocal != null && Object.hasOwnProperty.call(message, "selectedIsLocal"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.selectedIsLocal);
+                if (message.mutationBusy != null && Object.hasOwnProperty.call(message, "mutationBusy"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.mutationBusy);
+                if (message.mutationMessage != null && Object.hasOwnProperty.call(message, "mutationMessage"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.mutationMessage);
+                if (message.mutationResult != null && Object.hasOwnProperty.call(message, "mutationResult"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).uint64(message.mutationResult);
+                if (message.mutationApplied != null && Object.hasOwnProperty.call(message, "mutationApplied"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).bool(message.mutationApplied);
+                if (message.mutationUncertain != null && Object.hasOwnProperty.call(message, "mutationUncertain"))
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.mutationUncertain);
+                return writer;
+            };
+
+            /**
+             * Decodes a MulticaWorkspaceView message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.MulticaWorkspaceView
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.MulticaWorkspaceView} MulticaWorkspaceView
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            MulticaWorkspaceView.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.MulticaWorkspaceView();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.visible = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            message.selectedDevice = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            if (!(message.devices && message.devices.length))
+                                message.devices = [];
+                            message.devices.push($root.muster.app.MulticaDevice.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 4: {
+                            message.localService = $root.muster.v1.MulticaService.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 5: {
+                            message.selectedIsLocal = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.mutationBusy = reader.bool();
+                            break;
+                        }
+                    case 7: {
+                            message.mutationMessage = reader.string();
+                            break;
+                        }
+                    case 8: {
+                            message.mutationResult = reader.uint64();
+                            break;
+                        }
+                    case 9: {
+                            message.mutationApplied = reader.bool();
+                            break;
+                        }
+                    case 10: {
+                            message.mutationUncertain = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for MulticaWorkspaceView
+             * @function getTypeUrl
+             * @memberof muster.app.MulticaWorkspaceView
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            MulticaWorkspaceView.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.MulticaWorkspaceView";
+            };
+
+            return MulticaWorkspaceView;
+        })();
+
         app.ViewModel = (function() {
 
             /**
@@ -41218,6 +44166,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IMulticaPage|null} [multicaPage] ViewModel multicaPage
              * @property {muster.v1.IVisionStatus|null} [vision] ViewModel vision
              * @property {Array.<muster.app.Screen>|null} [navigationPath] ViewModel navigationPath
+             * @property {muster.app.IMulticaWorkspaceView|null} [multicaWorkspace] ViewModel multicaWorkspace
              * @property {muster.app.ISessionLoadMarker|null} [sessionLoad] ViewModel sessionLoad
              */
 
@@ -41530,6 +44479,14 @@ export const muster = $root.muster = (() => {
             ViewModel.prototype.navigationPath = $util.emptyArray;
 
             /**
+             * ViewModel multicaWorkspace.
+             * @member {muster.app.IMulticaWorkspaceView|null|undefined} multicaWorkspace
+             * @memberof muster.app.ViewModel
+             * @instance
+             */
+            ViewModel.prototype.multicaWorkspace = null;
+
+            /**
              * ViewModel sessionLoad.
              * @member {muster.app.ISessionLoadMarker|null|undefined} sessionLoad
              * @memberof muster.app.ViewModel
@@ -41647,6 +44604,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.VisionStatus.encode(message.vision, writer.uint32(/* id 37, wireType 2 =*/298).fork(), q + 1).ldelim();
                 if (message.sessionLoad != null && Object.hasOwnProperty.call(message, "sessionLoad"))
                     $root.muster.app.SessionLoadMarker.encode(message.sessionLoad, writer.uint32(/* id 38, wireType 2 =*/306).fork(), q + 1).ldelim();
+                if (message.multicaWorkspace != null && Object.hasOwnProperty.call(message, "multicaWorkspace"))
+                    $root.muster.app.MulticaWorkspaceView.encode(message.multicaWorkspace, writer.uint32(/* id 39, wireType 2 =*/314).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -41849,6 +44808,10 @@ export const muster = $root.muster = (() => {
                                 message.navigationPath.push(reader.int32());
                             break;
                         }
+                    case 39: {
+                            message.multicaWorkspace = $root.muster.app.MulticaWorkspaceView.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 38: {
                             message.sessionLoad = $root.muster.app.SessionLoadMarker.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
@@ -41895,6 +44858,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [showAccess] DeviceActions showAccess
              * @property {boolean|null} [canEditAccess] DeviceActions canEditAccess
              * @property {boolean|null} [canRemove] DeviceActions canRemove
+             * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceActions blackout
              */
 
             /**
@@ -41953,6 +44917,14 @@ export const muster = $root.muster = (() => {
             DeviceActions.prototype.canRemove = false;
 
             /**
+             * DeviceActions blackout.
+             * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.blackout = null;
+
+            /**
              * Creates a new DeviceActions instance using the specified properties.
              * @function create
              * @memberof muster.app.DeviceActions
@@ -41990,6 +44962,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 4, wireType 0 =*/32).bool(message.canEditAccess);
                 if (message.canRemove != null && Object.hasOwnProperty.call(message, "canRemove"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.canRemove);
+                if (message.blackout != null && Object.hasOwnProperty.call(message, "blackout"))
+                    $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -42045,6 +45019,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 5: {
                             message.canRemove = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.blackout = $root.muster.v1.DisplayBlackout.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:

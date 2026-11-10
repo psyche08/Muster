@@ -170,6 +170,7 @@ impl Daemon {
             locked: self.platform().locked(),
             on_console: self.platform().on_console(),
             covered: self.covered(),
+            blackout: self.blackout.as_ref().map(|b| b.view()),
             iterm2_automation: {
                 #[cfg(target_os = "macos")]
                 {

@@ -3,6 +3,7 @@
 //! the NetHelper XPC client.
 
 pub mod ax;
+pub mod blackout;
 pub mod bundle;
 pub mod codesign;
 pub mod events;

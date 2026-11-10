@@ -132,6 +132,15 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
         cover(&remote, &presence).await.is_ok(),
         "desktop signature must survive local proxying"
     );
+    let blackout = Req::DeviceSetBlackout(v1::DeviceSetCoverRequest { on: false });
+    assert!(
+        ca.call(blackout.clone()).await.is_err(),
+        "local cover is independent"
+    );
+    assert!(
+        remote.call(blackout).await.is_err(),
+        "a desktop with Locked Control cannot change mobile blackout"
+    );
     // ADR 0120: `locked.control` admits the request on its own, so which key
     // signed it no longer decides anything. Enrollment still has to persist,
     // which is what the roster assertions below check.

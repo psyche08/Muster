@@ -40,6 +40,7 @@ message Intent {
     BrowserSetup browser_setup = 81;
     BrowserRun browser_run = 82;
     SetCover set_cover = 21;
+    SetCover set_blackout = 140; // explicit target and desired on/off
     CancelLockedUse cancel_locked_use = 22;
     SetDeviceLockedUse set_device_locked_use = 86;
     DesktopSetupAction desktop_setup_action = 23;
@@ -576,6 +577,7 @@ message DeviceActions {
   bool show_access = 3;      // the access summary has something to show
   bool can_edit_access = 4;  // this device is an admin and the member is another
   bool can_remove = 5;
+  muster.v1.DisplayBlackout blackout = 6; // present for a connected, supported Mac on mobile
 }
 
 message DesktopChatsView {
