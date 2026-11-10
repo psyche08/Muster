@@ -51,22 +51,30 @@ impl Changes {
         }
     }
     pub fn metadata_changed(&self, config: &AgentConfig) -> bool {
+        ["codex", "claude", "deepseek"]
+            .iter()
+            .any(|p| self.provider_metadata_changed(config, p))
+    }
+    pub fn provider_metadata_changed(&self, config: &AgentConfig, provider: &str) -> bool {
         self.full
-            || config.codex_home.as_ref().is_some_and(|home| {
-                store_changed(self, home, "state_5.sqlite")
-                    || self.touches(&home.join("session_index.jsonl"))
-                    || self.touches(&home.join(".codex-global-state.json"))
-            })
-            || config.claude_desktop.as_ref().is_some_and(|root| {
-                self.touches(root)
-                    || root
-                        .parent()
-                        .is_some_and(|p| self.touches(&p.join("Local Storage/leveldb")))
-            })
-            || config
-                .deepseek_home
-                .as_ref()
-                .is_some_and(|home| self.touches(&home.join("storages")))
+            || match provider {
+                "codex" => config.codex_home.as_ref().is_some_and(|home| {
+                    store_changed(self, home, "state_5.sqlite")
+                        || self.touches(&home.join("session_index.jsonl"))
+                        || self.touches(&home.join(".codex-global-state.json"))
+                }),
+                "claude" => config.claude_desktop.as_ref().is_some_and(|root| {
+                    self.touches(root)
+                        || root
+                            .parent()
+                            .is_some_and(|p| self.touches(&p.join("Local Storage/leveldb")))
+                }),
+                "deepseek" => config
+                    .deepseek_home
+                    .as_ref()
+                    .is_some_and(|home| self.touches(&home.join("storages"))),
+                _ => false,
+            }
     }
     pub fn watch_root_changed(&self, config: &AgentConfig) -> bool {
         let mut roots = Vec::new();
@@ -143,6 +151,7 @@ impl Changes {
 #[derive(Default)]
 pub(crate) struct Sources {
     rows: Vec<Discovered>,
+    pub(crate) history: codex_history::RecencyCache,
 }
 impl Sources {
     pub fn update(
@@ -178,7 +187,10 @@ impl Sources {
             {
                 // A shared SQLite WAL does not identify the changed thread.
                 // Refresh only its rows, never walk the transcript roots.
-                if let Ok(found) = codex_history::scan(home) {
+                if changes.full {
+                    self.history = Default::default();
+                }
+                if let Ok(found) = self.history.scan(home) {
                     self.rows.retain(|r| !codex_history::is(r));
                     self.rows.extend(found);
                 }

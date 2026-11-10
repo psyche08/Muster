@@ -481,7 +481,11 @@ impl CatalogCache {
         self.limits.clone_from(&state.agent_catalog_limits);
         self.pending.clone_from(&state.agent_catalog_pending);
         self.organizing.clone_from(&state.agent_organizing);
-        self.rows = Some(catalog_rows(state));
+        let rows = catalog_rows(state);
+        if self.rows.as_ref() == Some(&rows) {
+            return false;
+        }
+        self.rows = Some(rows);
         true
     }
 }
@@ -1647,6 +1651,10 @@ mod history_projection_tests {
             assert!(!renderer.catalog.refresh(state));
         };
         check(&mut renderer, &state);
+        state
+            .agent_disclosures
+            .insert("missing-group".into(), false);
+        assert!(renderer.prepare(&state).is_none());
         state.busy += 1;
         assert!(!renderer.catalog.refresh(&state));
         check(&mut renderer, &state);

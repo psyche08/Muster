@@ -23,36 +23,46 @@ impl Catalog {
     /// A failed read is not a new empty native state. Retain only that provider's
     /// last complete display snapshot; mutation preparation reads afresh.
     pub fn retain_unavailable(&mut self, previous: &Self) {
-        for (provider, _) in &self.notices {
-            self.sections.extend(
-                previous
-                    .sections
-                    .iter()
-                    .filter(|s| &s.provider == provider)
-                    .cloned(),
-            );
-            self.members.extend(
-                previous
-                    .members
-                    .iter()
-                    .filter(|((p, _), _)| p == provider)
-                    .map(|(k, v)| (k.clone(), v.clone())),
-            );
-            self.pinned.extend(
-                previous
-                    .pinned
-                    .iter()
-                    .filter(|(p, _)| p == provider)
-                    .cloned(),
-            );
-            self.titles.extend(
-                previous
-                    .titles
-                    .iter()
-                    .filter(|((p, _), _)| p == provider)
-                    .map(|(k, v)| (k.clone(), v.clone())),
-            );
+        for provider in self
+            .notices
+            .iter()
+            .map(|(p, _)| p.clone())
+            .collect::<Vec<_>>()
+        {
+            self.sections.retain(|s| s.provider != provider);
+            self.copy_provider(previous, &provider);
         }
+    }
+
+    fn copy_provider(&mut self, previous: &Self, provider: &str) {
+        self.sections.extend(
+            previous
+                .sections
+                .iter()
+                .filter(|s| s.provider == provider)
+                .cloned(),
+        );
+        self.members.extend(
+            previous
+                .members
+                .iter()
+                .filter(|((p, _), _)| p == provider)
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
+        self.pinned.extend(
+            previous
+                .pinned
+                .iter()
+                .filter(|(p, _)| p == provider)
+                .cloned(),
+        );
+        self.titles.extend(
+            previous
+                .titles
+                .iter()
+                .filter(|((p, _), _)| p == provider)
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
     }
 
     pub fn apply(&self, session: &mut AgentSession) {
@@ -144,8 +154,32 @@ pub(crate) fn native_title(config: &AgentConfig, provider: &str, id: &str) -> Op
     }
 }
 pub(crate) fn read(config: &AgentConfig) -> Catalog {
+    read_changed(
+        config,
+        &crate::discovery::Changes::full(),
+        &Catalog::default(),
+    )
+}
+
+pub(crate) fn read_changed(
+    config: &AgentConfig,
+    changes: &crate::discovery::Changes,
+    previous: &Catalog,
+) -> Catalog {
+    let carry = |out: &mut Catalog, provider: &str| {
+        out.copy_provider(previous, provider);
+        out.notices.extend(
+            previous
+                .notices
+                .iter()
+                .filter(|(p, _)| p == provider)
+                .cloned(),
+        );
+    };
     let mut out = Catalog::default();
-    if let Some(home) = &config.codex_home {
+    if !changes.provider_metadata_changed(config, "codex") {
+        carry(&mut out, "codex");
+    } else if let Some(home) = &config.codex_home {
         match codex(home) {
             Ok(c) => merge(&mut out, c),
             Err(_) => out.notices.push((
@@ -154,7 +188,9 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             )),
         }
     }
-    if let Some(home) = &config.deepseek_home {
+    if !changes.provider_metadata_changed(config, "deepseek") {
+        carry(&mut out, "deepseek");
+    } else if let Some(home) = &config.deepseek_home {
         match deepseek(home) {
             Some(c) => merge(&mut out, c),
             None => out.notices.push((
@@ -163,7 +199,9 @@ pub(crate) fn read(config: &AgentConfig) -> Catalog {
             )),
         }
     }
-    if let Some(root) = &config.claude_desktop {
+    if !changes.provider_metadata_changed(config, "claude") {
+        carry(&mut out, "claude");
+    } else if let Some(root) = &config.claude_desktop {
         match claude(root) {
             Some(c) => merge(&mut out, c),
             None => out.notices.push((
@@ -661,6 +699,28 @@ mod tests {
         };
         failed.retain_unavailable(&previous);
         assert_eq!(failed.sections, previous.sections);
+        let dir = tempfile::tempdir().unwrap();
+        let config = AgentConfig {
+            codex_home: Some(dir.path().to_owned()),
+            claude_desktop: Some(dir.path().join("missing")),
+            ..Default::default()
+        };
+        let changes = crate::discovery::Changes {
+            full: false,
+            paths: [dir.path().join("state_5.sqlite-wal")].into(),
+        };
+        let mut partial = read_changed(&config, &changes, &failed);
+        partial.retain_unavailable(&failed);
+        assert_eq!(partial.sections, previous.sections);
+        assert_eq!(partial.pinned, previous.pinned);
+        assert_eq!(
+            partial
+                .notices
+                .iter()
+                .filter(|(p, _)| p == "claude")
+                .count(),
+            1
+        );
         let mut session = AgentSession {
             id: A.into(),
             provider: "claude".into(),
