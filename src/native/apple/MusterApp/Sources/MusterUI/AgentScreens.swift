@@ -118,7 +118,7 @@ private struct CatalogSessionGroup: View {
     }
 }
 
-private struct CatalogSessionRow: View, Equatable {
+struct CatalogSessionRow: View, Equatable {
     let core: MusterCore
     let row: Muster_App_AgentCatalogRow
     let displayMinute: Int
@@ -134,30 +134,7 @@ private struct CatalogSessionRow: View, Equatable {
                     .padding(.leading, CGFloat(min(row.depth, 8) - 1) * 14 + 6)
             }
             Button { core.openAgent(row.session.id, device: row.session.deviceID) } label: {
-                VStack(alignment: .leading, spacing: 5) {
-                    if row.session.provider == "claude" {
-                        HStack(spacing: 8) {
-                            Text(row.session.title.isEmpty ? row.session.id : row.session.title)
-                                .font(.body).lineLimit(1).truncationMode(.tail)
-                            Spacer(minLength: 4)
-                            if row.session.updatedUnix > 0 {
-                                Text(relative(row.session.updatedUnix))
-                                    .font(.caption).foregroundStyle(.secondary)
-                                    .accessibilityLabel("Last message \(relative(row.session.updatedUnix))")
-                            }
-                            if row.session.state == "waiting_approval" || row.session.state == "running" {
-                                Circle().fill(row.session.state == "waiting_approval" ? Color.orange : Color.green)
-                                    .frame(width: 6, height: 6).accessibilityLabel(row.session.state == "waiting_approval" ? "Needs you" : "Working")
-                            }
-                        }.padding(.vertical, 6).help(row.session.title)
-                    } else { SessionRow(session: row.session, showDevice: row.sourceLabel.isEmpty) }
-                    if !row.sourceLabel.isEmpty {
-                        Text(row.sourceLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    if !row.session.searchSnippet.isEmpty {
-                        Text(row.session.searchSnippet).font(.callout).foregroundStyle(.secondary).lineLimit(3)
-                    }
-                }.contentShape(Rectangle())
+                SessionRow(session: row.session, source: row.sourceLabel)
             }.buttonStyle(.plain)
             if row.expandable {
                 Button { core.agentCatalogAction(.toggleFamily, value: row.key) } label: {
@@ -381,30 +358,39 @@ struct TurnFooter: View {
 
 struct SessionRow: View {
     let session: Muster_V1_AgentSession
-    var showDevice = true
+    let source: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(session.provider.capitalized).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(session.provider == "codex" ? Color.blue.opacity(0.15) : Color.orange.opacity(0.15), in: Capsule())
-                Text(session.title.isEmpty ? session.id : session.title).font(.headline).lineLimit(1)
-                Spacer()
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(session.title.isEmpty ? session.id : session.title)
+                    .font(.body.weight(.medium)).lineLimit(1).truncationMode(.tail)
+                    .help(session.title.isEmpty ? session.id : session.title)
+                Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 2) {
                     StateBadge(state: session.state)
                     if session.processState == "running" && session.state == "unknown" {
                         Text("process alive").font(.caption2).foregroundStyle(.secondary)
                     }
-                }
+                }.fixedSize(horizontal: true, vertical: false)
             }
-            HStack {
-                if showDevice && !session.deviceName.isEmpty { Text(session.deviceName).font(.footnote.weight(.medium)) }
-                Text(session.cwd).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                Spacer()
-                Text(relative(session.updatedUnix)).font(.footnote).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(source).lineLimit(1).layoutPriority(1)
+                if !session.cwd.isEmpty {
+                    Text(session.cwd).lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(.tertiary).help(session.cwd)
+                }
+                Spacer(minLength: 0)
+                if session.updatedUnix > 0 {
+                    Text(relative(session.updatedUnix)).fixedSize().layoutPriority(1)
+                        .accessibilityLabel("Last message \(relative(session.updatedUnix))")
+                }
+            }.font(.caption).foregroundStyle(.secondary)
+            if !session.searchSnippet.isEmpty {
+                Text(session.searchSnippet).font(.callout).foregroundStyle(.secondary).lineLimit(3)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .contentShape(Rectangle())
     }
 }

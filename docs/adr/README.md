@@ -293,3 +293,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0175](0175-codex-catalog-recency-cache.md) | Accepted | Reuse unchanged native history timestamps during catalog discovery |
 | [0176](0176-session-media-and-events.md) | Accepted | Display provider images and recorded session events |
 | [0177](0177-reuse-runtime-transcript-observations.md) | Accepted | Reuse passive transcript observations and publish changed runtime state |
+| [0178](0178-consistent-session-list-rows.md) | Accepted | Use one session row across providers |

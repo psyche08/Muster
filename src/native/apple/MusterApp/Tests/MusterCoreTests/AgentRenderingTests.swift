@@ -263,6 +263,39 @@ final class AgentRenderingTests: XCTestCase {
     }
 
     @MainActor
+    func testCatalogRowsHaveConsistentHeightAcrossProviders() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("catalog-layout-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let core = try MusterCore(config: .phone(dir: directory, name: "catalog fixture"),
+                                  keys: SoftwareKeys(), onViewModel: { _ in }, onEffect: { _, _ in })
+        defer { core.shutdown() }
+
+        for width: CGFloat in [320, 736] {
+            var heights: [Int] = []
+            for provider in ["Claude", "Codex", "DeepSeek"] {
+                let row = Muster_App_AgentCatalogRow.with {
+                    $0.sourceLabel = "\(provider) · Device A"
+                    $0.session = .with {
+                        $0.provider = provider.lowercased()
+                        $0.title = "Review the build output and the pending changes"
+                        $0.state = "waiting_approval"
+                        $0.cwd = "/Projects/Example/Modules/Components"
+                        $0.updatedUnix = 1_790_572_800
+                        $0.searchSnippet = "One matching line from the conversation"
+                    }
+                }
+                let view = CatalogSessionRow(core: core, row: row, displayMinute: 0).frame(width: width)
+                let image = try XCTUnwrap(ImageRenderer(content: view).cgImage)
+                XCTAssertEqual(image.width, Int(width))
+                heights.append(image.height)
+            }
+            XCTAssertEqual(Set(heights).count, 1, "Provider rows differ at width \(width)")
+        }
+    }
+
+    @MainActor
     func testRenderPhoneWidthCatalogAndMarkdownTurn() throws {
         var vm = ViewModel()
         vm.agents.deviceID = "*"
@@ -305,7 +338,7 @@ final class AgentRenderingTests: XCTestCase {
         let content = VStack(alignment: .leading, spacing: 16) {
             Text("Agents").font(.largeTitle.bold())
             DeviceTabs(devices: vm.serviceDevices, selected: "*", select: { _ in }, details: { _ in })
-            SessionRow(session: session)
+            SessionRow(session: session, source: "Codex · Mac-B")
             Divider()
             MessageBubble(message: markdown)
             TurnFooter(message: footer)
