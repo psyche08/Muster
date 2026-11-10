@@ -316,7 +316,7 @@ pub fn catdesk_runtime() -> Option<muster_agent::catdesk_app::Runtime> {
     use muster_agent::catdesk_app;
     let socket = catdesk_app::socket()?;
     let pid = catdesk_app::health(&socket).ok()?;
-    if !codesign::process_satisfies(pid, &CATDESK_APP.app.requirement()) {
+    if !codesign::discovery_process_satisfies(pid, &CATDESK_APP.app.requirement()) {
         return None;
     }
     let start = codesign::process_start(pid)?;
@@ -1565,6 +1565,7 @@ impl NativeAppController {
 
     async fn poll_loop(self: Arc<Self>) {
         let mut previous_process = None;
+        let mut next_observation = std::time::Instant::now();
         loop {
             tokio::time::sleep(STATE_POLL).await;
             if Arc::strong_count(&self) == 1 {
@@ -1610,11 +1611,27 @@ impl NativeAppController {
                 // respond always re-observes after the protected unlock.
                 continue;
             }
-            if screen_locked() || !ax::trusted() || self.check_identity().is_err() {
+            if screen_locked() || !ax::trusted() {
+                next_observation = std::time::Instant::now();
+                self.unobserve(SessionState::Unknown).await;
+                continue;
+            }
+            if std::time::Instant::now() < next_observation {
+                continue;
+            }
+            next_observation = std::time::Instant::now() + Duration::from_secs(3);
+            if self.check_identity().is_err() {
                 self.unobserve(SessionState::Unknown).await;
                 continue;
             }
             self.observe().await;
+            if matches!(
+                self.state(),
+                SessionState::Running | SessionState::WaitingApproval
+            ) || self.unconfirmed.is_unconfirmed()
+            {
+                next_observation = std::time::Instant::now();
+            }
         }
     }
 

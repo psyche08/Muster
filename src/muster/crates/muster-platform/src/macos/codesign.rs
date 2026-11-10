@@ -92,6 +92,85 @@ pub fn process_satisfies(pid: u32, requirement: &str) -> bool {
     ok
 }
 
+/// A short-lived observation for passive discovery only. Control operations use
+/// process_satisfies directly. Exec can preserve a PID and launch time.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SignedImage {
+    start: u64,
+    flags: u32,
+    cdhash: [u8; 20],
+}
+
+fn signed_image(pid: u32) -> Option<SignedImage> {
+    unsafe extern "C" {
+        fn csops(pid: libc::pid_t, operation: u32, address: *mut c_void, size: usize) -> i32;
+    }
+    const CS_OPS_STATUS: u32 = 0;
+    const CS_OPS_CDHASH: u32 = 5;
+    const CS_VALID: u32 = 1;
+    let start = process_start(pid)?;
+    let mut flags = 0u32;
+    let mut cdhash = [0u8; 20];
+    // SAFETY: these Darwin status queries write into buffers of the specified sizes.
+    unsafe {
+        if csops(
+            pid as i32,
+            CS_OPS_STATUS,
+            (&mut flags as *mut u32).cast(),
+            size_of::<u32>(),
+        ) != 0
+            || flags & CS_VALID == 0
+            || csops(
+                pid as i32,
+                CS_OPS_CDHASH,
+                cdhash.as_mut_ptr().cast(),
+                cdhash.len(),
+            ) != 0
+            || cdhash == [0; 20]
+        {
+            return None;
+        }
+    }
+    Some(SignedImage {
+        start,
+        flags,
+        cdhash,
+    })
+}
+
+pub(super) fn discovery_process_satisfies(pid: u32, requirement: &str) -> bool {
+    use std::{
+        collections::HashMap,
+        sync::{LazyLock, Mutex},
+        time::{Duration, Instant},
+    };
+    type Observations = HashMap<(u32, String), (SignedImage, Instant)>;
+    static VERIFIED: LazyLock<Mutex<Observations>> = LazyLock::new(Default::default);
+    const VALID_FOR: Duration = Duration::from_secs(60);
+    let Some(image) = signed_image(pid) else {
+        return process_satisfies(pid, requirement);
+    };
+    let key = (pid, requirement.to_owned());
+    if VERIFIED
+        .lock()
+        .unwrap()
+        .get(&key)
+        .is_some_and(|(prior, at)| *prior == image && at.elapsed() < VALID_FOR)
+    {
+        return true;
+    }
+    if !process_satisfies(pid, requirement) || signed_image(pid) != Some(image) {
+        VERIFIED.lock().unwrap().remove(&key);
+        return false;
+    }
+    let mut verified = VERIFIED.lock().unwrap();
+    verified.retain(|_, (_, at)| at.elapsed() < VALID_FOR);
+    if verified.len() < 1024 {
+        verified.insert(key, (image, Instant::now()));
+    }
+    true
+}
+
 /// The process start time in microseconds since the epoch, from
 /// `proc_pidinfo(PROC_PIDTBSDINFO)`; `None` when the pid is gone.
 pub fn process_start(pid: u32) -> Option<u64> {
@@ -182,8 +261,16 @@ mod process_tests {
             .unwrap();
         let pid = child.id();
         assert!(observe_process_start(pid).unwrap().is_some());
+        assert!(signed_image(pid).is_some());
+        assert!(discovery_process_satisfies(pid, "anchor apple"));
+        assert!(discovery_process_satisfies(pid, "anchor apple"));
+        assert!(!discovery_process_satisfies(
+            pid,
+            "identifier \"invalid.example\""
+        ));
         drop(child.stdin.take());
         child.wait().unwrap();
         assert_eq!(observe_process_start(pid).unwrap(), None);
+        assert!(!discovery_process_satisfies(pid, "anchor apple"));
     }
 }

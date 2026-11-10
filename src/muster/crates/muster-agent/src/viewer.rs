@@ -70,6 +70,14 @@ pub trait Viewer: Send {
             meta.len(),
         ))
     }
+    /// Some viewers share a backing file with unrelated conversations.
+    fn changed_stamp(
+        &self,
+        prior: (SystemTime, u64),
+    ) -> std::io::Result<Option<(SystemTime, u64)>> {
+        let current = self.stamp()?;
+        Ok((current != prior).then_some(current))
+    }
     /// Reads what was appended since the last poll.
     fn poll(&mut self) -> std::io::Result<Polled>;
 }

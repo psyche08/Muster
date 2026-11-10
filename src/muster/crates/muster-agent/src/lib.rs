@@ -1411,12 +1411,9 @@ impl AgentService {
             };
             // No await occurs while the viewer is leased out: cancellation
             // cannot strand it. Metadata and cached history remain readable.
-            let result = viewer.stamp().and_then(|stat| {
-                if stat == prior {
-                    Ok((stat, None))
-                } else {
-                    viewer.poll().map(|polled| (stat, Some(polled)))
-                }
+            let result = viewer.changed_stamp(prior).and_then(|change| match change {
+                Some(stat) => viewer.poll().map(|polled| (stat, Some(polled))),
+                None => Ok((prior, None)),
             });
             let time = if result.as_ref().is_ok_and(|(_, p)| p.is_some()) {
                 if codex_history::is(&source) {
