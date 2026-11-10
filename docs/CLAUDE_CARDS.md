@@ -20,6 +20,11 @@ use the existing guarded native Accessibility path.
 | File delivery | Caption and confirmed attachment links; only a successful matching `SendUserFile` result with a validated path enables preview |
 | Artifact | Successful `https://claude.ai/code/artifact/…` delivery links |
 
+On macOS and iOS, an optional wrap-up opens below the transcript with its
+recap, question and reply buttons. Press a reply to submit it directly.
+The close button folds the card. The card’s context menu offers a custom
+answer when the question accepts text.
+
 A successful wrap-up result means the card was shown, not that its question was
 answered. Later human input, a replacement wrap-up, a display failure, or an
 explicit no-box result retires it without manufacturing an answer receipt.

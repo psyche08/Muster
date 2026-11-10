@@ -168,6 +168,36 @@ final class AgentRenderingTests: XCTestCase {
     }
 
     @MainActor
+    func testCompactWrapUpFitsPhoneAndDesktopWidths() throws {
+        let interaction = Muster_V1_PendingInteraction.with {
+            $0.id = "question:wrap"; $0.kind = "question"; $0.optional = true
+            $0.prompt = "六轮检查已完成。恢复后连接正常，仍有一项需要复测。"
+            $0.questions = [.with {
+                $0.id = "next"; $0.prompt = "要调整设置并再次运行检查吗？"
+                $0.allowText = true
+                $0.options = ["调整并复测", "先不改"].map { label in
+                    .with { $0.id = label; $0.label = label; $0.description_p = label }
+                }
+            }]
+        }
+        for width: CGFloat in [320, 736] {
+            let view = InteractionCard(interaction: interaction, compactWrapUp: true, submitting: false,
+                                       error: "", outcomeUnknown: false, respond: { _, _ in })
+                .frame(width: width).environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            let image = try XCTUnwrap(renderer.cgImage)
+            XCTAssertEqual(image.width, Int(width * renderer.scale))
+            let height = CGFloat(image.height) / renderer.scale
+            XCTAssertGreaterThan(height, 85, "The wrap-up should open with its actions visible")
+            XCTAssertLessThan(height, 180, "A single choice should not require a full questionnaire")
+            try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                .write(to: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("muster-wrap-up-\(Int(width)).png"))
+        }
+    }
+
+    @MainActor
     func testRenderQuestionCardsAtPhoneWidth() throws {
         let interaction = Muster_V1_PendingInteraction.with {
             $0.id = "question:render"; $0.kind = "question"

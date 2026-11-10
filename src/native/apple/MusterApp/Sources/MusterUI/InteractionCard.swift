@@ -5,10 +5,12 @@ import MusterCore
 /// Draft selections are user input only; Shared Rust validates and submits them.
 struct InteractionCard: View {
     let interaction: Muster_V1_PendingInteraction
+    var compactWrapUp = false
     let submitting: Bool
     let error: String
     let outcomeUnknown: Bool
     let respond: (String, [Muster_V1_QuestionAnswer]) -> Void
+    @State private var foldedWrapUp = false
     @State private var expanded = false
     @State private var selections: [String: Set<String>] = [:]
     @State private var custom: Set<String> = []
@@ -18,7 +20,23 @@ struct InteractionCard: View {
     private var palette: ChatPalette { ChatPalette(scheme: scheme, style: style) }
 
     var body: some View {
-        if interaction.optional {
+        if compactWrapUp, let question = interaction.questions.first {
+            if foldedWrapUp {
+                Button {
+                    foldedWrapUp = false
+                } label: {
+                    Label("可选回答", systemImage: "chevron.right")
+                }.buttonStyle(.plain).foregroundStyle(palette.secondary)
+            } else {
+                wrapUp(question)
+                    .contextMenu {
+                        if question.allowText {
+                            Button("输入自己的回答") { custom.insert(question.id) }
+                                .disabled(submitting || outcomeUnknown)
+                        }
+                    }
+            }
+        } else if interaction.optional {
             DisclosureGroup(isExpanded: $expanded) {
                 card.padding(.top, 10)
             } label: {
@@ -26,6 +44,83 @@ struct InteractionCard: View {
             }.tint(palette.secondary)
         } else {
             card
+        }
+    }
+
+    private func wrapUp(_ question: Muster_V1_InteractionQuestion) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(interaction.prompt)
+                    .foregroundStyle(palette.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    foldedWrapUp = true
+                } label: {
+                    Image(systemName: "xmark").padding(4)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(palette.secondary)
+                .accessibilityLabel("收起可选回答")
+            }
+            Text(question.prompt).textSelection(.enabled)
+            if custom.contains(question.id) {
+                answerField(for: question).accessibilityLabel(question.prompt)
+                HStack {
+                    Button("提交回答") {
+                        respond("", [.with {
+                            $0.questionID = question.id
+                            $0.text = text[question.id, default: ""]
+                        }])
+                    }.disabled(text[question.id, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("取消") { custom.remove(question.id) }
+                }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { wrapUpButtons(question) }.fixedSize()
+                    VStack(alignment: .leading, spacing: 8) { wrapUpButtons(question) }
+                }
+            }
+            if submitting { ProgressView().controlSize(.small) }
+            responseFeedback
+        }
+        .disabled(submitting || outcomeUnknown)
+        .font(.system(size: ChatStyle.bodySize)).foregroundStyle(palette.text)
+        .padding(15)
+        .background(palette.canvas, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.border))
+    }
+
+    private func wrapUpButtons(_ question: Muster_V1_InteractionQuestion) -> some View {
+        ForEach(question.options, id: \.id) { option in
+            let primary = option.id == question.options.first?.id
+            Button {
+                let answer = Muster_V1_QuestionAnswer.with {
+                    $0.questionID = question.id
+                    $0.optionIds = [option.id]
+                }
+                respond("", [answer])
+            } label: {
+                Text(option.label).fontWeight(.medium)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .foregroundStyle(primary ? palette.canvas : palette.text)
+                    .background(primary ? palette.text : palette.secondary.opacity(0.22),
+                                in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help(option.description_p)
+        }
+    }
+
+    @ViewBuilder private var responseFeedback: some View {
+        if !error.isEmpty {
+            Label(error, systemImage: outcomeUnknown ? "questionmark.circle" : "exclamationmark.circle")
+                .font(.callout).foregroundStyle(.red)
+        }
+        if outcomeUnknown {
+            Text("Check the answer in the desktop app before trying again.")
+                .font(.caption).foregroundStyle(palette.secondary)
         }
     }
 
@@ -111,8 +206,7 @@ struct InteractionCard: View {
                     }.frame(maxWidth: .infinity)
                 }.buttonStyle(.borderedProminent).controlSize(.large)
             }
-            if !error.isEmpty { Label(error, systemImage: outcomeUnknown ? "questionmark.circle" : "exclamationmark.circle").font(.callout).foregroundStyle(.red) }
-            if outcomeUnknown { Text("Check the answer in the desktop app before trying again.").font(.caption).foregroundStyle(palette.secondary) }
+            responseFeedback
         }
         .disabled(submitting || outcomeUnknown)
         .padding(18)

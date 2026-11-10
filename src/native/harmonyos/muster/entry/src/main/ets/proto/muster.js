@@ -47194,6 +47194,7 @@ export const muster = $root.muster = (() => {
              * @property {Array.<muster.app.ICodeRunView>|null} [codeRuns] ChatView codeRuns
              * @property {string|null} [codeError] ChatView codeError
              * @property {boolean|null} [hasNewer] ChatView hasNewer
+             * @property {Array.<string>|null} [compactWrapUpIds] ChatView compactWrapUpIds
              */
 
             /**
@@ -47209,6 +47210,7 @@ export const muster = $root.muster = (() => {
                 this.timeline = [];
                 this.trace = [];
                 this.codeRuns = [];
+                this.compactWrapUpIds = [];
                 if (properties)
                     for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -47528,6 +47530,14 @@ export const muster = $root.muster = (() => {
             ChatView.prototype.hasNewer = false;
 
             /**
+             * ChatView compactWrapUpIds.
+             * @member {Array.<string>} compactWrapUpIds
+             * @memberof muster.app.ChatView
+             * @instance
+             */
+            ChatView.prototype.compactWrapUpIds = $util.emptyArray;
+
+            /**
              * Creates a new ChatView instance using the specified properties.
              * @function create
              * @memberof muster.app.ChatView
@@ -47637,6 +47647,9 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 39, wireType 2 =*/314).string(message.codeError);
                 if (message.hasNewer != null && Object.hasOwnProperty.call(message, "hasNewer"))
                     writer.uint32(/* id 40, wireType 0 =*/320).bool(message.hasNewer);
+                if (message.compactWrapUpIds != null && message.compactWrapUpIds.length)
+                    for (let i = 0; i < message.compactWrapUpIds.length; ++i)
+                        writer.uint32(/* id 41, wireType 2 =*/330).string(message.compactWrapUpIds[i]);
                 return writer;
             };
 
@@ -47836,6 +47849,12 @@ export const muster = $root.muster = (() => {
                         }
                     case 40: {
                             message.hasNewer = reader.bool();
+                            break;
+                        }
+                    case 41: {
+                            if (!(message.compactWrapUpIds && message.compactWrapUpIds.length))
+                                message.compactWrapUpIds = [];
+                            message.compactWrapUpIds.push(reader.string());
                             break;
                         }
                     default:

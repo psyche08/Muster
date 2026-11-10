@@ -18461,6 +18461,9 @@ export namespace muster {
 
             /** ChatView hasNewer */
             hasNewer?: (boolean|null);
+
+            /** ChatView compactWrapUpIds */
+            compactWrapUpIds?: (string[]|null);
         }
 
         /** Represents a ChatView. */
@@ -18588,6 +18591,9 @@ export namespace muster {
 
             /** ChatView hasNewer. */
             public hasNewer: boolean;
+
+            /** ChatView compactWrapUpIds. */
+            public compactWrapUpIds: string[];
 
             /**
              * Creates a new ChatView instance using the specified properties.
