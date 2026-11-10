@@ -294,3 +294,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0176](0176-session-media-and-events.md) | Accepted | Display provider images and recorded session events |
 | [0177](0177-reuse-runtime-transcript-observations.md) | Accepted | Reuse passive transcript observations and publish changed runtime state |
 | [0178](0178-consistent-session-list-rows.md) | Accepted | Use one session row across providers |
+| [0179](0179-publish-unified-apple-catalog.md) | Accepted | Publish the unified Apple catalog as 1.1.34 (124) |
