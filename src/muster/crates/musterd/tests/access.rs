@@ -124,6 +124,19 @@ async fn sessions(remote: &Client, provider: &str) -> Result<Vec<String>, muster
     }
 }
 
+async fn watch_page(watch: &mut muster_rpc::Call, timeout: Duration) -> v1::AgentSessionPage {
+    let event = tokio::time::timeout(timeout, watch.events.recv())
+        .await
+        .expect("catalog deadline")
+        .expect("catalog stream");
+    match event {
+        v1::event::Ev::AgentEvent(v1::AgentEvent {
+            ev: Some(v1::agent_event::Ev::ListChanged(page)),
+        }) => page,
+        _ => panic!("expected a catalog page"),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -469,6 +482,15 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         !all_desktop.iter().any(|id| id.starts_with("orca:")),
         "all Desktop scopes must not leak CLI sessions"
     );
+    let mut catalog = remote
+        .start(Req::AgentWatch(v1::AgentWatchRequest {
+            catalog_only: true,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+    let initial = watch_page(&mut catalog, Duration::from_secs(3)).await;
+    assert!(initial.sessions.iter().any(|s| s.id == CLAUDE));
     ca.call(Req::NetworkSetScopes(v1::NetworkSetScopesRequest {
         device_id: pending.device_id.clone(),
         scopes: vec!["agents".into(), "agents:codex".into()],
@@ -476,6 +498,12 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     }))
     .await
     .unwrap();
+
+    // A narrower provider grant bypasses the ordinary five-second interval.
+    let restricted = watch_page(&mut catalog, Duration::from_secs(2)).await;
+    assert_eq!(restricted.sessions.len(), 1);
+    assert_eq!(restricted.sessions[0].id, CODEX);
+    catalog.cancel().await;
 
     // A watch of every session shows Codex only.
     let mut watch = remote
@@ -766,4 +794,91 @@ async fn multica_reservation_removes_catalog_search_and_child_access_and_ends_id
             .await
             .is_ok()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catalog_watch_coalesces_changes_and_invalidates_ownership_immediately() {
+    let dir = tempfile::tempdir().unwrap();
+    transcripts(dir.path());
+    let daemon = Daemon::start_with(
+        config(dir.path(), None, "test-host"),
+        std::sync::Arc::new(musterd::DefaultPlatform),
+        None,
+    )
+    .await
+    .unwrap();
+    let agent = daemon.agent().unwrap();
+    let rename = |title: &str| {
+        std::fs::write(
+            dir.path().join("codex/session_index.jsonl"),
+            format!(r#"{{"id":"{CODEX}","thread_name":"{title}"}}"#),
+        )
+        .unwrap();
+    };
+    rename("Initial");
+    agent.rescan().await;
+    let local = client(&daemon).await;
+    let mut watch = local
+        .start(Req::AgentWatch(v1::AgentWatchRequest {
+            catalog_only: true,
+            grouped: true,
+            provider_pages: true,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+    let has_title = |page: v1::AgentSessionPage, title: &str| {
+        page.sessions
+            .iter()
+            .any(|s| s.id == CODEX && s.title == title)
+    };
+    assert!(has_title(
+        watch_page(&mut watch, Duration::from_secs(7)).await,
+        "Initial"
+    ));
+    rename("Intermediate");
+    agent.rescan().await;
+    rename("Latest");
+    agent.rescan().await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(600), watch.events.recv())
+            .await
+            .is_err()
+    );
+    assert!(has_title(
+        watch_page(&mut watch, Duration::from_secs(7)).await,
+        "Latest"
+    ));
+
+    // A burst returning to the published page should produce no delivery.
+    rename("Transient");
+    agent.rescan().await;
+    rename("Latest");
+    agent.rescan().await;
+    assert!(
+        tokio::time::timeout(Duration::from_secs(6), watch.events.recv())
+            .await
+            .is_err()
+    );
+
+    rename("Pending");
+    agent.rescan().await;
+    reserve_multica(&daemon, CODEX);
+    let event = tokio::time::timeout(Duration::from_secs(2), watch.events.recv())
+        .await
+        .unwrap();
+    assert!(
+        matches!(event, Some(v1::event::Ev::AgentEvent(v1::AgentEvent {
+        ev: Some(v1::agent_event::Ev::Unavailable(removed)),
+    })) if removed.sessions.iter().any(|id| id == CODEX))
+    );
+    assert!(
+        watch_page(&mut watch, Duration::from_secs(2))
+            .await
+            .sessions
+            .iter()
+            .all(|s| s.id != CODEX)
+    );
+    watch.cancel().await;
+    daemon.shutdown().await;
 }

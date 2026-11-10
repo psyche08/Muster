@@ -881,8 +881,12 @@ impl<'a> AgentVisibility<'a> {
         limit: usize,
         visible: &[String],
         provider_pages: bool,
+        shown_sessions: &mut std::collections::BTreeSet<String>,
     ) -> Result<v1::AgentSessionPage, Error> {
         let snapshot = self.snapshot(agent);
+        for row in &snapshot.sessions {
+            session_ids(row, shown_sessions);
+        }
         if grouped {
             let page = if provider_pages {
                 muster_agent::catalog::provider_page
@@ -2029,9 +2033,6 @@ async fn dispatch(
             ownership_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             let mut ownership_revision = daemon.store().multica_ownership_revision()?;
             let mut shown_sessions = std::collections::BTreeSet::new();
-            for row in visible.snapshot(&agent).sessions {
-                session_ids(&row, &mut shown_sessions);
-            }
             let filter = r.session.clone();
             let catalog_only = r.catalog_only && filter.is_empty();
             let limit = if catalog_only {
@@ -2046,20 +2047,41 @@ async fn dispatch(
             // The watched session's provider, fixed for the stream's life.
             let mut provider = None;
             let mut _watch = None;
+            let catalog_page = |shown: &mut _| {
+                visible.catalog_page(
+                    &agent,
+                    r.grouped,
+                    limit,
+                    &r.visible_sessions,
+                    r.provider_pages,
+                    shown,
+                )
+            };
+            let catalog_grants = || {
+                (catalog_only && visible.peer.is_some()).then(|| {
+                    muster_core::apps::agent_providers()
+                        .into_iter()
+                        .filter(|provider| visible.allows(Some(provider)))
+                        .collect::<Vec<_>>()
+                })
+            };
+            let mut grants = catalog_grants();
+            let mut last_page = None;
             // Current state first so the watcher starts from a known view.
             if filter.is_empty() {
+                let page = catalog_page(&mut shown_sessions)?;
+                if catalog_only {
+                    last_page = Some(page.clone());
+                }
                 events
                     .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
-                        ev: Some(v1::agent_event::Ev::ListChanged(visible.catalog_page(
-                            &agent,
-                            r.grouped,
-                            limit,
-                            &r.visible_sessions,
-                            r.provider_pages,
-                        )?)),
+                        ev: Some(v1::agent_event::Ev::ListChanged(page)),
                     }))
                     .await?;
             } else {
+                for row in visible.snapshot(&agent).sessions {
+                    session_ids(&row, &mut shown_sessions);
+                }
                 let session = agent
                     .session(&filter)
                     .ok_or_else(|| Error::NotFound(format!("agent session {filter}")))?;
@@ -2086,6 +2108,9 @@ async fn dispatch(
                         .await?;
                 }
             }
+            const CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+            let mut next_refresh = tokio::time::Instant::now() + CATALOG_REFRESH_INTERVAL;
+            let mut catalog_dirty = false;
             loop {
                 let event = tokio::select! {
                     _ = events.cancelled().cancelled() => break,
@@ -2095,17 +2120,33 @@ async fn dispatch(
                             return Err(Error::Unauthorized("Session ownership or access changed".into()));
                         }
                         let revision = daemon.store().multica_ownership_revision()?;
-                        if revision == ownership_revision { continue; }
-                        ownership_revision = revision;
-                        let removed: Vec<_> = shown_sessions.iter().filter(|id| !visible.session(&agent, id)).cloned().collect();
-                        if !removed.is_empty() {
-                            for id in &removed { shown_sessions.remove(id); }
-                            events.send(v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(v1::agent_event::Ev::Unavailable(v1::AgentUnavailable { sessions: removed })) })).await?;
+                        if revision != ownership_revision {
+                            ownership_revision = revision;
+                            let removed: Vec<_> = shown_sessions.iter().filter(|id| !visible.session(&agent, id)).cloned().collect();
+                            if !removed.is_empty() {
+                                for id in &removed { shown_sessions.remove(id); }
+                                events.send(v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(v1::agent_event::Ev::Unavailable(v1::AgentUnavailable { sessions: removed })) })).await?;
+                            }
+                        } else {
+                            let current_grants = catalog_grants();
+                            let refresh_due = catalog_dirty && tokio::time::Instant::now() >= next_refresh;
+                            if grants == current_grants && !refresh_due {
+                                continue;
+                            }
+                            grants = current_grants;
                         }
-                        for row in visible.snapshot(&agent).sessions { session_ids(&row, &mut shown_sessions); }
                         muster_agent::Event::ListChanged
                     }
                     next = rx.recv() => match next {
+                        Ok(muster_agent::Event::ListChanged | muster_agent::Event::State(_)) if catalog_only => {
+                            catalog_dirty = true;
+                            continue;
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) if catalog_only => {
+                            // The next full catalog also covers changes skipped in a burst.
+                            catalog_dirty = true;
+                            continue;
+                        }
                         Ok(event) => event,
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             // A watcher cannot know which sessions/messages it
@@ -2118,7 +2159,7 @@ async fn dispatch(
                         Err(_) => break,
                     }
                 };
-                if matches!(event, muster_agent::Event::ListChanged) {
+                if !filter.is_empty() && matches!(event, muster_agent::Event::ListChanged) {
                     for row in visible.snapshot(&agent).sessions {
                         session_ids(&row, &mut shown_sessions);
                     }
@@ -2142,34 +2183,25 @@ async fn dispatch(
                     ));
                 }
                 if catalog_only {
-                    if matches!(
-                        event,
-                        muster_agent::Event::ListChanged | muster_agent::Event::State(_)
-                    ) {
-                        events
-                            .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
-                                ev: Some(v1::agent_event::Ev::ListChanged(visible.catalog_page(
-                                    &agent,
-                                    r.grouped,
-                                    limit,
-                                    &r.visible_sessions,
-                                    r.provider_pages,
-                                )?)),
-                            }))
-                            .await?;
+                    if matches!(event, muster_agent::Event::ListChanged) {
+                        let page = catalog_page(&mut shown_sessions)?;
+                        catalog_dirty = false;
+                        next_refresh = tokio::time::Instant::now() + CATALOG_REFRESH_INTERVAL;
+                        if last_page.as_ref() != Some(&page) {
+                            last_page = Some(page.clone());
+                            events
+                                .send(v1::event::Ev::AgentEvent(v1::AgentEvent {
+                                    ev: Some(v1::agent_event::Ev::ListChanged(page)),
+                                }))
+                                .await?;
+                        }
                     }
                     continue;
                 }
                 let shown = |session: &str| visible.session(&agent, session);
                 let ev = match event {
                     muster_agent::Event::ListChanged if filter.is_empty() => {
-                        v1::agent_event::Ev::ListChanged(visible.catalog_page(
-                            &agent,
-                            r.grouped,
-                            limit,
-                            &r.visible_sessions,
-                            r.provider_pages,
-                        )?)
+                        v1::agent_event::Ev::ListChanged(catalog_page(&mut shown_sessions)?)
                     }
                     muster_agent::Event::ListChanged => match agent
                         .session(&filter)
