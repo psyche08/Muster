@@ -1,9 +1,9 @@
 #![cfg(unix)]
-use muster_agent::orca::{Action, Source, runtime::NativeRuntime};
+use muster_agent::cli::{Action, Source, runtime::NativeRuntime};
 use muster_proto::v1::AgentMessagesRequest;
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 fn programs() -> HashMap<String, PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/orca-cli.py");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/native-cli.py");
     [("codex".into(), path.clone()), ("claude".into(), path)]
         .into_iter()
         .collect()
@@ -154,6 +154,8 @@ async fn rust_runtime_owns_both_cli_protocols_and_persists_sessions() {
         let requests = std::fs::read_to_string(cwd.path().join("provider-requests.jsonl")).unwrap();
         if agent == "codex" {
             assert!(requests.contains("thread/resume"));
+        } else {
+            assert!(requests.contains(r#""resume": "claude-session-1""#));
         }
         source.shutdown();
     }
@@ -322,4 +324,76 @@ async fn a_sessions_environment_is_not_written_to_the_journal() {
         found.is_empty(),
         "a session credential reached the journal: {found:?}"
     );
+}
+
+/// Seed the deployed schema and opaque IDs independently of the current create path.
+#[tokio::test]
+async fn opens_a_pre_cutover_session_and_expires_its_old_prompt() {
+    use rusqlite::{Connection, params};
+    use serde_json::json;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = tempfile::tempdir().unwrap();
+    let db = Connection::open(dir.path().join("sessions.db")).unwrap();
+    db.execute_batch(
+        "
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE items (session TEXT, id TEXT, seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                            revision INTEGER, observed INTEGER, body TEXT, UNIQUE(session,id));
+        INSERT INTO meta VALUES ('runtime', 'host-a');
+    ",
+    )
+    .unwrap();
+    db.execute(
+        "INSERT INTO sessions VALUES ('cli-a', ?)",
+        [json!({
+            "id":"cli-a", "agent":"codex", "cwd":cwd.path(), "provider_id":"thread-1",
+            "generation":"old-child", "turn":"turn-1", "state":"running"
+        })
+        .to_string()],
+    )
+    .unwrap();
+    for (id, body) in [
+        (
+            "message",
+            json!({"kind":"message","role":"assistant","blocks":[{"type":"text","text":"Prior turn"}]}),
+        ),
+        (
+            "question",
+            json!({"kind":"approval","generation":"old-child","resolution":{"state":"pending"}}),
+        ),
+    ] {
+        db.execute(
+            "INSERT INTO items(session,id,revision,observed,body) VALUES ('cli-a',?,1,1000,?)",
+            params![id, body.to_string()],
+        )
+        .unwrap();
+    }
+    drop(db);
+
+    let runtime = NativeRuntime::with_programs(dir.path(), programs()).unwrap();
+    let (events, _) = tokio::sync::broadcast::channel(32);
+    let source = Source::new(runtime, events);
+    source.discover().await.unwrap();
+    let id = "orca:686f73742d61:636c692d61";
+    let page = source
+        .history(&AgentMessagesRequest {
+            session: id.into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(page.messages.iter().any(|m| m.text == "Prior turn"));
+    assert!(source.pending(id).is_empty());
+    assert_eq!(source.session_provider(id).as_deref(), Some("orca"));
+    source
+        .operation(id, "after-upgrade", Action::Send("Continue".into()))
+        .await
+        .unwrap();
+    wait_prompt(&source, id).await;
+    let requests = std::fs::read_to_string(cwd.path().join("provider-requests.jsonl")).unwrap();
+    assert!(requests.contains("thread/resume"));
+    assert!(!requests.contains("thread/start"));
+    source.shutdown();
 }

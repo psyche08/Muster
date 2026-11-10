@@ -134,7 +134,7 @@ impl Predictor for AppServer {
         let program = self
             .program
             .clone()
-            .or_else(|| crate::orca::runtime::program::resolve("codex"))?;
+            .or_else(|| crate::cli::runtime::program::resolve("codex"))?;
         let mut child = match spawn(&program) {
             Ok(child) => child,
             Err(error) => {

@@ -318,9 +318,9 @@ impl Daemon {
                     Err(error) => log::warn!("cloud sessions off: no HTTPS client: {error}"),
                 }
             }
-            if agent.orca_rpc.is_none() {
-                match muster_agent::orca::runtime::NativeRuntime::open(&config.dir.join("orca")) {
-                    Ok(runtime) => agent.orca_rpc = Some(runtime),
+            if agent.cli_runtime.is_none() {
+                match muster_agent::cli::runtime::NativeRuntime::open(&config.dir.join("orca")) {
+                    Ok(runtime) => agent.cli_runtime = Some(runtime),
                     Err(_) => log::warn!("Rust CLI session store unavailable"),
                 }
             }
@@ -898,8 +898,8 @@ impl Daemon {
             self.injected_vnet_open.lock().unwrap().take();
         }
         if let Some(agent) = &self.agent {
-            if let Ok(orca) = agent.orca_source() {
-                orca.shutdown();
+            if let Ok(cli) = agent.cli_source() {
+                cli.shutdown();
             }
         }
         if let Some(blackout) = &self.blackout {

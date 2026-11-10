@@ -218,7 +218,7 @@ fn turn_event(message: &v1::AgentMessage) -> Option<TurnEvent> {
 /// Read the provider-confirmed turn outcome out of a `turn_status` row.
 ///
 /// The row's text is the daemon's own rendering of the journal's turn item
-/// (`muster_agent::orca::render`), `Turn: <state>` followed by any provider
+/// (`muster_agent::cli::render`), `Turn: <state>` followed by any provider
 /// error. A state this build does not know returns `None`: the turn then
 /// counts as unsettled, which is reported as an unknown outcome rather than
 /// presented as success. A typed outcome field on the row would remove this

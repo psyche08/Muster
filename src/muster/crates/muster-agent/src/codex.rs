@@ -137,7 +137,7 @@ fn discover(
             };
             let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
             let head = heads.get(&path, modified, meta.len(), Head::read);
-            // Native CLI sessions are listed by the Rust Orca source. Their
+            // Native CLI sessions are listed by the native CLI runtime. Their
             // Codex rollout is storage, not a second desktop session.
             if head.owned_by_muster {
                 continue;

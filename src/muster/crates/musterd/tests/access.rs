@@ -147,8 +147,8 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     let dir_b = tempfile::tempdir().unwrap();
     let codex_file = transcripts(dir_a.path());
     let mut alpha = config(dir_a.path(), Some(relay.clone()), "alpha");
-    alpha.agent.as_mut().unwrap().orca_rpc = Some(
-        muster_agent::orca::runtime::NativeRuntime::with_programs(
+    alpha.agent.as_mut().unwrap().cli_runtime = Some(
+        muster_agent::cli::runtime::NativeRuntime::with_programs(
             &dir_a.path().join("orca"),
             [("codex".into(), std::path::PathBuf::from("/bin/true"))]
                 .into_iter()
@@ -282,7 +282,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     let orca_id = a
         .agent()
         .unwrap()
-        .orca_source()
+        .cli_source()
         .unwrap()
         .create(
             dir_a.path().to_str().unwrap(),
@@ -327,7 +327,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             }))
             .await
     ));
-    assert_eq!(a.agent().unwrap().orca_source().unwrap().list().len(), 1);
+    assert_eq!(a.agent().unwrap().cli_source().unwrap().list().len(), 1);
 
     // Listing: Codex only, and asking for Claude by name is refused.
     assert_eq!(sessions(&remote, "").await.unwrap(), [CODEX]);

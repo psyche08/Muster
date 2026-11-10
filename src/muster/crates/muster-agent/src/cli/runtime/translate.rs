@@ -1,4 +1,4 @@
-//! Native provider frames -> Orca-style revisioned journal, wholly in Rust.
+//! Native provider frames -> revisioned CLI journal, wholly in Rust.
 use super::*;
 pub(super) fn event(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
     if s.agent == "codex" {
@@ -175,6 +175,9 @@ fn claude(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
         }
         Some("system") if f["subtype"] == "init" => {
             let id = string(f, "session_id")?;
+            if !s.provider_id.is_empty() && id != s.provider_id {
+                return Err(Error::Conflict("Claude resumed a different session".into()));
+            }
             rt.update(&s.id, |s| s.provider_id = id)
         }
         Some("assistant" | "user") => {
@@ -263,14 +266,19 @@ fn claude(rt: &NativeRuntime, s: &Session, f: &Value) -> Result<(), Error> {
         _ => Ok(()),
     }
 }
-pub(super) fn response(s: &Session, body: &Value, params: &Value) -> Result<Value, Error> {
+pub(super) fn response(
+    s: &Session,
+    body: &Value,
+    option: Option<&str>,
+    reply: PromptReply<'_>,
+) -> Result<Value, Error> {
     let response = if body["kind"] == "question" {
         let questions = body["questions"]
             .as_array()
             .ok_or_else(|| unavailable("Unsupported question"))?;
-        let answers = params["answers"]
-            .as_array()
-            .ok_or_else(|| Error::Invalid("Answer each question".into()))?;
+        let PromptReply::Answers(answers) = reply else {
+            return Err(Error::Invalid("Answer each question".into()));
+        };
         if questions.len() != answers.len() {
             return Err(Error::Invalid("Answer each question exactly once".into()));
         }
@@ -278,15 +286,13 @@ pub(super) fn response(s: &Session, body: &Value, params: &Value) -> Result<Valu
         for q in questions {
             let found: Vec<_> = answers
                 .iter()
-                .filter(|a| a["questionId"] == q["id"])
+                .filter(|a| Some(a.question_id.as_str()) == q["id"].as_str())
                 .collect();
             if found.len() != 1 {
                 return Err(Error::Invalid("Question changed".into()));
             }
             let answer = found[0];
-            let options = answer["optionIds"]
-                .as_array()
-                .ok_or_else(|| Error::Invalid("Invalid answer".into()))?;
+            let options = &answer.option_ids;
             if q["multiSelect"] != true && options.len() > 1 {
                 return Err(Error::Invalid("Choose one option".into()));
             }
@@ -298,7 +304,7 @@ pub(super) fn response(s: &Session, body: &Value, params: &Value) -> Result<Valu
                     .ok_or_else(|| Error::Invalid("Unknown answer option".into()))?;
                 labels.push(string(offered, "label")?);
             }
-            let other = answer["other"].as_str().unwrap_or_default();
+            let other = answer.text.as_str();
             if !other.is_empty() {
                 if q["freeTextQuestionId"].is_null() || other.len() > 64 * 1024 {
                     return Err(Error::Invalid(
@@ -324,7 +330,7 @@ pub(super) fn response(s: &Session, body: &Value, params: &Value) -> Result<Valu
             json!({"behavior":"allow","updatedInput":input})
         }
     } else {
-        let option = string(params, "optionId")?;
+        let option = option.ok_or_else(|| Error::Invalid("Choose an approval option".into()))?;
         if !body["options"]
             .as_array()
             .is_some_and(|opts| opts.iter().any(|o| o["id"] == option))

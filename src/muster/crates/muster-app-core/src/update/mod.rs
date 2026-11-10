@@ -30,6 +30,7 @@ pub(crate) mod admitted;
 mod agents;
 mod approval_cards;
 mod catalog;
+mod cli;
 pub(crate) mod code_runs;
 mod desktop_chats;
 mod files;
@@ -38,7 +39,6 @@ pub(crate) mod multica;
 pub(crate) mod native_create;
 mod network;
 mod operations;
-mod orca;
 mod send_recovery;
 mod shell;
 mod terminals;
@@ -453,7 +453,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::SelectDevice(s) => network::intent_select_device(state, s),
         It::SetDeviceLockedUse(r) => manual_locked_use::set(state, ctx, r),
         It::CancelLockedUse(_) => cancel_locked(state, ctx, CancelReason::User),
-        It::OrcaCreate(o) => orca::create(state, ctx, o),
+        It::OrcaCreate(o) => cli::create(state, ctx, o),
         It::NativeCreate(c) => native_create::create(state, ctx, c),
         It::AgentCatalogAction(a) => catalog::intent(state, ctx, a),
         It::AgentOrganize(a) => catalog::organize(state, ctx, a),

@@ -288,3 +288,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0170](0170-session-provider-lookup.md) | Accepted | Read the session provider without projecting its descendants |
 | [0171](0171-mobile-display-blackout.md) | Accepted, hardware acceptance pending | Phone-controlled display blackout on Mac |
 | [0172](0172-passive-discovery-and-catalog-cost.md) | Accepted | Bound passive discovery and reuse unchanged catalog projections |
+| [0173](0173-direct-native-cli-protocols.md) | Accepted | Connect CLI sessions directly to the native provider protocols |

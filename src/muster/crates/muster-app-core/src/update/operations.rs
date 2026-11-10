@@ -88,7 +88,7 @@ pub(super) fn op_request_from(
         self_id.clone()
     };
     let remote_native_send = device != route
-        && matches!(&req, Req::AgentSend(r) if !muster_agent::cloud::is_cloud(&r.session) && !muster_agent::orca::is_orca(&r.session));
+        && matches!(&req, Req::AgentSend(r) if !muster_agent::cloud::is_cloud(&r.session) && !muster_agent::cli::is_cli(&r.session));
     let mut diagnostic =
         crate::send_diagnostics::Trace::new(ctx.shell.clone(), what, &device, &req);
     spawn(ctx, async move {
