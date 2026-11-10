@@ -214,6 +214,11 @@ fn project(state: &State, content: bool) -> app::ViewModel {
     {
         // Desktop chats take text only: no attachments offered.
         let attachments = !matches!(chat.session.mode.as_str(), "chat" | "orca");
+        let (queued, interactions): (Vec<_>, Vec<_>) =
+            muster_agent::queue::ordered_interactions(&chat.interactions)
+                .into_iter()
+                .filter(|_| !chat.session.read_only)
+                .partition(|i| i.kind == muster_agent::queue::KIND);
         vm.chat = Some(app::ChatView {
             device_id: chat.device.clone(),
             session: Some({
@@ -239,15 +244,22 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             } else {
                 Vec::new()
             },
-            interactions: muster_agent::queue::ordered_interactions(&chat.interactions)
-                .into_iter()
-                .filter(|i| !chat.session.read_only && i.kind != muster_agent::queue::KIND)
+            compact_wrap_up_ids: interactions
+                .iter()
+                .filter(|i| {
+                    chat.session.provider == "claude"
+                        && matches!(chat.session.mode.as_str(), "" | "code")
+                        && i.kind == "question"
+                        && i.optional
+                        && muster_agent::claude_cards::is_wrap(i)
+                        && !i.questions[0].multi_select
+                        && !i.questions[0].options.is_empty()
+                })
+                .map(|i| i.id.clone())
                 .collect(),
+            interactions,
             queue: Some(app::QueuedMessagesView {
-                messages: muster_agent::queue::ordered_interactions(&chat.interactions)
-                    .into_iter()
-                    .filter(|i| !chat.session.read_only && i.kind == muster_agent::queue::KIND)
-                    .collect(),
+                messages: queued,
                 submitting: chat.sending || chat.loading || !chat.responding_interaction.is_empty(),
                 error: if chat.response_interaction.starts_with("queued:") {
                     chat.response_error.clone()
@@ -1094,6 +1106,43 @@ mod tests {
         assert!(
             !phone_page.show_access,
             "a member without grants shows nothing"
+        );
+    }
+
+    #[test]
+    fn compact_wrap_ups_require_an_optional_claude_choice() {
+        let mut state = State::new(false, Some("local".into()));
+        state.screen = app::Screen::Chat;
+        let args = serde_json::json!({
+            "recap": "Checks passed.", "ask": "Continue?",
+            "actions": [{"label": "Continue"}, {"label": "Later"}]
+        });
+        let wrap = muster_agent::claude_cards::wrap_up(&args, "wrap", "s").unwrap();
+        let mut blocked = wrap.clone();
+        blocked.id = "blocked".into();
+        blocked.optional = false;
+        let mut generic = wrap.clone();
+        generic.id = "generic".into();
+        generic.questions[0].id = "ordinary".into();
+        state.chat = Some(crate::state::Chat {
+            session: v1::AgentSession {
+                provider: "claude".into(),
+                ..Default::default()
+            },
+            interactions: vec![generic, wrap.clone(), blocked],
+            ..Default::default()
+        });
+        assert_eq!(
+            view_model(&state).chat.unwrap().compact_wrap_up_ids,
+            [wrap.id]
+        );
+        state.chat.as_mut().unwrap().session.provider = "codex".into();
+        assert!(
+            view_model(&state)
+                .chat
+                .unwrap()
+                .compact_wrap_up_ids
+                .is_empty()
         );
     }
 

@@ -177,7 +177,7 @@ final class ConversationCollectionController: UIViewController, UICollectionView
             case .interactions: return false
             }
         }
-        if previousChat?.interactions != chat.interactions || previousChat?.respondingInteraction != chat.respondingInteraction || previousChat?.responseError != chat.responseError || previousChat?.responseUnknown != chat.responseUnknown || restyle {
+        if previousChat?.compactWrapUpIds != chat.compactWrapUpIds || previousChat?.interactions != chat.interactions || previousChat?.respondingInteraction != chat.respondingInteraction || previousChat?.responseError != chat.responseError || previousChat?.responseUnknown != chat.responseUnknown || restyle {
             interactionHost.rootView = interactions
             interactionHost.view.invalidateIntrinsicContentSize()
         }

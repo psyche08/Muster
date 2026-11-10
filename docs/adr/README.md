@@ -289,3 +289,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0171](0171-mobile-display-blackout.md) | Accepted, hardware acceptance pending | Phone-controlled display blackout on Mac |
 | [0172](0172-passive-discovery-and-catalog-cost.md) | Accepted | Bound passive discovery and reuse unchanged catalog projections |
 | [0173](0173-direct-native-cli-protocols.md) | Accepted | Connect CLI sessions directly to the native provider protocols |
+| [0174](0174-compact-claude-wrap-up.md) | Accepted | Show Claude’s optional wrap-up as inline actions on Apple |

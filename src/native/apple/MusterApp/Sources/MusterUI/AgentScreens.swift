@@ -662,6 +662,7 @@ struct ChatView: View {
     private func interactionCards(core: MusterCore) -> some View {
         ForEach(chat.interactions, id: \.id) { interaction in
             InteractionCard(interaction: interaction,
+                            compactWrapUp: chat.compactWrapUpIds.contains(interaction.id),
                             submitting: !chat.respondingInteraction.isEmpty,
                             error: chat.responseError, outcomeUnknown: chat.responseUnknown) { option, answers in
                 core.agentRespond(interaction: interaction.id, option: option, answers: answers)

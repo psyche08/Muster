@@ -3239,6 +3239,12 @@ public nonisolated struct Muster_App_ChatView: @unchecked Sendable {
     set {_uniqueStorage()._hasNewer_p = newValue}
   }
 
+  /// optional Claude wrap-ups with direct reply buttons
+  public var compactWrapUpIds: [String] {
+    get {_storage._compactWrapUpIds}
+    set {_uniqueStorage()._compactWrapUpIds = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -9307,7 +9313,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ChatView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{3}has_newer\0\u{b}messages\0\u{c}\u{3}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{3}has_newer\0\u{3}compact_wrap_up_ids\0\u{b}messages\0\u{c}\u{3}\u{1}")
 
   fileprivate class _StorageClass {
     var _deviceID: String = String()
@@ -9349,6 +9355,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
     var _codeRuns: [Muster_App_CodeRunView] = []
     var _codeError: String = String()
     var _hasNewer_p: Bool = false
+    var _compactWrapUpIds: [String] = []
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -9398,6 +9405,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       _codeRuns = source._codeRuns
       _codeError = source._codeError
       _hasNewer_p = source._hasNewer_p
+      _compactWrapUpIds = source._compactWrapUpIds
     }
   }
 
@@ -9455,6 +9463,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         case 38: try { try decoder.decodeRepeatedMessageField(value: &_storage._codeRuns) }()
         case 39: try { try decoder.decodeSingularStringField(value: &_storage._codeError) }()
         case 40: try { try decoder.decodeSingularBoolField(value: &_storage._hasNewer_p) }()
+        case 41: try { try decoder.decodeRepeatedStringField(value: &_storage._compactWrapUpIds) }()
         default: break
         }
       }
@@ -9584,6 +9593,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       if _storage._hasNewer_p != false {
         try visitor.visitSingularBoolField(value: _storage._hasNewer_p, fieldNumber: 40)
       }
+      if !_storage._compactWrapUpIds.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._compactWrapUpIds, fieldNumber: 41)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9632,6 +9644,7 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         if _storage._codeRuns != rhs_storage._codeRuns {return false}
         if _storage._codeError != rhs_storage._codeError {return false}
         if _storage._hasNewer_p != rhs_storage._hasNewer_p {return false}
+        if _storage._compactWrapUpIds != rhs_storage._compactWrapUpIds {return false}
         return true
       }
       if !storagesAreEqual {return false}

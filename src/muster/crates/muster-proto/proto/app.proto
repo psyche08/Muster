@@ -731,6 +731,7 @@ message ChatView {
   repeated CodeRunView code_runs = 38;
   string code_error = 39;
   bool has_newer = 40;
+  repeated string compact_wrap_up_ids = 41; // optional Claude wrap-ups with direct reply buttons
 }
 
 // The shell offers to release the earlier send once the user has checked the
