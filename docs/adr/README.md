@@ -283,3 +283,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0165](0165-a-locked-permission-card-read-reserves-no-provider-queue.md) | Accepted; source verified, locked-device acceptance pending | A locked permission-card read reserves no provider queue |
 | [0166](0166-release-apple-1-1-28.md) | Accepted; published and installed on three Macs; iPhone installation pending | Release Apple 1.1.28 (118) from `main` to every Mac and iPhone, after fixing the CLI build |
 | [0167](0167-deepseek-harness-native-session-creation.md) | Accepted; source and isolated App host verified, release pending | Create DeepSeek Harness sessions through Muster's plugin, on ADR 0163's task contract |
+| [0168](0168-coalesce-session-catalog-updates.md) | Accepted; device acceptance pending | Coalesce ordinary live session list changes and skip unchanged pages |
