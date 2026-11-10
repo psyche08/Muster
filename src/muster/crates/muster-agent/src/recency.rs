@@ -54,43 +54,98 @@ pub(crate) fn last_message_time_scoped(
     .unwrap_or(0))
 }
 
-pub fn activity(path: &Path, provider: Provider, process_start: u64) -> crate::model::SessionState {
-    activity_at(path, provider, process_start).0
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) struct FileStamp {
+    modified: std::time::SystemTime,
+    length: u64,
+    #[cfg(unix)]
+    identity: (u64, u64, i64, i64),
 }
-
-/// The activity the newest dated record implies: the grammar's turn rule
-/// (an end is idle, a start or, where the source has no events, any
-/// message is running, a final-phase message is idle) and when.
-pub fn activity_at(
-    path: &Path,
+impl FileStamp {
+    pub(crate) fn read(path: &Path) -> Option<Self> {
+        let m = std::fs::metadata(path).ok()?;
+        Some(Self {
+            modified: m.modified().ok()?,
+            length: m.len(),
+            #[cfg(unix)]
+            identity: {
+                use std::os::unix::fs::MetadataExt;
+                (m.dev(), m.ino(), m.ctime(), m.ctime_nsec())
+            },
+        })
+    }
+}
+type Activity = (crate::model::SessionState, u64);
+struct CachedActivity {
+    path: std::path::PathBuf,
     provider: Provider,
-    process_start: u64,
-) -> (crate::model::SessionState, u64) {
-    activity_at_scope(path, provider, process_start, false)
+    start: u64,
+    child: bool,
+    stamp: FileStamp,
+    value: Activity,
+}
+#[derive(Default)]
+pub(crate) struct ActivityReader {
+    entries: std::collections::HashMap<String, CachedActivity>,
+}
+impl ActivityReader {
+    pub(crate) fn read(
+        &mut self,
+        id: &str,
+        path: &Path,
+        provider: Provider,
+        start: u64,
+        child: bool,
+    ) -> Activity {
+        let stamp = FileStamp::read(path);
+        if let Some(entry) = self.entries.get(id)
+            && Some(entry.stamp) == stamp
+            && entry.path == path
+            && entry.provider == provider
+            && entry.start == start
+            && entry.child == child
+        {
+            return entry.value;
+        }
+        self.entries.remove(id);
+        let Ok(value) = activity_at_scope(path, provider, start, child) else {
+            return (crate::model::SessionState::Unknown, 0);
+        };
+        if let Some(stamp) = stamp
+            && FileStamp::read(path) == Some(stamp)
+        {
+            self.entries.insert(
+                id.to_owned(),
+                CachedActivity {
+                    path: path.to_owned(),
+                    provider,
+                    start,
+                    child,
+                    stamp,
+                    value,
+                },
+            );
+        }
+        value
+    }
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&str) -> bool) {
+        self.entries.retain(|id, _| keep(id));
+    }
 }
 
-/// A discovered Claude child has its own transcript whose conversation records
-/// are marked sidechain. Normalize only that scope, just like its JSONL viewer.
-pub(crate) fn subagent_activity_at(
-    path: &Path,
-    provider: Provider,
-    process_start: u64,
-) -> (crate::model::SessionState, u64) {
-    activity_at_scope(path, provider, process_start, provider == Provider::Claude)
-}
-
+/// The newest dated lifecycle or conversation record for this worker generation.
 fn activity_at_scope(
     path: &Path,
     provider: Provider,
     process_start: u64,
     sidechain: bool,
-) -> (crate::model::SessionState, u64) {
+) -> std::io::Result<Activity> {
     use crate::model::SessionState as S;
     use crate::profile::field;
     let Some((records, _)) = provider.jsonl() else {
-        return (S::Unknown, 0);
+        return Ok((S::Unknown, 0));
     };
-    last_record(path, |r| {
+    Ok(last_record(path, |r| {
         let normalized;
         let r = if sidechain && r["isSidechain"] == true {
             normalized = {
@@ -138,10 +193,8 @@ fn activity_at_scope(
             },
             ts,
         ))
-    })
-    .ok()
-    .flatten()
-    .unwrap_or((S::Unknown, 0))
+    })?
+    .unwrap_or((S::Unknown, 0)))
 }
 
 fn last_record<T>(path: &Path, select: impl Fn(&Value) -> Option<T>) -> std::io::Result<Option<T>> {

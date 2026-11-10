@@ -217,6 +217,12 @@ async fn worker_file_evidence_tracks_background_turn_without_granting_control() 
         start: muster_agent::model::parse_ts("2026-09-29T00:00:00Z") * 1_000_000,
     };
     service.observe_runtime_files(vec![(worker, path.clone())]);
+    let mut events = service.subscribe();
+    service.observe_runtime_files(vec![(worker, path.clone())]);
+    assert!(matches!(
+        events.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+    ));
     let observed = service.session(SESSION).unwrap();
     assert_eq!(
         (

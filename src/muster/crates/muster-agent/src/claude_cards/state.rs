@@ -254,6 +254,8 @@ pub struct TrackedFile {
     modified: std::time::SystemTime,
     length: u64,
     offset: u64,
+    #[cfg(unix)]
+    identity: Option<(u64, u64)>,
     tracker: Tracker,
 }
 impl TrackedFile {
@@ -263,6 +265,8 @@ impl TrackedFile {
             modified: std::time::UNIX_EPOCH,
             length: 0,
             offset: 0,
+            #[cfg(unix)]
+            identity: None,
             tracker: Tracker::new(session),
         }
     }
@@ -273,16 +277,33 @@ impl TrackedFile {
     ) -> Option<crate::questions::Snapshot> {
         let meta = std::fs::metadata(path).ok()?;
         let modified = meta.modified().ok()?;
-        if self.path != path
+        #[cfg(unix)]
+        let replaced = {
+            use std::os::unix::fs::MetadataExt;
+            self.identity != Some((meta.dev(), meta.ino()))
+        };
+        #[cfg(not(unix))]
+        let replaced = meta.len() != self.length || modified != self.modified;
+        if replaced
+            || self.path != path
             || meta.len() < self.length
             || meta.len() == self.length && modified != self.modified
         {
             *self = Self::new(path, session);
         }
         if meta.len() != self.length || modified != self.modified {
-            self.offset = records_from(path, self.offset, |r| self.tracker.record(r)).ok()?;
+            let Ok(offset) = records_from(path, self.offset, |r| self.tracker.record(r)) else {
+                *self = Self::new(path, session);
+                return None;
+            };
+            self.offset = offset;
             self.length = meta.len();
             self.modified = modified;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.identity = Some((meta.dev(), meta.ino()));
         }
         let mut snapshot = self.tracker.snapshot();
         desktop_tasks(&mut snapshot, session);
