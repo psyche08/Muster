@@ -15,6 +15,8 @@ pub fn title(name: &str) -> &'static str {
         START | SPAWN => "任务提议",
         DISMISS => "任务已撤回",
         CHAPTER => "章节",
+        "mcp__ccd_session__hand_off_to_session" => "会话交接",
+        "mcp__ccd_session__list_start_targets" => "可启动会话",
         "SendUserFile" => "文件",
         "Artifact" => "Artifact",
         _ => "",
@@ -134,6 +136,19 @@ impl Presentation {
                 md(&text(&args["title"], 300)?),
                 text(&args["summary"], 16384).unwrap_or_default()
             ),
+            "mcp__ccd_session__hand_off_to_session" => {
+                let title = text(&args["title"], 300)?;
+                let plan = text(&args["remaining_plan"], 16384).unwrap_or_default();
+                format!("**{}**\n\n{plan}", md(&title))
+            }
+            "mcp__ccd_session__list_start_targets" => {
+                let result = output(&result["content"]);
+                if result.is_empty() {
+                    "No targets reported".into()
+                } else {
+                    result.chars().take(16384).collect()
+                }
+            }
             START | SPAWN => {
                 let title = text(&args["title"], 300).unwrap_or_else(|| "任务".into());
                 let detail = ["tldr", "prompt", "background", "context"]

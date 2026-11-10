@@ -494,9 +494,10 @@ fn work_page<R: Record>(
         }
     };
     let start = end.saturating_sub(count).max(span.start);
+    let messages = history::bounded_page(&records[start..end], false, project);
     v1::AgentMessagePage {
-        messages: records[start..end].iter().map(project).collect(),
-        has_more: start > span.start,
+        has_more: start > span.start || messages.len() < end - start,
+        messages,
         ..Default::default()
     }
 }

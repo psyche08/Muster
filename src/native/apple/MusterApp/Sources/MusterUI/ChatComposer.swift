@@ -13,17 +13,17 @@ import AppKit
 private struct ComposerAttachment: Identifiable {
     let id = UUID().uuidString
     let value: Muster_V1_AgentAttachment
-    var thumbnail: CGImage? { Self.image(value.data, size: 256) }
+    var thumbnail: CGImage? { rasterThumbnail(value.data, size: 256) }
+}
 
-    static func image(_ data: Data, size: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: size,
-            kCGImageSourceShouldCacheImmediately: true,
-        ] as CFDictionary)
-    }
+func rasterThumbnail(_ data: Data, size: Int) -> CGImage? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+    return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: size,
+        kCGImageSourceShouldCacheImmediately: true,
+    ] as CFDictionary)
 }
 
 struct ChatComposer: View {
@@ -198,7 +198,7 @@ struct ChatComposer: View {
                     Spacer()
                     Button("Done") { preview = nil }
                 }
-                if let image = ComposerAttachment.image(item.value.data, size: 2048) {
+                if let image = rasterThumbnail(item.value.data, size: 2048) {
                     Image(decorative: image, scale: 1).resizable().scaledToFit()
                 }
             }.padding(20)

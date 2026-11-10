@@ -43,6 +43,12 @@ pub fn action_labels(action: &str) -> &'static [&'static str] {
         _ => &[],
     }
 }
+pub(crate) fn fallback(block: &Value) -> String {
+    let from = text(&block["from"]["model"], 160).unwrap_or_else(|| "unknown model".into());
+    let to = text(&block["to"]["model"], 160).unwrap_or_else(|| "unknown model".into());
+    format!("Model fallback: {from} → {to}")
+}
+
 pub fn option_labels(option: &QuestionOption) -> Vec<&str> {
     if let Some(action) = option.id.strip_prefix("action:") {
         action_labels(action).to_vec()

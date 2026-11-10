@@ -137,6 +137,7 @@ pub fn ends_turn(records: &Records, record: &Value) -> bool {
 pub struct Reader {
     provider: Provider,
     sidechain: bool,
+    attachment_home: Option<PathBuf>,
     records: &'static Records,
     hooks: &'static dyn Hooks,
     usage: crate::usage::Tracker,
@@ -190,6 +191,16 @@ impl JsonlViewer {
         hooks: &'static dyn Hooks,
     ) -> Self {
         let mut reader = Reader::new(discovered.provider, records, hooks, discovered.meta.clone());
+        if discovered.provider == Provider::Deepseek {
+            // sessions/<project>/<session>/session.v4.jsonl[.zstd]
+            reader.attachment_home = discovered
+                .path
+                .ancestors()
+                .nth(3)
+                .filter(|p| p.file_name().is_some_and(|n| n == "sessions"))
+                .and_then(Path::parent)
+                .map(Path::to_owned);
+        }
         // Only a separately discovered child file may include sidechain records.
         // A mixed parent transcript must keep filtering its embedded sidechains.
         reader.sidechain =
@@ -220,6 +231,7 @@ impl Reader {
         Self {
             provider,
             sidechain: false,
+            attachment_home: None,
             records,
             hooks,
             usage: Default::default(),
@@ -314,6 +326,7 @@ impl Reader {
             phase: at.phase.to_string(),
             tool_name: part.tool.0.to_string(),
             tool_call_id: part.tool.1.to_string(),
+            preview_jpegs: Vec::new(),
             tool_status: String::new(),
         }
     }
@@ -396,6 +409,49 @@ impl Reader {
         Some(message)
     }
 
+    fn image_message(&self, block: &Value, at: &RecordAt<'_>, id: String, role: Role) -> Message {
+        let preview = match self.provider {
+            Provider::Claude => crate::inline_image::claude(block),
+            Provider::Codex => crate::inline_image::codex(block, None),
+            Provider::Deepseek => self
+                .attachment_home
+                .as_deref()
+                .and_then(|root| crate::inline_image::deepseek(block, root)),
+            Provider::Catdesk => None,
+        };
+        let caption = if preview.is_some() {
+            "Image"
+        } else {
+            crate::inline_image::UNAVAILABLE
+        };
+        let mut m = Self::message_of(at, id, Part::text(role), caption.into());
+        m.preview_jpegs.extend(preview);
+        m
+    }
+
+    fn result_images(&self, value: &Value, at: &RecordAt<'_>, id: &str, out: &mut Vec<Message>) {
+        for (index, block) in field(value, self.records.tool_result.output)
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            if self
+                .records
+                .message
+                .media_blocks
+                .contains(&block["type"].as_str().unwrap_or(""))
+            {
+                out.push(self.image_message(
+                    block,
+                    at,
+                    format!("{id}:result-image:{index}"),
+                    Role::System,
+                ));
+            }
+        }
+    }
+
     fn ingest(&mut self, offset: u64, record: &Value, out: &mut Vec<Message>) {
         let records = self.records;
         if skipped(records, record) {
@@ -476,9 +532,24 @@ impl Reader {
                 }
                 Value::Array(blocks) => {
                     let mut texts = 0usize;
+                    let mut user_images = Vec::new();
                     for (i, block) in blocks.iter().enumerate() {
                         let kind = block["type"].as_str().unwrap_or("");
-                        if rule.text_blocks.contains(&kind) {
+                        if rule.media_blocks.contains(&kind) {
+                            let m = self.image_message(block, &at, format!("{id}:image:{i}"), role);
+                            if role == Role::User {
+                                user_images.push(m);
+                            } else {
+                                messages.push(m);
+                            }
+                        } else if self.provider == Provider::Claude && kind == "fallback" {
+                            messages.push(Self::message_of(
+                                &at,
+                                block_id(i),
+                                Part::text(Role::System),
+                                crate::claude_cards::fallback(block),
+                            ));
+                        } else if rule.text_blocks.contains(&kind) {
                             let index = match rule.block_ids {
                                 BlockIds::All => i,
                                 BlockIds::Text => texts,
@@ -539,6 +610,24 @@ impl Reader {
                                 }
                                 messages.push(message);
                             }
+                            self.result_images(block, &at, &block_id(i), &mut messages);
+                        }
+                    }
+                    // Keep a caption and its images in one user turn. Preserve the
+                    // original text ID used by saved anchors and history cursors.
+                    for image in user_images {
+                        if let Some(caption) = messages.iter_mut().rev().find(|m| {
+                            m.role == Role::User
+                                && m.kind == MessageKind::Text
+                                && m.preview_jpegs.len() < crate::inline_image::MAX_PREVIEWS
+                        }) {
+                            if image.preview_jpegs.is_empty() {
+                                caption.text.push('\n');
+                                caption.text.push_str(crate::inline_image::UNAVAILABLE);
+                            }
+                            caption.preview_jpegs.extend(image.preview_jpegs);
+                        } else {
+                            messages.push(image);
                         }
                     }
                 }
@@ -571,6 +660,7 @@ impl Reader {
             if let Some(message) = self.tool_result(envelope, &Value::Null, id.clone(), &at) {
                 messages.push(message);
             }
+            self.result_images(envelope, &at, &id, &mut messages);
         }
         if starts {
             self.state = SessionState::Running;

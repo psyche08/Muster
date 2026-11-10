@@ -939,6 +939,7 @@ fn message(id: &str, role: Role, kind: MessageKind, text: String, ts_unix: u64) 
         phase: String::new(),
         tool_name: String::new(),
         tool_call_id: String::new(),
+        preview_jpegs: Vec::new(),
         tool_status: String::new(),
     }
 }

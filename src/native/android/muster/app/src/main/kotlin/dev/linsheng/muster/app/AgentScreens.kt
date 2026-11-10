@@ -1099,16 +1099,25 @@ fun CompactContext(message: AgentMessage, core: MusterCore?) {
 fun MessageBubble(message: AgentMessage, core: MusterCore?, parts: List<muster.app.MessagePart> = emptyList()) {
     val user = message.role == "user"
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
-        if (parts.any { it.kind == "code" }) {
-            ConversationParts(parts, core)
-        } else if (user) {
-            Text(
-                message.text,
-                Modifier.widthIn(max = 320.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(20.dp)).padding(16.dp, 10.dp),
-                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        } else {
-            ChatMarkdown(message.text, core, Modifier.fillMaxWidth())
+        Column {
+            message.previewJpegsList.forEach { jpeg ->
+                val bitmap = remember(jpeg) { decode(jpeg.toByteArray(), 1) }
+                if (bitmap != null) {
+                    Image(bitmap, "Image preview", Modifier.widthIn(max = 320.dp).heightIn(max = 260.dp),
+                        contentScale = ContentScale.Fit)
+                }
+            }
+            if (parts.any { it.kind == "code" }) {
+                ConversationParts(parts, core)
+            } else if (user) {
+                Text(
+                    message.text,
+                    Modifier.widthIn(max = 320.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(20.dp)).padding(16.dp, 10.dp),
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            } else {
+                ChatMarkdown(message.text, core, Modifier.fillMaxWidth())
+            }
         }
     }
 }

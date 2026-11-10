@@ -229,18 +229,43 @@ fn clip(s: &str) -> String {
 }
 /// Provider item text shared by history rendering and search. Never search raw JSON.
 pub(crate) fn item(id: &str, raw: &str, ts: i64) -> Option<Message> {
-    let v: Value = serde_json::from_str(raw).ok()?;
+    project(id, &serde_json::from_str(raw).ok()?, ts, None)
+}
+
+pub(crate) fn project(
+    id: &str,
+    v: &Value,
+    ts: i64,
+    preview_root: Option<&Path>,
+) -> Option<Message> {
+    let mut previews = Vec::new();
     let (role, kind, body, phase, tool) = match v["type"].as_str()? {
         "userMessage" => (
             Role::User,
             MessageKind::Text,
-            v["content"]
-                .as_array()?
-                .iter()
-                .filter(|p| p["type"] == "text")
-                .filter_map(|p| p["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
+            {
+                let mut parts = Vec::new();
+                for part in v["content"].as_array()? {
+                    match part["type"].as_str() {
+                        Some("text") => {
+                            parts.extend(part["text"].as_str().filter(|s| !is_wrapper(s)))
+                        }
+                        Some("image" | "localImage") => {
+                            let preview = preview_root
+                                .filter(|_| previews.len() < crate::inline_image::MAX_PREVIEWS)
+                                .and_then(|root| crate::inline_image::codex(part, Some(root)));
+                            parts.push(if preview.is_some() || preview_root.is_none() {
+                                "Image"
+                            } else {
+                                crate::inline_image::UNAVAILABLE
+                            });
+                            previews.extend(preview);
+                        }
+                        _ => {}
+                    }
+                }
+                parts.join("\n")
+            },
             "".into(),
             "".into(),
         ),
@@ -300,6 +325,72 @@ pub(crate) fn item(id: &str, raw: &str, ts: i64) -> Option<Message> {
             "".into(),
             "web_search".into(),
         ),
+        "imageView" => {
+            let path = v["path"].as_str()?;
+            let preview = preview_root.and_then(|root| crate::inline_image::codex(v, Some(root)));
+            let name = Path::new(path).file_name()?.to_string_lossy();
+            let label = if preview.is_some() {
+                "Viewed image"
+            } else {
+                crate::inline_image::UNAVAILABLE
+            };
+            previews.extend(preview);
+            (
+                Role::System,
+                MessageKind::Text,
+                format!("{label}: {name}"),
+                String::new(),
+                String::new(),
+            )
+        }
+        "functionCallOutput" => (
+            Role::Tool,
+            MessageKind::ToolResult,
+            clip(&text(&v["output"])),
+            String::new(),
+            v["name"].as_str().unwrap_or("tool").into(),
+        ),
+        "sleep" => (
+            Role::System,
+            MessageKind::Text,
+            format!("Wait: {} ms", v["durationMs"].as_u64()?),
+            String::new(),
+            String::new(),
+        ),
+        "subAgentActivity" => {
+            let agent = v["agentPath"]
+                .as_str()
+                .or(v["agentThreadId"].as_str())
+                .unwrap_or("subagent");
+            (
+                Role::System,
+                MessageKind::Text,
+                format!("Subagent {agent}: {}", v["kind"].as_str()?),
+                String::new(),
+                String::new(),
+            )
+        }
+        "hookPrompt" => (
+            Role::System,
+            MessageKind::Text,
+            {
+                let body = v["fragments"]
+                    .as_array()?
+                    .iter()
+                    .filter_map(|f| f["text"].as_str())
+                    .map(strip_hidden_blocks)
+                    .filter(|s| !s.is_empty() && !is_wrapper(s))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if body.is_empty() {
+                    "Hook prompt".into()
+                } else {
+                    format!("Hook prompt\n{}", clip(&body))
+                }
+            },
+            String::new(),
+            String::new(),
+        ),
         "contextCompaction" => (
             Role::System,
             MessageKind::Text,
@@ -322,6 +413,7 @@ pub(crate) fn item(id: &str, raw: &str, ts: i64) -> Option<Message> {
         usage: None,
         tool_name: tool,
         tool_call_id: id.into(),
+        preview_jpegs: previews,
         tool_status: String::new(),
     })
 }
@@ -428,7 +520,7 @@ fn projection_cursor(db: &Connection, thread: &str) -> Option<(i64, i64)> {
 }
 
 fn read(db: &Connection, d: &Discovered) -> Result<(Vec<Message>, bool), String> {
-    let mut q=db.prepare("SELECT turn_id, item_id, item_json, created_at_ms, length(item_json) FROM thread_items WHERE thread_id=?1 ORDER BY rollout_ordinal DESC, item_id LIMIT 10001").map_err(|e|e.to_string())?;
+    let mut q=db.prepare("SELECT turn_id, item_id, item_json, created_at_ms, length(item_json), item_type FROM thread_items WHERE thread_id=?1 ORDER BY rollout_ordinal DESC, item_id LIMIT 10001").map_err(|e|e.to_string())?;
     let mut rows = q.query([&d.id]).map_err(|e| e.to_string())?;
     let mut messages = Vec::new();
     let mut count = 0;
@@ -443,7 +535,13 @@ fn read(db: &Connection, d: &Discovered) -> Result<(Vec<Message>, bool), String>
             break;
         }
         bytes += len;
-        if len > 1 << 20 {
+        let kind: String = r.get(5).map_err(|e| e.to_string())?;
+        let limit = if kind == "userMessage" {
+            16 << 20
+        } else {
+            1 << 20
+        };
+        if len > limit {
             partial = true;
             continue;
         }
@@ -453,7 +551,10 @@ fn read(db: &Connection, d: &Discovered) -> Result<(Vec<Message>, bool), String>
             r.get::<_, String>(1).map_err(|e| e.to_string())?
         );
         let raw: String = r.get(2).map_err(|e| e.to_string())?;
-        if let Some(m) = item(&id, &raw, r.get(3).map_err(|e| e.to_string())?) {
+        if let Some(m) = serde_json::from_str(&raw)
+            .ok()
+            .and_then(|v| project(&id, &v, r.get(3).ok()?, Some(&d.meta.cwd)))
+        {
             if ids.insert(m.id.clone()) {
                 messages.push(m);
             }
@@ -505,6 +606,30 @@ pub(crate) fn search(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn provider_activity_keeps_visible_information_and_tool_identity() {
+        for (raw, expected) in [
+            (
+                r#"{"type":"functionCallOutput","name":"lookup","output":"found"}"#,
+                "found",
+            ),
+            (
+                r#"{"type":"hookPrompt","fragments":[{"text":"Check result"}]}"#,
+                "Check result",
+            ),
+            (r#"{"type":"sleep","durationMs":250}"#, "250 ms"),
+            (
+                r#"{"type":"subAgentActivity","agentPath":"worker","kind":"completed"}"#,
+                "worker: completed",
+            ),
+        ] {
+            let m = item("stable", raw, 3000).unwrap();
+            assert!(m.text.contains(expected));
+            assert_eq!(m.id, "sqlite:stable");
+            assert_eq!(m.ts_unix, 3);
+        }
+    }
+
     #[test]
     fn native_messages_are_typed_and_preserve_stable_ids() {
         let a = item(

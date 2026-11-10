@@ -29,6 +29,7 @@ mod discovery;
 pub mod files;
 mod history_store;
 pub mod idle_compact;
+mod inline_image;
 pub mod jsonl;
 pub mod local_input;
 pub mod model;

@@ -460,3 +460,20 @@ fn registry_is_scoped_to_cli_session_and_refreshes_without_transcript_changes() 
     assert!(s.retired.contains("question:a"));
     assert!(s.resolved.is_empty());
 }
+
+#[test]
+fn handoff_card_requires_a_successful_tool_result() {
+    let mut p = Presentation::default();
+    let args = json!({"title":"Continue review","remaining_plan":"Verify samples"});
+    let tool = "mcp__ccd_session__hand_off_to_session";
+    p.call("failed", tool, &args);
+    assert!(
+        p.result("failed", &json!({"is_error":true}), &Value::Null)
+            .is_none()
+    );
+    p.call("ok", tool, &args);
+    let body = p
+        .result("ok", &json!({"content":"done"}), &Value::Null)
+        .unwrap();
+    assert!(body.contains("Continue review") && body.contains("Verify samples"));
+}
