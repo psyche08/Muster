@@ -1,7 +1,8 @@
 //! State → ViewModel. Pure projection: nothing here decides anything.
 
 use muster_proto::Message as _;
-use muster_proto::app;
+use muster_proto::{app, v1};
+use std::collections::{HashMap, HashSet};
 
 use crate::Ctx;
 use crate::state::State;
@@ -127,18 +128,6 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         }),
         // Presence may have changed since the list loaded.
         agents: Some(app::AgentsView {
-            sections: crate::catalog::project(
-                state,
-                &if state.agents.query.trim().is_empty() {
-                    &state.agents.sessions
-                } else {
-                    &state.agents_search_sessions
-                }
-                .iter()
-                .filter(|s| !state.offline(&s.device_id))
-                .map(session_row)
-                .collect::<Vec<_>>(),
-            ),
             create_hosts: state
                 .reachable_service_devices()
                 .into_iter()
@@ -165,14 +154,19 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 .iter()
                 .map(|app| (*app).into())
                 .collect(),
-            sessions: state
-                .agents
-                .sessions
-                .iter()
-                .filter(|s| !state.offline(&s.device_id))
-                .map(session_row)
-                .collect(),
-            ..state.agents.clone()
+            device_id: state.agents.device_id.clone(),
+            native_sections: state.agents.native_sections.clone(),
+            errors: state.agents.errors.clone(),
+            loading: state.agents.loading,
+            creating: state.agents.creating,
+            query: state.agents.query.clone(),
+            searching: state.agents.searching,
+            search_has_more: state.agents.search_has_more,
+            search_notices: state.agents.search_notices.clone(),
+            native_creating: state.agents.native_creating,
+            native_create_draft: state.agents.native_create_draft.clone(),
+            sessions: Vec::new(),
+            sections: Vec::new(),
         }),
         desktop_chats: Some(app::DesktopChatsView {
             choices: muster_agent::desktop_chat::ChatApp::ALL
@@ -211,6 +205,10 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         device_actions: Some(device_actions(state)),
         device_locked_use: crate::update::manual_locked_use::views(state),
     };
+    if content {
+        let agents = vm.agents.as_mut().unwrap();
+        (agents.sessions, agents.sections) = catalog_rows(state);
+    }
     if state.screen == app::Screen::Chat
         && let Some(chat) = &state.chat
     {
@@ -397,9 +395,89 @@ fn strip_rtt(link: &mut String) {
     }
 }
 
+fn catalog_rows(state: &State) -> (Vec<v1::AgentSession>, Vec<app::AgentCatalogSection>) {
+    let visible = |rows: &[v1::AgentSession]| {
+        rows.iter()
+            .filter(|s| !state.offline(&s.device_id))
+            .map(session_row)
+            .collect::<Vec<_>>()
+    };
+    let sessions = visible(&state.agents.sessions);
+    let sections = if state.agents.query.trim().is_empty() {
+        crate::catalog::project(state, &sessions)
+    } else {
+        crate::catalog::project(state, &visible(&state.agents_search_sessions))
+    };
+    (sessions, sections)
+}
+
+#[derive(Default)]
+struct CatalogCache {
+    sessions: Vec<v1::AgentSession>,
+    search: Vec<v1::AgentSession>,
+    native_sections: Vec<v1::AgentSection>,
+    groups: Vec<v1::AgentCatalogGroup>,
+    device: String,
+    searching: bool,
+    offline: Vec<String>,
+    disclosures: HashMap<String, bool>,
+    limits: HashMap<String, usize>,
+    pending: HashMap<String, usize>,
+    organizing: HashSet<String>,
+    rows: Option<(Vec<v1::AgentSession>, Vec<app::AgentCatalogSection>)>,
+}
+
+impl CatalogCache {
+    fn refresh(&mut self, state: &State) -> bool {
+        let offline: Vec<_> = state
+            .network
+            .iter()
+            .flat_map(|n| &n.members)
+            .filter(|m| crate::state::member_offline(m))
+            .map(|m| m.device_id.clone())
+            .collect();
+        let searching = !state.agents.query.trim().is_empty();
+        let search = if searching {
+            state.agents_search_sessions.as_slice()
+        } else {
+            &[]
+        };
+        if self.rows.is_some()
+            && self.sessions == state.agents.sessions
+            && self.search == search
+            && self.native_sections == state.agents.native_sections
+            && self.groups == state.agent_catalog_groups
+            && self.device == state.agents.device_id
+            && self.searching == searching
+            && self.offline == offline
+            && self.disclosures == state.agent_disclosures
+            && self.limits == state.agent_catalog_limits
+            && self.pending == state.agent_catalog_pending
+            && self.organizing == state.agent_organizing
+        {
+            return false;
+        }
+        self.sessions.clone_from(&state.agents.sessions);
+        self.search = search.to_vec();
+        self.native_sections
+            .clone_from(&state.agents.native_sections);
+        self.groups.clone_from(&state.agent_catalog_groups);
+        self.device.clone_from(&state.agents.device_id);
+        self.searching = searching;
+        self.offline = offline;
+        self.disclosures.clone_from(&state.agent_disclosures);
+        self.limits.clone_from(&state.agent_catalog_limits);
+        self.pending.clone_from(&state.agent_catalog_pending);
+        self.organizing.clone_from(&state.agent_organizing);
+        self.rows = Some(catalog_rows(state));
+        true
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct Renderer {
     previous: Option<app::ViewModel>,
+    catalog: CatalogCache,
     content_key: Option<(u64, String, String, bool)>,
     timeline: Vec<app::ChatBlock>,
     trace: Vec<app::TraceSpan>,
@@ -444,7 +522,11 @@ impl Renderer {
                 strip_rtt(&mut member.link);
             }
         }
-        if self.content_key == key && self.previous.as_ref() == Some(&comparison) {
+        let catalog_changed = self.catalog.refresh(state);
+        if !catalog_changed
+            && self.content_key == key
+            && self.previous.as_ref() == Some(&comparison)
+        {
             return None;
         }
         if self.content_key != key {
@@ -465,6 +547,8 @@ impl Renderer {
             chat.timeline = self.timeline.clone();
             chat.trace = self.trace.clone();
         }
+        let agents = vm.agents.as_mut().unwrap();
+        (agents.sessions, agents.sections) = self.catalog.rows.as_ref().unwrap().clone();
         Some(vm.encode_to_vec())
     }
     pub fn push(&mut self, state: &State, ctx: &Ctx) {
@@ -1493,6 +1577,50 @@ mod history_projection_tests {
     use super::*;
     use crate::state::Chat;
     use muster_proto::v1;
+
+    #[test]
+    fn catalog_reuse_tracks_edits_search_controls_and_reachability() {
+        let mut state = State::new(false, None);
+        state.agents.sessions.push(v1::AgentSession {
+            id: "a".into(),
+            device_id: "device-a".into(),
+            provider: "codex".into(),
+            title: "old".into(),
+            ..Default::default()
+        });
+        let mut renderer = Renderer::default();
+        let check = |renderer: &mut Renderer, state: &State| {
+            let emitted = renderer.prepare(state).unwrap();
+            assert_eq!(
+                app::ViewModel::decode(emitted.as_slice()).unwrap().agents,
+                view_model(state).agents
+            );
+            assert!(!renderer.catalog.refresh(state));
+        };
+        check(&mut renderer, &state);
+        state.busy += 1;
+        assert!(!renderer.catalog.refresh(&state));
+        check(&mut renderer, &state);
+        state.agents.sessions[0].title = "new".into();
+        check(&mut renderer, &state);
+        state
+            .agent_disclosures
+            .insert("catalog:recent".into(), false);
+        check(&mut renderer, &state);
+        state.agents.query = "term".into();
+        state.agents_search_sessions = state.agents.sessions.clone();
+        check(&mut renderer, &state);
+        state.network = Some(v1::NetworkStatus {
+            members: vec![v1::MemberView {
+                device_id: "device-a".into(),
+                presence: "offline".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        check(&mut renderer, &state);
+        assert!(renderer.catalog.rows.as_ref().unwrap().0.is_empty());
+    }
 
     #[test]
     fn large_cached_transcript_projects_the_latest_turns_without_losing_history_or_cards() {

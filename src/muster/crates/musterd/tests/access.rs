@@ -702,6 +702,7 @@ async fn multica_reservation_removes_catalog_search_and_child_access_and_ends_id
     )
     .await
     .unwrap();
+    daemon.agent().unwrap().rescan().await;
     let local = client(&daemon).await;
     assert!(sessions(&local, "").await.unwrap().contains(&CODEX.into()));
     let mut watch = local

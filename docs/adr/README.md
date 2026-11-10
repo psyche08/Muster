@@ -287,3 +287,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0169](0169-package-quieter-session-list.md) | Accepted; three desktop installations and live measurements verified | Package 1.1.29 (119) for three-Mac session list and CPU acceptance |
 | [0170](0170-session-provider-lookup.md) | Accepted | Read the session provider without projecting its descendants |
 | [0171](0171-mobile-display-blackout.md) | Accepted, hardware acceptance pending | Phone-controlled display blackout on Mac |
+| [0172](0172-passive-discovery-and-catalog-cost.md) | Accepted | Bound passive discovery and reuse unchanged catalog projections |

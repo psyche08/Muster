@@ -229,6 +229,8 @@ pub(crate) fn item(id: &str, raw: &str, ts: i64) -> Option<Message> {
 pub(crate) struct History {
     d: Discovered,
     previous: Vec<Message>,
+    cursor: Option<(i64, i64)>,
+    last_full: Option<std::time::Instant>,
     notice: String,
 }
 impl History {
@@ -236,6 +238,8 @@ impl History {
         Self {
             d,
             previous: Vec::new(),
+            cursor: None,
+            last_full: None,
             notice: String::new(),
         }
     }
@@ -262,8 +266,34 @@ impl Viewer for History {
     fn stamp(&self) -> std::io::Result<(SystemTime, u64)> {
         crate::catdesk::stamp(&self.d.path)
     }
+    fn changed_stamp(
+        &self,
+        prior: (SystemTime, u64),
+    ) -> std::io::Result<Option<(SystemTime, u64)>> {
+        let current = self.stamp()?;
+        if current == prior {
+            return Ok(None);
+        }
+        // Keep the previous file stamp unconsumed. Reconcile unmarked edits
+        // even if this is the final write and the provider cursor never moves.
+        if let Some(cursor) = self.cursor
+            && self
+                .last_full
+                .is_some_and(|at| at.elapsed() < Duration::from_secs(10))
+            && let Ok(db) = open(&self.d.path)
+            && projection_cursor(&db, &self.d.id) == Some(cursor)
+        {
+            return Ok(None);
+        }
+        Ok(Some(current))
+    }
     fn poll(&mut self) -> std::io::Result<Polled> {
-        let (messages, partial) = read(&self.d).map_err(std::io::Error::other)?;
+        let mut db = open(&self.d.path).map_err(std::io::Error::other)?;
+        let tx = db.transaction().map_err(std::io::Error::other)?;
+        let cursor = projection_cursor(&tx, &self.d.id);
+        let (messages, partial) = read(&tx, &self.d).map_err(std::io::Error::other)?;
+        self.cursor = cursor;
+        self.last_full = Some(std::time::Instant::now());
         self.notice = if partial {
             "Showing available Codex local history; some items exceed the supported history window or format.".into()
         } else if messages.is_empty() {
@@ -285,8 +315,11 @@ impl Viewer for History {
         })
     }
 }
-fn read(d: &Discovered) -> Result<(Vec<Message>, bool), String> {
-    let db = open(&d.path).map_err(|e| e.to_string())?;
+fn projection_cursor(db: &Connection, thread: &str) -> Option<(i64, i64)> {
+    db.query_row("SELECT next_rollout_byte_offset,next_rollout_ordinal FROM thread_history_projection_state WHERE thread_id=?1", [thread], |r| Ok((r.get(0)?,r.get(1)?))).ok()
+}
+
+fn read(db: &Connection, d: &Discovered) -> Result<(Vec<Message>, bool), String> {
     let mut q=db.prepare("SELECT turn_id, item_id, item_json, created_at_ms, length(item_json) FROM thread_items WHERE thread_id=?1 ORDER BY rollout_ordinal DESC, item_id LIMIT 10001").map_err(|e|e.to_string())?;
     let mut rows = q.query([&d.id]).map_err(|e| e.to_string())?;
     let mut messages = Vec::new();
@@ -430,7 +463,31 @@ mod store_tests {
         db.execute("DELETE FROM thread_items WHERE item_id='tool'", [])
             .unwrap();
         let mut viewer = History::new(found[0].clone());
+        // Older stores have no per-thread cursor and always reconcile changed files.
+        let prior = (UNIX_EPOCH, 0);
+        assert!(viewer.changed_stamp(prior).unwrap().is_some());
+        db.execute_batch("CREATE TABLE thread_history_projection_state(thread_id TEXT PRIMARY KEY,next_rollout_byte_offset INTEGER,next_rollout_ordinal INTEGER);").unwrap();
+        db.execute(
+            "INSERT INTO thread_history_projection_state VALUES(?1,10,1)",
+            [ID],
+        )
+        .unwrap();
         let first = viewer.poll().unwrap();
+        db.execute(
+            "INSERT INTO thread_history_projection_state VALUES('other',20,2)",
+            [],
+        )
+        .unwrap();
+        assert!(viewer.changed_stamp(prior).unwrap().is_none());
+        viewer.last_full = Some(std::time::Instant::now() - Duration::from_secs(11));
+        assert!(viewer.changed_stamp(prior).unwrap().is_some());
+        viewer.last_full = Some(std::time::Instant::now());
+        db.execute(
+            "UPDATE thread_history_projection_state SET next_rollout_ordinal=2 WHERE thread_id=?1",
+            [ID],
+        )
+        .unwrap();
+        assert!(viewer.changed_stamp(prior).unwrap().is_some());
         assert_eq!(first.messages.len(), 1);
         assert!(viewer.poll().unwrap().messages.is_empty());
         let (hit, partial) = search(

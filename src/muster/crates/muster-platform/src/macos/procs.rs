@@ -79,7 +79,10 @@ pub async fn codex_runtime_files() -> Vec<(
         .iter()
         .filter(|(pid, _, path)| {
             path.ends_with("ChatGPT.app/Contents/MacOS/ChatGPT")
-                && codesign::process_satisfies(*pid, &muster_core::apps::CODEX.requirement())
+                && codesign::discovery_process_satisfies(
+                    *pid,
+                    &muster_core::apps::CODEX.requirement(),
+                )
         })
         .map(|(pid, _, _)| *pid)
         .collect();
@@ -89,7 +92,7 @@ pub async fn codex_runtime_files() -> Vec<(
             roots.contains(parent)
                 && path.contains("/ChatGPT.app/Contents/")
                 && path.ends_with("/codex")
-                && codesign::process_satisfies(
+                && codesign::discovery_process_satisfies(
                     *pid,
                     &format!(
                         "anchor apple generic and certificate leaf[subject.OU] = \"{}\"",
@@ -185,7 +188,10 @@ pub fn claude_runtime_sessions() -> Vec<(
         };
         let state = match super::codesign::observe_process_start(pid) {
             Ok(Some(start)) if start / 1_000_000 == registration.process.start / 1_000_000 => {
-                if !super::codesign::process_satisfies(pid, crate::requirements::CLAUDE_CLI) {
+                if !super::codesign::discovery_process_satisfies(
+                    pid,
+                    crate::requirements::CLAUDE_CLI,
+                ) {
                     continue;
                 }
                 ProcessState::Running
