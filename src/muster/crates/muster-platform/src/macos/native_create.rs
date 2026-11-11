@@ -356,6 +356,14 @@ pub async fn submit(
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
         .ok_or_else(|| Error::Invalid("Unsupported native provider".into()))?;
+    let started = Instant::now();
+    let stage = |name: &str| {
+        log::info!(
+            "Native creation stage: {name} elapsed_ms={}",
+            started.elapsed().as_millis()
+        )
+    };
+    stage("admitted");
     console()?;
     if !ax::trusted() {
         return Err(unavailable(
@@ -373,6 +381,7 @@ pub async fn submit(
     }
     let generation = input::user_input_generation();
     let bundle = bundle_path(profile)?;
+    stage("bundle_verified");
     let was_running = !native_app::app_pids(profile).is_empty();
     if !was_running {
         open(&bundle, None)?;
@@ -407,10 +416,12 @@ pub async fn submit(
     open(&bundle, None)?;
     // Cold startup may replace its preliminary window before the renderer is
     // ready. Bind the settled object set, not that transient startup shell.
+    stage("activated");
     let before = settled_windows(&guard, &root, true).await?;
     // Check every retained window independently: several complete forms must
     // not exhaust one form's node budget. Never navigate over a nonempty draft
     // if the provider ignores raise; missing/ambiguous editors fail closed.
+    stage("windows_ready");
     for window in &before {
         let composer = unique(window, |n| profile.controls().composer.matches(n))?
             .ok_or_else(|| unavailable("Existing native composer is unavailable"))?;
@@ -468,6 +479,7 @@ pub async fn submit(
             n.role() == "AXMenuItem" && label(n, "New Window")
         })
         .await?;
+        stage("new_window_request");
         guard.press(&new)?;
         let deadline = Instant::now() + Duration::from_secs(8);
         let fresh = loop {
@@ -488,8 +500,10 @@ pub async fn submit(
         fresh
             .raise()
             .map_err(|_| unavailable("Cannot raise the new window"))?;
+        stage("await_new_renderer");
         renderer_ready(&guard, &root, &fresh).await?;
         guard.check()?;
+        stage("dispatch_directory_route");
         open(&bundle, Some(&route))?;
         fresh
     } else {
@@ -518,6 +532,7 @@ pub async fn submit(
         && reusable_main.as_ref() == Some(&window);
     // Both providers can expose the window before a late trust dialog. Keep
     // its object identity and wait for the complete form, pressing trust once.
+    stage("await_routed_form");
     let deadline = Instant::now() + Duration::from_secs(25);
     let mut trusted = false;
     let (page, composer, project) = loop {
@@ -554,6 +569,7 @@ pub async fn submit(
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     };
+    stage("routed_form_verified");
     let selection = || -> Result<bool, Error> {
         guard.check()?;
         if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
@@ -585,6 +601,7 @@ pub async fn submit(
         page: &page,
         app: &root,
     };
+    stage("prepare_options");
     let shown = native_options::prepare_new(&options, model, effort).await?;
     // Opening and closing the pickers must not have typed anything.
     if composer
@@ -617,6 +634,7 @@ pub async fn submit(
     if composer.string("AXValue").as_deref() != Some(prompt) {
         return Err(conflict("Draft changed before submit"));
     }
+    stage("submit");
     control_guard::delivery_attempt();
     guard.press(&send).map_err(|e| {
         Error::UnknownOutcome(format!("Native submit attempted: {e}; do not replay"))
