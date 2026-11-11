@@ -72,6 +72,47 @@ pub(super) async fn start(
     }
     if !granted()? {
         preflight(daemon, "codex")?;
+        if let Some(prompt) = super::trusted_multica::first_turn(daemon, &o).await? {
+            if cancel.is_cancelled() || !daemon.platform().locked() {
+                return Err(Error::Conflict(
+                    "Multica dispatch or locked console changed".into(),
+                ));
+            }
+            o.text = prompt;
+            let task_id = o.task_id.clone();
+            let scope = grant::Scope {
+                task_id: task_id.clone(),
+                contract_sha256: hex::encode(Sha256::digest(o.text.as_bytes())),
+                provider: o.provider.clone(),
+                directory: o.directory.clone(),
+                model: "native-app".into(),
+                effort: "default".into(),
+            };
+            scheduler.update(daemon.store(), |registry| {
+                if registry.get(&task_id).is_some() {
+                    return Err(Error::Conflict(
+                        "This Multica run already has a grant".into(),
+                    ));
+                }
+                registry
+                    .grant(scope, now_ms(), 90_000)
+                    .map(|_| ())
+                    .map_err(refused)
+            })?;
+            log::info!("scheduler: host verified Multica dispatch and issued grant for {task_id}");
+            let result = if cancel.is_cancelled() {
+                Err(Error::Conflict(
+                    "Multica dispatch cancelled before execution".into(),
+                ))
+            } else {
+                operate(daemon, o).await
+            };
+            scheduler.update(daemon.store(), |registry| {
+                registry.revoke(&task_id, now_ms()).map_err(refused)
+            })?;
+            log::info!("scheduler: trusted Multica grant closed for {task_id}");
+            return result;
+        }
         let _pending = {
             let mut slot = scheduler.pending_multica.lock().unwrap();
             if slot.is_some() {

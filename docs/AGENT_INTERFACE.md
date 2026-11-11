@@ -522,3 +522,21 @@ choices). The bridge consumes the grant for its pending operation. Do not
 also submit an `operate` request. Status then shows the durable operation
 and its provider session. The local grant owner can revoke the grant when
 finished. An expired proposal requires a new authorized dispatch.
+
+### Automatic authorization of an owner's initial Multica issue
+
+The executor can enroll one workspace, owner account, agent, local Codex runtime
+and runtime daemon. Put an owner-private regular file named
+`multica-trusted-dispatch.json` in the local daemon state directory, outside
+the guest mounts. Its JSON fields are `origin` (an HTTPS origin),
+`workspace`, `owner`, `agent`, `runtime`, `runtime_daemon` (service UUIDs),
+`root` (canonical host workspace root) and `token` (an authenticated host
+reader credential for the same owner and origin). Protect the file with mode
+0600. Removing it disables automatic authorization for future requests.
+
+Create an issue as the enrolled owner and assign it to the enrolled agent at
+creation. On the first direct dispatch the host checks the live service records,
+submits the title and description as the task and closes the single-use grant
+after the creation receipt. The answer goes back through the Multica runtime.
+Edits, reruns, supplemental comments and other agents are outside this automatic
+path. A credential expiry requires renewing the host credential.

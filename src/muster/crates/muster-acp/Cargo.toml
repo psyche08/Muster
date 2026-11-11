@@ -9,6 +9,8 @@ description = "The Agent Client Protocol surface a task scheduler drives when it
 
 [dependencies]
 anyhow.workspace = true
+sha2.workspace = true
+hex.workspace = true
 async-trait = "0.1"
 serde.workspace = true
 rand.workspace = true
