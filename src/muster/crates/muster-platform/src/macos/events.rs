@@ -12,7 +12,9 @@
 //! `-[NSApplication run]`: `run` installs AppKit's default Apple Event
 //! handlers, and its `quit` handler would end the daemon without its
 //! shutdown whenever anything asked "Muster" to quit and resolved to the
-//! daemon's record.
+//! daemon's record. The two requests that must not end at the daemon's
+//! record — reopen and a `muster:` link — get handlers of their own, which
+//! hand them to the app ([`AppEvents::hand_launches_to_the_app`], ADR 0185).
 
 use std::ffi::{CStr, c_void};
 use std::marker::PhantomData;
@@ -87,21 +89,18 @@ impl AppEvents {
 
     /// Leave the Dock: set the activation policy to prohibited, which Launch
     /// Services records as `BackgroundOnly` (ADR 0123's outcome, without
-    /// `TransformProcessType`). `false` if AppKit refused.
+    /// `TransformProcessType`). `false` if the policy is not prohibited
+    /// afterwards.
     pub fn leave_the_dock(&self) -> bool {
-        // SAFETY: `-setActivationPolicy:` takes an `NSInteger` and returns a
-        // `BOOL`; `self.app` is the live shared application.
-        unsafe {
-            let send = std::mem::transmute::<
-                unsafe extern "C" fn(),
-                unsafe extern "C" fn(Id, Sel, isize) -> i8,
-            >(objc_msgSend);
-            send(
-                self.app,
-                sel(c"setActivationPolicy:"),
-                ACTIVATION_POLICY_PROHIBITED,
-            ) != 0
-        }
+        prohibit(self.app)
+    }
+
+    /// Hand the reopen and `muster:` link requests that Launch Services
+    /// delivers to this process's record to the app, which has the windows
+    /// (ADR 0185). Call before [`AppEvents::serve`]; `false` if an Apple Event
+    /// handler could not be installed.
+    pub fn hand_launches_to_the_app(&self) -> bool {
+        super::handoff::install()
     }
 
     /// Read the event queue for the rest of the process's life. Blocks in the
@@ -144,6 +143,71 @@ impl AppEvents {
     }
 }
 
+/// `-[NSApplication setActivationPolicy:]` with prohibited; `true` if the
+/// policy reads prohibited afterwards. The setter's own answer is not used:
+/// it answered `NO` while the policy stayed prohibited when two reopen
+/// requests arrived together.
+fn prohibit(app: Id) -> bool {
+    // SAFETY: `-setActivationPolicy:` takes an `NSInteger` and returns a
+    // `BOOL`; `-activationPolicy` returns an `NSInteger`; `app` is the live
+    // shared application.
+    unsafe {
+        let set = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel, isize) -> i8,
+        >(objc_msgSend);
+        let get = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel) -> isize,
+        >(objc_msgSend);
+        set(
+            app,
+            sel(c"setActivationPolicy:"),
+            ACTIVATION_POLICY_PROHIBITED,
+        );
+        get(app, sel(c"activationPolicy")) == ACTIVATION_POLICY_PROHIBITED
+    }
+}
+
+/// Leave the Dock again from an Apple Event handler. To deliver a reopen or
+/// a URL to this process, Launch Services first makes its record a
+/// foreground application. `false` off the main thread, outside a bundle, or
+/// if the policy is not prohibited afterwards.
+pub(super) fn leave_the_dock_again() -> bool {
+    AppEvents::take().is_some_and(|events| events.leave_the_dock())
+}
+
+/// `NSApplicationActivateAllWindows`.
+const ACTIVATE_ALL_WINDOWS: usize = 1;
+
+/// Bring the application with this pid forward, with all its windows.
+/// `false` if no such application is running or the request was refused.
+pub(super) fn activate(pid: i32) -> bool {
+    let cls = class(c"NSRunningApplication");
+    if cls.is_null() {
+        return false;
+    }
+    // SAFETY: `+runningApplicationWithProcessIdentifier:` takes a `pid_t` and
+    // returns an autoreleased instance or nil; `-activateWithOptions:` takes
+    // an `NSUInteger` and returns a `BOOL`. The caller runs inside the event
+    // loop's autorelease pool.
+    unsafe {
+        let lookup = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel, i32) -> Id,
+        >(objc_msgSend);
+        let app = lookup(cls, sel(c"runningApplicationWithProcessIdentifier:"), pid);
+        if app.is_null() {
+            return false;
+        }
+        let send = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel, usize) -> i8,
+        >(objc_msgSend);
+        send(app, sel(c"activateWithOptions:"), ACTIVATE_ALL_WINDOWS) != 0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +217,6 @@ mod tests {
         // The test harness runs each test on a spawned thread, and a cargo
         // build is not inside an `.app`; either alone must refuse.
         assert!(AppEvents::take().is_none());
+        assert!(!leave_the_dock_again());
     }
 }
