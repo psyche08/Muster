@@ -39,3 +39,26 @@ an effort. The OTA page serves registered iOS devices only.
 Check the daemon's source stamp, release ancestry, notarization, stapled
 ticket, Gatekeeper, iOS provisioning, the public page, package hashes and the
 feed signature. Record each platform's results separately.
+
+## Release evidence
+
+The public download page offers macOS and registered-device iOS 1.1.36 (126)
+from main commit `1319501a5f312f25a8ce5565fb65e64a6f34e213`. The macOS
+daemon stamp, release ancestry, Presence signing, Apple notarization, stapled
+ticket, Gatekeeper and update-feed signature passed verification. The full
+update package carries the same signed app and daemon as the notarized
+portable. The iOS archive passed strict signature verification for three
+registered devices (profile valid until 2027-09-30), and its IPA matched the
+package named in the public manifest.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| macOS portable | `3e92429ce87230843e45c79859d68bba382911ef5d56eb154d25dc8e26441f2e` |
+| macOS full update | `fe535c7a5a9227df8e5553de7a6d5af59f38608910ebce00e40225d6e39d28b1` |
+| iOS OTA IPA | `65f301e7488cd3c3a9ce31c7caf6dec160d96e0b16c12028527eba59dcd03057` |
+
+All 14 files matched the staged hashes over public HTTPS. The download and
+install links, the cache policy, and an older manifest URL resolving to
+build 126 were also verified. Superseded 1.1.35 files are still on the
+server; pruning them waits for the owner's approval. No installed Mac was
+updated and no physical iPhone was connected for this release.
