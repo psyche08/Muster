@@ -780,7 +780,9 @@ extension EnvironmentValues {
 struct WorkingGroup: View {
     let block: Muster_App_ChatBlock
     @Environment(\.conversationStyle) private var style
-    private var disclosure = TranscriptDisclosure()
+    // Not private: a plain private stored property makes the synthesized
+    // memberwise initializer private and unusable from other types.
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("working", id: block.id, defaultValue: block.defaultExpanded) }
     private var expanded: Bool { expansion.wrappedValue }
 
@@ -886,7 +888,7 @@ struct ActivityGroup: View, Equatable {
     @Environment(\.transcriptDisclosurePath) private var disclosurePath
     @Environment(\.conversationStyle) private var style
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("activity", id: block.id, defaultValue: expanded) }
 
     var body: some View {
@@ -947,7 +949,7 @@ struct ToolActivityRow: View {
         }
     }
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("tool", id: row.id, defaultValue: expanded) }
 
     var body: some View {
@@ -1023,9 +1025,9 @@ struct ToolActivityRow: View {
 struct TurnChanges: View {
     let message: Muster_V1_AgentMessage
     var open: (String) -> Void = { _ in }
-    private var expanded = false
+    var expanded = false
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("changes", id: message.id, defaultValue: expanded) }
 
     var body: some View {
@@ -1077,9 +1079,9 @@ struct TurnChanges: View {
 struct CompactContext: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.message == rhs.message }
     let message: Muster_V1_AgentMessage
-    private var expanded = false
+    var expanded = false
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("context", id: message.id, defaultValue: expanded) }
 
     var body: some View {

@@ -9,7 +9,7 @@ struct ReasoningRow: View {
     var expanded = false
     @Environment(\.conversationStyle) private var style
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("reasoning", id: block.id, defaultValue: expanded) }
 
     var body: some View {
@@ -50,9 +50,9 @@ struct ReasoningRow: View {
 
 struct SessionNotice: View {
     let block: Muster_App_ChatBlock
-    private var expanded = false
+    var expanded = false
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("notice", id: block.id, defaultValue: expanded) }
 
     var body: some View {
@@ -92,7 +92,7 @@ struct SessionDiffCard: View {
     @Environment(\.conversationStyle) private var style
     private var palette: ChatPalette { ChatPalette(scheme: scheme, style: style) }
 
-    private var disclosure = TranscriptDisclosure()
+    var disclosure = TranscriptDisclosure()
     private var expansion: Binding<Bool> { disclosure.binding("diff", id: file.id, defaultValue: expanded) }
 
     var body: some View {
