@@ -79,3 +79,4 @@
 1.1.34 3408c935975fe58d0aa0507974398fd1af903465 Unified Apple session catalog. Notarized macOS portable, signed full update feed and registered-device iOS OTA build 124 publicly verified (ADR 0179).
 1.1.35 89e18f07295f845a1e2fed05b8bbab3710b9f154 Compact active status on iPhone catalog rows. Notarized Mac portable, signed full update feed and paired iOS OTA build 125 publicly verified (ADR 0180).
 1.1.36 1319501a5f312f25a8ce5565fb65e64a6f34e213 Choose a new desktop session's model and effort before its first message (ADR 0181). Notarized Mac portable, signed full update feed and paired iOS OTA build 126 publicly verified (ADR 0182).
+1.1.37 3ff2da94804b36cacfe848e8982656e96e49360f Trusted Multica dispatch on enrolled Macs (ADR 0187). The notarized macOS archive and signed desktop feed were publicly verified, and three Macs reported the release commit after installation (ADR 0188).
