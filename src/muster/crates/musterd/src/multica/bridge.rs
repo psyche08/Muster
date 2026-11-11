@@ -486,7 +486,9 @@ fn spawn_bridge(
                                     let cli=root.join("bin/multica");
                                     let credential=muster_acp::TaskCredential::create(&root.join(".runtime-credentials"),&cli,&launch.env)?;
                                     let local=tokio::net::UnixStream::connect(&socket).await.map_err(|e|e.to_string())?;
-                                    let host=Arc::new(muster_acp::NativeHost::new(muster_rpc::Client::new(local),&launch.provider,session_root,credential));
+                                    let run = launch.env.get("MULTICA_TASK_ID").ok_or("Missing Multica run")?;
+                                    let host = muster_acp::NativeHost::new(muster_rpc::Client::new(local), &launch.provider, session_root, credential);
+                                    let host = Arc::new(host.with_multica_run(run.clone()));
                                     let cwd=launch.cwd.to_string_lossy().into_owned();
                                     if launch.provider=="codex"{muster_acp::scheduler::codex(reader,write,host,cwd,&launch.args).await}else{muster_acp::scheduler::claude(reader,write,host,cwd,&launch.args).await}.map_err(|e|e.to_string())
                                 }

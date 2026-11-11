@@ -503,3 +503,22 @@ Dated verification, diagnosis and incident records are in
 - [Inputs cleared before every submission, and a quiet cover (2026-10-27)](validation/AGENT-INTERFACE-RECORDS-2026-09-28-TO-10-27.md#inputs-cleared-before-every-submission-and-a-quiet-cover-2026-10-27)
 - [Session scans skip transcripts; control scans retry a vanished node (2026-10-27)](validation/AGENT-INTERFACE-RECORDS-2026-09-28-TO-10-27.md#session-scans-skip-transcripts-control-scans-retry-a-vanished-node-2026-10-27)
 - [Several windows on one conversation (2026-10-27)](validation/AGENT-INTERFACE-RECORDS-2026-09-28-TO-10-27.md#several-windows-on-one-conversation-2026-10-27)
+
+### Locked Codex first turns from the managed Multica runtime
+
+A local scheduler can authorize a dispatched Multica run on a locked Mac.
+Get the run UUID, runtime and work directory from Multica's authenticated
+issue execution record. On the target Mac call the local `agent_scheduler`
+status action with `task_id` equal to `multica:<run UUID>`. For up to 60 s,
+`op.state = awaiting_grant` exposes the proposed first message in
+`op.message`. The console stays locked during review.
+
+Check the run, issue, runtime and canonical directory against the dispatch
+you intended. Review the message and confirm its UTF-8 SHA-256 equals
+`contract_sha256`. Use the existing local `grant` action with that task ID,
+digest, provider and directory, a short TTL, and named model and effort
+(e.g. `native-app` and `default`, since this creation retains Codex's current
+choices). The bridge consumes the grant for its pending operation. Do not
+also submit an `operate` request. Status then shows the durable operation
+and its provider session. The local grant owner can revoke the grant when
+finished. An expired proposal requires a new authorized dispatch.
