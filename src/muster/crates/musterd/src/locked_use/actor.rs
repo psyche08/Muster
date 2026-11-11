@@ -997,7 +997,7 @@ pub(super) fn start_scheduled(
                     tokio::select! {
                         biased;
                         _ = cancelled => Err(Error::Unavailable("native operation cancelled".into())),
-                        result = job.perform(&daemon, crate::scheduler::IN_LEASE_RECEIPT) => result,
+                        result = job.perform(&daemon, crate::scheduler::IN_LEASE_RECEIPT, true) => result,
                     }
                 })
                 .await

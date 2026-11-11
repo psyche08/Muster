@@ -23,3 +23,14 @@ A refusal before submission can be localized without stopping the daemon to samp
 ## Verification
 
 Check the macOS adapter and guards. On paired Macs test a new remote operation and a separate scheduler grant, starting locked. Verify the exact first prompt, unique session, assistant answer and automatic relock separately for each. Revoke the scheduler test grant after use.
+
+The paired-device trace reached the new window at 2.58 s, then spent the
+remaining lease waiting for its initial composer. No directory navigation
+was dispatched. For a covered Codex creation, send the directory-only route
+once the uniquely new focused standard window exposes the application's
+document. The first editor belongs to the as-yet *unrouted* shell and is
+not a precondition for sending the route. Authorization to write still
+requires that exact window, the routed form, the selected local project
+and exact directory, empty composer and verified draft. The unlocked
+scheduler and manual creation retain ADR 0154's composer wait. Do not
+extend a lease or send a second route on timeout.

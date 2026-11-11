@@ -352,6 +352,7 @@ pub async fn submit(
     prompt: &str,
     model: &str,
     effort: &str,
+    covered: bool,
 ) -> Result<Submitted, Error> {
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
@@ -501,7 +502,27 @@ pub async fn submit(
             .raise()
             .map_err(|_| unavailable("Cannot raise the new window"))?;
         stage("await_new_renderer");
-        renderer_ready(&guard, &root, &fresh).await?;
+        if covered {
+            let limit = Instant::now() + Duration::from_secs(8);
+            loop {
+                guard.check()?;
+                if !windows(&root).contains(&fresh) {
+                    return Err(conflict("New native window was replaced"));
+                }
+                if fresh.role() == "AXWindow"
+                    && root.element("AXFocusedWindow").as_ref() == Some(&fresh)
+                    && unique(&fresh, |n| new_page("codex", n))?.is_some()
+                {
+                    break;
+                }
+                if Instant::now() >= limit {
+                    return Err(unavailable("New focused Codex document did not appear"));
+                }
+                tokio::time::sleep(Duration::from_millis(75)).await;
+            }
+        } else {
+            renderer_ready(&guard, &root, &fresh).await?;
+        }
         guard.check()?;
         stage("dispatch_directory_route");
         open(&bundle, Some(&route))?;
@@ -535,6 +556,7 @@ pub async fn submit(
     stage("await_routed_form");
     let deadline = Instant::now() + Duration::from_secs(25);
     let mut trusted = false;
+    let mut last_form_state = None;
     let (page, composer, project) = loop {
         guard.check()?;
         if !windows(&root).contains(&window) {
@@ -555,12 +577,31 @@ pub async fn submit(
             guard.press(&trust)?;
             trusted = true;
         }
-        if let Some(page) = unique(&window, |n| new_page(provider, n))?
+        let page = unique(&window, |n| new_page(provider, n))?;
+        let mut form_state = (page.is_some(), false, false, trusted);
+        if let Some(page) = page
             && (!reuses_main || empty_session_marker(&page)?)
-            && let Some(project) = selection_matches(provider, &page, cwd)?
-            && let Some(composer) = unique(&page, |n| profile.controls().composer.matches(n))?
         {
-            break (page, composer, project);
+            let project = selection_matches(provider, &page, cwd)?;
+            form_state.1 = project.is_some();
+            if let Some(project) = project {
+                let composer = unique(&page, |n| profile.controls().composer.matches(n))?;
+                form_state.2 = composer.is_some();
+                if let Some(composer) = composer {
+                    break (page, composer, project);
+                }
+            }
+        }
+        if last_form_state != Some(form_state) {
+            log::info!(
+                "Native creation form: page={} project={} composer={} trusted={} elapsed_ms={}",
+                form_state.0,
+                form_state.1,
+                form_state.2,
+                form_state.3,
+                started.elapsed().as_millis()
+            );
+            last_form_state = Some(form_state);
         }
         if Instant::now() >= deadline {
             return Err(unavailable(

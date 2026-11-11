@@ -153,10 +153,13 @@ impl Job {
         &self,
         daemon: &Arc<Daemon>,
         receipt: Duration,
+        covered: bool,
     ) -> Result<Resp, Error> {
         self.started.store(true, Ordering::SeqCst);
         match &self.inner {
-            Inner::Create(r) => crate::native_create::scheduled(daemon, r.clone(), receipt).await,
+            Inner::Create(r) => {
+                crate::native_create::scheduled(daemon, r.clone(), receipt, covered).await
+            }
             Inner::Operation(req) => crate::handler::locked_operation(daemon, req.clone()).await,
             #[cfg(test)]
             Inner::Probe(hold) => {
@@ -661,7 +664,7 @@ async fn unlocked(daemon: &Arc<Daemon>, task_id: &str, job: &Job) -> Result<Resp
                     "a Locked Use transaction owns the console".into(),
                 ));
             };
-            let result = job.perform(daemon, IN_LEASE_RECEIPT).await;
+            let result = job.perform(daemon, IN_LEASE_RECEIPT, false).await;
             drop(console);
             result
         })
