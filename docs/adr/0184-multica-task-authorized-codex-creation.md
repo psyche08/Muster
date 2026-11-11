@@ -48,3 +48,10 @@ Exercise refusal and digest binding in the daemon. On the installed build
 dispatch a real issue to the Mac's Multica runtime while locked, authorize
 only that run, check its ledger and unique first message, then verify the
 answer at Multica and the OS lock observation. Clean up the test grant.
+
+On the real service the first turn contains the issue UUID and instructions
+for reading the issue. The issue body is fetched by the native agent. Review
+the issue itself as well as the proposed first turn. The Multica runner also
+has a 30-second initial progress deadline. The adapter emits the received
+user item at turn start and completes that item when the native prompt
+returns. Only the provider's completed assistant turn emits a final answer.
