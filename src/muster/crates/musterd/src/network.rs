@@ -271,7 +271,7 @@ impl Daemon {
                 services.push("agent.approvals.locked.v1".to_string());
                 // Remote desktop (Code mode) session creation (ADR 0150).
                 services.push("agent.native_create.v1".to_string());
-                // Its model and effort, chosen before the first message (ADR 0180).
+                // Its model and effort, chosen before the first message (ADR 0181).
                 services.push("agent.native_create.options.v1".to_string());
             }
         }

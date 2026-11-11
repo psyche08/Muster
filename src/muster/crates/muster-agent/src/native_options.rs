@@ -231,7 +231,7 @@ pub fn confirmed(choices: &[ChatChoice], kind: Kind, name: &str) -> bool {
 }
 
 /// The stable start of every refusal of a new session's requested model or
-/// effort (ADR 0180). Such a creation sent nothing, and asking again
+/// effort (ADR 0181). Such a creation sent nothing, and asking again
 /// unchanged is refused again, so callers treat it as final.
 pub const CREATE_REFUSED: &str = "The new session's model and effort were not set";
 

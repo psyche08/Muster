@@ -1,5 +1,5 @@
 //! AX adapter for the coding composer's model and effort menus: a session's
-//! web area, or a new session's form before its first message (ADR 0180).
+//! web area, or a new session's form before its first message (ADR 0181).
 use super::*;
 use muster_agent::{
     desktop_chat as chat,
@@ -518,7 +518,7 @@ async fn press_effort(scope: &impl Scope, effort: &str) -> Result<String, Error>
 }
 
 /// Chooses a new session's model and effort on its form and reads both back
-/// before anything is drafted (ADR 0180). Empty names keep the app's choice.
+/// before anything is drafted (ADR 0181). Empty names keep the app's choice.
 /// A name the app does not offer refuses with `options::CREATE_REFUSED`.
 /// Returns what the pickers show, for one last read-only comparison just
 /// before the first message.

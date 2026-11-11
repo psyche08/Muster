@@ -1,9 +1,10 @@
-# ADR 0180: Choose a new desktop session's model and effort before its first message
+# ADR 0181: Choose a new desktop session's model and effort before its first message
 
 - Date: 2026-11-10
-- Status: Accepted; source and tests verified, and a Claude creation with a
-  model and an effort verified on a Mac (2026-11-11). Codex's Power walk on a
-  device, Locked Use, release and installation are not verified.
+- Status: Accepted; source and tests verified. On a Mac (2026-11-11), a
+  Claude creation with a model and an effort and a Codex creation with a
+  Power level were verified. Codex's model choice on ChatGPT 26.1103, Locked
+  Use, release and installation are not verified.
 - Related: [ADR 0097](0097-task-scoped-scheduler-grant-for-locked-use.md),
   [ADR 0111](0111-native-organization-ax-and-file-confirmation.md),
   [ADR 0115](0115-target-scoped-local-input.md),
@@ -139,6 +140,12 @@ while a modifier is held.
   - A name that fits no single level walks back to the starting level and
     is refused with every level's name.
   - The read back confirms the level the walk stopped on.
+  - The panel is closed with one Return on the focused `Power` item, which
+    the app takes as done. After a key, and on a panel opened again, the app
+    ignores a press on the popup, so toggling the popup does not close it.
+    The read back opens the panel again and closes it the same way. Return
+    is posted only after the focused `Power` item is read back, never to the
+    composer, where Return sends.
 
   A Codex form whose effort picker is a plain menu has the level pressed as
   on existing sessions.
@@ -276,16 +283,39 @@ both fields empty and keep the app's choice.
   6. **Local input.** Four runs were refused with `conflict: Physical input
      changed; nothing is retried` when the operator moved the mouse during
      them. Nothing was pressed after the movement, and nothing was sent.
-- **Not verified.**
-  - **Codex.** Neither Codex request reached the model and effort steps.
-    - The first was stopped by local input while its new ChatGPT window was
-      still loading.
-    - The second was refused by the existing activation check: `Native
-      activation did not settle ... renderer=false`. The app's only window
-      showed a chat whose composer is not the Codex composer. That window
-      was left as it was.
+  7. **Codex window.** ChatGPT's only window showed a chat, not the Codex
+     composer. With the operator's approval, that window was moved to a new
+     Codex page before the Codex runs.
+  8. **Codex refusal.** Request `nc-accept-codex-bogus-4` asked for effort
+     `Bogus` from `GPT-6 Astra Extended, 3 of 5.` It was `Rejected` with
+     `invalid: ... effort "Bogus" is not offered (the app offers "GPT-6 Astra
+     Light", "GPT-6 Astra Standard", "GPT-6 Astra Extended", "GPT-6 Astra
+     Extra High", "GPT-6 Astra Ultra"); nothing was sent`. The walk read every
+     level and returned to level 3, and no session was created.
+  9. **Codex creation.** Request `nc-accept-codex-apply-3` asked for effort
+     `Light`, two levels below `Extended`.
+     - It was `Applied` as session `01a1c8d4`.
+     - The session's transcript records model `gpt-6-astra` and effort
+       `low`.
+     - Its first message is the prompt, and the reply was `OK`.
 
-    So the Power walk on a device, and Codex step 4 below, are still open.
+     Three earlier runs timed out and sent nothing. The panel was looked
+     up under the popup's old name, and toggling the popup did not close the
+     panel after a key, nor the panel the read back opened. All three were
+     fixed before the results above.
+  10. **Codex input.** No Codex run advanced the HID event counters the
+      creation guard reads.
+  11. **Codex restored.** The creation changed Codex's default effort in
+      `~/.codex/config.toml` from `high` to `low` and trusted the scratch
+      directory. Later, ChatGPT's Accessibility tree listed the application
+      element as each of its windows, so the default could not be walked
+      back in the app. The file was restored from a copy taken before the
+      runs, after checking that those two changes were its only differences.
+- **Not verified.**
+  - Codex's model choice on ChatGPT 26.1103: the Codex runs asked only for
+    an effort.
+  - The existing-session path on ChatGPT 26.1103 (`AgentChatSetOptions`),
+    which still closes the Power panel by toggling the popup.
   - Locked Use (step 5 below).
   - Signed build, release and installation.
 - **Device acceptance (remaining).** This needs an unlocked Mac and the
@@ -300,6 +330,6 @@ both fields empty and keep the app's choice.
   3. Request a Claude creation with an effort the app does not offer. Expect
      `Rejected` with the levels in the message, and no new session. Done.
   4. Repeat steps 2 and 3 for Codex, with a Power level two levels away. Its
-     ChatGPT windows must show the Codex composer first.
+     ChatGPT windows must show the Codex composer first. Done for the effort.
   5. Repeat step 2 on a locked Mac through Locked Use.
-  6. Restore each app's previous model and effort.
+  6. Restore each app's previous model and effort. Done.

@@ -47,7 +47,7 @@ fn well_formed(r: &v1::AgentNativeCreateRequest, providers: &[&str]) -> Result<(
     Ok(())
 }
 
-/// Whether a creation asks for a model or an effort (ADR 0180).
+/// Whether a creation asks for a model or an effort (ADR 0181).
 fn has_options(r: &v1::AgentNativeCreateRequest) -> bool {
     !r.model.is_empty() || !r.effort.is_empty()
 }

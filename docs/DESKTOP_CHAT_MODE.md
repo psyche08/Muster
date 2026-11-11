@@ -254,7 +254,7 @@ rejected before anything moves on the Mac, with the app's reason.
 ### New desktop sessions
 
 `AgentNativeCreate` can also name the new session's `model` and `effort`
-(ADR 0180; service `agent.native_create.options.v1`). The daemon chooses them
+(ADR 0181; service `agent.native_create.options.v1`). The daemon chooses them
 on the new session's form and reads them back before the first message is
 drafted. It re-reads the picker's label just before pressing send. A name
 the app does not offer, or a choice it does not confirm, refuses the creation
@@ -289,13 +289,18 @@ High`). While its panel is open, the popup and the panel are both named
 popup's: `Standard` and `Extended` on the slider are `Medium` and `High` on
 the popup. A request names a level as the status does, or without the
 model words that every level shares (`Light`, `Extended`); the popup's
-words are refused. The whole name stops the walk where it is read; a short
-name is looked up after every level was read. A name that fits no single
-level walks back to the starting level before the creation is refused.
-Existing sessions keep the Power rules above.
+words are refused. On that Mac the levels were `GPT-6 Astra Light`,
+`Standard`, `Extended`, `Extra High` and `Ultra`. The whole name stops the
+walk where it is read; a short name is looked up after every level was read.
+A name that fits no single level walks back to the starting level before the
+creation is refused. Once the slider has moved, and on a panel opened again,
+ChatGPT 26.1103 ignores a press on the popup, so the daemon closes the panel
+with one Return on the focused `Power` item, never on the composer. Existing
+sessions keep the Power rules above.
 
-A Claude creation on Sonnet 5.5 at Medium was verified on a Mac on
-2026-11-11. The Codex Power walk is not yet verified on a device (ADR 0180).
+On a Mac on 2026-11-11, a Claude creation on Sonnet 5.5 at Medium and a
+Codex creation at `Light` (from `Extended`) were verified, and an unknown
+Codex level was refused with the five level names (ADR 0181).
 
 Middle-level check (2026-09-30, Mac-C): two conversations stated High (3 of
 5) and Extra High (4 of 5), and the new-chat page High; none offered

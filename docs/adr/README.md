@@ -296,4 +296,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0178](0178-consistent-session-list-rows.md) | Accepted | Use one session row across providers |
 | [0179](0179-publish-unified-apple-catalog.md) | Accepted | Publish the unified Apple catalog as 1.1.34 (124) |
 | [0180](0180-compact-ios-catalog-status.md) | Accepted | Keep iPhone catalog status on the title line |
-| [0180](0180-native-create-model-and-effort.md) | Accepted; Claude verified on a Mac, Codex device acceptance pending | Choose a new desktop session's model and effort before its first message |
+| [0181](0181-native-create-model-and-effort.md) | Accepted; Claude creation and Codex Power verified on a Mac | Choose a new desktop session's model and effort before its first message |
