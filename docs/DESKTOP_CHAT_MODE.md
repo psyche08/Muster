@@ -281,9 +281,18 @@ level and confirms it from the entry.
 
 On the ChatGPT app's new Codex form, Power is walked one level per
 application-directed Left or Right Arrow on its focused `Power` item. The
-status is read after every key, each key must move exactly one level, and a
-name no level has walks back to the starting level before the creation is
-refused. Existing sessions keep the Power rules above.
+status is read after every key, and each key must move exactly one level.
+ChatGPT 26.1103 names the form's popup by model and level (`GPT-6 Astra
+High`). While its panel is open, the popup and the panel are both named
+`Select effort`, and the status names the level by model and slider name
+(`GPT-6 Astra Extended, 3 of 5.`). The slider's words differ from the
+popup's: `Standard` and `Extended` on the slider are `Medium` and `High` on
+the popup. A request names a level as the status does, or without the
+model words that every level shares (`Light`, `Extended`); the popup's
+words are refused. The whole name stops the walk where it is read; a short
+name is looked up after every level was read. A name that fits no single
+level walks back to the starting level before the creation is refused.
+Existing sessions keep the Power rules above.
 
 A Claude creation on Sonnet 5.5 at Medium was verified on a Mac on
 2026-11-11. The Codex Power walk is not yet verified on a device (ADR 0180).

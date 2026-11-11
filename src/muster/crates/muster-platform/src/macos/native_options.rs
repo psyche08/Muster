@@ -122,7 +122,7 @@ async fn wait_menu(
         step.check()?;
         let snapshot = snapshot(scope).await?;
         step.check()?;
-        let panel = options::panel(&snapshot.0, picker)?;
+        let panel = options::opened_panel(&snapshot.0, picker, kind)?;
         if let Some(panel) = panel {
             if kind == Kind::Effort && options::power(&snapshot.0, panel).is_some() {
                 return Ok((panel, snapshot));
@@ -275,6 +275,7 @@ async fn submenu_effort(scope: &impl Scope) -> Result<Option<String>, Error> {
 enum Key {
     OpenSubmenu,
     Power(options::PowerStep),
+    PowerDone,
 }
 
 /// Focuses `item`, proves that the app's focused element and window are
@@ -321,6 +322,7 @@ async fn focused_key(scope: &impl Scope, item: &Element, key: Key) -> Result<(),
         Key::OpenSubmenu => app.submenu_right(),
         Key::Power(options::PowerStep::Lower) => app.slider_lower(),
         Key::Power(options::PowerStep::Higher) => app.slider_higher(),
+        Key::PowerDone => app.slider_done(),
     }
     .map_err(|e| Error::Unavailable(format!("Model/effort key: {e}")))
 }
@@ -384,9 +386,9 @@ async fn submenu_level(
 }
 
 /// The level the ChatGPT app's open Power panel states, and its "Power"
-/// item, from a fresh read. The picker is found afresh too: a combined
-/// picker's label names the level ("GPT-6 Astra High"), and so does its
-/// panel's title.
+/// item, from a fresh read. The picker is found afresh too: its label
+/// changes with the level, and while the panel is open the app names both
+/// the picker and the panel "Select effort".
 async fn read_power(scope: &impl Scope) -> Result<(chat::PowerLevel, Element), Error> {
     let (tree, elements) = snapshot(scope).await?;
     let index = options::picker(&tree, Kind::Effort)?;
@@ -404,8 +406,9 @@ async fn read_power(scope: &impl Scope) -> Result<(chat::PowerLevel, Element), E
 
 /// The ChatGPT app's Power slider: walks it with arrow keys on its exactly
 /// focused "Power" item, reading the level the app states after each key,
-/// until it states `effort` ([`options::PowerWalk`]).
-async fn walk_power(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+/// until it states `effort` ([`options::PowerWalk`]). Returns the app's own
+/// name for that level.
+async fn walk_power(scope: &impl Scope, effort: &str) -> Result<String, Error> {
     let (mut level, mut item) = read_power(scope).await?;
     let mut walk = options::PowerWalk::new(&level, effort);
     while let Some(step) = walk.next(&level)? {
@@ -427,14 +430,74 @@ async fn walk_power(scope: &impl Scope, effort: &str) -> Result<(), Error> {
             tokio::time::sleep(ECHO_POLL).await;
         }
     }
-    Ok(())
+    Ok(level.name)
+}
+
+/// The open Power panel's "Power" item, or `None` once the panel is closed.
+async fn power_item(scope: &impl Scope) -> Result<Option<Element>, Error> {
+    let (tree, elements) = snapshot(scope).await?;
+    let index = options::picker(&tree, Kind::Effort)?;
+    let picker = chat::Picker {
+        node: index,
+        label: tree.nodes[index].label().to_owned(),
+    };
+    Ok(options::panel(&tree, &picker)?
+        .and_then(|panel| options::power_entry(&tree, panel))
+        .map(|node| elements[node].clone()))
+}
+
+/// Closes the Power panel the way the app's own keyboard handling does:
+/// Return on the exactly focused "Power" item. After Power keys, the
+/// ChatGPT app 26.1103 leaves its panel open when its picker is pressed.
+async fn finish_power(scope: &impl Scope) -> Result<(), Error> {
+    let Some(item) = power_item(scope).await? else {
+        return Ok(());
+    };
+    focused_key(scope, &item, Key::PowerDone).await?;
+    let step = Step::new("close Power panel", Duration::from_secs(2));
+    loop {
+        step.check()?;
+        if power_item(scope).await?.is_none() {
+            return Ok(());
+        }
+        step.check()?;
+        tokio::time::sleep(ECHO_POLL).await;
+    }
+}
+
+/// Closes a new form's effort panel. A Power panel takes Return on its
+/// focused "Power" item ([`finish_power`]): the ChatGPT app 26.1103 leaves
+/// it open when its picker is pressed. After local input the guard refuses
+/// both, and nothing is pressed.
+async fn close_effort(scope: &impl Scope, power: bool) -> Result<(), Error> {
+    if power {
+        finish_power(scope).await?;
+    }
+    close(scope, Kind::Effort).await
+}
+
+/// A fresh read of a new form's effort choices, closed by [`close_effort`].
+async fn read_effort(scope: &impl Scope) -> Result<Vec<chat::ChatChoice>, Error> {
+    let (menu, (tree, _)) = open(scope, Kind::Effort).await?;
+    let choices = options::choices(&tree, menu, Kind::Effort);
+    let closed = close_effort(scope, options::power(&tree, menu).is_some()).await;
+    let choices = choices?;
+    closed?;
+    if choices.is_empty() {
+        return Err(Error::Unavailable(
+            "The app exposed no selectable choices".into(),
+        ));
+    }
+    Ok(choices)
 }
 
 /// A form's own effort picker (the ChatGPT app): its Power slider, or a
-/// menu of levels. Presses or walks to `effort` and closes the panel.
-async fn press_effort(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+/// menu of levels. Presses or walks to `effort`, closes the panel, and
+/// returns the name a fresh read must show for it.
+async fn press_effort(scope: &impl Scope, effort: &str) -> Result<String, Error> {
     let (panel, (tree, elements)) = open(scope, Kind::Effort).await?;
-    let result = if options::power(&tree, panel).is_some() {
+    let walked = options::power(&tree, panel).is_some();
+    let result = if walked {
         walk_power(scope, effort).await
     } else {
         let pressed = options::choices(&tree, panel, Kind::Effort).and_then(|choices| {
@@ -446,11 +509,12 @@ async fn press_effort(scope: &impl Scope, effort: &str) -> Result<(), Error> {
         if pressed.as_ref().is_ok_and(|pressed| *pressed) {
             tokio::time::sleep(Duration::from_millis(300)).await;
         }
-        pressed.map(|_| ())
+        pressed.map(|_| effort.to_owned())
     };
-    let close = close(scope, Kind::Effort).await;
-    result?;
-    close
+    let closed = close_effort(scope, walked).await;
+    let chosen = result?;
+    closed?;
+    Ok(chosen)
 }
 
 /// Chooses a new session's model and effort on its form and reads both back
@@ -482,9 +546,10 @@ pub(in crate::macos) async fn prepare_new(
     // decide on fresh reads.
     let selectable_effort = effort_picker(scope).await?;
     let mut levels = Vec::new();
+    let mut chosen = effort.to_owned();
     if !effort.is_empty() {
         if selectable_effort {
-            press_effort(scope, effort)
+            chosen = press_effort(scope, effort)
                 .await
                 .map_err(|error| match error {
                     // A model-only picker: asking again cannot find an effort.
@@ -511,9 +576,9 @@ pub(in crate::macos) async fn prepare_new(
     }
     if !effort.is_empty() {
         let (confirmed, current) = if selectable_effort {
-            let choices = read(scope, Kind::Effort).await?;
+            let choices = read_effort(scope).await?;
             let current = choices.iter().find(|c| c.selected).map(|c| c.name.clone());
-            (options::confirmed(&choices, Kind::Effort, effort), current)
+            (options::confirmed(&choices, Kind::Effort, &chosen), current)
         } else {
             let current = submenu_effort(scope).await?;
             let confirmed = current

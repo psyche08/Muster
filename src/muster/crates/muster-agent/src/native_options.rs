@@ -119,6 +119,30 @@ pub fn panel(tree: &AxTree, picker: &chat::Picker) -> Result<Option<usize>, Erro
     }
 }
 
+/// The panel `opened` opened, on a fresh read. The ChatGPT app (26.1103)
+/// renames its button while the panel is open ("GPT-6 Astra High" becomes
+/// "Select effort") and titles the panel so: a panel under the button's
+/// current name counts too.
+pub fn opened_panel(
+    tree: &AxTree,
+    opened: &chat::Picker,
+    kind: Kind,
+) -> Result<Option<usize>, Error> {
+    if let Some(found) = panel(tree, opened)? {
+        return Ok(Some(found));
+    }
+    match picker(tree, kind) {
+        Ok(node) if tree.nodes[node].label() != opened.label => panel(
+            tree,
+            &chat::Picker {
+                node,
+                label: tree.nodes[node].label().to_owned(),
+            },
+        ),
+        _ => Ok(None),
+    }
+}
+
 pub fn choices(tree: &AxTree, menu: usize, kind: Kind) -> Result<Vec<ChatChoice>, Error> {
     if !tree.complete {
         return Err(Error::Unavailable("Incomplete model menu snapshot".into()));
@@ -348,10 +372,12 @@ pub enum PowerStep {
 }
 
 /// Walks the ChatGPT app's Power slider to a level known only by name: the
-/// app states only the level it shows ("High, 3 of 5."). The walk reads
-/// every level downwards first, then upwards, and stops on the first that
-/// has the name. A name no level has walks back to the starting level and
-/// refuses the creation. Every key must move exactly one level.
+/// app states only the level it shows, as a model-and-reasoning name
+/// ("GPT-6 Astra Extended, 3 of 5."). A level's own name ends the walk where
+/// it is read. Any other name is looked up only after every level was read,
+/// downwards first and then upwards ([`power_named`]), and then walked to.
+/// A name no level has walks back to the starting level and refuses the
+/// creation. Every key must move exactly one level.
 #[derive(Debug)]
 pub struct PowerWalk {
     start: chat::PowerLevel,
@@ -359,7 +385,10 @@ pub struct PowerWalk {
     seen: BTreeMap<u32, String>,
     last: Option<(u32, PowerStep)>,
     keys: u32,
-    restoring: bool,
+    /// Once every level was read: the requested level, or the starting
+    /// one when no level has the name (`offered` false).
+    goal: Option<u32>,
+    offered: bool,
 }
 
 impl PowerWalk {
@@ -370,12 +399,14 @@ impl PowerWalk {
             seen: BTreeMap::new(),
             last: None,
             keys: 0,
-            restoring: false,
+            goal: None,
+            offered: false,
         }
     }
 
     /// The next key after reading `level`, the level the app states now;
-    /// `None` once it states the requested name.
+    /// `None` once it states the requested level, whose name is then
+    /// `level.name`.
     pub fn next(&mut self, level: &chat::PowerLevel) -> Result<Option<PowerStep>, Error> {
         if let Some((from, step)) = self.last.take() {
             let expected = match step {
@@ -390,55 +421,88 @@ impl PowerWalk {
             }
         }
         self.seen.insert(level.position, level.name.clone());
-        loop {
-            let target = if self.restoring {
-                &self.start.name
-            } else {
-                &self.target
-            };
-            if level.name == *target {
-                return if self.restoring {
-                    Err(not_offered(
-                        Kind::Effort,
-                        &self.target,
-                        self.seen.values().map(String::as_str),
-                    ))
-                } else {
-                    Ok(None)
-                };
-            }
-            let unseen = |mut range: std::ops::RangeInclusive<u32>| {
-                range.any(|p| !self.seen.contains_key(&p))
-            };
-            let step = match self.seen.iter().find(|(_, name)| *name == target) {
-                Some((&p, _)) if p < level.position => Some(PowerStep::Lower),
-                Some((&p, _)) if p > level.position => Some(PowerStep::Higher),
-                Some(_) => None,
-                None if unseen(1..=level.position.saturating_sub(1)) => Some(PowerStep::Lower),
-                None if unseen(level.position + 1..=level.total) => Some(PowerStep::Higher),
-                None => None,
-            };
-            match step {
-                Some(step) => {
-                    self.keys += 1;
-                    if self.keys > 3 * level.total {
-                        return Err(create_unavailable(
-                            "the Power slider did not settle on a level",
-                        ));
-                    }
-                    self.last = Some((level.position, step));
-                    return Ok(Some(step));
-                }
-                None if !self.restoring => self.restoring = true,
-                None => {
-                    return Err(not_offered(
-                        Kind::Effort,
-                        &self.target,
-                        self.seen.values().map(String::as_str),
-                    ));
-                }
-            }
+        if self.goal.is_none() && level.name == self.target {
+            return Ok(None);
         }
+        let goal = match self.goal {
+            Some(goal) => goal,
+            None => {
+                let unseen = |mut range: std::ops::RangeInclusive<u32>| {
+                    range.any(|p| !self.seen.contains_key(&p))
+                };
+                if unseen(1..=level.position.saturating_sub(1)) {
+                    return self.key(level, PowerStep::Lower);
+                }
+                if unseen(level.position + 1..=level.total) {
+                    return self.key(level, PowerStep::Higher);
+                }
+                let found = power_named(&self.seen, &self.target);
+                self.offered = found.is_some();
+                *self.goal.insert(found.unwrap_or(self.start.position))
+            }
+        };
+        match level.position.cmp(&goal) {
+            std::cmp::Ordering::Equal if self.offered => Ok(None),
+            std::cmp::Ordering::Equal => Err(not_offered(
+                Kind::Effort,
+                &self.target,
+                self.seen.values().map(String::as_str),
+            )),
+            std::cmp::Ordering::Greater => self.key(level, PowerStep::Lower),
+            std::cmp::Ordering::Less => self.key(level, PowerStep::Higher),
+        }
+    }
+
+    fn key(
+        &mut self,
+        level: &chat::PowerLevel,
+        step: PowerStep,
+    ) -> Result<Option<PowerStep>, Error> {
+        self.keys += 1;
+        if self.keys > 3 * level.total {
+            return Err(create_unavailable(
+                "the Power slider did not settle on a level",
+            ));
+        }
+        self.last = Some((level.position, step));
+        Ok(Some(step))
+    }
+}
+
+/// The position of the Power level `name` names, from every level's name
+/// (`seen`): the app's own name ("GPT-6 Astra Light"), or that name without
+/// the leading words every level shares, the model ("Light"). A name that
+/// fits no single level is not offered. The app's button names the levels
+/// in other words ("GPT-6 Astra High" for "GPT-6 Astra Extended"); those are
+/// never matched.
+pub fn power_named(seen: &BTreeMap<u32, String>, name: &str) -> Option<u32> {
+    let exact: Vec<u32> = seen
+        .iter()
+        .filter(|(_, n)| *n == name)
+        .map(|(p, _)| *p)
+        .collect();
+    if !exact.is_empty() || seen.len() < 2 {
+        return match exact.as_slice() {
+            [one] => Some(*one),
+            _ => None,
+        };
+    }
+    let words: Vec<Vec<&str>> = seen.values().map(|n| n.split(' ').collect()).collect();
+    let shared = (0..)
+        .take_while(|&i| words.iter().all(|w| i + 1 < w.len() && w[i] == words[0][i]))
+        .count();
+    if shared == 0 {
+        return None;
+    }
+    let short: Vec<u32> = seen
+        .keys()
+        .zip(&words)
+        .filter(|(_, w)| w[shared..].join(" ") == name)
+        .map(|(p, _)| *p)
+        .collect();
+    match short.as_slice() {
+        [one] => Some(*one),
+        _ => None,
     }
 }
 
@@ -778,13 +842,29 @@ mod tests {
 
     const POWER: [&str; 5] = ["Low", "Medium", "High", "Extra High", "Max"];
 
-    /// Plays `walk` against a slider that starts at `start` (1-based) and
-    /// moves one level per key; returns the keys and where it stopped.
-    fn walk(start: u32, target: &str) -> (Vec<PowerStep>, u32, Result<(), Error>) {
+    /// The ChatGPT app 26.1103 as read on a Mac: each level is stated as its
+    /// model and its slider name; its button reads "GPT-6 Astra High" at 3
+    /// of 5.
+    const ASTRA: [&str; 5] = [
+        "GPT-6 Astra Light",
+        "GPT-6 Astra Standard",
+        "GPT-6 Astra Extended",
+        "GPT-6 Astra Extra High",
+        "GPT-6 Astra Ultra",
+    ];
+
+    /// Plays `walk` against a slider of `names` that starts at `start`
+    /// (1-based) and moves one level per key; returns the keys and where it
+    /// stopped.
+    fn walk_names(
+        names: &[&str],
+        start: u32,
+        target: &str,
+    ) -> (Vec<PowerStep>, u32, Result<(), Error>) {
         let level = |p: u32| chat::PowerLevel {
-            name: POWER[p as usize - 1].into(),
+            name: names[p as usize - 1].into(),
             position: p,
-            total: 5,
+            total: names.len() as u32,
         };
         let mut position = start;
         let mut walk = PowerWalk::new(&level(start), target);
@@ -802,6 +882,10 @@ mod tests {
                 Err(error) => return (keys, position, Err(error)),
             }
         }
+    }
+
+    fn walk(start: u32, target: &str) -> (Vec<PowerStep>, u32, Result<(), Error>) {
+        walk_names(&POWER, start, target)
     }
 
     #[test]
@@ -828,6 +912,88 @@ mod tests {
             message,
             "The new session's model and effort were not set: effort \"Middle\" is not offered (the app offers \"Low\", \"Medium\", \"High\", \"Extra High\", \"Max\"); nothing was sent"
         );
+    }
+
+    #[test]
+    fn power_walk_takes_the_app_name_or_the_name_without_the_shared_model() {
+        use PowerStep::{Higher, Lower};
+        // The app's own name stops where it is read.
+        assert_eq!(walk_names(&ASTRA, 3, "GPT-6 Astra Light").0, [Lower, Lower]);
+        assert_eq!(walk_names(&ASTRA, 3, "GPT-6 Astra Extended").0, []);
+        // A name without the model is looked up after every level was read.
+        let (keys, at, done) = walk_names(&ASTRA, 3, "Light");
+        assert_eq!(
+            keys,
+            [
+                Lower, Lower, Higher, Higher, Higher, Higher, Lower, Lower, Lower, Lower
+            ]
+        );
+        assert_eq!(at, 1);
+        assert!(done.is_ok());
+        let (_, at, done) = walk_names(&ASTRA, 3, "Extended");
+        assert_eq!(at, 3);
+        assert!(done.is_ok());
+        let (_, at, done) = walk_names(&ASTRA, 1, "Extra High");
+        assert_eq!(at, 4);
+        assert!(done.is_ok());
+        // The button's words are not the slider's: "High" is not "Extra High".
+        for name in ["High", "Max", "Astra Ultra", "GPT-6 Astra High", "Extra"] {
+            let (keys, at, done) = walk_names(&ASTRA, 3, name);
+            assert_eq!(at, 3, "walked back for {name:?}: {keys:?}");
+            let Err(Error::Invalid(message)) = done else {
+                panic!("{name:?} was accepted")
+            };
+            assert!(
+                message.ends_with(
+                    "(the app offers \"GPT-6 Astra Light\", \"GPT-6 Astra Standard\", \"GPT-6 Astra Extended\", \"GPT-6 Astra Extra High\", \"GPT-6 Astra Ultra\"); nothing was sent"
+                ),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn power_names_drop_only_words_every_level_shares() {
+        let seen = |names: &[&str]| -> BTreeMap<u32, String> {
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (i as u32 + 1, n.to_string()))
+                .collect()
+        };
+        assert_eq!(power_named(&seen(&ASTRA), "Ultra"), Some(5));
+        assert_eq!(power_named(&seen(&ASTRA), "GPT-6 Astra Ultra"), Some(5));
+        assert_eq!(power_named(&seen(&POWER), "Max"), Some(5));
+        // Two models: only "GPT-6" is shared.
+        let mixed = seen(&["GPT-6 Astra Light", "GPT-6 Sol Max"]);
+        assert_eq!(power_named(&mixed, "Sol Max"), Some(2));
+        assert_eq!(power_named(&mixed, "Max"), None);
+        // A level is never named by nothing, and one level has no short name.
+        assert_eq!(power_named(&seen(&["Max", "Max Extra"]), "Extra"), None);
+        assert_eq!(power_named(&seen(&["GPT-6 Astra Ultra"]), "Max"), None);
+        assert_eq!(power_named(&seen(&["A Max", "A Max"]), "Max"), None);
+    }
+
+    #[test]
+    fn chatgpt_panel_is_found_under_the_renamed_button() {
+        // Closed, the button reads "GPT-6 Astra High"; open, it and the
+        // panel read "Select effort".
+        let t = tree(
+            "AXWebArea\n  AXPopUpButton title=\"Select effort\"\n  AXGroup\n    AXGroup title=\"Select effort\"\n      AXMenuItem title=\"Select model\"\n      AXMenuItem title=\"Reset to default\"\n      AXGroup/AXApplicationStatus\n        AXStaticText value=\"GPT-6 Astra Extended, 3 of 5.\"\n      AXMenuItem title=\"Power\"\n        AXGroup\n          AXGroup/AXEmptyGroup",
+        );
+        let opened = chat::Picker {
+            node: 1,
+            label: "GPT-6 Astra High".into(),
+        };
+        assert_eq!(panel(&t, &opened).unwrap(), None);
+        let found = opened_panel(&t, &opened, Kind::Effort).unwrap().unwrap();
+        assert_eq!(found, 3);
+        let (level, _) = power(&t, found).unwrap();
+        assert_eq!(
+            (level.name.as_str(), level.position, level.total),
+            ("GPT-6 Astra Extended", 3, 5)
+        );
+        assert_eq!(opened_panel(&t, &opened, Kind::Model).unwrap(), Some(3));
     }
 
     #[test]

@@ -166,6 +166,13 @@ impl Element {
         self.keyboard_pair(124) // kVK_RightArrow
     }
 
+    /// End a slider walk with Return, only after the caller verifies the
+    /// exact focused slider control (the ChatGPT app's "Power" item takes it
+    /// as done and closes its panel). Never on an editor, where Return sends.
+    pub fn slider_done(&self) -> Result<(), AXError> {
+        self.keyboard_pair(36) // kVK_Return
+    }
+
     /// Delete only after the caller proves the exact focused editor's full range.
     pub fn backspace(&self) -> Result<(), AXError> {
         self.keyboard_pair(51) // kVK_Delete; application-directed, never Return.

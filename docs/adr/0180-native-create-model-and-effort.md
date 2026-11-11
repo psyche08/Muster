@@ -41,8 +41,12 @@ Facts about the form, read on Claude 4.23118.1 in Code mode:
 - The picker names the effort as the app's own picker does: `High` for
   `--effort=high` and `Extra` for `--effort=xhigh`.
 
-The Codex composer shows one combined popup named by model and Power level
-(`GPT-6 Astra High`). Its panel states the level as `High, 3 of 5.`, and the
+The Codex composer shows one combined popup named by model and level
+(`GPT-6 Astra High`). On ChatGPT 26.1103 the open panel renames that popup
+and titles itself `Select effort`. Its status names the level by model and
+slider name (`GPT-6 Astra Extended, 3 of 5.`). The slider's words are not
+the popup's: the app's strings call medium and high reasoning `Standard`
+and `Extended` on the slider, and `Medium` and `High` on the popup. The
 slider takes arrow keys on its focused `Power` item. `AXPress` on its track
 clicks the centre, so Accessibility alone can only reach the middle level
 (DESKTOP_CHAT_MODE.md).
@@ -122,12 +126,22 @@ while a modifier is held.
   within 2 seconds refuse the creation as unavailable.
 - **Codex's effort.** Power is walked one level per key: Left Arrow lowers,
   Right Arrow raises. After every key the panel's status is read again, and
-  the key must move exactly one level, within 2 seconds. Because the app
-  states only the level it shows, the walk goes down to the lowest level
-  first, then up, and stops on the first level with the requested name. A
-  name no level has walks back to the starting level and is refused with
-  every level's name. A Codex form whose effort picker is a plain menu has
-  the level pressed as on existing sessions.
+  the key must move exactly one level, within 2 seconds. The panel is found
+  under the popup's name when it was pressed, or under the name it has while
+  open (`Select effort`).
+  - A request names a level as the status does (`GPT-6 Astra Light`), or
+    without the leading words that every level's name shares, which are the
+    model (`Light`). The popup's words (`High`) are never matched.
+  - The app states only the level it shows. The walk stops as soon as the
+    status shows the request's whole name. For any other name it first
+    reads every level, down to the lowest and then up to the highest, and
+    then walks to the one level that the short name fits.
+  - A name that fits no single level walks back to the starting level and
+    is refused with every level's name.
+  - The read back confirms the level the walk stopped on.
+
+  A Codex form whose effort picker is a plain menu has the level pressed as
+  on existing sessions.
 - **DeepSeek Harness.** The plugin path (ADR 0167) has no model picker. A
   non-empty `model` or `effort` is refused before the ledger, the plugin or the
   App host is involved.
@@ -192,7 +206,8 @@ both fields empty and keep the app's choice.
 - Choosing on the new form can also change the model and effort the app
   proposes for later new sessions, as choosing them by hand can.
 - Walking Codex's Power can pass through other levels on the form before it
-  settles. Nothing is drafted or sent meanwhile. If local input stops the
+  settles; a short name passes through every level. Nothing is drafted or
+  sent meanwhile. If local input stops the
   walk, the form keeps the level it reached, and the creation is refused.
 - Callers must check `agent.native_create.options.v1`. Without the service,
   they must not send the fields.
@@ -215,6 +230,10 @@ both fields empty and keep the app's choice.
       or more than one, and read backs that confirm only the chosen level;
     - walking Power to every level by name, walking back before refusing an
       unknown name, and stopping on a key that moves more than one level;
+    - ChatGPT 26.1103's panel found under its renamed popup, its
+      model-and-slider names (`GPT-6 Astra Extended`), short names that drop
+      only the words every level shares, and the popup's words (`High`,
+      `GPT-6 Astra High`) refused;
     - name validation and the refusal messages.
   - `musterd`: tests cover the request shape check and a DeepSeek Harness
     refusal with no ledger row and no plugin call.
