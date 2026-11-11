@@ -118,6 +118,39 @@ impl NativeHost {
             _ => Err("Unexpected native history response".into()),
         }
     }
+    async fn creation_digest(&self, session: &str) -> Result<Option<String>, String> {
+        let Some(run) = self
+            .multica_run
+            .as_ref()
+            .filter(|_| self.provider == "codex")
+        else {
+            return Ok(None);
+        };
+        let task_id = format!("multica:{run}");
+        let req = Req::AgentScheduler(v1::AgentSchedulerRequest {
+            action: Some(v1::agent_scheduler_request::Action::Status(
+                v1::AgentSchedulerTask {
+                    task_id: task_id.clone(),
+                },
+            )),
+        });
+        match self.client.call(req).await {
+            Ok(Resp::AgentScheduler(status))
+                if status.task_id == task_id
+                    && status.producer_session == session
+                    && status.ops.iter().any(|op| {
+                        op.op_id == task_id && op.state == "applied" && op.result == session
+                    }) =>
+            {
+                Ok(Some(status.contract_sha256))
+            }
+            Err(muster_rpc::Error::Remote {
+                code: v1::error::Code::NotFound,
+                ..
+            }) => Ok(None),
+            _ => Err("Multica session has no matching local creation receipt".into()),
+        }
+    }
     async fn control(&self, request: Req) -> Result<String, String> {
         match self.client.call(request).await.map_err(|e| e.to_string())? {
             Resp::OpResult(op) => {
@@ -222,6 +255,7 @@ impl Host for NativeHost {
         };
         b.phase = "attempted".into();
         self.save(id, &b)?;
+        let mut creation_digest = None;
         if b.session.is_empty() {
             b.session = self
                 .control(self.first_request(id, &b, prompt.clone()))
@@ -230,6 +264,7 @@ impl Host for NativeHost {
                 return Err("Native creation returned no provider identity".into());
             }
             self.save(id, &b)?;
+            creation_digest = self.creation_digest(&b.session).await?;
         } else {
             self.control(Req::AgentSend(v1::AgentSendRequest {
                 op_id: format!("native-turn-{}", nonce()),
@@ -264,7 +299,18 @@ impl Host for NativeHost {
                     }
                     if row.role == "user"
                         && row.kind == "text"
-                        && row.text.trim_end() == prompt.trim_end()
+                        && match &creation_digest {
+                            Some(digest) => {
+                                use sha2::{Digest, Sha256};
+                                [
+                                    &row.text[..],
+                                    row.text.strip_suffix('\n').unwrap_or(&row.text),
+                                ]
+                                .iter()
+                                .any(|text| hex::encode(Sha256::digest(text.as_bytes())) == *digest)
+                            }
+                            None => row.text.trim_end() == prompt.trim_end(),
+                        }
                     {
                         started = true;
                         continue;

@@ -21,9 +21,10 @@ path = "src/main.rs"
 
 [dependencies]
 base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 sha2.workspace = true
 muster-acp = { path = "../muster-acp" }
-url = "2"
+url = { version = "2", features = ["serde"] }
 muster-browser = { path = "../muster-browser" }
 muster-web = { path = "../muster-web" }
 muster-core = { path = "../muster-core" }
