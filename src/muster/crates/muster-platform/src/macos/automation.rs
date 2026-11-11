@@ -46,15 +46,31 @@ pub fn installed(bundle: &str) -> Option<bool> {
     )
 }
 
+/// `AEDesc`: a descriptor type and an opaque data handle.
 #[repr(C)]
-struct Descriptor {
-    kind: u32,
-    handle: *mut c_void,
+pub(super) struct Descriptor {
+    pub(super) kind: u32,
+    pub(super) handle: *mut c_void,
 }
+
+impl Descriptor {
+    pub(super) const fn null() -> Self {
+        Self {
+            kind: 0,
+            handle: std::ptr::null_mut(),
+        }
+    }
+}
+
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
-    fn AECreateDesc(kind: u32, bytes: *const c_void, len: isize, out: *mut Descriptor) -> i32;
-    fn AEDisposeDesc(desc: *mut Descriptor) -> i32;
+    pub(super) fn AECreateDesc(
+        kind: u32,
+        bytes: *const c_void,
+        len: isize,
+        out: *mut Descriptor,
+    ) -> i16;
+    pub(super) fn AEDisposeDesc(desc: *mut Descriptor) -> i16;
     fn AEDeterminePermissionToAutomateTarget(
         target: *const Descriptor,
         class: u32,
@@ -78,10 +94,7 @@ pub fn permission(bundle: &str, class: [u8; 4], event: [u8; 4], ask: bool) -> &'
         return "not_installed";
     }
     let bundle = bundle.as_bytes();
-    let mut target = Descriptor {
-        kind: 0,
-        handle: std::ptr::null_mut(),
-    };
+    let mut target = Descriptor::null();
     // SAFETY: initialized AE descriptor and a valid, length-delimited bundle ID;
     // both APIs are synchronous and the descriptor is disposed exactly once.
     let status = unsafe {

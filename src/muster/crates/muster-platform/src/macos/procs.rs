@@ -7,6 +7,15 @@ use std::path::Path;
 /// Pids whose executable path ends with `suffix` (e.g.
 /// `Claude.app/Contents/MacOS/Claude`).
 pub fn pids_by_executable_suffix(suffix: &str) -> Vec<u32> {
+    pids_where(|path| path.ends_with(suffix))
+}
+
+/// Pids running exactly the executable at `path`.
+pub fn pids_by_executable(path: &Path) -> Vec<u32> {
+    pids_where(|running| Path::new(running) == path)
+}
+
+fn pids_where(matches: impl Fn(&str) -> bool) -> Vec<u32> {
     let mut out = Vec::new();
     // SAFETY: a null buffer asks for the size only.
     let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
@@ -31,10 +40,7 @@ pub fn pids_by_executable_suffix(suffix: &str) -> Vec<u32> {
             continue;
         }
         let text = String::from_utf8_lossy(&path[..len as usize]);
-        if Path::new(text.as_ref())
-            .to_str()
-            .is_some_and(|p| p.ends_with(suffix))
-        {
+        if matches(text.as_ref()) {
             out.push(pid as u32);
         }
     }
@@ -233,6 +239,14 @@ fn bundle_for_executable(path: &Path) -> Option<&Path> {
 #[cfg(test)]
 mod bundle_tests {
     use super::*;
+
+    #[test]
+    fn finds_this_process_by_its_exact_executable() {
+        let exe = std::env::current_exe().unwrap().canonicalize().unwrap();
+        assert!(pids_by_executable(&exe).contains(&std::process::id()));
+        let elsewhere = Path::new("/nonexistent").join(exe.strip_prefix("/").unwrap());
+        assert!(!pids_by_executable(&elsewhere).contains(&std::process::id()));
+    }
 
     #[test]
     fn targets_only_the_observed_application_bundle() {
