@@ -271,8 +271,13 @@ for `--effort=xhigh`. The levels open on hover; `AXPress` leaves them closed
 and `AXShowMenu` on the `Effort` entry opens the web view's own context menu
 (Copy, Select All). So the daemon focuses the exact `Effort` entry, reads
 back the app's focused element and window, and posts one
-application-directed Right Arrow (the ADR 0111 submenu route), then presses
-the level named like the request.
+application-directed Right Arrow (the ADR 0111 submenu route). That opens a
+group titled like the entry: one group of levels, whose titles may carry a
+badge (`Medium Recommended`, `Max 3.5×` on Opus 5.5), then toggles such as
+`Ultracode`, which are never levels. The entry names the level without its
+badge or toggles (`Effort Extra · Ultracode`). A request names a level as the
+picker shows it (`Medium`) or by its whole title; the daemon presses that
+level and confirms it from the entry.
 
 On the ChatGPT app's new Codex form, Power is walked one level per
 application-directed Left or Right Arrow on its focused `Power` item. The
@@ -280,7 +285,8 @@ status is read after every key, each key must move exactly one level, and a
 name no level has walks back to the starting level before the creation is
 refused. Existing sessions keep the Power rules above.
 
-The effort keys are not yet verified on a device (ADR 0180).
+A Claude creation on Sonnet 5.5 at Medium was verified on a Mac on
+2026-11-11. The Codex Power walk is not yet verified on a device (ADR 0180).
 
 Middle-level check (2026-09-30, Mac-C): two conversations stated High (3 of
 5) and Extra High (4 of 5), and the new-chat page High; none offered

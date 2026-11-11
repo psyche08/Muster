@@ -246,25 +246,89 @@ pub fn shown(tree: &AxTree, picker: usize) -> Vec<String> {
     }
 }
 
-/// The effort Claude's model panel names on its "Effort <level>" entry.
+/// The effort Claude's model panel names on its "Effort <level>" entry, less
+/// the toggles it names after a dot ("Effort Extra · Ultracode" is "Extra").
 /// Reading it back is how a chosen level is confirmed.
 pub fn submenu_effort(tree: &AxTree, panel: usize) -> Option<String> {
     let entries = chat::menu_entries(tree, panel);
     let entry = chat::effort_entry(&entries)?;
-    let level = entry.label.strip_prefix("Effort")?.trim();
+    let level = entry.label.strip_prefix("Effort")?;
+    let level = level.split(" · ").next().unwrap_or_default().trim();
     (!level.is_empty()).then(|| level.to_string())
 }
 
-/// Claude's effort levels, once its "Effort <level>" entry opened them: the
-/// enabled entries the model panel did not list before (`panel_labels`),
-/// wherever the app renders them. The entry itself never counts as a level.
-pub fn effort_levels(tree: &AxTree, panel_labels: &[String]) -> Vec<ChatChoice> {
-    chat::menu_entries(tree, 0)
+/// Claude's effort levels, once its focused "Effort <level>" entry
+/// (`entry`, its title) opened them: the entries of the group of choices in
+/// the submenu titled like that entry. Each is named by its whole title,
+/// badge included ("Medium Recommended", "Max 3.5×"). Toggles after that
+/// group ("Ultracode") are not levels.
+pub fn effort_levels(tree: &AxTree, entry: &str) -> Vec<ChatChoice> {
+    let group = tree
+        .nodes
         .iter()
-        .filter(|e| e.enabled && !panel_labels.contains(&e.label) && !e.label.starts_with("Effort"))
-        .map(|e| chat::choice(tree, e))
-        .filter(|c| !c.name.is_empty())
+        .position(|n| n.role == "AXGroup" && n.title == entry)
+        .and_then(|submenu| {
+            tree.preorder(submenu)
+                .into_iter()
+                .find(|&i| tree.nodes[i].subrole == "AXApplicationGroup")
+        });
+    let Some(group) = group else {
+        return Vec::new();
+    };
+    chat::menu_entries(tree, group)
+        .into_iter()
+        .filter(|e| e.enabled && !e.label.is_empty())
+        .map(|e| ChatChoice {
+            node: e.node,
+            name: e.label,
+            detail: String::new(),
+            selected: e.selected,
+        })
         .collect()
+}
+
+/// The level a name names: the one titled exactly so, else the one level
+/// whose title is that name and a badge ("Medium" names "Medium
+/// Recommended"). None when no level, or more than one, fits.
+pub fn level_named<'a>(levels: &'a [ChatChoice], name: &str) -> Option<&'a ChatChoice> {
+    let exact: Vec<_> = levels.iter().filter(|c| c.name == name).collect();
+    let fits = if exact.is_empty() {
+        levels
+            .iter()
+            .filter(|c| {
+                c.name
+                    .strip_prefix(name)
+                    .is_some_and(|badge| badge.starts_with(' '))
+            })
+            .collect()
+    } else {
+        exact
+    };
+    match fits.as_slice() {
+        [one] => Some(one),
+        _ => None,
+    }
+}
+
+/// The level to press for `name`, or none when it is already chosen.
+/// Refuses a name no single level fits, listing the levels.
+pub fn create_level<'a>(
+    levels: &'a [ChatChoice],
+    name: &str,
+) -> Result<Option<&'a ChatChoice>, Error> {
+    let level = level_named(levels, name)
+        .ok_or_else(|| not_offered(Kind::Effort, name, levels.iter().map(|c| c.name.as_str())))?;
+    Ok((!level.selected).then_some(level))
+}
+
+/// Whether the level the "Effort" entry shows after a press (`shown`) is
+/// the one `name` chose from `levels`: the same name, or one that fits the
+/// same level ("Medium" for a request of "Medium Recommended").
+pub fn level_confirmed(levels: &[ChatChoice], name: &str, shown: &str) -> bool {
+    shown == name
+        || level_named(levels, shown)
+            .zip(level_named(levels, name))
+            .is_some_and(|(shown, chosen)| shown.node == chosen.node)
 }
 
 /// The ChatGPT app's "Power" item: its slider takes arrow keys while the
@@ -550,7 +614,7 @@ mod tests {
           AXMenuItem title=\"Sonnet 5.5\"
           AXMenuItem title=\"Haiku 5.5\"
         AXSplitter
-        AXMenuItem title=\"Effort High\"
+        AXMenuItem title=\"Effort High · Ultracode\"
         AXSplitter
         AXMenuItem title=\"More models\"
         AXStaticText value=\"Fast mode\"
@@ -607,11 +671,58 @@ mod tests {
         }
     }
 
-    /// Claude's effort levels open beside the model panel once its focused
-    /// "Effort High" entry takes the Right arrow key.
+    /// Claude 4.23118.1, read on a Mac: the focused "Effort <level>" entry
+    /// opens, on the Right arrow key, a group titled like it. Its levels are
+    /// one group of menu items whose titles carry badges; "Ultracode" is a
+    /// toggle after them.
     #[test]
-    fn claude_effort_levels_are_the_entries_the_panel_did_not_list() {
+    fn claude_effort_levels_are_the_choices_in_the_effort_submenu() {
         let closed = tree(CLAUDE_FORM);
+        let entry = "Effort High · Ultracode";
+        assert!(effort_levels(&closed, entry).is_empty());
+        let open = tree(&format!(
+            "{CLAUDE_FORM}
+  AXGroup title=\"{entry}\"
+    AXGroup
+      AXStaticText value=\"Higher effort means more thorough responses\"
+      AXGroup/AXApplicationGroup
+        AXMenuItem title=\"Low\"
+        AXMenuItem title=\"Medium Recommended\"
+        AXMenuItem title=\"High\"
+        AXMenuItem title=\"Extra\"
+        AXMenuItem title=\"Max 3.5×\"
+        AXMenuItem title=\"Ultra\" enabled=\"0\"
+      AXSplitter
+      AXMenuItem title=\"Ultracode\""
+        ));
+        let levels = effort_levels(&open, entry);
+        let names: Vec<_> = levels.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Low", "Medium Recommended", "High", "Extra", "Max 3.5×"]
+        );
+        // A level is named as the picker shows it, or by its whole title.
+        for (name, title) in [
+            ("Extra", "Extra"),
+            ("Medium", "Medium Recommended"),
+            ("Medium Recommended", "Medium Recommended"),
+            ("Max", "Max 3.5×"),
+        ] {
+            let level = create_level(&levels, name).unwrap().unwrap();
+            assert_eq!(level.name, title);
+        }
+        for refused in ["Ultracode", "Extra high", "Med", "Ultra"] {
+            let Err(Error::Invalid(message)) = create_level(&levels, refused) else {
+                panic!("{refused}")
+            };
+            assert_eq!(
+                message,
+                format!(
+                    "{CREATE_REFUSED}: effort {refused:?} is not offered (the app offers \"Low\", \"Medium Recommended\", \"High\", \"Extra\", \"Max 3.5×\"); nothing was sent"
+                )
+            );
+        }
+        // The entry names the level without its badge, or its toggles.
         let model = picker(&closed, Kind::Model).unwrap();
         let panel_ = panel(
             &closed,
@@ -622,40 +733,33 @@ mod tests {
         )
         .unwrap()
         .unwrap();
-        let labels: Vec<String> = chat::menu_entries(&closed, panel_)
-            .into_iter()
-            .map(|e| e.label)
-            .collect();
-        assert!(effort_levels(&closed, &labels).is_empty());
-        let open = tree(&format!(
-            "{CLAUDE_FORM}
-  AXGroup
-    AXMenu
-      AXMenuItem title=\"Low\"
-      AXMenuItem title=\"Medium\"
-      AXMenuItem title=\"High\"
-      AXMenuItem title=\"Extra\"
-      AXMenuItem title=\"Max\"
-      AXMenuItem title=\"Ultra\" enabled=\"0\""
-        ));
-        let levels = effort_levels(&open, &labels);
-        let names: Vec<_> = levels.iter().map(|c| c.name.as_str()).collect();
-        assert_eq!(names, ["Low", "Medium", "High", "Extra", "Max"]);
+        assert_eq!(submenu_effort(&closed, panel_).as_deref(), Some("High"));
+        assert!(level_confirmed(&levels, "Medium", "Medium"));
+        assert!(level_confirmed(&levels, "Medium Recommended", "Medium"));
+        assert!(level_confirmed(&levels, "Max", "Max"));
+        assert!(!level_confirmed(&levels, "Max", "Extra"));
+        assert!(!level_confirmed(&levels, "Medium Recommended", "Low"));
+        // A badge never stands in for a level the app names exactly.
+        let close = |names: &[&str]| -> Vec<ChatChoice> {
+            names
+                .iter()
+                .enumerate()
+                .map(|(node, name)| ChatChoice {
+                    node,
+                    name: (*name).into(),
+                    detail: String::new(),
+                    selected: false,
+                })
+                .collect()
+        };
+        let levels = close(&["Extra", "Extra High"]);
         assert_eq!(
-            create_choice(&levels, Kind::Effort, "Extra")
-                .unwrap()
-                .unwrap()
-                .name,
+            create_level(&levels, "Extra").unwrap().unwrap().name,
             "Extra"
         );
-        let Err(Error::Invalid(message)) = create_choice(&levels, Kind::Effort, "Extra high")
-        else {
-            panic!()
-        };
-        assert_eq!(
-            message,
-            "The new session's model and effort were not set: effort \"Extra high\" is not offered (the app offers \"Low\", \"Medium\", \"High\", \"Extra\", \"Max\"); nothing was sent"
-        );
+        assert!(!level_confirmed(&levels, "Extra High", "Extra"));
+        let levels = close(&["Max 2×", "Max 3×"]);
+        assert!(create_level(&levels, "Max").is_err());
         // A model without effort shows no entry.
         let t = tree("AXGroup title=\"Model: Haiku 5.5\"\n  AXMenuItem title=\"Haiku 5.5\"");
         assert_eq!(submenu_effort(&t, 0), None);

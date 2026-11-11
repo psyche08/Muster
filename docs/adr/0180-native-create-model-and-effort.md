@@ -1,9 +1,9 @@
 # ADR 0180: Choose a new desktop session's model and effort before its first message
 
 - Date: 2026-11-10
-- Status: Accepted; source and tests verified, the Claude form read on a Mac
-  without sending. The effort keys, a daemon-to-app creation run, release,
-  installation and device acceptance are not verified.
+- Status: Accepted; source and tests verified, and a Claude creation with a
+  model and an effort verified on a Mac (2026-11-11). Codex's Power walk on a
+  device, Locked Use, release and installation are not verified.
 - Related: [ADR 0097](0097-task-scoped-scheduler-grant-for-locked-use.md),
   [ADR 0111](0111-native-organization-ax-and-file-confirmation.md),
   [ADR 0115](0115-target-scoped-local-input.md),
@@ -103,14 +103,23 @@ while a modifier is held.
   No pointer event, no global or HID-level input, and no key outside that
   application. Every step re-checks the creation guard, so local input
   anywhere stops the walk.
-- **Claude's effort.** If the panel's `Effort <level>` entry already names the
-  request, nothing is pressed. Otherwise the entry gets one Right Arrow. The
-  levels are the enabled menu entries that the panel did not list before the
-  key and that are not the entry itself. They count once two reads agree.
-  The level named exactly like the request is pressed, and the panel is
-  closed by toggling its picker. A name the levels do not have is refused
-  with the levels in the message. Levels that do not open within 2 seconds
-  refuse the creation as unavailable.
+- **Claude's effort.** The panel's entry names the current level and any
+  toggle after a dot (`Effort Extra · Ultracode` names `Extra`). If it
+  already names the request, nothing is pressed. Otherwise the entry gets
+  one Right Arrow. That opens a group titled like the entry, with:
+  - a description;
+  - one group of level items, whose titles may carry a badge (`Low`,
+    `Medium Recommended`, `High`, `Extra`, `Max 3.5×`);
+  - toggles after a separator (`Ultracode`), which are never levels.
+
+  The levels count once two reads agree. A request names a level by its
+  whole title, or as the picker shows it: a title that is the request plus a
+  space and a badge. An exact title wins, and a name that fits no level, or
+  more than one, is refused with the titles in the message. The level is
+  pressed and the panel is closed by toggling its picker. The read back
+  confirms it when the entry then names the request, or a name that fits the
+  same level (`Medium` for `Medium Recommended`). Levels that do not open
+  within 2 seconds refuse the creation as unavailable.
 - **Codex's effort.** Power is walked one level per key: Left Arrow lowers,
   Right Arrow raises. After every key the panel's status is read again, and
   the key must move exactly one level, within 2 seconds. Because the app
@@ -200,8 +209,10 @@ both fields empty and keep the app's choice.
     `effort` and clears `effort`, and each change alters the digest.
   - `muster-agent`: fixtures modelled on the Claude 4.23118.1 form cover:
     - reading the shown model and effort, without offering fast mode;
-    - finding Claude's effort levels once they open, and refusing a name
-      they do not have;
+    - the effort entry naming its level without the `Ultracode` toggle;
+    - Claude's levels as read on the Mac: badges in titles, the toggle left
+      out, a name that fits by its badge, refusals of names that fit no level
+      or more than one, and read backs that confirm only the chosen level;
     - walking Power to every level by name, walking back before refusing an
       unknown name, and stopping on a key that moves more than one level;
     - name validation and the refusal messages.
@@ -211,26 +222,65 @@ both fields empty and keep the app's choice.
   picker on Claude 4.23118.1. It confirmed the tree above, including that
   `AXPress` and `AXShowMenu` leave the effort levels closed. No message was
   sent, and the model was not changed.
+- **Device acceptance (2026-11-11, operator's Mac, unlocked; Claude
+  4.23118.1, ChatGPT 26.1103.60933).** A development daemon built from this
+  branch ran with its own state directory. It was started from inside that
+  directory with `--dir .`, because the Locked Use socket path must be
+  shorter than `SUN_LEN`. After the first run, each request waited until
+  the Mac had been idle for 8 s, and later for 45 s.
+  1. `device_info` listed `agent.native_create.options.v1`.
+  2. **Claude effort keys.** A probe focused the `Effort Extra · Ultracode`
+     entry, read back the app's focus, and posted one application-directed
+     Right Arrow. The levels opened as described under Decision, and toggling
+     the picker closed them unchanged. Posting a key this way did not advance
+     the HID event counters the creation guard reads.
+  3. **Claude refusals.** Unknown names were refused, and nothing was sent:
+     - effort `Bogus`: the message listed `Low`, `Medium Recommended`,
+       `High`, `Extra` and `Max 3.5× or more usage`;
+     - model `Bogus`: the message listed the four models.
+
+     The first build had counted `Ultracode` as a level and would have read
+     `Extra · Ultracode` back as the level. Both were fixed before the
+     results above.
+  4. **Claude creation.** Request `nc-accept-claude-apply-1` asked for
+     `Sonnet 5.5` and `Medium`. The form showed `Opus 5.5 Extra`.
+     - It was `Applied` as session `978b4dd0`.
+     - A picker read every 150 ms showed the model change, then the levels
+       opening and `Medium Recommended` pressed, then `Effort Medium` read
+       back, all within 4 s of the form appearing.
+     - The session record holds `claude-sonnet-5-5` and `medium`.
+     - Its first message is the prompt, and the reply was `OK`.
+     - It is the only session in that directory.
+  5. **Claude restored.** The run did not modify the app's new-session
+     default (`ccd-session-presets.json`, built-in local preset:
+     `claude-opus-5-5`, `xhigh`), so there was nothing to restore.
+  6. **Local input.** Four runs were refused with `conflict: Physical input
+     changed; nothing is retried` when the operator moved the mouse during
+     them. Nothing was pressed after the movement, and nothing was sent.
 - **Not verified.**
-  - That Claude's focused `Effort` entry opens its levels on the Right Arrow,
-    and what the levels are named. ADR 0111's submenu key is also still
-    pending device acceptance.
-  - That Codex's focused `Power` item moves one level per arrow key on the
-    new-session form.
-  - A daemon-driven creation with `model` and `effort` on Claude or Codex,
-    unlocked or in Locked Use.
+  - **Codex.** Neither Codex request reached the model and effort steps.
+    - The first was stopped by local input while its new ChatGPT window was
+      still loading.
+    - The second was refused by the existing activation check: `Native
+      activation did not settle ... renderer=false`. The app's only window
+      showed a chat whose composer is not the Codex composer. That window
+      was left as it was.
+
+    So the Power walk on a device, and Codex step 4 below, are still open.
+  - Locked Use (step 5 below).
   - Signed build, release and installation.
-- **Device acceptance (pending).** This needs an unlocked Mac and the
+- **Device acceptance (remaining).** This needs an unlocked Mac and the
   person's approval to send one test message from a new session in a scratch
   directory:
   1. Through a development daemon with its own state directory, run
      `muster rpc '{"device_info":{}}'` and check that it lists
-     `agent.native_create.options.v1`.
+     `agent.native_create.options.v1`. Done.
   2. Request a Claude creation with a model and an effort other than the
      current ones. Expect `Applied`, a new session whose picker shows both,
-     and a transcript with the first message.
+     and a transcript with the first message. Done.
   3. Request a Claude creation with an effort the app does not offer. Expect
-     `Rejected` with the levels in the message, and no new session.
-  4. Repeat steps 2 and 3 for Codex, with a Power level two levels away.
+     `Rejected` with the levels in the message, and no new session. Done.
+  4. Repeat steps 2 and 3 for Codex, with a Power level two levels away. Its
+     ChatGPT windows must show the Codex composer first.
   5. Repeat step 2 on a locked Mac through Locked Use.
   6. Restore each app's previous model and effort.

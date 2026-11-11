@@ -328,16 +328,20 @@ async fn focused_key(scope: &impl Scope, item: &Element, key: Key) -> Result<(),
 /// Claude: the model panel's "Effort <level>" entry opens its levels on
 /// hover, or on the Right arrow key while it is focused. Opens them that
 /// way, presses `effort` and closes the panel. Success is only ever decided
-/// by a later read.
-async fn press_submenu_effort(scope: &impl Scope, effort: &str) -> Result<(), Error> {
+/// by a later read; the levels it read (none when the entry already named
+/// `effort`) are what that read is checked against.
+async fn press_submenu_effort(
+    scope: &impl Scope,
+    effort: &str,
+) -> Result<Vec<chat::ChatChoice>, Error> {
     let (panel, (tree, elements)) = open(scope, Kind::Model).await?;
     let result = submenu_level(scope, effort, &tree, &elements, panel).await;
-    if result.as_ref().is_ok_and(|pressed| *pressed) {
+    if result.as_ref().is_ok_and(|(pressed, _)| *pressed) {
         tokio::time::sleep(Duration::from_millis(300)).await;
     }
     let close = close(scope, Kind::Model).await;
-    result?;
-    close
+    let (_, levels) = result?;
+    close.map(|()| levels)
 }
 
 async fn submenu_level(
@@ -346,28 +350,29 @@ async fn submenu_level(
     tree: &chat::AxTree,
     elements: &[Element],
     panel: usize,
-) -> Result<bool, Error> {
+) -> Result<(bool, Vec<chat::ChatChoice>), Error> {
     let entries = chat::menu_entries(tree, panel);
     let Some(entry) = chat::effort_entry(&entries) else {
         return Err(options::create_no_effort(effort));
     };
     if options::submenu_effort(tree, panel).as_deref() == Some(effort) {
-        return Ok(false);
+        return Ok((false, Vec::new()));
     }
-    let labels: Vec<String> = entries.iter().map(|e| e.label.clone()).collect();
+    let title = entry.label.clone();
     focused_key(scope, &elements[entry.node], Key::OpenSubmenu).await?;
     // Decide on a list two reads agree on: levels may still be mounting.
     let step = Step::new("effort levels", Duration::from_secs(2));
     let mut previous: Option<Vec<String>> = None;
     loop {
         let (tree, elements) = snapshot(scope).await?;
-        let levels = options::effort_levels(&tree, &labels);
+        let levels = options::effort_levels(&tree, &title);
         let names: Vec<String> = levels.iter().map(|c| c.name.clone()).collect();
         if !levels.is_empty() && previous.as_ref() == Some(&names) {
-            return match options::create_choice(&levels, Kind::Effort, effort)? {
-                Some(level) => press(scope, &elements[level.node]).map(|()| true),
-                None => Ok(false),
+            let pressed = match options::create_level(&levels, effort)? {
+                Some(level) => press(scope, &elements[level.node]).map(|()| true)?,
+                None => false,
             };
+            return Ok((pressed, levels));
         }
         previous = Some(names);
         if step.expired() {
@@ -476,6 +481,7 @@ pub(in crate::macos) async fn prepare_new(
     // The model can change the offered efforts, and Codex's picker labels:
     // decide on fresh reads.
     let selectable_effort = effort_picker(scope).await?;
+    let mut levels = Vec::new();
     if !effort.is_empty() {
         if selectable_effort {
             press_effort(scope, effort)
@@ -488,7 +494,7 @@ pub(in crate::macos) async fn prepare_new(
                     other => other,
                 })?;
         } else {
-            press_submenu_effort(scope, effort).await?;
+            levels = press_submenu_effort(scope, effort).await?;
         }
     }
     // Read both back; never infer success from a press or a key.
@@ -510,7 +516,10 @@ pub(in crate::macos) async fn prepare_new(
             (options::confirmed(&choices, Kind::Effort, effort), current)
         } else {
             let current = submenu_effort(scope).await?;
-            (current.as_deref() == Some(effort), current)
+            let confirmed = current
+                .as_deref()
+                .is_some_and(|shown| options::level_confirmed(&levels, effort, shown));
+            (confirmed, current)
         };
         if !confirmed {
             return Err(options::create_refused(format!(
