@@ -1,7 +1,7 @@
 # ADR 0185 – Let the host authorize the owner's direct Multica assignment
 
 - Date: 2026-11-11
-- Status: Proposed, installed acceptance pending
+- Status: Accepted, unattended issue verified on an installed Mac
 - Related: [0184](0184-multica-task-authorized-codex-creation.md), [0097](0097-task-scoped-scheduler-grant-for-locked-use.md)
 
 ## Context
@@ -53,3 +53,30 @@ queue creation in that same or immediately following second. Check the run's
 initiator name against the authenticated owner's name as an additional
 consistency check alongside the stable issue, account and runtime UUIDs.
 The contract covers the exact service snapshot read by the host.
+
+### Installed acceptance
+
+A notarized executor built from `3d694a55` ran the normal managed Multica
+0.3.62 Codex bridge. A separate test client created one fresh issue assigned
+to the enrolled agent and then only read state. It made no grant, operate,
+revoke or manual lease request. The daemon verified the dispatch and minted
+its own grant. Native submission took 10.45 seconds from UI admission.
+The operating system was observed locked, then temporarily unlocked, then
+locked again. Multica completed 14 seconds after the observed relock, with
+the correct arithmetic answer in both its result and its text event.
+There was one service run, one applied creation, and exactly one native
+session in the run directory. Its first message matched the service-sourced
+snapshot and its digest. Its final assistant answer matched the Multica
+answer. The host had revoked the grant.
+
+Earlier test issues also exercised the existing limits. Physical input
+stopped a creation before submission. An unready existing window and a
+separate slow new renderer exhausted a lease before submission. Those grants
+closed and their consoles relocked. The successful test began with the Mac
+idle and the Codex composer ready. These results establish unattended
+authorization and successful delivery under those conditions.
+
+The final daemon and ACP suites passed (147 and 24 tests, three daemon tests
+ignored), along with Clippy. Source stamp, Developer ID signature, Apple
+notarization, stapling and Gatekeeper were checked. Only the executor was
+updated. No public app release was made.

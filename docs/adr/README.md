@@ -300,4 +300,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0182](0182-publish-native-create-options.md) | Accepted | Publish native create options as Apple 1.1.36 (126) |
 | [0183](0183-locked-codex-creation-stages.md) | Accepted; verified on paired Macs | Route a covered Codex creation before its first composer |
 | [0184](0184-multica-task-authorized-codex-creation.md) | Accepted, verified on a locked Mac | Bind locked Multica Codex creation to one reviewed run |
-| [0185](0185-trusted-multica-dispatch.md) | Proposed | Authorize a direct Multica assignment on the enrolled host |
+| [0185](0185-trusted-multica-dispatch.md) | Accepted, unattended issue verified | Authorize a direct Multica assignment on the enrolled host |
