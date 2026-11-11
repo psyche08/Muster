@@ -1,0 +1,168 @@
+//! Local owner review for one managed Multica first turn (ADR 0184).
+use super::*;
+use tokio_util::sync::CancellationToken;
+
+fn valid(o: &v1::AgentSchedulerOperate) -> bool {
+    o.task_id.strip_prefix("multica:").is_some_and(|run| {
+        !run.is_empty()
+            && run.len() <= 80
+            && run
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+    }) && o.task_id == o.op_id
+        && o.provider == "codex"
+        && o.role == "producer"
+        && o.kind == "create"
+        && o.session.is_empty()
+        && o.model.is_empty()
+        && o.effort.is_empty()
+        && !o.text.trim().is_empty()
+        && o.text.len() <= MAX_TEXT
+}
+
+pub(super) fn check_contract(
+    o: &v1::AgentSchedulerOperate,
+    scope: &grant::Scope,
+) -> Result<(), Error> {
+    if !valid(o)
+        || o.task_id != scope.task_id
+        || o.directory != scope.directory
+        || o.provider != scope.provider
+        || hex::encode(Sha256::digest(o.text.as_bytes())) != scope.contract_sha256
+    {
+        return Err(Error::Unauthorized(
+            "Multica first turn differs from the owner's grant".into(),
+        ));
+    }
+    Ok(())
+}
+
+struct Pending<'a>(&'a Scheduler);
+impl Drop for Pending<'_> {
+    fn drop(&mut self) {
+        self.0.pending_multica.lock().unwrap().take();
+    }
+}
+
+pub(super) async fn start(
+    daemon: &Arc<Daemon>,
+    mut o: v1::AgentSchedulerOperate,
+    cancel: &CancellationToken,
+) -> Result<Resp, Error> {
+    o.kind = "create".into();
+    if !valid(&o) {
+        return Err(Error::Invalid("Invalid Multica Codex first turn".into()));
+    }
+    let scheduler = &daemon.scheduler;
+    let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
+    if !granted()? && !daemon.platform().locked() {
+        let cancel = cancel.clone();
+        let request = v1::AgentNativeCreateRequest {
+            op_id: o.op_id,
+            provider: o.provider,
+            directory: o.directory,
+            prompt: o.text,
+            ..Default::default()
+        };
+        return muster_agent::control_guard::scope(
+            Arc::new(move || !cancel.is_cancelled()),
+            crate::native_create::create(daemon, request),
+        )
+        .await;
+    }
+    if !granted()? {
+        preflight(daemon, "codex")?;
+        let _pending = {
+            let mut slot = scheduler.pending_multica.lock().unwrap();
+            if slot.is_some() {
+                return Err(Error::Conflict(
+                    "Another Multica first turn is awaiting authorization".into(),
+                ));
+            }
+            *slot = Some(v1::AgentSchedulerStatus {
+                task_id: o.task_id.clone(),
+                provider: o.provider.clone(),
+                directory: o.directory.clone(),
+                contract_sha256: hex::encode(Sha256::digest(o.text.as_bytes())),
+                op: Some(v1::AgentSchedulerOp {
+                    op_id: o.op_id.clone(),
+                    role: o.role.clone(),
+                    kind: o.kind.clone(),
+                    state: "awaiting_grant".into(),
+                    message: o.text.clone(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+            Pending(scheduler)
+        };
+        let until = tokio::time::Instant::now() + Duration::from_secs(60);
+        while !granted()? {
+            tokio::select! {
+                _ = cancel.cancelled() => return Err(Error::Conflict("Multica request cancelled before authorization".into())),
+                _ = tokio::time::sleep_until(until) => return Err(Error::Unauthorized("No local grant for this Multica first turn".into())),
+                _ = tokio::time::sleep(Duration::from_millis(200)) => {}
+            }
+        }
+    }
+    if cancel.is_cancelled() {
+        return Err(Error::Conflict(
+            "Multica request cancelled before submission".into(),
+        ));
+    }
+    operate(daemon, o).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn grant_is_for_one_unchanged_first_turn() {
+        let mut o = v1::AgentSchedulerOperate {
+            task_id: "multica:test-run".into(),
+            op_id: "multica:test-run".into(),
+            role: "producer".into(),
+            kind: "create".into(),
+            provider: "codex".into(),
+            directory: "/work".into(),
+            text: "first".into(),
+            ..Default::default()
+        };
+        let scope = grant::Scope {
+            task_id: o.task_id.clone(),
+            contract_sha256: hex::encode(Sha256::digest(b"first")),
+            provider: o.provider.clone(),
+            directory: o.directory.clone(),
+            model: "native-app".into(),
+            effort: "default".into(),
+        };
+        assert!(check_contract(&o, &scope).is_ok());
+        for changed in [
+            v1::AgentSchedulerOperate {
+                text: "second".into(),
+                ..o.clone()
+            },
+            v1::AgentSchedulerOperate {
+                directory: "/other".into(),
+                ..o.clone()
+            },
+            v1::AgentSchedulerOperate {
+                op_id: "another".into(),
+                ..o.clone()
+            },
+            v1::AgentSchedulerOperate {
+                kind: "send".into(),
+                ..o.clone()
+            },
+            v1::AgentSchedulerOperate {
+                role: "reviewer".into(),
+                ..o.clone()
+            },
+        ] {
+            assert!(check_contract(&changed, &scope).is_err());
+        }
+        o.task_id = "multica:other".into();
+        o.op_id = o.task_id.clone();
+        assert!(check_contract(&o, &scope).is_err());
+    }
+}

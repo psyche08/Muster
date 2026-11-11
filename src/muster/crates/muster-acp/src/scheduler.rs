@@ -150,13 +150,20 @@ where
                     let completed=Arc::new(std::sync::atomic::AtomicBool::new(false));let completion=completed.clone();
                     active=Some(TurnTask {host:host.clone(),session:session.clone(),completed,handle:tokio::spawn(async move {
                         output.send(json!({"method":"turn/started","params":{"threadId":sid,"turn":{"id":tid,"status":"inProgress"}}})).await;
+                        // The scheduler has delivered a user item. A covered
+                        // creation can still be awaiting local authorization.
+                        let input_item = json!({"id":format!("{tid}-input"),"type":"userMessage","content":[{"type":"text","text":prompt,"text_elements":[]}]});
+                        let input_event = json!({"threadId":sid,"turnId":tid,"item":input_item});
+                        output.send(json!({"method":"item/started","params":input_event})).await;
                         let mut body=String::new();let mut reason=StopReason::Error("Provider turn ended without a completion receipt".into());
                         match executor.prompt(&sid,&prompt).await {
                             Err(e)=>reason=StopReason::Error(e),
-                            Ok(mut events)=>while let Some(event)=events.recv().await {match event {
+                            Ok(mut events)=>{
+                                output.send(json!({"method":"item/completed","params":input_event})).await;
+                                while let Some(event)=events.recv().await {match event {
                                 TurnEvent::Text(delta)=>{body.push_str(&delta);output.send(json!({"method":"item/agentMessage/delta","params":{"threadId":sid,"turnId":tid,"itemId":tid,"delta":delta}})).await;},
                                 TurnEvent::Settled(r)=>{reason=r;break},_=>{}
-                            }}
+                            }}}
                         }
                         // A failed submission is not a final answer. Some scheduler
                         // clients act on this item before reading turn/completed.
@@ -428,11 +435,23 @@ mod tests {
             .await;
             next(&mut r2).await;
             send(&mut w2,json!({"id":3,"method":"turn/start","params":{"threadId":"fixture-session","input":[{"type":"text","text":"hello"}]}})).await;
+            let mut input_started = 0;
             let mut finals = 0;
             let mut errors = 0;
             loop {
                 let frame = next(&mut r2).await;
-                if frame["method"] == "item/completed" {
+                if frame["method"] == "item/started"
+                    && frame["params"]["item"]["type"] == "userMessage"
+                {
+                    assert_eq!(frame["params"]["item"]["content"][0]["text"], "hello");
+                    input_started += 1;
+                }
+                if frame["method"] == "turn/completed" {
+                    assert_eq!(input_started, 1);
+                }
+                if frame["method"] == "item/completed"
+                    && frame["params"]["item"]["type"] == "agentMessage"
+                {
                     assert_eq!(expected, "completed", "failed turn emitted a final answer");
                     assert_eq!(frame["params"]["item"]["text"], "fixture reply");
                     finals += 1;

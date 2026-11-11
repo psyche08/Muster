@@ -1937,7 +1937,9 @@ async fn dispatch(
             .await?
         }
         // Local owner only; its operations take the console themselves.
-        Req::AgentScheduler(r) => crate::scheduler::call(daemon, r).await?,
+        Req::AgentScheduler(r) => {
+            crate::scheduler::call_cancellable(daemon, r, events.cancelled()).await?
+        }
         Req::OrcaCreate(r) => {
             use muster_proto::Message as _;
             if r.op_id.is_empty() {

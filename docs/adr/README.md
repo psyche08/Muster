@@ -299,3 +299,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0181](0181-native-create-model-and-effort.md) | Accepted; Claude creation and Codex Power verified on a Mac | Choose a new desktop session's model and effort before its first message |
 | [0182](0182-publish-native-create-options.md) | Accepted | Publish native create options as Apple 1.1.36 (126) |
 | [0183](0183-locked-codex-creation-stages.md) | Accepted; verified on paired Macs | Route a covered Codex creation before its first composer |
+| [0184](0184-multica-task-authorized-codex-creation.md) | Accepted, verified on a locked Mac | Bind locked Multica Codex creation to one reviewed run |
