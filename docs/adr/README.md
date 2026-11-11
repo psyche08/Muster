@@ -297,3 +297,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0179](0179-publish-unified-apple-catalog.md) | Accepted | Publish the unified Apple catalog as 1.1.34 (124) |
 | [0180](0180-compact-ios-catalog-status.md) | Accepted | Keep iPhone catalog status on the title line |
 | [0181](0181-native-create-model-and-effort.md) | Accepted; Claude creation and Codex Power verified on a Mac | Choose a new desktop session's model and effort before its first message |
+| [0182](0182-publish-native-create-options.md) | Accepted | Publish native create options as Apple 1.1.36 (126) |
