@@ -16,6 +16,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+mod multica_create;
+
 const KEY: &str = "scheduler.grants";
 /// Inside a scheduled lease: how long a creation looks for its receipt
 /// before giving the console back. The model's answer is never waited for.
@@ -29,6 +31,7 @@ pub(crate) struct Scheduler {
     /// `Err`: the stored grants could not be read. Everything is refused and
     /// nothing is written, so no count or unknown operation is ever reset.
     registry: Mutex<Result<Registry, String>>,
+    pending_multica: Mutex<Option<v1::AgentSchedulerStatus>>,
     /// One scheduler operation at a time on this Mac.
     running: tokio::sync::Mutex<()>,
 }
@@ -73,6 +76,7 @@ impl Scheduler {
         }
         Self {
             registry: Mutex::new(registry),
+            pending_multica: Mutex::new(None),
             running: tokio::sync::Mutex::new(()),
         }
     }
@@ -153,10 +157,13 @@ impl Job {
         &self,
         daemon: &Arc<Daemon>,
         receipt: Duration,
+        covered: bool,
     ) -> Result<Resp, Error> {
         self.started.store(true, Ordering::SeqCst);
         match &self.inner {
-            Inner::Create(r) => crate::native_create::scheduled(daemon, r.clone(), receipt).await,
+            Inner::Create(r) => {
+                crate::native_create::scheduled(daemon, r.clone(), receipt, covered).await
+            }
             Inner::Operation(req) => crate::handler::locked_operation(daemon, req.clone()).await,
             #[cfg(test)]
             Inner::Probe(hold) => {
@@ -203,6 +210,9 @@ struct Parsed {
 }
 
 fn parse(o: &v1::AgentSchedulerOperate, scope: &grant::Scope) -> Result<Parsed, Error> {
+    if scope.task_id.starts_with("multica:") {
+        multica_create::check_contract(o, scope)?;
+    }
     let kind = kind_of(&o.kind)?;
     let role = role_of(&o.role)?;
     let content = matches!(kind, Kind::Create | Kind::Send);
@@ -293,9 +303,15 @@ fn request<'a>(o: &'a v1::AgentSchedulerOperate, p: &Parsed) -> grant::Request<'
     }
 }
 
-pub(crate) async fn call(
+#[cfg(test)]
+async fn call(daemon: &Arc<Daemon>, r: v1::AgentSchedulerRequest) -> Result<Resp, Error> {
+    call_cancellable(daemon, r, &tokio_util::sync::CancellationToken::new()).await
+}
+
+pub(crate) async fn call_cancellable(
     daemon: &Arc<Daemon>,
     r: v1::AgentSchedulerRequest,
+    cancel: &tokio_util::sync::CancellationToken,
 ) -> Result<Resp, Error> {
     use v1::agent_scheduler_request::Action;
     let scheduler = &daemon.scheduler;
@@ -332,7 +348,21 @@ pub(crate) async fn call(
             log::warn!("scheduler: task {:?} revoked", t.task_id);
             status(daemon, &t.task_id, None)
         }
-        Action::Status(t) => status(daemon, &t.task_id, None),
+        Action::Status(t) => match status(daemon, &t.task_id, None) {
+            Err(Error::NotFound(e)) => scheduler
+                .pending_multica
+                .lock()
+                .unwrap()
+                .as_ref()
+                .filter(|p| p.task_id == t.task_id)
+                .cloned()
+                .map(Resp::AgentScheduler)
+                .ok_or(Error::NotFound(e)),
+            other => other,
+        },
+        Action::Operate(o) if o.kind == "multica_create" => {
+            multica_create::start(daemon, o, cancel).await
+        }
         Action::Operate(o) => operate(daemon, o).await,
         Action::Reconcile(o) => reconcile(daemon, o).await,
         Action::Adopt(a) => adopt(daemon, a).await,
@@ -357,6 +387,11 @@ fn adoptable(sessions: &[v1::AgentSession], scope: &grant::Scope, id: &str) -> b
 /// Binds an existing session to a role instead of creating one (ADR 0097).
 /// It reads the provider's session registry and never touches the desktop.
 async fn adopt(daemon: &Arc<Daemon>, a: v1::AgentSchedulerAdopt) -> Result<Resp, Error> {
+    if a.task_id.starts_with("multica:") {
+        return Err(Error::Unauthorized(
+            "Multica creation grants cannot adopt sessions".into(),
+        ));
+    }
     let role = role_of(&a.role)?;
     // Liveness, the role, the quota and a repeat are decided on a copy before
     // the registry is read.
@@ -661,7 +696,7 @@ async fn unlocked(daemon: &Arc<Daemon>, task_id: &str, job: &Job) -> Result<Resp
                     "a Locked Use transaction owns the console".into(),
                 ));
             };
-            let result = job.perform(daemon, IN_LEASE_RECEIPT).await;
+            let result = job.perform(daemon, IN_LEASE_RECEIPT, false).await;
             drop(console);
             result
         })

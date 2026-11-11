@@ -1,4 +1,4 @@
-# ADR 0183: The daemon hands launch requests to the app
+# ADR 0185: The daemon hands launch requests to the app
 
 - Date: 2026-11-11
 - Status: Accepted; source, tests and a scratch-bundle runtime check verified;

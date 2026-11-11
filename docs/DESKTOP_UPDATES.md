@@ -239,9 +239,9 @@ either launches too early and stops, or relaunches when it must not.
 A normal `open` can also reach the daemon rather than the app. `musterd` holds
 a Launch Services record under the app's bundle id (ADR 0164). While the daemon
 runs, `open`, the Dock and Finder resolve to that record, even when an app
-process is running. Since ADR 0183 the daemon passes the request on: it
+process is running. Since ADR 0185 the daemon passes the request on: it
 forwards it to the running app or starts one with `open -n`. A daemon built
-before ADR 0183 drops the request, so no window appears. On such a Mac, when
+before ADR 0185 drops the request, so no window appears. On such a Mac, when
 the daemon is running and the app is not, make the single launch
 `open -n /Applications/Muster.app`.
 

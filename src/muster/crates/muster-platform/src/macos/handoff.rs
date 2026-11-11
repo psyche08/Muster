@@ -1,4 +1,4 @@
-//! Launch requests that reach the daemon, handed to the app (ADR 0183).
+//! Launch requests that reach the daemon, handed to the app (ADR 0185).
 //!
 //! `musterd` holds a Launch Services record under the app's bundle id
 //! (ADR 0164). When Muster is opened from the Dock, Finder, Spotlight or

@@ -1937,7 +1937,9 @@ async fn dispatch(
             .await?
         }
         // Local owner only; its operations take the console themselves.
-        Req::AgentScheduler(r) => crate::scheduler::call(daemon, r).await?,
+        Req::AgentScheduler(r) => {
+            crate::scheduler::call_cancellable(daemon, r, events.cancelled()).await?
+        }
         Req::OrcaCreate(r) => {
             use muster_proto::Message as _;
             if r.op_id.is_empty() {
@@ -2648,8 +2650,13 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
     // briefly as a scheduled one, then read-only after relock (ADR 0150).
     if let Req::AgentNativeCreate(r) = request {
         native_creation(daemon, &r)?;
-        return crate::native_create::scheduled(daemon, r, crate::scheduler::IN_LEASE_RECEIPT)
-            .await;
+        return crate::native_create::scheduled(
+            daemon,
+            r,
+            crate::scheduler::IN_LEASE_RECEIPT,
+            true,
+        )
+        .await;
     }
 
     // A session driven through its app's plugin (DeepSeek Harness, ADR

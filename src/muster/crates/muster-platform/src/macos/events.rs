@@ -14,7 +14,7 @@
 //! shutdown whenever anything asked "Muster" to quit and resolved to the
 //! daemon's record. The two requests that must not end at the daemon's
 //! record — reopen and a `muster:` link — get handlers of their own, which
-//! hand them to the app ([`AppEvents::hand_launches_to_the_app`], ADR 0183).
+//! hand them to the app ([`AppEvents::hand_launches_to_the_app`], ADR 0185).
 
 use std::ffi::{CStr, c_void};
 use std::marker::PhantomData;
@@ -97,7 +97,7 @@ impl AppEvents {
 
     /// Hand the reopen and `muster:` link requests that Launch Services
     /// delivers to this process's record to the app, which has the windows
-    /// (ADR 0183). Call before [`AppEvents::serve`]; `false` if an Apple Event
+    /// (ADR 0185). Call before [`AppEvents::serve`]; `false` if an Apple Event
     /// handler could not be installed.
     pub fn hand_launches_to_the_app(&self) -> bool {
         super::handoff::install()

@@ -99,7 +99,7 @@ pub(crate) async fn create(
             .clone()
             .try_read_owned()
             .map_err(|_| Error::Conflict("A Locked Use transaction owns the console".into()))?;
-        owned(daemon, r, UNLOCKED_RECEIPT, Some(console)).await
+        owned(daemon, r, UNLOCKED_RECEIPT, Some(console), false).await
     }
 }
 
@@ -111,11 +111,12 @@ pub(crate) async fn scheduled(
     daemon: &Arc<Daemon>,
     r: v1::AgentNativeCreateRequest,
     receipt: Duration,
+    covered: bool,
 ) -> Result<Resp, Error> {
     validate(&r)?;
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (daemon, receipt);
+        let _ = (daemon, receipt, covered);
         Err(Error::Unavailable(
             "Native desktop creation requires macOS".into(),
         ))
@@ -127,7 +128,7 @@ pub(crate) async fn scheduled(
                 "Native creation requires Accessibility".into(),
             ));
         }
-        owned(daemon, r, receipt, None).await
+        owned(daemon, r, receipt, None, covered).await
     }
 }
 
@@ -137,6 +138,7 @@ async fn owned(
     r: v1::AgentNativeCreateRequest,
     receipt_budget: Duration,
     console: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+    covered: bool,
 ) -> Result<Resp, Error> {
     use muster_agent::{control_guard, desktop_lock::LockKind};
     use muster_proto::Message;
@@ -178,7 +180,7 @@ async fn owned(
         let before:Vec<String>=agent.list(None,usize::MAX).into_iter().map(|s|s.id).collect();
         let held=ownership.clone();let provider=r.provider.clone();let cwd=path.clone();let prompt=r.prompt.clone();
         let (model,effort)=(r.model.clone(),r.effort.clone());
-        let form=control_guard::spawn_blocking_async(async move {let _held=held;muster_platform::macos::native_create::submit(&provider,&cwd,&prompt,&model,&effort).await}).await.map_err(|e|Error::UnknownOutcome(e.to_string()))??;
+        let form=control_guard::spawn_blocking_async(async move {let _held=held;muster_platform::macos::native_create::submit(&provider,&cwd,&prompt,&model,&effort,covered).await}).await.map_err(|e|Error::UnknownOutcome(e.to_string()))??;
         let deadline=tokio::time::Instant::now()+receipt_budget;
         loop {
             control_guard::check().map_err(|e|Error::UnknownOutcome(e.to_string()))?;

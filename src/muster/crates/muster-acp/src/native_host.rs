@@ -23,6 +23,7 @@ pub struct NativeHost {
     provider: String,
     root: PathBuf,
     brief: String,
+    multica_run: Option<String>,
     _credential: Option<std::sync::Arc<TaskCredential>>,
 }
 impl NativeHost {
@@ -38,8 +39,42 @@ impl NativeHost {
             provider: provider.into(),
             root,
             brief,
+            multica_run: None,
             _credential: credential,
         }
+    }
+    /// Set only by the managed bridge, after validating the launch directory.
+    pub fn with_multica_run(mut self, run: String) -> Self {
+        self.multica_run = Some(run);
+        self
+    }
+
+    fn first_request(&self, id: &str, binding: &Binding, prompt: String) -> Req {
+        if let Some(run) = &self.multica_run
+            && self.provider == "codex"
+        {
+            let task_id = format!("multica:{run}");
+            let operation = v1::AgentSchedulerOperate {
+                op_id: task_id.clone(),
+                task_id,
+                kind: "multica_create".into(),
+                role: "producer".into(),
+                provider: self.provider.clone(),
+                directory: binding.cwd.clone(),
+                text: prompt,
+                ..Default::default()
+            };
+            return Req::AgentScheduler(v1::AgentSchedulerRequest {
+                action: Some(v1::agent_scheduler_request::Action::Operate(operation)),
+            });
+        }
+        Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
+            op_id: format!("native-create-{id}"),
+            provider: self.provider.clone(),
+            directory: binding.cwd.clone(),
+            prompt,
+            ..Default::default()
+        })
     }
     fn path(&self, id: &str) -> Result<PathBuf, String> {
         let key = id
@@ -189,13 +224,7 @@ impl Host for NativeHost {
         self.save(id, &b)?;
         if b.session.is_empty() {
             b.session = self
-                .control(Req::AgentNativeCreate(v1::AgentNativeCreateRequest {
-                    op_id: format!("native-create-{id}"),
-                    provider: b.provider.clone(),
-                    directory: b.cwd.clone(),
-                    prompt: prompt.clone(),
-                    ..Default::default()
-                }))
+                .control(self.first_request(id, &b, prompt.clone()))
                 .await?;
             if b.session.is_empty() {
                 return Err("Native creation returned no provider identity".into());

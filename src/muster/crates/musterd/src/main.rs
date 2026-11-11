@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     //
     // The registration also lets Launch Services deliver "open Muster" to the
     // daemon instead of the app, which then showed no window. The main thread
-    // hands those requests to the app (ADR 0183).
+    // hands those requests to the app (ADR 0185).
     #[cfg(target_os = "macos")]
     if let Some(events) = muster_platform::macos::events::AppEvents::take() {
         let setup = MainThread {
@@ -96,7 +96,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// What the main thread set up in AppKit before the runtime started
-/// (ADR 0164, ADR 0183).
+/// (ADR 0164, ADR 0185).
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 struct MainThread {
@@ -144,7 +144,7 @@ async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
     // prohibited activation policy is recorded as `BackgroundOnly`, which has
     // no tile (ADR 0132's outcome, now through AppKit; ADR 0164). A refusal is
     // logged rather than fatal, as before. So is a reopen handler that could
-    // not be installed (ADR 0183): the daemon runs, and opening Muster while
+    // not be installed (ADR 0185): the daemon runs, and opening Muster while
     // no app process runs shows no window, as before.
     if let Some(main_thread) = main_thread {
         if main_thread.left_the_dock {
