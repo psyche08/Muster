@@ -236,6 +236,15 @@ the single launch â€” ten seconds was enough on all three Macs, three was not â€
 and do not relaunch afterwards. A script that treats the two as one condition
 either launches too early and stops, or relaunches when it must not.
 
+A normal `open` can also reach the daemon rather than the app. `musterd` holds
+a Launch Services record under the app's bundle id (ADR 0164). While the daemon
+runs, `open`, the Dock and Finder resolve to that record, even when an app
+process is running. Since ADR 0183 the daemon passes the request on: it
+forwards it to the running app or starts one with `open -n`. A daemon built
+before ADR 0183 drops the request, so no window appears. On such a Mac, when
+the daemon is running and the app is not, make the single launch
+`open -n /Applications/Muster.app`.
+
 Do not drive a fleet installation over the Vnet address. Stopping musterd tears
 down the virtual network, so an SSH session addressed to a member's `192.168.13.x`
 address is cut at the daemon stop, mid-script: during the 1.0.94 rollout Mac-B

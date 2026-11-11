@@ -70,15 +70,22 @@ fn main() -> anyhow::Result<()> {
     // unresponsive and Activity Monitor shows it "Not Responding". Inside the
     // bundle the runtime moves to its own thread and the main thread serves
     // that queue until the runtime ends the process (ADR 0164).
+    //
+    // The registration also lets Launch Services deliver "open Muster" to the
+    // daemon instead of the app, which then showed no window. The main thread
+    // hands those requests to the app (ADR 0183).
     #[cfg(target_os = "macos")]
     if let Some(events) = muster_platform::macos::events::AppEvents::take() {
-        let left_the_dock = events.leave_the_dock();
+        let setup = MainThread {
+            left_the_dock: events.leave_the_dock(),
+            hands_launches_to_the_app: events.hand_launches_to_the_app(),
+        };
         std::thread::Builder::new()
             .name("musterd-runtime".into())
             // The main thread's size: the daemon's future was sized for it.
             .stack_size(8 << 20)
             .spawn(move || {
-                let outcome = std::panic::catch_unwind(move || run_daemon(Some(left_the_dock)));
+                let outcome = std::panic::catch_unwind(move || run_daemon(Some(setup)));
                 let code = exit_code(outcome);
                 let _ = std::io::Write::flush(&mut std::io::stdout());
                 std::process::exit(code);
@@ -88,10 +95,19 @@ fn main() -> anyhow::Result<()> {
     run_daemon(None)
 }
 
-/// `left_the_dock` is `None` when the main thread is not serving AppKit
-/// events (outside an app bundle, or not macOS).
-fn run_daemon(left_the_dock: Option<bool>) -> anyhow::Result<()> {
-    tokio::runtime::Runtime::new()?.block_on(run(left_the_dock))
+/// What the main thread set up in AppKit before the runtime started
+/// (ADR 0164, ADR 0183).
+#[derive(Clone, Copy)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct MainThread {
+    left_the_dock: bool,
+    hands_launches_to_the_app: bool,
+}
+
+/// `main_thread` is `None` when the main thread is not serving AppKit events
+/// (outside an app bundle, or not macOS).
+fn run_daemon(main_thread: Option<MainThread>) -> anyhow::Result<()> {
+    tokio::runtime::Runtime::new()?.block_on(run(main_thread))
 }
 
 /// The status `main` returning `outcome` would have exited with: Rust prints
@@ -109,7 +125,7 @@ fn exit_code(outcome: std::thread::Result<anyhow::Result<()>>) -> i32 {
     }
 }
 
-async fn run(left_the_dock: Option<bool>) -> anyhow::Result<()> {
+async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
     let args = Args::parse();
     let mut logger =
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
@@ -127,14 +143,23 @@ async fn run(left_the_dock: Option<bool>) -> anyhow::Result<()> {
     // The Dock tile went in `main`, before the runtime started: the
     // prohibited activation policy is recorded as `BackgroundOnly`, which has
     // no tile (ADR 0132's outcome, now through AppKit; ADR 0164). A refusal is
-    // logged rather than fatal, as before.
-    match left_the_dock {
-        Some(true) => log::info!("main thread serving window-server events; out of the Dock"),
-        Some(false) => log::warn!(
-            "main thread serving window-server events; could not leave the Dock: \
-             setActivationPolicy(prohibited) was refused"
-        ),
-        None => {}
+    // logged rather than fatal, as before. So is a reopen handler that could
+    // not be installed (ADR 0183): the daemon runs, and opening Muster while
+    // no app process runs shows no window, as before.
+    if let Some(main_thread) = main_thread {
+        if main_thread.left_the_dock {
+            log::info!("main thread serving window-server events; out of the Dock");
+        } else {
+            log::warn!(
+                "main thread serving window-server events; could not leave the Dock: \
+                 setActivationPolicy(prohibited) was refused"
+            );
+        }
+        if main_thread.hands_launches_to_the_app {
+            log::info!("reopen requests and URLs that reach the daemon go to the app");
+        } else {
+            log::warn!("could not install the reopen and URL handlers; they stay with the daemon");
+        }
     }
     let dir = args
         .dir
