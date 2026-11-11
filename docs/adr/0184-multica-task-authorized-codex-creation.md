@@ -1,7 +1,7 @@
 # ADR 0184 – Authorize a locked Codex creation for one Multica run
 
 - Date: 2026-11-11
-- Status: Proposed, device verification pending
+- Status: Accepted, verified with a real Multica issue on a locked Mac
 - Related: [0097](0097-task-scoped-scheduler-grant-for-locked-use.md), [0183](0183-locked-codex-creation-stages.md)
 
 ## Context
@@ -55,3 +55,29 @@ the issue itself as well as the proposed first turn. The Multica runner also
 has a 30-second initial progress deadline. The adapter emits the received
 user item at turn start and completes that item when the native prompt
 returns. Only the provider's completed assistant turn emits a final answer.
+
+
+### Device evidence
+
+The notarized test build from `852c4007` ran on the target Mac with Multica
+0.3.62. A host-side test scheduler queried the authoritative issue and run,
+compared the canonical directory, reviewed first-turn template and SHA-256,
+and granted only that run over the local socket. Ordinary issue assignment
+alone did not supply the grant.
+
+- Without a grant, two Multica attempts ended with no matching Codex session.
+- On the final build, the first dispatch after daemon replacement used the
+  container's previous bridge port and failed before the handshake. After
+  bridge reconciliation, the same issue was re-enqueued following a
+  read-only zero-session check.
+- The authorized run transitioned from locked to unlocked and automatically
+  back to locked. Multica recorded completion 26 seconds after the relock.
+  Both its final result and its text stream contained the correct arithmetic
+  answer. The scheduler ledger recorded one applied creation and bound its
+  native session. A search across *both* execution directories found exactly
+  one Codex session, with the reviewed first message and the correct final
+  answer. The local owner revoked the grant.
+- Source verification included the daemon and ACP unit suites (144 and 24
+  tests passed respectively, three daemon tests ignored). Developer ID
+  signing, notarization, stapling, Gatekeeper and the installed daemon
+  source stamp were verified. Only the executor was updated for this test.
