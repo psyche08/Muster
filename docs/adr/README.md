@@ -303,3 +303,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0185](0185-the-daemon-hands-launch-requests-to-the-app.md) | Accepted; scratch-bundle runtime check verified | Hand reopen requests and `muster:` links that reach the daemon to the app |
 | [0186](0186-dev-builds-keep-line-tables-only.md) | Accepted; measured on clean test builds | Keep only line tables in dev and test builds |
 | [0187](0187-trusted-multica-dispatch.md) | Accepted, unattended issue verified | Authorize a direct Multica assignment on the enrolled host |
+| [0188](0188-publish-macos-trusted-dispatch.md) | Accepted | Publish trusted Multica dispatch on macOS 1.1.37 (127) |
