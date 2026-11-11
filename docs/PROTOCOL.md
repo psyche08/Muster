@@ -80,14 +80,14 @@ The hashed and signed `signed_bytes`:
 1. Already holding the same hash → `Duplicate`.
 2. Any unknown parent → `MissingParents(list)`; the caller retries later.
 3. Genesis requires an empty roster and no parents. Other entries require an existing Genesis, equal `network_id`, and at least one parent.
-4. Validate against the folded `causal_past(parents)`: the signer is an active administrator (for Genesis, the creator); the signature is valid; Genesis prefix is in 8..=30; an Add device has never appeared in the past (removed IDs cannot be re-added); Update / Remove targets are currently active.
+4. Validate against the folded `causal_past(parents)`: the signer is an active administrator (for Genesis, the creator); the signature is valid; Genesis prefix is in 8..=30; an Add names no currently active member (a removed ID returns only through a new Add by an active admin, ADR 0185); Update / Remove targets are currently active.
 5. After insertion, `recompute()`; if the new entry is not in the accepted set, roll back with "entry was invalidated by the roster it joined".
 
 `recompute()` (same state for any insertion order; see `tests/properties.rs`):
 
 - Kahn topological order, with the ready set ascending by `(lamport, hash)`.
 - Accept an entry if and only if every parent is accepted, and in the fold of `accepted ∩ causal_past(parents)` the signer is an active administrator and the signature is valid. Accept Genesis only when no entry has yet been accepted.
-- Removed-administrator rule: for each accepted `Remove(X)`, exclude every entry signed by X outside `causal_past([remove])`, then repeat until stable.
+- Removed-administrator rule: for each accepted `Remove(X)`, exclude every entry signed by X outside `causal_past([remove])`, unless an accepted re-add of X folds after the Remove and lies causally before the entry (ADR 0185), then repeat until stable.
 - State = fold of the accepted set: Genesis sets network_id, name, and cidr, forcing the creator to Admin; Add inserts only if absent; Update applies only when `(lamport, hash)` exceeds the member's `last_update` (last writer wins), applies only `Some` fields, and updates `defined_by` when vip changes; Remove sets `removed = true` permanently.
 - Resolve VIP conflicts after folding: sort active members sharing a VIP by `(defined_by, device_id)` ascending; the first retains it and the rest have `vip = None` in the state.
 

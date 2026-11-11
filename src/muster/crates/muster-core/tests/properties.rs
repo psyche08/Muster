@@ -181,12 +181,25 @@ fn removal_is_permanent_and_non_admins_cannot_author() {
     let (admin, admin2, m1, m2) = (&signers[0], &signers[1], &signers[2], &signers[3]);
     let m2_id = m2.public_key().device_id();
     assert!(roster.state().active(&m2_id).is_none());
-    // Re-adding a removed device is refused, by either admin.
-    for a in [admin, admin2] {
-        if let Ok(entry) = author(&roster, a.as_ref()).add(record(m2, "m2-again")) {
-            assert!(roster.insert(entry).is_err(), "removed device came back");
+    // A removed device returns only through an active admin's re-add
+    // (ADR 0185): the new record wins and the device is active again. The
+    // removed device cannot re-add itself, and a member cannot re-add it.
+    for signer in [m2, m1] {
+        if let Ok(entry) = author(&roster, signer.as_ref()).add(record(m2, "m2-self")) {
+            assert!(
+                roster.insert(entry).is_err(),
+                "a non-admin re-added a device"
+            );
         }
     }
+    let readd = author(&roster, admin.as_ref())
+        .add(record(m2, "m2-again"))
+        .unwrap();
+    roster.insert(readd).unwrap();
+    assert_eq!(
+        roster.state().active(&m2_id).unwrap().record.name,
+        "m2-again"
+    );
     // A member cannot add or remove anyone.
     let stranger = SoftSigner::generate();
     if let Ok(entry) = author(&roster, m1.as_ref()).add(record(&stranger, "s")) {
@@ -215,8 +228,8 @@ fn removal_is_permanent_and_non_admins_cannot_author() {
     );
     assert_eq!(
         roster.state().active_members().count(),
-        2,
-        "admin and m1 remain"
+        3,
+        "admin, m1 and the re-added m2 remain"
     );
 }
 

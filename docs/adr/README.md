@@ -300,3 +300,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0182](0182-publish-native-create-options.md) | Accepted | Publish native create options as Apple 1.1.36 (126) |
 | [0183](0183-locked-codex-creation-stages.md) | Accepted; verified on paired Macs | Route a covered Codex creation before its first composer |
 | [0184](0184-transcript-view-initializers-internal.md) | Accepted; source verified, iOS simulator build passes | Keep the transcript views' memberwise initializers internal under Xcode 26.4 |
+| [0185](0185-removed-device-readd.md) | Accepted; source and tests verified, paired-device acceptance pending | Let a removed device rejoin through a fresh admin-approved Add |

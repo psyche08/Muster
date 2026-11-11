@@ -4,7 +4,9 @@
 //! Rules, restated where the code applies them:
 //! - an entry is accepted only if its parents are accepted and its signer is
 //!   an active admin in the fold of its causal past (Genesis signs itself);
-//! - Remove is permanent; a removed device id is never re-added;
+//! - a removed device id returns only through a new Add signed by an active
+//!   admin causally after the Remove (a re-add); entries the removed device
+//!   signed that the Remove does not include stay invalid (ADR 0185);
 //! - Update is last-writer-wins by (lamport, hash);
 //! - entries signed by an admin that a Remove does not causally include are
 //!   invalid, so a stolen admin key cannot backfill;
@@ -540,13 +542,33 @@ impl State {
                 );
             }
             Body::Add(record) => {
-                self.members.entry(record.device_id).or_insert(Member {
-                    record: record.clone(),
-                    removed: false,
-                    defined_by: hash,
-                    last_update: (entry.lamport, hash),
-                    presence_epoch: None,
-                });
+                // First Add inserts a member. A later Add for a removed
+                // device re-adds it: the new record supersedes the tombstone,
+                // and the presence epoch resets so no binding signed before
+                // the Remove can revive (ADR 0185).
+                match self.members.get_mut(&record.device_id) {
+                    Some(member) => {
+                        *member = Member {
+                            record: record.clone(),
+                            removed: false,
+                            defined_by: hash,
+                            last_update: (entry.lamport, hash),
+                            presence_epoch: None,
+                        };
+                    }
+                    None => {
+                        self.members.insert(
+                            record.device_id,
+                            Member {
+                                record: record.clone(),
+                                removed: false,
+                                defined_by: hash,
+                                last_update: (entry.lamport, hash),
+                                presence_epoch: None,
+                            },
+                        );
+                    }
+                }
             }
             Body::Update { device_id, update } => {
                 if update.is_presence_epoch()
@@ -851,9 +873,11 @@ impl Roster {
                 }
             }
             Body::Add(record) => {
-                if past.members.contains_key(&record.device_id) {
+                // A re-add of a removed device is a fresh authorization by an
+                // active admin and replaces the tombstone (ADR 0185).
+                if past.active(&record.device_id).is_some() {
                     return Err(Error::Rejected(
-                        "device already in roster (removed ids are never re-added)".into(),
+                        "device is already an active member".into(),
                     ));
                 }
             }
@@ -976,17 +1000,39 @@ impl Roster {
                     accepted_set.insert(hash);
                 }
             }
-            // Removed-admin rule: an accepted Remove(X) invalidates every entry
-            // X signed that the Remove does not causally include.
+            // Removed-admin rule: an accepted Remove(X) invalidates every
+            // entry X signed that the Remove does not causally include —
+            // unless X was re-added: an entry E signed by X stays valid when
+            // an accepted re-add of X folds after the Remove and lies
+            // causally before E (ADR 0185).
             let mut newly_excluded = HashSet::new();
-            for hash in &accepted {
+            let readds: HashMap<DeviceId, Vec<usize>> = accepted.iter().enumerate().fold(
+                HashMap::new(),
+                |mut map, (index, hash)| {
+                    if let Body::Add(record) = &self.entries[hash].body {
+                        map.entry(record.device_id).or_default().push(index);
+                    }
+                    map
+                },
+            );
+            for (remove_index, hash) in accepted.iter().enumerate() {
                 if let Body::Remove { device_id } = &self.entries[hash].body {
-                    let past = self.causal_past(&[*hash]);
+                    let removed_past = self.causal_past(&[*hash]);
                     for other in &accepted {
-                        if other != hash
-                            && self.entries[other].signer == *device_id
-                            && !past.contains(other)
+                        if other == hash
+                            || self.entries[other].signer != *device_id
+                            || removed_past.contains(other)
                         {
+                            continue;
+                        }
+                        let before_other = self.causal_past(&[*other]);
+                        let readded = readds.get(device_id).is_some_and(|indexes| {
+                            indexes.iter().any(|&add_index| {
+                                add_index > remove_index
+                                    && before_other.contains(&accepted[add_index])
+                            })
+                        });
+                        if !readded {
                             newly_excluded.insert(*other);
                         }
                     }
@@ -1083,10 +1129,15 @@ impl Author<'_> {
     }
 
     /// Adds a device; desktops and servers get the next free vip unless the
-    /// record already names one.
+    /// record already names one. A re-add of a removed device keeps the
+    /// address its removal reserved: no active member holds it, and the
+    /// device's stale routes still point there.
     pub fn add(&self, mut record: DeviceRecord) -> Result<Entry, Error> {
         if record.kind != DeviceKind::Phone && record.vip.is_none() {
-            record.vip = self.roster.state().free_vip();
+            record.vip = match self.roster.state().member(&record.device_id) {
+                Some(previous) => previous.record.vip,
+                None => self.roster.state().free_vip(),
+            };
         }
         self.on_head(Body::Add(record))
     }
@@ -1349,14 +1400,119 @@ mod tests {
         .add(record(&SoftSigner::generate(), "x", DeviceKind::Server))
         .unwrap();
         assert!(matches!(roster.insert(late), Err(Error::Rejected(_))));
-        // Removed ids are never re-added.
+        // The active admin re-adds the removed one (ADR 0185): the new
+        // record wins and the returning admin can sign again.
+        let mut returning = record(&admin, "mac-a-again", DeviceKind::Desktop);
+        returning.role = Role::Admin;
         let readd = Author {
             roster: &roster,
             signer: &phone,
         }
-        .add(record(&admin, "mac-a-again", DeviceKind::Desktop))
+        .add(returning)
         .unwrap();
-        assert!(matches!(roster.insert(readd), Err(Error::Rejected(_))));
+        roster.insert(readd).unwrap();
+        let admin_id = admin.public_key().device_id();
+        let member = roster.state().active(&admin_id).unwrap();
+        assert_eq!(member.record.name, "mac-a-again");
+        assert!(member.is_admin());
+        assert!(roster.state().members[&admin_id].presence_epoch.is_none());
+        let after = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .add(record(&SoftSigner::generate(), "y", DeviceKind::Server))
+        .unwrap();
+        let returned_id = after.device_id().unwrap();
+        roster.insert(after).unwrap();
+        assert!(roster.state().members.contains_key(&returned_id));
+        // An active member cannot be added twice.
+        let duplicate = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .add(record(&admin, "mac-a-dupe", DeviceKind::Desktop))
+        .unwrap();
+        assert!(matches!(roster.insert(duplicate), Err(Error::Rejected(_))));
+    }
+
+    /// A removed device's pre-Remove entries stay invalid across a re-add;
+    /// only what it signs causally after the re-add counts (ADR 0185).
+    #[test]
+    fn readd_does_not_revive_pre_remove_entries() {
+        let admin = SoftSigner::generate();
+        let member = SoftSigner::generate();
+        let mut roster = Roster::new();
+        let genesis = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .genesis("home", cidr(), record(&admin, "admin", DeviceKind::Desktop))
+        .unwrap();
+        roster.insert(genesis).unwrap();
+        let mut member_record = record(&member, "member", DeviceKind::Desktop);
+        member_record.role = Role::Admin;
+        let add = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .add(member_record)
+        .unwrap();
+        roster.insert(add).unwrap();
+        let member_id = member.public_key().device_id();
+        let vip_before = roster.state().active(&member_id).unwrap().record.vip;
+
+        // The member signs an entry on its own fork, then the admin removes
+        // it without that fork: the signed entry must not survive.
+        let mut fork = roster.clone();
+        let signed_before = Author {
+            roster: &fork,
+            signer: &member,
+        }
+        .add(record(&SoftSigner::generate(), "backfill", DeviceKind::Server))
+        .unwrap();
+        let remove = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .remove(member_id)
+        .unwrap();
+        roster.insert(remove).unwrap();
+        fork.insert(signed_before.clone()).unwrap();
+        let mut merged = roster.clone();
+        assert!(matches!(
+            merged.insert(signed_before.clone()),
+            Err(Error::Rejected(_))
+        ));
+        assert!(merged.state().active(&member_id).is_none());
+
+        // The admin re-adds the member causally after the Remove. The old
+        // fork stays dead even when merged afterwards, but the member signs
+        // fresh entries once it is back.
+        let mut returning = record(&member, "member-again", DeviceKind::Desktop);
+        returning.role = Role::Admin;
+        let readd = Author {
+            roster: &merged,
+            signer: &admin,
+        }
+        .add(returning)
+        .unwrap();
+        merged.insert(readd).unwrap();
+        assert!(matches!(
+            merged.insert(signed_before.clone()),
+            Err(Error::Rejected(_))
+        ));
+        let active = merged.state().active(&member_id).unwrap();
+        assert_eq!(active.record.name, "member-again");
+        assert_eq!(active.record.vip, vip_before);
+        let signed_after = Author {
+            roster: &merged,
+            signer: &member,
+        }
+        .add(record(&SoftSigner::generate(), "fresh", DeviceKind::Server))
+        .unwrap();
+        let fresh_id = signed_after.device_id().unwrap();
+        merged.insert(signed_after).unwrap();
+        assert!(merged.state().members.contains_key(&fresh_id));
     }
 
     #[test]
