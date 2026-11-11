@@ -35,3 +35,25 @@ notarization, stapling, Gatekeeper, feed signature and public artifact hashes.
 Check each installed app, daemon identity and runtime after taking the desktop
 update lease. Record publication and device evidence separately from the
 locked workflow acceptance in ADR 0187.
+
+## Release evidence
+
+[GitHub release v1.1.37](https://github.com/psyche08/Muster/releases/tag/v1.1.37)
+and the public desktop update feed serve the release built from
+`3ff2da94804b36cacfe848e8982656e96e49360f`. Developer ID and Presence signing, release ancestry,
+Apple notarization, stapling and Gatekeeper checks passed. The final link
+targeted macOS 14. The version and signed executables in the full update
+matched the notarized portable. The GitHub archive and public desktop
+downloads were read back and verified, including the update signature.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| macOS install ZIP | `e073e663c86a88518e5db2517e1eac0ec140834ba601f79ebfbb0e5c37d462aa` |
+| macOS full update | `6062396d7f77a35130d4db6ef73c8955480197732f9d0a6d48ab573dc36a5fb9` |
+
+All three enrolled Apple silicon Macs ran 1.1.37 (127) after independent
+installation jobs acquired the desktop update lease. Each reported the
+release commit, its original device identity and granted Accessibility.
+Existing host-specific dispatch enrollment was preserved. The registered
+iOS manifest still pointed to build 126. Locked issue execution was previously
+verified on the diagnostic build in ADR 0187.
