@@ -59,6 +59,11 @@ package named in the public manifest.
 
 All 14 files matched the staged hashes over public HTTPS. The download and
 install links, the cache policy, and an older manifest URL resolving to
-build 126 were also verified. Superseded 1.1.35 files are still on the
-server; pruning them waits for the owner's approval. No installed Mac was
-updated and no physical iPhone was connected for this release.
+build 126 were also verified. No installed Mac was updated and no physical
+iPhone was connected for this release.
+
+With the owner's approval, `prune-releases.py --apply` then removed seven
+superseded files: the 1.1.35 full update package, and two older IPAs with
+their install and manifest plists, including 1.1.35's. The three removed
+package URLs return 410, both removed manifest URLs resolve to build 126, and
+all 14 current files still matched over public HTTPS.
