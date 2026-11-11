@@ -182,6 +182,11 @@ impl Policy {
         {
             return Err(deny("run does not match the direct assignment"));
         }
+        // Display name is only a consistency check. The owner UUID on the
+        // issue, agent and runtime is the identity binding.
+        if me["name"].as_str().is_none_or(str::is_empty) || run["initiator_name"] != me["name"] {
+            return Err(deny("run initiator mismatch"));
+        }
         let created = issue["created_at"]
             .as_str()
             .ok_or_else(|| deny("missing creation time"))?;
@@ -191,8 +196,19 @@ impl Policy {
         let ts = chrono::DateTime::parse_from_rfc3339(dispatched)
             .map_err(|_| deny("invalid dispatch time"))?
             .timestamp();
+        let issue_time = chrono::DateTime::parse_from_rfc3339(created)
+            .map_err(|_| deny("invalid issue time"))?
+            .timestamp();
+        let queued_time = run["created_at"]
+            .as_str()
+            .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+            .ok_or_else(|| deny("invalid task queue time"))?
+            .timestamp();
+        // The service serializes both writes to whole seconds. Adjacent
+        // writes can therefore straddle a second boundary on a new issue.
         if issue["updated_at"] != created
-            || run["created_at"] != created
+            || !(0..=1).contains(&(queued_time - issue_time))
+            || ts < queued_time
             || !(-5..=180).contains(&(now - ts))
         {
             return Err(deny("issue was changed or dispatch is not fresh"));
@@ -336,11 +352,11 @@ mod tests {
             cwd: "/work/ws/aaaaaaaa/workdir",
         };
         let records = Records {
-            me: json!({"id":"owner"}),
+            me: json!({"id":"owner","name":"Example Owner"}),
             issue: json!({"id":ISSUE,"workspace_id":"ws","creator_type":"member","creator_id":"owner","initiator_user_id":"owner","assignee_type":"agent","assignee_id":"agent","created_at":WHEN,"updated_at":WHEN,"title":"Example","description":"Compute an integer."}),
             agent: json!({"id":"agent","owner_id":"owner","workspace_id":"ws","runtime_id":"runtime"}),
             runtimes: json!([{"id":"runtime","workspace_id":"ws","owner_id":"owner","daemon_id":"registered-executor","runtime_mode":"local","provider":"codex","status":"online"}]),
-            runs: json!([{"id":RUN,"issue_id":ISSUE,"workspace_id":"ws","agent_id":"agent","runtime_id":"runtime","kind":"direct","attempt":1,"status":"running","dispatched_at":WHEN,"created_at":WHEN,"work_dir":hint.cwd}]),
+            runs: json!([{"id":RUN,"issue_id":ISSUE,"workspace_id":"ws","agent_id":"agent","runtime_id":"runtime","kind":"direct","initiator_name":"Example Owner","attempt":1,"status":"running","dispatched_at":WHEN,"created_at":WHEN,"work_dir":hint.cwd}]),
         };
         (policy, hint, records)
     }
@@ -369,6 +385,20 @@ mod tests {
         assert!(Hint::read(&ambiguous).is_err());
     }
     #[test]
+    fn immediate_enqueue_can_cross_one_second() {
+        let (p, h, mut r) = fixture();
+        let later = "2026-01-01T00:00:01Z";
+        r.runs[0]["created_at"] = json!(later);
+        r.runs[0]["dispatched_at"] = json!(later);
+        let now = chrono::DateTime::parse_from_rfc3339(later)
+            .unwrap()
+            .timestamp();
+        assert!(p.verify(&h, &r, now).is_ok());
+        r.runs[0]["created_at"] = json!("2026-01-01T00:00:03Z");
+        assert!(p.verify(&h, &r, now).is_err());
+    }
+
+    #[test]
     fn foreign_edits_retries_and_misdirected_runs_get_no_grant() {
         let now = chrono::DateTime::parse_from_rfc3339(WHEN)
             .unwrap()
@@ -382,6 +412,7 @@ mod tests {
             |r| r.issue["assignee_id"] = json!("other"),
             |r| r.agent["runtime_id"] = json!("another"),
             |r| r.runtimes[0]["daemon_id"] = json!("wrong-device"),
+            |r| r.runs[0]["initiator_name"] = json!("different"),
             |r| r.runs[0]["kind"] = json!("wakeup"),
             |r| r.runs[0]["issue_id"] = json!("different"),
             |r| r.runs[0]["attempt"] = json!(2),

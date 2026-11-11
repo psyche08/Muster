@@ -46,3 +46,10 @@ Exercise wrong principals, foreign assignments, altered requests, extra
 attempts and directory substitution. Validate the normal entry point on a
 locked Mac using a fresh real issue, with only read-only observation after
 assignment. Verify a single session, the service result and automatic relock.
+
+The service returns issue and queue timestamps to whole seconds. A real initial
+direct assignment crossed the boundary between two adjacent seconds. Accept a
+queue creation in that same or immediately following second. Check the run's
+initiator name against the authenticated owner's name as an additional
+consistency check alongside the stable issue, account and runtime UUIDs.
+The contract covers the exact service snapshot read by the host.
