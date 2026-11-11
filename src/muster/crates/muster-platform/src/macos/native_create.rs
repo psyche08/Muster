@@ -2,6 +2,7 @@
 use super::{
     ax::{self, Element},
     codesign, input, native_app,
+    native_app::native_options,
 };
 use muster_agent::{Error, control_guard, profile::App};
 use std::{
@@ -320,7 +321,38 @@ impl Submitted {
     }
 }
 
-pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitted, Error> {
+/// The new session's form as the scope its model and effort pickers are
+/// read and pressed in: every step re-proves the exact window, page,
+/// directory and empty new-session state, the app's identity, an unlocked
+/// console and the person's idle input.
+struct Form<'a, F: Fn() -> Result<(), Error> + Sync> {
+    check: &'a F,
+    page: &'a Element,
+    app: &'a Element,
+}
+impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> {
+    fn check(&self) -> Result<(), Error> {
+        (self.check)()
+    }
+    fn web(&self) -> &Element {
+        self.page
+    }
+    fn app(&self) -> &Element {
+        self.app
+    }
+}
+
+/// Submits the first message of a new session. A requested `model` or
+/// `effort` (names as the app shows them; empty keeps the app's choice) is
+/// chosen and read back on the new session's form first; one the app does
+/// not offer or confirm refuses before anything is drafted (ADR 0181).
+pub async fn submit(
+    provider: &str,
+    cwd: &Path,
+    prompt: &str,
+    model: &str,
+    effort: &str,
+) -> Result<Submitted, Error> {
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
         .ok_or_else(|| Error::Invalid("Unsupported native provider".into()))?;
@@ -548,6 +580,20 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         return Err(conflict("Native composer is not empty"));
     }
     form()?;
+    let options = Form {
+        check: &form,
+        page: &page,
+        app: &root,
+    };
+    let shown = native_options::prepare_new(&options, model, effort).await?;
+    // Opening and closing the pickers must not have typed anything.
+    if composer
+        .string("AXValue")
+        .is_none_or(|v| !profile.is_empty(&v))
+    {
+        return Err(conflict("Native composer is not empty"));
+    }
+    form()?;
     composer
         .set_string("AXValue", prompt)
         .map_err(|_| unavailable("Draft write refused"))?;
@@ -566,6 +612,7 @@ pub async fn submit(provider: &str, cwd: &Path, prompt: &str) -> Result<Submitte
         profile.controls().send.matches(n) && n.bool("AXEnabled") == Some(true)
     })
     .await?;
+    native_options::still_shown(&options, &shown).await?;
     form()?;
     if composer.string("AXValue").as_deref() != Some(prompt) {
         return Err(conflict("Draft changed before submit"));

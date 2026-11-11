@@ -7,6 +7,7 @@
 //! without Accessibility and only on a direct request to an unlocked Mac, in
 //! a session named from the operation (ADR 0167).
 use crate::{Daemon, Error};
+use muster_agent::native_options::valid_name;
 use muster_proto::v1::{self, response::Resp};
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,7 +39,17 @@ fn well_formed(r: &v1::AgentNativeCreateRequest, providers: &[&str]) -> Result<(
             "Native creation requires operation, provider, absolute directory and prompt".into(),
         ));
     }
+    if !valid_name(&r.model) || !valid_name(&r.effort) {
+        return Err(Error::Invalid(
+            "Native creation model and effort must be names of at most 128 bytes, without control characters or surrounding spaces".into(),
+        ));
+    }
     Ok(())
+}
+
+/// Whether a creation asks for a model or an effort (ADR 0181).
+fn has_options(r: &v1::AgentNativeCreateRequest) -> bool {
+    !r.model.is_empty() || !r.effort.is_empty()
 }
 
 /// Whether the provider's sessions are created through Muster's plugin
@@ -56,6 +67,13 @@ pub(crate) async fn create(
         validate(&r)?;
     } else {
         well_formed(&r, &["deepseek"])?;
+        // The plugin's task contract (ADR 0163) takes no model or effort.
+        if has_options(&r) {
+            return Err(muster_agent::native_options::create_refused(
+                "DeepSeek Harness sessions take no model or effort from Muster",
+            )
+            .into());
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -159,7 +177,8 @@ async fn owned(
     crate::handler::ledgered(daemon,&r.op_id,"agent.native_create",&r.provider,true,&body,async {
         let before:Vec<String>=agent.list(None,usize::MAX).into_iter().map(|s|s.id).collect();
         let held=ownership.clone();let provider=r.provider.clone();let cwd=path.clone();let prompt=r.prompt.clone();
-        let form=control_guard::spawn_blocking_async(async move {let _held=held;muster_platform::macos::native_create::submit(&provider,&cwd,&prompt).await}).await.map_err(|e|Error::UnknownOutcome(e.to_string()))??;
+        let (model,effort)=(r.model.clone(),r.effort.clone());
+        let form=control_guard::spawn_blocking_async(async move {let _held=held;muster_platform::macos::native_create::submit(&provider,&cwd,&prompt,&model,&effort).await}).await.map_err(|e|Error::UnknownOutcome(e.to_string()))??;
         let deadline=tokio::time::Instant::now()+receipt_budget;
         loop {
             control_guard::check().map_err(|e|Error::UnknownOutcome(e.to_string()))?;
@@ -363,6 +382,7 @@ mod tests {
             provider: provider.into(),
             directory: "/tmp".into(),
             prompt: "hi".into(),
+            ..Default::default()
         }
     }
 
@@ -381,5 +401,33 @@ mod tests {
             validate(&request("gemini")),
             Err(Error::Invalid(_))
         ));
+    }
+
+    /// A model or effort is a name exactly as the app shows it; anything
+    /// else is refused before the ledger, the console or the app.
+    #[test]
+    fn options_are_exact_short_names() {
+        let mut r = request("claude");
+        r.model = "Opus 5.5".into();
+        r.effort = "High".into();
+        validate(&r).unwrap();
+        assert!(has_options(&r));
+        assert!(!has_options(&request("claude")));
+        for (model, effort) in [
+            (" Opus 5.5", ""),
+            ("", "High\n"),
+            (&*"m".repeat(129), ""),
+            ("Opus\u{0}5.5", ""),
+        ] {
+            let r = v1::AgentNativeCreateRequest {
+                model: model.into(),
+                effort: effort.into(),
+                ..request("codex")
+            };
+            assert!(
+                matches!(validate(&r), Err(Error::Invalid(_))),
+                "{model:?} {effort:?}"
+            );
+        }
     }
 }

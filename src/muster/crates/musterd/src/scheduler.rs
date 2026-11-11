@@ -226,6 +226,9 @@ fn parse(o: &v1::AgentSchedulerOperate, scope: &grant::Scope) -> Result<Parsed, 
                 provider: scope.provider.clone(),
                 directory: scope.directory.clone(),
                 prompt: o.text.clone(),
+                // The scheduler grant (ADR 0097) names no model or effort:
+                // the app's current choice is kept.
+                ..Default::default()
             };
             let body = r.encode_to_vec();
             (Inner::Create(r), Some(("agent.native_create", body)))

@@ -372,12 +372,14 @@ mod organization_tests {
 mod native_create_tests {
     use super::*;
     #[test]
-    fn creation_provider_directory_and_first_message_are_signed() {
+    fn creation_provider_directory_first_message_and_options_are_signed() {
         let request = v1::AgentNativeCreateRequest {
             op_id: "operation".into(),
             provider: "codex".into(),
             directory: "/Users/example/project".into(),
             prompt: "Summarize the build".into(),
+            model: "GPT-6.1 Sol".into(),
+            effort: "High".into(),
         };
         let original = operation(&Req::AgentNativeCreate(request.clone())).unwrap();
         assert_eq!(
@@ -385,13 +387,17 @@ mod native_create_tests {
             Some(Req::AgentNativeCreate(request.clone()))
         );
         assert_eq!(turn(&original), Some("operation"));
-        for field in 0..4 {
+        for field in 0..7 {
             let mut changed = request.clone();
             match field {
                 0 => changed.op_id = "other-operation".into(),
                 1 => changed.provider = "claude".into(),
                 2 => changed.directory = "/Users/example/other".into(),
-                _ => changed.prompt = "Delete the build".into(),
+                3 => changed.prompt = "Delete the build".into(),
+                4 => changed.model = "GPT-5.5".into(),
+                5 => changed.effort = "Low".into(),
+                // Leaving the app's choice is a different request too.
+                _ => changed.effort.clear(),
             };
             assert_ne!(
                 digest(&original),

@@ -312,6 +312,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             provider: provider.into(),
             directory: dir_a.path().display().to_string(),
             prompt: String::new(),
+            ..Default::default()
         })
     };
     assert!(unauthorized(&remote.call(create("claude")).await));

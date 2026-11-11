@@ -2305,6 +2305,7 @@ fn desktop_creation(op_id: &str, directory: &std::path::Path) -> v1::AgentNative
         provider: "codex".into(),
         directory: directory.display().to_string(),
         prompt: "Synthetic first message".into(),
+        ..Default::default()
     }
 }
 
