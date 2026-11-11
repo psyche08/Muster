@@ -8,6 +8,7 @@ pub mod bundle;
 pub mod codesign;
 pub mod events;
 pub mod ghostty;
+mod handoff;
 pub mod input;
 pub mod lock;
 pub mod native_app;

@@ -1,4 +1,4 @@
-# ADR 0185 – Let the host authorize the owner's direct Multica assignment
+# ADR 0187 – Let the host authorize the owner's direct Multica assignment
 
 - Date: 2026-11-11
 - Status: Accepted, unattended issue verified on an installed Mac
