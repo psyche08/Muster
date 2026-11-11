@@ -301,3 +301,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0183](0183-locked-codex-creation-stages.md) | Accepted; verified on paired Macs | Route a covered Codex creation before its first composer |
 | [0184](0184-multica-task-authorized-codex-creation.md) | Accepted, verified on a locked Mac | Bind locked Multica Codex creation to one reviewed run |
 | [0185](0185-the-daemon-hands-launch-requests-to-the-app.md) | Accepted; scratch-bundle runtime check verified | Hand reopen requests and `muster:` links that reach the daemon to the app |
+| [0186](0186-dev-builds-keep-line-tables-only.md) | Accepted; measured on clean test builds | Keep only line tables in dev and test builds |

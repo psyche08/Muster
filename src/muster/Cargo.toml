@@ -64,5 +64,11 @@ tun = { version = "0.7", features = ["async"] }
 [workspace.lints.clippy]
 all = "warn"
 
+# Line tables keep file:line in panics and backtraces; full variable info
+# cost a quarter of a clean test build and 3 GB per target dir (ADR 0186).
+# `CARGO_PROFILE_DEV_DEBUG=full` restores it for a debugger session.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 debug = 1
