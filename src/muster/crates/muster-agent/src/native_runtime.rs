@@ -9,6 +9,26 @@ pub enum Destination {
     Unavailable,
 }
 
+/// Only a window allocated by this daemon in this provider process can be
+/// reclaimed for another creation. Window order and focus are not identities.
+pub struct CreationWindow<T> {
+    process: (u32, u64),
+    window: T,
+}
+
+impl<T: PartialEq> CreationWindow<T> {
+    pub fn new(pid: u32, start: u64, window: T) -> Self {
+        Self {
+            process: (pid, start),
+            window,
+        }
+    }
+
+    pub fn live(&self, pid: u32, start: u64, windows: &[T]) -> Option<&T> {
+        (self.process == (pid, start) && windows.contains(&self.window)).then_some(&self.window)
+    }
+}
+
 /// Choose an opaque new-session window. A reusable main shell must have been
 /// uniquely verified by the OS adapter before navigation; the caller must
 /// prove its new-session page, directory/mode and empty composer before writing.
@@ -140,6 +160,17 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProje
 mod tests {
     use super::*;
     #[test]
+    fn only_the_allocated_window_in_the_same_process_is_reused() {
+        let pin = CreationWindow::new(10, 20, 2);
+        for windows in [[1, 2], [2, 1], [3, 2]] {
+            assert_eq!(pin.live(10, 20, &windows), Some(&2));
+        }
+        assert_eq!(pin.live(10, 20, &[1]), None);
+        assert_eq!(pin.live(10, 21, &[2]), None);
+        assert_eq!(pin.live(11, 20, &[2]), None);
+    }
+
+    #[test]
     fn only_new_or_proved_activation_windows_are_eligible() {
         assert_eq!(
             session_window(&[1], &[1], &[1, 2], true, None).unwrap(),
@@ -170,6 +201,10 @@ mod tests {
             None
         );
         assert!(session_window(&[1], &[1], &[1, 2, 3], true, Some(&1)).is_err());
+        assert_eq!(
+            session_window(&[1], &[1], &[1, 2], true, Some(&1)).unwrap(),
+            Some(2)
+        );
     }
     #[test]
     fn directory_labels_require_the_entire_authorized_path() {

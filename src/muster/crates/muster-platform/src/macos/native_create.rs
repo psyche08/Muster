@@ -4,9 +4,10 @@ use super::{
     codesign, input, native_app,
     native_app::native_options,
 };
-use muster_agent::{Error, control_guard, profile::App};
+use muster_agent::{Error, control_guard, native_runtime::CreationWindow, profile::App};
 use std::{
     path::{Path, PathBuf},
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -15,6 +16,9 @@ use std::{
 /// its 60 s deadline on every window of one Mac (ADR 0154). Nothing has been
 /// navigated or typed while this runs, and the guard still stops on input.
 const WINDOW_STARTUP: Duration = Duration::from_secs(90);
+
+// All native creation entry points already hold the daemon's provider lock.
+static CODEX_WINDOW: Mutex<Option<CreationWindow<Element>>> = Mutex::new(None);
 
 fn unavailable(s: impl Into<String>) -> Error {
     Error::Unavailable(s.into())
@@ -236,6 +240,7 @@ fn selection_matches(
     provider: &str,
     page: &Element,
     cwd: &Path,
+    require_codex_home: bool,
 ) -> Result<Option<Selection>, Error> {
     let all = nodes(page)?;
     let proof = if provider == "claude" {
@@ -271,6 +276,7 @@ fn selection_matches(
             })
             .join(".codex-global-state.json");
         if labels.len() == 1
+            && (!require_codex_home || codex_home_heading(&all))
             && all
                 .iter()
                 .any(|n| label(n, "Switch mode, current mode: Codex"))
@@ -299,6 +305,20 @@ fn new_page(provider: &str, page: &Element) -> bool {
                 matches!(u.as_str(), "about:blank" | "https://claude.ai/epitaxy")
             }
         })
+}
+
+fn codex_home_heading(all: &[Element]) -> bool {
+    // The Codex home hero exposes the literal static prefix followed
+    // by the project picker. An existing thread can have an empty editor.
+    all.iter().any(|n| {
+        n.role() == "AXStaticText"
+            && n.string("AXValue").is_some_and(|v| {
+                matches!(
+                    v.trim(),
+                    "What should we build in" | "What should we work on in"
+                )
+            })
+    })
 }
 
 fn empty_session_marker(window: &Element) -> Result<bool, Error> {
@@ -340,6 +360,43 @@ impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> 
     fn app(&self) -> &Element {
         self.app
     }
+}
+
+async fn allocate_codex_window(
+    guard: &Guard,
+    root: &Element,
+    before: &[Element],
+) -> Result<Element, Error> {
+    let menu = root
+        .element("AXMenuBar")
+        .ok_or_else(|| unavailable("No native menu bar"))?;
+    let new = wait(guard, &menu, |n| {
+        n.role() == "AXMenuItem" && label(n, "New Window")
+    })
+    .await?;
+    guard.press(&new)?;
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        guard.check()?;
+        let fresh: Vec<_> = windows(root)
+            .into_iter()
+            .filter(|w| !before.contains(w))
+            .collect();
+        if fresh.len() == 1 {
+            return Ok(fresh[0].clone());
+        }
+        if fresh.len() > 1 || Instant::now() >= deadline {
+            return Err(conflict("New window identity is ambiguous"));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+fn require_focus(root: &Element, window: &Element) -> Result<(), Error> {
+    if root.element("AXFocusedWindow").as_ref() != Some(window) {
+        return Err(conflict("Native route target is not the focused window"));
+    }
+    Ok(())
 }
 
 /// Submits the first message of a new session. A requested `model` or
@@ -414,7 +471,9 @@ pub async fn submit(
         Vec::new()
     };
     guard.check()?;
-    open(&bundle, None)?;
+    if was_running {
+        open(&bundle, None)?;
+    }
     // Cold startup may replace its preliminary window before the renderer is
     // ready. Bind the settled object set, not that transient startup shell.
     stage("activated");
@@ -470,48 +529,56 @@ pub async fn submit(
     } else {
         route.query_pairs_mut().append_pair("folder", cwd_text);
     }
-    // Codex navigation reuses the foreground window; first create a new one.
+    // Codex routes to its focused window. Retain the one Muster allocated.
     // Claude's code/new entry may create a window or reuse its verified main shell.
+    let mut reused_codex = false;
     let window = if provider == "codex" {
-        let menu = root
-            .element("AXMenuBar")
-            .ok_or_else(|| unavailable("No native menu bar"))?;
-        let new = wait(&guard, &menu, |n| {
-            n.role() == "AXMenuItem" && label(n, "New Window")
-        })
-        .await?;
-        stage("new_window_request");
-        guard.press(&new)?;
-        let deadline = Instant::now() + Duration::from_secs(8);
-        let fresh = loop {
-            guard.check()?;
-            let fresh: Vec<_> = windows(&root)
-                .into_iter()
-                .filter(|w| !before.contains(w))
-                .collect();
-            if fresh.len() == 1 {
-                break fresh[0].clone();
-            }
-            if fresh.len() > 1 || Instant::now() >= deadline {
-                return Err(conflict("New window identity is ambiguous"));
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
+        let pinned = CODEX_WINDOW
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|pin| pin.live(pid, guard.start, &before))
+            .cloned();
+        // A cold launch can restore a conversation. Claim its only window
+        // directly only when the new-session home is positively identified.
+        let window = if let Some(window) = pinned {
+            stage("reuse_codex_window");
+            reused_codex = true;
+            window
+        } else {
+            let window = if before_activation.is_empty()
+                && let [startup] = before.as_slice()
+                && let Some(page) = unique(startup, |n| new_page("codex", n))?
+                && selection_matches("codex", &page, cwd, true)?.is_some()
+            {
+                reused_codex = true;
+                stage("reuse_startup_window");
+                startup.clone()
+            } else {
+                stage("new_window_request");
+                allocate_codex_window(&guard, &root, &before).await?
+            };
+            *CODEX_WINDOW.lock().unwrap() =
+                Some(CreationWindow::new(pid, guard.start, window.clone()));
+            window
         };
         guard.check()?;
-        fresh
-            .raise()
-            .map_err(|_| unavailable("Cannot raise the new window"))?;
+        if root.element("AXFocusedWindow").as_ref() != Some(&window) {
+            window
+                .raise()
+                .map_err(|_| unavailable("Cannot raise the target Codex window"))?;
+        }
         stage("await_new_renderer");
         if covered {
             let limit = Instant::now() + Duration::from_secs(8);
             loop {
                 guard.check()?;
-                if !windows(&root).contains(&fresh) {
+                if !windows(&root).contains(&window) {
                     return Err(conflict("New native window was replaced"));
                 }
-                if fresh.role() == "AXWindow"
-                    && root.element("AXFocusedWindow").as_ref() == Some(&fresh)
-                    && unique(&fresh, |n| new_page("codex", n))?.is_some()
+                if window.role() == "AXWindow"
+                    && root.element("AXFocusedWindow").as_ref() == Some(&window)
+                    && unique(&window, |n| new_page("codex", n))?.is_some()
                 {
                     break;
                 }
@@ -521,14 +588,23 @@ pub async fn submit(
                 tokio::time::sleep(Duration::from_millis(75)).await;
             }
         } else {
-            renderer_ready(&guard, &root, &fresh).await?;
+            renderer_ready(&guard, &root, &window).await?;
         }
         guard.check()?;
+        require_focus(&root, &window)?;
         stage("dispatch_directory_route");
         open(&bundle, Some(&route))?;
-        fresh
+        window
     } else {
         guard.check()?;
+        if let Some(main) = &reusable_main {
+            if root.element("AXFocusedWindow").as_ref() != Some(main) {
+                main.raise()
+                    .map_err(|_| unavailable("Cannot raise the Claude main window"))?;
+            }
+            require_focus(&root, main)?;
+            guard.check()?;
+        }
         open(&bundle, Some(&route))?;
         let deadline = Instant::now() + Duration::from_secs(8);
         loop {
@@ -548,9 +624,8 @@ pub async fn submit(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     };
-    let reuses_main = provider == "claude"
-        && before_activation.contains(&window)
-        && reusable_main.as_ref() == Some(&window);
+    let reuses_main =
+        reusable_main.as_ref() == Some(&window) && before_activation.contains(&window);
     // Both providers can expose the window before a late trust dialog. Keep
     // its object identity and wait for the complete form, pressing trust once.
     stage("await_routed_form");
@@ -582,7 +657,7 @@ pub async fn submit(
         if let Some(page) = page
             && (!reuses_main || empty_session_marker(&page)?)
         {
-            let project = selection_matches(provider, &page, cwd)?;
+            let project = selection_matches(provider, &page, cwd, reused_codex)?;
             form_state.1 = project.is_some();
             if let Some(project) = project {
                 let composer = unique(&page, |n| profile.controls().composer.matches(n))?;
@@ -619,7 +694,7 @@ pub async fn submit(
         }
         Ok(new_page(provider, &page)
             && (!reuses_main || empty_session_marker(&page)?)
-            && selection_matches(provider, &page, cwd)?.as_ref() == Some(&project))
+            && selection_matches(provider, &page, cwd, reused_codex)?.as_ref() == Some(&project))
     };
     let form = || -> Result<(), Error> {
         if selection()? {
@@ -652,6 +727,7 @@ pub async fn submit(
         return Err(conflict("Native composer is not empty"));
     }
     form()?;
+    require_focus(&root, &window)?;
     composer
         .set_string("AXValue", prompt)
         .map_err(|_| unavailable("Draft write refused"))?;
@@ -675,6 +751,7 @@ pub async fn submit(
     if composer.string("AXValue").as_deref() != Some(prompt) {
         return Err(conflict("Draft changed before submit"));
     }
+    require_focus(&root, &window)?;
     stage("submit");
     control_guard::delivery_attempt();
     guard.press(&send).map_err(|e| {
