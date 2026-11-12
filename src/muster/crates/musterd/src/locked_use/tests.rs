@@ -1107,6 +1107,9 @@ impl muster_agent::controller::Controller for QueueController {
     }
     async fn send(&self, text: &str) -> Result<(), muster_agent::Error> {
         muster_agent::control_guard::check()?;
+        if text == "covered-navigation" && !super::navigation_is_covered()? {
+            return Err(muster_agent::Error::Conflict("foreground required".into()));
+        }
         if matches!(text, "pressed" | "lost") {
             muster_agent::control_guard::delivery_attempt();
         }
@@ -1213,6 +1216,13 @@ async fn stopped_operation_is_not_sent_only_before_its_delivery_press() {
         "a possible submission stays undecidable"
     );
 }
+#[tokio::test]
+async fn signed_send_reaches_the_controller_with_covered_navigation() {
+    let (status, ledger, _, _) = outcome_case("covered-navigation").await;
+    assert_eq!(status, v1::op_result::Status::Applied);
+    assert_eq!(ledger.as_deref(), Some("applied"));
+}
+
 #[tokio::test]
 async fn unknown_before_any_press_is_recorded_as_not_sent() {
     let (status, ledger, message, replay) = outcome_case("blocked").await;

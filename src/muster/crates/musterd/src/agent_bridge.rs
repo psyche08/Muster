@@ -610,7 +610,7 @@ pub async fn ensure_native(
                     &navigation_title,
                     title_is_unique,
                     &resolver,
-                    daemon.covered(),
+                    crate::locked_use::navigation_is_covered()?,
                 )
                 .await?;
                 if agent.retains_native_controller(session) {

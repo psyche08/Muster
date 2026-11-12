@@ -6,6 +6,33 @@
 
 use super::*;
 
+// This binding exists only while the admitted actor worker is being polled.
+// The display cover toggle and unrelated tasks cannot manufacture it.
+tokio::task_local! { static COVERED_NAVIGATION: (); }
+
+fn covered_worker<F>(
+    check: Arc<dyn Fn() -> bool + Send + Sync>,
+    operation: F,
+) -> tokio::task::JoinHandle<F::Output>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    muster_agent::control_guard::spawn_blocking_async(muster_agent::control_guard::scope(
+        check,
+        COVERED_NAVIGATION.scope((), operation),
+    ))
+}
+
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn navigation_is_covered() -> Result<bool, muster_agent::Error> {
+    if COVERED_NAVIGATION.try_with(|_| ()).is_err() {
+        return Ok(false);
+    }
+    muster_agent::control_guard::check()?;
+    Ok(true)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run(
     owner: Arc<Owner>,
@@ -852,12 +879,12 @@ pub(super) fn start_action(
         // The delivery scope is inherited by the blocking worker, so presses
         // there are visible to the owner and to the operation's ledger row.
         scoped
-            .scope(work.scope(muster_agent::control_guard::scope(check, async move {
+            .scope(work.scope(async move {
                 // Aborting this async caller must also cancel readiness/receipt
                 // waits on the OS worker. A synchronous AX call still drains first,
                 // and its WorkQueue permit keeps the cover in place until then.
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
-                muster_agent::control_guard::spawn_blocking_async(async move {
+                covered_worker(check, async move {
                     muster_agent::control_guard::check()?;
                     // Creation may be inside an OS call when cancellation arrives.
                     // Keep the work permit until it drains; the owner retains cover.
@@ -874,7 +901,7 @@ pub(super) fn start_action(
                 .map_err(|error| {
                     Error::Unavailable(format!("native operation worker failed: {error}"))
                 })?
-            })))
+            }))
             .await
     });
     (job, delivery)
@@ -920,9 +947,9 @@ pub(super) fn start_compact(
     });
     let job = tokio::spawn(async move {
         scoped
-            .scope(work.scope(muster_agent::control_guard::scope(check, async move {
+            .scope(work.scope(async move {
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
-                muster_agent::control_guard::spawn_blocking_async(async move {
+                covered_worker(check, async move {
                     muster_agent::control_guard::check()?;
                     tokio::select! {
                         biased;
@@ -941,7 +968,7 @@ pub(super) fn start_compact(
                 .map_err(|error| {
                     Error::Unavailable(format!("native operation worker failed: {error}"))
                 })?
-            })))
+            }))
             .await
     });
     (job, delivery)
@@ -990,9 +1017,9 @@ pub(super) fn start_scheduled(
     });
     let job = tokio::spawn(async move {
         scoped
-            .scope(work.scope(muster_agent::control_guard::scope(check, async move {
+            .scope(work.scope(async move {
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
-                muster_agent::control_guard::spawn_blocking_async(async move {
+                covered_worker(check, async move {
                     muster_agent::control_guard::check()?;
                     tokio::select! {
                         biased;
@@ -1004,7 +1031,7 @@ pub(super) fn start_scheduled(
                 .map_err(|error| {
                     Error::Unavailable(format!("native operation worker failed: {error}"))
                 })?
-            })))
+            }))
             .await
     });
     (job, delivery)
@@ -1068,5 +1095,46 @@ pub(super) async fn stop_unlock(job: &mut Option<UnlockJob>) {
     if let Some(job) = job.take() {
         job.cancel.cancel();
         let _ = job.finish().await;
+    }
+}
+
+#[cfg(test)]
+mod covered_navigation_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn only_the_admitted_worker_can_navigate_as_covered_while_live() {
+        let live = Arc::new(AtomicBool::new(true));
+        let checked = live.clone();
+        let (entered, worker_ready) = oneshot::channel();
+        let (resume, revoked) = oneshot::channel();
+        let worker = covered_worker(
+            Arc::new(move || checked.load(Ordering::SeqCst)),
+            async move {
+                assert!(navigation_is_covered().unwrap());
+                // A separate request cannot borrow the active worker's lease.
+                assert!(
+                    !tokio::spawn(async { navigation_is_covered().unwrap() })
+                        .await
+                        .unwrap()
+                );
+                entered.send(()).unwrap();
+                revoked.await.unwrap();
+                assert!(navigation_is_covered().is_err());
+                // Nested OS actions still inherit the revocable action check.
+                assert!(
+                    muster_agent::control_guard::spawn_blocking(muster_agent::control_guard::check)
+                        .await
+                        .unwrap()
+                        .is_err()
+                );
+            },
+        );
+        worker_ready.await.unwrap();
+        assert!(!navigation_is_covered().unwrap());
+        live.store(false, Ordering::SeqCst);
+        resume.send(()).unwrap();
+        worker.await.unwrap();
     }
 }

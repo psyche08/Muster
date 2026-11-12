@@ -23,6 +23,8 @@ use receipt::ReceiptWait;
 #[cfg(test)]
 mod tests;
 
+#[cfg(any(target_os = "macos", test))]
+pub(crate) use actor::navigation_is_covered;
 use actor::*;
 
 type Reply = oneshot::Sender<Result<Resp, Error>>;
