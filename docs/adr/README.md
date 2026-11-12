@@ -308,4 +308,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0190](0190-background-desktop-admission.md) | Accepted | Admit desktop operations on the executor without taking foreground |
 | [0191](0191-native-multica-receipts.md) | Accepted | Verify native composer receipts and supply task-scoped issue context |
 | [0192](0192-unlocked-multica-project-directory.md) | Accepted | Bind an unlocked Multica project to its registered Codex directory |
-| [0193](0193-jumper-browser-identity-probe.md) | Proposed | Verify one terminal host's identity through the signed-in browser |
+| [0193](0193-jumper-browser-identity-probe.md) | Accepted; local Chrome verified | Verify one terminal host's identity through the signed-in browser |

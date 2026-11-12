@@ -1,7 +1,7 @@
 # ADR 0193: Verify the identity of one terminal host through Chrome
 
 - Date: 2026-11-12
-- Status: Proposed
+- Status: Accepted; local Chrome terminal verified
 - Related: architecture §3.6, ADR 0049, Agent Halo Browser
 
 ## Context
@@ -22,6 +22,6 @@ The user must load the extension in the signed-in Chrome profile and register it
 
 ## Verification
 
-Exercise the bridge, prompt boundaries, stale output, navigation, cleanup and ambiguous writes with synthetic fixtures. Separately check the local CLI against the operator's signed-in profile, including a fresh target prompt, delimited output and a return to the first hop. Device acceptance is pending.
+The local Rust bridge suite exercises command order, an incomplete hostname, a missing output line, a mid-command Native Messaging disconnect, and authentication handoff. The JavaScript adapter fixture distinguishes a prior command transcript and the terminal input value from a fresh output row. These failure paths were exercised with fixtures.
 
-The local Rust bridge suite exercises command order, an incomplete hostname, a missing output line, a mid-command Native Messaging disconnect, and authentication handoff. The JavaScript adapter fixture distinguishes a prior command transcript and the terminal input value from a fresh output row. The matching host and CLI built locally. Live terminal acceptance requires loading the unpacked extension in the signed-in profile.
+On 2026-11-12, Chrome loaded the unpacked 0.4.0 extension in the signed-in profile and the matching locally built CLI received its native bridge ping. A fresh local CLI probe observed the configured target prompt, obtained the account from the rendered output after the command echo, then observed the exit echo and first-hop prompt. The operation returned `status: closed` and `pageRetained: false`. Operator-specific identities are omitted here. This run used the development host and CLI; it did not publish a signed application update.
