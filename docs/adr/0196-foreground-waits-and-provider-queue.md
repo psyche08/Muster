@@ -12,12 +12,22 @@ requests could wait only 30 seconds to acquire. Target diagnostics recorded
 both timeouts. Counting ledger entries alone hides preparation failures;
 counting every log line as a message overcounts retries of the same operation.
 
+The phone report also showed five rejected sends that had already entered a
+signed Locked Use action. Each target trace then waited for the window until
+the 15-second owner deadline. Selection used the daemon's user-facing privacy
+cover flag, which does not identify an admitted action.
+
 ## Decision
 
 Check for the exact visible session or eligible background creation form first.
 If foreground navigation is necessary but unavailable, an operation already
-owning the provider returns a conflict instead of waiting for a human. Keep
-the managed creation's cancellable admission wait outside the provider queue.
+owning the provider returns a conflict instead of waiting for a human.
+Only the guarded OS worker started by the Locked Use owner after action
+admission may take the covered navigation path. Bind this fact to the same
+live check as the action. An ordinary caller, a different task and a privacy
+cover toggle cannot inherit it. Expiry stops the operation; do not change the
+deadline or infer authority from display state. Keep managed creation's
+cancellable admission wait outside the provider queue.
 Retain covered startup, input quiet, destination, draft and receipt checks.
 Recheck foreground immediately before a navigation action. Never submit or
 replay a request on a foreground change. Distinguish a locked, inactive or
@@ -28,6 +38,8 @@ selection errors. Earlier logs cannot distinguish these causes.
 
 Increasing the queue timeout also increases latency for requests that could
 already run. Activating another application could redirect local keystrokes.
+Using a daemon-wide active-lease flag would also classify unrelated callers
+as covered.
 Parking all callers for a later handoff requires carrying live caller and
 console ownership across that wait; interactive requests instead receive a
 specific refusal and can be initiated again when the desktop is ready.
@@ -49,5 +61,7 @@ fleet success-rate or latency improvement.
 
 Local verification: the native Rust selection/runtime filter passed 119 tests
 (one existing ignored test); the daemon receipt integration test passed with
-loopback enabled. The updated macOS adapter compiled as part of that test.
+loopback enabled. All 48 daemon Locked Use tests passed, including a signed
+request reaching the controller with covered navigation and concurrent-task
+isolation and revocation. The updated macOS adapter compiled in these tests.
 No signed build, install or physical-device run was performed for this decision.
