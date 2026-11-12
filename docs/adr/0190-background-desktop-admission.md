@@ -39,3 +39,14 @@ Already visible sessions can be resolved without selecting another window.
 Exercise policy and provider tests, then use an independent foreground editor,
 system-delivered test input, window order, pointer and activation observations.
 Report real service outcomes and each task's receipt separately from module tests.
+
+Initial device trials observed two independently assigned runs enter the wait
+on an unlocked Mac. The foreground editor received 174 of 174 and 226 of 226
+alternating system-delivered characters. The observer saw no activation loss,
+normal-layer window order change or pointer movement in those intervals.
+After the operator released the editor and selected the provider, both runs
+stopped before drafting during a new-window transition. Use the workspace's
+frontmost application for the activation check. A temporary lack of an AX
+focused element does not establish that another app became frontmost. A
+verified empty Codex home already focused within the provider can also be
+claimed for routing after the operator selects it.

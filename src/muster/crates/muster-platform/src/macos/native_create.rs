@@ -104,7 +104,12 @@ impl Guard {
             ));
         }
         if self.mode != CreationConsole::Covered
-            && self.mode != CreationConsole::observe(false, Some(self.pid), input::focus())
+            && self.mode
+                != CreationConsole::observe(
+                    false,
+                    Some(self.pid),
+                    super::events::foreground_owner(),
+                )
         {
             return Err(conflict(
                 "Foreground application changed during native creation",
@@ -557,7 +562,7 @@ pub async fn submit(
             return Err(conflict("Ambiguous native app processes"));
         }
         let pid = pids.first().copied();
-        let mode = CreationConsole::observe(covered, pid, input::focus());
+        let mode = CreationConsole::observe(covered, pid, super::events::foreground_owner());
         if let Some(pid) = pid {
             let background = matches!(mode, CreationConsole::Background(_));
             let quiet = if background {
@@ -698,14 +703,29 @@ pub async fn submit(
                 reused_codex = true;
                 window
             } else {
-                let window = if before_activation.is_empty()
-                    && let [startup] = before.as_slice()
-                    && let Some(page) = unique(startup, |n| new_page("codex", n))?
-                    && selection_matches("codex", &page, cwd, true)?.is_some()
-                {
+                // An existing focused, empty Codex home is a safe initial
+                // work window. Its project can differ before the directory
+                // route; the exact requested project is checked after it.
+                let startup = root
+                    .element("AXFocusedWindow")
+                    .filter(|w| before.contains(w));
+                let window = if let Some(startup) = startup
+                    && let Some(page) = unique(&startup, |n| new_page("codex", n))?
+                    && {
+                        let all = nodes(&page)?;
+                        codex_home_heading(&all)
+                            && all
+                                .iter()
+                                .any(|n| label(n, "Switch mode, current mode: Codex"))
+                            && all.iter().any(|n| {
+                                n.role() == "AXPopUpButton"
+                                    && n.string("AXDescription")
+                                        .is_some_and(|a| a.starts_with("Change project: "))
+                            })
+                    } {
                     reused_codex = true;
                     stage("reuse_startup_window");
-                    startup.clone()
+                    startup
                 } else {
                     stage("new_window_request");
                     allocate_codex_window(&guard, &root, &before).await?

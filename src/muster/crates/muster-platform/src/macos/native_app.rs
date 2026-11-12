@@ -662,7 +662,8 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         permit.check(self.generation())?;
         if !self.covered
             && matches!(self.profile.app.provider, "codex" | "claude")
-            && super::input::focus() != muster_agent::local_input::Owner::Process(self.pid)
+            && super::events::foreground_owner()
+                != muster_agent::local_input::Owner::Process(self.pid)
         {
             return Err(Error::Conflict(
                 "Foreground changed before session selection".into(),
@@ -687,7 +688,8 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         self.check()?;
         permit.check(self.generation())?;
         if !self.covered
-            && super::input::focus() != muster_agent::local_input::Owner::Process(self.pid)
+            && super::events::foreground_owner()
+                != muster_agent::local_input::Owner::Process(self.pid)
         {
             return Err(Error::Conflict(
                 "Foreground changed before session navigation; nothing dispatched".into(),
@@ -782,7 +784,9 @@ pub async fn select_session(
             use muster_agent::native_navigation::Host;
             let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
             let mut waiting = false;
-            while super::input::focus() != muster_agent::local_input::Owner::Process(pid) {
+            while super::events::foreground_owner()
+                != muster_agent::local_input::Owner::Process(pid)
+            {
                 host.check()?;
                 if host.surface()?.is_some() {
                     break;
