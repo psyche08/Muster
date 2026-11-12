@@ -57,9 +57,21 @@ pub(super) async fn start(
     let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
     // Wait outside the provider/console locks and the once-only delivery
     // ledger. Each live Multica run owns its own cancellable wait.
+    let project = if !granted()? && !daemon.platform().locked() {
+        // Failure to qualify for project access only permits the original run directory.
+        super::trusted_multica::verified_destination(daemon, &o, true)
+            .await
+            .unwrap_or_default()
+    } else {
+        None
+    };
     #[cfg(target_os = "macos")]
     if !granted()? && !daemon.platform().locked() {
-        let cwd = std::fs::canonicalize(&o.directory)
+        let directory = project
+            .as_ref()
+            .map(|(path, _)| path.as_path())
+            .unwrap_or_else(|| std::path::Path::new(&o.directory));
+        let cwd = std::fs::canonicalize(directory)
             .map_err(|_| Error::Invalid("Multica working directory is unavailable".into()))?;
         let mut queued = false;
         loop {
@@ -92,6 +104,20 @@ pub(super) async fn start(
         }
     }
     if !granted()? && !daemon.platform().locked() {
+        if let Some((directory, prompt)) = project {
+            if std::fs::canonicalize(&directory).ok().as_ref() != Some(&directory) {
+                return Err(Error::Conflict("Enrolled project directory changed".into()));
+            }
+            o.directory = directory
+                .into_os_string()
+                .into_string()
+                .map_err(|_| Error::Invalid("Project path must be UTF-8".into()))?;
+            o.text = prompt;
+            log::info!(
+                "scheduler: verified unlocked Multica project for {}",
+                o.task_id
+            );
+        }
         let cancel = cancel.clone();
         let request = v1::AgentNativeCreateRequest {
             op_id: o.op_id,
@@ -108,7 +134,9 @@ pub(super) async fn start(
     }
     if !granted()? {
         preflight(daemon, "codex")?;
-        if let Some(prompt) = super::trusted_multica::first_turn(daemon, &o).await? {
+        if let Some((_, prompt)) =
+            super::trusted_multica::verified_destination(daemon, &o, false).await?
+        {
             if cancel.is_cancelled() || !daemon.platform().locked() {
                 return Err(Error::Conflict(
                     "Multica dispatch or locked console changed".into(),
