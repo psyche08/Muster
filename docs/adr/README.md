@@ -310,4 +310,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0192](0192-unlocked-multica-project-directory.md) | Accepted | Bind an unlocked Multica project to its registered Codex directory |
 | [0193](0193-jumper-browser-identity-probe.md) | Accepted; local Chrome verified | Verify one terminal host's identity through the signed-in browser |
 | [0194](0194-close-menu-read-decides.md) | Accepted, not verified on a device | Let a finished read decide that the model/effort menu closed |
-| [0195](0195-publish-browser-terminal.md) | Accepted for release | Publish the Chrome terminal identity probe in Apple 1.1.38 |
+| [0195](0195-publish-browser-terminal.md) | Accepted; published and installed on the test Mac | Publish the Chrome terminal identity probe in Apple 1.1.38 |
