@@ -602,13 +602,37 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
 
     fn check(&self) -> Result<(), Error> {
         muster_agent::control_guard::check()?;
-        if codesign::process_start(self.pid) != Some(self.start)
-            || super::lock::session_state()
-                .is_none_or(|s| s.screen_locked || !s.login_done || !s.on_console)
-        {
+        if codesign::process_start(self.pid) != Some(self.start) {
             return Err(Error::Unavailable(
-                "desktop changed during session selection".into(),
+                "Provider process identity changed or is unavailable during session selection"
+                    .into(),
             ));
+        }
+        let state = super::lock::session_state().ok_or_else(|| {
+            Error::Unavailable("Console state unavailable during session selection".into())
+        })?;
+        if state.screen_locked {
+            return Err(Error::Unavailable(
+                "Console locked during session selection".into(),
+            ));
+        }
+        if !state.login_done || !state.on_console {
+            return Err(Error::Unavailable(
+                "Console session inactive during session selection".into(),
+            ));
+        }
+        Ok(())
+    }
+    fn check_navigation(&self) -> Result<(), Error> {
+        if !self.covered
+            && matches!(self.profile.app.provider, "codex" | "claude")
+            && super::events::foreground_owner()
+                != muster_agent::local_input::Owner::Process(self.pid)
+        {
+            return Err(Error::Conflict(format!(
+                "Bring {} to the foreground to select this session; nothing was sent",
+                self.profile.app.provider
+            )));
         }
         Ok(())
     }
@@ -660,15 +684,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     ) -> Result<(), Error> {
         self.check()?;
         permit.check(self.generation())?;
-        if !self.covered
-            && matches!(self.profile.app.provider, "codex" | "claude")
-            && super::events::foreground_owner()
-                != muster_agent::local_input::Owner::Process(self.pid)
-        {
-            return Err(Error::Conflict(
-                "Foreground changed before session selection".into(),
-            ));
-        }
+        self.check_navigation()?;
         control.press().map_err(|code| {
             Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
         })
@@ -687,15 +703,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         }
         self.check()?;
         permit.check(self.generation())?;
-        if !self.covered
-            && matches!(self.profile.app.provider, "codex" | "claude")
-            && super::events::foreground_owner()
-                != muster_agent::local_input::Owner::Process(self.pid)
-        {
-            return Err(Error::Conflict(
-                "Foreground changed before session navigation; nothing dispatched".into(),
-            ));
-        }
+        self.check_navigation()?;
         let dispatched = tokio::time::timeout(
             permit.remaining(),
             tokio::process::Command::new("/usr/bin/open")
@@ -781,30 +789,6 @@ pub async fn select_session(
             trace: &trace,
             covered,
         };
-        if !covered && matches!(profile.app.provider, "codex" | "claude") {
-            use muster_agent::native_navigation::Host;
-            let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
-            let mut waiting = false;
-            while super::events::foreground_owner()
-                != muster_agent::local_input::Owner::Process(pid)
-            {
-                host.check()?;
-                if host.surface()?.is_some() {
-                    break;
-                }
-                if !waiting {
-                    log::info!("native selection queued for target window");
-                    waiting = true;
-                }
-                if tokio::time::Instant::now() >= deadline {
-                    return Err(Error::Unavailable(
-                        "Foreground-dependent session selection timed out; nothing dispatched"
-                            .into(),
-                    ));
-                }
-                tokio::time::sleep(Duration::from_millis(350)).await;
-            }
-        }
         let (surface, generation) =
             muster_agent::native_navigation::select(&host, Default::default()).await?;
         trace.finish();

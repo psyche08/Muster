@@ -18,6 +18,9 @@ pub trait Host: Send + Sync {
     fn check(&self) -> Result<(), Error>;
     fn generation(&self) -> u64;
     fn surface(&self) -> Result<Option<Self::Surface>, Error>;
+    /// The visible target needs no navigation. Check before planning any other route
+    /// and again at the OS action boundary.
+    fn check_navigation(&self) -> Result<(), Error>;
     fn sidebar(&self) -> Result<Sidebar<Self::Control>, Error>;
     fn exact_route(&self) -> Option<String>;
     fn requires_exact_route(&self) -> bool {
@@ -109,6 +112,7 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             if let Some(surface) = host.surface()? {
                 return Ok(Some(Ready::Visible(surface)));
             }
+            host.check_navigation()?;
             // A native ID makes sidebar titles and pagination irrelevant. It
             // does not make the future destination or its composer trusted.
             if let Some(route) = host.exact_route() {
@@ -230,6 +234,7 @@ mod tests {
         require_exact: bool,
         missing: bool,
         ambiguous: bool,
+        background: bool,
         incomplete: bool,
         input_on_dispatch: bool,
         slow_surface: bool,
@@ -256,6 +261,13 @@ mod tests {
                 return Err(Error::Conflict("ambiguous views".into()));
             }
             Ok(self.visible.load(SeqCst).then_some("verified-target"))
+        }
+        fn check_navigation(&self) -> Result<(), Error> {
+            if self.background {
+                Err(Error::Conflict("foreground required".into()))
+            } else {
+                Ok(())
+            }
         }
         fn sidebar(&self) -> Result<Sidebar<bool>, Error> {
             self.reads.fetch_add(1, SeqCst);
@@ -326,9 +338,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hidden_background_target_cannot_dispatch_or_block_for_a_handoff() {
+        for exact in [true, false] {
+            let h = Fixture {
+                background: true,
+                exact,
+                ..Default::default()
+            };
+            assert!(matches!(
+                select(&h, budget()).await,
+                Err(Error::Conflict(_))
+            ));
+            assert_eq!(
+                h.dispatches.load(SeqCst) + h.reads.load(SeqCst) + h.presses.load(SeqCst),
+                0
+            );
+        }
+    }
+    #[tokio::test]
     async fn visible_target_needs_no_navigation_or_sidebar() {
         let h = Fixture {
             visible: AtomicBool::new(true),
+            background: true,
             exact: true,
             ..Default::default()
         };

@@ -20,6 +20,17 @@ pub enum CreationConsole {
 }
 
 impl CreationConsole {
+    /// Called after looking for an eligible form. A provider permit protects UI
+    /// actions, not a wait for its owner to switch applications.
+    pub fn check_wait(self, provider_held: bool, provider: &str) -> Result<(), Error> {
+        if provider_held && matches!(self, Self::Background(_) | Self::Waiting) {
+            return Err(Error::Conflict(format!(
+                "Bring {provider} to the foreground to start this session; nothing was submitted"
+            )));
+        }
+        Ok(())
+    }
+
     pub fn observe(covered: bool, provider: Option<u32>, focus: crate::local_input::Owner) -> Self {
         use crate::local_input::Owner;
         if covered {
@@ -341,6 +352,21 @@ mod tests {
         }
         assert_eq!(CreationConsole::observe(false, None, Process(1)), Waiting);
         assert_eq!(CreationConsole::observe(true, None, Nobody), Covered);
+    }
+
+    #[test]
+    fn only_pre_admission_can_wait_for_a_foreground_handoff() {
+        use CreationConsole::*;
+        for mode in [Waiting, Background(5)] {
+            assert!(mode.check_wait(false, "test").is_ok());
+            assert!(matches!(
+                mode.check_wait(true, "test"),
+                Err(Error::Conflict(_))
+            ));
+        }
+        for mode in [Provider, Covered] {
+            assert!(mode.check_wait(true, "test").is_ok());
+        }
     }
 
     #[test]

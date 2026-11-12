@@ -642,7 +642,7 @@ async fn prepare(
     model: &str,
     effort: &str,
     covered: bool,
-    bounded: bool,
+    provider_held: bool,
 ) -> Result<Admission, Error> {
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
@@ -663,7 +663,7 @@ async fn prepare(
     }
     let bundle = bundle_path(profile)?;
     stage("bundle_verified");
-    let deadline = bounded.then(|| Instant::now() + WINDOW_STARTUP);
+    let deadline = provider_held.then(|| Instant::now() + WINDOW_STARTUP);
     let mut launched = false;
     let mut waiting = false;
     let mut last_reason = None;
@@ -709,7 +709,7 @@ async fn prepare(
                 };
                 if let Err(error) = guard.check() {
                     console()?;
-                    if !bounded && matches!(error, Error::Conflict(_)) {
+                    if !provider_held && matches!(error, Error::Conflict(_)) {
                         tokio::time::sleep(Duration::from_millis(100)).await;
                         continue;
                     }
@@ -745,9 +745,10 @@ async fn prepare(
             open(&bundle, None)?;
             launched = true;
         }
+        mode.check_wait(provider_held, provider)?;
         if deadline.is_some_and(|d| Instant::now() >= d) {
             return Err(unavailable(
-                "Foreground-dependent creation timed out in the provider queue; nothing submitted",
+                "Native creation readiness timed out; nothing submitted",
             ));
         }
         if !waiting {
