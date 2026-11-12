@@ -66,3 +66,27 @@ root is already registered. Use the provider's project-specific new-chat AX
 button only for a uniquely named, single-root project in a retained window
 or verified empty home. Verify the newly displayed local project and exact
 root again before the draft. A new per-run root still needs initial setup.
+
+The final service acceptance used two real issues on an enrolled executor.
+During the waiting interval the independent editor received 691 of 691
+system-routed tagged keystrokes in order. Its text matched, and 2,701 samples
+showed no keyboard focus loss, pointer movement or normal-window ordering
+change. The run directory for each new assignment required foreground setup.
+After the operator handed foreground to Codex, both jobs completed. The
+provider allocated one working window for the first creation and reused it
+for the next, taking the total window count from four to five.
+
+In a separate two-request trial a paired Mac created two sessions via a
+previously registered project on the background executor. Both answers were
+read back, the four-window count was stable and the editor received all 200
+tagged characters. Its pointer position changed during that trial. This does
+not establish unchanged pointer position throughout those two submissions.
+Claude's equivalent physical-device acceptance remains pending.
+
+A short-lived foreground handoff also exposed a race between scheduler
+eligibility and admission inside the submission ledger. The managed scheduler
+now obtains a cancellable read-only window plan before taking the provider
+and console permits. It rechecks the exact plan after serialization. Stale
+plans are discarded before the ledger begins. A background AX press occurs
+only inside the ledger. The two-issue result above used the candidate before
+this final admission-lifetime adjustment.

@@ -455,12 +455,18 @@ fn require_focus(root: &Element, window: &Element) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(PartialEq)]
+struct BackgroundTarget {
+    window: Element,
+    action: Option<Element>,
+}
+
 fn ready_background_window(
     root: &Element,
     guard: &Guard,
     provider: &str,
     cwd: &Path,
-) -> Result<Option<Element>, Error> {
+) -> Result<Option<BackgroundTarget>, Error> {
     let live = windows(root);
     let pin = CODEX_WINDOW
         .lock()
@@ -519,7 +525,10 @@ fn ready_background_window(
             continue;
         }
         if focused.as_ref() == Some(&window) {
-            return Ok(Some(window));
+            return Ok(Some(BackgroundTarget {
+                window,
+                action: None,
+            }));
         }
         candidates.push(window);
     }
@@ -533,11 +542,10 @@ fn ready_background_window(
             .find(|(window, _)| focused.as_ref() == Some(window))
             .or_else(|| (routes.len() == 1).then(|| &routes[0]));
         if let Some((window, button)) = route {
-            guard.press(button)?;
-            log::info!(
-                "Native creation: dispatched project-specific new chat in background window"
-            );
-            return Ok(Some(window.clone()));
+            return Ok(Some(BackgroundTarget {
+                window: window.clone(),
+                action: Some(button.clone()),
+            }));
         }
     }
     if ready.is_none() {
@@ -577,26 +585,65 @@ fn ready_background_window(
                     guard.profile.controls().stop.matches(n) && n.bool("AXEnabled") == Some(true)
                 })
             {
-                guard.press(new)?;
-                return Ok(Some(window));
+                return Ok(Some(BackgroundTarget {
+                    window,
+                    action: Some((*new).clone()),
+                }));
             }
         }
     }
-    Ok(ready)
+    Ok(ready.map(|window| BackgroundTarget {
+        window,
+        action: None,
+    }))
 }
 
-/// Submits the first message of a new session. A requested `model` or
-/// `effort` (names as the app shows them; empty keeps the app's choice) is
-/// chosen and read back on the new session's form first; one the app does
-/// not offer or confirm refuses before anything is drafted (ADR 0181).
-pub async fn submit(
+pub struct Admission {
+    guard: Guard,
+    root: Element,
+    bundle: PathBuf,
+    background_window: Option<BackgroundTarget>,
+    stable_windows: Option<Vec<Element>>,
+    launched: bool,
+    started: Instant,
+}
+
+impl Admission {
+    /// The provider permit may have been held by another job while this
+    /// read-only observation waited. Discard a changed plan before ledger.begin.
+    pub fn still_ready(&self, cwd: &Path) -> bool {
+        if self.guard.check().is_err() {
+            return false;
+        }
+        if self.background_window.is_some() {
+            return ready_background_window(
+                &self.root,
+                &self.guard,
+                self.guard.profile.app.provider,
+                cwd,
+            )
+            .is_ok_and(|now| now == self.background_window);
+        }
+        self.stable_windows
+            .as_ref()
+            .is_some_and(|old| windows(&self.root) == *old)
+    }
+}
+
+/// Managed tasks call this with the live caller's cancellation guard, before
+/// reserving the console, provider or submission ledger. No UI action is sent.
+pub async fn managed_admission(cwd: &Path) -> Result<Admission, Error> {
+    prepare("codex", cwd, "", "", false, false).await
+}
+
+async fn prepare(
     provider: &str,
     cwd: &Path,
-    prompt: &str,
     model: &str,
     effort: &str,
     covered: bool,
-) -> Result<Submitted, Error> {
+    bounded: bool,
+) -> Result<Admission, Error> {
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
         .ok_or_else(|| Error::Invalid("Unsupported native provider".into()))?;
@@ -616,7 +663,7 @@ pub async fn submit(
     }
     let bundle = bundle_path(profile)?;
     stage("bundle_verified");
-    let deadline = Instant::now() + WINDOW_STARTUP;
+    let deadline = bounded.then(|| Instant::now() + WINDOW_STARTUP);
     let mut launched = false;
     let mut waiting = false;
     let mut last_reason = None;
@@ -660,7 +707,14 @@ pub async fn submit(
                     },
                     mode,
                 };
-                guard.check()?;
+                if let Err(error) = guard.check() {
+                    console()?;
+                    if !bounded && matches!(error, Error::Conflict(_)) {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        continue;
+                    }
+                    return Err(error);
+                }
                 let root = Element::application(pid);
                 root.enable_manual_accessibility();
                 if mode == CreationConsole::Provider {
@@ -668,7 +722,7 @@ pub async fn submit(
                     // enablement. Input/focus changes here can safely requeue.
                     match settled_windows(&guard, &root, true).await {
                         Ok(snapshot) => break (guard, root, None, Some(snapshot)),
-                        Err(Error::Conflict(_)) if Instant::now() < deadline => {
+                        Err(Error::Conflict(_)) if deadline.is_none_or(|d| Instant::now() < d) => {
                             console()?;
                             continue;
                         }
@@ -691,7 +745,7 @@ pub async fn submit(
             open(&bundle, None)?;
             launched = true;
         }
-        if Instant::now() >= deadline {
+        if deadline.is_some_and(|d| Instant::now() >= d) {
             return Err(unavailable(
                 "Foreground-dependent creation timed out in the provider queue; nothing submitted",
             ));
@@ -702,12 +756,63 @@ pub async fn submit(
         }
         tokio::time::sleep(Duration::from_millis(350)).await;
     };
+    Ok(Admission {
+        guard,
+        root,
+        bundle,
+        background_window,
+        stable_windows,
+        launched,
+        started,
+    })
+}
+
+/// Submits the first message of a new session. A requested `model` or
+/// `effort` (names as the app shows them; empty keeps the app's choice) is
+/// chosen and read back on the new session's form first; one the app does
+/// not offer or confirm refuses before anything is drafted (ADR 0181).
+pub async fn submit(
+    provider: &str,
+    cwd: &Path,
+    prompt: &str,
+    model: &str,
+    effort: &str,
+    covered: bool,
+    admission: Option<Admission>,
+) -> Result<Submitted, Error> {
+    let Admission {
+        guard,
+        root,
+        bundle,
+        background_window,
+        stable_windows,
+        launched,
+        started,
+    } = match admission {
+        Some(prepared) => prepared,
+        None => prepare(provider, cwd, model, effort, covered, true).await?,
+    };
+    let profile = guard.profile;
+    let stage = |name: &str| {
+        log::info!(
+            "Native creation stage: {name} elapsed_ms={}",
+            started.elapsed().as_millis()
+        )
+    };
     let cwd_text = cwd
         .to_str()
         .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?;
     let pid = guard.pid;
     let background = background_window.is_some();
-    let (window, reused_codex, reuses_main) = if let Some(window) = background_window {
+    let (window, reused_codex, reuses_main) = if let Some(target) = background_window {
+        let window = target.window;
+        if let Some(action) = target.action {
+            guard.check()?;
+            if !windows(&root).contains(&window) || !window.contains(&action) {
+                return Err(conflict("Background creation target was replaced"));
+            }
+            guard.press(&action)?;
+        }
         if provider == "codex" {
             *CODEX_WINDOW.lock().unwrap() =
                 Some(CreationWindow::new(pid, guard.start, window.clone()));

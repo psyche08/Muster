@@ -39,3 +39,9 @@ without a matching task credential use their original assignment instructions.
 Use synthetic tests for escaped punctuation, changed text, ambiguous issue
 references and incorrect response bindings. Separate native receipt and
 service result evidence from the foreground-input measurements.
+
+On the installed candidate both final real service runs had status completed.
+Each run had exactly one root Codex session, one user turn with the scoped
+issue snapshot, and the same exact arithmetic answer in its final assistant
+message and the service result. Earlier diagnostic runs ended in failure and
+remain recorded separately. No terminal outcome was edited in the service.

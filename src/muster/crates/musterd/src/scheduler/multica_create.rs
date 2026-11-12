@@ -102,7 +102,7 @@ pub(super) async fn start(
         };
         return muster_agent::control_guard::scope(
             Arc::new(move || !cancel.is_cancelled()),
-            crate::native_create::create(daemon, request),
+            crate::native_create::create_unlocked(daemon, request, true),
         )
         .await;
     }
