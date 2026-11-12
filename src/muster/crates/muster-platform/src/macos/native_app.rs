@@ -592,6 +592,7 @@ struct NavigationHost<'a> {
     title_is_unique: bool,
     resolver: &'a Resolver,
     trace: &'a Trace,
+    covered: bool,
 }
 
 #[async_trait]
@@ -659,6 +660,14 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     ) -> Result<(), Error> {
         self.check()?;
         permit.check(self.generation())?;
+        if !self.covered
+            && matches!(self.profile.app.provider, "codex" | "claude")
+            && super::input::focus() != muster_agent::local_input::Owner::Process(self.pid)
+        {
+            return Err(Error::Conflict(
+                "Foreground changed before session selection".into(),
+            ));
+        }
         control.press().map_err(|code| {
             Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
         })
@@ -677,10 +686,17 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         }
         self.check()?;
         permit.check(self.generation())?;
+        if !self.covered
+            && super::input::focus() != muster_agent::local_input::Owner::Process(self.pid)
+        {
+            return Err(Error::Conflict(
+                "Foreground changed before session navigation; nothing dispatched".into(),
+            ));
+        }
         let dispatched = tokio::time::timeout(
             permit.remaining(),
             tokio::process::Command::new("/usr/bin/open")
-                .arg("-a")
+                .args(["-g", "-a"])
                 .arg(bundle)
                 .arg(route)
                 .stdin(std::process::Stdio::null())
@@ -736,6 +752,7 @@ pub async fn select_session(
     title: &str,
     title_is_unique: bool,
     resolver: &Resolver,
+    covered: bool,
 ) -> Result<PreparedSession, Error> {
     let (session, title, resolver) = (session.to_owned(), title.to_owned(), resolver.clone());
     muster_agent::control_guard::spawn_blocking_async(async move {
@@ -759,7 +776,30 @@ pub async fn select_session(
             title_is_unique,
             resolver: &resolver,
             trace: &trace,
+            covered,
         };
+        if !covered && matches!(profile.app.provider, "codex" | "claude") {
+            use muster_agent::native_navigation::Host;
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+            let mut waiting = false;
+            while super::input::focus() != muster_agent::local_input::Owner::Process(pid) {
+                host.check()?;
+                if host.surface()?.is_some() {
+                    break;
+                }
+                if !waiting {
+                    log::info!("native selection queued for target window");
+                    waiting = true;
+                }
+                if tokio::time::Instant::now() >= deadline {
+                    return Err(Error::Unavailable(
+                        "Foreground-dependent session selection timed out; nothing dispatched"
+                            .into(),
+                    ));
+                }
+                tokio::time::sleep(Duration::from_millis(350)).await;
+            }
+        }
         let (surface, generation) =
             muster_agent::native_navigation::select(&host, Default::default()).await?;
         trace.finish();

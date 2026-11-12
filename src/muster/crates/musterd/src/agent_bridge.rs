@@ -525,10 +525,11 @@ pub async fn set_chat_mode(
 /// A platform without desktop Accessibility selects nothing: only a
 /// controller attached in-process (by an embedder or a test) can act.
 pub async fn ensure_native(
-    platform: &dyn Platform,
+    daemon: &crate::Daemon,
     agent: Arc<AgentService>,
     session: &str,
 ) -> Result<(), crate::Error> {
+    let platform = daemon.platform().as_ref();
     if !drives_desktop(platform) {
         return if agent.has_controller(session) {
             Ok(())
@@ -609,6 +610,7 @@ pub async fn ensure_native(
                     &navigation_title,
                     title_is_unique,
                     &resolver,
+                    daemon.covered(),
                 )
                 .await?;
                 if agent.retains_native_controller(session) {

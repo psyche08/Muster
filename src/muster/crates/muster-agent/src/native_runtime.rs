@@ -9,6 +9,30 @@ pub enum Destination {
     Unavailable,
 }
 
+/// Foreground belongs to the executor. An input pause in another app never
+/// grants permission to launch, raise a window or dispatch an activating URL.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CreationConsole {
+    Covered,
+    Provider,
+    Background(u32),
+    Waiting,
+}
+
+impl CreationConsole {
+    pub fn observe(covered: bool, provider: Option<u32>, focus: crate::local_input::Owner) -> Self {
+        use crate::local_input::Owner;
+        if covered {
+            return Self::Covered;
+        }
+        match (provider, focus) {
+            (Some(pid), Owner::Process(front)) if pid == front => Self::Provider,
+            (Some(_), Owner::Process(front)) => Self::Background(front),
+            _ => Self::Waiting,
+        }
+    }
+}
+
 /// Only a window allocated by this daemon in this provider process can be
 /// reclaimed for another creation. Window order and focus are not identities.
 pub struct CreationWindow<T> {
@@ -159,6 +183,25 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProje
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn background_or_unknown_focus_never_admits_foreground_work() {
+        use crate::local_input::Owner::*;
+        use CreationConsole::*;
+        assert_eq!(
+            CreationConsole::observe(false, Some(2), Process(1)),
+            Background(1)
+        );
+        assert_eq!(
+            CreationConsole::observe(false, Some(2), Process(2)),
+            Provider
+        );
+        for owner in [Nobody, Unknown] {
+            assert_eq!(CreationConsole::observe(false, Some(2), owner), Waiting);
+        }
+        assert_eq!(CreationConsole::observe(false, None, Process(1)), Waiting);
+        assert_eq!(CreationConsole::observe(true, None, Nobody), Covered);
+    }
+
     #[test]
     fn only_the_allocated_window_in_the_same_process_is_reused() {
         let pin = CreationWindow::new(10, 20, 2);

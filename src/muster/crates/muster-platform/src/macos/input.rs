@@ -98,7 +98,7 @@ pub fn user_input_idle() -> Duration {
 }
 
 /// The application with keyboard focus.
-fn focus() -> Owner {
+pub(super) fn focus() -> Owner {
     match Element::system_wide().element_result("AXFocusedApplication") {
         Ok(app) => app.pid().map_or(Owner::Unknown, Owner::Process),
         Err(NO_VALUE) => Owner::Nobody,
