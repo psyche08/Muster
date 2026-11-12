@@ -688,6 +688,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         self.check()?;
         permit.check(self.generation())?;
         if !self.covered
+            && matches!(self.profile.app.provider, "codex" | "claude")
             && super::events::foreground_owner()
                 != muster_agent::local_input::Owner::Process(self.pid)
         {

@@ -274,6 +274,29 @@ enum Selection {
     Codex(muster_agent::native_runtime::CodexProject),
 }
 
+fn codex_project_state() -> Option<Vec<u8>> {
+    let home = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".codex")))?;
+    std::fs::read(home.join(".codex-global-state.json")).ok()
+}
+
+/// Advisory only. An unregistered per-run directory needs foreground routing.
+/// The provider lock and complete live form proof still precede every write.
+pub fn multica_directory_admissible(cwd: &Path) -> bool {
+    let Some(app) = muster_agent::profile::app("codex") else {
+        return false;
+    };
+    let pids = native_app::app_pids(app);
+    let [pid] = pids.as_slice() else { return false };
+    match CreationConsole::observe(false, Some(*pid), super::events::foreground_owner()) {
+        CreationConsole::Provider => input::user_input_idle() >= Duration::from_secs(1),
+        CreationConsole::Background(_) => codex_project_state()
+            .is_some_and(|b| muster_agent::native_runtime::selected_codex_directory(&b, cwd)),
+        _ => false,
+    }
+}
+
 fn selection_matches(
     provider: &str,
     page: &Element,
@@ -307,12 +330,6 @@ fn selection_matches(
                     .and_then(|d| d.strip_prefix("Change project: ").map(str::to_owned))
             })
             .collect();
-        let state = std::env::var_os("CODEX_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".codex")
-            })
-            .join(".codex-global-state.json");
         if labels.len() == 1
             && (!require_codex_home || codex_home_heading(&all))
             && all
@@ -323,8 +340,7 @@ fn selection_matches(
                     && n.string("AXValue").as_deref() == Some("This computer")
             })
         {
-            std::fs::read(state)
-                .ok()
+            codex_project_state()
                 .and_then(|b| muster_agent::native_runtime::codex_project(&b, &labels[0], cwd))
                 .map(Selection::Codex)
         } else {
@@ -450,7 +466,8 @@ fn ready_background_window(
         .as_ref()
         .and_then(|p| p.live(guard.pid, guard.start, &live))
         .cloned();
-    let mut ready = None;
+    let mut candidates = Vec::new();
+    let focused = root.element("AXFocusedWindow");
     for window in live {
         if provider == "codex" && pin.as_ref().is_some_and(|p| p != &window) {
             continue;
@@ -472,10 +489,15 @@ fn ready_background_window(
         {
             continue;
         }
-        if ready.replace(window).is_some() {
-            return Ok(None);
+        if focused.as_ref() == Some(&window) {
+            return Ok(Some(window));
         }
+        candidates.push(window);
     }
+    if candidates.len() > 1 {
+        return Ok(None);
+    }
+    let ready = candidates.pop();
     if ready.is_none() {
         // In the same working directory, the window's own New button can
         // replace a finished conversation without an app-wide URL or AXRaise.
@@ -555,7 +577,8 @@ pub async fn submit(
     let deadline = Instant::now() + WINDOW_STARTUP;
     let mut launched = false;
     let mut waiting = false;
-    let (guard, root, background_window) = loop {
+    let mut last_reason = None;
+    let (guard, root, background_window, stable_windows) = loop {
         console()?;
         let pids = native_app::app_pids(profile);
         if pids.len() > 1 {
@@ -570,6 +593,19 @@ pub async fn submit(
             } else {
                 input::user_input_idle()
             };
+            let reason = match mode {
+                CreationConsole::Provider if quiet < Duration::from_millis(500) => {
+                    "foreground_input"
+                }
+                CreationConsole::Provider => "provider_foreground",
+                CreationConsole::Background(_) => "other_app_foreground",
+                CreationConsole::Waiting => "no_focus_owner",
+                CreationConsole::Covered => "covered",
+            };
+            if last_reason != Some(reason) {
+                stage(reason);
+                last_reason = Some(reason);
+            }
             if mode != CreationConsole::Waiting && quiet >= Duration::from_millis(500) {
                 let guard = Guard {
                     profile,
@@ -585,8 +621,20 @@ pub async fn submit(
                 guard.check()?;
                 let root = Element::application(pid);
                 root.enable_manual_accessibility();
+                if mode == CreationConsole::Provider {
+                    // Everything in this wait is observation or idempotent AX
+                    // enablement. Input/focus changes here can safely requeue.
+                    match settled_windows(&guard, &root, true).await {
+                        Ok(snapshot) => break (guard, root, None, Some(snapshot)),
+                        Err(Error::Conflict(_)) if Instant::now() < deadline => {
+                            console()?;
+                            continue;
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
                 if !background {
-                    break (guard, root, None);
+                    break (guard, root, None, None);
                 }
                 if model.is_empty()
                     && effort.is_empty()
@@ -594,7 +642,7 @@ pub async fn submit(
                 {
                     guard.check()?;
                     stage("background_form_ready");
-                    break (guard, root, Some(window));
+                    break (guard, root, Some(window), None);
                 }
             }
         } else if covered && !launched && input::user_input_idle() >= Duration::from_millis(500) {
@@ -625,19 +673,22 @@ pub async fn submit(
         (window, provider == "codex", provider == "claude")
     } else {
         let was_running = !launched;
-        let before_activation = if was_running {
-            settled_windows(&guard, &root, false).await?
+        let (before_activation, before) = if let Some(before) = stable_windows {
+            (before.clone(), before)
         } else {
-            Vec::new()
+            let before_activation = if was_running {
+                settled_windows(&guard, &root, false).await?
+            } else {
+                Vec::new()
+            };
+            guard.check()?;
+            if was_running {
+                open(&bundle, None)?;
+            }
+            stage("activated");
+            let before = settled_windows(&guard, &root, true).await?;
+            (before_activation, before)
         };
-        guard.check()?;
-        if was_running && covered {
-            open(&bundle, None)?;
-        }
-        // Cold startup may replace its preliminary window before the renderer is
-        // ready. Bind the settled object set, not that transient startup shell.
-        stage("activated");
-        let before = settled_windows(&guard, &root, true).await?;
         // Check every retained window independently: several complete forms must
         // not exhaust one form's node budget. Never navigate over a nonempty draft
         // if the provider ignores raise; missing/ambiguous editors fail closed.

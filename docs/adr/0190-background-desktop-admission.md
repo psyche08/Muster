@@ -50,3 +50,13 @@ frontmost application for the activation check. A temporary lack of an AX
 focused element does not establish that another app became frontmost. A
 verified empty Codex home already focused within the provider can also be
 claimed for routing after the operator selects it.
+
+On Codex 26.1106.51428 the selected local project was stored under an
+owner-scoped key. A test-folder confirmation produced one scoped selection
+whose project had the exact test root. Accept that layout and the legacy
+layout, rejecting multiple owners or conflicting selections. During the
+project-picker probe A received 251 of 251 keys with unchanged focus, pointer
+and normal window order. Adding a new source folder opened a native sheet;
+A kept its focus and received 13 of 13 keys, but the window list changed.
+Foreground-only setup for a managed issue therefore waits outside the
+delivery ledger and provider/console locks while the live caller is present.
