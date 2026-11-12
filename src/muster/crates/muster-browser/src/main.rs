@@ -1,4 +1,6 @@
 //! Chrome launches this executable; stdout contains framed JSON only.
+#[cfg(unix)]
+mod jumper;
 use anyhow::{Context, Result, bail, ensure};
 use muster_browser::*;
 use serde_json::{Value, json};
@@ -111,14 +113,18 @@ async fn run() -> Result<()> {
                 continue;
             }
         };
-        let response = exchange(
-            &mut stdout,
-            &mut rx,
-            serde_json::to_value(&request)?,
-            next_id,
-            request.deadline(),
-        )
-        .await;
+        let response = if matches!(request, Request::JumperWhoami {}) {
+            jumper::probe(dir, &mut stdout, &mut rx, &mut next_id).await
+        } else {
+            exchange(
+                &mut stdout,
+                &mut rx,
+                serde_json::to_value(&request)?,
+                next_id,
+                request.deadline(),
+            )
+            .await
+        };
         let (reply, fatal) = match response {
             Ok(mut reply) => {
                 reply

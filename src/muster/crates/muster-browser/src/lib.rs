@@ -23,6 +23,7 @@ pub const FETCH_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2
 #[serde(tag = "op", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
     Ping {},
+    JumperWhoami {},
     Tabs {},
     Sessions {},
     Open {
@@ -192,7 +193,8 @@ impl Request {
     }
     pub fn is_mutation(&self) -> bool {
         match self {
-            Self::Open { .. }
+            Self::JumperWhoami {}
+            | Self::Open { .. }
             | Self::Close { .. }
             | Self::Click { .. }
             | Self::Type { .. }
@@ -208,6 +210,8 @@ impl Request {
     /// screen is local; reaching a site is not.
     pub fn deadline(&self) -> std::time::Duration {
         match self {
+            // Four bounded prompt waits plus one bridge deadline per input and cleanup.
+            Self::JumperWhoami {} => std::time::Duration::from_secs(130),
             Self::Fetch { .. } => FETCH_DEADLINE,
             _ => DEADLINE,
         }

@@ -137,3 +137,33 @@ Browser automation boundary tests use simulated Chrome/socket environments and d
 
 API references: [Chrome Native Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging),
 [Chrome debugger](https://developer.chrome.com/docs/extensions/reference/api/debugger)。
+
+## Local Jumper terminal identity check
+
+Load this extension in the Chrome profile signed in to the terminal site and
+register the matching native host. Place a private `jumper.json` alongside
+`browser/bridge.sock` in Muster's state directory. Its two fields are literal
+DNS names selected by the local operator. For example:
+
+```json
+{"site":"gateway.example.test","host":"host-a.example.test"}
+```
+
+```sh
+muster browser '{"op":"jumperWhoami"}'
+```
+
+The operation opens a fresh HTTPS tab at the configured site's `/terminal`.
+Rust waits for the first hop, submits the configured host, waits for its full
+hostname in the rendered prompt, submits `whoami`, reads the single account
+line between its echo and the next target prompt, then submits `exit`.
+A successful result includes the target, the account and the return-to-gateway
+receipt after tab cleanup. The adapter currently reads xterm DOM rows or its
+accessibility tree. Chrome establishes the site's sockets and supplies browser
+identity. No site credentials or socket URLs cross Native Messaging.
+
+Check the JSON `status` when invoking from a script. A login redirect or a
+recognized interactive challenge returns `authenticationRequired` and leaves
+the page open for the operator. After completing authentication, an operator
+can start a fresh check. Other failures identify the last stage. A write with
+an uncertain outcome is never retried automatically.

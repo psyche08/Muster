@@ -9,6 +9,11 @@ pub fn parse(json: &str) -> Result<muster_browser::Request, Error> {
     }
     let request: muster_browser::Request =
         serde_json::from_str(json).map_err(|e| Error::Invalid(e.to_string()))?;
+    if matches!(request, muster_browser::Request::JumperWhoami {}) {
+        return Err(Error::Invalid(
+            "jumperWhoami requires the local browser CLI".into(),
+        ));
+    }
     request
         .validate()
         .map_err(|e| Error::Invalid(e.to_string()))?;
