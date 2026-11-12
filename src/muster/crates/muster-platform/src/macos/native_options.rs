@@ -120,8 +120,8 @@ async fn wait_menu(
     let mut entered_models = false;
     loop {
         step.check()?;
+        // A finished read decides even after the deadline (`Step::until`).
         let snapshot = snapshot(scope).await?;
-        step.check()?;
         let panel = options::opened_panel(&snapshot.0, picker, kind)?;
         if let Some(panel) = panel {
             if kind == Kind::Effort && options::power(&snapshot.0, panel).is_some() {
@@ -162,17 +162,18 @@ async fn close(scope: &impl Scope, kind: Kind) -> Result<(), Error> {
     // Toggle only the session's uniquely identified picker. Never send a
     // global Escape or click another window to dismiss the menu.
     press(scope, &elements[index])?;
-    let step = Step::new("close model/effort menu", Duration::from_secs(1));
-    loop {
-        step.check()?;
-        let (tree, _) = snapshot(scope).await?;
-        step.check()?;
-        if options::panel(&tree, &picker)?.is_none() {
-            return Ok(());
-        }
-        step.check()?;
-        tokio::time::sleep(ECHO_POLL).await;
-    }
+    // 2 s, as for the menu to open (`wait_menu`): every read re-proves the
+    // scope, which on a new-session form walks the page twice besides the
+    // snapshot, about 250 ms a read. A 1 s budget allowed three or four
+    // reads, the first right after the press, and timed out (1056-1137 ms)
+    // on a Mac whose Claude was busy (ADR 0194).
+    let picker = &picker;
+    Step::new("close model/effort menu", Duration::from_secs(2))
+        .until(ECHO_POLL, || async move {
+            let (tree, _) = snapshot(scope).await?;
+            Ok(options::panel(&tree, picker)?.is_none().then_some(()))
+        })
+        .await
 }
 
 /// Opens the picker, reads its menu with `read`, and closes it again

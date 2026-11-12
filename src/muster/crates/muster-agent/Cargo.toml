@@ -37,6 +37,8 @@ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 [dev-dependencies]
 tempfile = "3"
 env_logger.workspace = true
+# Paused time for the step budget tests (native_step).
+tokio = { workspace = true, features = ["test-util"] }
 
 # build.rs compiles profiles/*.toml (the desktop app profiles, §3.6.4) into
 # the statics of `profile`.
