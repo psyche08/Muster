@@ -291,8 +291,10 @@ pub fn multica_directory_admissible(cwd: &Path) -> bool {
     let [pid] = pids.as_slice() else { return false };
     match CreationConsole::observe(false, Some(*pid), super::events::foreground_owner()) {
         CreationConsole::Provider => input::user_input_idle() >= Duration::from_secs(1),
-        CreationConsole::Background(_) => codex_project_state()
-            .is_some_and(|b| muster_agent::native_runtime::selected_codex_directory(&b, cwd)),
+        CreationConsole::Background(_) => codex_project_state().is_some_and(|b| {
+            muster_agent::native_runtime::selected_codex_directory(&b, cwd)
+                || muster_agent::native_runtime::codex_sidebar_project(&b, cwd).is_some()
+        }),
         _ => false,
     }
 }
@@ -466,6 +468,12 @@ fn ready_background_window(
         .as_ref()
         .and_then(|p| p.live(guard.pid, guard.start, &live))
         .cloned();
+    let project_action = (provider == "codex")
+        .then(codex_project_state)
+        .flatten()
+        .and_then(|b| muster_agent::native_runtime::codex_sidebar_project(&b, cwd))
+        .map(|name| format!("Start new chat in {name}"));
+    let mut routes = Vec::new();
     let mut candidates = Vec::new();
     let focused = root.element("AXFocusedWindow");
     for window in live {
@@ -478,15 +486,36 @@ fn ready_background_window(
         if provider == "claude" && !empty_session_marker(&page)? {
             continue;
         }
-        if selection_matches(provider, &page, cwd, true)?.is_none() {
-            continue;
-        }
         let editor = unique(&page, |n| guard.profile.controls().composer.matches(n))?;
         if editor
             .as_ref()
             .and_then(|n| n.string("AXValue"))
             .is_none_or(|v| !guard.profile.is_empty(&v))
         {
+            continue;
+        }
+        if selection_matches(provider, &page, cwd, true)?.is_none() {
+            if let Some(action) = project_action.as_deref() {
+                let tree = nodes(&window)?;
+                if (pin.as_ref() == Some(&window) || codex_home_heading(&tree))
+                    && !tree.iter().any(|n| {
+                        n.role() == "AXSheet"
+                            || n.string("AXSubrole").as_deref() == Some("AXApplicationDialog")
+                            || guard.profile.controls().stop.matches(n)
+                                && n.bool("AXEnabled") == Some(true)
+                    })
+                {
+                    let mut buttons = tree.iter().filter(|n| {
+                        n.role() == "AXButton"
+                            && n.string("AXDescription").as_deref() == Some(action)
+                    });
+                    if let Some(button) = buttons.next()
+                        && buttons.next().is_none()
+                    {
+                        routes.push((window, button.clone()));
+                    }
+                }
+            }
             continue;
         }
         if focused.as_ref() == Some(&window) {
@@ -498,6 +527,19 @@ fn ready_background_window(
         return Ok(None);
     }
     let ready = candidates.pop();
+    if ready.is_none() {
+        let route = routes
+            .iter()
+            .find(|(window, _)| focused.as_ref() == Some(window))
+            .or_else(|| (routes.len() == 1).then(|| &routes[0]));
+        if let Some((window, button)) = route {
+            guard.press(button)?;
+            log::info!(
+                "Native creation: dispatched project-specific new chat in background window"
+            );
+            return Ok(Some(window.clone()));
+        }
+    }
     if ready.is_none() {
         // In the same working directory, the window's own New button can
         // replace a finished conversation without an app-wide URL or AXRaise.

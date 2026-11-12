@@ -180,6 +180,31 @@ fn selected_codex_project(json: &serde_json::Value) -> Option<&serde_json::Value
     }
 }
 
+/// Label for a project-specific sidebar action. The live selection is
+/// verified independently after navigation. Never pick among duplicate names.
+pub fn codex_sidebar_project(bytes: &[u8], cwd: &Path) -> Option<String> {
+    let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let projects = state["local-projects"].as_object()?;
+    let mut matches = projects.values().filter(|p| {
+        p["rootPaths"]
+            .as_array()
+            .is_some_and(|roots| roots.len() == 1 && roots[0].as_str() == cwd.to_str())
+    });
+    let label = matches.next()?["name"].as_str()?.trim();
+    if !cwd.is_absolute()
+        || label.is_empty()
+        || matches.next().is_some()
+        || projects
+            .values()
+            .filter(|p| p["name"].as_str() == Some(label))
+            .count()
+            != 1
+    {
+        return None;
+    }
+    Some(label.to_owned())
+}
+
 pub fn selected_codex_directory(bytes: &[u8], cwd: &Path) -> bool {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return false;
@@ -350,6 +375,21 @@ mod tests {
             selected_codex_directory(&bytes, Path::new("/tmp/test-work"))
                 && codex_project(&bytes, "Task", Path::new("/tmp/test-work")).is_some()
         };
+        let bytes = serde_json::to_vec(&state).unwrap();
+        assert_eq!(
+            codex_sidebar_project(&bytes, Path::new("/tmp/test-work")).as_deref(),
+            Some("Task")
+        );
+        let mut duplicate = state.clone();
+        duplicate["local-projects"]["other"] =
+            serde_json::json!({"name":"Task","rootPaths":["/tmp/elsewhere"]});
+        assert!(
+            codex_sidebar_project(
+                &serde_json::to_vec(&duplicate).unwrap(),
+                Path::new("/tmp/test-work")
+            )
+            .is_none()
+        );
         assert!(matches(&state));
         assert!(!selected_codex_directory(
             &serde_json::to_vec(&state).unwrap(),

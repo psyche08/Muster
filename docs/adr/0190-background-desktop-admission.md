@@ -60,3 +60,9 @@ and normal window order. Adding a new source folder opened a native sheet;
 A kept its focus and received 13 of 13 keys, but the window list changed.
 Foreground-only setup for a managed issue therefore waits outside the
 delivery ledger and provider/console locks while the live caller is present.
+
+A background window can show another selected project even when the requested
+root is already registered. Use the provider's project-specific new-chat AX
+button only for a uniquely named, single-root project in a retained window
+or verified empty home. Verify the newly displayed local project and exact
+root again before the draft. A new per-run root still needs initial setup.
