@@ -12,7 +12,7 @@ fn deny(why: &str) -> Error {
     Error::Unauthorized(format!("Trusted Multica dispatch: {why}"))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Policy {
     origin: url::Url,
@@ -275,11 +275,26 @@ impl<'a> Hint<'a> {
     }
 }
 
+pub(super) struct Destination {
+    pub directory: PathBuf,
+    pub prompt: String,
+    enrollment: Policy,
+    config_dir: PathBuf,
+}
+
+impl Destination {
+    pub fn still_enrolled(&self) -> bool {
+        load(&self.config_dir).is_ok_and(|p| p.as_ref() == Some(&self.enrollment))
+            && std::fs::canonicalize(&self.directory).ok().as_ref() == Some(&self.directory)
+            && self.directory.is_dir()
+    }
+}
+
 pub(super) async fn verified_destination(
     daemon: &Daemon,
     o: &v1::AgentSchedulerOperate,
     project_only: bool,
-) -> Result<Option<(PathBuf, String)>, Error> {
+) -> Result<Option<Destination>, Error> {
     let Some(p) = load(&daemon.config.dir)? else {
         return Ok(None);
     };
@@ -323,7 +338,13 @@ pub(super) async fn verified_destination(
         runtimes,
         runs,
     };
-    resolve(&p, &hint, &records, (now_ms() / 1000) as i64, project_only)
+    let verified = resolve(&p, &hint, &records, (now_ms() / 1000) as i64, project_only)?;
+    Ok(verified.map(|(directory, prompt)| Destination {
+        directory,
+        prompt,
+        enrollment: p,
+        config_dir: daemon.config.dir.clone(),
+    }))
 }
 
 fn resolve(
