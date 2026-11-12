@@ -12,7 +12,7 @@ fn deny(why: &str) -> Error {
     Error::Unauthorized(format!("Trusted Multica dispatch: {why}"))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Policy {
     origin: url::Url,
@@ -23,6 +23,8 @@ struct Policy {
     runtime: String,
     runtime_daemon: String,
     root: PathBuf,
+    #[serde(default)]
+    unlocked_projects: std::collections::BTreeMap<String, PathBuf>,
 }
 
 fn uuid(s: &str) -> bool {
@@ -230,14 +232,7 @@ impl Policy {
             .filter(|t| !t.trim().is_empty())
             .ok_or_else(|| deny("empty issue title"))?;
         let body = issue["description"].as_str().unwrap_or("").trim();
-        let prompt = format!(
-            "Multica issue {}\n\n{}\n\n{}",
-            hint.issue,
-            title.trim(),
-            body
-        )
-        .trim_end()
-        .to_owned();
+        let prompt = muster_agent::native_runtime::multica_issue_prompt(hint.issue, title, body);
         if prompt.len() > MAX_TEXT {
             return Err(deny("issue exceeds first-turn budget"));
         }
@@ -280,13 +275,32 @@ impl<'a> Hint<'a> {
     }
 }
 
-pub(super) async fn first_turn(
+pub(super) struct Destination {
+    pub directory: PathBuf,
+    pub prompt: String,
+    enrollment: Policy,
+    config_dir: PathBuf,
+}
+
+impl Destination {
+    pub fn still_enrolled(&self) -> bool {
+        load(&self.config_dir).is_ok_and(|p| p.as_ref() == Some(&self.enrollment))
+            && std::fs::canonicalize(&self.directory).ok().as_ref() == Some(&self.directory)
+            && self.directory.is_dir()
+    }
+}
+
+pub(super) async fn verified_destination(
     daemon: &Daemon,
     o: &v1::AgentSchedulerOperate,
-) -> Result<Option<String>, Error> {
+    project_only: bool,
+) -> Result<Option<Destination>, Error> {
     let Some(p) = load(&daemon.config.dir)? else {
         return Ok(None);
     };
+    if project_only && p.unlocked_projects.is_empty() {
+        return Ok(None);
+    }
     let hint = Hint::read(o)?;
     let expected = p
         .root
@@ -324,8 +338,42 @@ pub(super) async fn first_turn(
         runtimes,
         runs,
     };
-    p.verify(&hint, &records, (now_ms() / 1000) as i64)
-        .map(Some)
+    let verified = resolve(&p, &hint, &records, (now_ms() / 1000) as i64, project_only)?;
+    Ok(verified.map(|(directory, prompt)| Destination {
+        directory,
+        prompt,
+        enrollment: p,
+        config_dir: daemon.config.dir.clone(),
+    }))
+}
+
+fn resolve(
+    p: &Policy,
+    hint: &Hint<'_>,
+    records: &Records,
+    now: i64,
+    project_only: bool,
+) -> Result<Option<(PathBuf, String)>, Error> {
+    let directory = if project_only {
+        let Some(path) = records.issue["project_id"]
+            .as_str()
+            .filter(|id| uuid(id))
+            .and_then(|id| p.unlocked_projects.get(id))
+        else {
+            return Ok(None);
+        };
+        if !path.is_absolute()
+            || !path.is_dir()
+            || std::fs::canonicalize(path).ok().as_ref() != Some(path)
+        {
+            return Err(deny("project directory is not its enrolled canonical path"));
+        }
+        path.clone()
+    } else {
+        PathBuf::from(hint.cwd)
+    };
+    let prompt = p.verify(hint, records, now)?;
+    Ok(Some((directory, prompt)))
 }
 
 #[cfg(test)]
@@ -345,6 +393,7 @@ mod tests {
             runtime: "runtime".into(),
             runtime_daemon: "registered-executor".into(),
             root: "/work".into(),
+            unlocked_projects: Default::default(),
         };
         let hint = Hint {
             run: RUN,
@@ -384,6 +433,33 @@ mod tests {
         };
         assert!(Hint::read(&ambiguous).is_err());
     }
+    #[test]
+    fn mapped_project_requires_verified_assignment_and_canonical_root() {
+        let (mut p, h, mut r) = fixture();
+        let now = chrono::DateTime::parse_from_rfc3339(WHEN)
+            .unwrap()
+            .timestamp();
+        let local = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        let project = "cccccccc-0000-4000-8000-000000000001";
+        p.unlocked_projects.insert(project.into(), local.clone());
+        assert!(resolve(&p, &h, &r, now, true).unwrap().is_none());
+        r.issue["project_id"] = json!(project);
+        assert_eq!(resolve(&p, &h, &r, now, true).unwrap().unwrap().0, local);
+        assert_eq!(
+            resolve(&p, &h, &r, now, false).unwrap().unwrap().0,
+            Path::new(h.cwd)
+        );
+        r.issue["creator_id"] = json!("foreign");
+        assert!(resolve(&p, &h, &r, now, true).is_err());
+        r.issue["creator_id"] = json!("owner");
+        r.runs[0]["work_dir"] = json!("/elsewhere");
+        assert!(resolve(&p, &h, &r, now, true).is_err());
+        r.runs[0]["work_dir"] = json!(h.cwd);
+        p.unlocked_projects
+            .insert(project.into(), "relative".into());
+        assert!(resolve(&p, &h, &r, now, true).is_err());
+    }
+
     #[test]
     fn immediate_enqueue_can_cross_one_second() {
         let (p, h, mut r) = fixture();

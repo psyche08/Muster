@@ -814,8 +814,17 @@ pub async fn submit(
             guard.press(&action)?;
         }
         if provider == "codex" {
-            *CODEX_WINDOW.lock().unwrap() =
-                Some(CreationWindow::new(pid, guard.start, window.clone()));
+            let mut pin = CODEX_WINDOW.lock().unwrap();
+            let same = pin
+                .as_ref()
+                .and_then(|p| p.live(pid, guard.start, std::slice::from_ref(&window)))
+                .is_some();
+            stage(if same {
+                "background_pinned_window_reused"
+            } else {
+                "background_window_pinned"
+            });
+            *pin = Some(CreationWindow::new(pid, guard.start, window.clone()));
         }
         (window, provider == "codex", provider == "claude")
     } else {

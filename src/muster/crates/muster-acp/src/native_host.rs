@@ -260,13 +260,15 @@ impl Host for NativeHost {
             format!("{text}\n\n{}", self.brief)
         };
         let mut prompt = prompt;
+        let mut verified_issue = None;
         if b.session.is_empty()
             && self.provider == "codex"
             && let Some(reader) = &self.issue_reader
             && let Some(snapshot) = reader.read(text).await
         {
             prompt.push_str("\n\nThe task-scoped client already read the assigned issue. Use this title and description for the task: ");
-            prompt.push_str(&snapshot);
+            prompt.push_str(&snapshot.json);
+            verified_issue = Some(snapshot.first_turn);
         }
         b.phase = "attempted".into();
         self.save(id, &b)?;
@@ -330,11 +332,15 @@ impl Host for NativeHost {
                                         .as_deref()
                                         .is_some_and(matches))
                             }
-                            None => muster_agent::native_runtime::first_prompt_matches(
-                                &host.provider,
-                                &row.text,
-                                &prompt,
-                            ),
+                            None => std::iter::once(prompt.as_str())
+                                .chain(verified_issue.as_deref())
+                                .any(|expected| {
+                                    muster_agent::native_runtime::first_prompt_matches(
+                                        &host.provider,
+                                        &row.text,
+                                        expected,
+                                    )
+                                }),
                         }
                     {
                         started = true;

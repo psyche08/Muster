@@ -4,6 +4,11 @@ use serde_json::Value;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use url::Url;
 
+pub(crate) struct IssueSnapshot {
+    pub json: String,
+    pub first_turn: String,
+}
+
 pub struct TaskIssue {
     origin: Url,
     token: String,
@@ -79,7 +84,7 @@ impl TaskIssue {
         }
         serde_json::from_str(&response.body).ok()
     }
-    pub(crate) async fn read(&self, prompt: &str) -> Option<String> {
+    pub(crate) async fn read(&self, prompt: &str) -> Option<IssueSnapshot> {
         let id = reference(prompt)?;
         let path = format!("/api/issues/{id}");
         let runs = format!("{path}/task-runs");
@@ -90,7 +95,7 @@ impl TaskIssue {
         .ok()?;
         self.snapshot(id, &issue?, &runs?)
     }
-    fn snapshot(&self, id: &str, issue: &Value, runs: &Value) -> Option<String> {
+    fn snapshot(&self, id: &str, issue: &Value, runs: &Value) -> Option<IssueSnapshot> {
         if issue["id"] != id
             || issue["workspace_id"] != self.workspace
             || issue["assignee_type"] != "agent"
@@ -113,7 +118,10 @@ impl TaskIssue {
         if title.trim().is_empty() || title.len() + description.len() > 64 * 1024 {
             return None;
         }
-        Some(serde_json::json!({"title":title,"description":description}).to_string())
+        Some(IssueSnapshot {
+            json: serde_json::json!({"title":title,"description":description}).to_string(),
+            first_turn: muster_agent::native_runtime::multica_issue_prompt(id, title, description),
+        })
     }
 }
 

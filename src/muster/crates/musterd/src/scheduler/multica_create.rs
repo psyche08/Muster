@@ -57,9 +57,18 @@ pub(super) async fn start(
     let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
     // Wait outside the provider/console locks and the once-only delivery
     // ledger. Each live Multica run owns its own cancellable wait.
+    let project = if !granted()? && !daemon.platform().locked() {
+        super::trusted_multica::verified_destination(daemon, &o, true).await?
+    } else {
+        None
+    };
     #[cfg(target_os = "macos")]
     if !granted()? && !daemon.platform().locked() {
-        let cwd = std::fs::canonicalize(&o.directory)
+        let directory = project
+            .as_ref()
+            .map(|route| route.directory.as_path())
+            .unwrap_or_else(|| std::path::Path::new(&o.directory));
+        let cwd = std::fs::canonicalize(directory)
             .map_err(|_| Error::Invalid("Multica working directory is unavailable".into()))?;
         let mut queued = false;
         loop {
@@ -71,6 +80,14 @@ pub(super) async fn start(
             preflight(daemon, "codex")?;
             if daemon.platform().locked() || granted()? {
                 break;
+            }
+            if project
+                .as_ref()
+                .is_some_and(|route| !route.still_enrolled())
+            {
+                return Err(Error::Conflict(
+                    "Multica project enrollment changed while queued".into(),
+                ));
             }
             let path = cwd.clone();
             if tokio::task::spawn_blocking(move || {
@@ -92,6 +109,18 @@ pub(super) async fn start(
         }
     }
     if !granted()? && !daemon.platform().locked() {
+        if let Some(route) = &project {
+            o.directory = route
+                .directory
+                .to_str()
+                .ok_or_else(|| Error::Invalid("Project path must be UTF-8".into()))?
+                .to_owned();
+            o.text.clone_from(&route.prompt);
+            log::info!(
+                "scheduler: verified unlocked Multica project for {}",
+                o.task_id
+            );
+        }
         let cancel = cancel.clone();
         let request = v1::AgentNativeCreateRequest {
             op_id: o.op_id,
@@ -101,20 +130,24 @@ pub(super) async fn start(
             ..Default::default()
         };
         return muster_agent::control_guard::scope(
-            Arc::new(move || !cancel.is_cancelled()),
+            Arc::new(move || {
+                !cancel.is_cancelled()
+                    && project.as_ref().is_none_or(|route| route.still_enrolled())
+            }),
             crate::native_create::create_unlocked(daemon, request, true),
         )
         .await;
     }
     if !granted()? {
         preflight(daemon, "codex")?;
-        if let Some(prompt) = super::trusted_multica::first_turn(daemon, &o).await? {
+        if let Some(route) = super::trusted_multica::verified_destination(daemon, &o, false).await?
+        {
             if cancel.is_cancelled() || !daemon.platform().locked() {
                 return Err(Error::Conflict(
                     "Multica dispatch or locked console changed".into(),
                 ));
             }
-            o.text = prompt;
+            o.text = route.prompt;
             let task_id = o.task_id.clone();
             let scope = grant::Scope {
                 task_id: task_id.clone(),

@@ -190,6 +190,17 @@ fn codex_composer_record(expected: &str) -> String {
     rendered
 }
 
+/// First turn reconstructed independently from the enrolled service issue.
+pub fn multica_issue_prompt(issue: &str, title: &str, body: &str) -> String {
+    format!(
+        "Multica issue {issue}\n\n{}\n\n{}",
+        title.trim(),
+        body.trim()
+    )
+    .trim_end()
+    .to_owned()
+}
+
 /// The only alternative considered for a digest-bound receipt is a complete
 /// reversible serialization. The caller still checks the original SHA-256.
 pub fn codex_composer_original(record: &str) -> Option<String> {
