@@ -156,6 +156,59 @@ pub fn directory_label_matches(label: &str, cwd: &Path, home: Option<&Path>) -> 
         .is_some_and(|relative| !relative.is_empty() && label == format!("~/{relative}"))
 }
 
+/// A rich-text Codex composer can store literal input as Markdown, including
+/// hard breaks. Compare the whole expected serialization, never a substring.
+pub fn first_prompt_matches(provider: &str, recorded: &str, expected: &str) -> bool {
+    let recorded = recorded.trim_end();
+    let expected = expected.trim_end();
+    if recorded == expected {
+        return true;
+    }
+    if provider != "codex" {
+        return false;
+    }
+    codex_composer_record(expected) == recorded
+}
+
+fn codex_composer_record(expected: &str) -> String {
+    let mut rendered = String::with_capacity(expected.len());
+    for (i, line) in expected.split('\n').enumerate() {
+        if i != 0 {
+            rendered.push_str("\\\n");
+        }
+        let heading = line.bytes().take_while(|c| *c == b'#').count();
+        if (1..=6).contains(&heading) && line.as_bytes().get(heading) == Some(&b' ') {
+            rendered.push('\\');
+        }
+        for ch in line.chars() {
+            if matches!(ch, '\\' | '*' | '`' | '<') {
+                rendered.push('\\');
+            }
+            rendered.push(ch);
+        }
+    }
+    rendered
+}
+
+/// The only alternative considered for a digest-bound receipt is a complete
+/// reversible serialization. The caller still checks the original SHA-256.
+pub fn codex_composer_original(record: &str) -> Option<String> {
+    let mut original = String::with_capacity(record.len());
+    let mut chars = record.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            original.push(ch);
+            continue;
+        }
+        let escaped = chars.next()?;
+        if !matches!(escaped, '\\' | '\n' | '#' | '*' | '`' | '<') {
+            return None;
+        }
+        original.push(escaped);
+    }
+    (original != record && codex_composer_record(&original) == record).then_some(original)
+}
+
 /// An identity proven against the provider's selected local project and exact root.
 /// Retain it across form preparation; a different selection invalidates the proof.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,6 +294,25 @@ fn project_in_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn desktop_receipt_requires_the_complete_expected_input() {
+        let prompt = "## Task\n\nRead `x` and **return** <one>.";
+        let record = "\\## Task\\\n\\\nRead \\`x\\` and \\*\\*return\\*\\* \\<one>.\n";
+        assert_eq!(
+            codex_composer_original(record.trim_end()).as_deref(),
+            Some(prompt)
+        );
+        assert!(codex_composer_original("unrelated\\#text").is_none());
+        assert!(first_prompt_matches("codex", record, prompt));
+        assert!(!first_prompt_matches("claude", record, prompt));
+        assert!(!first_prompt_matches("codex", record, "## Task"));
+        assert!(!first_prompt_matches(
+            "codex",
+            &format!("extra{record}"),
+            prompt
+        ));
+    }
+
     #[test]
     fn background_or_unknown_focus_never_admits_foreground_work() {
         use crate::local_input::Owner::*;

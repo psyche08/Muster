@@ -22,6 +22,8 @@ use tokio::sync::{Mutex, mpsc};
 
 mod host_rpc;
 mod native_host;
+mod native_issue;
+pub use native_issue::TaskIssue;
 pub mod scheduler;
 pub use host_rpc::RpcHost;
 pub use native_host::{NativeHost, TaskCredential};

@@ -287,14 +287,16 @@ async fn shows(
     prompt: &str,
 ) -> bool {
     agent.rescan().await;
-    agent
-        .session(session)
-        .is_some_and(|s| std::path::Path::new(&s.cwd) == path)
-        && first_message_is(agent, session, prompt).await
+    let Some(s) = agent.session(session) else {
+        return false;
+    };
+    std::path::Path::new(&s.cwd) == path
+        && first_message_is(agent, &s.provider, session, prompt).await
 }
 
 async fn first_message_is(
     agent: &Arc<muster_agent::AgentService>,
+    provider: &str,
     session: &str,
     prompt: &str,
 ) -> bool {
@@ -302,10 +304,9 @@ async fn first_message_is(
         .messages(session, 2000, None)
         .await
         .is_ok_and(|(messages, _)| {
-            messages
-                .iter()
-                .find(|m| m.role == "user")
-                .is_some_and(|m| m.text.trim_end() == prompt.trim_end())
+            messages.iter().find(|m| m.role == "user").is_some_and(|m| {
+                muster_agent::native_runtime::first_prompt_matches(provider, &m.text, prompt)
+            })
         })
 }
 
@@ -328,7 +329,7 @@ async fn candidates(
         {
             continue;
         }
-        if first_message_is(agent, &s.id, prompt).await {
+        if first_message_is(agent, provider, &s.id, prompt).await {
             matches.push(s.id)
         }
     }

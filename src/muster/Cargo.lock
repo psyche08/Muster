@@ -2170,6 +2170,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "hex",
+ "muster-agent",
  "muster-proto",
  "muster-rpc",
  "rand 0.8.8",
@@ -2178,6 +2179,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "url",
 ]
 
 [[package]]
