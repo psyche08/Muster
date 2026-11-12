@@ -9,6 +9,30 @@ pub enum Destination {
     Unavailable,
 }
 
+/// Foreground belongs to the executor. An input pause in another app never
+/// grants permission to launch, raise a window or dispatch an activating URL.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CreationConsole {
+    Covered,
+    Provider,
+    Background(u32),
+    Waiting,
+}
+
+impl CreationConsole {
+    pub fn observe(covered: bool, provider: Option<u32>, focus: crate::local_input::Owner) -> Self {
+        use crate::local_input::Owner;
+        if covered {
+            return Self::Covered;
+        }
+        match (provider, focus) {
+            (Some(pid), Owner::Process(front)) if pid == front => Self::Provider,
+            (Some(_), Owner::Process(front)) => Self::Background(front),
+            _ => Self::Waiting,
+        }
+    }
+}
+
 /// Only a window allocated by this daemon in this provider process can be
 /// reclaimed for another creation. Window order and focus are not identities.
 pub struct CreationWindow<T> {
@@ -132,20 +156,131 @@ pub fn directory_label_matches(label: &str, cwd: &Path, home: Option<&Path>) -> 
         .is_some_and(|relative| !relative.is_empty() && label == format!("~/{relative}"))
 }
 
+/// A rich-text Codex composer can store literal input as Markdown, including
+/// hard breaks. Compare the whole expected serialization, never a substring.
+pub fn first_prompt_matches(provider: &str, recorded: &str, expected: &str) -> bool {
+    let recorded = recorded.trim_end();
+    let expected = expected.trim_end();
+    if recorded == expected {
+        return true;
+    }
+    if provider != "codex" {
+        return false;
+    }
+    codex_composer_record(expected) == recorded
+}
+
+fn codex_composer_record(expected: &str) -> String {
+    let mut rendered = String::with_capacity(expected.len());
+    for (i, line) in expected.split('\n').enumerate() {
+        if i != 0 {
+            rendered.push_str("\\\n");
+        }
+        let heading = line.bytes().take_while(|c| *c == b'#').count();
+        if (1..=6).contains(&heading) && line.as_bytes().get(heading) == Some(&b' ') {
+            rendered.push('\\');
+        }
+        for ch in line.chars() {
+            if matches!(ch, '\\' | '*' | '`' | '<') {
+                rendered.push('\\');
+            }
+            rendered.push(ch);
+        }
+    }
+    rendered
+}
+
+/// The only alternative considered for a digest-bound receipt is a complete
+/// reversible serialization. The caller still checks the original SHA-256.
+pub fn codex_composer_original(record: &str) -> Option<String> {
+    let mut original = String::with_capacity(record.len());
+    let mut chars = record.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            original.push(ch);
+            continue;
+        }
+        let escaped = chars.next()?;
+        if !matches!(escaped, '\\' | '\n' | '#' | '*' | '`' | '<') {
+            return None;
+        }
+        original.push(escaped);
+    }
+    (original != record && codex_composer_record(&original) == record).then_some(original)
+}
+
 /// An identity proven against the provider's selected local project and exact root.
 /// Retain it across form preparation; a different selection invalidates the proof.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodexProject(String);
 
+/// Only a single unambiguous selection can supply the project identity.
+fn selected_codex_project(json: &serde_json::Value) -> Option<&serde_json::Value> {
+    let mut scoped = json
+        .as_object()?
+        .iter()
+        .filter(|(k, _)| {
+            k.strip_prefix("electron-owner-value:selected-project:")
+                .is_some_and(|owner| !owner.is_empty())
+        })
+        .map(|(_, v)| v);
+    let first = scoped.next();
+    match (json.get("selected-project"), first) {
+        (_, Some(_)) if scoped.next().is_some() => None,
+        (Some(legacy), Some(current)) if legacy != current => None,
+        (_, Some(current)) => Some(current),
+        (legacy, None) => legacy,
+    }
+}
+
+/// Label for a project-specific sidebar action. The live selection is
+/// verified independently after navigation. Never pick among duplicate names.
+pub fn codex_sidebar_project(bytes: &[u8], cwd: &Path) -> Option<String> {
+    let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let projects = state["local-projects"].as_object()?;
+    let mut matches = projects.values().filter(|p| {
+        p["rootPaths"]
+            .as_array()
+            .is_some_and(|roots| roots.len() == 1 && roots[0].as_str() == cwd.to_str())
+    });
+    let label = matches.next()?["name"].as_str()?.trim();
+    if !cwd.is_absolute()
+        || label.is_empty()
+        || matches.next().is_some()
+        || projects
+            .values()
+            .filter(|p| p["name"].as_str() == Some(label))
+            .count()
+            != 1
+    {
+        return None;
+    }
+    Some(label.to_owned())
+}
+
+pub fn selected_codex_directory(bytes: &[u8], cwd: &Path) -> bool {
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return false;
+    };
+    project_in_directory(&json, None, cwd).is_some()
+}
+
 pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProject> {
-    let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
-    let selected = &json["selected-project"];
+    project_in_directory(&serde_json::from_slice(bytes).ok()?, Some(label), cwd)
+}
+
+fn project_in_directory(
+    json: &serde_json::Value,
+    label: Option<&str>,
+    cwd: &Path,
+) -> Option<CodexProject> {
+    let selected = selected_codex_project(json)?;
     if selected["type"].as_str() != Some("local") || !cwd.is_absolute() {
         return None;
     }
     let id = selected["projectId"].as_str().filter(|id| !id.is_empty())?;
     let project = json["local-projects"].as_object()?.get(id)?;
-    if project["name"].as_str() != Some(label)
+    if label.is_some_and(|name| project["name"].as_str() != Some(name))
         || project
             .get("id")
             .is_some_and(|value| value.as_str() != Some(id))
@@ -159,6 +294,44 @@ pub fn codex_project(bytes: &[u8], label: &str, cwd: &Path) -> Option<CodexProje
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn desktop_receipt_requires_the_complete_expected_input() {
+        let prompt = "## Task\n\nRead `x` and **return** <one>.";
+        let record = "\\## Task\\\n\\\nRead \\`x\\` and \\*\\*return\\*\\* \\<one>.\n";
+        assert_eq!(
+            codex_composer_original(record.trim_end()).as_deref(),
+            Some(prompt)
+        );
+        assert!(codex_composer_original("unrelated\\#text").is_none());
+        assert!(first_prompt_matches("codex", record, prompt));
+        assert!(!first_prompt_matches("claude", record, prompt));
+        assert!(!first_prompt_matches("codex", record, "## Task"));
+        assert!(!first_prompt_matches(
+            "codex",
+            &format!("extra{record}"),
+            prompt
+        ));
+    }
+
+    #[test]
+    fn background_or_unknown_focus_never_admits_foreground_work() {
+        use crate::local_input::Owner::*;
+        use CreationConsole::*;
+        assert_eq!(
+            CreationConsole::observe(false, Some(2), Process(1)),
+            Background(1)
+        );
+        assert_eq!(
+            CreationConsole::observe(false, Some(2), Process(2)),
+            Provider
+        );
+        for owner in [Nobody, Unknown] {
+            assert_eq!(CreationConsole::observe(false, Some(2), owner), Waiting);
+        }
+        assert_eq!(CreationConsole::observe(false, None, Process(1)), Waiting);
+        assert_eq!(CreationConsole::observe(true, None, Nobody), Covered);
+    }
+
     #[test]
     fn only_the_allocated_window_in_the_same_process_is_reused() {
         let pin = CreationWindow::new(10, 20, 2);
@@ -263,6 +436,45 @@ mod tests {
             Destination::Cli("/bin/cli".into())
         );
     }
+    #[test]
+    fn owner_scoped_project_needs_one_consistent_record_and_exact_path() {
+        let mut state = serde_json::json!({
+            "electron-owner-value:selected-project:fixture": {"type":"local","projectId":"p"},
+            "local-projects":{"p":{"id":"p","name":"Task","rootPaths":["/tmp/test-work"]}}
+        });
+        let matches = |s: &serde_json::Value| {
+            let bytes = serde_json::to_vec(s).unwrap();
+            selected_codex_directory(&bytes, Path::new("/tmp/test-work"))
+                && codex_project(&bytes, "Task", Path::new("/tmp/test-work")).is_some()
+        };
+        let bytes = serde_json::to_vec(&state).unwrap();
+        assert_eq!(
+            codex_sidebar_project(&bytes, Path::new("/tmp/test-work")).as_deref(),
+            Some("Task")
+        );
+        let mut duplicate = state.clone();
+        duplicate["local-projects"]["other"] =
+            serde_json::json!({"name":"Task","rootPaths":["/tmp/elsewhere"]});
+        assert!(
+            codex_sidebar_project(
+                &serde_json::to_vec(&duplicate).unwrap(),
+                Path::new("/tmp/test-work")
+            )
+            .is_none()
+        );
+        assert!(matches(&state));
+        assert!(!selected_codex_directory(
+            &serde_json::to_vec(&state).unwrap(),
+            Path::new("/tmp/other")
+        ));
+        state["selected-project"] = serde_json::json!({"type":"local","projectId":"other"});
+        assert!(!matches(&state));
+        state.as_object_mut().unwrap().remove("selected-project");
+        state["electron-owner-value:selected-project:another"] =
+            state["electron-owner-value:selected-project:fixture"].clone();
+        assert!(!matches(&state));
+    }
+
     #[test]
     fn project_requires_selected_identity_and_exact_single_root() {
         let cwd = Path::new("/tmp/one/workdir");

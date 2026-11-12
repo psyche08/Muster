@@ -305,3 +305,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0187](0187-trusted-multica-dispatch.md) | Accepted, unattended issue verified | Authorize a direct Multica assignment on the enrolled host |
 | [0188](0188-publish-macos-trusted-dispatch.md) | Accepted | Publish trusted Multica dispatch on macOS 1.1.37 (127) |
 | [0189](0189-reuse-native-create-windows.md) | Accepted | Reuse a dedicated Codex window and prefer the Claude main shell |
+| [0190](0190-background-desktop-admission.md) | Accepted | Admit desktop operations on the executor without taking foreground |
+| [0191](0191-native-multica-receipts.md) | Accepted | Verify native composer receipts and supply task-scoped issue context |

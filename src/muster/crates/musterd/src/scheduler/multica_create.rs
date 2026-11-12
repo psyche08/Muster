@@ -55,6 +55,42 @@ pub(super) async fn start(
     }
     let scheduler = &daemon.scheduler;
     let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
+    // Wait outside the provider/console locks and the once-only delivery
+    // ledger. Each live Multica run owns its own cancellable wait.
+    #[cfg(target_os = "macos")]
+    if !granted()? && !daemon.platform().locked() {
+        let cwd = std::fs::canonicalize(&o.directory)
+            .map_err(|_| Error::Invalid("Multica working directory is unavailable".into()))?;
+        let mut queued = false;
+        loop {
+            if cancel.is_cancelled() {
+                return Err(Error::Conflict(
+                    "Multica creation cancelled while queued".into(),
+                ));
+            }
+            preflight(daemon, "codex")?;
+            if daemon.platform().locked() || granted()? {
+                break;
+            }
+            let path = cwd.clone();
+            if tokio::task::spawn_blocking(move || {
+                muster_platform::macos::native_create::multica_directory_admissible(&path)
+            })
+            .await
+            .map_err(|e| Error::Unavailable(e.to_string()))?
+            {
+                break;
+            }
+            if !queued {
+                log::info!("scheduler: Multica creation queued for native workspace");
+                queued = true;
+            }
+            tokio::select! {
+                _ = cancel.cancelled() => return Err(Error::Conflict("Multica creation cancelled while queued".into())),
+                _ = tokio::time::sleep(Duration::from_millis(500)) => {}
+            }
+        }
+    }
     if !granted()? && !daemon.platform().locked() {
         let cancel = cancel.clone();
         let request = v1::AgentNativeCreateRequest {
@@ -66,7 +102,7 @@ pub(super) async fn start(
         };
         return muster_agent::control_guard::scope(
             Arc::new(move || !cancel.is_cancelled()),
-            crate::native_create::create(daemon, request),
+            crate::native_create::create_unlocked(daemon, request, true),
         )
         .await;
     }

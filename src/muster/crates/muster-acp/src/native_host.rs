@@ -25,6 +25,7 @@ pub struct NativeHost {
     brief: String,
     multica_run: Option<String>,
     _credential: Option<std::sync::Arc<TaskCredential>>,
+    issue_reader: Option<std::sync::Arc<crate::TaskIssue>>,
 }
 impl NativeHost {
     pub fn new(
@@ -41,7 +42,12 @@ impl NativeHost {
             brief,
             multica_run: None,
             _credential: credential,
+            issue_reader: None,
         }
+    }
+    pub fn with_issue_reader(mut self, reader: Option<crate::TaskIssue>) -> Self {
+        self.issue_reader = reader.map(std::sync::Arc::new);
+        self
     }
     /// Set only by the managed bridge, after validating the launch directory.
     pub fn with_multica_run(mut self, run: String) -> Self {
@@ -253,6 +259,15 @@ impl Host for NativeHost {
         } else {
             format!("{text}\n\n{}", self.brief)
         };
+        let mut prompt = prompt;
+        if b.session.is_empty()
+            && self.provider == "codex"
+            && let Some(reader) = &self.issue_reader
+            && let Some(snapshot) = reader.read(text).await
+        {
+            prompt.push_str("\n\nThe task-scoped client already read the assigned issue. Use this title and description for the task: ");
+            prompt.push_str(&snapshot);
+        }
         b.phase = "attempted".into();
         self.save(id, &b)?;
         let mut creation_digest = None;
@@ -302,14 +317,24 @@ impl Host for NativeHost {
                         && match &creation_digest {
                             Some(digest) => {
                                 use sha2::{Digest, Sha256};
-                                [
-                                    &row.text[..],
-                                    row.text.strip_suffix('\n').unwrap_or(&row.text),
-                                ]
-                                .iter()
-                                .any(|text| hex::encode(Sha256::digest(text.as_bytes())) == *digest)
+                                let matches = |text: &str| {
+                                    hex::encode(Sha256::digest(text.as_bytes())) == *digest
+                                };
+                                let bare = row.text.strip_suffix('\n').unwrap_or(&row.text);
+                                matches(&row.text)
+                                    || matches(bare)
+                                    || (host.provider == "codex"
+                                        && muster_agent::native_runtime::codex_composer_original(
+                                            bare,
+                                        )
+                                        .as_deref()
+                                        .is_some_and(matches))
                             }
-                            None => row.text.trim_end() == prompt.trim_end(),
+                            None => muster_agent::native_runtime::first_prompt_matches(
+                                &host.provider,
+                                &row.text,
+                                &prompt,
+                            ),
                         }
                     {
                         started = true;

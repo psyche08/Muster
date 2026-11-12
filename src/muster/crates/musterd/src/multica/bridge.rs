@@ -444,6 +444,7 @@ async fn listen(
             socket.to_path_buf(),
             Path::new(&c.data_dir).to_path_buf(),
             allowed,
+            c.server_url.clone(),
         ),
     });
     Ok(true)
@@ -458,8 +459,10 @@ fn spawn_bridge(
     socket: PathBuf,
     root: PathBuf,
     allowed: PathBuf,
+    server_url: String,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let http = crate::cloud_http::Client::connect().ok();
         let permits = Arc::new(tokio::sync::Semaphore::new(8));
         let mut clients = tokio::task::JoinSet::new();
         loop {
@@ -468,6 +471,7 @@ fn spawn_bridge(
                 accepted=listener.accept()=>{
                     let Ok((stream,_))=accepted else{break};let Ok(permit)=permits.clone().try_acquire_owned()else{continue};
                     let token=token.clone();let socket=socket.clone();let root=root.clone();let allowed=allowed.clone();
+                    let http=http.clone(); let server_url=server_url.clone();
                     clients.spawn(async move {
                         let _permit=permit;let (read,mut write)=stream.into_split();let mut reader=BufReader::new(read);
                         let Ok(Some(launch))=tokio::time::timeout(Duration::from_secs(5),handshake(&mut reader,&token,&allowed)).await else{return};
@@ -488,7 +492,9 @@ fn spawn_bridge(
                                     let local=tokio::net::UnixStream::connect(&socket).await.map_err(|e|e.to_string())?;
                                     let run = launch.env.get("MULTICA_TASK_ID").ok_or("Missing Multica run")?;
                                     let host = muster_acp::NativeHost::new(muster_rpc::Client::new(local), &launch.provider, session_root, credential);
-                                    let host = Arc::new(host.with_multica_run(run.clone()));
+                                    let issue=http.and_then(|http|muster_acp::TaskIssue::new(&server_url,&launch.env,http));
+                                    log::info!("Multica native assignment: task-scoped issue reader configured={}", issue.is_some());
+                                    let host = Arc::new(host.with_multica_run(run.clone()).with_issue_reader(issue));
                                     let cwd=launch.cwd.to_string_lossy().into_owned();
                                     if launch.provider=="codex"{muster_acp::scheduler::codex(reader,write,host,cwd,&launch.args).await}else{muster_acp::scheduler::claude(reader,write,host,cwd,&launch.args).await}.map_err(|e|e.to_string())
                                 }
@@ -880,6 +886,7 @@ mod tests {
             host.join("musterd.sock"),
             data.clone(),
             data.clone(),
+            "https://example.invalid".into(),
         );
         let task = [("MULTICA_TASK_ID", "task-a")];
         let in_root = task_dir.canonicalize().unwrap();

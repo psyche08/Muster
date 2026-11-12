@@ -50,6 +50,35 @@ fn sel(name: &CStr) -> Sel {
     unsafe { sel_registerName(name.as_ptr()) }
 }
 
+/// Workspace activation remains observable when an app temporarily has no
+/// focused AX element, e.g. while replacing a blank window or closing a menu.
+pub(super) fn foreground_owner() -> muster_agent::local_input::Owner {
+    use muster_agent::local_input::Owner;
+    // SAFETY: NSWorkspace's read-only accessors below take no arguments.
+    // Retain autoreleased objects through the read on this worker thread.
+    let pid = unsafe {
+        let pool = objc_autoreleasePoolPush();
+        let object = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel) -> Id,
+        >(objc_msgSend);
+        let integer = std::mem::transmute::<
+            unsafe extern "C" fn(),
+            unsafe extern "C" fn(Id, Sel) -> libc::pid_t,
+        >(objc_msgSend);
+        let workspace = object(class(c"NSWorkspace"), sel(c"sharedWorkspace"));
+        let front = object(workspace, sel(c"frontmostApplication"));
+        let pid = integer(front, sel(c"processIdentifier"));
+        objc_autoreleasePoolPop(pool);
+        pid
+    };
+    if pid > 0 {
+        Owner::Process(pid as u32)
+    } else {
+        Owner::Unknown
+    }
+}
+
 /// The shared `NSApplication`, held on the main thread that took it.
 pub struct AppEvents {
     app: Id,
