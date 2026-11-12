@@ -1,5 +1,6 @@
 // Chrome OS/API adapter only. Rust owns request schemas, deadlines, serialization,
 // AX projection and idle release. No content scripts or external message listener.
+importScripts('jumper.js');
 const HOST = 'dev.linsheng.muster.browser';
 const attached = new Set();
 let currentPort = null;
@@ -21,7 +22,7 @@ function connect() {
     console.warn('Agent Halo host disconnected:', chrome.runtime.lastError?.message);
     if (currentPort === port) currentPort = null;
     // A disconnected request is never replayed. Pending CDP calls check this port.
-    detachAll().finally(() => {
+    Promise.all([releaseJumper(), detachAll()]).finally(() => {
       setTimeout(connect, retryMs);
       retryMs = Math.min(retryMs * 2, 8000);
     });
@@ -208,6 +209,10 @@ const OPS = {
   type: args => writeNode(args, id => type(id, args.ref, args.text, args.clear)),
   press: args => writeNode(args, id => press(id, args.key, args.ref)),
   fetch: fetchAsBrowser,
+  jumperOpen: openJumper,
+  jumperObserve: () => jumperEffect('observe'),
+  jumperInput: ({ action }) => jumperEffect(action),
+  jumperRelease: ({ retain }) => releaseJumper(retain),
 };
 chrome.runtime.onStartup.addListener(() => {});
 connect();

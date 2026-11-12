@@ -341,3 +341,160 @@ async fn timed_out_queued_client_never_sends_mutation_without_host_ready() {
     client.read_to_end(&mut bytes).await.unwrap();
     assert!(bytes.is_empty());
 }
+
+#[tokio::test]
+async fn local_identity_probe_sequences_receipts_and_releases_its_tab() {
+    let mut host = Host::start().await;
+    let name = "host-a.example.test";
+    std::fs::write(
+        host.temp.path().join("browser/jumper.json"),
+        json!({"site":"gateway.example.test","host":name}).to_string(),
+    )
+    .unwrap();
+    let path = host.path();
+    assert!(Request::JumperWhoami {}.is_mutation());
+    for forbidden in [
+        json!({"op":"jumperInput","action":"exit"}),
+        json!({"op":"jumperWhoami","host":name}),
+        json!({"op":"jumperWhoami","script":"whoami"}),
+    ] {
+        assert!(serde_json::from_value::<Request>(forbidden).is_err());
+    }
+    let task = tokio::spawn(async move { call(&path, &Request::JumperWhoami {}).await });
+    let gateway = json!(["Jumper", ""]);
+    let target = json!([name, ""]);
+    for (op, action, receipt) in [
+        ("jumperOpen", None, json!({"state":"opened"})),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[gateway]}),
+        ),
+        ("jumperInput", Some("connect"), json!({"state":"sent"})),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[["host-a",""]]}),
+        ),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[target]}),
+        ),
+        ("jumperInput", Some("whoami"), json!({"state":"sent"})),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[[name,"whoami"],target]}),
+        ),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[[name,"whoami"],"operator_a",target]}),
+        ),
+        ("jumperInput", Some("exit"), json!({"state":"sent"})),
+        (
+            "jumperObserve",
+            None,
+            json!({"state":"screen","rows":[[name,"exit"],null,gateway]}),
+        ),
+        ("jumperRelease", None, json!({"state":"released"})),
+    ] {
+        let request = read_frame(&mut host.output, MAX_REQUEST).await.unwrap();
+        assert_eq!(request["op"], op);
+        assert_eq!(request["action"].as_str(), action);
+        if op == "jumperRelease" {
+            assert_eq!(request["retain"], false);
+        }
+        write_frame(
+            &mut host.input,
+            &json!({"reqId":request["reqId"],"result":receipt}),
+            MAX_RESPONSE,
+        )
+        .await
+        .unwrap();
+    }
+    let result = task.await.unwrap().unwrap();
+    assert_eq!(result["whoami"], "operator_a");
+    assert_eq!(result["status"], "closed");
+    assert_eq!(result["pageRetained"], false);
+}
+
+#[tokio::test]
+async fn terminal_authentication_retains_page_and_sends_no_input() {
+    let mut host = Host::start().await;
+    std::fs::write(
+        host.temp.path().join("browser/jumper.json"),
+        br#"{"site":"gateway.example.test","host":"host-a"}"#,
+    )
+    .unwrap();
+    let path = host.path();
+    let task = tokio::spawn(async move { call(&path, &Request::JumperWhoami {}).await });
+    for (op, state) in [
+        ("jumperOpen", "opened"),
+        ("jumperObserve", "authenticationRequired"),
+        ("jumperRelease", "released"),
+    ] {
+        let request = read_frame(&mut host.output, MAX_REQUEST).await.unwrap();
+        assert_eq!(request["op"], op);
+        if op == "jumperRelease" {
+            assert_eq!(request["retain"], true);
+        }
+        write_frame(
+            &mut host.input,
+            &json!({"reqId":request["reqId"],"result":{"state":state}}),
+            MAX_RESPONSE,
+        )
+        .await
+        .unwrap();
+    }
+    let result = task.await.unwrap().unwrap();
+    assert_eq!(result["status"], "authenticationRequired");
+    assert_eq!(result["stage"], "firstHop");
+    assert_eq!(result["pageRetained"], true);
+}
+
+#[tokio::test]
+async fn native_channel_lost_after_whoami_reports_stage_without_replay() {
+    let mut host = Host::start().await;
+    std::fs::write(
+        host.temp.path().join("browser/jumper.json"),
+        br#"{"site":"gateway.example.test","host":"host-a"}"#,
+    )
+    .unwrap();
+    let path = host.path();
+    let task = tokio::spawn(async move { call(&path, &Request::JumperWhoami {}).await });
+    for (op, data) in [
+        ("jumperOpen", json!({"state":"opened"})),
+        (
+            "jumperObserve",
+            json!({"state":"screen","rows":[["Jumper",""]]}),
+        ),
+        ("jumperInput", json!({"state":"sent"})),
+        (
+            "jumperObserve",
+            json!({"state":"screen","rows":[["host-a",""]]}),
+        ),
+    ] {
+        let request = read_frame(&mut host.output, MAX_REQUEST).await.unwrap();
+        assert_eq!(request["op"], op);
+        write_frame(
+            &mut host.input,
+            &json!({"reqId":request["reqId"],"result":data}),
+            MAX_RESPONSE,
+        )
+        .await
+        .unwrap();
+    }
+    let write = read_frame(&mut host.output, MAX_REQUEST).await.unwrap();
+    assert_eq!(write["action"], "whoami");
+    drop(host.input);
+    let error = task.await.unwrap().unwrap_err().to_string();
+    assert!(
+        error.contains("whoami: native channel lost")
+            && error.contains("do not automatically retry"),
+        "{error}"
+    );
+    assert!(!host.child.wait().await.unwrap().success());
+    assert!(read_frame(&mut host.output, MAX_REQUEST).await.is_err());
+}

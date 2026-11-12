@@ -16,7 +16,7 @@ function fixture() {
         const port = { onMessage: event(), onDisconnect: event(), postMessage: m => sent.push(m) };
         ports.push(port); return port;
       },
-      getManifest: () => ({ version: '0.3.0' }), onStartup: event(),
+      getManifest: () => ({ version: '0.4.0' }), onStartup: event(),
     },
     tabs: { get: async () => ({ url: 'https://example.test/' }), onRemoved: event(), query: async () => [] },
     debugger: {
@@ -45,6 +45,7 @@ function fixture() {
     chrome, console: { warn() {} }, navigator: { platform: 'Linux', userAgent: 'test' },
     TextEncoder, setTimeout: fn => timers.push(fn), fetch, URL, btoa, atob,
   });
+  context.importScripts = name => vm.runInContext(fs.readFileSync(__dirname + '/' + name, 'utf8'), context);
   vm.runInContext(fs.readFileSync(__dirname + '/sw.js', 'utf8'), context);
   return {
     chrome, sent, commands, detached, ports, timers, context, fetched,
@@ -155,5 +156,35 @@ test('preserved public manifest key matches the Rust native host origin', () => 
   assert.equal(manifest.host_permissions, undefined);
   assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
   // `ping` reports this, so which copy Chrome is running is answerable.
-  assert.equal(manifest.version, '0.3.0');
+  assert.equal(manifest.version, '0.4.0');
+});
+
+test('terminal reads fresh rendered rows, binds the full host and excludes input and banners', () => {
+  const f = fixture();
+  const host = 'host-a.example.test', origin = 'https://gateway.example.test';
+  const gateway = '[operator@Jumper]#', target = '[operator@' + host + ' ~]$';
+  let lines = [gateway], dispatched = [];
+  const input = { value: 'false_input_value', focus() {}, dispatchEvent: event => dispatched.push(event.kind) };
+  const renderer = { get children() { return lines.map(textContent => ({ textContent })); } };
+  const root = { querySelector: selector => selector.startsWith('textarea') ? input : renderer };
+  f.context.location = { origin, pathname: '/terminal' };
+  f.context.document = { querySelector: () => null, querySelectorAll: () => [root], body: { innerText: '' } };
+  f.context.DataTransfer = class { setData() {} };
+  f.context.KeyboardEvent = f.context.ClipboardEvent = class { constructor(kind) { this.kind = kind; } };
+  const effect = action => JSON.parse(JSON.stringify(f.context.terminalEffect(origin, host, action)));
+  assert.deepEqual(effect('observe').rows, [['Jumper','']]);
+  assert.equal(effect('connect').state, 'sent');
+  lines = [target + ' whoami','old_user',target,'unrelated private banner',target];
+  assert.deepEqual(effect('observe').rows.slice(-2), [null,[host,'']]);
+  assert.equal(effect('whoami').state, 'sent');
+  assert.equal(effect('observe').state, 'waiting');
+  lines = [...lines.slice(0, -1), target + ' whoami','fresh_user',target];
+  assert.deepEqual(effect('observe').rows, [[host,'whoami'],'fresh_user',[host,'']]);
+  const size = dispatched.length;
+  lines.push('operator changed the terminal');
+  assert.equal(effect('exit').state, 'changedBeforeInput');
+  assert.equal(dispatched.length, size);
+  f.context.location.pathname = '/login';
+  assert.equal(effect('exit').state, 'authenticationRequired');
+  assert.equal(dispatched.length, size);
 });
