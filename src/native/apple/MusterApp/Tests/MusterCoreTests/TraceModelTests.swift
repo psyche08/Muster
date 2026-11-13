@@ -367,6 +367,12 @@ final class TraceModelTests: XCTestCase {
                                                 detail: "git status\ngit diff"))
         XCTAssertEqual(withDetail.detailPreview, "git status")
         XCTAssertEqual(withDetail.previewText, "Shell · git status")
+        let reasoning = TraceRecord(span: span("r", kind: "reasoning", title: "Reasoning",
+                                               detail: "Checking the fixtures."))
+        XCTAssertEqual(reasoning.previewText, "Checking the fixtures.")
+
+        let described = TraceRecord(span: span("call", kind: "tool", title: "shell · git status", detail: "git status\nclean"))
+        XCTAssertEqual(described.previewText, "shell · git status")
 
         let titleOnly = TraceRecord(span: span("t2", kind: "tool", title: "Shell", detail: "\n  \n"))
         XCTAssertEqual(titleOnly.previewText, "Shell")

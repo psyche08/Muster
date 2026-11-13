@@ -55,6 +55,7 @@ other_roles = "assistant"
 content = "content"
 text_blocks = ["text"]
 media_blocks = ["image"]
+reasoning_blocks = ["thinking"]
 block_ids = "all"
 
 [source.tool_call]

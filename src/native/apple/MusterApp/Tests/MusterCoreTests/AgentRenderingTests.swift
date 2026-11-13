@@ -366,7 +366,7 @@ extension AgentRenderingTests {
     @MainActor
     func testOrcaPresentationAtPhoneAndDesktopWidths() throws {
         let reasoning = Muster_App_ChatBlock.with {
-            $0.id = "reason"; $0.kind = "reasoning"; $0.title = "Reasoning"
+            $0.id = "reason"; $0.defaultExpanded = true; $0.kind = "reasoning"; $0.title = "Reasoning"
             $0.message = .with { $0.text = "检查失败的测试，并核对变更范围。" }
         }
         let reply = Muster_V1_AgentMessage.with {
@@ -374,7 +374,7 @@ extension AgentRenderingTests {
             $0.text = "已修复会话展示。**正文保持可见**，工具详情按需展开。\n\n- 保留流式更新\n- 显示准确的文件差异"
         }
         let activity = Muster_App_ChatBlock.with {
-            $0.id = "tools"; $0.kind = "activity"; $0.title = "1 command · 2 file reads"
+            $0.id = "tools"; $0.defaultExpanded = true; $0.kind = "activity"; $0.title = "1 command · 2 file reads"
             $0.activityRows = [.with {
                 $0.id = "call"; $0.title = "shell · cargo test -p muster-agent"; $0.toolName = "shell"
                 $0.category = "shell"; $0.detail = "cargo test -p muster-agent"; $0.status = "failed"
@@ -396,7 +396,7 @@ extension AgentRenderingTests {
                 let content = VStack(alignment: .leading, spacing: 16) {
                     MessageBubble(message: .with { $0.role = "user"; $0.text = "优化会话展示" })
                     ReasoningRow(block: reasoning)
-                    ActivityGroup(block: activity, expanded: true)
+                    ActivityGroup(block: activity)
                     SessionDiffCard(file: diff, expanded: true)
                     MessageBubble(message: reply)
                 }.padding(20).frame(width: width)

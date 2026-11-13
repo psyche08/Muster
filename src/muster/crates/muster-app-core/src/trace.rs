@@ -43,14 +43,7 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
             outcome = None;
         }
         let (kind, title) = match m.kind.as_str() {
-            "tool_call" => (
-                "tool",
-                if m.tool_name.is_empty() {
-                    "Tool"
-                } else {
-                    &m.tool_name
-                },
-            ),
+            "tool_call" => ("tool", "Tool"),
             "tool_result" => ("tool", "Unpaired tool output"),
             "turn_summary" => (
                 "turn",
@@ -74,7 +67,13 @@ pub fn spans(messages: &[AgentMessage], own: &str) -> Vec<TraceSpan> {
         spans.push(TraceSpan {
             id: m.id.clone(),
             kind: kind.into(),
-            title: title.into(),
+            title: if m.kind == "tool_call" {
+                crate::timeline::tool_title(m)
+            } else if kind == "reasoning" && !m.text.trim().is_empty() {
+                crate::timeline::compact_label(&m.text)
+            } else {
+                title.into()
+            },
             detail: if m.kind == "turn_summary" {
                 m.usage
                     .as_ref()

@@ -27,6 +27,10 @@ pub trait Hooks: Send + Sync {
     fn title(&self, _record: &Value) -> Option<(String, bool)> {
         None
     }
+    /// Displayable reasoning summary in a standalone provider record.
+    fn reasoning_summary(&self, _record: &Value) -> Option<String> {
+        None
+    }
     /// The turn summary a record completes, if any.
     fn usage(
         &self,
@@ -571,7 +575,12 @@ impl Reader {
                             ));
                         } else if role == Role::Assistant && rule.reasoning_blocks.contains(&kind) {
                             // The grammar requires `block_ids = "all"` here.
-                            let text = block["text"].as_str().unwrap_or("").trim();
+                            let field = if kind == "thinking" {
+                                "thinking"
+                            } else {
+                                "text"
+                            };
+                            let text = block[field].as_str().unwrap_or("").trim();
                             if !text.is_empty() {
                                 let mut message = Self::message_of(
                                     &at,
@@ -647,6 +656,10 @@ impl Reader {
                     message.phase = "final_answer".into();
                 }
             }
+        } else if let Some(text) = self.hooks.reasoning_summary(record) {
+            let mut message = Self::message_of(&at, id.clone(), Part::text(Role::Assistant), text);
+            message.phase = "reasoning".into();
+            messages.push(message);
         } else if let Where::Record(m) = &records.tool_call.at
             && m.matches(record)
         {

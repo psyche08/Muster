@@ -46,6 +46,21 @@ impl Hooks for CodexHooks {
             text
         }
     }
+    fn reasoning_summary(&self, record: &Value) -> Option<String> {
+        let payload = &record["payload"];
+        if record["type"] != "response_item" || payload["type"] != "reasoning" {
+            return None;
+        }
+        let text = payload["summary"]
+            .as_array()?
+            .iter()
+            .filter(|part| part["type"] == "summary_text")
+            .filter_map(|part| part["text"].as_str())
+            .filter(|s| !s.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        (!text.is_empty()).then_some(text)
+    }
     fn usage(
         &self,
         tracker: &mut crate::usage::Tracker,
@@ -460,6 +475,30 @@ mod tests {
         assert_eq!(polled.messages[1].to_proto().tool_call_id, "c1");
         assert_eq!(polled.messages[2].to_proto().tool_call_id, "c1");
         assert_eq!(viewer.state(), SessionState::Running);
+
+        for summary in [
+            serde_json::json!([]),
+            serde_json::json!([
+                {"type":"summary_text","text":"Checking the fixtures."},
+                {"type":"summary_text","text":"Two cases remain."}
+            ]),
+        ] {
+            writeln!(
+                f,
+                "{}",
+                serde_json::json!({"type":"response_item","payload":{
+                    "type":"reasoning","summary":summary,"encrypted_content":"opaque fixture"
+                }})
+            )
+            .unwrap();
+        }
+        let summaries = viewer.poll().unwrap().messages;
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].phase, "reasoning");
+        assert_eq!(
+            summaries[0].text,
+            "Checking the fixtures.\nTwo cases remain."
+        );
 
         writeln!(f, r#"{{"type":"response_item","payload":{{"type":"message","role":"assistant","content":[{{"type":"output_text","text":"done `\n<oai-mem-citation>p</oai-mem-citation>`"}}]}}}}"#).unwrap();
         writeln!(
