@@ -188,9 +188,14 @@ fn resolver(profile: &App, agent: &Arc<AgentService>) -> Resolver {
             let agent = agent.clone();
             let provider = profile.provider();
             Arc::new(move |key| {
-                key.title
+                key.url
                     .as_deref()
-                    .and_then(|title| agent.native_session_by_title(provider, title))
+                    .and_then(muster_agent::native_sidebar::codex_thread_id)
+                    .or_else(|| {
+                        key.title
+                            .as_deref()
+                            .and_then(|title| agent.native_session_by_title(provider, title))
+                    })
             })
         }
     }
@@ -569,7 +574,7 @@ pub async fn ensure_native(
     if let Some(app) = agent
         .session(session)
         .and_then(|s| muster_agent::desktop_chat::ChatApp::from_provider(&s.provider))
-        && !(inspect && app == muster_agent::desktop_chat::ChatApp::Claude)
+        && app != muster_agent::desktop_chat::ChatApp::Claude
         && muster_platform::macos::ax::trusted()
         && muster_agent::native_sidebar::catalog_session_route(app.profile().provider(), session)
             .is_none()

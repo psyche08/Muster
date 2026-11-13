@@ -12,14 +12,25 @@ pub enum Destination {
 /// Foreground belongs to the executor. An input pause in another app never
 /// grants permission to launch, raise a window or dispatch an activating URL.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CreationConsole {
+pub enum NativeConsole {
     Covered,
     Provider,
     Background(u32),
     Waiting,
 }
 
-impl CreationConsole {
+impl NativeConsole {
+    /// A visible surface does not need permission to navigate. For a hidden one
+    /// the original focus owner must still be known, or this must be covered.
+    pub fn check_navigation(self, current: Self) -> Result<(), Error> {
+        if self == Self::Waiting || self != current {
+            return Err(Error::Conflict(
+                "Foreground owner changed or is unavailable during session navigation".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Called after looking for an eligible form. A provider permit protects UI
     /// actions, not a wait for its owner to switch applications.
     pub fn check_wait(self, provider_held: bool, provider: &str) -> Result<(), Error> {
@@ -338,25 +349,35 @@ mod tests {
     #[test]
     fn background_or_unknown_focus_never_admits_foreground_work() {
         use crate::local_input::Owner::*;
-        use CreationConsole::*;
+        use NativeConsole::*;
         assert_eq!(
-            CreationConsole::observe(false, Some(2), Process(1)),
+            NativeConsole::observe(false, Some(2), Process(1)),
             Background(1)
         );
-        assert_eq!(
-            CreationConsole::observe(false, Some(2), Process(2)),
-            Provider
-        );
+        assert_eq!(NativeConsole::observe(false, Some(2), Process(2)), Provider);
         for owner in [Nobody, Unknown] {
-            assert_eq!(CreationConsole::observe(false, Some(2), owner), Waiting);
+            assert_eq!(NativeConsole::observe(false, Some(2), owner), Waiting);
         }
-        assert_eq!(CreationConsole::observe(false, None, Process(1)), Waiting);
-        assert_eq!(CreationConsole::observe(true, None, Nobody), Covered);
+        assert_eq!(NativeConsole::observe(false, None, Process(1)), Waiting);
+        assert_eq!(NativeConsole::observe(true, None, Nobody), Covered);
+    }
+
+    #[test]
+    fn session_navigation_binds_the_observed_console_at_dispatch() {
+        use NativeConsole::*;
+        for before in [Waiting, Provider, Background(7), Background(8), Covered] {
+            for now in [Waiting, Provider, Background(7), Background(8), Covered] {
+                assert_eq!(
+                    before.check_navigation(now).is_ok(),
+                    before == now && before != Waiting
+                );
+            }
+        }
     }
 
     #[test]
     fn only_pre_admission_can_wait_for_a_foreground_handoff() {
-        use CreationConsole::*;
+        use NativeConsole::*;
         for mode in [Waiting, Background(5)] {
             assert!(mode.check_wait(false, "test").is_ok());
             assert!(matches!(

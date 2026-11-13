@@ -50,16 +50,8 @@ fn from_url(provider: &str, raw: &str) -> Option<Page> {
             None
         }
         "codex" => {
-            if url.scheme() == "codex" && url.host_str() == Some("threads") {
-                return uuid(url.path().strip_prefix('/')?).map(Page::Code);
-            }
-            if url.scheme() == "app" && url.host_str() == Some("-") {
-                let path = url.fragment().unwrap_or(url.path());
-                return path
-                    .strip_prefix("/thread/")
-                    .or_else(|| path.strip_prefix("/threads/"))
-                    .and_then(uuid)
-                    .map(Page::Code);
+            if let Some(id) = muster_agent::native_sidebar::codex_thread_id(raw) {
+                return Some(Page::Code(id));
             }
             if url.scheme() == "https" && url.host_str() == Some("chatgpt.com") {
                 return uuid(url.path().strip_prefix("/c/")?).map(Page::Chat);
@@ -232,7 +224,7 @@ impl Snapshot {
         };
         guard(destination, expected)?;
         let original = self.original.as_ref();
-        let mut owner = expected;
+        let owner = expected;
         if let Some(page) = original
             && page != destination
         {
@@ -251,7 +243,8 @@ impl Snapshot {
             } else {
                 Vec::new()
             };
-            if let Some(w) = self.window.as_ref()
+            if expected == self.target
+                && let Some(w) = self.window.as_ref()
                 && window(&self.app).as_ref() != Some(w)
                 && selection(self.profile.provider(), w).as_ref() == Some(page)
                 && self.app.contains(w)
@@ -259,10 +252,21 @@ impl Snapshot {
                 guard(destination, expected)?;
                 w.perform("AXRaise")
                     .map_err(|_| unavailable("original window could not be raised"))?;
-            } else if route.is_none() || (expected != self.target && links.len() == 1) {
-                let [link] = links.as_slice() else {
-                    return Err(unavailable("no unique exact original session link"));
-                };
+            } else if route.is_none() || expected != self.target {
+                let link = match links.as_slice() {
+                    [link] => Some(link.clone()),
+                    [] if self.profile.provider() == "claude"
+                        && let Page::Code(id) = page
+                        && let Some(w) = self.window.as_ref()
+                        && window(&self.app).as_ref() == Some(w) =>
+                    {
+                        native_app::claude_return_row(w, id)
+                    }
+                    _ => None,
+                }
+                .ok_or_else(|| {
+                    unavailable("no unique in-app return path to the original session")
+                })?;
                 guard(destination, expected)?;
                 link.press()
                     .map_err(|_| unavailable("original session link refused"))?;
@@ -293,10 +297,7 @@ impl Snapshot {
             }
             loop {
                 permit.check(input::user_input_generation())?;
-                let f = front();
-                if f == Some(self.target) {
-                    owner = self.target;
-                } else if f != Some(expected) {
+                if front() != Some(expected) {
                     return Err(unavailable("foreground changed during restore"));
                 }
                 if window(&self.app)

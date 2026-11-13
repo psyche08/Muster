@@ -6,7 +6,7 @@ use super::{
 };
 use muster_agent::{
     Error, control_guard,
-    native_runtime::{CreationConsole, CreationWindow},
+    native_runtime::{CreationWindow, NativeConsole},
     profile::App,
 };
 use std::{
@@ -91,7 +91,7 @@ struct Guard {
     pid: u32,
     start: u64,
     generation: u64,
-    mode: CreationConsole,
+    mode: NativeConsole,
 }
 impl Guard {
     fn check(&self) -> Result<(), Error> {
@@ -103,19 +103,15 @@ impl Guard {
                 "Native process identity changed; nothing is retried",
             ));
         }
-        if self.mode != CreationConsole::Covered
+        if self.mode != NativeConsole::Covered
             && self.mode
-                != CreationConsole::observe(
-                    false,
-                    Some(self.pid),
-                    super::events::foreground_owner(),
-                )
+                != NativeConsole::observe(false, Some(self.pid), super::events::foreground_owner())
         {
             return Err(conflict(
                 "Foreground application changed during native creation",
             ));
         }
-        let generation = if matches!(self.mode, CreationConsole::Background(_)) {
+        let generation = if matches!(self.mode, NativeConsole::Background(_)) {
             input::target_input_generation(self.pid)
         } else {
             input::user_input_generation()
@@ -292,9 +288,9 @@ pub fn multica_directory_admissible(cwd: &Path) -> bool {
     };
     let pids = native_app::app_pids(app);
     let [pid] = pids.as_slice() else { return false };
-    match CreationConsole::observe(false, Some(*pid), super::events::foreground_owner()) {
-        CreationConsole::Provider => input::user_input_idle() >= Duration::from_secs(1),
-        CreationConsole::Background(_) => codex_project_state().is_some_and(|b| {
+    match NativeConsole::observe(false, Some(*pid), super::events::foreground_owner()) {
+        NativeConsole::Provider => input::user_input_idle() >= Duration::from_secs(1),
+        NativeConsole::Background(_) => codex_project_state().is_some_and(|b| {
             muster_agent::native_runtime::selected_codex_directory(&b, cwd)
                 || muster_agent::native_runtime::codex_sidebar_project(&b, cwd).is_some()
         }),
@@ -644,14 +640,12 @@ impl Admission {
 /// Managed tasks call this with the live caller's cancellation guard, before
 /// reserving the console, provider or submission ledger. No UI action is sent.
 pub async fn managed_admission(cwd: &Path) -> Result<Admission, Error> {
-    prepare("codex", cwd, "", "", false, false).await
+    prepare("codex", cwd, false, false).await
 }
 
 async fn prepare(
     provider: &str,
     cwd: &Path,
-    model: &str,
-    effort: &str,
     covered: bool,
     provider_held: bool,
 ) -> Result<Admission, Error> {
@@ -685,28 +679,26 @@ async fn prepare(
             return Err(conflict("Ambiguous native app processes"));
         }
         let pid = pids.first().copied();
-        let mode = CreationConsole::observe(covered, pid, super::events::foreground_owner());
+        let mode = NativeConsole::observe(covered, pid, super::events::foreground_owner());
         if let Some(pid) = pid {
-            let background = matches!(mode, CreationConsole::Background(_));
+            let background = matches!(mode, NativeConsole::Background(_));
             let quiet = if background {
                 input::target_input_idle(&[pid])
             } else {
                 input::user_input_idle()
             };
             let reason = match mode {
-                CreationConsole::Provider if quiet < Duration::from_millis(500) => {
-                    "foreground_input"
-                }
-                CreationConsole::Provider => "provider_foreground",
-                CreationConsole::Background(_) => "other_app_foreground",
-                CreationConsole::Waiting => "no_focus_owner",
-                CreationConsole::Covered => "covered",
+                NativeConsole::Provider if quiet < Duration::from_millis(500) => "foreground_input",
+                NativeConsole::Provider => "provider_foreground",
+                NativeConsole::Background(_) => "other_app_foreground",
+                NativeConsole::Waiting => "no_focus_owner",
+                NativeConsole::Covered => "covered",
             };
             if last_reason != Some(reason) {
                 stage(reason);
                 last_reason = Some(reason);
             }
-            if mode != CreationConsole::Waiting && quiet >= Duration::from_millis(500) {
+            if mode != NativeConsole::Waiting && quiet >= Duration::from_millis(500) {
                 let guard = Guard {
                     profile,
                     pid,
@@ -728,7 +720,12 @@ async fn prepare(
                 }
                 let root = Element::application(pid);
                 root.enable_manual_accessibility();
-                if mode == CreationConsole::Provider {
+                if let Some(window) = ready_background_window(&root, &guard, provider, cwd)? {
+                    guard.check()?;
+                    stage("background_form_ready");
+                    break (guard, root, Some(window), None);
+                }
+                if mode == NativeConsole::Provider {
                     // Everything in this wait is observation or idempotent AX
                     // enablement. Input/focus changes here can safely requeue.
                     match settled_windows(&guard, &root, true).await {
@@ -742,14 +739,6 @@ async fn prepare(
                 }
                 if !background {
                     break (guard, root, None, None);
-                }
-                if model.is_empty()
-                    && effort.is_empty()
-                    && let Some(window) = ready_background_window(&root, &guard, provider, cwd)?
-                {
-                    guard.check()?;
-                    stage("background_form_ready");
-                    break (guard, root, Some(window), None);
                 }
             }
         } else if covered && !launched && input::user_input_idle() >= Duration::from_millis(500) {
@@ -802,7 +791,7 @@ pub async fn submit(
         started,
     } = match admission {
         Some(prepared) => prepared,
-        None => prepare(provider, cwd, model, effort, covered, true).await?,
+        None => prepare(provider, cwd, covered, true).await?,
     };
     let profile = guard.profile;
     let stage = |name: &str| {
