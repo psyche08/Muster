@@ -313,3 +313,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0195](0195-publish-browser-terminal.md) | Accepted; published and installed on the test Mac | Publish the Chrome terminal identity probe in Apple 1.1.38 |
 | [0196](0196-foreground-waits-and-provider-queue.md) | Accepted | Keep foreground handoffs out of occupied provider queues |
 | [0197](0197-inline-recorded-work.md) | Accepted | Show recorded reasoning and tool descriptions inline |
+| [0198](0198-publish-apple-1-1-39.md) | Accepted | Publish Apple 1.1.39 and select build 129 for public TestFlight |
