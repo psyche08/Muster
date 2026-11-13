@@ -244,20 +244,57 @@ async fn owned(
         break (Arc::new((provider_lock, console)), prepared);
     };
     let body = r.encode_to_vec();
-    crate::handler::ledgered(daemon,&r.op_id,"agent.native_create",&r.provider,true,&body,async {
-        let before:Vec<String>=agent.list(None,usize::MAX).into_iter().map(|s|s.id).collect();
-        let held=ownership.clone();let provider=r.provider.clone();let cwd=path.clone();let prompt=r.prompt.clone();
-        let (model,effort)=(r.model.clone(),r.effort.clone());
-        let form=control_guard::spawn_blocking_async(async move {let _held=held;muster_platform::macos::native_create::submit(&provider,&cwd,&prompt,&model,&effort,covered,prepared).await}).await.map_err(|e|Error::UnknownOutcome(e.to_string()))??;
-        let deadline=tokio::time::Instant::now()+receipt_budget;
-        loop {
-            control_guard::check().map_err(|e|Error::UnknownOutcome(e.to_string()))?;
-            let mut matches=candidates(&agent,&r.provider,&path,&r.prompt,&before).await;
-            if matches.len()==1 && form.visible().map_err(|e|Error::UnknownOutcome(e.to_string()))? {return Ok(matches.remove(0))}
-            if matches.len()>1 || tokio::time::Instant::now()>=deadline {return Err(Error::UnknownOutcome("Native submission has no unique receipt yet; reconcile from transcripts, never replay".into()))}
-            tokio::time::sleep(Duration::from_millis(200)).await;
-        }
-    }).await
+    let operation = crate::handler::ledgered(
+        daemon,
+        &r.op_id,
+        "agent.native_create",
+        &r.provider,
+        true,
+        &body,
+        async {
+            let before: Vec<String> = agent
+                .list(None, usize::MAX)
+                .into_iter()
+                .map(|s| s.id)
+                .collect();
+            let held = ownership.clone();
+            let provider = r.provider.clone();
+            let cwd = path.clone();
+            let prompt = r.prompt.clone();
+            let (model, effort) = (r.model.clone(), r.effort.clone());
+            let slot = muster_platform::macos::navigation_restore::current_form();
+            let form = control_guard::spawn_blocking_async(
+                muster_platform::macos::navigation_restore::track_form(slot, async move {
+                    let _held = held;
+                    muster_platform::macos::native_create::submit(
+                        &provider, &cwd, &prompt, &model, &effort, covered, prepared,
+                    )
+                    .await
+                }),
+            )
+            .await
+            .map_err(|e| Error::UnknownOutcome(e.to_string()))??;
+            let deadline = tokio::time::Instant::now() + receipt_budget;
+            loop {
+                control_guard::check().map_err(|e| Error::UnknownOutcome(e.to_string()))?;
+                let mut matches = candidates(&agent, &r.provider, &path, &r.prompt, &before).await;
+                if matches.len() == 1
+                    && form
+                        .visible()
+                        .map_err(|e| Error::UnknownOutcome(e.to_string()))?
+                {
+                    let id = matches.remove(0);
+                    muster_agent::native_navigation::restore::created(&id);
+                    return Ok(id);
+                }
+                if matches.len() > 1 || tokio::time::Instant::now() >= deadline {
+                    return Err(Error::UnknownOutcome("Native submission has no unique receipt yet; reconcile from transcripts, never replay".into()));
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        },
+    );
+    crate::navigation_restore::run(daemon, app, None, covered, ownership.clone(), operation).await
 }
 
 /// Creation through Muster's plugin inside the app (ADR 0167): the plugin's

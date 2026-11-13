@@ -305,6 +305,20 @@ impl Handler for MusterHandler {
             if let Err(error) = authorize_request(&daemon, &ctx, &request, &access) {
                 return fail(error);
             }
+            // This RPC only requests observation. The watch already carries a
+            // cached pending card; even a locked host can answer without an unlock.
+            if let Req::AgentInspect(r) = &request
+                && let Some(agent) = daemon.agent()
+                && agent.retains_native_controller(&r.session)
+                && agent
+                    .pending(&r.session)
+                    .iter()
+                    .any(|i| !i.optional && matches!(i.kind.as_str(), "approval" | "question"))
+            {
+                return Resp::DebugText(v1::DebugText {
+                    text: "previously observed pending interaction".into(),
+                });
+            }
             if let Req::TerminalCreate(r) = &request
                 && crate::native_terminals::source(&daemon, &r.source)
                     .is_ok_and(|t| t.source() == "ghostty")
@@ -2345,7 +2359,17 @@ async fn dispatch(
         | Req::AgentInterrupt(_)
         | Req::AgentComplete(_)
         | Req::AgentOrganize(_)
-        | Req::AgentInspect(_)) => locked_operation(daemon, request).await?,
+        | Req::AgentInspect(_)) => {
+            let weak = Arc::downgrade(daemon);
+            let context = ctx.clone();
+            let original = request.clone();
+            let allowed = Arc::new(move || {
+                weak.upgrade().is_some_and(|d| {
+                    authorize_request(&d, &context, &original, &access_for(&original)).is_ok()
+                })
+            });
+            muster_agent::control_guard::scope(allowed, locked_operation(daemon, request)).await?
+        }
         request @ (Req::AgentChats(_)
         | Req::AgentChatOpen(_)
         | Req::AgentChatOptions(_)
@@ -2707,7 +2731,8 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         Req::AgentRespond(r) => r.op_id.as_str(),
         Req::AgentInterrupt(r) => r.op_id.as_str(),
         _ => "",
-    };
+    }
+    .to_owned();
     let preparation_started = std::time::Instant::now();
     log::info!("Agent {what} op={op_id:?} target={session:?}: waiting for provider queue");
     // FIFO for this provider, including navigation, input and its receipt.
@@ -2725,9 +2750,19 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         preparation_started.elapsed().as_millis()
     );
     #[cfg(target_os = "macos")]
-    if what == "send" && !plugin && crate::agent_bridge::drives_desktop(daemon.platform().as_ref())
-    {
-        muster_agent::control_guard::wait_for_quiet(
+    let app = (!plugin)
+        .then(|| crate::agent_bridge::session_app(agent, &session))
+        .flatten()
+        .map(|(app, _)| app);
+    #[cfg(target_os = "macos")]
+    let destination = session.clone();
+    let operation = async {
+        #[cfg(target_os = "macos")]
+        if what == "send"
+            && !plugin
+            && crate::agent_bridge::drives_desktop(daemon.platform().as_ref())
+        {
+            muster_agent::control_guard::wait_for_quiet(
             crate::agent_bridge::session_input_idle(agent, &session),
             Duration::from_millis(250),
             Duration::from_secs(3),
@@ -2735,167 +2770,188 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         .await.inspect_err(|error| {
             log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger phase=quiet_input elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
         })?;
-    }
-    if !plugin {
-        crate::agent_bridge::ensure_native(daemon, agent.clone(), &session, matches!(request, Req::AgentInspect(_)))
+        }
+        if !plugin {
+            crate::agent_bridge::ensure_native(daemon, agent.clone(), &session, matches!(request, Req::AgentInspect(_)))
             .await
             .inspect_err(|error| {
                 // Pre-ledger failures used to leave only “operation finished” in
                 // Locked Use logs. Record the stage and reason, never the request.
                 log::warn!("Agent {what} op={op_id:?} target={session:?}: native preparation failed before ledger elapsed_ms={}: {error}", preparation_started.elapsed().as_millis());
             })?;
-    }
-    log::info!(
-        "Agent {what} op={op_id:?} target={session:?}: native preparation ready elapsed_ms={}",
-        preparation_started.elapsed().as_millis()
-    );
-    Ok(match request {
-        Req::AgentOrganize(r) => {
-            let agent = agent.clone();
-            let body = muster_proto::Message::encode_to_vec(&r);
-            let subject = r.session.clone();
-            let op_id = r.op_id.clone();
-            ledgered(
-                daemon,
-                &op_id,
-                "agent.organize",
-                &subject,
-                true,
-                &body,
-                async move { Ok(agent.organize(r).await?) },
-            )
-            .await?
         }
-        Req::AgentComplete(r) => Resp::AgentCompletion(v1::AgentCompletion {
-            text: agent.complete(&r.session).await?,
-            session: r.session,
-        }),
-        Req::AgentInspect(r) => {
-            // Observe before the covered read completes, not on a later poll
-            // that may run only after the console has relocked.
-            agent.refresh_interactions(&r.session).await?;
-            let agent = agent.clone();
-            let text = muster_agent::control_guard::spawn_blocking(move || {
-                agent.question_diagnostic(&r.session)
-            })
-            .await
-            .map_err(|e| Error::Unavailable(e.to_string()))??;
-            Resp::DebugText(v1::DebugText { text })
-        }
-        Req::AgentSend(r) => {
-            let agent = agent_of(daemon)?.clone();
-            use muster_proto::Message as _;
-            muster_proto::attachments::validate(&r.text, &r.attachments).map_err(Error::Invalid)?;
-            if muster_agent::desktop_chat::app_of(&r.session).is_some() && !r.attachments.is_empty()
-            {
-                // Local file references mean nothing to a claude.ai / ChatGPT chat.
-                return Err(Error::Invalid(
-                    "desktop chats take text only; nothing was sent".into(),
-                ));
+        log::info!(
+            "Agent {what} op={op_id:?} target={session:?}: native preparation ready elapsed_ms={}",
+            preparation_started.elapsed().as_millis()
+        );
+        Ok(match request {
+            Req::AgentOrganize(r) => {
+                let agent = agent.clone();
+                let body = muster_proto::Message::encode_to_vec(&r);
+                let subject = r.session.clone();
+                let op_id = r.op_id.clone();
+                ledgered(
+                    daemon,
+                    &op_id,
+                    "agent.organize",
+                    &subject,
+                    true,
+                    &body,
+                    async move { Ok(agent.organize(r).await?) },
+                )
+                .await?
             }
-            // Bind filenames, media types and all bytes to the idempotency ledger.
-            let body = r.encode_to_vec();
-            let root = daemon.config.dir.join("attachments");
-            let subject = r.session.clone();
-            ledgered(
-                daemon,
-                &r.op_id,
-                "agent.send",
-                &subject,
-                true,
-                &body,
-                async move {
-                    let text = tokio::task::spawn_blocking(move || {
-                        muster_agent::attachments::prepare(&root, &r.text, &r.attachments)
-                    })
-                    .await
-                    .map_err(|e| Error::Unavailable(e.to_string()))??;
-                    // The user checked the Mac: the earlier write never arrived.
-                    if !r.release_unconfirmed.is_empty() {
-                        let agent = agent.clone();
-                        let session = r.session.clone();
-                        let operation = r.release_unconfirmed.clone();
-                        muster_agent::control_guard::spawn_blocking(move || {
-                            agent.release_unconfirmed(&session, &operation)
+            Req::AgentComplete(r) => Resp::AgentCompletion(v1::AgentCompletion {
+                text: agent.complete(&r.session).await?,
+                session: r.session,
+            }),
+            Req::AgentInspect(r) => {
+                // Observe before the covered read completes, not on a later poll
+                // that may run only after the console has relocked.
+                agent.refresh_interactions(&r.session).await?;
+                let agent = agent.clone();
+                let text = muster_agent::control_guard::spawn_blocking(move || {
+                    agent.question_diagnostic(&r.session)
+                })
+                .await
+                .map_err(|e| Error::Unavailable(e.to_string()))??;
+                Resp::DebugText(v1::DebugText { text })
+            }
+            Req::AgentSend(r) => {
+                let agent = agent_of(daemon)?.clone();
+                use muster_proto::Message as _;
+                muster_proto::attachments::validate(&r.text, &r.attachments)
+                    .map_err(Error::Invalid)?;
+                if muster_agent::desktop_chat::app_of(&r.session).is_some()
+                    && !r.attachments.is_empty()
+                {
+                    // Local file references mean nothing to a claude.ai / ChatGPT chat.
+                    return Err(Error::Invalid(
+                        "desktop chats take text only; nothing was sent".into(),
+                    ));
+                }
+                // Bind filenames, media types and all bytes to the idempotency ledger.
+                let body = r.encode_to_vec();
+                let root = daemon.config.dir.join("attachments");
+                let subject = r.session.clone();
+                ledgered(
+                    daemon,
+                    &r.op_id,
+                    "agent.send",
+                    &subject,
+                    true,
+                    &body,
+                    async move {
+                        let text = tokio::task::spawn_blocking(move || {
+                            muster_agent::attachments::prepare(&root, &r.text, &r.attachments)
                         })
                         .await
                         .map_err(|e| Error::Unavailable(e.to_string()))??;
-                    }
-                    // A new desktop chat answers with the conversation it became.
-                    Ok(agent.send_to(&r.session, &text).await?)
-                },
-            )
-            .await?
-        }
-        Req::AgentRespond(r) => {
-            let agent = agent_of(daemon)?.clone();
-            let body = muster_proto::Message::encode_to_vec(&r);
-            let subject = if r.session.is_empty() {
-                r.interaction.clone()
-            } else {
-                r.session.clone()
-            };
-            let question_count = r.answers.len();
-            let mut response = ledgered(
-                daemon,
-                &r.op_id,
-                "agent.respond",
-                &subject,
-                true,
-                &body,
-                async move {
-                    if !r.answers.is_empty() {
-                        if r.session.is_empty() {
-                            return Err(crate::Error::Invalid(
-                                "Question answers require a session".into(),
-                            ));
+                        // The user checked the Mac: the earlier write never arrived.
+                        if !r.release_unconfirmed.is_empty() {
+                            let agent = agent.clone();
+                            let session = r.session.clone();
+                            let operation = r.release_unconfirmed.clone();
+                            muster_agent::control_guard::spawn_blocking(move || {
+                                agent.release_unconfirmed(&session, &operation)
+                            })
+                            .await
+                            .map_err(|e| Error::Unavailable(e.to_string()))??;
                         }
-                        agent
-                            .answer_questions(&r.session, &r.interaction, &r.answers)
-                            .await?;
-                    } else if r.session.is_empty() {
-                        agent.respond(&r.interaction, &r.option, &r.answer).await?;
-                    } else {
-                        agent
-                            .respond_in_session(&r.session, &r.interaction, &r.option, &r.answer)
-                            .await?;
-                    }
-                    Ok(r.interaction)
-                },
-            )
-            .await?;
-            if question_count > 0
-                && let Resp::OpResult(result) = &mut response
-                && matches!(
-                    Status::try_from(result.status),
-                    Ok(Status::Applied | Status::Duplicate)
+                        // A new desktop chat answers with the conversation it became.
+                        Ok(agent.send_to(&r.session, &text).await?)
+                    },
                 )
-            {
-                result.message =
-                    format!("已执行 {question_count} 道题的答题操作，请在原会话确认结果。");
+                .await?
             }
-            response
-        }
-        Req::AgentInterrupt(r) => {
-            let agent = agent_of(daemon)?.clone();
-            let body = r.session.clone().into_bytes();
-            let subject = r.session.clone();
-            ledgered(
-                daemon,
-                &r.op_id,
-                "agent.interrupt",
-                &subject,
-                true,
-                &body,
-                async move {
-                    agent.interrupt(&r.session).await?;
-                    Ok(r.session)
-                },
-            )
-            .await?
-        }
-        _ => return Err(Error::Invalid("not a locked agent operation".into())),
-    })
+            Req::AgentRespond(r) => {
+                let agent = agent_of(daemon)?.clone();
+                let body = muster_proto::Message::encode_to_vec(&r);
+                let subject = if r.session.is_empty() {
+                    r.interaction.clone()
+                } else {
+                    r.session.clone()
+                };
+                let question_count = r.answers.len();
+                let mut response = ledgered(
+                    daemon,
+                    &r.op_id,
+                    "agent.respond",
+                    &subject,
+                    true,
+                    &body,
+                    async move {
+                        if !r.answers.is_empty() {
+                            if r.session.is_empty() {
+                                return Err(crate::Error::Invalid(
+                                    "Question answers require a session".into(),
+                                ));
+                            }
+                            agent
+                                .answer_questions(&r.session, &r.interaction, &r.answers)
+                                .await?;
+                        } else if r.session.is_empty() {
+                            agent.respond(&r.interaction, &r.option, &r.answer).await?;
+                        } else {
+                            agent
+                                .respond_in_session(
+                                    &r.session,
+                                    &r.interaction,
+                                    &r.option,
+                                    &r.answer,
+                                )
+                                .await?;
+                        }
+                        Ok(r.interaction)
+                    },
+                )
+                .await?;
+                if question_count > 0
+                    && let Resp::OpResult(result) = &mut response
+                    && matches!(
+                        Status::try_from(result.status),
+                        Ok(Status::Applied | Status::Duplicate)
+                    )
+                {
+                    result.message =
+                        format!("已执行 {question_count} 道题的答题操作，请在原会话确认结果。");
+                }
+                response
+            }
+            Req::AgentInterrupt(r) => {
+                let agent = agent_of(daemon)?.clone();
+                let body = r.session.clone().into_bytes();
+                let subject = r.session.clone();
+                ledgered(
+                    daemon,
+                    &r.op_id,
+                    "agent.interrupt",
+                    &subject,
+                    true,
+                    &body,
+                    async move {
+                        agent.interrupt(&r.session).await?;
+                        Ok(r.session)
+                    },
+                )
+                .await?
+            }
+            _ => return Err(Error::Invalid("not a locked agent operation".into())),
+        })
+    };
+    #[cfg(target_os = "macos")]
+    if let Some(app) = app {
+        return crate::navigation_restore::run(
+            daemon,
+            app,
+            Some(&destination),
+            crate::locked_use::navigation_is_covered()?,
+            Arc::new(_app),
+            operation,
+        )
+        .await;
+    }
+    operation.await
 }
 
 /// Rejects an operation the session's app does not declare in its profile

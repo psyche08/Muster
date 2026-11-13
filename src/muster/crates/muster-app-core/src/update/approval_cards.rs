@@ -70,6 +70,7 @@ pub(super) fn refresh(
         chat.approval_refresh_pending = false;
         return;
     }
+    chat.approval_refresh_attempted = true;
     let epoch = state.chat_call_epoch;
     let tx = ctx.tx.clone();
     spawn(ctx, async move {
@@ -90,6 +91,7 @@ pub(super) fn refresh(
 
 pub(super) fn finished(
     state: &mut State,
+    ctx: &Ctx,
     token: CancellationToken,
     device: String,
     session: String,
@@ -106,6 +108,17 @@ pub(super) fn finished(
     if missing(chat)
         && let Some(error) = error
     {
+        if error == format!("unavailable: {}", muster_proto::INSPECT_LOCAL_INPUT) {
+            chat.approval_refresh_attempted = false;
+            chat.approval_refresh_pending = true;
+            spawn(ctx, async move {
+                tokio::select! {
+                    _ = token.cancelled()=> Msg::Ignored,
+                    _ = tokio::time::sleep(Duration::from_secs(35)) => Msg::RefreshApprovals{token,device,session},
+                }
+            });
+            return;
+        }
         state.toast(
             format!("Could not read Claude's permission card: {error}"),
             true,

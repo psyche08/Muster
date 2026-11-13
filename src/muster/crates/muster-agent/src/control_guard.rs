@@ -150,8 +150,13 @@ where
     let permit = queue.as_ref().map(WorkQueue::enter);
     let check = CHECK.try_with(Clone::clone).ok();
     let delivery = current_delivery();
+    let navigation = crate::native_navigation::restore::NAVIGATION
+        .try_with(Clone::clone)
+        .ok();
+    let navigation_worker = navigation.as_ref().map(|n| n.worker());
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
+        let _navigation_worker = navigation_worker;
         let checked = || match check {
             Some(check) => CHECK.sync_scope(check, work),
             None => work(),
@@ -159,6 +164,10 @@ where
         let run = || match delivery {
             Some(delivery) => DELIVERY.sync_scope(delivery, checked),
             None => checked(),
+        };
+        let run = || match navigation {
+            Some(n) => crate::native_navigation::restore::NAVIGATION.sync_scope(n, run),
+            None => run(),
         };
         match queue {
             Some(queue) => WORK.sync_scope(queue, run),
@@ -184,6 +193,10 @@ pub async fn scope<T>(
     future: impl Future<Output = T>,
 ) -> T {
     CHECK.scope(check, future).await
+}
+/// Clone the current live check for an operation-owned cleanup worker.
+pub fn current_check() -> Option<Arc<dyn Fn() -> bool + Send + Sync>> {
+    CHECK.try_with(Clone::clone).ok()
 }
 pub fn check() -> Result<(), crate::Error> {
     if CHECK.try_with(|check| check()).unwrap_or(true) {

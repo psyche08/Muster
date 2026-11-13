@@ -2985,6 +2985,23 @@ async fn permission_reads_are_bounded_cancelled_and_yield_to_initial_cards() {
             .unwrap(),
         Some(Loop::Msg(m)) if matches!(*m, Msg::Ignored)
     ));
+    // A deferred inspection is quiet, holds only its watch and schedules one retry.
+    let retry = CancellationToken::new();
+    approval_cards::finished(
+        &mut state,
+        &ctx,
+        retry.clone(),
+        "mac".into(),
+        session.clone(),
+        Some(format!(
+            "unavailable: {}",
+            muster_proto::INSPECT_LOCAL_INPUT
+        )),
+    );
+    assert!(state.chat.as_ref().unwrap().approval_refresh_pending);
+    assert!(state.toasts.is_empty());
+    retry.cancel();
+    assert!(matches!(rx.recv().await,Some(Loop::Msg(m)) if matches!(*m,Msg::Ignored)));
     // A late delayed message cannot start a read after navigation/cancellation.
     approval_cards::refresh(&mut state, &ctx, token, "mac".into(), session);
     assert!(state.chat_calls.is_empty());

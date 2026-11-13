@@ -16,6 +16,8 @@ pub mod handler;
 pub mod l4forwarder;
 pub mod locked_use;
 pub mod multica;
+#[cfg(target_os = "macos")]
+mod navigation_restore;
 pub mod network;
 mod presence;
 pub mod vision;
@@ -252,6 +254,8 @@ pub struct Daemon {
     /// `None` on a platform that drives no desktop apps.
     pub(crate) desktop_locks: Option<muster_agent::desktop_lock::DesktopLocks>,
     /// FIFO per provider on this host; different providers are independent.
+    #[cfg(target_os = "macos")]
+    navigation_returns: navigation_restore::Returns,
     pub(crate) agent_operations: crate::agent_bridge::ProviderQueues,
 }
 
@@ -396,6 +400,8 @@ impl Daemon {
             covered: std::sync::atomic::AtomicBool::new(false),
             plugin_setup: std::sync::atomic::AtomicU8::new(0),
             desktop_locks,
+            #[cfg(target_os = "macos")]
+            navigation_returns: Default::default(),
             agent_operations: crate::agent_bridge::ProviderQueues::default(),
         });
         if daemon.config.listen && cfg!(target_os = "macos") {
