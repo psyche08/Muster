@@ -139,6 +139,7 @@ fn window_range(
             id: message.id.clone(),
             kind: kind.into(),
             title: title.into(),
+            default_expanded: kind == "reasoning",
             message: Some(message.clone()),
             completed,
             diffs: if kind == "diff" {
@@ -376,12 +377,13 @@ fn turn(
             if !visible.contains(&index) {
                 continue;
             }
-            // A provider's recorded reasoning is its own collapsed row.
+            // Keep recorded reasoning distinct from the final answer.
             let reasoning = message.phase == "reasoning";
             work.push(ChatBlock {
                 id: message.id.clone(),
                 kind: if reasoning { "reasoning" } else { "message" }.into(),
                 title: if reasoning { "Reasoning" } else { "" }.into(),
+                default_expanded: reasoning,
                 message: Some(message.clone()),
                 completed,
                 ..Default::default()
@@ -422,13 +424,17 @@ fn flush_work(
     let (details, details_error) = details.take().unwrap_or_default();
     // A work record whose records are not loaded still shows its group.
     if let Some(id) = id.filter(|_| !work.is_empty() || !details.is_empty()) {
+        let show_steps = details.is_empty()
+            && work
+                .iter()
+                .any(|child| matches!(child.kind.as_str(), "reasoning" | "activity"));
         out.push(ChatBlock {
             id: format!("working:{id}"),
             kind: "working".into(),
             title: if completed { "Worked" } else { "Working" }.into(),
             children: std::mem::take(work),
             completed,
-            default_expanded: !completed,
+            default_expanded: !completed || show_steps,
             details: details.into(),
             details_error,
             ..Default::default()
@@ -448,6 +454,7 @@ fn flush(
             kind: "activity".into(),
             activity_rows: activity_rows(activity, completed),
             title: activity_title(activity),
+            default_expanded: true,
             activity: std::mem::take(activity),
             completed,
             ..Default::default()
@@ -552,59 +559,89 @@ fn presentation_status(message: &AgentMessage, completed: bool) -> &'static str 
     }
 }
 
-fn activity_row(message: &AgentMessage) -> ChatActivityRow {
-    let name = message
+fn short_tool_name(message: &AgentMessage) -> &str {
+    message
         .tool_name
         .rsplit('.')
         .next()
         .filter(|s| !s.is_empty())
-        .unwrap_or("Tool");
-    let category = tool_category(name);
-    let is_result = message.kind == "tool_result";
-    let arguments = (!is_result)
-        .then(|| {
-            serde_json::from_str::<serde_json::Value>(
-                message
-                    .text
-                    .strip_prefix(&format!("{} ", message.tool_name))
-                    .unwrap_or(&message.text),
-            )
-            .ok()
-        })
-        .flatten();
-    let excerpt = arguments.as_ref().and_then(|value| {
-        if let Some(command) = value.as_str() {
-            return Some(command);
-        }
-        [
-            "cmd",
-            "command",
-            "file_path",
-            "path",
-            "pattern",
-            "query",
-            "code",
-        ]
-        .iter()
-        .find_map(|key| value.get(key).and_then(|v| v.as_str()))
-    });
-    // Preserve the complete bounded source in the disclosure. Never infer
-    // success, a pending operation, or call/result pairing from adjacency.
-    let title = if is_result {
-        format!("{name} output")
-    } else if let Some(excerpt) = excerpt {
-        format!(
-            "{name} · {}",
-            excerpt
-                .split_whitespace()
+        .unwrap_or("Tool")
+}
+
+/// A compact label shared by the transcript and trace. History can supply a
+/// plain command followed by output, or a tool-prefixed JSON argument object.
+pub(crate) fn tool_title(message: &AgentMessage) -> String {
+    let name = short_tool_name(message);
+    let text = message
+        .text
+        .strip_prefix(&format!("{} ", message.tool_name))
+        .unwrap_or(&message.text);
+    let args = serde_json::from_str::<serde_json::Value>(text).ok();
+    let value = args.as_ref();
+    let field = |key: &str| {
+        value
+            .and_then(|v| v.get(key))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    };
+    if let Some(description) = field("description").or_else(|| field("title")) {
+        return compact_label(description);
+    }
+    let command = value.and_then(|v| v.get("command").or_else(|| v.get("cmd")));
+    let argv = command
+        .and_then(|v| v.as_array())
+        .filter(|a| a.iter().all(|e| e.is_string()))
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
                 .collect::<Vec<_>>()
                 .join(" ")
-                .chars()
-                .take(180)
-                .collect::<String>()
-        )
+        });
+    let excerpt = [
+        "cmd",
+        "command",
+        "file_path",
+        "path",
+        "pattern",
+        "query",
+        "code",
+    ]
+    .into_iter()
+    .find_map(field)
+    .or(argv.as_deref())
+    .or_else(|| value.and_then(|v| v.as_str()))
+    .or_else(|| {
+        (value.is_none()
+            && tool_category(name) == "shell"
+            && !text.trim_start().starts_with(['{', '[']))
+        .then(|| text.lines().next())
+        .flatten()
+    })
+    .map(str::trim)
+    .filter(|s| !s.is_empty());
+    match excerpt {
+        Some(s) => format!("{name} · {}", compact_label(s)),
+        None => name.into(),
+    }
+}
+
+pub(crate) fn compact_label(text: &str) -> String {
+    text.split_whitespace()
+        .flat_map(|word| std::iter::once(' ').chain(word.chars()))
+        .skip(1)
+        .take(180)
+        .collect()
+}
+
+fn activity_row(message: &AgentMessage) -> ChatActivityRow {
+    let name = short_tool_name(message);
+    let category = tool_category(name);
+    let is_result = message.kind == "tool_result";
+    let title = if is_result {
+        format!("{name} output")
     } else {
-        name.to_owned()
+        tool_title(message)
     };
     ChatActivityRow {
         id: message.id.clone(),
@@ -641,7 +678,7 @@ mod tests {
             live.iter().map(|b| &b.id).collect::<Vec<_>>(),
             done.iter().map(|b| &b.id).collect::<Vec<_>>()
         );
-        assert!(!live[1].default_expanded);
+        assert!(live[1].default_expanded && live[2].default_expanded);
         assert_eq!(done[3].message.as_ref().unwrap().id, "answer");
     }
     #[test]
@@ -777,7 +814,7 @@ mod tests {
         }
     }
     #[test]
-    fn transcript_reasoning_is_a_collapsed_row_inside_worked() {
+    fn transcript_reasoning_is_visible_inside_worked() {
         let mut reasoning = m("reason", "assistant", "text");
         reasoning.phase = "reasoning".into();
         let mut last = m("last-thought", "assistant", "text");
@@ -795,6 +832,7 @@ mod tests {
             ["message", "working", "message"]
         );
         let work = &out[1].children;
+        assert!(work.iter().all(|child| child.default_expanded));
         assert_eq!(
             work.iter()
                 .map(|b| (b.kind.as_str(), b.title.as_str()))
@@ -916,7 +954,7 @@ mod tests {
         assert_eq!(view[1].children[0].message.as_ref().unwrap().id, "c");
         assert_eq!(view[2].message.as_ref().unwrap().id, "f");
         assert!(view[1].completed);
-        assert!(!view[1].default_expanded);
+        assert!(view[1].default_expanded);
         let live = blocks(&messages[..4], true);
         assert_eq!(live[1].id, view[1].id);
         assert!(!live[1].completed);
@@ -956,7 +994,7 @@ mod tests {
         assert!(
             groups[..2]
                 .iter()
-                .all(|b| b.completed && !b.default_expanded)
+                .all(|b| b.completed && b.default_expanded)
         );
         assert!(!groups[2].completed);
         assert!(groups[2].default_expanded);
@@ -1000,9 +1038,25 @@ mod tests {
         assert_eq!(rows[1].detail, result.text);
         assert!(rows[1].is_result);
         assert_eq!(rows[1].title, "exec_command output");
-        call.text = "invalid JSON".into();
+        call.text = "{invalid JSON".into();
         assert_eq!(activity_row(&call).title, "exec_command");
-        assert_eq!(activity_row(&call).detail, "invalid JSON");
+        assert_eq!(activity_row(&call).detail, "{invalid JSON");
+        for (input, title) in [
+            (
+                r#"functions.exec_command {"description":"Find fixtures","cmd":"rg fixture"}"#,
+                "Find fixtures",
+            ),
+            (
+                r#"{"command":["git","status"]}"#,
+                "exec_command · git status",
+            ),
+            ("git status\nprivate output", "exec_command · git status"),
+            ("\noutput without a command", "exec_command"),
+        ] {
+            call.text = input.into();
+            assert_eq!(activity_row(&call).title, title);
+            assert_eq!(crate::trace::spans(&[call.clone()], "idle")[0].title, title);
+        }
     }
     #[test]
     fn consecutive_calls_pair_by_provider_id_with_reversed_outputs() {

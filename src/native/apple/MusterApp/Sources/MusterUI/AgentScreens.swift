@@ -882,12 +882,12 @@ struct WorkDetails: View {
 struct ActivityGroup: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.block == rhs.block }
     let block: Muster_App_ChatBlock
-    var expanded = false
+    var expanded: Bool? = nil
     @Environment(\.transcriptDisclosurePath) private var disclosurePath
     @Environment(\.conversationStyle) private var style
 
     private var disclosure = TranscriptDisclosure()
-    private var expansion: Binding<Bool> { disclosure.binding("activity", id: block.id, defaultValue: expanded) }
+    private var expansion: Binding<Bool> { disclosure.binding("activity", id: block.id, defaultValue: expanded ?? block.defaultExpanded) }
 
     var body: some View {
         if style == .deepseek { deepseekBody } else { standardBody }

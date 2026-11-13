@@ -830,17 +830,19 @@ mod tests {
         let mut viewer = viewer(main);
         let polled = viewer.poll().unwrap();
         let texts: Vec<_> = polled.messages.iter().map(|m| m.text.as_str()).collect();
-        assert_eq!(polled.messages[1].to_proto().tool_call_id, "tool-1");
+        assert_eq!(polled.messages[1].phase, "reasoning");
         assert_eq!(polled.messages[2].to_proto().tool_call_id, "tool-1");
+        assert_eq!(polled.messages[3].to_proto().tool_call_id, "tool-1");
         assert_eq!(
             texts,
             vec![
                 "hello",
+                "hmm",
                 "Read {\"file_path\":\"/repo/a\"}",
                 "Read: contents"
             ]
         );
-        assert!(polled.messages[1].id.ends_with(":1"));
+        assert!(polled.messages[2].id.ends_with(":1"));
         assert_eq!(viewer.state(), SessionState::Running);
 
         writeln!(f, r#"{{"type":"assistant","uuid":"a2","message":{{"role":"assistant","stop_reason":"end_turn","content":[{{"type":"text","text":"done"}}]}}}}"#).unwrap();

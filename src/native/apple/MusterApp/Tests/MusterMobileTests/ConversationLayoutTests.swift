@@ -138,8 +138,10 @@ final class ConversationLayoutTests: XCTestCase {
                 }
             }
         }
-        let collapsed = UIHostingController(rootView: ActivityGroup(block: block))
-        let expanded = UIHostingController(rootView: ActivityGroup(block: block, expanded: true))
+        var visible = block
+        visible.defaultExpanded = true
+        let collapsed = UIHostingController(rootView: ActivityGroup(block: visible, expanded: false))
+        let expanded = UIHostingController(rootView: ActivityGroup(block: visible))
         XCTAssertLessThan(collapsed.sizeThatFits(in: CGSize(width: 370, height: 900)).height, 60)
         XCTAssertGreaterThan(expanded.sizeThatFits(in: CGSize(width: 370, height: 900)).height, 100)
         try snapshot(VStack(alignment: .leading, spacing: 16) {

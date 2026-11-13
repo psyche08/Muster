@@ -64,9 +64,8 @@ installation, or phone-to-host inference end-to-end acceptance.
 
 ## Session presentation
 
-In the native macOS and iOS timeline,
-assistant prose remains visible while reasoning and consecutive tool calls use
-compact disclosures. Tool arguments and matched output remain available in full.
+The native macOS and iOS timeline shows recorded reasoning and tool descriptions
+inline. A tool row can be expanded to read its arguments and matched output.
 Provider-recorded running, completed, failed and interrupted states are projected
 by Rust; output arrival alone does not prove success. Settled turns do not retain
 orphaned running indicators. Row IDs stay stable as streamed content changes.

@@ -6,11 +6,11 @@ import MusterCore
 // lifecycle labels all arrive from Shared Rust, never from parsing UI text.
 struct ReasoningRow: View {
     let block: Muster_App_ChatBlock
-    var expanded = false
+    var expanded: Bool? = nil
     @Environment(\.conversationStyle) private var style
 
     private var disclosure = TranscriptDisclosure()
-    private var expansion: Binding<Bool> { disclosure.binding("reasoning", id: block.id, defaultValue: expanded) }
+    private var expansion: Binding<Bool> { disclosure.binding("reasoning", id: block.id, defaultValue: expanded ?? block.defaultExpanded) }
 
     var body: some View {
         if style == .deepseek { deepseekBody } else { standardBody }

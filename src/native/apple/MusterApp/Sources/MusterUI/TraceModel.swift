@@ -207,6 +207,8 @@ struct TraceRecord: Identifiable, Equatable {
     /// One single-line string for the ledger's content column.
     var previewText: String {
         let preview = detailPreview
+        if kind == .reasoning && !preview.isEmpty { return preview }
+        if kind == .tool && !title.isEmpty && (title == preview || title.hasSuffix(" · " + preview)) { return title }
         if title.isEmpty { return preview }
         if preview.isEmpty { return title }
         return "\(title) · \(preview)"

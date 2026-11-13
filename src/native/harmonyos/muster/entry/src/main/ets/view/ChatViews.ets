@@ -839,21 +839,22 @@ export struct WorkingGroup {
 @ComponentV2
 export struct ActivityGroup {
   @Param @Require block: pb.app.IChatBlock;
-  @Local expanded: boolean = false;
+  @Local toggled: boolean | undefined = undefined;
+  private expanded(): boolean { return this.toggled ?? (this.block.defaultExpanded === true); }
 
   build() {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
         Text('⌘').fontSize(14).opacity(0.6).width(20)
         Text(this.block.title || 'Tool activity').fontSize(14).opacity(0.7).maxLines(1).layoutWeight(1)
-        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(12).rotate({ angle: this.expanded ? -90 : 180 })
+        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(12).rotate({ angle: this.expanded() ? -90 : 180 })
           .fontColor([$r('sys.color.font_secondary')])
       }
       .width('100%').padding({ top: 4, bottom: 4 })
-      .accessibilityText(`${this.block.title || 'Tool activity'}, ${this.expanded ? 'expanded' : 'collapsed'}`)
-      .onClick((): void => { this.expanded = !this.expanded; })
+      .accessibilityText(`${this.block.title || 'Tool activity'}, ${this.expanded() ? 'expanded' : 'collapsed'}`)
+      .onClick((): void => { this.toggled = !this.expanded(); })
       // Shared Rust gives every activity group its rows (calls paired with output).
-      if (this.expanded) {
+      if (this.expanded()) {
         ForEach(this.block.activityRows ?? [], (row: pb.app.IChatActivityRow): void => {
           ToolActivityRow({ row: row })
         }, (row: pb.app.IChatActivityRow): string => row.id ?? '')

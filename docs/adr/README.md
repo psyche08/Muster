@@ -312,3 +312,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0194](0194-close-menu-read-decides.md) | Accepted, not verified on a device | Let a finished read decide that the model/effort menu closed |
 | [0195](0195-publish-browser-terminal.md) | Accepted; published and installed on the test Mac | Publish the Chrome terminal identity probe in Apple 1.1.38 |
 | [0196](0196-foreground-waits-and-provider-queue.md) | Accepted | Keep foreground handoffs out of occupied provider queues |
+| [0197](0197-inline-recorded-work.md) | Accepted | Show recorded reasoning and tool descriptions inline |

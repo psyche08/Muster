@@ -917,7 +917,7 @@ private fun WorkDetails(block: ChatBlock, core: MusterCore?) {
 
 @Composable
 fun ActivityGroup(block: ChatBlock) {
-    var expanded by remember(block.id) { mutableStateOf(false) }
+    var expanded by remember(block.id) { mutableStateOf(block.defaultExpanded) }
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
