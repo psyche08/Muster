@@ -193,6 +193,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         terminal: None,
         policy: state.policy.clone(),
         embedded: state.embedded,
+        require_locked_use_auth: state.locked_use_auth.as_ref().is_some_and(|p| p.required()),
         files: state.files.clone(),
         file: state.file.clone(),
         git: state.git.clone(),

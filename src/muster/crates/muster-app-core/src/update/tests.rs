@@ -245,7 +245,7 @@ async fn background_phone_cancels_display_watches_and_network_change_keeps_them_
             .await
             .unwrap(),
     );
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let ctx = Ctx {
         shell,
         backend: backend.clone(),
@@ -412,11 +412,67 @@ async fn background_phone_cancels_display_watches_and_network_change_keeps_them_
         Ok(Resp::AgentChatOptions(_))
     ));
     assert!(state.locked.is_none());
-    // Desktop manual leases must wait for a native Presence effect even when
-    // this test backend has a working device signer. Expiration must release
-    // busy UI state and ignore a late successful authentication result.
+    // Load the same local preference as a socket-backed Mac at startup.
     state.embedded = false;
     state.self_info.as_mut().unwrap().kind = "desktop".into();
+    state.locked_use_auth = Some(crate::locked_use_auth::Preference::load(dir.path()));
+    assert!(!crate::render::view_model(&state).require_locked_use_auth);
+    let origin = Some(("session".to_owned(), "draft".to_owned()));
+    msg(
+        &mut state,
+        &ctx,
+        Msg::PresenceNeeded {
+            response_origin: origin.clone(),
+            what: "send",
+            device: device.clone(),
+            call_id: 7,
+            request: Box::new(Req::LockedUseExecute(v1::LockedUseExecuteRequest {
+                challenge: challenge.encode(),
+                signature: vec![],
+            })),
+            message: challenge.signing_message(),
+        },
+    );
+    assert!(state.locked.is_some() && state.presence.is_none() && state.effects.is_empty());
+    // The test daemon never issued this nonce. Its reply proves the reducer
+    // dispatched and retained the original draft identity for reconciliation.
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while let Some(crate::Loop::Msg(reply)) = rx.recv().await {
+            if let Msg::OpDone {
+                response_origin,
+                locked_nonce,
+                ..
+            } = *reply
+                && response_origin == origin
+            {
+                assert_eq!(locked_nonce.as_deref(), Some(challenge.nonce().as_slice()));
+                return;
+            }
+        }
+        panic!("missing Locked Use reply");
+    })
+    .await
+    .unwrap();
+    state.locked = None;
+    let set_auth = |state: &mut State, required| {
+        intent(
+            state,
+            &ctx,
+            app::Intent {
+                it: Some(It::SetRequireLockedUseAuth(required)),
+            },
+        );
+        assert_eq!(
+            crate::render::view_model(state).require_locked_use_auth,
+            required
+        );
+        assert_eq!(
+            crate::locked_use_auth::Preference::load(dir.path()).required(),
+            required
+        );
+    };
+    set_auth(&mut state, true);
+    // With opt-in, expiry or cancellation releases the UI and ignores late proof.
     for cancelled in [false, true] {
         state.manual_busy.insert(device.clone());
         msg(
@@ -483,6 +539,7 @@ async fn background_phone_cancels_display_watches_and_network_change_keeps_them_
     );
     assert!(!state.manual_busy.contains(&device));
     assert!(state.locked.is_none());
+    set_auth(&mut state, false);
     msg(
         &mut state,
         &ctx,

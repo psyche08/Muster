@@ -821,6 +821,15 @@ pub(super) fn msg_presence_needed(
             Msg::LockedExpired(nonce)
         });
         state.locked = locked;
+        if state
+            .locked_use_auth
+            .as_ref()
+            .is_some_and(|p| !p.required())
+        {
+            auth_diagnostic.event("local_auth_not_required");
+            op_request_from(state, ctx, what, device, *request, response_origin);
+            return;
+        }
     }
     // Rust already validated the challenge against the selected target,
     // network and complete pending operation. Only foreground phones

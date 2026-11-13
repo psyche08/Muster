@@ -241,7 +241,7 @@ private struct NativeCreateSheet: View {
                 Section("First message") {
                     TextEditor(text: $prompt).frame(minHeight: 100)
                 }
-                Text("Opens a new Code session in the app on that Mac and sends the first message. The app must be installed and signed in there, and the directory must exist. A locked Mac asks you to authenticate first; the session is never submitted twice.")
+                Text("Opens a new Code session in the app on that Mac and sends the first message. The app must be installed and signed in there, and the directory must exist. Muster checks your Locked Use permission when that Mac is locked.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .navigationTitle("New desktop session")

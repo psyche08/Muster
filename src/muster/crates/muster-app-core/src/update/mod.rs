@@ -497,6 +497,16 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
                 );
             }
         }
+        It::SetRequireLockedUseAuth(required) => {
+            if let Some(pref) = &mut state.locked_use_auth
+                && let Err(error) = pref.set(required)
+            {
+                state.toast(
+                    format!("Could not save Locked Use preference: {error}"),
+                    true,
+                );
+            }
+        }
         It::SetCover(c) => network::intent_set_cover(state, ctx, c),
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)

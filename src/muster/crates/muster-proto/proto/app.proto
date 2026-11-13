@@ -39,6 +39,7 @@ message Intent {
     OpenBrowser open_browser = 80;
     BrowserSetup browser_setup = 81;
     BrowserRun browser_run = 82;
+    bool set_require_locked_use_auth = 141; // requesting Mac only
     SetCover set_cover = 21;
     SetCover set_blackout = 140; // explicit target and desired on/off
     CancelLockedUse cancel_locked_use = 22;
@@ -565,6 +566,7 @@ message ViewModel {
   muster.v1.VisionStatus vision = 37;
   repeated Screen navigation_path = 34; // visible root through current screen
   MulticaWorkspaceView multica_workspace = 39;
+  bool require_locked_use_auth = 40;
   SessionLoadMarker session_load = 38; // opaque, Rust-owned diagnostic marker
 }
 

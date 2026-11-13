@@ -492,6 +492,18 @@ struct SettingsView: View {
                 NavigationLink("性能监控") { PerformanceMonitorView(core: core, devices: vm.serviceDevices) }
             }
             #endif
+            #if os(macOS)
+            Section {
+                Toggle("操作锁屏 Mac 前验证身份", isOn: Binding(
+                    get: { vm.requireLockedUseAuth },
+                    set: { core.setRequireLockedUseAuth($0) }
+                ))
+            } header: {
+                Text("锁屏操作")
+            } footer: {
+                Text("开启后，从本机发起新的锁屏操作时，需要使用触控 ID 或密码确认。")
+            }
+            #endif
             if vm.desktopUpdate.supported {
                 Section {
                     Toggle("自动更新", isOn: Binding(

@@ -386,6 +386,7 @@ pub struct State {
     pub manual_devices: HashMap<String, v1::DeviceInfo>,
     pub manual_busy: std::collections::HashSet<String>,
     pub manual_watches: HashMap<String, Watch>,
+    pub locked_use_auth: Option<crate::locked_use_auth::Preference>,
     pub embedded: bool,
     pub self_id: String,
     /// What the shell was last told about the cover (desktops).
@@ -521,6 +522,7 @@ impl State {
             manual_devices: HashMap::new(),
             manual_busy: Default::default(),
             manual_watches: HashMap::new(),
+            locked_use_auth: None,
             embedded,
             self_id: self_id.unwrap_or_default(),
             cover_shown: None,
