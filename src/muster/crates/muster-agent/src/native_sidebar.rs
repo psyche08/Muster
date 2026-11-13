@@ -8,6 +8,19 @@ pub fn claude_session_sidebar(id: &str, subrole: &str, name: &str) -> bool {
             && matches!(name, "Sidebar" | "侧边栏" | "側邊欄"))
 }
 
+/// A local Code request may change modes through the session sidebar only
+/// when the enclosing Claude page is positively identified as Chat.
+pub fn claude_chat_page(raw: &str) -> bool {
+    url::Url::parse(raw).is_ok_and(|u| {
+        u.scheme() == "https"
+            && u.host_str() == Some("claude.ai")
+            && (matches!(u.path(), "/new" | "/recents" | "/chats")
+                || ["/chat/", "/project/"]
+                    .iter()
+                    .any(|prefix| u.path().starts_with(prefix)))
+    })
+}
+
 /// Native session IDs avoid sidebar pagination and generated titles. This route
 /// only requests navigation: callers must guard the OS action and resolve the
 /// resulting surface to the exact catalog ID before any mutation.
@@ -42,6 +55,21 @@ pub fn catalog_session_route(provider: &str, session: &str) -> Option<String> {
         _ => return None,
     };
     exact_session_route(provider, &native)
+}
+
+/// Exact thread URLs exposed by the Codex app shell and session links.
+pub fn codex_thread_id(raw: &str) -> Option<String> {
+    let url = url::Url::parse(raw).ok()?;
+    let id = match (url.scheme(), url.host_str()) {
+        ("codex", Some("threads")) => url.path().strip_prefix('/')?,
+        ("app", Some("-")) => {
+            let path = url.fragment().unwrap_or(url.path());
+            path.strip_prefix("/thread/")
+                .or_else(|| path.strip_prefix("/threads/"))?
+        }
+        _ => return None,
+    };
+    crate::viewer::is_uuid(id).then(|| id.to_ascii_lowercase())
 }
 
 /// OS adapters expose only the attributes needed to read a button's label.
@@ -734,6 +762,29 @@ mod tests {
 mod navigation_tests {
     use super::exact_session_route;
     const SESSION: &str = "local_12345678-1234-4234-8234-123456789abc";
+
+    #[test]
+    fn only_provider_conversation_routes_supply_mode_or_thread_evidence() {
+        use super::{claude_chat_page, codex_thread_id};
+        let uuid = SESSION.strip_prefix("local_").unwrap();
+        for path in ["/new", "/recents", "/chat/example", "/project/example"] {
+            assert!(claude_chat_page(&format!("https://claude.ai{path}")));
+        }
+        for url in [
+            "https://claude.ai/settings",
+            "https://claude.ai/epitaxy",
+            "https://example.org/chat/example",
+        ] {
+            assert!(!claude_chat_page(url));
+        }
+        for url in [
+            format!("codex://threads/{uuid}"),
+            format!("app://-/#/thread/{uuid}"),
+        ] {
+            assert_eq!(codex_thread_id(&url).as_deref(), Some(uuid));
+        }
+        assert!(codex_thread_id(&format!("https://example.org/threads/{uuid}")).is_none());
+    }
 
     #[test]
     fn absent_row_uses_exact_id_without_a_title_or_last_selector() {

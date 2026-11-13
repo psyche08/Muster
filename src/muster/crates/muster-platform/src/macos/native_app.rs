@@ -388,6 +388,7 @@ struct SidebarScan {
     rows: usize,
     navigation: usize,
     more: Option<Element>,
+    provider_unavailable: bool,
     complete: bool,
 }
 
@@ -402,12 +403,13 @@ fn scan_sidebar(
     title_is_unique: bool,
     resolver: &Resolver,
     trace: &Trace,
-    background_inspection: bool,
+    claude_background_sidebar: bool,
 ) -> SidebarScan {
     use muster_agent::profile::SessionList;
     let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
     let mut conversation_views = 0usize;
+    let mut provider_unavailable = false;
     let app_walk = app.walk_pruned_report(|node| {
         let attrs = node.attributes(&["AXRole", "AXSubrole", "AXIdentifier", "AXDOMIdentifier"]);
         let field = |i: usize| attrs[i].as_ref().and_then(ax::value_string);
@@ -448,14 +450,23 @@ fn scan_sidebar(
         // pruned: in ChatGPT.app the session list lives inside the open
         // conversation's single web area, so pruning it hides the sidebar
         // (ADR 0091).
-        if separate_conversation_views && !background_inspection && role == "AXWebArea" {
+        if separate_conversation_views && !claude_background_sidebar && role == "AXWebArea" {
             let key = WebAreaKey::of(node);
             if !muster_agent::native_scan::descend_web_area(resolver(&key).is_some()) {
                 conversation_views += 1;
                 return false;
             }
         }
-        if background_inspection {
+        if claude_background_sidebar {
+            if role == "AXHeading"
+                && node.string("AXTitle").as_deref() == Some("Claude is temporarily unavailable")
+                && node
+                    .element("AXParent")
+                    .is_some_and(|p| p.string("AXSubrole").as_deref() == Some("AXApplicationAlert"))
+            {
+                provider_unavailable = true;
+                return false;
+            }
             // Current Claude nests its sidebar inside the conversation web area.
             // Adjacent landmarks can contain tools and approval controls.
             if id == "app-shell-sidebar"
@@ -501,6 +512,8 @@ fn scan_sidebar(
     let mut rows = 0usize;
     let mut more_rule = None;
     let mut more = None;
+    let mut code_mode = Vec::new();
+    let mut chat_page = false;
     let standalone_title = match sessions {
         SessionList::Sidebar {
             standalone_title,
@@ -512,7 +525,9 @@ fn scan_sidebar(
         }
         SessionList::PageRows => {
             for area in &navigation {
-                candidates = catdesk_rows(area, title, title_is_unique, trace);
+                let (found, finished) = catdesk_rows(area, title, title_is_unique, trace);
+                candidates.extend(found);
+                complete &= finished;
             }
             rows = candidates.len();
             false
@@ -522,10 +537,27 @@ fn scan_sidebar(
         .iter()
         .filter(|_| sessions != SessionList::PageRows)
     {
+        // A Chat sidebar lists different conversations, even when titles collide.
+        // Its Code radio is a bounded in-app preparation step, never a submit.
+        let in_chat = claude_background_sidebar && enclosing_claude_chat(area);
+        chat_page |= in_chat;
         let area_walk = area.walk_pruned_report(|node| {
             let attrs = node.attributes(&["AXRole", "AXTitle", "AXDescription", "AXURL"]);
             let field = |i: usize| attrs[i].as_ref().and_then(ax::value_string);
             let role = field(0).unwrap_or_default();
+            if in_chat {
+                if role == "AXRadioButton"
+                    && field(1).as_deref() == Some("Code")
+                    && node.element("AXParent").is_some_and(|g| {
+                        g.role() == "AXRadioGroup" && g.string("AXTitle").as_deref() == Some("Mode")
+                    })
+                    && node.bool("AXEnabled") == Some(true)
+                    && node.has_action("AXPress")
+                {
+                    code_mode.push(node.clone());
+                }
+                return true;
+            }
             if !matches!(role.as_str(), "AXButton" | "AXLink" | "AXRow") {
                 return true;
             }
@@ -534,7 +566,17 @@ fn scan_sidebar(
                 url: field(3),
             };
             rows += 1;
-            let by_id = key.url.is_some() && resolver(&key).as_deref() == Some(session);
+            let row_id = key.url.as_deref().and_then(|raw| {
+                if profile.provider() == "codex" {
+                    muster_agent::native_sidebar::codex_thread_id(raw)
+                } else {
+                    resolver(&WebAreaKey {
+                        url: Some(raw.to_owned()),
+                        title: None,
+                    })
+                }
+            });
+            let by_id = row_id.as_deref() == Some(session);
             let node_title = key.title.as_deref().unwrap_or_default();
             let description = field(2).unwrap_or_default();
             let standalone = (standalone_title
@@ -546,7 +588,8 @@ fn scan_sidebar(
                     || node_title.is_empty()
                     || node_title.contains(title)))
             .then(|| muster_agent::native_sidebar::read_label(node));
-            let by_title = (!profile.requires_exact_navigation() || key.url.is_none())
+            let by_title = row_id.is_none()
+                && (!profile.requires_exact_navigation() || key.url.is_none())
                 && muster_agent::native_sidebar::title_matches(
                     standalone_title,
                     title,
@@ -576,14 +619,37 @@ fn scan_sidebar(
         complete &= area_walk.1 == "complete";
         trace.record(format_args!("area_walk={area_walk:?} (nodes, stop, ms)"));
     }
+    if chat_page {
+        candidates.clear();
+        more = match code_mode.as_slice() {
+            [radio] if navigation_count == 1 => Some(radio.clone()),
+            _ => None,
+        };
+        rows = 0;
+    }
     trace.record(format_args!("rows={rows} candidates={}", candidates.len()));
     SidebarScan {
         candidates,
         rows,
         navigation: navigation_count,
+        provider_unavailable,
         more,
         complete,
     }
+}
+
+fn enclosing_claude_chat(element: &Element) -> bool {
+    let mut parent = element.element("AXParent");
+    for _ in 0..32 {
+        let Some(node) = parent else { break };
+        if node.role() == "AXWebArea" {
+            return node
+                .string("AXURL")
+                .is_some_and(|u| muster_agent::native_sidebar::claude_chat_page(&u));
+        }
+        parent = node.element("AXParent");
+    }
+    false
 }
 
 /// Select only a uniquely identified navigation control, then resolve the
@@ -600,6 +666,8 @@ pub struct PreparedSession {
     surface: Surface,
 }
 
+use muster_agent::native_runtime::NativeConsole;
+
 struct NavigationHost<'a> {
     profile: &'static AppProfile,
     pid: u32,
@@ -610,10 +678,19 @@ struct NavigationHost<'a> {
     title_is_unique: bool,
     resolver: &'a Resolver,
     trace: &'a Trace,
-    covered: bool,
-    // Bind background sidebar actions to the unrelated app that owned focus.
-    background_owner: Option<u32>,
+    console: NativeConsole,
+    prefer_sidebar: bool,
     inspect_uncovered: bool,
+}
+
+impl NavigationHost<'_> {
+    fn check_owner(&self) -> Result<(), Error> {
+        self.console.check_navigation(NativeConsole::observe(
+            self.console == NativeConsole::Covered,
+            Some(self.pid),
+            super::events::foreground_owner(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -642,37 +719,23 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
                 "Console session inactive during session selection".into(),
             ));
         }
-        if let Some(owner) = self.background_owner
-            && super::events::foreground_owner() != muster_agent::local_input::Owner::Process(owner)
-        {
-            return Err(Error::Conflict(
-                "Foreground changed during background inspection".into(),
-            ));
+        if matches!(self.console, NativeConsole::Background(_)) {
+            self.check_owner()?;
         }
         Ok(())
     }
-    fn background_inspection(&self) -> bool {
-        self.background_owner.is_some()
+    fn background_sidebar(&self) -> bool {
+        self.prefer_sidebar
+    }
+    fn covered_sidebar_fallback(&self) -> bool {
+        self.console == NativeConsole::Covered && self.prefer_sidebar
     }
     fn inspection_idle(&self) -> Option<Duration> {
         self.inspect_uncovered.then(super::input::user_input_idle)
     }
     fn check_navigation(&self) -> Result<(), Error> {
         muster_agent::native_navigation::admit_inspection(self.inspection_idle())?;
-        if self.background_inspection() {
-            return self.check();
-        }
-        if !self.covered
-            && matches!(self.profile.app.provider, "codex" | "claude")
-            && super::events::foreground_owner()
-                != muster_agent::local_input::Owner::Process(self.pid)
-        {
-            return Err(Error::Conflict(format!(
-                "Bring {} to the foreground to select this session; nothing was sent",
-                self.profile.app.provider
-            )));
-        }
-        Ok(())
+        self.check_owner()
     }
     fn generation(&self) -> u64 {
         target_input_generation(self.pid)
@@ -691,8 +754,8 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         }
     }
     fn sidebar(&self) -> Result<muster_agent::native_navigation::Sidebar<Element>, Error> {
-        let registry_title = self
-            .background_inspection()
+        let claude_sidebar = self.background_sidebar() && self.profile.provider() == "claude";
+        let registry_title = claude_sidebar
             .then(|| {
                 let root = muster_agent::claude::desktop_registry()?;
                 muster_agent::claude::desktop_navigation_title(&root, self.session)
@@ -711,8 +774,13 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             unique,
             self.resolver,
             self.trace,
-            self.background_inspection(),
+            claude_sidebar,
         );
+        if scan.provider_unavailable && scan.navigation == 0 && scan.complete {
+            return Err(Error::Unavailable(
+                "Claude reports that it is temporarily unavailable; nothing was submitted".into(),
+            ));
+        }
         Ok(muster_agent::native_navigation::Sidebar {
             candidates: scan.candidates,
             more: scan.more,
@@ -733,8 +801,8 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         permit: &muster_agent::native_navigation::ActionPermit,
     ) -> Result<(), Error> {
         self.check()?;
-        permit.check(self.generation())?;
         self.check_navigation()?;
+        permit.check(self.generation())?;
         muster_agent::native_navigation::restore::dispatch(false);
         control.press().map_err(|code| {
             Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
@@ -745,9 +813,9 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         route: &str,
         permit: &muster_agent::native_navigation::ActionPermit,
     ) -> Result<(), Error> {
-        if self.background_inspection() {
+        if self.background_sidebar() && !self.covered_sidebar_fallback() {
             return Err(Error::Conflict(
-                "Background inspection requires in-app navigation".into(),
+                "Background session selection requires in-app navigation".into(),
             ));
         }
         let bundle = super::procs::process_bundle(self.pid)
@@ -758,8 +826,8 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             ));
         }
         self.check()?;
-        permit.check(self.generation())?;
         self.check_navigation()?;
+        permit.check(self.generation())?;
         muster_agent::native_navigation::restore::dispatch(true);
         let dispatched = tokio::time::timeout(
             permit.remaining(),
@@ -837,17 +905,7 @@ pub async fn select_session(
         }
         let app = Element::application(pid);
         app.enable_manual_accessibility();
-        let background_owner = if inspect
-            && !covered
-            && profile.app.provider == "claude"
-            && let muster_agent::local_input::Owner::Process(owner) =
-                super::events::foreground_owner()
-            && owner != pid
-        {
-            Some(owner)
-        } else {
-            None
-        };
+        let focus = super::events::foreground_owner();
         let host = NavigationHost {
             profile,
             pid,
@@ -858,8 +916,8 @@ pub async fn select_session(
             title_is_unique,
             resolver: &resolver,
             trace: &trace,
-            covered,
-            background_owner,
+            console: NativeConsole::observe(covered, Some(pid), focus),
+            prefer_sidebar: matches!(focus, muster_agent::local_input::Owner::Process(owner) if owner != pid),
             inspect_uncovered: inspect && !covered,
         };
         let (surface, generation) =
@@ -884,13 +942,18 @@ pub async fn select_session(
 /// exactly, take its nearest pressable ancestor, and keep it only if that
 /// row's own labels (nested controls excluded) are the title and at most a
 /// known badge. Traces are content-free: roles, counts and outcomes.
-fn catdesk_rows(area: &Element, title: &str, title_is_unique: bool, trace: &Trace) -> Vec<Element> {
+fn catdesk_rows(
+    area: &Element,
+    title: &str,
+    title_is_unique: bool,
+    trace: &Trace,
+) -> (Vec<Element>, bool) {
     let mut found: Vec<Element> = Vec::new();
     if !title_is_unique || title.trim().is_empty() {
         trace.record(format_args!(
             "catdesk_rows skipped unique_title={title_is_unique}"
         ));
-        return found;
+        return (found, true);
     }
     let mut texts = 0usize;
     let walk = area.walk_report(|node| {
@@ -943,7 +1006,32 @@ fn catdesk_rows(area: &Element, title: &str, title_is_unique: bool, trace: &Trac
         "catdesk_rows title_texts={texts} candidates={} walk={walk:?} (nodes, stop, ms)",
         found.len()
     ));
-    found
+    (found, walk.1 == "complete")
+}
+
+/// Restoration must stay in the original window and must not page the sidebar
+/// or guess a title. The caller guards ownership again after this read and
+/// verifies the destination UUID after pressing this one control.
+pub(super) fn claude_return_row(window: &Element, session: &str) -> Option<Element> {
+    let registry = muster_agent::claude::desktop_registry()?;
+    muster_agent::claude::desktop_navigation_id(&registry, session)?;
+    let (title, unique) = muster_agent::claude::desktop_navigation_title(&registry, session)?;
+    let mut trace = Trace::new("return_sidebar", "claude", session);
+    let scan = scan_sidebar(
+        &CLAUDE_APP,
+        window,
+        session,
+        &title,
+        unique,
+        &claude_resolver(),
+        &trace,
+        true,
+    );
+    trace.finish();
+    match scan.candidates.as_slice() {
+        [row] if scan.complete && window.contains(row) => Some(row.clone()),
+        _ => None,
+    }
 }
 
 /// The Claude desktop app's resolver: `/epitaxy/<desktop id>` in the URL,

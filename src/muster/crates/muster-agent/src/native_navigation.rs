@@ -23,7 +23,12 @@ pub trait Host: Send + Sync {
     /// The visible target needs no navigation. Check before planning any other route
     /// and again at the OS action boundary.
     fn check_navigation(&self) -> Result<(), Error>;
-    fn background_inspection(&self) -> bool;
+    fn background_sidebar(&self) -> bool;
+    /// A covered worker can use its existing foreground authority only if
+    /// a complete read found no in-app route and no control was pressed.
+    fn covered_sidebar_fallback(&self) -> bool {
+        false
+    }
     fn inspection_idle(&self) -> Option<Duration> {
         None
     }
@@ -135,16 +140,22 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             host.check_navigation()?;
             // A native ID makes sidebar titles and pagination irrelevant. It
             // does not make the future destination or its composer trusted.
-            if let Some(route) = host.exact_route() {
-                if !host.background_inspection() {
-                    return Ok(Some(Ready::Exact(route)));
+            let route = host.exact_route();
+            if let Some(route) = &route {
+                if !host.background_sidebar() {
+                    return Ok(Some(Ready::Exact(route.clone())));
                 }
                 // UUID mapping is required even when the title only locates a row.
                 // Launch Services may activate a provider despite its background flag.
-            } else if host.requires_exact_route() || host.background_inspection() {
+            } else if host.requires_exact_route() {
                 return Err(Error::Unavailable("local session UUID mapping is missing or ambiguous; no title lookup or navigation attempted".into()));
             }
             let sidebar = host.sidebar()?;
+            if host.covered_sidebar_fallback() && sidebar.complete && sidebar.candidates.is_empty()
+                && sidebar.more.is_none() && let Some(route) = route
+            {
+                return Ok(Some(Ready::Exact(route)));
+            }
             Ok((sidebar.navigation > 0).then_some(Ready::Sidebar(sidebar)))
         },
     )
@@ -199,6 +210,11 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
                 if sidebar.rows <= before {
                     break;
                 }
+            }
+            if host.background_sidebar() && sidebar.complete && sidebar.candidates.is_empty() {
+                return Err(Error::Unavailable(
+                    "The desktop app did not expose this session in its sidebar; nothing was submitted".into(),
+                ));
             }
             if !sidebar.complete || sidebar.candidates.len() != 1 {
                 return Err(Error::Unavailable(format!(
@@ -258,6 +274,8 @@ mod tests {
         missing: bool,
         ambiguous: bool,
         background: bool,
+        covered: bool,
+        no_rows: bool,
         inspect: bool,
         recent_input: bool,
         ambiguous_rows: bool,
@@ -289,17 +307,16 @@ mod tests {
             Ok(self.visible.load(SeqCst).then_some("verified-target"))
         }
         fn check_navigation(&self) -> Result<(), Error> {
-            if self.background && !self.inspect {
-                Err(Error::Conflict("foreground required".into()))
-            } else {
-                Ok(())
-            }
+            Ok(())
         }
         fn inspection_idle(&self) -> Option<Duration> {
-            self.recent_input.then_some(Duration::from_millis(10))
+            (self.inspect && self.recent_input).then_some(Duration::from_millis(10))
         }
-        fn background_inspection(&self) -> bool {
-            self.background && self.inspect
+        fn background_sidebar(&self) -> bool {
+            self.background
+        }
+        fn covered_sidebar_fallback(&self) -> bool {
+            self.covered
         }
         fn sidebar(&self) -> Result<Sidebar<bool>, Error> {
             self.reads.fetch_add(1, SeqCst);
@@ -310,7 +327,7 @@ mod tests {
             Ok(Sidebar {
                 candidates: if self.ambiguous_rows {
                     vec![true, true]
-                } else if page >= self.pages {
+                } else if page >= self.pages && !self.no_rows {
                     vec![true]
                 } else {
                     vec![]
@@ -387,21 +404,18 @@ mod tests {
         assert!(select(&host, budget()).await.is_ok());
     }
     #[tokio::test]
-    async fn hidden_background_target_cannot_dispatch_or_block_for_a_handoff() {
+    async fn hidden_background_write_uses_in_app_rows_with_or_without_a_url_route() {
         for exact in [true, false] {
             let h = Fixture {
                 background: true,
                 exact,
+                require_exact: exact,
+                recent_input: true, // input in the unrelated foreground app
                 ..Default::default()
             };
-            assert!(matches!(
-                select(&h, budget()).await,
-                Err(Error::Conflict(_))
-            ));
-            assert_eq!(
-                h.dispatches.load(SeqCst) + h.reads.load(SeqCst) + h.presses.load(SeqCst),
-                0
-            );
+            assert_eq!(select(&h, budget()).await.unwrap().0, "verified-target");
+            assert_eq!(h.presses.load(SeqCst), 1);
+            assert_eq!(h.dispatches.load(SeqCst), 0);
         }
     }
     #[tokio::test]
@@ -410,6 +424,7 @@ mod tests {
             background: true,
             inspect: true,
             exact: true,
+            require_exact: true,
             ..Default::default()
         };
         let h = Fixture {
@@ -446,6 +461,82 @@ mod tests {
         assert_eq!(wrong.presses.load(SeqCst), 1);
         assert_eq!(wrong.dispatches.load(SeqCst), 0);
     }
+    #[tokio::test]
+    async fn only_covered_selection_can_fall_back_after_a_complete_read_without_actions() {
+        let covered = || Fixture {
+            background: true,
+            covered: true,
+            exact: true,
+            ..Default::default()
+        };
+        for (host, succeeds, presses, urls) in [
+            (covered(), true, 1, 0),
+            (
+                Fixture {
+                    no_rows: true,
+                    ..covered()
+                },
+                true,
+                0,
+                1,
+            ),
+            (
+                Fixture {
+                    no_rows: true,
+                    covered: false,
+                    ..covered()
+                },
+                false,
+                0,
+                0,
+            ),
+            (
+                Fixture {
+                    ambiguous_rows: true,
+                    ..covered()
+                },
+                false,
+                0,
+                0,
+            ),
+            (
+                Fixture {
+                    no_rows: true,
+                    incomplete: true,
+                    ..covered()
+                },
+                false,
+                0,
+                0,
+            ),
+            (
+                Fixture {
+                    missing: true,
+                    ..covered()
+                },
+                false,
+                1,
+                0,
+            ),
+            (
+                Fixture {
+                    no_rows: true,
+                    pages: 1,
+                    ..covered()
+                },
+                false,
+                1,
+                0,
+            ),
+        ] {
+            assert_eq!(select(&host, budget()).await.is_ok(), succeeds);
+            assert_eq!(
+                (host.presses.load(SeqCst), host.dispatches.load(SeqCst)),
+                (presses, urls)
+            );
+        }
+    }
+
     #[tokio::test]
     async fn visible_target_needs_no_navigation_or_sidebar() {
         let h = Fixture {
