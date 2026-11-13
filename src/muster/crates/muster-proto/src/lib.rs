@@ -182,3 +182,6 @@ mod native_request_wire_compatibility {
         ));
     }
 }
+
+/// Stable Unavailable detail for an inspection deferred before desktop navigation.
+pub const INSPECT_LOCAL_INPUT: &str = "native inspection deferred: local user active";

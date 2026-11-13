@@ -127,6 +127,7 @@ impl Guard {
     }
     fn press(&self, e: &Element) -> Result<(), Error> {
         self.check()?;
+        muster_agent::native_navigation::restore::dispatch(false);
         e.press()
             .map_err(|_| unavailable("Native control refused the action"))
     }
@@ -183,6 +184,7 @@ fn open(path: &Path, route: Option<&url::Url>) -> Result<(), Error> {
     if let Some(route) = route {
         command.arg(route.as_str());
     }
+    muster_agent::native_navigation::restore::dispatch(true);
     if !command
         .status()
         .map_err(|_| unavailable("App launch failed"))?
@@ -190,6 +192,7 @@ fn open(path: &Path, route: Option<&url::Url>) -> Result<(), Error> {
     {
         return Err(unavailable("App launch was refused"));
     }
+    super::navigation_restore::note_foreground();
     Ok(())
 }
 
@@ -352,6 +355,14 @@ fn selection_matches(
     Ok(proof)
 }
 
+pub(super) fn verified_empty_form(provider: &str, page: &Element) -> bool {
+    new_page(provider, page)
+        && if provider == "codex" {
+            nodes(page).is_ok_and(|all| codex_home_heading(&all))
+        } else {
+            empty_session_marker(page).unwrap_or(false)
+        }
+}
 fn new_page(provider: &str, page: &Element) -> bool {
     page.role() == "AXWebArea"
         && page.string("AXURL").is_some_and(|u| {
@@ -1047,6 +1058,7 @@ pub async fn submit(
                 let composer = unique(&page, |n| profile.controls().composer.matches(n))?;
                 form_state.2 = composer.is_some();
                 if let Some(composer) = composer {
+                    super::navigation_restore::track_new_page(profile.provider(), &window, &page);
                     break (page, composer, project);
                 }
             }

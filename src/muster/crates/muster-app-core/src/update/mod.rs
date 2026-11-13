@@ -676,7 +676,7 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             session,
             error,
-        } => approval_cards::finished(state, token, device, session, error),
+        } => approval_cards::finished(state, ctx, token, device, session, error),
         Msg::ChatControl {
             epoch,
             device,

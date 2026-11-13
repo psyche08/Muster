@@ -1,5 +1,7 @@
 //! Shared AX navigation workflow. Host handles are opaque observations, never
 //! authority to submit. A navigation is dispatched once and verified by identity.
+pub mod restore;
+
 use crate::{Error, control_guard, native_step::Step};
 use std::time::Duration;
 
@@ -22,6 +24,9 @@ pub trait Host: Send + Sync {
     /// and again at the OS action boundary.
     fn check_navigation(&self) -> Result<(), Error>;
     fn background_inspection(&self) -> bool;
+    fn inspection_idle(&self) -> Option<Duration> {
+        None
+    }
     fn sidebar(&self) -> Result<Sidebar<Self::Control>, Error>;
     fn exact_route(&self) -> Option<String>;
     fn requires_exact_route(&self) -> bool {
@@ -30,6 +35,13 @@ pub trait Host: Send + Sync {
     fn press(&self, control: &Self::Control, permit: &ActionPermit) -> Result<(), Error>;
     async fn navigate(&self, route: &str, permit: &ActionPermit) -> Result<(), Error>;
     fn refresh_renderer(&self, budget: Duration) -> Result<(), Error>;
+}
+
+pub fn admit_inspection(idle: Option<Duration>) -> Result<(), Error> {
+    if idle.is_some_and(|d| d < Duration::from_secs(3)) {
+        return Err(Error::Unavailable(muster_proto::INSPECT_LOCAL_INPUT.into()));
+    }
+    Ok(())
 }
 
 /// Limits belong to one navigation, not to the length of the whole user task.
@@ -93,6 +105,12 @@ impl ActionPermit {
         self.deadline
             .saturating_duration_since(tokio::time::Instant::now())
     }
+    pub fn for_restoration(generation: u64) -> Self {
+        Self {
+            generation,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(3),
+        }
+    }
     fn bounded(&self, budget: Duration) -> Self {
         Self {
             generation: self.generation,
@@ -113,6 +131,7 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             if let Some(surface) = host.surface()? {
                 return Ok(Some(Ready::Visible(surface)));
             }
+            admit_inspection(host.inspection_idle())?;
             host.check_navigation()?;
             // A native ID makes sidebar titles and pagination irrelevant. It
             // does not make the future destination or its composer trusted.
@@ -240,6 +259,7 @@ mod tests {
         ambiguous: bool,
         background: bool,
         inspect: bool,
+        recent_input: bool,
         ambiguous_rows: bool,
         incomplete: bool,
         input_on_dispatch: bool,
@@ -274,6 +294,9 @@ mod tests {
             } else {
                 Ok(())
             }
+        }
+        fn inspection_idle(&self) -> Option<Duration> {
+            self.recent_input.then_some(Duration::from_millis(10))
         }
         fn background_inspection(&self) -> bool {
             self.background && self.inspect
@@ -348,6 +371,21 @@ mod tests {
         assert_eq!(host.dispatches.load(SeqCst), 0);
     }
 
+    #[tokio::test]
+    async fn busy_inspection_can_read_visible_surface_but_never_navigates() {
+        let host = Fixture {
+            inspect: true,
+            exact: true,
+            recent_input: true,
+            ..Default::default()
+        };
+        assert!(
+            matches!(select(&host,budget()).await,Err(Error::Unavailable(reason)) if reason==muster_proto::INSPECT_LOCAL_INPUT)
+        );
+        assert_eq!(host.dispatches.load(SeqCst) + host.presses.load(SeqCst), 0);
+        host.visible.store(true, SeqCst);
+        assert!(select(&host, budget()).await.is_ok());
+    }
     #[tokio::test]
     async fn hidden_background_target_cannot_dispatch_or_block_for_a_handoff() {
         for exact in [true, false] {

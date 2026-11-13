@@ -613,6 +613,7 @@ struct NavigationHost<'a> {
     covered: bool,
     // Bind background sidebar actions to the unrelated app that owned focus.
     background_owner: Option<u32>,
+    inspect_uncovered: bool,
 }
 
 #[async_trait]
@@ -653,7 +654,11 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     fn background_inspection(&self) -> bool {
         self.background_owner.is_some()
     }
+    fn inspection_idle(&self) -> Option<Duration> {
+        self.inspect_uncovered.then(super::input::user_input_idle)
+    }
     fn check_navigation(&self) -> Result<(), Error> {
+        muster_agent::native_navigation::admit_inspection(self.inspection_idle())?;
         if self.background_inspection() {
             return self.check();
         }
@@ -730,6 +735,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         self.check()?;
         permit.check(self.generation())?;
         self.check_navigation()?;
+        muster_agent::native_navigation::restore::dispatch(false);
         control.press().map_err(|code| {
             Error::Unavailable(format!("AX navigation failed ({code}); not retried"))
         })
@@ -754,6 +760,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         self.check()?;
         permit.check(self.generation())?;
         self.check_navigation()?;
+        muster_agent::native_navigation::restore::dispatch(true);
         let dispatched = tokio::time::timeout(
             permit.remaining(),
             tokio::process::Command::new("/usr/bin/open")
@@ -767,6 +774,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
                 .status(),
         )
         .await;
+        super::navigation_restore::note_foreground();
         self.check()?;
         if !matches!(dispatched, Ok(Ok(status)) if status.success()) {
             return Err(Error::Unavailable(
@@ -852,6 +860,7 @@ pub async fn select_session(
             trace: &trace,
             covered,
             background_owner,
+            inspect_uncovered: inspect && !covered,
         };
         let (surface, generation) =
             muster_agent::native_navigation::select(&host, Default::default()).await?;

@@ -60,8 +60,23 @@ pub(crate) async fn compact(daemon: &Arc<Daemon>, id: &str) -> Result<(), Error>
         .ok_or_else(|| Error::Unavailable("agent control is off".into()))?
         .clone();
     let _app = crate::agent_bridge::hold_session(daemon, &agent, id, "compact").await?;
-    crate::agent_bridge::ensure_native(daemon, agent.clone(), id, false).await?;
-    agent.compact(id).await.map_err(Error::from)
+    let operation = async {
+        crate::agent_bridge::ensure_native(daemon, agent.clone(), id, false).await?;
+        agent.compact(id).await.map_err(Error::from)
+    };
+    #[cfg(target_os = "macos")]
+    if let Some((app, _)) = crate::agent_bridge::session_app(&agent, id) {
+        return crate::navigation_restore::run(
+            daemon,
+            app,
+            Some(id),
+            crate::locked_use::navigation_is_covered()?,
+            Arc::new(_app),
+            operation,
+        )
+        .await;
+    }
+    operation.await
 }
 
 #[cfg(target_os = "macos")]

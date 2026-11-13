@@ -184,6 +184,7 @@ fn console_ready() -> Result<(), Error> {
 }
 
 fn press(element: &Element, what: &str) -> Result<(), Error> {
+    muster_agent::native_navigation::restore::dispatch(false);
     element
         .press()
         .map_err(|code| Error::Unavailable(format!("AX press on {what} failed ({code})")))
@@ -436,6 +437,7 @@ pub async fn return_to_code(app: ChatApp) -> Result<bool, Error> {
     if view.chat != Some(true) && chat::navigation_clear(app, &tree) {
         return Ok(false);
     }
+    muster_agent::native_navigation::restore::dispatch(false);
     switch_mode(app, &guard, &root, false).await?;
     log::info!(
         "{} returned to its {} mode for an agent operation",
