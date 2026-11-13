@@ -32,3 +32,28 @@ An iPhone install also needs an available device connection or user action.
 Check archive versions and source stamp, signatures, notarization, feed and OTA
 readback, GitHub assets, installed device versions and App Store Connect build,
 group and review status independently.
+
+### Publication and device verification
+
+Both Apple archives were built from clean main commit `3e1deedf`. The
+desktop package passed Developer ID and Presence signing checks, release
+ancestry, notarization, stapling and Gatekeeper. The
+[GitHub release](https://github.com/psyche08/Muster/releases/tag/v1.1.39)
+tag points to that commit. Both public asset digests matched the local files.
+
+The signed desktop feed and iOS registered-device IPA passed package checks.
+All 14 files, download links and cache headers passed HTTPS verification.
+Four superseded publisher files were removed. The portable SHA-256 is
+`0b440835802da5839c4b8e92dfd7d3df090f483a35d64450ec6c4479c914dbc4`.
+The registered-device IPA SHA-256 is
+`5fe64c383f487b85d32f9e855b0e2762d29c198066b54b8d850d1b63ae355429`.
+
+All three roster Macs reported version 1.1.39, source commit `3e1deedf`,
+hardware-backed identity, registered relay and a working virtual network
+after installation. Xcode listed the paired iPhone as unavailable during
+the install checks. Its installed version is unverified.
+
+App Store Connect processed the separate iOS distribution upload as VALID.
+Build 129 was attached to the existing Public Beta group and submitted for
+external beta review. At 08:47 CST on November 13 the review was waiting.
+External availability of this build awaits Apple's decision.
