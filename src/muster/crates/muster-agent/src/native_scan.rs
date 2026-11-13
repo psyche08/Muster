@@ -81,6 +81,20 @@ pub struct ViewPlace {
     pub minimized: bool,
 }
 
+/// Choose one provider window from AX order before looking for a session.
+pub fn preferred_window<'a, W: PartialEq>(
+    windows: &'a [W],
+    focused: Option<&W>,
+    main: Option<&W>,
+    eligible: impl Fn(&W) -> bool,
+) -> Option<&'a W> {
+    let preferred = |candidate: &W| windows.iter().find(|w| *w == candidate && eligible(w));
+    focused
+        .and_then(preferred)
+        .or_else(|| main.and_then(preferred))
+        .or_else(|| windows.iter().find(|w| eligible(w)))
+}
+
 /// Which of several views of one conversation an operation runs in, or
 /// `None` to refuse as ambiguous.
 ///
@@ -321,6 +335,20 @@ mod tests {
             window_rank,
             minimized,
         }
+    }
+
+    #[test]
+    fn window_metadata_decides_before_any_session_rows_are_read() {
+        let choose = |focus: Option<i32>, main: Option<i32>, allowed: &[i32]| {
+            preferred_window(&[1, 2, 3], focus.as_ref(), main.as_ref(), |w| {
+                allowed.contains(w)
+            })
+            .copied()
+        };
+        assert_eq!(choose(Some(2), Some(3), &[1, 2, 3]), Some(2));
+        assert_eq!(choose(Some(2), Some(3), &[1, 3]), Some(3));
+        assert_eq!(choose(Some(9), None, &[2, 3]), Some(2));
+        assert_eq!(choose(Some(2), Some(3), &[]), None);
     }
 
     #[test]

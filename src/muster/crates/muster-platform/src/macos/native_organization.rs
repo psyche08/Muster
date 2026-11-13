@@ -15,7 +15,7 @@ impl NativeAppController {
         self.check_identity()?;
         if screen_locked()
             || target_input_generation(self.pid) != generation
-            || !self.app.contains(window)
+            || !self.operation_root()?.contains(window)
             || !window.contains(web)
             || (self.resolver)(&WebAreaKey::of(web)).as_deref() != Some(self.session.as_str())
         {

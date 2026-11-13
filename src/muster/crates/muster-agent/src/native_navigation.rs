@@ -23,12 +23,7 @@ pub trait Host: Send + Sync {
     /// The visible target needs no navigation. Check before planning any other route
     /// and again at the OS action boundary.
     fn check_navigation(&self) -> Result<(), Error>;
-    fn background_sidebar(&self) -> bool;
-    /// A covered worker can use its existing foreground authority only if
-    /// a complete read found no in-app route and no control was pressed.
-    fn covered_sidebar_fallback(&self) -> bool {
-        false
-    }
+    fn sidebar_only(&self) -> bool;
     fn inspection_idle(&self) -> Option<Duration> {
         None
     }
@@ -140,10 +135,9 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             host.check_navigation()?;
             // A native ID makes sidebar titles and pagination irrelevant. It
             // does not make the future destination or its composer trusted.
-            let route = host.exact_route();
-            if let Some(route) = &route {
-                if !host.background_sidebar() {
-                    return Ok(Some(Ready::Exact(route.clone())));
+            if let Some(route) = host.exact_route() {
+                if !host.sidebar_only() {
+                    return Ok(Some(Ready::Exact(route)));
                 }
                 // UUID mapping is required even when the title only locates a row.
                 // Launch Services may activate a provider despite its background flag.
@@ -151,11 +145,6 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
                 return Err(Error::Unavailable("local session UUID mapping is missing or ambiguous; no title lookup or navigation attempted".into()));
             }
             let sidebar = host.sidebar()?;
-            if host.covered_sidebar_fallback() && sidebar.complete && sidebar.candidates.is_empty()
-                && sidebar.more.is_none() && let Some(route) = route
-            {
-                return Ok(Some(Ready::Exact(route)));
-            }
             Ok((sidebar.navigation > 0).then_some(Ready::Sidebar(sidebar)))
         },
     )
@@ -211,7 +200,7 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
                     break;
                 }
             }
-            if host.background_sidebar() && sidebar.complete && sidebar.candidates.is_empty() {
+            if host.sidebar_only() && sidebar.complete && sidebar.candidates.is_empty() {
                 return Err(Error::Unavailable(
                     "The desktop app did not expose this session in its sidebar; nothing was submitted".into(),
                 ));
@@ -274,7 +263,6 @@ mod tests {
         missing: bool,
         ambiguous: bool,
         background: bool,
-        covered: bool,
         no_rows: bool,
         inspect: bool,
         recent_input: bool,
@@ -312,11 +300,8 @@ mod tests {
         fn inspection_idle(&self) -> Option<Duration> {
             (self.inspect && self.recent_input).then_some(Duration::from_millis(10))
         }
-        fn background_sidebar(&self) -> bool {
+        fn sidebar_only(&self) -> bool {
             self.background
-        }
-        fn covered_sidebar_fallback(&self) -> bool {
-            self.covered
         }
         fn sidebar(&self) -> Result<Sidebar<bool>, Error> {
             self.reads.fetch_add(1, SeqCst);
@@ -462,81 +447,18 @@ mod tests {
         assert_eq!(wrong.dispatches.load(SeqCst), 0);
     }
     #[tokio::test]
-    async fn only_covered_selection_can_fall_back_after_a_complete_read_without_actions() {
-        let covered = || Fixture {
+    async fn a_missing_window_row_never_dispatches_a_process_wide_url() {
+        let h = Fixture {
             background: true,
-            covered: true,
             exact: true,
+            no_rows: true,
+            pages: 1,
             ..Default::default()
         };
-        for (host, succeeds, presses, urls) in [
-            (covered(), true, 1, 0),
-            (
-                Fixture {
-                    no_rows: true,
-                    ..covered()
-                },
-                true,
-                0,
-                1,
-            ),
-            (
-                Fixture {
-                    no_rows: true,
-                    covered: false,
-                    ..covered()
-                },
-                false,
-                0,
-                0,
-            ),
-            (
-                Fixture {
-                    ambiguous_rows: true,
-                    ..covered()
-                },
-                false,
-                0,
-                0,
-            ),
-            (
-                Fixture {
-                    no_rows: true,
-                    incomplete: true,
-                    ..covered()
-                },
-                false,
-                0,
-                0,
-            ),
-            (
-                Fixture {
-                    missing: true,
-                    ..covered()
-                },
-                false,
-                1,
-                0,
-            ),
-            (
-                Fixture {
-                    no_rows: true,
-                    pages: 1,
-                    ..covered()
-                },
-                false,
-                1,
-                0,
-            ),
-        ] {
-            assert_eq!(select(&host, budget()).await.is_ok(), succeeds);
-            assert_eq!(
-                (host.presses.load(SeqCst), host.dispatches.load(SeqCst)),
-                (presses, urls)
-            );
-        }
+        assert!(select(&h, budget()).await.is_err());
+        assert_eq!(h.presses.load(SeqCst), 1); // one in-window expansion
+        assert_eq!(h.dispatches.load(SeqCst), 0);
     }
-
     #[tokio::test]
     async fn visible_target_needs_no_navigation_or_sidebar() {
         let h = Fixture {

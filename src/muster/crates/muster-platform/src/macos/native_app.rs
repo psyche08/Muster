@@ -374,11 +374,22 @@ impl muster_agent::native_sidebar::LabelNode for Element {
 }
 
 /// The sessions an app shows, through the resolver.
-pub fn discover(pid: u32, resolver: &Resolver) -> Vec<String> {
-    web_areas(pid)
-        .iter()
-        .filter_map(|key| resolver(key))
-        .collect()
+pub fn discover(profile: &AppProfile, pid: u32, resolver: &Resolver) -> Vec<String> {
+    let app = Element::application(pid);
+    app.enable_manual_accessibility();
+    let Ok(root) = super::session_window::for_provider(&app, profile.provider()) else {
+        return Vec::new();
+    };
+    let mut sessions = Vec::new();
+    root.walk(|node| {
+        if node.role() == "AXWebArea"
+            && let Some(id) = resolver(&WebAreaKey::of(node))
+        {
+            sessions.push(id);
+        }
+        true
+    });
+    sessions
 }
 
 /// What one look at the session list found: rows naming the session, the
@@ -403,7 +414,7 @@ fn scan_sidebar(
     title_is_unique: bool,
     resolver: &Resolver,
     trace: &Trace,
-    claude_background_sidebar: bool,
+    claude_sidebar: bool,
 ) -> SidebarScan {
     use muster_agent::profile::SessionList;
     let sessions = profile.controls().sessions;
@@ -450,14 +461,14 @@ fn scan_sidebar(
         // pruned: in ChatGPT.app the session list lives inside the open
         // conversation's single web area, so pruning it hides the sidebar
         // (ADR 0091).
-        if separate_conversation_views && !claude_background_sidebar && role == "AXWebArea" {
+        if separate_conversation_views && !claude_sidebar && role == "AXWebArea" {
             let key = WebAreaKey::of(node);
             if !muster_agent::native_scan::descend_web_area(resolver(&key).is_some()) {
                 conversation_views += 1;
                 return false;
             }
         }
-        if claude_background_sidebar {
+        if claude_sidebar {
             if role == "AXHeading"
                 && node.string("AXTitle").as_deref() == Some("Claude is temporarily unavailable")
                 && node
@@ -539,7 +550,7 @@ fn scan_sidebar(
     {
         // A Chat sidebar lists different conversations, even when titles collide.
         // Its Code radio is a bounded in-app preparation step, never a submit.
-        let in_chat = claude_background_sidebar && enclosing_claude_chat(area);
+        let in_chat = claude_sidebar && enclosing_claude_chat(area);
         chat_page |= in_chat;
         let area_walk = area.walk_pruned_report(|node| {
             let attrs = node.attributes(&["AXRole", "AXTitle", "AXDescription", "AXURL"]);
@@ -679,11 +690,17 @@ struct NavigationHost<'a> {
     resolver: &'a Resolver,
     trace: &'a Trace,
     console: NativeConsole,
-    prefer_sidebar: bool,
+    root: Element,
     inspect_uncovered: bool,
 }
 
 impl NavigationHost<'_> {
+    fn check_window(&self) -> Result<(), Error> {
+        if super::session_window::for_provider(&self.app, self.profile.provider())? != self.root {
+            return Err(Error::Conflict("Session navigation window changed".into()));
+        }
+        Ok(())
+    }
     fn check_owner(&self) -> Result<(), Error> {
         self.console.check_navigation(NativeConsole::observe(
             self.console == NativeConsole::Covered,
@@ -719,16 +736,14 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
                 "Console session inactive during session selection".into(),
             ));
         }
+        self.check_window()?;
         if matches!(self.console, NativeConsole::Background(_)) {
             self.check_owner()?;
         }
         Ok(())
     }
-    fn background_sidebar(&self) -> bool {
-        self.prefer_sidebar
-    }
-    fn covered_sidebar_fallback(&self) -> bool {
-        self.console == NativeConsole::Covered && self.prefer_sidebar
+    fn sidebar_only(&self) -> bool {
+        self.root != self.app || matches!(self.console, NativeConsole::Background(_))
     }
     fn inspection_idle(&self) -> Option<Duration> {
         self.inspect_uncovered.then(super::input::user_input_idle)
@@ -743,7 +758,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     fn surface(&self) -> Result<Option<Surface>, Error> {
         match find_surface_traced(
             self.profile,
-            &self.app,
+            &self.root,
             self.session,
             self.resolver,
             Some(self.trace),
@@ -754,7 +769,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         }
     }
     fn sidebar(&self) -> Result<muster_agent::native_navigation::Sidebar<Element>, Error> {
-        let claude_sidebar = self.background_sidebar() && self.profile.provider() == "claude";
+        let claude_sidebar = self.sidebar_only() && self.profile.provider() == "claude";
         let registry_title = claude_sidebar
             .then(|| {
                 let root = muster_agent::claude::desktop_registry()?;
@@ -768,7 +783,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             });
         let scan = scan_sidebar(
             self.profile,
-            &self.app,
+            &self.root,
             self.session,
             title,
             unique,
@@ -802,6 +817,11 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     ) -> Result<(), Error> {
         self.check()?;
         self.check_navigation()?;
+        if !self.root.contains(control) {
+            return Err(Error::Conflict(
+                "Sidebar control left the selected window".into(),
+            ));
+        }
         permit.check(self.generation())?;
         muster_agent::native_navigation::restore::dispatch(false);
         control.press().map_err(|code| {
@@ -810,51 +830,17 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     }
     async fn navigate(
         &self,
-        route: &str,
-        permit: &muster_agent::native_navigation::ActionPermit,
+        _route: &str,
+        _permit: &muster_agent::native_navigation::ActionPermit,
     ) -> Result<(), Error> {
-        if self.background_sidebar() && !self.covered_sidebar_fallback() {
-            return Err(Error::Conflict(
-                "Background session selection requires in-app navigation".into(),
-            ));
-        }
-        let bundle = super::procs::process_bundle(self.pid)
-            .ok_or_else(|| Error::Unavailable("desktop bundle identity unavailable".into()))?;
-        if !codesign::process_satisfies(self.pid, &self.profile.app.requirement()) {
-            return Err(Error::Unavailable(
-                "desktop signature changed before navigation".into(),
-            ));
-        }
-        self.check()?;
-        self.check_navigation()?;
-        permit.check(self.generation())?;
-        muster_agent::native_navigation::restore::dispatch(true);
-        let dispatched = tokio::time::timeout(
-            permit.remaining(),
-            tokio::process::Command::new("/usr/bin/open")
-                .args(["-g", "-a"])
-                .arg(bundle)
-                .arg(route)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .kill_on_drop(true)
-                .status(),
-        )
-        .await;
-        super::navigation_restore::note_foreground();
-        self.check()?;
-        if !matches!(dispatched, Ok(Ok(status)) if status.success()) {
-            return Err(Error::Unavailable(
-                "exact-session navigation dispatch failed or timed out; not retried".into(),
-            ));
-        }
-        Ok(())
+        Err(Error::Unavailable(
+            "No window-scoped native URL dispatch is available".into(),
+        ))
     }
     fn refresh_renderer(&self, budget: Duration) -> Result<(), Error> {
         let started = std::time::Instant::now();
         let mut areas = Vec::new();
-        self.app.walk_pruned(|node| {
+        self.root.walk_pruned(|node| {
             if started.elapsed() >= budget {
                 return ax::Visit::Stop;
             }
@@ -917,7 +903,7 @@ pub async fn select_session(
             resolver: &resolver,
             trace: &trace,
             console: NativeConsole::observe(covered, Some(pid), focus),
-            prefer_sidebar: matches!(focus, muster_agent::local_input::Owner::Process(owner) if owner != pid),
+            root: super::session_window::for_provider(&app, profile.provider())?,
             inspect_uncovered: inspect && !covered,
         };
         let (surface, generation) =
@@ -1059,6 +1045,7 @@ pub fn cli_session_for(desktop_id: &str) -> Option<String> {
 
 #[derive(Clone)]
 struct Surface {
+    root: Element,
     web_area: Element,
     composer: Option<Element>,
     sends: Vec<Element>,
@@ -1238,6 +1225,11 @@ fn scan_surface(
         }
         1 => views.remove(0),
         _ => {
+            if super::session_window::scoped(profile.provider()) {
+                return Err(
+                    Error::Conflict("Multiple target views in the selected window".into()).into(),
+                );
+            }
             let places = view_places(app, &views);
             let chosen = muster_agent::native_scan::choose_view(&places);
             let facts = places
@@ -1300,6 +1292,7 @@ fn scan_surface(
         );
     }
     Ok(Surface {
+        root: app.clone(),
         web_area,
         composer: composer.into_iter().next(),
         sends: send,
@@ -1569,7 +1562,8 @@ impl NativeAppController {
         let app = Element::application(pid);
         app.enable_manual_accessibility();
         let generation = target_input_generation(pid);
-        let surface = find_surface(profile, &app, session, &resolver)?;
+        let root = super::session_window::for_provider(&app, profile.provider())?;
+        let surface = find_surface(profile, &root, session, &resolver)?;
         Self::attach_prepared(
             PreparedSession {
                 profile,
@@ -1615,6 +1609,11 @@ impl NativeAppController {
                 "desktop changed after session preparation".into(),
             ));
         }
+        if super::session_window::for_provider(&app, profile.provider())? != surface.root {
+            return Err(Error::Conflict(
+                "Window changed before controller attachment".into(),
+            ));
+        }
         let controller = Arc::new(Self {
             profile,
             resolver,
@@ -1650,6 +1649,19 @@ impl NativeAppController {
         target_input_generation(self.pid)
     }
 
+    fn operation_root(&self) -> Result<Element, Error> {
+        super::session_window::for_provider(&self.app, self.profile.provider())
+    }
+
+    fn fresh_surface(&self) -> Result<Surface, Error> {
+        find_surface(
+            self.profile,
+            &self.operation_root()?,
+            &self.session,
+            &self.resolver,
+        )
+    }
+
     /// The target is still the process we attached to and still shows the session.
     fn check_identity(&self) -> Result<(), Error> {
         if codesign::process_start(self.pid) != Some(self.start) {
@@ -1662,8 +1674,11 @@ impl NativeAppController {
             return Ok(());
         }
         let mut surface = self.surface.lock().unwrap();
-        let same_session = (self.resolver)(&WebAreaKey::of(&surface.web_area)).as_deref()
-            == Some(self.session.as_str());
+        let root = self.operation_root()?;
+        let same_session = surface.root == root
+            && root.contains(&surface.web_area)
+            && (self.resolver)(&WebAreaKey::of(&surface.web_area)).as_deref()
+                == Some(self.session.as_str());
         if !same_session
             || surface
                 .composer
@@ -1675,7 +1690,7 @@ impl NativeAppController {
             // Resolve the same session uniquely in the same process; never
             // adopt whichever view happens to be focused or reset this
             // controller's unknown-write / interaction state by reattaching.
-            let replacement = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let replacement = self.fresh_surface()?;
             if codesign::process_start(self.pid) != Some(self.start) || screen_locked() {
                 return Err(Error::Unavailable(
                     "the app or lock state changed while refreshing the session view".into(),
@@ -1696,7 +1711,7 @@ impl NativeAppController {
     fn check_write_surface(&self, web_area: &Element, composer: &Element) -> Result<(), Error> {
         self.check_identity()?;
         if (self.resolver)(&WebAreaKey::of(web_area)).as_deref() != Some(self.session.as_str())
-            || !self.app.contains(web_area)
+            || !self.operation_root()?.contains(web_area)
             || !web_area.contains(composer)
         {
             return Err(Error::Unavailable(
@@ -1713,7 +1728,7 @@ impl NativeAppController {
     fn surface_diagnostic(&self) -> Result<String, Error> {
         muster_agent::control_guard::check()?;
         self.check_identity()?;
-        let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+        let fresh = self.fresh_surface()?;
         let composer = fresh.composer.as_ref().map(|c| {
             serde_json::json!({
                 "role": c.role(),
@@ -1868,10 +1883,23 @@ impl NativeAppController {
     /// enabled approval options mean a decision is pending.
     async fn observe(&self) -> bool {
         let _observation = self.observation.lock().await;
-        let web_area = self.surface.lock().unwrap().web_area.clone();
+        let (root, web_area) = {
+            let surface = self.surface.lock().unwrap();
+            (surface.root.clone(), surface.web_area.clone())
+        };
+        let valid = || {
+            self.operation_root().as_ref().ok() == Some(&root)
+                && root.contains(&web_area)
+                && (self.resolver)(&WebAreaKey::of(&web_area)).as_deref()
+                    == Some(self.session.as_str())
+        };
+        if !valid() {
+            return false;
+        }
         let controls = self.profile.controls();
+        let observed = web_area.clone();
         let snapshot = muster_agent::control_guard::spawn_blocking(move || {
-            super::native_chat::approval_snapshot(&web_area)
+            super::native_chat::approval_snapshot(&observed)
         })
         .await;
         let Ok((tree, elements)) = snapshot else {
@@ -1886,6 +1914,9 @@ impl NativeAppController {
             if !self.retain_locked_approval() {
                 self.unobserve(SessionState::Unknown).await;
             }
+            return false;
+        }
+        if !valid() {
             return false;
         }
         let stop = tree
@@ -2062,7 +2093,7 @@ impl NativeAppController {
             if !answering {
                 self.composer_question_guard(expected)?;
             }
-            let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let fresh = self.fresh_surface()?;
             let Some(composer) = fresh.composer.clone() else {
                 *self.surface.lock().unwrap() = fresh;
                 if answering {
@@ -2173,7 +2204,7 @@ impl NativeAppController {
                 self.composer_question_guard(expected)?;
                 // A cached composer may still belong to the web area after
                 // Electron replaces its active editor. Always resolve afresh.
-                let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+                let fresh = self.fresh_surface()?;
                 let composer = fresh
                     .composer
                     .clone()
@@ -2203,7 +2234,7 @@ impl NativeAppController {
             composer.set_bool("AXFocused", true).map_err(|code| {
                 Error::Unavailable(format!("AX composer focus failed ({code}); not sent"))
             })?;
-            let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let fresh = self.fresh_surface()?;
             let current = fresh.composer.clone().ok_or_else(|| {
                 Error::Unavailable("The native prompt is not visible after focus; not sent".into())
             })?;
@@ -2266,7 +2297,7 @@ impl NativeAppController {
             self.composer_question_guard(expected)?;
             // Do not wait on the cached element: Electron may retain an old
             // composer in its tree while replacing the active editor.
-            let mut fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let mut fresh = self.fresh_surface()?;
             // A covered Chromium renderer may leave both AXValue and Send in
             // the browser cache after a successful write. Ask the renderer for
             // a read-only update, then resolve the exact session again. Never
@@ -2279,7 +2310,7 @@ impl NativeAppController {
             if !cached_echo && started.elapsed() < muster_agent::native_send::ECHO_DEADLINE {
                 let queried = self.app.query_renderer(&fresh.web_area);
                 trace.record(format_args!("draft_renderer_query accepted={queried}"));
-                fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+                fresh = self.fresh_surface()?;
             }
             let current = fresh.composer.clone();
             if previous_composer.is_some() && previous_composer != current {
@@ -2495,7 +2526,7 @@ impl Controller for NativeAppController {
             return Ok(false);
         }
         let generation = self.input_generation();
-        let fresh = match find_surface(self.profile, &self.app, &self.session, &self.resolver) {
+        let fresh = match self.fresh_surface() {
             Ok(surface) if surface.composer.is_some() => surface,
             Ok(_) | Err(Error::NotFound(_)) => return Ok(false),
             Err(error) => return Err(error),
@@ -2597,7 +2628,7 @@ impl Controller for NativeAppController {
                     "Local input changed during completion; draft preserved".into(),
                 ));
             }
-            let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+            let fresh = self.fresh_surface()?;
             let composer = fresh
                 .composer
                 .clone()
@@ -2629,7 +2660,9 @@ impl Controller for NativeAppController {
             .set_bool("AXFocused", true)
             .map_err(|e| Error::Unavailable(format!("Cannot focus the native prompt ({e})")))?;
         let focused = locate()?;
-        if focused.bool("AXFocused") != Some(true)
+        if self.app.element("AXFocusedWindow").as_ref() != Some(&self.operation_root()?)
+            || self.app.element("AXFocusedUIElement").as_ref() != Some(&focused)
+            || focused.bool("AXFocused") != Some(true)
             || focused.string("AXValue").as_deref() != Some(original.as_str())
         {
             return Err(Error::Conflict(
@@ -2879,6 +2912,62 @@ mod inspection_tests {
     use super::*;
     use muster_agent::local_input::Owner;
 
+    /// Inspect one known sidebar row without selecting it or changing focus.
+    #[test]
+    #[ignore = "needs an unlocked Mac, a running provider and a named sidebar fixture"]
+    fn single_window_sidebar_on_device() {
+        let provider = std::env::var("MUSTER_WINDOW_TEST_PROVIDER").unwrap();
+        let session = std::env::var("MUSTER_WINDOW_TEST_SESSION").unwrap();
+        let title = std::env::var("MUSTER_WINDOW_TEST_TITLE").unwrap();
+        let profile = profiles()
+            .into_iter()
+            .find(|p| p.provider() == provider)
+            .unwrap();
+        assert!(super::super::session_window::scoped(&provider));
+        let pids = app_pids(profile);
+        let [pid] = pids.as_slice() else {
+            panic!("need one signed provider")
+        };
+        let app = Element::application(*pid);
+        app.enable_manual_accessibility();
+        let selected = super::super::session_window::root(&app).unwrap();
+        let windows = app
+            .attribute("AXWindows")
+            .map(|v| Element::elements_of(&v))
+            .unwrap();
+        let resolver: Resolver = if provider == "claude" {
+            claude_resolver()
+        } else {
+            Arc::new(|key| {
+                key.url
+                    .as_deref()
+                    .and_then(muster_agent::native_sidebar::codex_thread_id)
+            })
+        };
+        let trace = Trace::new("single_window_test", &provider, &session);
+        let scan = scan_sidebar(
+            profile,
+            &selected,
+            &session,
+            &title,
+            true,
+            &resolver,
+            &trace,
+            provider == "claude",
+        );
+        eprintln!(
+            "provider={provider} listed_windows={} selected_index={:?} sidebars={} matches={} complete={}",
+            windows.len(),
+            windows.iter().position(|w| w == &selected),
+            scan.navigation,
+            scan.candidates.len(),
+            scan.complete
+        );
+        assert!(scan.complete && scan.navigation == 1 && scan.candidates.len() == 1);
+        assert!(selected.contains(&scan.candidates[0]));
+        assert!(super::super::session_window::root(&app).unwrap() == selected);
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "requires a named local Claude Code session and a different app in front"]
     async fn inspect_background_claude_session_on_device() {
@@ -2897,7 +2986,7 @@ mod inspection_tests {
         assert_ne!(pid, front, "requires Claude in the background");
         let resolver = claude_resolver();
         assert!(
-            !discover(pid, &resolver).contains(&session),
+            !discover(profile, pid, &resolver).contains(&session),
             "test needs a different session initially displayed"
         );
         let selected = select_session(profile, pid, &session, "", false, &resolver, false, true)

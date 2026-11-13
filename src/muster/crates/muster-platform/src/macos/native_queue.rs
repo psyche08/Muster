@@ -206,7 +206,7 @@ impl NativeAppController {
         }
         let web = self.surface.lock().unwrap().web_area.clone();
         if (self.resolver)(&WebAreaKey::of(&web)).as_deref() != Some(&self.session)
-            || !self.app.contains(&web)
+            || !self.operation_root()?.contains(&web)
         {
             return Err(Error::Unavailable(
                 "The selected session view changed".into(),
@@ -300,7 +300,7 @@ impl NativeAppController {
 impl NativeAppController {
     /// The composer's value, from a fresh scan of this session's view.
     fn composer_value(&self) -> Result<Option<String>, Error> {
-        let fresh = find_surface(self.profile, &self.app, &self.session, &self.resolver)?;
+        let fresh = self.fresh_surface()?;
         let composer = fresh.composer.clone().ok_or_else(|| {
             Error::Unavailable("The native prompt is not visible; nothing deleted".into())
         })?;

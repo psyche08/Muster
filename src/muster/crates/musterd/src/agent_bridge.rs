@@ -62,7 +62,7 @@ pub(crate) async fn native_apps(agent: Arc<AgentService>, queues: ProviderQueues
             // list it); the controller verifies its signature.
             let pids = app_pids(profile);
             for pid in pids {
-                for session in discover(pid, resolver) {
+                for session in discover(profile, pid, resolver) {
                     if agent.retains_native_controller(&session) {
                         continue;
                     }

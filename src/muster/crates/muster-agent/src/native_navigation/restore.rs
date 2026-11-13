@@ -8,6 +8,7 @@ use std::sync::{
 #[derive(Clone, Default)]
 pub struct Navigation(Arc<Record>);
 struct Record {
+    window: std::sync::OnceLock<Box<dyn std::any::Any + Send + Sync>>,
     dispatched: AtomicBool,
     may_activate: AtomicBool,
     foreground: Mutex<Option<ProcessIdentity>>,
@@ -17,6 +18,7 @@ struct Record {
 impl Default for Record {
     fn default() -> Self {
         Self {
+            window: Default::default(),
             dispatched: Default::default(),
             may_activate: Default::default(),
             foreground: Default::default(),
@@ -34,6 +36,29 @@ impl Drop for Worker {
 tokio::task_local! { pub(crate) static NAVIGATION: Navigation; }
 
 impl Navigation {
+    /// Nested preparation and execution must inherit the same window, even in
+    /// callers that do not request restoration (e.g. model options).
+    pub async fn with_window_scope<T>(operation: impl Future<Output = T>) -> T {
+        if NAVIGATION.try_with(|_| ()).is_ok() {
+            operation.await
+        } else {
+            Self::default().scope(operation).await
+        }
+    }
+    pub fn bind_window<W: 'static + Send + Sync + Clone + PartialEq>(
+        current: W,
+    ) -> Result<W, Error> {
+        if let Ok(scope) = NAVIGATION.try_with(Clone::clone) {
+            let bound = scope.0.window.get_or_init(|| Box::new(current.clone()));
+            if bound.downcast_ref::<W>() != Some(&current) {
+                return Err(Error::Conflict(
+                    "The selected desktop window changed; operation stopped".into(),
+                ));
+            }
+        }
+        Ok(current)
+    }
+
     pub(crate) fn worker(&self) -> Worker {
         self.0.workers.send_modify(|count| *count += 1);
         Worker(self.clone())
@@ -107,6 +132,33 @@ pub fn ownership(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn one_window_is_pinned_across_workers_but_not_across_operations() {
+        use crate::{control_guard, native_scan::preferred_window};
+        // Both sidebars contain the same target; window 1 has a duplicate too.
+        let windows = [0usize, 1];
+        let rows = [vec!["target"], vec!["target", "target", "other"]];
+        for preferred in windows {
+            Navigation::with_window_scope(async {
+                let selected =
+                    *preferred_window(&windows, Some(&preferred), None, |_| true).unwrap();
+                let root = Navigation::bind_window(selected).unwrap();
+                let candidates = rows[root].iter().filter(|r| **r == "target").count();
+                assert_eq!(candidates, if preferred == 0 { 1 } else { 2 });
+                if preferred == 0 {
+                    assert!(!rows[root].contains(&"other"));
+                }
+                control_guard::spawn_blocking(move || {
+                    assert!(Navigation::bind_window(1 - root).is_err());
+                    assert_eq!(Navigation::bind_window(root).unwrap(), root);
+                })
+                .await
+                .unwrap();
+            })
+            .await;
+        }
+    }
 
     struct FakeHost {
         hid: u64,

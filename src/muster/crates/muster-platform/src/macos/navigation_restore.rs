@@ -114,6 +114,7 @@ pub(super) fn track_new_page(provider: &'static str, window: &Element, page: &El
 }
 pub struct Snapshot {
     profile: &'static App,
+    single_window: bool,
     target: ProcessIdentity,
     front: ProcessIdentity,
     app: Element,
@@ -125,7 +126,7 @@ pub struct Snapshot {
     pub creation: std::sync::Arc<std::sync::Mutex<Option<CreationForm>>>,
 }
 impl Snapshot {
-    pub fn capture(profile: &'static App) -> Option<Self> {
+    pub fn capture(profile: &'static App, existing_session: bool) -> Option<Self> {
         let hid = input::user_input_generation();
         let frontmost = front()?;
         let pids = native_app::app_pids(profile);
@@ -135,7 +136,12 @@ impl Snapshot {
             return None;
         }
         let app = Element::application(*pid);
-        let window = window(&app);
+        let single_window = existing_session && super::session_window::scoped(profile.provider());
+        let window = if single_window {
+            Some(super::session_window::root(&app).ok()?)
+        } else {
+            window(&app)
+        };
         let original = window
             .as_ref()
             .and_then(|w| selection(profile.provider(), w));
@@ -143,6 +149,7 @@ impl Snapshot {
         let minimized = window.as_ref().and_then(|w| w.bool("AXMinimized"));
         (input::user_input_generation() == hid && front() == Some(frontmost)).then_some(Self {
             profile,
+            single_window,
             target,
             front: frontmost,
             app,
@@ -154,6 +161,15 @@ impl Snapshot {
             creation: Default::default(),
         })
     }
+    fn current_window(&self) -> Option<Element> {
+        if self.single_window {
+            let current = super::session_window::selected(&self.app).ok()?;
+            (Some(&current) == self.window.as_ref()).then_some(current)
+        } else {
+            window(&self.app)
+        }
+    }
+
     pub fn owns(&self, destination: &Page, expected_front: ProcessIdentity) -> Result<(), Error> {
         muster_agent::control_guard::check()?;
         if !lock::session_state().is_some_and(|v| v.on_console && v.login_done && !v.screen_locked)
@@ -161,7 +177,7 @@ impl Snapshot {
         {
             return Err(unavailable("console or provider process changed"));
         }
-        let shown = window(&self.app).and_then(|w| {
+        let shown = self.current_window().and_then(|w| {
             let selected = selection(self.profile.provider(), &w);
             if matches!(destination, Page::Creation(_))
                 && selected.is_none()
@@ -194,7 +210,7 @@ impl Snapshot {
 
     fn exact_links(&self, page: &Page) -> Vec<Element> {
         let mut links = Vec::new();
-        let Some(w) = window(&self.app) else {
+        let Some(w) = self.current_window() else {
             return links;
         };
         let (_, stop, _) = w.walk_pruned_report(|node| {
@@ -238,27 +254,28 @@ impl Snapshot {
             };
             // A provider without an exact dispatch route can still have the
             // original session in its original, separate window.
-            let links = if route.is_none() || expected != self.target {
+            let links = if self.single_window || route.is_none() || expected != self.target {
                 self.exact_links(page)
             } else {
                 Vec::new()
             };
-            if expected == self.target
+            if !self.single_window
+                && expected == self.target
                 && let Some(w) = self.window.as_ref()
-                && window(&self.app).as_ref() != Some(w)
+                && self.current_window().as_ref() != Some(w)
                 && selection(self.profile.provider(), w).as_ref() == Some(page)
                 && self.app.contains(w)
             {
                 guard(destination, expected)?;
                 w.perform("AXRaise")
                     .map_err(|_| unavailable("original window could not be raised"))?;
-            } else if route.is_none() || expected != self.target {
+            } else if self.single_window || route.is_none() || expected != self.target {
                 let link = match links.as_slice() {
                     [link] => Some(link.clone()),
                     [] if self.profile.provider() == "claude"
                         && let Page::Code(id) = page
                         && let Some(w) = self.window.as_ref()
-                        && window(&self.app).as_ref() == Some(w) =>
+                        && self.current_window().as_ref() == Some(w) =>
                     {
                         native_app::claude_return_row(w, id)
                     }
@@ -300,7 +317,8 @@ impl Snapshot {
                 if front() != Some(expected) {
                     return Err(unavailable("foreground changed during restore"));
                 }
-                if window(&self.app)
+                if self
+                    .current_window()
                     .and_then(|w| selection(self.profile.provider(), &w))
                     .as_ref()
                     == Some(page)
@@ -316,7 +334,7 @@ impl Snapshot {
             if let Some(w) = self.window.as_ref()
                 && self.minimized == Some(true)
                 && w.bool("AXMinimized") == Some(false)
-                && self.app.contains(w)
+                && (self.single_window || self.app.contains(w))
             {
                 guard(page, owner)?;
                 w.set_bool("AXMinimized", true)
