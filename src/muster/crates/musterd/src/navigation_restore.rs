@@ -246,15 +246,20 @@ pub(crate) async fn run<T>(
     } else {
         None
     };
+    let scope = Navigation::default();
+    let existing_session = target.is_some();
     let original = match &previous {
         Some(p) => Some(p.snapshot.clone()),
-        None => control_guard::spawn_blocking(move || Snapshot::capture(app))
+        None => scope
+            .scope(async {
+                control_guard::spawn_blocking(move || Snapshot::capture(app, existing_session))
+                    .await
+            })
             .await
             .ok()
             .flatten()
             .map(Arc::new),
     };
-    let scope = Navigation::default();
     let mut op = Operation {
         daemon: Arc::downgrade(daemon),
         app,

@@ -167,6 +167,12 @@ fn process(app: ChatApp) -> Option<(u32, u64)> {
         .find_map(|pid| codesign::process_start(pid).map(|start| (pid, start)))
 }
 
+fn chat_window(pid: u32) -> Result<Element, Error> {
+    let app = Element::application(pid);
+    app.enable_manual_accessibility();
+    super::session_window::root(&app)
+}
+
 fn console_ready() -> Result<(), Error> {
     if !ax::trusted() {
         return Err(Error::Unavailable(
@@ -196,14 +202,16 @@ struct Guard {
     pid: u32,
     start: u64,
     generation: u64,
+    window: Element,
 }
 
 impl Guard {
-    fn new(pid: u32, start: u64) -> Self {
+    fn new(pid: u32, start: u64, window: &Element) -> Self {
         Self {
             pid,
             start,
             generation: target_input_generation(pid),
+            window: window.clone(),
         }
     }
 
@@ -212,6 +220,9 @@ impl Guard {
         console_ready()?;
         if codesign::process_start(self.pid) != Some(self.start) {
             return Err(Error::Unavailable("the app was restarted".into()));
+        }
+        if super::session_window::root(&Element::application(self.pid))? != self.window {
+            return Err(Error::Conflict("Chat window changed".into()));
         }
         let current = target_input_generation(self.pid);
         if current != self.generation {
@@ -377,9 +388,8 @@ pub async fn set_mode(app: ChatApp, chat: bool) -> Result<(), Error> {
     console_ready()?;
     let (pid, start) = process(app)
         .ok_or_else(|| Error::Unavailable(format!("{} is not running on this Mac", app.name())))?;
-    let root = Element::application(pid);
-    root.enable_manual_accessibility();
-    let guard = Guard::new(pid, start);
+    let root = chat_window(pid)?;
+    let guard = Guard::new(pid, start, &root);
     guard.check()?;
     switch_mode(app, &guard, &root, chat).await
 }
@@ -393,8 +403,7 @@ pub async fn return_to_code(app: ChatApp) -> Result<bool, Error> {
     let Some((pid, start)) = process(app) else {
         return Ok(false);
     };
-    let root = Element::application(pid);
-    root.enable_manual_accessibility();
+    let root = chat_window(pid)?;
     console_ready()?;
     let (tree, generation) = muster_agent::control_guard::prepare_readonly(
         "Code mode navigation",
@@ -431,6 +440,7 @@ pub async fn return_to_code(app: ChatApp) -> Result<bool, Error> {
         pid,
         start,
         generation,
+        window: root.clone(),
     };
     guard.check()?;
     let view = chat::mode(app, &tree);
@@ -576,9 +586,8 @@ pub async fn open(
     console_ready()?;
     let (pid, start) = process(app)
         .ok_or_else(|| Error::Unavailable(format!("{} is not running on this Mac", app.name())))?;
-    let root = Element::application(pid);
-    root.enable_manual_accessibility();
-    let guard = Guard::new(pid, start);
+    let root = chat_window(pid)?;
+    let guard = Guard::new(pid, start, &root);
     guard.check()?;
     switch_to_chat(app, &guard, &root).await?;
     let session = match session.filter(|s| !chat::is_new_session(s)) {
@@ -631,9 +640,8 @@ pub async fn catalog(
         return Ok(catalog);
     }
     console_ready()?;
-    let root = Element::application(pid);
-    root.enable_manual_accessibility();
-    let guard = Guard::new(pid, start);
+    let root = chat_window(pid)?;
+    let guard = Guard::new(pid, start, &root);
     if full_history {
         switch_to_chat(app, &guard, &root).await?;
     }
@@ -747,9 +755,8 @@ pub async fn inspect_options(app: ChatApp) -> Result<String, Error> {
     console_ready()?;
     let (pid, start) = process(app)
         .ok_or_else(|| Error::Unavailable(format!("{} is not running on this Mac", app.name())))?;
-    let root = Element::application(pid);
-    root.enable_manual_accessibility();
-    let guard = Guard::new(pid, start);
+    let root = chat_window(pid)?;
+    let guard = Guard::new(pid, start, &root);
     let o = open_picker(app, &guard, &root).await?;
     let mut out = format!("{}: picker {:?}\n", app.name(), o.picker.label);
     for status in chat::panel_status(&o.tree, o.panel) {
@@ -1214,11 +1221,12 @@ pub async fn options(
         .write
         .try_lock()
         .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
-    let guard = Guard::new(driver.pid, driver.start);
+    let root = super::session_window::root(&driver.root)?;
+    let guard = Guard::new(driver.pid, driver.start, &root);
     guard.check()?;
     if let Some((model, effort)) = set {
         if !model.is_empty() {
-            choose_model(app, &guard, &driver.root, model).await?;
+            choose_model(app, &guard, &root, model).await?;
             log::info!(
                 "{} chat {}: model {model:?} chosen",
                 app.name(),
@@ -1226,7 +1234,7 @@ pub async fn options(
             );
         }
         if !effort.is_empty() {
-            let pressed = raise_power_to_middle(&guard, &driver.root).await?;
+            let pressed = raise_power_to_middle(&guard, &root).await?;
             log::info!(
                 "{} chat {}: Power {}",
                 app.name(),
@@ -1239,7 +1247,7 @@ pub async fn options(
             );
         }
     }
-    let mut out = read_options(app, &guard, &driver.root).await?;
+    let mut out = read_options(app, &guard, &root).await?;
     if let Some((model, _)) = set.filter(|(m, _)| !m.is_empty())
         && !out.models.iter().any(|m| m.selected && m.name == model)
     {
@@ -1408,7 +1416,8 @@ impl ChatDriver {
         if self.write.try_lock().is_err() {
             return None;
         }
-        let (tree, _) = take(&self.root, false).await;
+        let root = super::session_window::root(&self.root).ok()?;
+        let (tree, _) = take(&root, false).await;
         let conversation = (chat::mode(self.app, &tree).chat == Some(true))
             .then(|| chat::conversation(self.app, &tree))
             .flatten();
@@ -1460,6 +1469,7 @@ impl ChatDriver {
         if codesign::process_start(self.pid) != Some(self.start) {
             return Err(Error::Unavailable("the app was restarted".into()));
         }
+        super::session_window::root(&self.root)?;
         console_ready()
     }
 
@@ -1539,7 +1549,7 @@ impl ChatDriver {
             || target_input_generation(self.pid),
             || {
                 self.check_identity()?;
-                let (tree, elements) = snapshot(&self.root, false);
+                let (tree, elements) = snapshot(&super::session_window::root(&self.root)?, false);
                 let located = self.locate(&agent, &tree, session)?;
                 let field = &tree.nodes[located.composer];
                 let write = if chat::is_empty_draft(field, &field.value) {
@@ -1560,6 +1570,7 @@ impl ChatDriver {
             ));
         }
         if write {
+            self.check_identity()?;
             super::native_app::draft(profile(self.app), &composer, text).map_err(|code| {
                 Error::Unavailable(format!("AX set value failed ({code}); not sent"))
             })?;
@@ -1576,7 +1587,7 @@ impl ChatDriver {
                 ));
             }
             self.check_identity()?;
-            let (tree, elements) = take(&self.root, false).await;
+            let (tree, elements) = take(&super::session_window::root(&self.root)?, false).await;
             let located = self.locate(&agent, &tree, session).map_err(|error| {
                 Error::Conflict(format!("{error}; the draft was preserved, not sent"))
             })?;
@@ -1640,7 +1651,8 @@ impl ChatDriver {
             let step = Step::new("chat send receipt", Duration::from_secs(10));
             loop {
                 if step.check().is_err() { break None; }
-                let (tree, _) = take(&self.root, false).await;
+                let Ok(root) = super::session_window::root(&self.root) else { break None };
+                let (tree, _) = take(&root, false).await;
                 if step.check().is_err() { break None; }
                 if let Some(after) = chat::conversation(self.app, &tree)
                     && chat::confirms_send(&before, &after, text)
@@ -1682,7 +1694,8 @@ impl ChatDriver {
             if step.check().is_err() {
                 return None;
             }
-            let (tree, _) = take(&self.root, false).await;
+            let root = super::session_window::root(&self.root).ok()?;
+            let (tree, _) = take(&root, false).await;
             if step.check().is_err() {
                 return None;
             }
@@ -1719,13 +1732,14 @@ impl ChatDriver {
             .upgrade()
             .ok_or_else(|| Error::Unavailable("the agent service stopped".into()))?;
         self.check_identity()?;
-        let (tree, elements) = take(&self.root, false).await;
+        let (tree, elements) = take(&super::session_window::root(&self.root)?, false).await;
         let located = self.locate(&agent, &tree, session)?;
         let stop = located
             .stop
             .ok_or_else(|| Error::Conflict("no reply is being generated".into()))?;
         muster_agent::control_guard::delivery_attempt();
         muster_agent::control_guard::check()?;
+        self.check_identity()?;
         press(&elements[stop], "Stop")
     }
 }

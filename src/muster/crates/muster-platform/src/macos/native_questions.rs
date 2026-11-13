@@ -813,7 +813,7 @@ impl NativeAppController {
             .and_then(|s| s.pending)
             .ok_or_else(|| Error::NotFound("No pending native question".into()))?;
         let web = self.surface.lock().unwrap().web_area.clone();
-        if !self.app.contains(&web) {
+        if !self.operation_root()?.contains(&web) {
             return Err(Error::Unavailable("Question is no longer visible".into()));
         }
         let renderer_query = cards(self.profile).refresh_renderer && self.app.query_renderer(&web);
@@ -873,7 +873,7 @@ impl NativeAppController {
         }
         let web = self.surface.lock().unwrap().web_area.clone();
         if (self.resolver)(&WebAreaKey::of(&web)).as_deref() != Some(self.session.as_str())
-            || !self.app.contains(&web)
+            || !self.operation_root()?.contains(&web)
         {
             return Err(Error::Unavailable(
                 "Question view is no longer the selected session".into(),
@@ -923,8 +923,7 @@ impl NativeAppController {
         // a new application proxy, just as a new diagnostic inspection does.
         // This is read-only discovery of the same session, never a tab switch
         // or another press of the answer control.
-        let app = Element::application(self.pid);
-        let fresh = find_surface(self.profile, &app, &self.session, &self.resolver)?;
+        let fresh = self.fresh_surface()?;
         let surface_ms = started.elapsed().as_millis();
         self.question_guard(pending, generation)?;
         let recheck_ms = started.elapsed().as_millis();

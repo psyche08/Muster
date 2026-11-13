@@ -18,6 +18,7 @@ pub mod notice;
 pub mod procs;
 #[cfg(feature = "sep")]
 pub mod sep;
+mod session_window;
 pub mod vision;
 
 pub mod locked_use;

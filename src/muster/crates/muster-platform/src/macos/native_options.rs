@@ -38,7 +38,7 @@ impl Scope for SessionScope<'_> {
             ));
         }
         c.check_identity()?;
-        if !c.app.contains(&self.web)
+        if !c.operation_root()?.contains(&self.web)
             || (c.resolver)(&WebAreaKey::of(&self.web)).as_deref() != Some(c.session.as_str())
         {
             return Err(Error::Conflict(

@@ -1550,11 +1550,13 @@ async fn dispatch(
                     let _app =
                         crate::agent_bridge::hold_session(daemon, agent, &matches[0].id, "select")
                             .await?;
-                    crate::agent_bridge::ensure_native(
-                        daemon,
-                        agent.clone(),
-                        &matches[0].id,
-                        false,
+                    muster_agent::native_navigation::restore::Navigation::with_window_scope(
+                        crate::agent_bridge::ensure_native(
+                            daemon,
+                            agent.clone(),
+                            &matches[0].id,
+                            false,
+                        ),
                     )
                     .await?;
                     format!("AX selected {} ({})", matches[0].title, matches[0].id)
@@ -2543,6 +2545,13 @@ pub(crate) async fn cloud_operation(daemon: &Arc<Daemon>, request: Req) -> Resul
 /// UI reads navigate the desktop too; the Locked Use owner calls this only
 /// after its signed operation is active, on the same guarded OS worker.
 async fn chat_control(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
+    muster_agent::native_navigation::restore::Navigation::with_window_scope(chat_control_in_window(
+        daemon, request,
+    ))
+    .await
+}
+
+async fn chat_control_in_window(daemon: &Arc<Daemon>, request: Req) -> Result<Resp, Error> {
     Ok(match request {
         Req::AgentChats(r) => {
             let agent = agent_of(daemon)?.clone();
