@@ -319,3 +319,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0201](0201-background-claude-card-selection.md) | Accepted | Locate local Claude approval cards through the background sidebar |
 | [0202](0202-publish-apple-1-1-40.md) | Accepted | Publish Apple 1.1.40 (130) for desktop, OTA and public beta |
 | [0203](0203-restore-native-navigation.md) | Proposed | Restore a borrowed native session after Muster finishes |
+| [0204](0204-release-apple-1-1-41.md) | Accepted | Release Apple 1.1.41 with native session restoration |
