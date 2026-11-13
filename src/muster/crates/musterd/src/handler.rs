@@ -1536,8 +1536,13 @@ async fn dispatch(
                     let _app =
                         crate::agent_bridge::hold_session(daemon, agent, &matches[0].id, "select")
                             .await?;
-                    crate::agent_bridge::ensure_native(daemon, agent.clone(), &matches[0].id)
-                        .await?;
+                    crate::agent_bridge::ensure_native(
+                        daemon,
+                        agent.clone(),
+                        &matches[0].id,
+                        false,
+                    )
+                    .await?;
                     format!("AX selected {} ({})", matches[0].title, matches[0].id)
                 }
                 _ => daemon
@@ -2732,7 +2737,7 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         })?;
     }
     if !plugin {
-        crate::agent_bridge::ensure_native(daemon, agent.clone(), &session)
+        crate::agent_bridge::ensure_native(daemon, agent.clone(), &session, matches!(request, Req::AgentInspect(_)))
             .await
             .inspect_err(|error| {
                 // Pre-ledger failures used to leave only “operation finished” in
@@ -2982,7 +2987,7 @@ async fn session_options(
         )
         .await;
     }
-    crate::agent_bridge::ensure_native(daemon, agent.clone(), session).await?;
+    crate::agent_bridge::ensure_native(daemon, agent.clone(), session, false).await?;
     Ok(agent.model_options(session, set).await?)
 }
 

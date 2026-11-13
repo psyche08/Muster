@@ -60,7 +60,7 @@ pub(crate) async fn compact(daemon: &Arc<Daemon>, id: &str) -> Result<(), Error>
         .ok_or_else(|| Error::Unavailable("agent control is off".into()))?
         .clone();
     let _app = crate::agent_bridge::hold_session(daemon, &agent, id, "compact").await?;
-    crate::agent_bridge::ensure_native(daemon, agent.clone(), id).await?;
+    crate::agent_bridge::ensure_native(daemon, agent.clone(), id, false).await?;
     agent.compact(id).await.map_err(Error::from)
 }
 

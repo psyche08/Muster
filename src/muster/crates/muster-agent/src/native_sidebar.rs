@@ -1,6 +1,13 @@
 //! Exact title matching for native Agent sidebar controls. A match only
 //! selects a candidate; the controller must still verify the opened session ID.
 
+/// Claude puts several complementary/navigation landmarks in its session page.
+pub fn claude_session_sidebar(id: &str, subrole: &str, name: &str) -> bool {
+    id == "app-shell-sidebar"
+        || (matches!(subrole, "AXLandmarkComplementary" | "AXLandmarkNavigation")
+            && matches!(name, "Sidebar" | "侧边栏" | "側邊欄"))
+}
+
 /// Native session IDs avoid sidebar pagination and generated titles. This route
 /// only requests navigation: callers must guard the OS action and resolve the
 /// resulting surface to the exact catalog ID before any mutation.
@@ -176,6 +183,27 @@ fn metadata_label(label: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_inspection_only_uses_the_session_sidebar() {
+        assert!(claude_session_sidebar(
+            "",
+            "AXLandmarkComplementary",
+            "Sidebar"
+        ));
+        assert!(claude_session_sidebar("app-shell-sidebar", "", ""));
+        assert!(!claude_session_sidebar(
+            "",
+            "AXLandmarkComplementary",
+            "Session details"
+        ));
+        assert!(!claude_session_sidebar(
+            "",
+            "AXLandmarkNavigation",
+            "Repository and pull request controls"
+        ));
+        assert!(!claude_session_sidebar("", "AXButton", "Sidebar"));
+    }
 
     const TITLE: &str = "示例应用导航任务续";
 
