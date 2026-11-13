@@ -324,3 +324,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0206](0206-publish-apple-1-1-42.md) | Accepted | Publish Apple 1.1.42 with background session selection |
 | [0207](0207-apple-143-retest.md) | Accepted | Identify the macOS retest with Apple build 133 |
 | [0208](0208-one-window-per-native-session-operation.md) | Accepted | Bind existing desktop session operations to one window |
+| [0209](0209-release-apple-1-1-44.md) | Accepted | Release Apple 1.1.44 with single-window session selection |
