@@ -1989,6 +1989,100 @@ fn a_scheduled_lease_takes_only_its_reserved_operation_and_no_key_arms_it() {
     assert_eq!(f.gate.phase(), Phase::Idle);
 }
 
+/// A dispatch grant's creation and a send to the session it bound (ADR 0199).
+fn dispatch_reservations() -> [muster_core::scheduler_grant::Reservation; 2] {
+    use muster_core::dispatch_grant::*;
+    use muster_core::scheduler_grant::{Admission, Kind, Outcome};
+    let scope = Scope::new(
+        "review-service".into(),
+        vec!["claude".into()],
+        vec!["/work".into()],
+    )
+    .unwrap();
+    let mut grant = Grant::new(scope, 1_000, 60_000).unwrap();
+    let fresh = |admission| match admission {
+        Ok(Admission::Fresh(reservation)) => reservation,
+        other => panic!("{other:?}"),
+    };
+    let create = Request {
+        op_id: "dispatch-create-1",
+        kind: Kind::Create,
+        provider: "claude",
+        directory: "/work/project",
+        session: "",
+        body: [7; 32],
+    };
+    let created = fresh(grant.reserve(&create, Vec::new(), true, 1_000));
+    grant
+        .settle("dispatch-create-1", Outcome::Applied("s1".into()))
+        .unwrap();
+    let send = Request {
+        op_id: "dispatch-send-1",
+        kind: Kind::Send,
+        provider: "claude",
+        directory: "",
+        session: "s1",
+        body: [8; 32],
+    };
+    let sent = fresh(grant.reserve(&send, Vec::new(), true, 1_001));
+    [created, sent]
+}
+
+#[test]
+fn a_dispatch_reservation_opens_the_same_scheduled_lease_and_no_key_arms_it() {
+    for reserved in dispatch_reservations() {
+        assert_eq!(reserved.task_id(), "dispatch:review-service");
+        let mut f = Fixture::new();
+        let target = f.target();
+        let c = f.issue_scheduled(&reserved).unwrap();
+        assert!(f.gate.is_scheduled());
+        assert_eq!(c.turn(), reserved.op_id());
+        assert_eq!(c.operation(), &reserved.digest());
+        for signer in [&f.phone, &f.presence, &f.admin] {
+            let signature = signer.sign(&c.signing_message()).unwrap();
+            assert!(
+                f.gate
+                    .arm(
+                        f.roster.state(),
+                        &f.policy,
+                        target,
+                        &c,
+                        &signature,
+                        f.now,
+                        f.observation
+                    )
+                    .is_err()
+            );
+        }
+        assert!(
+            f.gate
+                .arm_unattended(f.roster.state(), &f.policy, f.now, f.observation)
+                .is_err()
+        );
+        assert!(f.gate.bind_provider_queue("claude").is_err());
+
+        let mut f = Fixture::new();
+        let target = f.target();
+        f.scheduled_active(&reserved);
+        assert!(f.action(target, "another-op", &reserved.digest()).is_err());
+        assert!(f.action(target, reserved.op_id(), &[5; 32]).is_err());
+        f.action(target, reserved.op_id(), &reserved.digest())
+            .unwrap();
+        assert!(
+            f.action(target, reserved.op_id(), &reserved.digest())
+                .is_err()
+        );
+        assert_eq!(
+            f.gate.stop(StopReason::Completed, f.now),
+            Directive::LockAndKeepCovered(StopReason::Completed)
+        );
+        f.tick(1);
+        f.observation.screen = Screen::Locked;
+        assert_eq!(f.poll(), Directive::ReleaseCover);
+        assert_eq!(f.gate.phase(), Phase::Idle);
+    }
+}
+
 #[test]
 fn local_switches_a_locked_console_and_local_input_gate_a_scheduled_lease() {
     type Change = fn(&mut Fixture);

@@ -479,6 +479,35 @@ supervisor drives one task's desktop conversations through
   provider receipt, not that the model has finished. The supervisor reads
   turn completion and artifacts through the read-only interfaces.
 
+## Dispatch grant (2026-11-13)
+
+[ADR 0199](adr/0199-local-dispatch-grant-for-locked-use.md). A named local
+service creates sessions and sends to them on a locked Mac through
+`muster rpc --request -`. JSON names one action:
+`{"agent_dispatch":{"action":{"<action>":{...}}}}`.
+
+| Action | Fields | Effect |
+|---|---|---|
+| `grant` | `name`, `providers` (`claude`, `codex`), `roots` (1-16 existing directories, not `/`), `ttl_seconds` (at most 30 days) | The local owner grants it. Roots are stored canonical. Granting the name again replaces the scope and lifetime and keeps the bound sessions and records. At most 4 names. |
+| `revoke` / `status` | `name` | Stops new operations at once, or reports scope, lifetime, bound sessions, locked leases in the last hour, records and unknown operations. |
+| `create` | `grant`, `request` (an `agent_native_create` request) | Creates a session in a root or below one, with the request's model and effort. Its receipt binds the new session to the grant. |
+| `send` | `grant`, `request` (an `agent_send` request, text only) | Sends to a session this grant's own creation bound. `/compact` is an ordinary send. |
+
+- **Answers** are the `op_result` of the plain RPC: `applied` (a creation's
+  `result_id` is the new session), `duplicate` for a repeated op_id,
+  `rejected` when nothing was sent, `unknown` when it may have been. An
+  unknown operation is never replayed; do not send it again under a new
+  op_id.
+- **Refusals reserve nothing:** outside the grant (directory, provider, a
+  session the grant did not create), expired, revoked, 30 locked leases in the
+  last hour, an undrivable desktop, or a busy console.
+- **Locked Mac.** One scheduled Locked Use lease per operation (see
+  LOCKED_USE.md). **Unlocked Mac.** The scheduler grant's quiet path. Send
+  every create and send through the grant either way, so every session is
+  bound.
+- **No adoption.** A session created through the plain RPC, or the owner's
+  own, cannot be driven through the grant.
+
 ## Desktop Chat mode
 
 The Claude and ChatGPT apps' ordinary conversations, read and driven through

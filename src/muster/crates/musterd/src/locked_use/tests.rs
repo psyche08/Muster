@@ -2145,10 +2145,42 @@ async fn scheduled(
     Arc<AtomicBool>,
     tokio::task::JoinHandle<Result<Resp, Error>>,
 ) {
-    let os = Os::new();
-    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
     let hold = Arc::new(AtomicBool::new(false));
     let (reservation, job) = crate::scheduler::test_reservation(daemon, "t1", op_id, hold.clone());
+    lease(daemon, reservation, job, hold).await
+}
+
+/// This Mac's own scheduled lease for one reserved creation of the dispatch
+/// grant "svc" (ADR 0199).
+async fn dispatched(
+    daemon: &Arc<Daemon>,
+    op_id: &str,
+) -> (
+    Arc<Owner>,
+    Arc<Os>,
+    crate::scheduler::Job,
+    Arc<AtomicBool>,
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+) {
+    let hold = Arc::new(AtomicBool::new(false));
+    let (reservation, job) = crate::dispatch::test_reservation(daemon, "svc", op_id, hold.clone());
+    lease(daemon, reservation, job, hold).await
+}
+
+async fn lease(
+    daemon: &Arc<Daemon>,
+    reservation: muster_core::scheduler_grant::Reservation,
+    job: crate::scheduler::Job,
+    hold: Arc<AtomicBool>,
+) -> (
+    Arc<Owner>,
+    Arc<Os>,
+    crate::scheduler::Job,
+    Arc<AtomicBool>,
+    tokio::task::JoinHandle<Result<Resp, Error>>,
+) {
+    let os = Os::new();
+    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
     let (task_owner, task_daemon, task_job) = (owner.clone(), daemon.clone(), job.clone());
     let reply = tokio::spawn(async move {
         task_owner
@@ -2225,6 +2257,73 @@ async fn a_revoked_grant_stops_its_scheduled_lease_before_the_desktop() {
     assert!(outcome.is_err(), "{outcome:?}");
     assert!(!job.started());
     relocked(&owner, &os).await;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_dispatch_lease_unlocks_under_cover_runs_its_one_operation_and_relocks() {
+    let (_dir, daemon, _owner, _os, _c, _key, peer, _job) = start().await;
+    let (owner, os, job, _hold, reply) = dispatched(&daemon, "op-d1").await;
+    unlock_started(&os).await;
+    assert!(!job.started());
+    let queued = owner
+        .enqueue(
+            &daemon,
+            peer,
+            send_request("missing", "hello", "op-2"),
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(queued, Some(Err(_))), "{queued:?}");
+    authorize_unlock(&owner, &os).await;
+    let resp = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let Resp::OpResult(r) = resp else {
+        panic!("{resp:?}")
+    };
+    assert_eq!(r.result_id, "probe-session");
+    assert!(job.started());
+    relocked(&owner, &os).await;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_revoked_dispatch_grant_stops_its_lease_before_the_desktop() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    let (owner, os, job, _hold, reply) = dispatched(&daemon, "op-d1").await;
+    crate::dispatch::test_revoke(&daemon, "svc");
+    authorize_unlock(&owner, &os).await;
+    let outcome = tokio::time::timeout(Duration::from_secs(3), reply)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert!(!job.started());
+    relocked(&owner, &os).await;
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_lease_never_runs_another_grants_job() {
+    let (_dir, daemon, _owner, _os, _c, _key, _peer, _job) = start().await;
+    let os = Os::new();
+    let owner = Arc::new(Owner::new(Some(Arc::new(Port(os.clone())))));
+    let hold = Arc::new(AtomicBool::new(false));
+    let (task, task_job) = crate::scheduler::test_reservation(&daemon, "t1", "op-s1", hold.clone());
+    let (dispatch, dispatch_job) = crate::dispatch::test_reservation(&daemon, "svc", "op-d1", hold);
+    for (reservation, job) in [(task, dispatch_job), (dispatch, task_job)] {
+        let error = owner
+            .scheduled(daemon.clone(), reservation, job.clone())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::Invalid(_)), "{error}");
+        assert!(!job.started());
+    }
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    assert!(owner.current.lock().unwrap().is_none());
     daemon.shutdown().await;
 }
 

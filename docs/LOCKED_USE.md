@@ -13,6 +13,25 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
+### 2026-11-13: a standing local dispatch grant
+
+[ADR 0199](adr/0199-local-dispatch-grant-for-locked-use.md) gives this Mac's
+scheduled lease a second holder: a named local service the owner granted with
+the `agent_dispatch` RPC.
+
+- **Scope.** The providers it may use, 1-16 canonical roots, and a lifetime of
+  at most 30 days. It can be revoked at any time.
+- **Two operations.** A creation in a root or below one, and a text send to a
+  session that one of this grant's own creations bound. There is no adoption.
+- **One reserved operation per lease**, exactly as for ADR 0097: only a stored
+  reservation opens the lease, no key arms it, and every OS call rechecks the
+  ADR 0087 switches and that this grant is still live. A lease refuses a job
+  of another grant.
+- **Bounded.** At most 30 locked leases in any rolling hour, counted at
+  reservation.
+- **Cleanup is unchanged:** the cover, the watchdog, plugin consumption, the
+  15 s window, the local-input stop and the relock before release.
+
 ### 2026-11-04: `locked.control` is the authorization
 
 [ADR 0120](adr/0120-locked-control-without-a-per-operation-signature.md) ends

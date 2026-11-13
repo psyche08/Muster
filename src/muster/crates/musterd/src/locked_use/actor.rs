@@ -493,12 +493,11 @@ pub(super) async fn run(
                     );
                     action = Some(job);
                     action_delivery = Some(delivery);
-                } else if admitted && let Some(LocalJob::Scheduled { task_id, job }) = &local {
+                } else if admitted && let Some(LocalJob::Scheduled { job }) = &local {
                     log::info!("Locked Use: scheduled operation admitted after OS unlock");
                     live.store(true, std::sync::atomic::Ordering::SeqCst);
                     let (handle, delivery) = start_scheduled(
                         daemon.clone(),
-                        task_id.clone(),
                         (**job).clone(),
                         started,
                         os.clone(),
@@ -974,15 +973,15 @@ pub(super) fn start_compact(
     (job, delivery)
 }
 
-/// One operation of a task scheduler grant under its scheduled lease (ADR
-/// 0097). Each OS call is admitted only while the lease is live, inside its
-/// first window, on the same console with no local input, unlocked, while
-/// this Mac still allows Locked Use and agent control of the app, and while
-/// the task's grant is neither revoked nor expired.
+/// One operation of a task scheduler grant (ADR 0097) or a local dispatch
+/// grant (ADR 0199) under its scheduled lease. Each OS call is admitted only
+/// while the lease is live, inside its first window, on the same console with
+/// no local input, unlocked, while this Mac still allows Locked Use and agent
+/// control of the app, and while the job's grant is neither revoked nor
+/// expired.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn start_scheduled(
     daemon: Arc<Daemon>,
-    task_id: String,
     job: crate::scheduler::Job,
     started: Instant,
     os: Arc<dyn LockedUseOs>,
@@ -999,6 +998,7 @@ pub(super) fn start_scheduled(
     let scoped = delivery.clone();
     let checked = daemon.clone();
     let provider = job.provider().to_owned();
+    let holder = job.holder().clone();
     let check = Arc::new(move || {
         let sample = os.observe();
         live.load(std::sync::atomic::Ordering::SeqCst)
@@ -1013,7 +1013,7 @@ pub(super) fn start_scheduled(
                     && muster_core::apps::app(&provider)
                         .is_some_and(|app| p.ax_allowlist.iter().any(|id| id == app.bundle_id))
             })
-            && checked.scheduler.live(&task_id)
+            && holder.live(&checked)
     });
     let job = tokio::spawn(async move {
         scoped

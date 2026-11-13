@@ -63,7 +63,8 @@ fn access_for(req: &Req) -> Access {
         Req::Multica(_)
         | Req::MulticaMutation(_)
         | Req::Vision(_)
-        | Req::AgentScheduler(_) => Access::LocalOnly,
+        | Req::AgentScheduler(_)
+        | Req::AgentDispatch(_) => Access::LocalOnly,
         Req::MulticaService(r) if r.action == v1::multica_service_request::Action::Save as i32 => Access::LocalOnly,
         Req::MulticaService(_) => Access::Member,
         Req::MulticaBrowse(r) => Access::Need(Permission::Multica {
@@ -1936,6 +1937,8 @@ async fn dispatch(
         Req::AgentScheduler(r) => {
             crate::scheduler::call_cancellable(daemon, r, events.cancelled()).await?
         }
+        // Local owner only, like the scheduler (ADR 0199).
+        Req::AgentDispatch(r) => crate::dispatch::call(daemon, r).await?,
         Req::OrcaCreate(r) => {
             use muster_proto::Message as _;
             if r.op_id.is_empty() {

@@ -123,10 +123,38 @@ impl Scheduler {
     }
 }
 
+/// Which grant a scheduled operation belongs to. Every OS call of the
+/// operation checks that this grant is still live.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Holder {
+    /// A task scheduler grant (ADR 0097).
+    Task(String),
+    /// A local dispatch grant (ADR 0199).
+    Dispatch(String),
+}
+
+impl Holder {
+    pub(crate) fn live(&self, daemon: &Daemon) -> bool {
+        match self {
+            Holder::Task(id) => daemon.scheduler.live(id),
+            Holder::Dispatch(name) => daemon.dispatch.live(name),
+        }
+    }
+
+    /// The task id this holder's reservations carry.
+    pub(crate) fn task_id(&self) -> String {
+        match self {
+            Holder::Task(id) => id.clone(),
+            Holder::Dispatch(name) => format!("dispatch:{name}"),
+        }
+    }
+}
+
 /// The desktop operation a reservation runs: the exact inner request.
 #[derive(Clone)]
 pub(crate) struct Job {
     provider: String,
+    holder: Holder,
     inner: Inner,
     /// Set when the operation itself begins. Unset afterwards proves it never
     /// reached the desktop (the lease or the console was refused first).
@@ -144,11 +172,45 @@ enum Inner {
 }
 
 impl Job {
+    /// A creation for a grant other than a task's (ADR 0199).
+    pub(crate) fn create(holder: Holder, r: v1::AgentNativeCreateRequest) -> Self {
+        Self {
+            provider: r.provider.clone(),
+            holder,
+            inner: Inner::Create(r),
+            started: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// A send for a grant other than a task's (ADR 0199).
+    pub(crate) fn send(holder: Holder, provider: String, r: v1::AgentSendRequest) -> Self {
+        Self {
+            provider,
+            holder,
+            inner: Inner::Operation(Req::AgentSend(r)),
+            started: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Tests: a probe for `holder`, held while `hold` is set.
+    #[cfg(test)]
+    pub(crate) fn probe(holder: Holder, hold: Arc<AtomicBool>) -> Self {
+        Self {
+            provider: "claude".into(),
+            holder,
+            inner: Inner::Probe(hold),
+            started: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
     pub(crate) fn provider(&self) -> &str {
         &self.provider
     }
 
-    #[cfg(test)]
+    pub(crate) fn holder(&self) -> &Holder {
+        &self.holder
+    }
+
     pub(crate) fn started(&self) -> bool {
         self.started.load(Ordering::SeqCst)
     }
@@ -575,6 +637,7 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
     };
     let job = Job {
         provider: scope.provider.clone(),
+        holder: Holder::Task(o.task_id.clone()),
         inner: parsed.inner.clone(),
         started: Arc::new(AtomicBool::new(false)),
     };
@@ -592,7 +655,7 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
             .scheduled(daemon.clone(), reservation, job.clone())
             .await
     } else {
-        unlocked(daemon, &o.task_id, &job).await
+        unlocked(daemon, &job).await
     };
     let outcome = classify(daemon, &o.op_id, &parsed, &job, &result);
     log::info!(
@@ -647,7 +710,7 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
 }
 
 /// Refusals that need no reservation: nothing would be attempted.
-fn preflight(daemon: &Daemon, provider: &str) -> Result<(), Error> {
+pub(crate) fn preflight(daemon: &Daemon, provider: &str) -> Result<(), Error> {
     if daemon.platform().accessibility() != Some(true) {
         return Err(Error::Unavailable(
             "Accessibility is not granted to musterd; nothing was reserved".into(),
@@ -671,10 +734,10 @@ fn preflight(daemon: &Daemon, provider: &str) -> Result<(), Error> {
 
 /// An unlocked console: only after local input has been quiet, while no
 /// Locked Use owns the console, with the grant re-checked on every OS call.
-async fn unlocked(daemon: &Arc<Daemon>, task_id: &str, job: &Job) -> Result<Resp, Error> {
+pub(crate) async fn unlocked(daemon: &Arc<Daemon>, job: &Job) -> Result<Resp, Error> {
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (daemon, task_id, job);
+        let _ = (daemon, job);
         Err(Error::Unavailable(
             "scheduler desktop control requires macOS".into(),
         ))
@@ -684,11 +747,11 @@ async fn unlocked(daemon: &Arc<Daemon>, task_id: &str, job: &Job) -> Result<Resp
         use muster_agent::idle_compact::{QUIET, QUIET_WAIT};
         use muster_platform::macos::input::user_input_idle;
         let checked = daemon.clone();
-        let task = task_id.to_owned();
+        let holder = job.holder.clone();
         let check = Arc::new(move || {
             !checked.platform().locked()
                 && checked.platform().accessibility() == Some(true)
-                && checked.scheduler.live(&task)
+                && holder.live(&checked)
         });
         muster_agent::control_guard::scope(check, async {
             muster_agent::control_guard::wait_for_quiet(user_input_idle, QUIET, QUIET_WAIT).await?;
@@ -729,32 +792,44 @@ fn classify(
         });
     }
     if let Some((kind, body)) = &parsed.ledger {
-        let ledger = daemon.store().ledger();
-        return match ledger.status(op_id) {
-            Ok(None) => Outcome::NotStarted(failure),
-            Ok(Some(_)) => match ledger.outcome(op_id, kind, body) {
-                Ok(muster_store::Outcome::Applied(id)) => {
-                    Outcome::Applied(String::from_utf8_lossy(&id).into_owned())
-                }
-                Ok(muster_store::Outcome::Rejected(reason)) => {
-                    Outcome::NotStarted(String::from_utf8_lossy(&reason).into_owned())
-                }
-                Ok(muster_store::Outcome::Conflict) => {
-                    Outcome::Unknown("the operation ledger holds a different request".into())
-                }
-                _ => Outcome::Unknown(if failure.is_empty() {
-                    "no provider receipt yet".into()
-                } else {
-                    failure
-                }),
-            },
-            Err(e) => Outcome::Unknown(format!("operation ledger unreadable: {e}")),
-        };
+        return from_ledger(daemon, op_id, kind, body, failure);
     }
     match result {
         Ok(Resp::AgentChatOptions(options)) => Outcome::Applied(options_summary(options)),
         _ if parsed.kind == Kind::ReadOptions => Outcome::NotStarted(failure),
         _ => Outcome::Unknown(failure),
+    }
+}
+
+/// A ledgered operation that began is what its ledger row says: no row means
+/// it never reached submission, a pending row is unknown.
+pub(crate) fn from_ledger(
+    daemon: &Daemon,
+    op_id: &str,
+    kind: &str,
+    body: &[u8],
+    failure: String,
+) -> Outcome {
+    let ledger = daemon.store().ledger();
+    match ledger.status(op_id) {
+        Ok(None) => Outcome::NotStarted(failure),
+        Ok(Some(_)) => match ledger.outcome(op_id, kind, body) {
+            Ok(muster_store::Outcome::Applied(id)) => {
+                Outcome::Applied(String::from_utf8_lossy(&id).into_owned())
+            }
+            Ok(muster_store::Outcome::Rejected(reason)) => {
+                Outcome::NotStarted(String::from_utf8_lossy(&reason).into_owned())
+            }
+            Ok(muster_store::Outcome::Conflict) => {
+                Outcome::Unknown("the operation ledger holds a different request".into())
+            }
+            _ => Outcome::Unknown(if failure.is_empty() {
+                "no provider receipt yet".into()
+            } else {
+                failure
+            }),
+        },
+        Err(e) => Outcome::Unknown(format!("operation ledger unreadable: {e}")),
     }
 }
 
@@ -888,12 +963,7 @@ pub(crate) fn test_reservation(
             }
         })
         .unwrap();
-    let job = Job {
-        provider: "claude".into(),
-        inner: Inner::Probe(hold),
-        started: Arc::new(AtomicBool::new(false)),
-    };
-    (reservation, job)
+    (reservation, Job::probe(Holder::Task(task_id.into()), hold))
 }
 
 #[cfg(test)]
@@ -1403,6 +1473,7 @@ mod tests {
             .unwrap();
         let job = |p: &Parsed, started: bool| Job {
             provider: "claude".into(),
+            holder: Holder::Task("t1".into()),
             inner: p.inner.clone(),
             started: Arc::new(AtomicBool::new(started)),
         };
