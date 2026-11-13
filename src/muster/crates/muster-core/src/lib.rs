@@ -5,6 +5,7 @@
 
 pub mod apps;
 pub mod canonical;
+pub mod dispatch_grant;
 pub mod identity;
 pub mod invite;
 pub mod locked_use;

@@ -163,6 +163,9 @@ message Request {
     MulticaServiceRequest multica_service = 78;
     MulticaMutation multica_mutation = 79;
     DeviceSetCoverRequest device_set_blackout = 80;
+    // Local owner only: a named local service's standing dispatch grant
+    // (ADR 0199).
+    AgentDispatchRequest agent_dispatch = 81;
   }
 }
 
@@ -215,6 +218,7 @@ message Response {
     MulticaService multica_service = 78;
     VisionStatus vision = 74;
     AgentSchedulerStatus agent_scheduler = 76;
+    AgentDispatchStatus agent_dispatch = 81;
   }
 }
 
@@ -1403,4 +1407,48 @@ message AgentSchedulerStatus {
   // The operation reconcile was asked about, after reconciliation.
   AgentSchedulerOp op = 18;
   repeated string adopted = 19;  // roles whose session was adopted, not created
+}
+
+// A standing grant for one named local service (ADR 0199): it creates
+// sessions under its roots and sends to the sessions its own creations bound,
+// on a locked Mac under this Mac's own scheduled Locked Use lease. Local
+// socket only.
+message AgentDispatchRequest {
+  oneof action {
+    AgentDispatchGrant grant = 1;
+    AgentDispatchName revoke = 2;
+    AgentDispatchName status = 3;
+    // Answered with the op_result of agent_native_create.
+    AgentDispatchCreate create = 4;
+    // Answered with the op_result of agent_send. Text only.
+    AgentDispatchSend send = 5;
+  }
+}
+message AgentDispatchGrant {
+  string name = 1;
+  repeated string providers = 2;  // claude | codex
+  repeated string roots = 3;      // existing directories; creations in or below them
+  uint64 ttl_seconds = 4;         // at most 30 days
+}
+message AgentDispatchName { string name = 1; }
+message AgentDispatchCreate {
+  string grant = 1;
+  AgentNativeCreateRequest request = 2;
+}
+message AgentDispatchSend {
+  string grant = 1;
+  AgentSendRequest request = 2;
+}
+message AgentDispatchStatus {
+  string name = 1;
+  repeated string providers = 2;
+  repeated string roots = 3;
+  uint64 issued_unix_ms = 4;
+  uint64 expires_unix_ms = 5;
+  uint64 revoked_unix_ms = 6;  // 0: not revoked
+  bool live = 7;
+  uint32 sessions = 8;          // bound by this grant's creation receipts
+  uint32 locked_last_hour = 9;  // locked leases reserved in the last hour
+  uint32 records = 10;          // operations on record
+  uint32 unknown = 11;          // of which unknown: never replayed
 }

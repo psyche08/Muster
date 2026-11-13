@@ -73,11 +73,9 @@ impl std::ops::Deref for Current {
 pub(crate) enum LocalJob {
     /// `/compact` in one conversation (ADR 0087).
     Compact(String),
-    /// One operation a task scheduler grant reserved (ADR 0097).
-    Scheduled {
-        task_id: String,
-        job: Box<crate::scheduler::Job>,
-    },
+    /// One operation a task scheduler grant (ADR 0097) or a local dispatch
+    /// grant (ADR 0199) reserved. The job names its grant.
+    Scheduled { job: Box<crate::scheduler::Job> },
 }
 
 struct Queued {
@@ -463,8 +461,9 @@ impl Owner {
         self.ask(|reply| Command::Unattended { reply }).await
     }
 
-    /// One operation of a task scheduler grant on a locked console (ADR
-    /// 0097): this Mac's own lease, opened only by the grant's reservation,
+    /// One operation of a task scheduler grant (ADR 0097) or a local
+    /// dispatch grant (ADR 0199) on a locked console: this Mac's own lease,
+    /// opened only by the grant's reservation,
     /// for exactly that operation. The lease, its cover, watchdog, input
     /// takeover, one plugin consumption and relock are those of every other
     /// Locked Use; nothing waits for the model inside it.
@@ -478,6 +477,12 @@ impl Owner {
             Error::Unavailable("Locked Use is unsupported on this platform".into())
         })?;
         os.available().map_err(Error::Unavailable)?;
+        // The job runs only for the grant that reserved it.
+        if reservation.task_id() != job.holder().task_id() {
+            return Err(Error::Invalid(
+                "the reservation belongs to another grant".into(),
+            ));
+        }
         // Never preempt: another owner's lease keeps the console.
         let write = self
             .writes
@@ -526,10 +531,7 @@ impl Owner {
             write,
             None,
             None,
-            Some(LocalJob::Scheduled {
-                task_id: reservation.task_id().to_owned(),
-                job: Box::new(job),
-            }),
+            Some(LocalJob::Scheduled { job: Box::new(job) }),
         )?;
         self.ask(|reply| Command::Unattended { reply }).await
     }

@@ -209,6 +209,8 @@ pub struct Daemon {
     pub(crate) locked_use: Arc<locked_use::Owner>,
     /// One task's bounded scheduler grant (ADR 0097).
     pub(crate) scheduler: scheduler::Scheduler,
+    /// Named local services' standing dispatch grants (ADR 0199).
+    pub(crate) dispatch: dispatch::Dispatch,
     config: DaemonConfig,
     store: Arc<Store>,
     signer: SharedSigner,
@@ -346,6 +348,7 @@ impl Daemon {
             )
         });
         let scheduler = scheduler::Scheduler::load(&store);
+        let dispatch = dispatch::Dispatch::load(&store);
         #[cfg(target_os = "macos")]
         let blackout = if config.listen && kind == DeviceKind::Desktop {
             Some(blackout::Blackout::start(&store)?)
@@ -358,6 +361,7 @@ impl Daemon {
             blackout,
             locked_use,
             scheduler,
+            dispatch,
             multica: multica::Manager::new(&config.dir),
             config,
             store,
@@ -1241,5 +1245,6 @@ mod relay_text_tests {
     }
 }
 
+mod dispatch;
 mod native_create;
 mod scheduler;

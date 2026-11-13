@@ -252,8 +252,9 @@ pub struct Request<'a> {
 }
 
 /// A reserved operation: the only way to open a scheduled Locked Use lease
-/// (`locked_use::Gate::issue_scheduled`). Not Clone; only `Grant::reserve`
-/// makes one.
+/// (`locked_use::Gate::issue_scheduled`). Not Clone; only a grant's
+/// `reserve` makes one: `Grant::reserve` here, or a dispatch grant's
+/// (`dispatch_grant`, ADR 0199).
 #[derive(Debug)]
 pub struct Reservation {
     task_id: String,
@@ -266,6 +267,27 @@ pub struct Reservation {
 }
 
 impl Reservation {
+    /// For another grant's `reserve` in this crate: a dispatch grant's
+    /// operation has no role, so it carries the producer's.
+    pub(crate) fn from_grant(
+        task_id: String,
+        op_id: String,
+        provider: String,
+        kind: Kind,
+        session: String,
+        digest: [u8; 32],
+    ) -> Self {
+        Self {
+            task_id,
+            op_id,
+            provider,
+            kind,
+            role: Role::Producer,
+            session,
+            digest,
+        }
+    }
+
     pub fn task_id(&self) -> &str {
         &self.task_id
     }

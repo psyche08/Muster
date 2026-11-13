@@ -1443,4 +1443,48 @@ mod tests {
             })
         ));
     }
+
+    /// A local service wraps the ordinary request in its dispatch grant (ADR 0199).
+    #[test]
+    fn rpc_json_wraps_a_request_in_a_dispatch_grant() {
+        use muster_proto::v1::{AgentDispatchRequest, agent_dispatch_request::Action};
+        let request: Req = serde_json::from_str(
+            r#"{"agent_dispatch":{"action":{"create":{"grant":"svc","request":{"op_id":"o","provider":"claude","directory":"/d","prompt":"x","model":"m","effort":"high"}}}}}"#,
+        )
+        .unwrap();
+        let Req::AgentDispatch(AgentDispatchRequest {
+            action: Some(Action::Create(c)),
+        }) = request
+        else {
+            panic!("{request:?}")
+        };
+        assert_eq!(c.grant, "svc");
+        assert_eq!(c.request.unwrap().model, "m");
+        let request: Req = serde_json::from_str(
+            r#"{"agent_dispatch":{"action":{"send":{"grant":"svc","request":{"op_id":"o","session":"s","text":"/compact"}}}}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request,
+            Req::AgentDispatch(AgentDispatchRequest {
+                action: Some(Action::Send(_))
+            })
+        ));
+        let request: Req = serde_json::from_str(
+            r#"{"agent_dispatch":{"action":{"grant":{"name":"svc","providers":["claude","codex"],"roots":["/d"],"ttl_seconds":86400}}}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request,
+            Req::AgentDispatch(AgentDispatchRequest {
+                action: Some(Action::Grant(_))
+            })
+        ));
+        assert!(
+            serde_json::from_str::<Req>(
+                r#"{"agent_dispatch":{"action":{"send":{"grant":"svc","sesion":"s"}}}}"#
+            )
+            .is_err()
+        );
+    }
 }
