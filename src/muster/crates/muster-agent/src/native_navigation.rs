@@ -21,6 +21,7 @@ pub trait Host: Send + Sync {
     /// The visible target needs no navigation. Check before planning any other route
     /// and again at the OS action boundary.
     fn check_navigation(&self) -> Result<(), Error>;
+    fn background_inspection(&self) -> bool;
     fn sidebar(&self) -> Result<Sidebar<Self::Control>, Error>;
     fn exact_route(&self) -> Option<String>;
     fn requires_exact_route(&self) -> bool {
@@ -116,9 +117,12 @@ pub async fn select<H: Host>(host: &H, budget: Budget) -> Result<(H::Surface, u6
             // A native ID makes sidebar titles and pagination irrelevant. It
             // does not make the future destination or its composer trusted.
             if let Some(route) = host.exact_route() {
-                return Ok(Some(Ready::Exact(route)));
-            }
-            if host.requires_exact_route() {
+                if !host.background_inspection() {
+                    return Ok(Some(Ready::Exact(route)));
+                }
+                // UUID mapping is required even when the title only locates a row.
+                // Launch Services may activate a provider despite its background flag.
+            } else if host.requires_exact_route() || host.background_inspection() {
                 return Err(Error::Unavailable("local session UUID mapping is missing or ambiguous; no title lookup or navigation attempted".into()));
             }
             let sidebar = host.sidebar()?;
@@ -235,6 +239,8 @@ mod tests {
         missing: bool,
         ambiguous: bool,
         background: bool,
+        inspect: bool,
+        ambiguous_rows: bool,
         incomplete: bool,
         input_on_dispatch: bool,
         slow_surface: bool,
@@ -263,11 +269,14 @@ mod tests {
             Ok(self.visible.load(SeqCst).then_some("verified-target"))
         }
         fn check_navigation(&self) -> Result<(), Error> {
-            if self.background {
+            if self.background && !self.inspect {
                 Err(Error::Conflict("foreground required".into()))
             } else {
                 Ok(())
             }
+        }
+        fn background_inspection(&self) -> bool {
+            self.background && self.inspect
         }
         fn sidebar(&self) -> Result<Sidebar<bool>, Error> {
             self.reads.fetch_add(1, SeqCst);
@@ -276,7 +285,9 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(25));
             }
             Ok(Sidebar {
-                candidates: if page >= self.pages {
+                candidates: if self.ambiguous_rows {
+                    vec![true, true]
+                } else if page >= self.pages {
                     vec![true]
                 } else {
                     vec![]
@@ -297,7 +308,7 @@ mod tests {
             permit.check(self.generation())?;
             self.presses.fetch_add(1, SeqCst);
             if *target {
-                self.visible.store(true, SeqCst);
+                self.visible.store(!self.missing, SeqCst);
             }
             Ok(())
         }
@@ -354,6 +365,48 @@ mod tests {
                 0
             );
         }
+    }
+    #[tokio::test]
+    async fn background_inspection_selects_and_verifies_only_through_the_sidebar() {
+        let inspect = || Fixture {
+            background: true,
+            inspect: true,
+            exact: true,
+            ..Default::default()
+        };
+        let h = Fixture {
+            pages: 1,
+            ..inspect()
+        };
+        assert_eq!(select(&h, budget()).await.unwrap().0, "verified-target");
+        assert_eq!(h.presses.load(SeqCst), 2);
+        assert_eq!(h.dispatches.load(SeqCst), 0);
+        let unmapped = Fixture {
+            exact: false,
+            ..inspect()
+        };
+        assert!(select(&unmapped, budget()).await.is_err());
+        assert_eq!(unmapped.reads.load(SeqCst), 0);
+        for h in [
+            Fixture {
+                ambiguous_rows: true,
+                ..inspect()
+            },
+            Fixture {
+                incomplete: true,
+                ..inspect()
+            },
+        ] {
+            assert!(select(&h, budget()).await.is_err());
+            assert_eq!(h.presses.load(SeqCst) + h.dispatches.load(SeqCst), 0);
+        }
+        let wrong = Fixture {
+            missing: true,
+            ..inspect()
+        };
+        assert!(select(&wrong, budget()).await.is_err());
+        assert_eq!(wrong.presses.load(SeqCst), 1);
+        assert_eq!(wrong.dispatches.load(SeqCst), 0);
     }
     #[tokio::test]
     async fn visible_target_needs_no_navigation_or_sidebar() {

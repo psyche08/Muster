@@ -528,6 +528,7 @@ pub async fn ensure_native(
     daemon: &crate::Daemon,
     agent: Arc<AgentService>,
     session: &str,
+    inspect: bool,
 ) -> Result<(), crate::Error> {
     let platform = daemon.platform().as_ref();
     if !drives_desktop(platform) {
@@ -568,6 +569,7 @@ pub async fn ensure_native(
     if let Some(app) = agent
         .session(session)
         .and_then(|s| muster_agent::desktop_chat::ChatApp::from_provider(&s.provider))
+        && !(inspect && app == muster_agent::desktop_chat::ChatApp::Claude)
         && muster_platform::macos::ax::trusted()
         && muster_agent::native_sidebar::catalog_session_route(app.profile().provider(), session)
             .is_none()
@@ -611,6 +613,7 @@ pub async fn ensure_native(
                     title_is_unique,
                     &resolver,
                     crate::locked_use::navigation_is_covered()?,
+                    inspect,
                 )
                 .await?;
                 if agent.retains_native_controller(session) {
@@ -640,7 +643,7 @@ pub async fn ensure_native(
             }
         }
     }
-    let _ = (agent, session);
+    let _ = (agent, session, inspect);
     Err(crate::Error::Unavailable(
         "this session is not visible in its native app".into(),
     ))

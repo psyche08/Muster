@@ -392,8 +392,7 @@ struct SidebarScan {
 }
 
 /// Read-only: finds the controls that name `session` in the app's session
-/// list (see the profile's `SessionList`). Logs up to `log_rows` rows, and
-/// relevant ones beyond them.
+/// list (see the profile's `SessionList`).
 #[allow(clippy::too_many_arguments)]
 fn scan_sidebar(
     profile: &AppProfile,
@@ -403,18 +402,23 @@ fn scan_sidebar(
     title_is_unique: bool,
     resolver: &Resolver,
     trace: &Trace,
-    log_rows: usize,
+    background_inspection: bool,
 ) -> SidebarScan {
     use muster_agent::profile::SessionList;
     let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
     let mut conversation_views = 0usize;
     let app_walk = app.walk_pruned_report(|node| {
-        let id = node
-            .string("AXIdentifier")
-            .or_else(|| node.string("AXDOMIdentifier"))
-            .unwrap_or_default();
-        let subrole = text(node, "AXSubrole");
+        let attrs = node.attributes(&["AXRole", "AXSubrole", "AXIdentifier", "AXDOMIdentifier"]);
+        let field = |i: usize| attrs[i].as_ref().and_then(ax::value_string);
+        let role = field(0).unwrap_or_default();
+        // The macOS menu bar (including its Help search field) never contains
+        // the in-window session sidebar. Its offscreen AX children can fail IPC.
+        if role == "AXMenuBar" {
+            return false;
+        }
+        let subrole = field(1).unwrap_or_default();
+        let id = field(2).or_else(|| field(3)).unwrap_or_default();
         let SessionList::Sidebar {
             landmarks,
             separate_conversation_views,
@@ -423,7 +427,7 @@ fn scan_sidebar(
         else {
             // No landmark: rows are found from their title text inside the
             // main window's page.
-            let main = node.role() == "AXWebArea"
+            let main = role == "AXWebArea"
                 && node
                     .string("AXURL")
                     .as_deref()
@@ -444,12 +448,33 @@ fn scan_sidebar(
         // pruned: in ChatGPT.app the session list lives inside the open
         // conversation's single web area, so pruning it hides the sidebar
         // (ADR 0091).
-        if separate_conversation_views && node.role() == "AXWebArea" {
+        if separate_conversation_views && !background_inspection && role == "AXWebArea" {
             let key = WebAreaKey::of(node);
             if !muster_agent::native_scan::descend_web_area(resolver(&key).is_some()) {
                 conversation_views += 1;
                 return false;
             }
+        }
+        if background_inspection {
+            // Current Claude nests its sidebar inside the conversation web area.
+            // Adjacent landmarks can contain tools and approval controls.
+            if id == "app-shell-sidebar"
+                || matches!(
+                    subrole.as_str(),
+                    "AXLandmarkComplementary" | "AXLandmarkNavigation"
+                )
+            {
+                let name = node
+                    .string("AXTitle")
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| node.string("AXDescription"))
+                    .unwrap_or_default();
+                if muster_agent::native_sidebar::claude_session_sidebar(&id, &subrole, &name) {
+                    navigation.push(node.clone());
+                    return false;
+                }
+            }
+            return true;
         }
         if id == "app-shell-sidebar"
             || (landmarks
@@ -474,7 +499,6 @@ fn scan_sidebar(
     ));
     let mut candidates = Vec::new();
     let mut rows = 0usize;
-    let mut logged = 0usize;
     let mut more_rule = None;
     let mut more = None;
     let standalone_title = match sessions {
@@ -498,29 +522,39 @@ fn scan_sidebar(
         .iter()
         .filter(|_| sessions != SessionList::PageRows)
     {
-        let area_walk = area.walk_report(|node| {
-            if !matches!(node.role().as_str(), "AXButton" | "AXLink" | "AXRow") {
+        let area_walk = area.walk_pruned_report(|node| {
+            let attrs = node.attributes(&["AXRole", "AXTitle", "AXDescription", "AXURL"]);
+            let field = |i: usize| attrs[i].as_ref().and_then(ax::value_string);
+            let role = field(0).unwrap_or_default();
+            if !matches!(role.as_str(), "AXButton" | "AXLink" | "AXRow") {
                 return true;
             }
-            let key = WebAreaKey::of(node);
+            let key = WebAreaKey {
+                title: field(1),
+                url: field(3),
+            };
             rows += 1;
-            let by_id = key.url.as_ref().is_some() && resolver(&key).as_deref() == Some(session);
-            let node_title = text(node, "AXTitle");
-            let description = text(node, "AXDescription");
+            let by_id = key.url.is_some() && resolver(&key).as_deref() == Some(session);
+            let node_title = key.title.as_deref().unwrap_or_default();
+            let description = field(2).unwrap_or_default();
             let standalone = (standalone_title
                 && title_is_unique
-                && node.role() == "AXButton"
+                && role == "AXButton"
                 && node_title != title
-                && description != title)
-                .then(|| muster_agent::native_sidebar::read_label(node));
-            let by_title = muster_agent::native_sidebar::title_matches(
-                standalone_title,
-                title,
-                title_is_unique,
-                &node_title,
-                &description,
-                standalone.as_ref().and_then(|r| r.0.as_deref()),
-            );
+                && description != title
+                && (!profile.requires_exact_navigation()
+                    || node_title.is_empty()
+                    || node_title.contains(title)))
+            .then(|| muster_agent::native_sidebar::read_label(node));
+            let by_title = (!profile.requires_exact_navigation() || key.url.is_none())
+                && muster_agent::native_sidebar::title_matches(
+                    standalone_title,
+                    title,
+                    title_is_unique,
+                    node_title,
+                    &description,
+                    standalone.as_ref().and_then(|r| r.0.as_deref()),
+                );
             let press = node.has_action("AXPress");
             if more.is_none()
                 && press
@@ -528,24 +562,11 @@ fn scan_sidebar(
                     rule.matches(if node_title.is_empty() {
                         &description
                     } else {
-                        &node_title
+                        node_title
                     })
                 })
             {
                 more = Some(node.clone());
-            }
-            let relevant = by_id || by_title || (!title.is_empty() && node_title.contains(title));
-            if logged < log_rows || (logged < log_rows + 24 && relevant) {
-                // Metadata belongs to a sidebar control, never the main pane.
-                let labels = standalone.as_ref().map(|r| {
-                    let texts = r.0.as_ref().map(|v| {
-                        v.iter().take(4).map(|s| label(s)).collect::<Vec<_>>()
-                    });
-                    (texts, r.1, r.2, r.3)
-                });
-                trace.record(format_args!("row={rows} role={} title={:?} description={:?} url_present={} by_id={by_id} by_title={by_title} press={press} label_read={labels:?} (texts, nodes, skipped_controls, stop)",
-                    node.role(), label(&node_title), label(&description), key.url.is_some()));
-                logged += 1;
             }
             if (by_id || by_title) && press && !candidates.contains(node) {
                 candidates.push(node.clone());
@@ -555,10 +576,7 @@ fn scan_sidebar(
         complete &= area_walk.1 == "complete";
         trace.record(format_args!("area_walk={area_walk:?} (nodes, stop, ms)"));
     }
-    trace.record(format_args!(
-        "rows={rows} logged_rows={logged} candidates={}",
-        candidates.len()
-    ));
+    trace.record(format_args!("rows={rows} candidates={}", candidates.len()));
     SidebarScan {
         candidates,
         rows,
@@ -593,6 +611,8 @@ struct NavigationHost<'a> {
     resolver: &'a Resolver,
     trace: &'a Trace,
     covered: bool,
+    // Bind background sidebar actions to the unrelated app that owned focus.
+    background_owner: Option<u32>,
 }
 
 #[async_trait]
@@ -621,9 +641,22 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
                 "Console session inactive during session selection".into(),
             ));
         }
+        if let Some(owner) = self.background_owner
+            && super::events::foreground_owner() != muster_agent::local_input::Owner::Process(owner)
+        {
+            return Err(Error::Conflict(
+                "Foreground changed during background inspection".into(),
+            ));
+        }
         Ok(())
     }
+    fn background_inspection(&self) -> bool {
+        self.background_owner.is_some()
+    }
     fn check_navigation(&self) -> Result<(), Error> {
+        if self.background_inspection() {
+            return self.check();
+        }
         if !self.covered
             && matches!(self.profile.app.provider, "codex" | "claude")
             && super::events::foreground_owner()
@@ -653,15 +686,27 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         }
     }
     fn sidebar(&self) -> Result<muster_agent::native_navigation::Sidebar<Element>, Error> {
+        let registry_title = self
+            .background_inspection()
+            .then(|| {
+                let root = muster_agent::claude::desktop_registry()?;
+                muster_agent::claude::desktop_navigation_title(&root, self.session)
+            })
+            .flatten();
+        let (title, unique) = registry_title
+            .as_ref()
+            .map_or((self.title, self.title_is_unique), |(title, unique)| {
+                (title.as_str(), *unique)
+            });
         let scan = scan_sidebar(
             self.profile,
             &self.app,
             self.session,
-            self.title,
-            self.title_is_unique,
+            title,
+            unique,
             self.resolver,
             self.trace,
-            0,
+            self.background_inspection(),
         );
         Ok(muster_agent::native_navigation::Sidebar {
             candidates: scan.candidates,
@@ -694,6 +739,11 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
         route: &str,
         permit: &muster_agent::native_navigation::ActionPermit,
     ) -> Result<(), Error> {
+        if self.background_inspection() {
+            return Err(Error::Conflict(
+                "Background inspection requires in-app navigation".into(),
+            ));
+        }
         let bundle = super::procs::process_bundle(self.pid)
             .ok_or_else(|| Error::Unavailable("desktop bundle identity unavailable".into()))?;
         if !codesign::process_satisfies(self.pid, &self.profile.app.requirement()) {
@@ -756,6 +806,7 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn select_session(
     profile: &'static AppProfile,
     pid: u32,
@@ -764,6 +815,7 @@ pub async fn select_session(
     title_is_unique: bool,
     resolver: &Resolver,
     covered: bool,
+    inspect: bool,
 ) -> Result<PreparedSession, Error> {
     let (session, title, resolver) = (session.to_owned(), title.to_owned(), resolver.clone());
     muster_agent::control_guard::spawn_blocking_async(async move {
@@ -777,6 +829,17 @@ pub async fn select_session(
         }
         let app = Element::application(pid);
         app.enable_manual_accessibility();
+        let background_owner = if inspect
+            && !covered
+            && profile.app.provider == "claude"
+            && let muster_agent::local_input::Owner::Process(owner) =
+                super::events::foreground_owner()
+            && owner != pid
+        {
+            Some(owner)
+        } else {
+            None
+        };
         let host = NavigationHost {
             profile,
             pid,
@@ -788,6 +851,7 @@ pub async fn select_session(
             resolver: &resolver,
             trace: &trace,
             covered,
+            background_owner,
         };
         let (surface, generation) =
             muster_agent::native_navigation::select(&host, Default::default()).await?;
@@ -2712,6 +2776,52 @@ fn screen_locked() -> bool {
 
 #[path = "native_questions.rs"]
 mod question_forms;
+
+#[cfg(test)]
+mod inspection_tests {
+    use super::*;
+    use muster_agent::local_input::Owner;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires a named local Claude Code session and a different app in front"]
+    async fn inspect_background_claude_session_on_device() {
+        let session = std::env::var("MUSTER_INSPECT_TEST_SESSION").expect("target CLI UUID");
+        let profile = profiles()
+            .into_iter()
+            .find(|p| p.provider() == "claude")
+            .unwrap();
+        let pid = app_pids(profile)
+            .into_iter()
+            .next()
+            .expect("running Claude");
+        let Owner::Process(front) = super::super::events::foreground_owner() else {
+            panic!("no observable foreground application");
+        };
+        assert_ne!(pid, front, "requires Claude in the background");
+        let resolver = claude_resolver();
+        assert!(
+            !discover(pid, &resolver).contains(&session),
+            "test needs a different session initially displayed"
+        );
+        let selected = select_session(profile, pid, &session, "", false, &resolver, false, true)
+            .await
+            .expect("select the exact session without foreground navigation");
+        assert_eq!(
+            resolver(&WebAreaKey::of(&selected.surface.web_area)).as_deref(),
+            Some(session.as_str())
+        );
+        let (tree, _) = super::super::native_chat::approval_snapshot(&selected.surface.web_area);
+        assert!(tree.complete);
+        eprintln!(
+            "live permission card observed: {}",
+            muster_agent::native_approval::observe(profile, &tree).is_some()
+        );
+        assert_eq!(
+            super::super::events::foreground_owner(),
+            Owner::Process(front)
+        );
+    }
+}
 
 #[cfg(test)]
 mod send_tests {
