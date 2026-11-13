@@ -317,3 +317,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0199](0199-local-dispatch-grant-for-locked-use.md) | Proposed; source and tests only | Let a named local service create and drive its own sessions on a locked Mac |
 | [0200](0200-optional-requester-locked-use-auth.md) | Accepted | Make the macOS requester's Locked Use identity check optional |
 | [0201](0201-background-claude-card-selection.md) | Accepted | Locate local Claude approval cards through the background sidebar |
+| [0202](0202-publish-apple-1-1-40.md) | Accepted | Publish Apple 1.1.40 (130) for desktop, OTA and public beta |
