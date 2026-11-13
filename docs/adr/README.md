@@ -315,3 +315,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0197](0197-inline-recorded-work.md) | Accepted | Show recorded reasoning and tool descriptions inline |
 | [0198](0198-publish-apple-1-1-39.md) | Accepted | Publish Apple 1.1.39 and select build 129 for public TestFlight |
 | [0199](0199-local-dispatch-grant-for-locked-use.md) | Proposed; source and tests only | Let a named local service create and drive its own sessions on a locked Mac |
+| [0200](0200-optional-requester-locked-use-auth.md) | Accepted | Make the macOS requester's Locked Use identity check optional |

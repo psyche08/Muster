@@ -14,6 +14,7 @@ pub mod desktop_startup;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod desktop_update;
 mod drafts;
+mod locked_use_auth;
 mod render;
 mod send_diagnostics;
 mod session_diagnostics;
@@ -146,7 +147,7 @@ impl AppCore {
             backend: backend.clone(),
             tx: tx.clone(),
         };
-        runtime.spawn(run(rx, ctx));
+        runtime.spawn(run(rx, ctx, config.dir));
         Ok(AppCore {
             runtime: Some(runtime),
             tx,
@@ -164,7 +165,7 @@ impl AppCore {
             backend: backend.clone(),
             tx: tx.clone(),
         };
-        tokio::spawn(run(rx, ctx));
+        tokio::spawn(run(rx, ctx, config.dir));
         Ok(AppCore {
             runtime: None,
             tx,
@@ -218,8 +219,11 @@ impl AppCore {
     }
 }
 
-async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx) {
+async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx, dir: PathBuf) {
     let mut state = State::new(ctx.backend.is_embedded(), ctx.backend.device_id());
+    if cfg!(target_os = "macos") && !state.embedded {
+        state.locked_use_auth = Some(locked_use_auth::Preference::load(&dir));
+    }
     update::init(&mut state, &ctx);
     let tick_tx = ctx.tx.clone();
     let ticker = tokio::spawn(async move {

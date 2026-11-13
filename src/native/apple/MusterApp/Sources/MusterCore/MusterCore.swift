@@ -155,6 +155,10 @@ public final class MusterCore: MusterShell {
     }
 
     /// The privacy cover: this desktop's (device empty) or a member's.
+    public func setRequireLockedUseAuth(_ required: Bool) {
+        send(.setRequireLockedUseAuth(required))
+    }
+
     public func setCover(_ on: Bool, device: String = "") {
         send(.setCover(Muster_App_SetCover.with { $0.on = on; $0.deviceID = device }))
     }

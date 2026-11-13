@@ -169,7 +169,8 @@ use the same signed Locked Use continuation as sending. The operation binds its
 request ID, provider/session and complete selection payload. The owner checks
 authorization before unlock and during execution, uses the guarded OS worker,
 and returns the typed response after cleanup and relock. Foreground phones sign
-with their enrolled key; desktop requesters use presence authentication. An
+with their enrolled key. On a requesting Mac, Settings can require a local
+identity check for each new Locked Use lease. This defaults to off (ADR 0200). An
 already unlocked Mac uses ordinary authorized execution with the switch enabled.
 
 The `agent.chat.locked.v1` service marks support. Clients reject older hosts for
