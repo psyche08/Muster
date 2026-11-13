@@ -321,3 +321,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0203](0203-restore-native-navigation.md) | Proposed | Restore a borrowed native session after Muster finishes |
 | [0204](0204-release-apple-1-1-41.md) | Accepted | Release Apple 1.1.41 with native session restoration |
 | [0205](0205-background-native-tasks.md) | Accepted | Locate desktop sessions in the background for every operation |
+| [0206](0206-publish-apple-1-1-42.md) | Accepted | Publish Apple 1.1.42 with background session selection |
