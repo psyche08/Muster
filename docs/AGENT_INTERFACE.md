@@ -112,13 +112,18 @@ Cache policy sources (checked 2026-10-01):
 [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching#cache-lifetime),
 [Claude prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 
-Price snapshot: 2026-09-28, from
-[ccusage](https://github.com/ccusage/ccusage/tree/ce7d60cf9877f9fac8d397ba208311b153b300e2),
-`rust/crates/ccusage-core/src/models-dev-pricing.json` (OpenAI/Claude subset) and
-`fast-multiplier-overrides.json`. The data is bundled for offline rendering; its
-age is visible in the cost tooltip. Update the dated snapshot as prices change.
-[MIT attribution](third-party/ccusage-LICENSE.txt). Parsing and calculation are
-implemented in Shared Rust; no ccusage process runs on the phone.
+Shared Rust bundles an offline OpenAI and Claude price catalog. Each estimate
+shows the catalog date. The bundle includes published Fast, Flex and Ultrafast
+multipliers and keeps the last rates for delisted model IDs used in older
+transcripts. The revision and date are in `usage-price-tiers.json`.
+
+To refresh both tables, run
+`python3 scripts/refresh-usage-prices.py /path/to/ccusage <tag-or-commit>`
+against a [ccusage checkout](https://github.com/ccusage/ccusage).
+Review the diff against [OpenAI pricing](https://developers.openai.com/api/docs/pricing)
+and [Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing),
+including the supplemental Claude entries in the script.
+[MIT attribution](third-party/ccusage-LICENSE.txt).
 
 ## Conversation styles (2026-09-28)
 

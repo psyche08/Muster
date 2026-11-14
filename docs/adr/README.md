@@ -325,3 +325,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0207](0207-apple-143-retest.md) | Accepted | Identify the macOS retest with Apple build 133 |
 | [0208](0208-one-window-per-native-session-operation.md) | Accepted | Bind existing desktop session operations to one window |
 | [0209](0209-release-apple-1-1-44.md) | Accepted | Release Apple 1.1.44 with single-window session selection |
+| [0210](0210-refresh-turn-pricing.md) | Accepted | Refresh offline model and speed rates used in turn estimates |

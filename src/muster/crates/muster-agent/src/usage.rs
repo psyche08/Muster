@@ -4,7 +4,7 @@ use crate::model::{Message, MessageKind, Role, parse_ts};
 use muster_proto::v1::{CacheExpiry, TurnUsage};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
 #[derive(Clone, Default)]
 pub struct Tracker {
@@ -44,6 +44,22 @@ fn valid_codex_counts(v: &Value) -> bool {
         && count(v, "cached_input_tokens").saturating_add(codex_counts(v)[3])
             <= count(v, "input_tokens")
 }
+#[derive(serde::Deserialize)]
+struct PriceTiers {
+    date: String,
+    speeds: HashMap<String, SpeedRates>,
+}
+
+#[derive(serde::Deserialize)]
+struct SpeedRates {
+    exact: HashMap<String, f64>,
+    normalized_prefix: HashMap<String, f64>,
+}
+
+static PRICE_TIERS: LazyLock<PriceTiers> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("usage-price-tiers.json")).expect("price tiers")
+});
+
 fn estimate(
     model: &str,
     tier: &str,
@@ -53,12 +69,10 @@ fn estimate(
     write: u64,
     write_hour: u64,
 ) -> Option<f64> {
-    static PRICES: OnceLock<Value> = OnceLock::new();
-    static FAST: OnceLock<Value> = OnceLock::new();
-    let all = PRICES.get_or_init(|| {
+    static PRICES: LazyLock<Value> = LazyLock::new(|| {
         serde_json::from_str(include_str!("usage-prices.json")).expect("price snapshot")
     });
-    let base = &all[model]["cost"];
+    let base = &PRICES[model]["cost"];
     let mut rates = base;
     if let Some(tiers) = base["tiers"].as_array() {
         for t in tiers {
@@ -80,19 +94,20 @@ fn estimate(
     }
     let multiplier = match tier {
         "" | "default" | "standard" => 1.0,
-        "priority" | "fast" => {
-            let fast = FAST.get_or_init(|| {
-                serde_json::from_str(include_str!("usage-fast-prices.json")).expect("fast prices")
-            });
-            fast["exact"][model].as_f64().or_else(|| {
-                fast["normalized_prefix"]
-                    .as_object()?
+        // An explicit fast model SKU already carries the premium in its rates.
+        "priority" | "fast" if model.starts_with("claude-") && model.ends_with("-fast") => 1.0,
+        speed => {
+            let speed = if speed == "priority" { "fast" } else { speed };
+            let rates = PRICE_TIERS.speeds.get(speed)?;
+            *rates.exact.get(model).or_else(|| {
+                rates
+                    .normalized_prefix
                     .iter()
-                    .find(|(k, _)| model.starts_with(k.as_str()))
-                    .and_then(|(_, v)| v.as_f64())
+                    .filter(|(prefix, _)| model.starts_with(prefix.as_str()))
+                    .max_by_key(|(prefix, _)| prefix.len())
+                    .map(|(_, rate)| rate)
             })?
         }
-        _ => return None,
     };
     Some(cost * multiplier / 1_000_000.0)
 }
@@ -105,21 +120,18 @@ impl Tracker {
         self.unknown_requests.clear();
         self.active = true;
     }
-    fn sample(&self, counts: [u64; 4], write_hour: u64, recorded: Option<f64>) -> TurnUsage {
+    fn sample(
+        &self,
+        model: &str,
+        counts: [u64; 4],
+        write_hour: u64,
+        recorded: Option<f64>,
+    ) -> TurnUsage {
         let [input, output, read, write] = counts;
-        let cost = recorded.or_else(|| {
-            estimate(
-                &self.model,
-                &self.tier,
-                input,
-                output,
-                read,
-                write,
-                write_hour,
-            )
-        });
+        let cost = recorded
+            .or_else(|| estimate(model, &self.tier, input, output, read, write, write_hour));
         TurnUsage {
-            model: self.model.clone(),
+            model: model.into(),
             input_tokens: input,
             output_tokens: output,
             cache_read_tokens: read,
@@ -140,7 +152,7 @@ impl Tracker {
                 "unavailable"
             }
             .into(),
-            pricing_date: "2026-09-28".into(),
+            pricing_date: PRICE_TIERS.date.clone(),
             changes: Vec::new(),
             changes_incomplete: false,
             cache_hit_known: input > 0,
@@ -182,11 +194,15 @@ impl Tracker {
         }
         self.active = false;
         let mut sum = TurnUsage {
-            model: self.model.clone(),
+            model: self
+                .requests
+                .values()
+                .next()
+                .map_or_else(|| self.model.clone(), |u| u.model.clone()),
             tokens_known: !self.requests.is_empty() && self.unknown_requests.is_empty(),
             cost_known: !self.requests.is_empty() && self.unknown_requests.is_empty(),
             cost_source: "recorded".into(),
-            pricing_date: "2026-09-28".into(),
+            pricing_date: PRICE_TIERS.date.clone(),
             ..Default::default()
         };
         for usage in self.requests.values() {
@@ -301,13 +317,14 @@ impl Tracker {
                 .unwrap_or_else(|| offset.to_string());
             if valid_codex_counts(&p["usage"]) {
                 let counts = codex_counts(&p["usage"]);
+                let model = p["model"].as_str().unwrap_or(&self.model);
                 let expiry = crate::cache::codex(
                     ts,
-                    &self.model,
+                    model,
                     &self.retention,
                     counts[2].saturating_add(counts[3]),
                 );
-                self.record_request(key, self.sample(counts, 0, None), ts, expiry);
+                self.record_request(key, self.sample(model, counts, 0, None), ts, expiry);
             } else {
                 self.unknown_requests.insert(key);
             }
@@ -376,7 +393,7 @@ impl Tracker {
                     );
                     self.record_request(
                         self.sequence.to_string(),
-                        self.sample(counts, 0, None),
+                        self.sample(&self.model, counts, 0, None),
                         ts,
                         expiry,
                     );
@@ -478,6 +495,7 @@ impl Tracker {
                     .filter(|c| c.is_finite() && *c >= 0.0);
                 self.unknown_requests.remove(&key);
                 let next = self.sample(
+                    &self.model,
                     [input, count(usage, "output_tokens"), read, write],
                     count(&usage["cache_creation"], "ephemeral_1h_input_tokens"),
                     recorded,
@@ -545,8 +563,12 @@ impl Tracker {
                     let read = count(usage, "cacheReadTokens");
                     let write = count(usage, "cacheWriteTokens");
                     let input = count(usage, "inputTokens") + read + write;
-                    let next =
-                        self.sample([input, count(usage, "outputTokens"), read, write], 0, None);
+                    let next = self.sample(
+                        &self.model,
+                        [input, count(usage, "outputTokens"), read, write],
+                        0,
+                        None,
+                    );
                     let expiry =
                         crate::cache::unknown("DeepSeek Harness records no cache lifetime.");
                     self.record_request(key, next, ts, expiry);
@@ -854,6 +876,55 @@ mod tests {
             (u.input_tokens, u.output_tokens, u.request_count),
             (20, 10, 1)
         );
+    }
+
+    #[test]
+    fn codex_prices_the_model_recorded_on_each_request() {
+        let mut t = Tracker::default();
+        codex_start(&mut t, "turn");
+        t.codex(
+            1,
+            &json!({"type":"turn_context","payload":{
+            "model":"gpt-6.1-terra","service_tier":"priority"}}),
+        );
+        t.codex(
+            2,
+            &json!({"type":"token_usage_record","payload":{
+            "model":"gpt-6.1-sol","turn_id":"turn","response_id":"r1",
+            "usage":{"input_tokens":300_000,"cached_input_tokens":100_000,
+                     "cache_write_input_tokens":10_000,"output_tokens":100}}}),
+        );
+        // A request-level override must not leak into the next response.
+        codex_request(&mut t, "turn", "r2", "2026-11-10T05:01:00Z", 100, 80);
+        let u = codex_end(&mut t, "turn");
+        assert!(u.cost_known);
+        assert_eq!(
+            (u.model.as_str(), u.cost_source.as_str()),
+            ("multiple models", "estimated")
+        );
+        // Long-context Sol costs 2 * (190000*4 + 100000*.2 + 10000*5 + 100*15).
+        // Short-context Terra costs 2 * (20*1 + 80*.05 + 10*5), per million.
+        assert!((u.cost_usd - 1.663148).abs() < 1e-10);
+        assert_eq!(u.pricing_date, PRICE_TIERS.date);
+    }
+
+    #[test]
+    fn new_model_speed_tiers_use_published_rates() {
+        for (model, tier, expected) in [
+            ("gpt-6.1-sol", "standard", 2.0),
+            ("gpt-6.1-sol", "ultrafast", 12.0),
+            ("gpt-6.1-terra", "flex", 0.5),
+            ("claude-sonnet-5-5", "standard", 2.0),
+            ("claude-opus-5-5", "fast", 8.0),
+            ("claude-opus-5-5-fast", "fast", 8.0),
+            ("claude-mythos-5-2", "fast", 16.0),
+        ] {
+            assert_eq!(
+                estimate(model, tier, 1_000, 0, 0, 0, 0),
+                Some(expected / 1000.0)
+            );
+        }
+        assert!(estimate("gpt-6.1-terra", "ultrafast", 1000, 0, 0, 0, 0).is_none());
     }
 
     #[test]
