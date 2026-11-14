@@ -34,7 +34,7 @@
     "cost": {
       "cache_read": 0.08,
       "cache_write": 1,
-      "input": 0.7999999999999999,
+      "input": 0.8,
       "output": 4
     },
     "limit": {
@@ -43,7 +43,7 @@
   },
   "claude-3.5-sonnet-v2": {
     "cost": {
-      "cache_read": 0.30000000000000004,
+      "cache_read": 0.3,
       "cache_write": 3.75,
       "input": 3,
       "output": 15
@@ -54,7 +54,7 @@
   },
   "claude-3.7-sonnet": {
     "cost": {
-      "cache_read": 0.30000000000000004,
+      "cache_read": 0.3,
       "cache_write": 3.75,
       "input": 3,
       "output": 15
@@ -87,7 +87,7 @@
   },
   "claude-4.5-haiku": {
     "cost": {
-      "cache_read": 0.09999999999999999,
+      "cache_read": 0.1,
       "cache_write": 1.25,
       "input": 1,
       "output": 5
@@ -136,6 +136,30 @@
       "cache_write": 12.5,
       "input": 10,
       "output": 50
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-fable-5-2": {
+    "cost": {
+      "cache_read": 0.2,
+      "cache_write": 10,
+      "input": 8,
+      "output": 40
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-fable-5-2@default": {
+    "cost": {
+      "cache_read": 0.2,
+      "cache_write": 10,
+      "input": 8,
+      "output": 40
     },
     "exactOnly": true,
     "limit": {
@@ -213,12 +237,94 @@
       "context": 200000
     }
   },
+  "claude-haiku-5-5": {
+    "cost": {
+      "cache_read": 0.01,
+      "cache_write": 0.125,
+      "input": 0.1,
+      "output": 0.5,
+      "tiers": [
+        {
+          "cache_read": 0.05,
+          "cache_write": 0.625,
+          "input": 0.5,
+          "output": 2.5,
+          "tier": {
+            "size": 100000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-haiku-5-5@default": {
+    "cost": {
+      "cache_read": 0.01,
+      "cache_write": 0.125,
+      "input": 0.1,
+      "output": 0.5,
+      "tiers": [
+        {
+          "cache_read": 0.05,
+          "cache_write": 0.625,
+          "input": 0.5,
+          "output": 2.5,
+          "tier": {
+            "size": 100000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-haiku-5-5@eu": {
+    "cost": {
+      "cache_read": 0.02,
+      "cache_write": 0.14,
+      "input": 0.11,
+      "output": 0.55,
+      "tiers": [
+        {
+          "cache_read": 0.06,
+          "cache_write": 0.69,
+          "input": 0.55,
+          "output": 2.75,
+          "tier": {
+            "size": 100000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
   "claude-mythos-5": {
     "cost": {
       "cache_read": 1,
       "cache_write": 12.5,
       "input": 10,
       "output": 50
+    },
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-mythos-5-2": {
+    "cost": {
+      "cache_read": 0.2,
+      "cache_write": 10,
+      "input": 8,
+      "output": 40
     },
     "limit": {
       "context": 1000000
@@ -291,6 +397,18 @@
       "context": 200000
     }
   },
+  "claude-opus-4-5-think": {
+    "cost": {
+      "cache_read": 0.5,
+      "cache_write": 6.25,
+      "input": 5,
+      "output": 25
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 200000
+    }
+  },
   "claude-opus-4-5@eu": {
     "cost": {
       "cache_read": 0.55,
@@ -319,19 +437,7 @@
       "cache_read": 0.5,
       "cache_write": 6.25,
       "input": 5,
-      "output": 25,
-      "tiers": [
-        {
-          "cache_read": 1,
-          "cache_write": 12.5,
-          "input": 10,
-          "output": 37.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 25
     },
     "exactOnly": true,
     "limit": {
@@ -343,19 +449,7 @@
       "cache_read": 0.5,
       "cache_write": 6.25,
       "input": 5,
-      "output": 25,
-      "tiers": [
-        {
-          "cache_read": 1,
-          "cache_write": 12.5,
-          "input": 10,
-          "output": 37.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 25
     },
     "exactOnly": true,
     "limit": {
@@ -390,19 +484,7 @@
       "cache_read": 0.5,
       "cache_write": 6.25,
       "input": 5,
-      "output": 25,
-      "tiers": [
-        {
-          "cache_read": 1,
-          "cache_write": 12.5,
-          "input": 10,
-          "output": 37.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 25
     },
     "exactOnly": true,
     "limit": {
@@ -424,19 +506,7 @@
       "cache_read": 0.5,
       "cache_write": 6.25,
       "input": 5,
-      "output": 25,
-      "tiers": [
-        {
-          "cache_read": 1,
-          "cache_write": 12.5,
-          "input": 10,
-          "output": 37.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 25
     },
     "exactOnly": true,
     "limit": {
@@ -487,7 +557,7 @@
     },
     "exactOnly": true,
     "limit": {
-      "context": 200000
+      "context": 1000000
     }
   },
   "claude-opus-4-8@default": {
@@ -495,19 +565,7 @@
       "cache_read": 0.5,
       "cache_write": 6.25,
       "input": 5,
-      "output": 25,
-      "tiers": [
-        {
-          "cache_read": 1,
-          "cache_write": 12.5,
-          "input": 10,
-          "output": 37.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 25
     },
     "exactOnly": true,
     "limit": {
@@ -560,6 +618,18 @@
       "context": 1000000
     }
   },
+  "claude-opus-5-5-fast": {
+    "cost": {
+      "cache_read": 0.4,
+      "cache_write": 10,
+      "input": 8,
+      "output": 40
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
   "claude-opus-5-5@default": {
     "cost": {
       "cache_read": 0.2,
@@ -598,6 +668,8 @@
   },
   "claude-opus-5-thinking": {
     "cost": {
+      "cache_read": 0.5,
+      "cache_write": 5,
       "input": 5,
       "output": 25
     },
@@ -705,7 +777,7 @@
       "output": 15
     },
     "limit": {
-      "context": 1000000
+      "context": 200000
     }
   },
   "claude-sonnet-4-5-20250929": {
@@ -717,13 +789,49 @@
     },
     "exactOnly": true,
     "limit": {
-      "context": 1000000
+      "context": 200000
     }
   },
   "claude-sonnet-4-5-20250929-thinking": {
     "cost": {
+      "cache_read": 0.3,
+      "cache_write": 3.75,
       "input": 3,
-      "output": 15
+      "output": 15,
+      "tiers": [
+        {
+          "input": 6,
+          "output": 22.5,
+          "tier": {
+            "size": 200000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 200000
+    }
+  },
+  "claude-sonnet-4-5-think": {
+    "cost": {
+      "cache_read": 0.33,
+      "cache_write": 4.125,
+      "input": 3.3,
+      "output": 16.5,
+      "tiers": [
+        {
+          "cache_read": 0.66,
+          "cache_write": 8.25,
+          "input": 6.6,
+          "output": 24.75,
+          "tier": {
+            "size": 200000,
+            "type": "context"
+          }
+        }
+      ]
     },
     "exactOnly": true,
     "limit": {
@@ -770,19 +878,7 @@
       "cache_read": 0.3,
       "cache_write": 3.75,
       "input": 3,
-      "output": 15,
-      "tiers": [
-        {
-          "cache_read": 0.6,
-          "cache_write": 7.5,
-          "input": 6,
-          "output": 22.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 15
     },
     "exactOnly": true,
     "limit": {
@@ -791,8 +887,20 @@
   },
   "claude-sonnet-4-6-thinking": {
     "cost": {
+      "cache_read": 0.3,
+      "cache_write": 3.75,
       "input": 3,
-      "output": 15
+      "output": 15,
+      "tiers": [
+        {
+          "input": 6,
+          "output": 22.5,
+          "tier": {
+            "size": 200000,
+            "type": "context"
+          }
+        }
+      ]
     },
     "exactOnly": true,
     "limit": {
@@ -804,19 +912,7 @@
       "cache_read": 0.3,
       "cache_write": 3.75,
       "input": 3,
-      "output": 15,
-      "tiers": [
-        {
-          "cache_read": 0.6,
-          "cache_write": 7.5,
-          "input": 6,
-          "output": 22.5,
-          "tier": {
-            "size": 200000,
-            "type": "context"
-          }
-        }
-      ]
+      "output": 15
     },
     "exactOnly": true,
     "limit": {
@@ -876,6 +972,42 @@
       "input": 2,
       "output": 10
     },
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-sonnet-5-5": {
+    "cost": {
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "input": 2,
+      "output": 10
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-sonnet-5-5@default": {
+    "cost": {
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "input": 2,
+      "output": 10
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1000000
+    }
+  },
+  "claude-sonnet-5-5@eu": {
+    "cost": {
+      "cache_read": 0.22,
+      "cache_write": 2.75,
+      "input": 2.2,
+      "output": 11
+    },
+    "exactOnly": true,
     "limit": {
       "context": 1000000
     }
@@ -997,9 +1129,9 @@
   },
   "gpt-4.1-mini-2025-04-14": {
     "cost": {
-      "cache_read": 0.09999999999999999,
-      "input": 0.39999999999999997,
-      "output": 1.5999999999999999
+      "cache_read": 0.1,
+      "input": 0.4,
+      "output": 1.6
     },
     "exactOnly": true,
     "limit": {
@@ -1146,7 +1278,7 @@
   },
   "gpt-5-chat-latest": {
     "cost": {
-      "cache_read": 0.12500000000000003,
+      "cache_read": 0.125,
       "input": 1.25,
       "output": 10
     },
@@ -1157,7 +1289,7 @@
   },
   "gpt-5-codex": {
     "cost": {
-      "cache_read": 0.13,
+      "cache_read": 0.125,
       "input": 1.25,
       "output": 10
     },
@@ -1243,7 +1375,7 @@
   },
   "gpt-5.1-chat-latest": {
     "cost": {
-      "cache_read": 0.12500000000000003,
+      "cache_read": 0.125,
       "input": 1.25,
       "output": 10
     },
@@ -1309,7 +1441,6 @@
   },
   "gpt-5.2-chat-latest": {
     "cost": {
-      "cache_read": 0.175,
       "input": 1.75,
       "output": 14
     },
@@ -1341,7 +1472,6 @@
   },
   "gpt-5.3-chat-latest": {
     "cost": {
-      "cache_read": 0.175,
       "input": 1.75,
       "output": 14
     },
@@ -1448,14 +1578,14 @@
   },
   "gpt-5.4@eu": {
     "cost": {
-      "cache_read": 0.25,
-      "input": 2.5,
-      "output": 15,
+      "cache_read": 0.275,
+      "input": 2.75,
+      "output": 16.5,
       "tiers": [
         {
-          "cache_read": 0.5,
-          "input": 5,
-          "output": 22.5,
+          "cache_read": 0.55,
+          "input": 5.5,
+          "output": 24.75,
           "tier": {
             "size": 272000,
             "type": "context"
@@ -1512,14 +1642,14 @@
   },
   "gpt-5.5@eu": {
     "cost": {
-      "cache_read": 0.5,
-      "input": 5,
-      "output": 30,
+      "cache_read": 0.55,
+      "input": 5.5,
+      "output": 33,
       "tiers": [
         {
-          "cache_read": 1,
-          "input": 10,
-          "output": 45,
+          "cache_read": 1.1,
+          "input": 11,
+          "output": 49.5,
           "tier": {
             "size": 272000,
             "type": "context"
@@ -1582,6 +1712,7 @@
   },
   "gpt-5.6-luna-pro": {
     "cost": {
+      "cache_read": 0.02,
       "input": 0.2,
       "output": 1.2
     },
@@ -1593,8 +1724,21 @@
   "gpt-5.6-luna@eu": {
     "cost": {
       "cache_read": 0.022,
+      "cache_write": 0.275,
       "input": 0.22,
-      "output": 1.32
+      "output": 1.32,
+      "tiers": [
+        {
+          "cache_read": 0.044,
+          "cache_write": 0.55,
+          "input": 0.44,
+          "output": 1.98,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
     },
     "exactOnly": true,
     "limit": {
@@ -1627,6 +1771,7 @@
   },
   "gpt-5.6-sol-pro": {
     "cost": {
+      "cache_read": 0.5,
       "input": 5,
       "output": 30
     },
@@ -1638,8 +1783,21 @@
   "gpt-5.6-sol@eu": {
     "cost": {
       "cache_read": 0.44,
+      "cache_write": 5.5,
       "input": 4.4,
-      "output": 22
+      "output": 22,
+      "tiers": [
+        {
+          "cache_read": 0.88,
+          "cache_write": 11,
+          "input": 8.8,
+          "output": 33,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
     },
     "exactOnly": true,
     "limit": {
@@ -1672,6 +1830,7 @@
   },
   "gpt-5.6-terra-pro": {
     "cost": {
+      "cache_read": 0.2,
       "input": 2,
       "output": 12
     },
@@ -1683,8 +1842,21 @@
   "gpt-5.6-terra@eu": {
     "cost": {
       "cache_read": 0.22,
+      "cache_write": 2.75,
       "input": 2.2,
-      "output": 13.2
+      "output": 13.2,
+      "tiers": [
+        {
+          "cache_read": 0.44,
+          "cache_write": 5.5,
+          "input": 4.4,
+          "output": 19.8,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
     },
     "exactOnly": true,
     "limit": {
@@ -1751,11 +1923,13 @@
   "gpt-6-luna@eu": {
     "cost": {
       "cache_read": 0.012,
+      "cache_write": 0.15,
       "input": 0.12,
       "output": 0.6,
       "tiers": [
         {
           "cache_read": 0.024,
+          "cache_write": 0.3,
           "input": 0.24,
           "output": 0.9,
           "tier": {
@@ -1796,13 +1970,109 @@
   "gpt-6-sol@eu": {
     "cost": {
       "cache_read": 0.24,
+      "cache_write": 3,
       "input": 2.4,
       "output": 12,
       "tiers": [
         {
           "cache_read": 0.48,
+          "cache_write": 6,
           "input": 4.8,
           "output": 18,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1050000
+    }
+  },
+  "gpt-6.1-sol": {
+    "cost": {
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "input": 2,
+      "output": 10,
+      "tiers": [
+        {
+          "cache_read": 0.2,
+          "cache_write": 5,
+          "input": 4,
+          "output": 15,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "limit": {
+      "context": 1050000
+    }
+  },
+  "gpt-6.1-sol@eu": {
+    "cost": {
+      "cache_read": 0.12,
+      "cache_write": 3,
+      "input": 2.4,
+      "output": 12,
+      "tiers": [
+        {
+          "cache_read": 0.24,
+          "cache_write": 6,
+          "input": 4.8,
+          "output": 18,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "exactOnly": true,
+    "limit": {
+      "context": 1050000
+    }
+  },
+  "gpt-6.1-terra": {
+    "cost": {
+      "cache_read": 0.05,
+      "cache_write": 1.25,
+      "input": 1,
+      "output": 5,
+      "tiers": [
+        {
+          "cache_read": 0.1,
+          "cache_write": 2.5,
+          "input": 2,
+          "output": 7.5,
+          "tier": {
+            "size": 272000,
+            "type": "context"
+          }
+        }
+      ]
+    },
+    "limit": {
+      "context": 1050000
+    }
+  },
+  "gpt-6.1-terra@eu": {
+    "cost": {
+      "cache_read": 0.06,
+      "cache_write": 1.5,
+      "input": 1.2,
+      "output": 6,
+      "tiers": [
+        {
+          "cache_read": 0.12,
+          "cache_write": 3,
+          "input": 2.4,
+          "output": 9,
           "tier": {
             "size": 272000,
             "type": "context"
@@ -1864,19 +2134,19 @@
   },
   "gpt-oss-120b": {
     "cost": {
-      "cache_read": 0.01,
-      "input": 0.089,
-      "output": 0.446
+      "cache_read": 0.35,
+      "input": 0.35,
+      "output": 0.75
     },
     "limit": {
-      "context": 131000
+      "context": 131072
     }
   },
   "gpt-oss-20b": {
     "cost": {
-      "cache_read": 0.01,
-      "input": 0.04,
-      "output": 0.19
+      "cache_read": 0.00371429,
+      "input": 0.036,
+      "output": 0.15428571
     },
     "limit": {
       "context": 131072
