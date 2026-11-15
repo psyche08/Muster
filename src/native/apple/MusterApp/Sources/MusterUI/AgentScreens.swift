@@ -134,7 +134,7 @@ struct CatalogSessionRow: View, Equatable {
                     .padding(.leading, CGFloat(min(row.depth, 8) - 1) * 14 + 6)
             }
             Button { core.openAgent(row.session.id, device: row.session.deviceID) } label: {
-                SessionRow(session: row.session, source: row.sourceLabel)
+                SessionRow(session: row.session, source: row.sourceLabel, launch: row.launchLabel)
             }.buttonStyle(.plain)
             if row.expandable {
                 Button { core.agentCatalogAction(.toggleFamily, value: row.key) } label: {
@@ -146,7 +146,7 @@ struct CatalogSessionRow: View, Equatable {
         }
         .accessibilityIdentifier("agent-row-\(row.session.id)")
         .contextMenu {
-            if row.canOrganize { organizationActions }
+            if row.canOrganize || row.canArchive { organizationActions }
             if !row.session.parentSessionID.isEmpty {
                 Button { core.openAgent(row.session.parentSessionID, device: row.session.deviceID) } label: {
                     Label(row.session.parentTitle.isEmpty ? "Parent conversation" : row.session.parentTitle, systemImage: "arrow.turn.up.left")
@@ -155,8 +155,10 @@ struct CatalogSessionRow: View, Equatable {
         }
         #if os(iOS)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if row.canOrganize {
+            if row.canArchive {
                 Button("Archive", role: .destructive) { perform(.archive) }.disabled(row.organizing)
+            }
+            if row.canOrganize {
                 Button(row.session.pinned ? "Unpin" : "Pin") { perform(row.session.pinned ? .unpin : .pin) }.tint(.orange).disabled(row.organizing)
             }
         }
@@ -167,8 +169,12 @@ struct CatalogSessionRow: View, Equatable {
     }
     @ViewBuilder private var organizationActions: some View {
         Group {
-            Button(row.session.pinned ? "Unpin" : "Pin", systemImage: row.session.pinned ? "pin.slash" : "pin") { perform(row.session.pinned ? .unpin : .pin) }
-            Button("Archive", systemImage: "archivebox", role: .destructive) { perform(.archive) }
+            if row.canOrganize {
+                Button(row.session.pinned ? "Unpin" : "Pin", systemImage: row.session.pinned ? "pin.slash" : "pin") { perform(row.session.pinned ? .unpin : .pin) }
+            }
+            if row.canArchive {
+                Button("Archive", systemImage: "archivebox", role: .destructive) { perform(.archive) }
+            }
         }.disabled(row.organizing)
     }
 }
@@ -359,6 +365,8 @@ struct TurnFooter: View {
 struct SessionRow: View {
     let session: Muster_V1_AgentSession
     let source: String
+    /// How the session was started (Desktop, CLI, …), projected by Rust.
+    var launch: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -376,6 +384,16 @@ struct SessionRow: View {
                 }.fixedSize(horizontal: true, vertical: false)
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if !launch.isEmpty {
+                    Text(launch)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5)
+                        // Drawn past the text so the row keeps its height.
+                        .background(Capsule().fill(Color.secondary.opacity(0.15)).padding(.vertical, -1.5))
+                        .fixedSize()
+                        .accessibilityLabel("Started from \(launch)")
+                        .accessibilityIdentifier("agent-launch-\(session.id)")
+                }
                 Text(source).lineLimit(1).layoutPriority(1)
                 if !session.cwd.isEmpty {
                     Text(session.cwd).lineLimit(1).truncationMode(.middle)

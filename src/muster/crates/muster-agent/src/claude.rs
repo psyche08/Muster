@@ -230,6 +230,8 @@ fn discover(
                     state: SessionState::Idle,
                 },
                 entrypoint: head.entrypoint.clone(),
+                launch: crate::launch::claude(head.entrypoint.as_deref()),
+                muster_archivable: false,
                 path,
             });
         }
@@ -321,6 +323,12 @@ static ARCHIVE_CACHE: std::sync::LazyLock<std::sync::Mutex<HashMap<PathBuf, Arch
 /// parsed again only when it changes; bounded like
 /// [`desktop_registry_knows`], at most 4 MiB a file.
 pub fn desktop_archived(root: &Path) -> HashSet<String> {
+    desktop_sessions(root).1
+}
+
+/// Every Claude Code session a Claude.app conversation drives, and the ones
+/// [`desktop_archived`] reports, from one cached pass over the registry.
+pub fn desktop_sessions(root: &Path) -> (HashSet<String>, HashSet<String>) {
     let mut cache = ARCHIVE_CACHE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -383,7 +391,8 @@ pub fn desktop_archived(root: &Path) -> HashSet<String> {
         }
     }
     cache.retain(|path, _| present.contains(path));
-    archived_sessions(entries)
+    let known = entries.iter().map(|(id, _)| id.clone()).collect();
+    (known, archived_sessions(entries))
 }
 
 /// Sessions every one of whose conversations is archived.

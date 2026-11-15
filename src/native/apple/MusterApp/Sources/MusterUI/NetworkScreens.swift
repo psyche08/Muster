@@ -350,20 +350,12 @@ struct DeviceView: View {
                         Text(member.commit.isEmpty ? "not reported" : member.commit).font(.system(.body, design: .monospaced))
                     }
                 }
-                if vm.deviceActions.hasBlackout {
-                    let mode = vm.deviceActions.blackout
-                    Section {
-                        Toggle(isOn: Binding(get: { mode.enabled }, set: { core.setBlackout($0, device: member.deviceID) })) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Label("黑屏模式", systemImage: "display")
-                                Text(mode.status).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .accessibilityIdentifier("device-blackout")
+                let lockedUse = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID })
+                let mask = vm.deviceBlackout.first(where: { $0.deviceID == member.deviceID })
+                if lockedUse != nil || mask != nil {
+                    Section(mask == nil ? "Locked Use" : "Locked Use · 强制遮罩") {
+                        DeviceControlTiles(core: core, lockedUse: lockedUse, mask: mask)
                     }
-                }
-                if let control = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID }) {
-                    Section("Locked Use") { DeviceLockedUseToggle(core: core, control: control) }
                 }
                 if vm.selectedDeviceHasServices {
                     Section("Use") {
@@ -550,8 +542,10 @@ struct SettingsView: View {
                     Button { core.selectDevice(member.deviceID) } label: {
                         MemberRow(member: member)
                     }.buttonStyle(.plain)
-                    if let control = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID }) {
-                        DeviceLockedUseToggle(core: core, control: control)
+                    let lockedUse = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID })
+                    let mask = vm.deviceBlackout.first(where: { $0.deviceID == member.deviceID })
+                    if lockedUse != nil || mask != nil {
+                        DeviceControlTiles(core: core, lockedUse: lockedUse, mask: mask)
                     }
                 }
                 if vm.canInvite {
@@ -695,18 +689,72 @@ private func updateStatus(_ status: String) -> String {
 }
 
 #if canImport(SwiftUI)
-struct DeviceLockedUseToggle: View {
+/// Locked Use and the forced mask side by side under a Mac (ADR 0212). Both
+/// rows are Rust projections; a phone sees the mask, a desktop only Locked Use.
+struct DeviceControlTiles: View {
     let core: MusterCore
-    let control: Muster_App_DeviceLockedUseView
+    let lockedUse: Muster_App_DeviceLockedUseView?
+    let mask: Muster_App_DeviceBlackoutView?
     var body: some View {
-        Toggle(isOn: Binding(get: { control.on }, set: { core.setDeviceLockedUse($0, device: control.deviceID) })) {
-            VStack(alignment: .leading, spacing: 3) {
-                Label("Locked Use", systemImage: "lock.shield")
-                Text(control.status).font(.caption).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 8) {
+            if let control = lockedUse {
+                DeviceControlTile(
+                    title: "Locked Use", systemImage: "lock.shield", status: control.status,
+                    on: control.on, enabled: control.enabled, busy: control.busy,
+                    identifier: "device-locked-use-\(control.deviceID)",
+                    set: { core.setDeviceLockedUse($0, device: control.deviceID) }
+                )
+            }
+            if let control = mask {
+                DeviceControlTile(
+                    title: "强制遮罩", systemImage: "rectangle.inset.filled", status: control.status,
+                    on: control.on, enabled: control.enabled, busy: control.busy,
+                    identifier: "device-blackout-\(control.deviceID)",
+                    set: { core.setBlackout($0, device: control.deviceID) }
+                )
             }
         }
-        .disabled(!control.enabled)
-        .accessibilityIdentifier("device-locked-use-\(control.deviceID)")
+        .padding(.vertical, 2)
+    }
+}
+
+private struct DeviceControlTile: View {
+    let title: String
+    let systemImage: String
+    let status: String
+    let on: Bool
+    let enabled: Bool
+    let busy: Bool
+    let identifier: String
+    let set: (Bool) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(on ? Color.accentColor : .secondary)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 4)
+                if busy {
+                    ProgressView().controlSize(.small)
+                }
+                Toggle(title, isOn: Binding(get: { on }, set: set))
+                    .labelsHidden()
+                    .disabled(!enabled)
+                    .accessibilityHint(status)
+                    .accessibilityIdentifier(identifier)
+            }
+            Text(status)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 #endif

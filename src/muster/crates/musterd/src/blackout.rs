@@ -42,7 +42,7 @@ impl Blackout {
         }
         if on && locked {
             return Err(Error::Conflict(
-                "Unlock this Mac before enabling display blackout".into(),
+                "Unlock this Mac before turning on the forced mask".into(),
             ));
         }
         store.kv_set(KEY, if on { b"on" } else { b"off" })?;
@@ -54,9 +54,9 @@ impl Blackout {
         let enabled = *self.desired.lock().unwrap().borrow();
         let observation = self.observed.lock().unwrap();
         let status = match (enabled, observation.is_empty()) {
-            (true, true) => "正在开启黑屏…",
+            (true, true) => "正在开启强制遮罩…",
             (true, false) => observation.as_str(),
-            (false, false) => "正在解除黑屏…",
+            (false, false) => "正在解除强制遮罩…",
             (false, true) => "已关闭",
         };
         DisplayBlackout {
@@ -89,7 +89,7 @@ async fn supervise(
         match result {
             Ok(()) => observed.lock().unwrap().clear(),
             Err(error) => {
-                *observed.lock().unwrap() = format!("黑屏未就绪，正在重试：{error}");
+                *observed.lock().unwrap() = format!("强制遮罩未就绪，正在重试：{error}");
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(3)) => {}
                     changed = desired.changed() => if changed.is_err() { return; }

@@ -391,17 +391,8 @@ export struct DeviceView {
           // From the link heartbeat; empty until the device reports it.
           ListItem() { this.row('Version', this.member()?.version || 'not reported') }
           ListItem() { this.row('Commit', this.member()?.commit || 'not reported') }
-          if (this.actions().blackout) {
-            ListItem() {
-              Row() {
-                Column() {
-                  Text('黑屏模式')
-                  Text(this.actions().blackout?.status ?? '').fontSize(13).opacity(0.7)
-                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: this.actions().blackout?.enabled ?? false })
-                  .onChange((on: boolean): void => { this.core.setBlackout(on, this.member()?.deviceId ?? ''); })
-              }.padding(16)
-            }
+          if (hasDeviceControls(this.vm, this.member()?.deviceId ?? '')) {
+            ListItem() { DeviceControlTiles({ core: this.core, vm: this.vm, deviceId: this.member()?.deviceId ?? '' }) }
           }
           if (this.vm.selectedDeviceHasServices) {
             ListItem() { SectionHeader('Use') }
@@ -522,9 +513,9 @@ export struct SettingsView {
       ForEach(this.vm.network?.members ?? [], (member: pb.v1.IMemberView): void => {
         ListItem() { MemberRow({ member: member }) }
           .onClick((): void => { this.core.selectDevice(member.deviceId ?? ''); })
-        ForEach((this.vm.deviceLockedUse ?? []).filter((v: pb.app.IDeviceLockedUseView): boolean => v.deviceId === member.deviceId), (v: pb.app.IDeviceLockedUseView): void => {
-          ListItem() { DeviceLockedUseToggle({ core: this.core, control: v }) }
-        }, (v: pb.app.IDeviceLockedUseView): string => v.deviceId ?? '')
+        if (hasDeviceControls(this.vm, member.deviceId ?? '')) {
+          ListItem() { DeviceControlTiles({ core: this.core, vm: this.vm, deviceId: member.deviceId ?? '' }) }
+        }
       }, (member: pb.v1.IMemberView): string => member.deviceId ?? '')
       if (this.vm.canInvite) {
         ListItem() {
@@ -682,19 +673,76 @@ export struct SettingsView {
   }
 }
 
+function lockedUseOf(vm: ViewModel, deviceId: string): pb.app.IDeviceLockedUseView | undefined {
+  return (vm.deviceLockedUse ?? []).find((v: pb.app.IDeviceLockedUseView): boolean => v.deviceId === deviceId);
+}
+
+function maskOf(vm: ViewModel, deviceId: string): pb.app.IDeviceBlackoutView | undefined {
+  return (vm.deviceBlackout ?? []).find((v: pb.app.IDeviceBlackoutView): boolean => v.deviceId === deviceId);
+}
+
+function hasDeviceControls(vm: ViewModel, deviceId: string): boolean {
+  return lockedUseOf(vm, deviceId) !== undefined || maskOf(vm, deviceId) !== undefined;
+}
+
+/** Locked Use and the forced mask side by side (ADR 0212); Rust decides what each switch allows. */
 @ComponentV2
-struct DeviceLockedUseToggle {
+struct DeviceControlTiles {
   @Param @Require core: MusterCore;
-  @Param @Require control: pb.app.IDeviceLockedUseView;
+  @Param @Require vm: ViewModel;
+  @Param @Require deviceId: string;
   build() {
-    Row({ space: 12 }) {
-      Column({ space: 4 }) {
-        Text('Locked Use')
-        Text(this.control.status ?? '').fontSize(12).fontColor($r('sys.color.font_secondary'))
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: this.control.on ?? false })
-        .enabled(this.control.enabled ?? false)
-        .onChange((on: boolean): void => { this.core.setDeviceLockedUse(on, this.control.deviceId ?? ''); })
-    }.width('100%').padding(16)
+    Row({ space: 8 }) {
+      if (lockedUseOf(this.vm, this.deviceId) !== undefined) {
+        DeviceControlTile({
+          title: 'Locked Use',
+          status: lockedUseOf(this.vm, this.deviceId)?.status ?? '',
+          on: lockedUseOf(this.vm, this.deviceId)?.on ?? false,
+          enabled: lockedUseOf(this.vm, this.deviceId)?.enabled ?? false,
+          busy: false,
+          onSet: (on: boolean): void => { this.core.setDeviceLockedUse(on, this.deviceId); }
+        }).layoutWeight(1)
+      }
+      if (maskOf(this.vm, this.deviceId) !== undefined) {
+        DeviceControlTile({
+          title: '强制遮罩',
+          status: maskOf(this.vm, this.deviceId)?.status ?? '',
+          on: maskOf(this.vm, this.deviceId)?.on ?? false,
+          enabled: maskOf(this.vm, this.deviceId)?.enabled ?? false,
+          busy: maskOf(this.vm, this.deviceId)?.busy ?? false,
+          onSet: (on: boolean): void => { this.core.setBlackout(on, this.deviceId); }
+        }).layoutWeight(1)
+      }
+    }.width('100%').alignItems(VerticalAlign.Top).padding({ left: 16, right: 16, top: 4, bottom: 4 })
+  }
+}
+
+@ComponentV2
+struct DeviceControlTile {
+  @Param title: string = '';
+  @Param status: string = '';
+  @Param on: boolean = false;
+  @Param enabled: boolean = false;
+  @Param busy: boolean = false;
+  @Event onSet: (on: boolean) => void = (): void => {};
+  build() {
+    Column({ space: 2 }) {
+      Row({ space: 6 }) {
+        Text(this.title).fontSize(14).fontWeight(FontWeight.Medium).maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+        if (this.busy) {
+          LoadingProgress().width(16).height(16)
+        }
+        Toggle({ type: ToggleType.Switch, isOn: this.on })
+          .enabled(this.enabled)
+          .onChange((on: boolean): void => { this.onSet(on); })
+      }.width('100%')
+      Text(this.status).fontSize(12).fontColor($r('sys.color.font_secondary')).maxLines(3)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .alignItems(HorizontalAlign.Start)
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .backgroundColor($r('sys.color.comp_background_secondary'))
+    .borderRadius(12)
   }
 }

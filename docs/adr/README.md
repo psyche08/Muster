@@ -327,3 +327,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0209](0209-release-apple-1-1-44.md) | Accepted | Release Apple 1.1.44 with single-window session selection |
 | [0210](0210-refresh-turn-pricing.md) | Accepted | Refresh offline model and speed rates used in turn estimates |
 | [0211](0211-release-apple-1-1-45.md) | Accepted | Publish Apple 1.1.45 with refreshed turn cost estimates |
+| [0212](0212-forced-mask-tiles-and-session-launch.md) | Accepted | Put the forced mask beside Locked Use, label session launch origin and archive CLI sessions in Muster |

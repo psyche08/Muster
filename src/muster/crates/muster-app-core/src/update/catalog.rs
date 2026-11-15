@@ -373,16 +373,22 @@ pub(super) fn organize(state: &mut State, ctx: &Ctx, a: app::AgentOrganize) {
         state.toast("Refresh this native source before organizing it", true);
         return;
     };
-    if !crate::catalog::can_organize(state, &session) || state.agent_organizing.contains(&a.row_key)
-    {
+    if state.agent_organizing.contains(&a.row_key) {
         return;
     }
     let Ok(action) = Action::try_from(a.action) else {
         return;
     };
-    if !matches!(action, Action::Pin | Action::Unpin | Action::Archive) {
-        return; // Ignore stale Section/Project UI intents while those controls are disabled.
+    let allowed = match action {
+        Action::Pin | Action::Unpin => crate::catalog::can_organize(state, &session),
+        Action::Archive => crate::catalog::can_archive(state, &session),
+        // Ignore stale Section/Project UI intents while those controls are disabled.
+        _ => false,
+    };
+    if !allowed {
+        return;
     }
+    let muster = action == Action::Archive && session.muster_archivable;
     state.agent_organizing.insert(a.row_key.clone());
     let tx = ctx.tx.clone();
     let epoch = state.chat_call_epoch;
@@ -403,11 +409,18 @@ pub(super) fn organize(state: &mut State, ctx: &Ctx, a: app::AgentOrganize) {
         .await;
         Msg::Organized {
             key: a.row_key,
+            muster,
             result,
         }
     });
 }
-pub(super) fn organized(state: &mut State, ctx: &Ctx, key: String, result: Result<Resp, Error>) {
+pub(super) fn organized(
+    state: &mut State,
+    ctx: &Ctx,
+    key: String,
+    muster: bool,
+    result: Result<Resp, Error>,
+) {
     state.agent_organizing.remove(&key);
     match result {
         Ok(Resp::OpResult(r))
@@ -416,7 +429,14 @@ pub(super) fn organized(state: &mut State, ctx: &Ctx, key: String, result: Resul
                 Ok(v1::op_result::Status::Applied | v1::op_result::Status::Duplicate)
             ) =>
         {
-            state.toast("Native app updated", false)
+            state.toast(
+                if muster {
+                    "Archived in Muster; new activity brings it back"
+                } else {
+                    "Native app updated"
+                },
+                false,
+            )
         }
         Ok(Resp::OpResult(r)) => state.toast(
             if r.message.is_empty() {

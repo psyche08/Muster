@@ -385,6 +385,8 @@ pub struct State {
     pub browser: app::BrowserView,
     pub manual_devices: HashMap<String, v1::DeviceInfo>,
     pub manual_busy: std::collections::HashSet<String>,
+    /// Forced-mask requests the Mac has not reported yet: desired, sent at.
+    pub blackout_pending: HashMap<String, (bool, std::time::Instant)>,
     pub manual_watches: HashMap<String, Watch>,
     pub locked_use_auth: Option<crate::locked_use_auth::Preference>,
     pub embedded: bool,
@@ -521,6 +523,7 @@ impl State {
             browser: app::BrowserView::default(),
             manual_devices: HashMap::new(),
             manual_busy: Default::default(),
+            blackout_pending: HashMap::new(),
             manual_watches: HashMap::new(),
             locked_use_auth: None,
             embedded,

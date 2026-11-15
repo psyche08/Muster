@@ -1262,3 +1262,89 @@ async fn entry_refresh_uses_native_uuid_title_and_survives_a_sidebar_rescan() {
     service.refresh_session_metadata(id).await;
     assert_eq!(service.session(id).unwrap().title, "Renamed natively");
 }
+
+#[tokio::test]
+async fn cli_started_claude_sessions_archive_in_muster_until_new_activity() {
+    use muster_proto::v1::{AgentOrganizeRequest, agent_organize_request::Action};
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("claude");
+    let project = home.join("projects/repo");
+    let registry = dir.path().join("desktop");
+    let user = registry.join("org/user");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::create_dir_all(&user).unwrap();
+    let desktop = "11111111-1111-4111-8111-111111111111";
+    let cli = "22222222-2222-4222-8222-222222222222";
+    for (id, entrypoint) in [(desktop, "claude-desktop"), (cli, "cli")] {
+        std::fs::write(
+            project.join(format!("{id}.jsonl")),
+            format!(
+                "{{\"type\":\"user\",\"uuid\":\"u-{id}\",\"sessionId\":\"{id}\",\"cwd\":\"/repo\",\"entrypoint\":\"{entrypoint}\",\"message\":{{\"role\":\"user\",\"content\":\"Example task\"}}}}\n"
+            ),
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        user.join(format!("local_{desktop}.json")),
+        serde_json::json!({"cliSessionId": desktop, "title": "Example", "isArchived": false})
+            .to_string(),
+    )
+    .unwrap();
+    let archive = dir.path().join("muster/session-archive.json");
+    let config = AgentConfig {
+        codex_home: None,
+        claude_home: Some(home),
+        catdesk_home: None,
+        deepseek_home: None,
+        claude_desktop: Some(registry),
+        poll: Duration::from_secs(60),
+        rescan: Duration::from_secs(60),
+        muster_archive: Some(archive.clone()),
+        ..AgentConfig::default()
+    };
+    let service = AgentService::start(config.clone());
+    service.rescan().await;
+    let listed = |service: &AgentService, id: &str| {
+        service
+            .list(Some(Provider::Claude), 0)
+            .into_iter()
+            .find(|s| s.id == id)
+    };
+    let shown = listed(&service, desktop).unwrap();
+    assert_eq!(shown.launch, "desktop");
+    assert!(!shown.muster_archivable, "Claude.app lists and archives it");
+    let shown = listed(&service, cli).unwrap();
+    assert_eq!(shown.launch, "cli");
+    assert!(shown.muster_archivable);
+
+    let request = |session: &str| AgentOrganizeRequest {
+        session: session.into(),
+        action: Action::Archive as i32,
+        ..Default::default()
+    };
+    assert!(!service.archives_in_muster(&request(desktop)));
+    assert!(service.archives_in_muster(&request(cli)));
+    assert_eq!(service.organize(request(cli)).await.unwrap(), cli);
+    assert!(listed(&service, cli).is_none());
+    assert!(listed(&service, desktop).is_some());
+    assert!(archive.exists());
+
+    // A restarted daemon keeps the archive.
+    drop(service);
+    let service = AgentService::start(config);
+    service.rescan().await;
+    assert!(listed(&service, cli).is_none());
+
+    // The CLI resumes the session: newer activity lists it again.
+    std::fs::File::options()
+        .append(true)
+        .open(project.join(format!("{cli}.jsonl")))
+        .unwrap()
+        .set_times(
+            std::fs::FileTimes::new()
+                .set_modified(std::time::SystemTime::now() + Duration::from_secs(120)),
+        )
+        .unwrap();
+    service.rescan().await;
+    assert!(listed(&service, cli).is_some());
+}

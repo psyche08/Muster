@@ -33,6 +33,7 @@ mod catalog;
 mod cli;
 pub(crate) mod code_runs;
 mod desktop_chats;
+pub(crate) mod device_blackout;
 mod files;
 pub(crate) mod manual_locked_use;
 pub(crate) mod multica;
@@ -167,6 +168,8 @@ pub enum Msg {
     },
     Organized {
         key: String,
+        /// Archived in the daemon's own catalog rather than the native app.
+        muster: bool,
         result: Result<Resp, Error>,
     },
     CatalogMore {
@@ -484,19 +487,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenChange(o) => open_change(state, o),
         It::OpenFileLink(o) => files::intent_open_file_link(state, ctx, o),
         It::OpenGit(o) => open_git(state, ctx, o.diff_commit),
-        It::SetBlackout(c) => {
-            if c.device_id == state.target()
-                && crate::render::device_actions(state).blackout.is_some()
-            {
-                network::admin_request(
-                    state,
-                    ctx,
-                    "Blackout",
-                    c.device_id,
-                    Req::DeviceSetBlackout(v1::DeviceSetCoverRequest { on: c.on }),
-                );
-            }
-        }
+        It::SetBlackout(c) => device_blackout::set(state, ctx, c),
         It::SetRequireLockedUseAuth(required) => {
             if let Some(pref) = &mut state.locked_use_auth
                 && let Err(error) = pref.set(required)
@@ -628,14 +619,17 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         Msg::Invite(result) => network::msg_invite(state, result),
         Msg::JoinProgress(phase, message) => state.join = app::JoinView { phase, message },
         Msg::JoinDone(result) => network::msg_join_done(state, ctx, result),
-        Msg::ManualDevice(id, result) => match result {
-            Ok(info) => {
-                state.manual_devices.insert(id, info);
+        Msg::ManualDevice(id, result) => {
+            match result {
+                Ok(info) => {
+                    state.manual_devices.insert(id.clone(), info);
+                }
+                Err(_) => {
+                    state.manual_devices.remove(&id);
+                }
             }
-            Err(_) => {
-                state.manual_devices.remove(&id);
-            }
-        },
+            device_blackout::observed(state, &id);
+        }
         Msg::ManualDone(id, result) => {
             state.manual_busy.remove(&id);
             if let Err(error) = result {
@@ -754,7 +748,11 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             device,
             result,
         } => catalog::result(state, epoch, device, result),
-        Msg::Organized { key, result } => catalog::organized(state, ctx, key, result),
+        Msg::Organized {
+            key,
+            muster,
+            result,
+        } => catalog::organized(state, ctx, key, muster, result),
         Msg::CatalogMore {
             epoch,
             device,

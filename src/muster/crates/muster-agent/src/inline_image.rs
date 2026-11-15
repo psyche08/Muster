@@ -248,6 +248,8 @@ mod tests {
                 meta: Default::default(),
                 custom_title: false,
                 entrypoint: None,
+                launch: "",
+                muster_archivable: false,
             };
             let (rules, hooks) = provider.jsonl().unwrap();
             let mut viewer = crate::jsonl::JsonlViewer::open(&d, rules, hooks);

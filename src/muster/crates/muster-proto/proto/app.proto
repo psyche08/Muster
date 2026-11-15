@@ -145,6 +145,15 @@ message DeviceLockedUseView {
   bool busy = 4;
   string status = 5;
 }
+// One Mac's forced mask (ADR 0171/0212) in the Settings device list, beside
+// its Locked Use switch. Turning it on needs the Mac unlocked.
+message DeviceBlackoutView {
+  string device_id = 1;
+  bool on = 2;
+  bool enabled = 3;
+  bool busy = 4;
+  string status = 5;
+}
 message CancelLockedUse {}
 message Refresh {}
 // Back, or straight to a screen.
@@ -254,6 +263,8 @@ message AgentCatalogRow {
   repeated AgentOrganizationTarget destinations = 10;
   string removable_section = 11;
   string source_label = 7; // Rust-projected device/native-section origin in aggregate lists
+  string launch_label = 12; // Rust-projected start origin, e.g. Desktop or CLI; empty hides it
+  bool can_archive = 13; // Archive is offered (native organization or the daemon's own catalog)
 }
 message AgentCatalogSection {
   string key = 1;
@@ -567,6 +578,7 @@ message ViewModel {
   repeated Screen navigation_path = 34; // visible root through current screen
   MulticaWorkspaceView multica_workspace = 39;
   bool require_locked_use_auth = 40;
+  repeated DeviceBlackoutView device_blackout = 41; // same rows as device_locked_use
   SessionLoadMarker session_load = 38; // opaque, Rust-owned diagnostic marker
 }
 
@@ -683,6 +695,9 @@ message AgentsView {
   repeated string errors = 4;
   string device_id = 1;
   repeated muster.v1.AgentSession sessions = 2;
+  // How each session in `sessions` was started (ADR 0212): one label per
+  // entry, in the same order; empty when the launch is unknown.
+  repeated string launch_labels = 18;
   bool loading = 3;
 }
 

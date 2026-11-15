@@ -1151,7 +1151,12 @@ pub(super) fn msg_done(
                 load_basics(state, ctx);
             }
         }
-        Err(error) => state.toast(format!("{what}: {error}"), true),
+        Err(error) => {
+            if what == "Forced mask" || what == "admin" {
+                super::device_blackout::failed(state, None);
+            }
+            state.toast(format!("{what}: {error}"), true)
+        }
     }
     if what == "decide" {
         load_pending(ctx);

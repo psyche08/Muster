@@ -1030,6 +1030,28 @@ public nonisolated struct Muster_App_DeviceLockedUseView: Sendable {
   public init() {}
 }
 
+/// One Mac's forced mask (ADR 0171/0212) in the Settings device list, beside
+/// its Locked Use switch. Turning it on needs the Mac unlocked.
+public nonisolated struct Muster_App_DeviceBlackoutView: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var deviceID: String = String()
+
+  public var on: Bool = false
+
+  public var enabled: Bool = false
+
+  public var busy: Bool = false
+
+  public var status: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Muster_App_CancelLockedUse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1444,6 +1466,12 @@ public nonisolated struct Muster_App_AgentCatalogRow: Sendable {
 
   /// Rust-projected device/native-section origin in aggregate lists
   public var sourceLabel: String = String()
+
+  /// Rust-projected start origin, e.g. Desktop or CLI; empty hides it
+  public var launchLabel: String = String()
+
+  /// Archive is offered (native organization or the daemon's own catalog)
+  public var canArchive: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2623,6 +2651,12 @@ public nonisolated struct Muster_App_ViewModel: @unchecked Sendable {
     set {_uniqueStorage()._requireLockedUseAuth = newValue}
   }
 
+  /// same rows as device_locked_use
+  public var deviceBlackout: [Muster_App_DeviceBlackoutView] {
+    get {_storage._deviceBlackout}
+    set {_uniqueStorage()._deviceBlackout = newValue}
+  }
+
   /// opaque, Rust-owned diagnostic marker
   public var sessionLoad: Muster_App_SessionLoadMarker {
     get {_storage._sessionLoad ?? Muster_App_SessionLoadMarker()}
@@ -3000,6 +3034,13 @@ public nonisolated struct Muster_App_AgentsView: @unchecked Sendable {
   public var sessions: [Muster_V1_AgentSession] {
     get {_storage._sessions}
     set {_uniqueStorage()._sessions = newValue}
+  }
+
+  /// How each session in `sessions` was started (ADR 0212): one label per
+  /// entry, in the same order; empty when the launch is unknown.
+  public var launchLabels: [String] {
+    get {_storage._launchLabels}
+    set {_uniqueStorage()._launchLabels = newValue}
   }
 
   public var loading: Bool {
@@ -5514,6 +5555,56 @@ nonisolated extension Muster_App_DeviceLockedUseView: SwiftProtobuf.Message, Swi
   }
 }
 
+nonisolated extension Muster_App_DeviceBlackoutView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DeviceBlackoutView"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}on\0\u{1}enabled\0\u{1}busy\0\u{1}status\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.on) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.busy) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    }
+    if self.on != false {
+      try visitor.visitSingularBoolField(value: self.on, fieldNumber: 2)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 3)
+    }
+    if self.busy != false {
+      try visitor.visitSingularBoolField(value: self.busy, fieldNumber: 4)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_DeviceBlackoutView, rhs: Muster_App_DeviceBlackoutView) -> Bool {
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.on != rhs.on {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.busy != rhs.busy {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_App_CancelLockedUse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CancelLockedUse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
@@ -6249,7 +6340,7 @@ nonisolated extension Muster_App_AgentOrganizationTarget: SwiftProtobuf.Message,
 
 nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentCatalogRow"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}session\0\u{1}depth\0\u{1}expandable\0\u{1}expanded\0\u{3}parent_title\0\u{3}source_label\0\u{3}can_organize\0\u{1}organizing\0\u{1}destinations\0\u{3}removable_section\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}session\0\u{1}depth\0\u{1}expandable\0\u{1}expanded\0\u{3}parent_title\0\u{3}source_label\0\u{3}can_organize\0\u{1}organizing\0\u{1}destinations\0\u{3}removable_section\0\u{3}launch_label\0\u{3}can_archive\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6268,6 +6359,8 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
       case 9: try { try decoder.decodeSingularBoolField(value: &self.organizing) }()
       case 10: try { try decoder.decodeRepeatedMessageField(value: &self.destinations) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.removableSection) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.launchLabel) }()
+      case 13: try { try decoder.decodeSingularBoolField(value: &self.canArchive) }()
       default: break
       }
     }
@@ -6311,6 +6404,12 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
     if !self.removableSection.isEmpty {
       try visitor.visitSingularStringField(value: self.removableSection, fieldNumber: 11)
     }
+    if !self.launchLabel.isEmpty {
+      try visitor.visitSingularStringField(value: self.launchLabel, fieldNumber: 12)
+    }
+    if self.canArchive != false {
+      try visitor.visitSingularBoolField(value: self.canArchive, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6326,6 +6425,8 @@ nonisolated extension Muster_App_AgentCatalogRow: SwiftProtobuf.Message, SwiftPr
     if lhs.destinations != rhs.destinations {return false}
     if lhs.removableSection != rhs.removableSection {return false}
     if lhs.sourceLabel != rhs.sourceLabel {return false}
+    if lhs.launchLabel != rhs.launchLabel {return false}
+    if lhs.canArchive != rhs.canArchive {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8252,7 +8353,7 @@ nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ViewModel"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{3}multica_page\0\u{1}vision\0\u{3}session_load\0\u{3}multica_workspace\0\u{3}require_locked_use_auth\0\u{b}presence\0\u{c}\u{e}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{3}multica_page\0\u{1}vision\0\u{3}session_load\0\u{3}multica_workspace\0\u{3}require_locked_use_auth\0\u{3}device_blackout\0\u{b}presence\0\u{c}\u{e}\u{1}")
 
   fileprivate class _StorageClass {
     var _screen: Muster_App_Screen = .onboarding
@@ -8293,6 +8394,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
     var _navigationPath: [Muster_App_Screen] = []
     var _multicaWorkspace: Muster_App_MulticaWorkspaceView? = nil
     var _requireLockedUseAuth: Bool = false
+    var _deviceBlackout: [Muster_App_DeviceBlackoutView] = []
     var _sessionLoad: Muster_App_SessionLoadMarker? = nil
 
       // This property is used as the initial default value for new instances of the type.
@@ -8342,6 +8444,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       _navigationPath = source._navigationPath
       _multicaWorkspace = source._multicaWorkspace
       _requireLockedUseAuth = source._requireLockedUseAuth
+      _deviceBlackout = source._deviceBlackout
       _sessionLoad = source._sessionLoad
     }
   }
@@ -8400,6 +8503,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         case 38: try { try decoder.decodeSingularMessageField(value: &_storage._sessionLoad) }()
         case 39: try { try decoder.decodeSingularMessageField(value: &_storage._multicaWorkspace) }()
         case 40: try { try decoder.decodeSingularBoolField(value: &_storage._requireLockedUseAuth) }()
+        case 41: try { try decoder.decodeRepeatedMessageField(value: &_storage._deviceBlackout) }()
         default: break
         }
       }
@@ -8529,6 +8633,9 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       if _storage._requireLockedUseAuth != false {
         try visitor.visitSingularBoolField(value: _storage._requireLockedUseAuth, fieldNumber: 40)
       }
+      if !_storage._deviceBlackout.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._deviceBlackout, fieldNumber: 41)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -8576,6 +8683,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         if _storage._navigationPath != rhs_storage._navigationPath {return false}
         if _storage._multicaWorkspace != rhs_storage._multicaWorkspace {return false}
         if _storage._requireLockedUseAuth != rhs_storage._requireLockedUseAuth {return false}
+        if _storage._deviceBlackout != rhs_storage._deviceBlackout {return false}
         if _storage._sessionLoad != rhs_storage._sessionLoad {return false}
         return true
       }
@@ -9130,7 +9238,7 @@ nonisolated extension Muster_App_JoinView: SwiftProtobuf.Message, SwiftProtobuf.
 
 nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentsView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0\u{3}native_create_hosts\0\u{3}native_create_apps\0\u{3}native_creating\0\u{3}native_create_draft\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0\u{3}native_create_hosts\0\u{3}native_create_apps\0\u{3}native_creating\0\u{3}native_create_draft\0\u{3}launch_labels\0")
 
   fileprivate class _StorageClass {
     var _nativeSections: [Muster_V1_AgentSection] = []
@@ -9149,6 +9257,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
     var _errors: [String] = []
     var _deviceID: String = String()
     var _sessions: [Muster_V1_AgentSession] = []
+    var _launchLabels: [String] = []
     var _loading: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
@@ -9176,6 +9285,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
       _errors = source._errors
       _deviceID = source._deviceID
       _sessions = source._sessions
+      _launchLabels = source._launchLabels
       _loading = source._loading
     }
   }
@@ -9212,6 +9322,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
         case 15: try { try decoder.decodeRepeatedStringField(value: &_storage._nativeCreateApps) }()
         case 16: try { try decoder.decodeSingularBoolField(value: &_storage._nativeCreating) }()
         case 17: try { try decoder.decodeSingularMessageField(value: &_storage._nativeCreateDraft) }()
+        case 18: try { try decoder.decodeRepeatedStringField(value: &_storage._launchLabels) }()
         default: break
         }
       }
@@ -9275,6 +9386,9 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
       try { if let v = _storage._nativeCreateDraft {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
       } }()
+      if !_storage._launchLabels.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._launchLabels, fieldNumber: 18)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9300,6 +9414,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
         if _storage._errors != rhs_storage._errors {return false}
         if _storage._deviceID != rhs_storage._deviceID {return false}
         if _storage._sessions != rhs_storage._sessions {return false}
+        if _storage._launchLabels != rhs_storage._launchLabels {return false}
         if _storage._loading != rhs_storage._loading {return false}
         return true
       }

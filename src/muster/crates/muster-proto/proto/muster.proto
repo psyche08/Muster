@@ -708,7 +708,14 @@ message AgentSession {
   bool pinned = 26; // native provider metadata; display only
   string search_snippet = 24; // read-only title/body match, never input authority
   repeated AgentSession subsessions = 21; // direct independently controlled desktop sessions
-
+  // How the provider recorded this session being started, from the
+  // provider's own transcript metadata: desktop | cli | ide | sdk | exec |
+  // muster | empty (unrecorded). Display only; never input authority.
+  string launch = 27;
+  // The daemon can archive this session in its own catalog (ADR 0212): a
+  // CLI-started session the provider's desktop app does not list. Provider
+  // stores are never written.
+  bool muster_archivable = 28;
 }
 
 message AgentSection {
