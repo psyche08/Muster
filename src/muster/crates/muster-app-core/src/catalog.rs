@@ -227,7 +227,9 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
                 origin.push(device.clone());
             }
             row.source_label = origin.join(" · ");
+            row.launch_label = launch_label(&s.launch).into();
             row.can_organize = can_organize(state, s);
+            row.can_archive = can_archive(state, s);
             row.organizing = state.agent_organizing.contains(&row.key);
         }
     }
@@ -247,6 +249,25 @@ pub(crate) fn project(state: &State, sessions: &[AgentSession]) -> Vec<AgentCata
     };
     out.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| a.title.cmp(&b.title)));
     out
+}
+/// How the session was started (ADR 0212), as the provider recorded it.
+/// The flat session list's labels, one per session in the same order.
+pub(crate) fn launch_labels(sessions: &[AgentSession]) -> Vec<String> {
+    sessions
+        .iter()
+        .map(|s| launch_label(&s.launch).into())
+        .collect()
+}
+pub(crate) fn launch_label(launch: &str) -> &'static str {
+    match launch {
+        "desktop" => "Desktop",
+        "cli" => "CLI",
+        "exec" => "CLI exec",
+        "ide" => "IDE",
+        "sdk" => "SDK",
+        "muster" => "Muster CLI",
+        _ => "",
+    }
 }
 fn provider_title(provider: &str) -> String {
     match provider {
@@ -446,6 +467,56 @@ mod projection_tests {
         assert_eq!(state.agents.native_sections.len(), 2);
     }
     #[test]
+    fn cli_sessions_show_their_launch_and_archive_without_native_organization() {
+        let state = State::new(false, Some("host".into()));
+        let uuid = "11111111-2222-4333-8444-555555555555";
+        let desktop = AgentSession {
+            id: uuid.into(),
+            provider: "claude".into(),
+            mode: "code".into(),
+            launch: "desktop".into(),
+            ..Default::default()
+        };
+        let cli = AgentSession {
+            id: "aaaaaaaa-2222-4333-8444-555555555555".into(),
+            launch: "cli".into(),
+            muster_archivable: true,
+            ..desktop.clone()
+        };
+        let owned = AgentSession {
+            id: "orca:1".into(),
+            provider: "orca".into(),
+            mode: "orca".into(),
+            launch: "muster".into(),
+            muster_archivable: true,
+            ..Default::default()
+        };
+        let sessions = [desktop, cli, owned];
+        let groups = project(&state, &sessions);
+        let rows = &recent(&groups).rows;
+        let row = |id: &str| {
+            rows.iter()
+                .find(|r| r.session.as_ref().is_some_and(|s| s.id == id))
+                .unwrap()
+        };
+        let desktop = row(uuid);
+        assert_eq!(desktop.launch_label, "Desktop");
+        assert!(desktop.can_organize && desktop.can_archive);
+        let cli = row("aaaaaaaa-2222-4333-8444-555555555555");
+        assert_eq!(cli.launch_label, "CLI");
+        assert!(!cli.can_organize, "the desktop app has no row to pin");
+        assert!(cli.can_archive);
+        let owned = row("orca:1");
+        assert_eq!(owned.launch_label, "Muster CLI");
+        assert!(!owned.can_organize && owned.can_archive);
+
+        assert_eq!(
+            launch_labels(&sessions),
+            ["Desktop", "CLI", "Muster CLI"],
+            "the flat list carries the same labels, in its order"
+        );
+    }
+    #[test]
     fn ten_roots_are_shown_with_all_children_and_load_more_advances_ten() {
         let mut state = State::new(false, Some("host".into()));
         state.agents.native_sections = vec![AgentSection {
@@ -596,12 +667,22 @@ mod projection_tests {
     }
 }
 
+/// Native organization through the provider's desktop app (ADR 0111). A
+/// session that app does not list has no native row to act on.
 pub(crate) fn can_organize(state: &State, s: &AgentSession) -> bool {
     !s.read_only
+        && !s.muster_archivable
         && s.mode == "code"
         && muster_agent::viewer::is_uuid(&s.id)
         && matches!(s.provider.as_str(), "codex" | "claude")
         && !state.offline(&s.device_id)
+}
+
+/// Archive: native when the desktop app lists the session, otherwise in the
+/// daemon's own catalog for a CLI-started session (ADR 0212).
+pub(crate) fn can_archive(state: &State, s: &AgentSession) -> bool {
+    can_organize(state, s)
+        || (s.muster_archivable && !s.read_only && !s.archived && !state.offline(&s.device_id))
 }
 
 #[cfg(test)]

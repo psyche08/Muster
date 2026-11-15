@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -171,11 +172,12 @@ fun AgentsScreen(core: MusterCore, vm: ViewModel) {
                         }
                     }
                 }
-                items(agents.sessionsList, key = { "${it.deviceId}:${it.id}" }) { session ->
+                itemsIndexed(agents.sessionsList, key = { _, it -> "${it.deviceId}:${it.id}" }) { index, session ->
                     val key = "${session.deviceId}:${session.id}"
                     SessionRow(
                         session,
-                        Modifier.background(if (shown == key) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else Color.Transparent)
+                        launch = agents.launchLabelsList.getOrElse(index) { "" },
+                        modifier = Modifier.background(if (shown == key) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else Color.Transparent)
                             .clickable { core.openAgent(session.id, session.deviceId) },
                     )
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
@@ -186,7 +188,7 @@ fun AgentsScreen(core: MusterCore, vm: ViewModel) {
 }
 
 @Composable
-fun SessionRow(session: AgentSession, modifier: Modifier = Modifier) {
+fun SessionRow(session: AgentSession, modifier: Modifier = Modifier, launch: String = "") {
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier.fillMaxWidth().padding(16.dp, 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -206,6 +208,11 @@ fun SessionRow(session: AgentSession, modifier: Modifier = Modifier) {
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // How it was started (Desktop, CLI, …), as Rust labels it.
+            if (launch.isNotEmpty()) {
+                Text(launch, Modifier.background(secondary.copy(alpha = 0.15f), RoundedCornerShape(8.dp)).padding(horizontal = 5.dp),
+                    style = MaterialTheme.typography.labelSmall, color = secondary)
+            }
             if (session.deviceName.isNotEmpty()) {
                 Text(session.deviceName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
             }

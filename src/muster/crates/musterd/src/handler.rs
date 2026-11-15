@@ -2347,6 +2347,11 @@ async fn dispatch(
         {
             cli_operation(daemon, request).await?
         }
+        Req::AgentOrganize(r) if muster_archive_request(daemon, &r) => {
+            // Boxed: `dispatch` is polled on the app core's default-sized
+            // worker stacks, and the organize future would enlarge every arm.
+            Box::pin(muster_archive_operation(daemon, r)).await?
+        }
         request @ (Req::AgentSend(_)
         | Req::AgentRespond(_)
         | Req::AgentInterrupt(_)
@@ -2400,7 +2405,37 @@ impl From<muster_rpc::Error> for Error {
 /// Ordinary callers reach it only while holding the shared write reservation.
 /// Whether the request acts on a cloud session (`muster_agent::cloud`).
 fn independent_session(daemon: &Daemon, request: &Req) -> bool {
-    tmux_request(request) || cloud_session(daemon, request) || cli_session(daemon, request)
+    tmux_request(request)
+        || cloud_session(daemon, request)
+        || cli_session(daemon, request)
+        || muster_archive(daemon, request)
+}
+/// An archive Muster keeps in its own catalog (ADR 0212): it drives no native
+/// window and writes no provider store, so Locked Use does not apply.
+fn muster_archive(daemon: &Daemon, request: &Req) -> bool {
+    matches!(request, Req::AgentOrganize(r) if muster_archive_request(daemon, r))
+}
+fn muster_archive_request(daemon: &Daemon, request: &v1::AgentOrganizeRequest) -> bool {
+    agent_of(daemon).is_ok_and(|agent| agent.archives_in_muster(request))
+}
+async fn muster_archive_operation(
+    daemon: &Arc<Daemon>,
+    request: v1::AgentOrganizeRequest,
+) -> Result<Resp, Error> {
+    let agent = agent_of(daemon)?.clone();
+    let body = muster_proto::Message::encode_to_vec(&request);
+    let subject = request.session.clone();
+    let op_id = request.op_id.clone();
+    ledgered(
+        daemon,
+        &op_id,
+        "agent.organize",
+        &subject,
+        true,
+        &body,
+        async move { Ok(agent.organize(request).await?) },
+    )
+    .await
 }
 fn cli_session(daemon: &Daemon, request: &Req) -> bool {
     native_session(daemon, request)

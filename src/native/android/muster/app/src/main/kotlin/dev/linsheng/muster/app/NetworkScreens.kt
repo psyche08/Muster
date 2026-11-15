@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Dns
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
@@ -328,12 +330,9 @@ fun DeviceScreen(core: MusterCore, vm: ViewModel) {
         // From the link heartbeat; empty until the device reports it.
         item { ListItem(headlineContent = { Text("Version") }, supportingContent = { Text(member.version.ifEmpty { "not reported" }) }) }
         item { ListItem(headlineContent = { Text("Commit") }, supportingContent = { Text(member.commit.ifEmpty { "not reported" }, fontFamily = FontFamily.Monospace) }) }
-        if (actions.hasBlackout()) {
-            val mode = actions.blackout
-            item { ListItem(headlineContent = { Text("黑屏模式") }, supportingContent = { Text(mode.status) },
-                trailingContent = { Switch(mode.enabled, { core.setBlackout(it, member.deviceId) }) }) }
-        }
-        vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }?.let { item { DeviceLockedUseToggle(core, it) } }
+        val lockedUse = vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }
+        val mask = vm.deviceBlackoutList.firstOrNull { it.deviceId == member.deviceId }
+        if (lockedUse != null || mask != null) item { DeviceControlTiles(core, lockedUse, mask) }
         if (vm.selectedDeviceHasServices) {
             item { SectionHeader("Use") }
             item { ListItem(modifier = Modifier.clickable { core.openBrowser(member.deviceId) }, headlineContent = { Text("Chrome browser", color = MaterialTheme.colorScheme.primary) }) }
@@ -409,7 +408,9 @@ fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel) {
         }
         items(vm.network.membersList, key = { it.deviceId }) { member ->
             MemberRow(member) { core.selectDevice(member.deviceId) }
-            vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }?.let { DeviceLockedUseToggle(core, it) }
+            val lockedUse = vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }
+            val mask = vm.deviceBlackoutList.firstOrNull { it.deviceId == member.deviceId }
+            if (lockedUse != null || mask != null) DeviceControlTiles(core, lockedUse, mask)
         }
         if (vm.canInvite) {
             item { TextButton(onClick = { core.showInvite() }, Modifier.padding(start = 8.dp)) { Icon(Icons.Default.QrCode, null); Text("  Invite device") } }
@@ -506,9 +507,34 @@ fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel) {
     }
 }
 
+/** Locked Use and the forced mask side by side (ADR 0212); Rust decides what each switch allows. */
 @Composable
-private fun DeviceLockedUseToggle(core: MusterCore, control: muster.app.DeviceLockedUseView) {
-    ListItem(headlineContent = { Text("Locked Use") }, supportingContent = { Text(control.status) },
-        trailingContent = { Switch(checked = control.on, enabled = control.enabled,
-            onCheckedChange = { core.setDeviceLockedUse(it, control.deviceId) }) })
+private fun DeviceControlTiles(core: MusterCore, lockedUse: muster.app.DeviceLockedUseView?, mask: muster.app.DeviceBlackoutView?) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        lockedUse?.let { control ->
+            DeviceControlTile("Locked Use", control.status, control.on, control.enabled, busy = false, Modifier.weight(1f)) {
+                core.setDeviceLockedUse(it, control.deviceId)
+            }
+        }
+        mask?.let { control ->
+            DeviceControlTile("强制遮罩", control.status, control.on, control.enabled, control.busy, Modifier.weight(1f)) {
+                core.setBlackout(it, control.deviceId)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceControlTile(title: String, status: String, on: Boolean, enabled: Boolean, busy: Boolean, modifier: Modifier, set: (Boolean) -> Unit) {
+    Column(
+        modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp)).padding(12.dp, 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            Switch(checked = on, enabled = enabled, onCheckedChange = set)
+        }
+        Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    }
 }

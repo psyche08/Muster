@@ -176,6 +176,8 @@ impl RecencyCache {
                 },
                 custom_title: true,
                 entrypoint: r.get(7)?,
+                launch: crate::launch::codex(origin.as_deref(), Some(&source)),
+                muster_archivable: false,
             });
         }
         self.entries = next;

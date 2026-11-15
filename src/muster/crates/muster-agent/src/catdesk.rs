@@ -194,6 +194,8 @@ pub(crate) fn scan_db(db: &Path) -> rusqlite::Result<Vec<Discovered>> {
                 state: state_of(status),
             },
             entrypoint: None,
+            launch: "",
+            muster_archivable: false,
         });
     }
     Ok(out)

@@ -184,6 +184,8 @@ fn discover(
                     state: SessionState::Idle,
                 },
                 entrypoint: None,
+                launch: head.launch,
+                muster_archivable: false,
                 path,
             });
         }
@@ -252,6 +254,7 @@ struct Head {
     owned_by_muster: bool,
     parent_id: Option<String>,
     first_prompt: Option<String>,
+    launch: &'static str,
 }
 
 impl Head {
@@ -269,6 +272,10 @@ impl Head {
             match kind {
                 "session_meta" => {
                     head.owned_by_muster = payload["originator"].as_str() == Some("muster");
+                    head.launch = crate::launch::codex(
+                        payload["originator"].as_str(),
+                        payload["source"].as_str(),
+                    );
                     if let Some(id) = payload["id"]
                         .as_str()
                         .or_else(|| payload["session_id"].as_str())

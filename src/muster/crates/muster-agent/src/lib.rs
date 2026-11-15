@@ -31,8 +31,10 @@ mod history_store;
 pub mod idle_compact;
 mod inline_image;
 pub mod jsonl;
+pub mod launch;
 pub mod local_input;
 pub mod model;
+mod muster_archive;
 pub mod native_approval;
 pub mod native_identity;
 pub mod native_navigation;
@@ -118,6 +120,9 @@ pub struct AgentConfig {
     /// Suggests the next message after a watched Codex session's completed
     /// turn (the composer placeholder); `None` suggests nothing.
     pub predictor: Option<Arc<dyn prediction::Predictor>>,
+    /// Muster's own archive of CLI-started sessions (ADR 0212); `None` keeps
+    /// it in memory.
+    pub muster_archive: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for AgentConfig {
@@ -152,6 +157,7 @@ impl Default for AgentConfig {
             cloud_http: None,
             cli_runtime: None,
             predictor: None,
+            muster_archive: None,
         }
     }
 }
@@ -306,6 +312,7 @@ pub struct AgentService {
     deepseek: Option<Arc<deepseek_app::Link>>,
     /// Sessions whose suggestion may be due; `None` without a predictor.
     predict: Option<mpsc::UnboundedSender<String>>,
+    archive: Arc<muster_archive::Archive>,
 }
 
 /// Coalesce paths before waking the loop so a full channel cannot lose changes.
@@ -466,6 +473,7 @@ impl AgentService {
             .as_deref()
             .and_then(deepseek_app::socket)
             .map(deepseek_app::Link::new);
+        let archive = Arc::new(muster_archive::Archive::open(config.muster_archive.clone()));
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
@@ -502,6 +510,7 @@ impl AgentService {
             cli,
             deepseek,
             predict,
+            archive,
         });
         let (wake_tx, wake_rx) = mpsc::channel(1);
         let pending = Arc::new(Mutex::new(discovery::Changes::default()));
@@ -1105,6 +1114,7 @@ impl AgentService {
 
     fn scan_all(
         config: &AgentConfig,
+        archive: &muster_archive::Archive,
         cache: &HashMap<String, Discovered>,
         heads: &Mutex<(codex::Heads, claude::Heads)>,
         sources: &Mutex<discovery::Sources>,
@@ -1121,13 +1131,34 @@ impl AgentService {
                 .cloned()
                 .collect();
             claude::apply_desktop_relationships(root, &mut found);
-            let archived = claude::desktop_archived(root);
-            for d in found.iter_mut().filter(|d| archived.contains(&d.id)) {
-                d.archived = true;
-                d.meta.archived = true;
+            let (known, archived) = claude::desktop_sessions(root);
+            for d in &mut found {
+                if archived.contains(&d.id) {
+                    d.archived = true;
+                    d.meta.archived = true;
+                }
+                d.muster_archivable = d.launch != "desktop" && !known.contains(&d.id);
             }
             out.retain(|r| r.provider != Provider::Claude);
             out.extend(found);
+        } else {
+            for d in out.iter_mut().filter(|d| d.provider == Provider::Claude) {
+                d.muster_archivable = d.launch != "desktop";
+            }
+        }
+        // Codex lists interactive threads, CLI ones included; `codex exec`
+        // runs are never in its sidebar.
+        for d in out.iter_mut().filter(|d| d.provider == Provider::Codex) {
+            d.muster_archivable = d.launch == "exec";
+        }
+        for d in out
+            .iter_mut()
+            .filter(|d| d.muster_archivable && !d.archived)
+        {
+            if archive.hides(&d.id, d.modified_unix()) {
+                d.archived = true;
+                d.meta.archived = true;
+            }
         }
         for d in &mut out {
             if !d.provider.file_transcripts() || codex_history::is(d) {
@@ -1210,9 +1241,10 @@ impl AgentService {
         };
         let heads = self.heads.clone();
         let sources = self.sources.clone();
+        let archive = self.archive.clone();
         let Ok((found, mut sections)) = tokio::task::spawn_blocking(move || {
             (
-                Self::scan_all(&config, &cache, &heads, &sources, &changes),
+                Self::scan_all(&config, &archive, &cache, &heads, &sources, &changes),
                 if changes.metadata_changed(&config) {
                     sections::read_changed(&config, &changes, &previous_sections)
                 } else {
@@ -2025,6 +2057,8 @@ impl AgentService {
             device_name: String::new(),
             mode: "code".into(),
             read_only: d.hidden,
+            launch: d.launch.into(),
+            muster_archivable: d.muster_archivable && !d.hidden,
             relationship: d.relation.into(),
             parent_title: d
                 .parent_id
@@ -2463,7 +2497,11 @@ impl AgentService {
             .collect();
         if provider.is_none() {
             if let Some(cli) = &self.cli {
-                sessions.extend(cli.list());
+                sessions.extend(
+                    cli.list()
+                        .into_iter()
+                        .filter(|s| !self.archive.hides(&s.id, s.updated_unix)),
+                );
             }
         }
         sessions.sort_by(|a, b| {
@@ -2894,6 +2932,15 @@ impl AgentService {
     }
 
     /// Choices belong to the selected native session, not to a cached transcript.
+    /// Whether archiving `id` is Muster's own (ADR 0212): no native window,
+    /// no provider write, so it needs neither Accessibility nor Locked Use.
+    pub fn archives_in_muster(&self, request: &muster_proto::v1::AgentOrganizeRequest) -> bool {
+        request.action == muster_proto::v1::agent_organize_request::Action::Archive as i32
+            && self
+                .session(&request.session)
+                .is_some_and(|s| s.muster_archivable)
+    }
+
     pub async fn organize(
         &self,
         request: muster_proto::v1::AgentOrganizeRequest,
@@ -2901,6 +2948,23 @@ impl AgentService {
         let session = self
             .session(&request.session)
             .ok_or_else(|| Error::NotFound(request.session.clone()))?;
+        if self.archives_in_muster(&request) {
+            let modified = self
+                .inner
+                .lock()
+                .unwrap()
+                .catalog
+                .get(&session.id)
+                .map_or(0, Discovered::modified_unix);
+            self.archive
+                .archive(&session.id, session.updated_unix.max(modified))?;
+            if cli::is_cli(&session.id) {
+                let _ = self.events.send(Event::ListChanged);
+            } else {
+                self.rescan().await;
+            }
+            return Ok(request.session);
+        }
         let config = self.config.clone();
         let requested = request.clone();
         let plan = control_guard::spawn_blocking(move || {
@@ -3490,6 +3554,8 @@ mod polling_regressions {
             meta: meta.clone(),
             custom_title: false,
             entrypoint: None,
+            launch: "",
+            muster_archivable: false,
         };
         {
             let mut inner = service.inner.lock().unwrap();

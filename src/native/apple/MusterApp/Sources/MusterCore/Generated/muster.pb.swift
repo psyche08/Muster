@@ -2985,6 +2985,22 @@ public nonisolated struct Muster_V1_AgentSession: @unchecked Sendable {
     set {_uniqueStorage()._subsessions = newValue}
   }
 
+  /// How the provider recorded this session being started, from the
+  /// provider's own transcript metadata: desktop | cli | ide | sdk | exec |
+  /// muster | empty (unrecorded). Display only; never input authority.
+  public var launch: String {
+    get {_storage._launch}
+    set {_uniqueStorage()._launch = newValue}
+  }
+
+  /// The daemon can archive this session in its own catalog (ADR 0212): a
+  /// CLI-started session the provider's desktop app does not list. Provider
+  /// stores are never written.
+  public var musterArchivable: Bool {
+    get {_storage._musterArchivable}
+    set {_uniqueStorage()._musterArchivable = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -10789,7 +10805,7 @@ nonisolated extension Muster_V1_TerminalLines: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentSession"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0\u{3}section_id\0\u{3}section_position\0\u{3}search_snippet\0\u{3}parent_title\0\u{1}pinned\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}provider\0\u{1}title\0\u{1}cwd\0\u{1}state\0\u{3}updated_unix\0\u{3}message_count\0\u{1}controller\0\u{1}archived\0\u{3}device_id\0\u{3}device_name\0\u{3}process_state\0\u{1}mode\0\u{3}parent_session_id\0\u{1}subagents\0\u{3}read_only\0\u{3}transcript_notice\0\u{3}composer_suggestion\0\u{3}descendant_activity\0\u{1}relationship\0\u{1}subsessions\0\u{3}section_id\0\u{3}section_position\0\u{3}search_snippet\0\u{3}parent_title\0\u{1}pinned\0\u{1}launch\0\u{3}muster_archivable\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -10818,6 +10834,8 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
     var _pinned: Bool = false
     var _searchSnippet: String = String()
     var _subsessions: [Muster_V1_AgentSession] = []
+    var _launch: String = String()
+    var _musterArchivable: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -10854,6 +10872,8 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       _pinned = source._pinned
       _searchSnippet = source._searchSnippet
       _subsessions = source._subsessions
+      _launch = source._launch
+      _musterArchivable = source._musterArchivable
     }
   }
 
@@ -10898,6 +10918,8 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         case 24: try { try decoder.decodeSingularStringField(value: &_storage._searchSnippet) }()
         case 25: try { try decoder.decodeSingularStringField(value: &_storage._parentTitle) }()
         case 26: try { try decoder.decodeSingularBoolField(value: &_storage._pinned) }()
+        case 27: try { try decoder.decodeSingularStringField(value: &_storage._launch) }()
+        case 28: try { try decoder.decodeSingularBoolField(value: &_storage._musterArchivable) }()
         default: break
         }
       }
@@ -10984,6 +11006,12 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
       if _storage._pinned != false {
         try visitor.visitSingularBoolField(value: _storage._pinned, fieldNumber: 26)
       }
+      if !_storage._launch.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._launch, fieldNumber: 27)
+      }
+      if _storage._musterArchivable != false {
+        try visitor.visitSingularBoolField(value: _storage._musterArchivable, fieldNumber: 28)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -11019,6 +11047,8 @@ nonisolated extension Muster_V1_AgentSession: SwiftProtobuf.Message, SwiftProtob
         if _storage._pinned != rhs_storage._pinned {return false}
         if _storage._searchSnippet != rhs_storage._searchSnippet {return false}
         if _storage._subsessions != rhs_storage._subsessions {return false}
+        if _storage._launch != rhs_storage._launch {return false}
+        if _storage._musterArchivable != rhs_storage._musterArchivable {return false}
         return true
       }
       if !storagesAreEqual {return false}

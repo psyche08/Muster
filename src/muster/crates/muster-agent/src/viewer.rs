@@ -28,6 +28,11 @@ pub struct Discovered {
     /// The client that wrote the transcript, as the provider records it
     /// (Claude: `claude-desktop`, `cli`, `sdk-cli`); `None` when unrecorded.
     pub entrypoint: Option<String>,
+    /// How the provider recorded the session being started; see [`crate::launch`].
+    pub launch: &'static str,
+    /// Muster can archive it in its own catalog: a CLI-started session the
+    /// provider's desktop app does not list (ADR 0212).
+    pub muster_archivable: bool,
 }
 
 impl Discovered {

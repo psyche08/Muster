@@ -277,6 +277,8 @@ final class AgentRenderingTests: XCTestCase {
             for provider in ["Claude", "Codex", "DeepSeek"] {
                 let row = Muster_App_AgentCatalogRow.with {
                     $0.sourceLabel = "\(provider) · Device A"
+                    // A launch badge must not change the row height.
+                    $0.launchLabel = provider == "Claude" ? "CLI" : ""
                     $0.session = .with {
                         $0.provider = provider.lowercased()
                         $0.title = "Review the build output and the pending changes"

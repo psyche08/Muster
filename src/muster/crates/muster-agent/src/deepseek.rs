@@ -252,6 +252,8 @@ fn session(home: &Path, dir: &Path, archived: &HashSet<String>) -> Option<Discov
         },
         custom_title: false,
         entrypoint: None,
+        launch: "",
+        muster_archivable: false,
     };
     found.meta.updated_unix = found.modified_unix();
     Some(found)

@@ -595,6 +595,9 @@ impl NativeRuntime {
                         controller: "orca".into(),
                         process_state: "unknown".into(),
                         state: "unknown".into(),
+                        launch: crate::launch::MUSTER.into(),
+                        // Muster owns this store; archiving never touches it.
+                        muster_archivable: true,
                         ..Default::default()
                     },
                 )

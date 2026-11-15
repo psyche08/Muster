@@ -331,6 +331,8 @@ mod transcript_tests {
             meta: SessionMeta::default(),
             custom_title: false,
             entrypoint: None,
+            launch: "",
+            muster_archivable: false,
         };
         let docs = vec![(
             AgentSession {
@@ -404,6 +406,8 @@ mod transcript_tests {
             meta: SessionMeta::default(),
             custom_title: false,
             entrypoint: None,
+            launch: "",
+            muster_archivable: false,
         };
         let docs = vec![(
             AgentSession {

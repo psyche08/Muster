@@ -84,6 +84,9 @@ pub fn effect_result(state: &mut State, ctx: &Ctx, id: u64, result: app::EffectR
                 "authentication_cancelled"
             });
             if !result.ok || result.data.is_empty() {
+                if matches!(pending.request, Req::DeviceSetBlackout(_)) {
+                    super::device_blackout::failed(state, Some(&pending.device));
+                }
                 if matches!(pending.request, Req::BrowserCall(_)) {
                     state.browser.busy = false;
                     state.browser.result = "Authentication cancelled".into();

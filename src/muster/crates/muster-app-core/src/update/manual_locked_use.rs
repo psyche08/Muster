@@ -76,6 +76,7 @@ pub(super) fn watch(state: &mut State, ctx: &Ctx) {
         .map(|m| m.device_id.clone())
         .collect();
     state.manual_watches.retain(|id, _| ids.contains(id));
+    state.blackout_pending.retain(|id, _| ids.contains(id));
     state.manual_devices.retain(|id, _| ids.contains(id));
     for id in ids {
         if state.manual_watches.contains_key(&id) {

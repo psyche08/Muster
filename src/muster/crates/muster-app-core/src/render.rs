@@ -167,6 +167,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             native_create_draft: state.agents.native_create_draft.clone(),
             sessions: Vec::new(),
             sections: Vec::new(),
+            launch_labels: Vec::new(),
         }),
         desktop_chats: Some(app::DesktopChatsView {
             choices: muster_agent::desktop_chat::ChatApp::ALL
@@ -205,10 +206,12 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         join_access: Some(crate::access::join_defaults()),
         device_actions: Some(device_actions(state)),
         device_locked_use: crate::update::manual_locked_use::views(state),
+        device_blackout: crate::update::device_blackout::views(state),
     };
     if content {
         let agents = vm.agents.as_mut().unwrap();
         (agents.sessions, agents.sections) = catalog_rows(state);
+        agents.launch_labels = crate::catalog::launch_labels(&agents.sessions);
     }
     if state.screen == app::Screen::Chat
         && let Some(chat) = &state.chat
@@ -566,6 +569,7 @@ impl Renderer {
         }
         let agents = vm.agents.as_mut().unwrap();
         (agents.sessions, agents.sections) = self.catalog.rows.as_ref().unwrap().clone();
+        agents.launch_labels = crate::catalog::launch_labels(&agents.sessions);
         Some(vm.encode_to_vec())
     }
     pub fn push(&mut self, state: &State, ctx: &Ctx) {

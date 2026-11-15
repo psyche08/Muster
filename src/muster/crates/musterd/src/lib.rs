@@ -318,6 +318,7 @@ impl Daemon {
         let (changed, _) = broadcast::channel(64);
         let agent = config.agent.clone().map(|mut agent| {
             agent.history_cache = Some(config.dir.join("history-index"));
+            agent.muster_archive = Some(config.dir.join("session-archive.json"));
             if config.cloud && agent.cloud_http.is_none() {
                 match cloud_http::Client::connect() {
                     Ok(http) => agent.cloud_http = Some(http),

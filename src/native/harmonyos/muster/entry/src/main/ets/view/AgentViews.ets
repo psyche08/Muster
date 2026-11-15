@@ -33,8 +33,8 @@ export struct AgentsView {
               }
             }.width('100%')
           }
-          ForEach(this.vm.agents?.sessions ?? [], (session: pb.v1.IAgentSession): void => {
-            ListItem() { SessionRow({ session: session }) }
+          ForEach(this.vm.agents?.sessions ?? [], (session: pb.v1.IAgentSession, index: number): void => {
+            ListItem() { SessionRow({ session: session, launch: (this.vm.agents?.launchLabels ?? [])[index] ?? '' }) }
               .backgroundColor(this.shown() === `${session.deviceId}:${session.id}` ? $r('app.color.accent_soft') : Color.Transparent)
               .onClick((): void => { this.core.openAgent(session.id ?? '', session.deviceId ?? ''); })
           }, (session: pb.v1.IAgentSession): string => `${session.deviceId}:${session.id}`)
@@ -54,6 +54,8 @@ export struct AgentsView {
 @ComponentV2
 export struct SessionRow {
   @Param @Require session: pb.v1.IAgentSession;
+  /** How it was started (Desktop, CLI, …), as Rust labels it. */
+  @Param launch: string = '';
 
   build() {
     Column({ space: 3 }) {
@@ -72,6 +74,11 @@ export struct SessionRow {
         .alignItems(HorizontalAlign.End)
       }
       Row({ space: 6 }) {
+        if (this.launch) {
+          Text(this.launch).fontSize(10).fontWeight(FontWeight.Medium).opacity(0.8)
+            .padding({ left: 5, right: 5 })
+            .backgroundColor($r('sys.color.comp_background_secondary')).borderRadius(8)
+        }
         if (this.session.deviceName) { Text(this.session.deviceName).fontSize(12).fontWeight(FontWeight.Medium) }
         Text(this.session.cwd ?? '').fontSize(12).opacity(0.7).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         Text(relativeTime(uint64(this.session.updatedUnix))).fontSize(12).opacity(0.7)
