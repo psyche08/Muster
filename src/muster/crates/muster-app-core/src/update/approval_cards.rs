@@ -119,6 +119,13 @@ pub(super) fn finished(
             });
             return;
         }
+        // A running worker is read on entry only in case it holds a card its
+        // file hint missed (ADR 0109). Without a reported pending approval,
+        // a failed read tells the user nothing to act on (ADR 0213).
+        if chat.session.state != "waiting_approval" {
+            log::info!("permission-card read for a running worker failed: {error}");
+            return;
+        }
         state.toast(
             format!("Could not read Claude's permission card: {error}"),
             true,
