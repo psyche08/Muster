@@ -175,10 +175,16 @@ fn metadata_label(label: &str) -> bool {
     if label.chars().any(char::is_control) {
         return false;
     }
-    if label == "SSH"
-        || label
-            .strip_prefix("Started by Claude from ")
-            .is_some_and(|origin| !origin.trim().is_empty())
+    // A row with a single pull request names its state without a count
+    // (ADR 0213); the counted forms are checked below.
+    if matches!(label, "SSH" | "Open" | "Merged" | "Merge conflicts")
+        || ["Started by Claude from ", "Forked from "]
+            .iter()
+            .any(|prefix| {
+                label
+                    .strip_prefix(prefix)
+                    .is_some_and(|origin| !origin.trim().is_empty())
+            })
         || label
             .strip_suffix(" · Offline")
             .is_some_and(|workspace| !workspace.trim().is_empty())
@@ -342,6 +348,101 @@ mod tests {
             "",
             labels.as_deref()
         ));
+    }
+
+    /// Captured from Claude's Code sidebar on 2026-11-15: a merged single-PR
+    /// row and a forked row. Both failed a background permission-card read
+    /// with "did not expose this session in its sidebar".
+    #[test]
+    fn captured_bare_pr_state_and_fork_rows_are_selected() {
+        let fork = "Forked from 示例服务：设备转发";
+        let cases = [
+            (
+                "示例遮罩任务",
+                vec![
+                    Node("AXStaticText", Some("示例遮罩任务"), false, vec![]),
+                    Node(
+                        "AXGroup",
+                        None,
+                        false,
+                        vec![Node("AXStaticText", Some("Running"), false, vec![])],
+                    ),
+                    Node("AXStaticText", Some("Merged"), false, vec![]),
+                ],
+                "示例遮罩任务 Merged",
+            ),
+            (
+                "示例服务：设备转发 (fork)",
+                vec![
+                    Node(
+                        "AXStaticText",
+                        Some("示例服务：设备转发 (fork)"),
+                        false,
+                        vec![],
+                    ),
+                    Node("AXStaticText", Some(fork), false, vec![]),
+                    Node("AXGroup", None, false, vec![]),
+                ],
+                "示例服务：设备转发 (fork) Forked from 示例服务：设备转发",
+            ),
+        ];
+        for (title, children, name) in cases {
+            let row = Node(
+                "AXButton",
+                None,
+                true,
+                vec![Node("AXGroup", None, true, children)],
+            );
+            let (labels, _, _, stop) = read_label(&row);
+            assert_eq!(stop, "complete");
+            assert!(
+                title_matches(true, title, true, name, "", labels.as_deref()),
+                "{name}"
+            );
+            assert!(!title_matches(
+                true,
+                title,
+                false,
+                name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                false,
+                title,
+                true,
+                name,
+                "",
+                labels.as_deref()
+            ));
+            assert!(!title_matches(
+                true,
+                title,
+                true,
+                &format!("{name} extra"),
+                "",
+                labels.as_deref()
+            ));
+        }
+        for badge in ["Open", "Merge conflicts"] {
+            let labels = [badge.into(), TITLE.into()];
+            let name = format!("{TITLE} {badge}");
+            assert!(title_matches(true, TITLE, true, &name, "", Some(&labels)));
+        }
+        for badge in [
+            "Closed",
+            "merged",
+            "Merged ",
+            "Forked from ",
+            "Forked from  ",
+        ] {
+            let labels = [badge.into(), TITLE.into()];
+            let name = format!("{TITLE} {badge}");
+            assert!(
+                !title_matches(true, TITLE, true, &name, "", Some(&labels)),
+                "{badge:?} is not a recognized badge"
+            );
+        }
     }
 
     #[test]

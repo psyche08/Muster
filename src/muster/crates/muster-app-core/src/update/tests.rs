@@ -3002,6 +3002,24 @@ async fn permission_reads_are_bounded_cancelled_and_yield_to_initial_cards() {
     assert!(state.toasts.is_empty());
     retry.cancel();
     assert!(matches!(rx.recv().await,Some(Loop::Msg(m)) if matches!(*m,Msg::Ignored)));
+    // A failed entry read of a running worker with no reported approval is
+    // quiet; a reported pending approval says its card could not be read.
+    let sidebar = "unavailable: The desktop app did not expose this session in its sidebar; nothing was submitted";
+    for (activity, toasts) in [("idle", 0), ("running", 0), ("waiting_approval", 1)] {
+        let chat = state.chat.as_mut().unwrap();
+        chat.session.state = activity.into();
+        chat.session.process_state = "running".into();
+        approval_cards::finished(
+            &mut state,
+            &ctx,
+            CancellationToken::new(),
+            "mac".into(),
+            session.clone(),
+            Some(sidebar.into()),
+        );
+        assert_eq!(state.toasts.len(), toasts, "{activity}");
+    }
+    assert!(state.toasts[0].error && state.toasts[0].text.contains(sidebar));
     // A late delayed message cannot start a read after navigation/cancellation.
     approval_cards::refresh(&mut state, &ctx, token, "mac".into(), session);
     assert!(state.chat_calls.is_empty());
