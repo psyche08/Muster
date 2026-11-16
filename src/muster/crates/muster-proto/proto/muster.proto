@@ -134,6 +134,7 @@ message Request {
     LockedUseExtendRequest locked_use_extend = 61;
     NetworkRefreshRequest network_refresh = 62;
     OrcaCreateRequest orca_create = 63;
+    AgentSideQuestionRequest agent_side_question = 151;
     AgentCompleteRequest agent_complete = 64;
     DevicePresenceRequest device_presence = 65;
     NetworkPresenceRequest network_presence = 66;
@@ -212,6 +213,7 @@ message Response {
     AgentChatCatalog agent_chats = 52;
     AgentChatOptions agent_chat_options = 54;
     DiagnosticsSaved diagnostics_saved = 55;
+    AgentSideAnswer agent_side_answer = 151;
     AgentCompletion agent_completion = 56;
     PresenceInfo presence_info = 65;
     MulticaStatus multica = 70;
@@ -378,6 +380,16 @@ message LockedUseOperation {
 // Read-only AX inspection, bound to one session and a fresh operation id.
 message AgentInspectRequest { string session = 1; string op_id = 2; }
 // Protected native Tab input; never submits a message.
+// The host owns the child identity, history, turn admission and end state.
+message AgentSideQuestionRequest {
+  enum Action { CREATE = 0; ASK = 1; END = 2; }
+  string session = 1; // parent for CREATE, child for ASK / END
+  string question = 2; // optional initial question on CREATE
+  Action action = 3;
+  string op_id = 4;
+}
+message AgentSideAnswer { AgentSession session = 1; }
+
 message AgentCompleteRequest { string session = 1; string op_id = 2; }
 message AgentCompletion { string session = 1; string text = 2; }
 

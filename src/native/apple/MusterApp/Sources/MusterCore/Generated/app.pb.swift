@@ -561,6 +561,14 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     set {_uniqueStorage()._it = .uploadDiagnostics(newValue)}
   }
 
+  public var sideChatAction: Muster_App_SideChatAction {
+    get {
+      if case .sideChatAction(let v)? = _storage._it {return v}
+      return Muster_App_SideChatAction()
+    }
+    set {_uniqueStorage()._it = .sideChatAction(newValue)}
+  }
+
   public var composerComplete: Muster_App_ComposerComplete {
     get {
       if case .composerComplete(let v)? = _storage._it {return v}
@@ -793,6 +801,7 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case chatSetOptions(Muster_App_ChatSetOptions)
     case composerAction(Muster_App_ComposerAction)
     case uploadDiagnostics(Muster_App_UploadDiagnostics)
+    case sideChatAction(Muster_App_SideChatAction)
     case composerComplete(Muster_App_ComposerComplete)
     case openTerminals(Muster_App_OpenTerminals)
     case openTerminal(Muster_App_OpenTerminal)
@@ -1715,6 +1724,18 @@ public nonisolated struct Muster_App_ChatOptionsLoad: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_App_SideChatAction: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var end: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3253,6 +3274,21 @@ public nonisolated struct Muster_App_ChatView: @unchecked Sendable {
     set {_uniqueStorage()._composerSuggestion = newValue}
   }
 
+  public var canCreateSideChat: Bool {
+    get {_storage._canCreateSideChat}
+    set {_uniqueStorage()._canCreateSideChat = newValue}
+  }
+
+  public var canEndSideChat: Bool {
+    get {_storage._canEndSideChat}
+    set {_uniqueStorage()._canEndSideChat = newValue}
+  }
+
+  public var composerDisabledReason: String {
+    get {_storage._composerDisabledReason}
+    set {_uniqueStorage()._composerDisabledReason = newValue}
+  }
+
   public var canComplete: Bool {
     get {_storage._canComplete}
     set {_uniqueStorage()._canComplete = newValue}
@@ -4028,7 +4064,7 @@ nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}agent_load_work\0\u{3}multica_mutation_acknowledge\0\u{3}multica_mutation\0\u{3}set_blackout\0\u{3}set_require_locked_use_auth\0\u{3}rename_device\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}agent_load_work\0\u{3}multica_mutation_acknowledge\0\u{3}multica_mutation\0\u{3}set_blackout\0\u{3}set_require_locked_use_auth\0\u{3}rename_device\0\u{4}\u{9}side_chat_action\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -4961,6 +4997,19 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .renameDevice(v)
           }
         }()
+        case 151: try {
+          var v: Muster_App_SideChatAction?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .sideChatAction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .sideChatAction(v)
+          }
+        }()
         default: break
         }
       }
@@ -5253,6 +5302,10 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .renameDevice?: try {
         guard case .renameDevice(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 142)
+      }()
+      case .sideChatAction?: try {
+        guard case .sideChatAction(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 151)
       }()
       case nil: break
       }
@@ -6980,6 +7033,36 @@ nonisolated extension Muster_App_ChatOptionsLoad: SwiftProtobuf.Message, SwiftPr
   }
 
   public static func ==(lhs: Muster_App_ChatOptionsLoad, rhs: Muster_App_ChatOptionsLoad) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_SideChatAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SideChatAction"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}end\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.end) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.end != false {
+      try visitor.visitSingularBoolField(value: self.end, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_SideChatAction, rhs: Muster_App_SideChatAction) -> Bool {
+    if lhs.end != rhs.end {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9460,7 +9543,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ChatView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{3}has_newer\0\u{3}compact_wrap_up_ids\0\u{b}messages\0\u{c}\u{3}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}session\0\u{2}\u{2}interactions\0\u{3}has_earlier\0\u{1}sending\0\u{3}locked_use_status\0\u{3}can_cancel_locked_use\0\u{1}timeline\0\u{3}sent_draft_id\0\u{3}attachment_bytes_limit\0\u{3}attachment_count_limit\0\u{1}loading\0\u{3}load_error\0\u{3}responding_interaction\0\u{3}response_error\0\u{3}response_unknown\0\u{3}chat_options\0\u{3}chat_options_busy\0\u{3}chat_options_error\0\u{1}draft\0\u{1}queue\0\u{3}can_interrupt\0\u{3}can_choose_model\0\u{3}can_browse_files\0\u{3}provider_label\0\u{3}message_count\0\u{1}unconfirmed\0\u{3}content_revision\0\u{3}composer_placeholder\0\u{3}composer_suggestion\0\u{3}can_complete\0\u{1}completing\0\u{3}completion_error\0\u{1}trace\0\u{1}terminal\0\u{3}code_preview\0\u{3}code_runs\0\u{3}code_error\0\u{3}has_newer\0\u{3}compact_wrap_up_ids\0\u{3}can_create_side_chat\0\u{3}can_end_side_chat\0\u{3}composer_disabled_reason\0\u{b}messages\0\u{c}\u{3}\u{1}")
 
   fileprivate class _StorageClass {
     var _deviceID: String = String()
@@ -9493,6 +9576,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
     var _contentRevision: UInt64 = 0
     var _composerPlaceholder: String = String()
     var _composerSuggestion: String = String()
+    var _canCreateSideChat: Bool = false
+    var _canEndSideChat: Bool = false
+    var _composerDisabledReason: String = String()
     var _canComplete: Bool = false
     var _completing: Bool = false
     var _completionError: String = String()
@@ -9543,6 +9629,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       _contentRevision = source._contentRevision
       _composerPlaceholder = source._composerPlaceholder
       _composerSuggestion = source._composerSuggestion
+      _canCreateSideChat = source._canCreateSideChat
+      _canEndSideChat = source._canEndSideChat
+      _composerDisabledReason = source._composerDisabledReason
       _canComplete = source._canComplete
       _completing = source._completing
       _completionError = source._completionError
@@ -9611,6 +9700,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         case 39: try { try decoder.decodeSingularStringField(value: &_storage._codeError) }()
         case 40: try { try decoder.decodeSingularBoolField(value: &_storage._hasNewer_p) }()
         case 41: try { try decoder.decodeRepeatedStringField(value: &_storage._compactWrapUpIds) }()
+        case 42: try { try decoder.decodeSingularBoolField(value: &_storage._canCreateSideChat) }()
+        case 43: try { try decoder.decodeSingularBoolField(value: &_storage._canEndSideChat) }()
+        case 44: try { try decoder.decodeSingularStringField(value: &_storage._composerDisabledReason) }()
         default: break
         }
       }
@@ -9743,6 +9835,15 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
       if !_storage._compactWrapUpIds.isEmpty {
         try visitor.visitRepeatedStringField(value: _storage._compactWrapUpIds, fieldNumber: 41)
       }
+      if _storage._canCreateSideChat != false {
+        try visitor.visitSingularBoolField(value: _storage._canCreateSideChat, fieldNumber: 42)
+      }
+      if _storage._canEndSideChat != false {
+        try visitor.visitSingularBoolField(value: _storage._canEndSideChat, fieldNumber: 43)
+      }
+      if !_storage._composerDisabledReason.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._composerDisabledReason, fieldNumber: 44)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9782,6 +9883,9 @@ nonisolated extension Muster_App_ChatView: SwiftProtobuf.Message, SwiftProtobuf.
         if _storage._contentRevision != rhs_storage._contentRevision {return false}
         if _storage._composerPlaceholder != rhs_storage._composerPlaceholder {return false}
         if _storage._composerSuggestion != rhs_storage._composerSuggestion {return false}
+        if _storage._canCreateSideChat != rhs_storage._canCreateSideChat {return false}
+        if _storage._canEndSideChat != rhs_storage._canEndSideChat {return false}
+        if _storage._composerDisabledReason != rhs_storage._composerDisabledReason {return false}
         if _storage._canComplete != rhs_storage._canComplete {return false}
         if _storage._completing != rhs_storage._completing {return false}
         if _storage._completionError != rhs_storage._completionError {return false}

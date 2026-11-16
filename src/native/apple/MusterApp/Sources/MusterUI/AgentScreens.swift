@@ -703,8 +703,8 @@ struct ChatView: View {
         }
         // A desktop chat keeps its draft when the core moves it to
         // another Mac (every Mac shows the same conversation).
-        if chat.session.readOnly {
-            Label("Subagent · Read only", systemImage: "eye").font(.caption).foregroundStyle(.secondary).padding(12)
+        if !chat.composerDisabledReason.isEmpty {
+            Label(chat.composerDisabledReason, systemImage: "eye").font(.caption).foregroundStyle(.secondary).padding(12)
         } else {
             ChatComposer(core: core, chat: chat)
                 .id(chat.session.mode == "chat" ? chat.session.id : "\(chat.deviceID):\(chat.session.id)")
@@ -1174,7 +1174,7 @@ private struct RelatedSessionView: View {
                                 StateBadge(state: session.state)
                                 Image(systemName: "chevron.right")
                             }
-                            Text(session.relationship == "fork" ? "Fork" : (session.readOnly ? "Subagent · read only" : "Sub-session"))
+                            Text(session.relationship == "sidechat" ? "Side chat" : (session.relationship == "fork" ? "Fork" : (session.readOnly ? "Subagent · read only" : "Sub-session")))
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                     }.buttonStyle(.plain)

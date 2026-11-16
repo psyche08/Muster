@@ -145,20 +145,23 @@ impl Predictor for AppServer {
                 return None;
             }
         };
-        let session = Session {
-            stdin: child.stdin.take()?,
-            stdout: BufReader::new(child.stdout.take()?),
-            next: 0,
-            fork: None,
-            answer: None,
-            status: None,
-        };
+        let session = Session::from_child(&mut child)?;
         // The session owns the server's input: dropping it, finished or timed
         // out, is the end of input the server exits on.
-        let outcome = tokio::time::timeout(self.deadline, converse(session, &request)).await;
+        let outcome = tokio::time::timeout(
+            self.deadline,
+            fork_turn(
+                session,
+                &request.thread,
+                Some(&request.rollout),
+                Some(&request.turn),
+                PROMPT,
+            ),
+        )
+        .await;
         stop(&mut child).await;
         match outcome {
-            Ok(Ok(text)) => text,
+            Ok(Ok(text)) => parse(&text),
             Ok(Err(error)) => {
                 log::debug!("codex prediction for {}: {error}", request.thread);
                 None
@@ -201,7 +204,29 @@ async fn stop(child: &mut Child) {
     let _ = child.kill().await;
 }
 
-async fn converse(mut session: Session, request: &Request) -> Result<Option<String>, String> {
+/// The same bounded transport serves explicit side questions. No desktop
+/// writer is resumed. A paginated source is identified by UUID, not a DB path.
+pub(crate) async fn side_answer(
+    program: &Path,
+    thread: &str,
+    rollout: Option<&Path>,
+    prompt: &str,
+) -> Result<String, String> {
+    let mut child = spawn(program).map_err(|_| "Codex could not start")?;
+    let session = Session::from_child(&mut child).ok_or("Codex pipes unavailable")?;
+    let outcome =
+        tokio::time::timeout(DEADLINE, fork_turn(session, thread, rollout, None, prompt)).await;
+    stop(&mut child).await;
+    outcome.map_err(|_| "Codex side question timed out".to_string())?
+}
+
+async fn fork_turn(
+    mut session: Session,
+    thread: &str,
+    rollout: Option<&Path>,
+    prediction_turn: Option<&str>,
+    prompt: &str,
+) -> Result<String, String> {
     session
         .call(
             "initialize",
@@ -216,57 +241,51 @@ async fn converse(mut session: Session, request: &Request) -> Result<Option<Stri
         .await?;
     // A fork of the rollout file, not of the loaded thread: the desktop app
     // holds that thread's writer.
-    let fork = session
-        .call(
-            "thread/fork",
-            json!({
-                "threadId": request.thread,
-                "path": request.rollout,
-                "ephemeral": true,
-                "excludeTurns": true,
-                "threadSource": "composer_predictions",
-                "approvalPolicy": "never",
-                "permissions": ":read-only",
-                "runtimeWorkspaceRoots": [],
-                "config": {
-                    "features.enable_fanout": false,
-                    "features.multi_agent": false,
-                    "features.multi_agent_v2": false,
-                    "web_search": "disabled",
-                },
-            }),
-        )
-        .await?;
-    let fork = fork["thread"]["id"]
+    let mut params = json!({
+        "threadId": thread, "ephemeral": true, "excludeTurns": true,
+        "approvalPolicy": "never", "permissions": ":read-only", "runtimeWorkspaceRoots": [],
+        "config": {"features.enable_fanout": false, "features.multi_agent": false,
+                   "features.multi_agent_v2": false, "web_search": "disabled"}
+    });
+    if let Some(path) = rollout {
+        params["path"] = json!(path);
+    }
+    if prediction_turn.is_some() {
+        params["threadSource"] = json!("composer_predictions");
+    } else {
+        params["developerInstructions"] = json!(crate::side_chat::INSTRUCTIONS);
+        params["config"]["features.apps"] = json!(false);
+        params["config"]["features.plugins"] = json!(false);
+        params["config"]["features.hooks"] = json!(false);
+    }
+    let result = session.call("thread/fork", params).await?;
+    let fork = result["thread"]["id"]
         .as_str()
-        .ok_or("thread/fork returned no thread")?
-        .to_owned();
-    session.fork = Some(fork.clone());
-    session
-        .call(
-            "turn/start",
-            json!({
-                "threadId": fork,
-                "turnTrigger": "composer_predictions",
-                "responsesapiClientMetadata": {
-                    "prediction_source_thread_id": request.thread,
-                    "prediction_source_turn_id": request.turn,
-                    "prediction_trigger": "live",
-                },
-                "input": [{"type": "text", "text": PROMPT, "text_elements": []}],
-                "effort": "low",
-                "approvalPolicy": "never",
-                "permissions": ":read-only",
-            }),
-        )
-        .await?;
+        .filter(|id| !id.is_empty() && *id != thread)
+        .ok_or("Codex did not return a distinct fork")?;
+    if result["thread"]["ephemeral"] != true {
+        return Err("Codex did not confirm a temporary fork".into());
+    }
+    session.fork = Some(fork.to_owned());
+    let mut start = json!({
+        "threadId": fork, "input": [{"type":"text", "text":prompt, "text_elements":[]}],
+        "effort":"low", "approvalPolicy":"never", "permissions":":read-only"
+    });
+    if let Some(turn) = prediction_turn {
+        start["turnTrigger"] = json!("composer_predictions");
+        start["responsesapiClientMetadata"] = json!({
+            "prediction_source_thread_id":thread, "prediction_source_turn_id":turn,
+            "prediction_trigger":"live"
+        });
+    }
+    session.call("turn/start", start).await?;
     while session.status.is_none() {
         let message = session.read().await?;
         session.observe(message).await?;
     }
     match session.status.as_deref() {
-        Some("completed") => Ok(session.answer.as_deref().and_then(parse)),
-        status => Err(format!("prediction turn ended {status:?}")),
+        Some("completed") => session.answer.ok_or_else(|| "No answer from Codex".into()),
+        status => Err(format!("fork turn ended {status:?}")),
     }
 }
 
@@ -284,6 +303,16 @@ struct Session {
 }
 
 impl Session {
+    fn from_child(child: &mut Child) -> Option<Self> {
+        Some(Self {
+            stdin: child.stdin.take()?,
+            stdout: BufReader::new(child.stdout.take()?),
+            next: 0,
+            fork: None,
+            answer: None,
+            status: None,
+        })
+    }
     async fn send(&mut self, message: Value) -> Result<(), String> {
         let mut line = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
         line.push(b'\n');

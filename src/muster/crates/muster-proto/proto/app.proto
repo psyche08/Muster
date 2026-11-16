@@ -74,6 +74,7 @@ message Intent {
     ChatSetOptions chat_set_options = 29;
     ComposerAction composer_action = 84;
     UploadDiagnostics upload_diagnostics = 85;
+    SideChatAction side_chat_action = 151;
     ComposerComplete composer_complete = 88;
 
     OpenTerminals open_terminals = 40;
@@ -337,6 +338,7 @@ message OpenDesktopChats {
 // The open native agent/chat session's model and effort choices: read from the app's
 // menus on the Mac through Locked Use, or chosen by name as offered.
 message ChatOptionsLoad {}
+message SideChatAction { bool end = 1; }
 message ComposerComplete {}
 message ChatSetOptions {
   string model = 1;
@@ -741,6 +743,9 @@ message ChatView {
   string composer_placeholder = 30;
   // Explicit suggestion the user may choose to copy into their editable draft.
   string composer_suggestion = 31;
+  bool can_create_side_chat = 42;
+  bool can_end_side_chat = 43;
+  string composer_disabled_reason = 44;
   bool can_complete = 32;
   bool completing = 33;
   string completion_error = 34;

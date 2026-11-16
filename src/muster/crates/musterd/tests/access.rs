@@ -272,6 +272,17 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             .await
     ));
 
+    // A desktop provider grant does not authorize starting a CLI side fork.
+    assert!(unauthorized(
+        &remote
+            .call(Req::AgentSideQuestion(v1::AgentSideQuestionRequest {
+                session: CODEX.into(),
+                question: "Why?".into(),
+                ..Default::default()
+            }))
+            .await
+    ));
+
     // A itself sees both providers once its scanner has found them.
     let started = Instant::now();
     while sessions(&ca, "").await.unwrap().len() < 2 {
@@ -894,5 +905,113 @@ async fn catalog_watch_coalesces_changes_and_invalidates_ownership_immediately()
             .all(|s| s.id != CODEX)
     );
     watch.cancel().await;
+    daemon.shutdown().await;
+}
+
+#[test]
+fn side_chat_rpc_returns_subsessions_and_ended_sessions_refuse_every_send() {
+    // Match the packaged daemon runtime; its debug dispatch future needs this stack.
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .thread_stack_size(8 << 20)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(Box::pin(side_chat_rpc()));
+}
+async fn side_chat_rpc() {
+    use v1::agent_side_question_request::Action;
+    let dir = tempfile::tempdir().unwrap();
+    transcripts(dir.path());
+    let daemon = Daemon::start_with(
+        config(dir.path(), None, "side-host"),
+        std::sync::Arc::new(musterd::DefaultPlatform),
+        None,
+    )
+    .await
+    .unwrap();
+    let agent = daemon.agent().unwrap();
+    agent.rescan().await;
+    let local = client(&daemon).await;
+    let operation = |s: &str, act: Action, op: &str, question: &str| {
+        Req::AgentSideQuestion(v1::AgentSideQuestionRequest {
+            session: s.into(),
+            action: act as i32,
+            op_id: op.into(),
+            question: question.into(),
+        })
+    };
+    for parent in [CODEX, CLAUDE] {
+        let create = operation(parent, Action::Create, &format!("create-{parent}"), "");
+        let Resp::AgentSideAnswer(child) = local.call(create.clone()).await.unwrap() else {
+            panic!("no child")
+        };
+        let child = child.session.unwrap();
+        let Resp::AgentSideAnswer(replay) = local.call(create).await.unwrap() else {
+            panic!("no receipt")
+        };
+        assert_eq!(replay.session.unwrap().id, child.id);
+        assert_eq!(child.parent_session_id, parent);
+        assert!(
+            agent
+                .session(parent)
+                .unwrap()
+                .subsessions
+                .iter()
+                .any(|s| s.id == child.id)
+        );
+        assert!(
+            sessions(&local, &child.provider)
+                .await
+                .unwrap()
+                .contains(&child.id)
+        );
+        let Resp::AgentSideAnswer(ended) = local
+            .call(operation(
+                &child.id,
+                Action::End,
+                &format!("end-{parent}"),
+                "",
+            ))
+            .await
+            .unwrap()
+        else {
+            panic!("not ended")
+        };
+        assert!(ended.session.unwrap().read_only);
+        let Resp::OpResult(rejected) = local
+            .call(operation(
+                &child.id,
+                Action::Ask,
+                &format!("late-{parent}"),
+                "late",
+            ))
+            .await
+            .unwrap()
+        else {
+            panic!("accepted ended side question")
+        };
+        assert_eq!(rejected.status(), v1::op_result::Status::Rejected);
+        let main_send = local
+            .call(Req::AgentSend(v1::AgentSendRequest {
+                session: child.id.clone(),
+                text: "late".into(),
+                op_id: format!("legacy-{parent}"),
+                ..Default::default()
+            }))
+            .await;
+        assert!(matches!(main_send, Err(muster_rpc::Error::Remote { .. })));
+        let Resp::AgentMessages(history) = local
+            .call(Req::AgentMessages(v1::AgentMessagesRequest {
+                session: child.id,
+                ..Default::default()
+            }))
+            .await
+            .unwrap()
+        else {
+            panic!("no history")
+        };
+        assert!(history.messages.is_empty());
+    }
     daemon.shutdown().await;
 }

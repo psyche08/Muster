@@ -153,6 +153,7 @@ fn access_for(req: &Req) -> Access {
         | Req::AgentFiles(_)
         | Req::AgentFile(_)
         | Req::AgentGit(_) => Access::AgentSession { control: false },
+        Req::AgentSideQuestion(_) => Access::AgentSession { control: true },
         Req::AgentSendStatus(_) | Req::AgentConfirmDelivered(_) => Access::AgentReceipt,
         Req::AgentSend(_)
         | Req::AgentRespond(_)
@@ -305,6 +306,12 @@ impl Handler for MusterHandler {
             let access = access_for(&request);
             if let Err(error) = authorize_request(&daemon, &ctx, &request, &access) {
                 return fail(error);
+            }
+            if let Req::AgentSend(send) = &request
+                && let Some(agent) = daemon.agent()
+                && let Err(error) = agent.check_send_target(&send.session)
+            {
+                return fail(error.into());
             }
             // This RPC only requests observation. The watch already carries a
             // cached pending card; even a locked host can answer without an unlock.
@@ -629,6 +636,20 @@ fn authorize_request(
             }
         }
         Access::AgentSession { control } => {
+            // This explicitly requested fork uses a CLI worker as well as a
+            // desktop source. A grant to either one alone is insufficient.
+            if matches!(request, Req::AgentSideQuestion(_)) {
+                admit(
+                    daemon,
+                    ctx,
+                    &peer,
+                    request,
+                    &Permission::Agent {
+                        provider: Some("orca".into()),
+                        control: true,
+                    },
+                )?;
+            }
             admit(
                 daemon,
                 ctx,
@@ -693,6 +714,7 @@ async fn ordinary_terminal_request(daemon: &Daemon, request: &Req) -> Result<(),
 /// Ownership is checked for local callers too, before any provider action.
 fn ordinary_agent_request(daemon: &Daemon, request: &Req) -> Result<(), Error> {
     let session = match request {
+        Req::AgentSideQuestion(r) => r.session.clone(),
         Req::AgentWatch(r) if r.session.is_empty() => return Ok(()),
         Req::AgentSendStatus(_)
         | Req::AgentConfirmDelivered(_)
@@ -776,6 +798,7 @@ fn admit(
 /// The agent session a request names, and its provider if it exists.
 fn session_provider(daemon: &Daemon, request: &Req) -> Result<(String, Option<String>), Error> {
     let session = match request {
+        Req::AgentSideQuestion(r) => r.session.clone(),
         Req::AgentSendStatus(r) | Req::AgentConfirmDelivered(r) => r.session.clone(),
         Req::AgentWatch(r) => r.session.clone(),
         Req::AgentMessages(r) => r.session.clone(),
@@ -1951,6 +1974,7 @@ async fn dispatch(
         }
 
         // ------------------------------------------------------------- agent
+        Req::AgentSideQuestion(r) => Box::pin(side_chat_operation(daemon, r)).await?,
         Req::AgentNativeCreate(r) => {
             let cancelled = events.cancelled().clone();
             muster_agent::control_guard::scope(
@@ -2408,7 +2432,40 @@ impl From<muster_rpc::Error> for Error {
 
 /// Internal dispatch after the console owner has admitted this exact request.
 /// Ordinary callers reach it only while holding the shared write reservation.
-/// Whether the request acts on a cloud session (`muster_agent::cloud`).
+async fn side_chat_operation(
+    daemon: &Daemon,
+    r: v1::AgentSideQuestionRequest,
+) -> Result<Resp, Error> {
+    use muster_proto::Message;
+    if r.op_id.is_empty() {
+        return Err(Error::Invalid("Side chat needs an operation ID".into()));
+    }
+    let agent = agent_of(daemon)?;
+    let body = r.encode_to_vec();
+    let outcome = ledgered(
+        daemon,
+        &r.op_id,
+        "agent.side_chat",
+        &r.session,
+        false,
+        &body,
+        async { Ok(agent.side_operation(&r)?) },
+    )
+    .await?;
+    Ok(match outcome {
+        Resp::OpResult(op) if matches!(op.status(), Status::Applied | Status::Duplicate) => {
+            Resp::AgentSideAnswer(v1::AgentSideAnswer {
+                session: Some(Box::new(
+                    agent
+                        .session(&op.result_id)
+                        .ok_or_else(|| Error::NotFound("Side chat".into()))?,
+                )),
+            })
+        }
+        other => other,
+    })
+}
+
 fn independent_session(daemon: &Daemon, request: &Req) -> bool {
     tmux_request(request)
         || cloud_session(daemon, request)

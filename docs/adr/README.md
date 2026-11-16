@@ -330,3 +330,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0212](0212-forced-mask-tiles-and-session-launch.md) | Accepted | Put the forced mask beside Locked Use, label session launch origin and archive CLI sessions in Muster |
 | [0213](0213-bare-sidebar-badges-and-quiet-speculative-card-reads.md) | Accepted | Recognize bare single-PR and fork sidebar badges, and keep failed speculative permission-card reads quiet |
 | [0214](0214-member-display-name.md) | Accepted | Rename an enrolled device using a signed roster update |
+| [0215](0215-side-questions.md) | Accepted | Show Codex and Claude side chats as independently addressable sub-sessions |

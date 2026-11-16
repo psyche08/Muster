@@ -48,7 +48,7 @@ fn parent<'a>(
     // Families are the listed sessions a provider links: Claude's subsessions
     // and forks, DeepSeek Harness forks. Subagents are never catalog rows.
     let family = match s.provider.as_str() {
-        "claude" => matches!(s.relationship.as_str(), "subsession" | "fork"),
+        "claude" | "codex" => muster_agent::catalog::family_link(s),
         "deepseek" => s.relationship == "fork",
         _ => false,
     };

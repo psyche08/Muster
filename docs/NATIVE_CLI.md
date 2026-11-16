@@ -84,3 +84,20 @@ adapter). This is a native rendering port: no React, webview or Node runtime.
 Provider errors retain their bounded user-facing message, including model-version
 requirements, in the native timeline and failed-turn details. Raw transport/debug
 metadata is not rendered as an error.
+
+## Side chat in a desktop Code conversation
+
+On macOS or iOS, open a local Codex or Claude Code conversation and choose
+**Side chat** beside the composer. A bare `/btw` also creates a child; sending
+`/btw Why did this step fail?` asks its first question. The child opens in
+the normal conversation view. Find it again under its parent in the session
+list or in the parent's sub-sessions. Going back leaves the side chat open.
+**End side chat** makes it permanently read-only. Its history remains
+available. Completing an answer leaves the child open for follow-ups.
+
+Each question uses a fresh temporary fork of the current parent and up to the
+last eight successful exchanges from the child's journal. The host needs a
+recent signed-in native CLI for that provider; a paired client also needs
+Agent control for both the provider and the CLI adapter (`agents:orca`).
+Side prompts and answers are stored on the host by Muster. They never go to
+the parent composer and do not appear in the provider application's sidebar.

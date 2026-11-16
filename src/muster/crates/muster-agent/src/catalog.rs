@@ -43,6 +43,11 @@ pub fn display_key(group: &AgentCatalogGroup) -> String {
     .into()
 }
 
+pub fn family_link(s: &AgentSession) -> bool {
+    (matches!(s.provider.as_str(), "codex" | "claude") && s.relationship == "sidechat")
+        || (s.provider == "claude" && matches!(s.relationship.as_str(), "subsession" | "fork"))
+}
+
 /// Orphans are independent roots; cycles never hide conversations. Cross-device
 /// or cross-provider parent IDs cannot join a family.
 pub fn family_roots(sessions: &[AgentSession]) -> HashMap<String, String> {
@@ -54,9 +59,7 @@ pub fn family_roots(sessions: &[AgentSession]) -> HashMap<String, String> {
             let mut at = s;
             let mut seen = HashSet::from([own.clone()]);
             let root = loop {
-                if at.provider != "claude"
-                    || !matches!(at.relationship.as_str(), "subsession" | "fork")
-                {
+                if !family_link(at) {
                     break session_key(at);
                 }
                 let parent =

@@ -217,7 +217,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         && let Some(chat) = &state.chat
     {
         // Desktop chats take text only: no attachments offered.
-        let attachments = !matches!(chat.session.mode.as_str(), "chat" | "orca");
+        let attachments = !matches!(chat.session.mode.as_str(), "chat" | "orca" | "sidechat");
         let (queued, interactions): (Vec<_>, Vec<_>) =
             muster_agent::queue::ordered_interactions(&chat.interactions)
                 .into_iter()
@@ -274,7 +274,10 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             }),
             has_earlier: chat.has_earlier || chat.history_start_index() > 0,
             has_newer: chat.history_end_index() < chat.messages.len(),
-            sending: chat.sending || chat.loading,
+            sending: chat.sending
+                || chat.loading
+                || chat.side_request.is_some()
+                || (chat.session.mode == "sidechat" && chat.session.state == "running"),
             responding_interaction: chat.responding_interaction.clone(),
             response_error: chat.response_error.clone(),
             response_unknown: chat.response_unknown,
@@ -311,10 +314,11 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             // approvals, interrupts and files stay with the provider's web app.
             can_interrupt: matches!(chat.session.state.as_str(), "running" | "waiting_approval")
                 && chat.session.mode != "cloud"
+                && chat.session.mode != "sidechat"
                 && offers(&chat.session, |c| c.interrupt),
-            can_choose_model: !matches!(chat.session.mode.as_str(), "cloud" | "orca")
+            can_choose_model: !matches!(chat.session.mode.as_str(), "cloud" | "orca" | "sidechat")
                 && offers(&chat.session, |c| c.model_options),
-            can_browse_files: chat.session.mode != "orca"
+            can_browse_files: !matches!(chat.session.mode.as_str(), "orca" | "sidechat")
                 && chat.session.mode != "chat"
                 && chat.session.mode != "cloud"
                 && offers(&chat.session, |c| c.files),
@@ -333,6 +337,18 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                     })
                     .map(|(_, text)| text.clone())
                     .unwrap_or_else(|| chat.session.composer_suggestion.clone())
+            },
+            can_create_side_chat: muster_agent::side_chat::available(&chat.session)
+                && chat.side_request.is_none(),
+            can_end_side_chat: muster_agent::side_chat::is_child(&chat.session.id)
+                && !muster_agent::side_chat::ended(&chat.session)
+                && chat.side_request.is_none(),
+            composer_disabled_reason: if muster_agent::side_chat::ended(&chat.session) {
+                "Session ended · Read only".into()
+            } else if chat.session.read_only {
+                "Read only".into()
+            } else {
+                String::new()
             },
             can_complete: matches!(chat.session.provider.as_str(), "claude" | "codex")
                 && chat.session.mode == "code"
