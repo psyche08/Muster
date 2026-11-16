@@ -332,3 +332,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0214](0214-member-display-name.md) | Accepted | Rename an enrolled device using a signed roster update |
 | [0215](0215-side-questions.md) | Accepted | Show Codex and Claude side chats as independently addressable sub-sessions |
 | [0216](0216-background-approval-window.md) | Accepted | Resolve a background Claude window for approval inspection |
+| [0217](0217-transcript-view-initializers-internal.md) | Accepted; source verified, iOS simulator build passes | Keep the transcript views' memberwise initializers internal under Xcode 26.4 |
+| [0218](0218-removed-device-readd.md) | Accepted; source and tests verified, paired-device acceptance pending | Let a removed device rejoin through a fresh admin-approved Add |
