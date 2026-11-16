@@ -45,8 +45,11 @@ fn interface_config(address: Ipv4Addr, prefix: u8, config: &VnetConfig) -> tun::
     tun_config
         .address(address)
         .netmask(Ipv4Addr::from(!0u32 << (32 - u32::from(prefix))))
-        .mtu(config.mtu)
         .up();
+    // The tun Windows backend also applies this value to IPv6, which
+    // rejects our IPv4-only overlay MTU when it is below 1280.
+    #[cfg(not(windows))]
+    tun_config.mtu(config.mtu);
     if let Some(name) = &config.name {
         tun_config.tun_name(name);
     }
@@ -317,6 +320,32 @@ impl Vnet {
         }
         let device =
             tun::create_as_async(&tun_config).map_err(|e| Error::Io(format!("tun: {e}")))?;
+        #[cfg(windows)]
+        {
+            use tun::AbstractDevice;
+            let index = device
+                .tun_index()
+                .map_err(|e| Error::Io(format!("adapter index: {e}")))?;
+            let system = std::env::var_os("SystemRoot")
+                .ok_or_else(|| Error::Io("SystemRoot missing".into()))?;
+            let output = std::process::Command::new(
+                std::path::PathBuf::from(system).join("System32/netsh.exe"),
+            )
+            .args(["interface", "ipv4", "set", "subinterface"])
+            .arg(index.to_string())
+            .arg(format!("mtu={}", config.mtu))
+            .arg("store=active")
+            .output()
+            .map_err(|e| Error::Io(format!("configure IPv4 MTU: {e}")))?;
+            if !output.status.success() {
+                return Err(Error::Io(format!(
+                    "configure IPv4 MTU ({}): {} {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stdout).trim(),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )));
+            }
+        }
         log::info!("vnet up: {address}/{} mtu {}", cidr.1, config.mtu);
         let (writer, reader) = device
             .split()
