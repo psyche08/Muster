@@ -31,8 +31,10 @@ const MAX_TEXT: usize = 16_384;
 
 /// `~/Library/Application Support/catpaw-desk`, when its store exists.
 pub fn home() -> Option<PathBuf> {
-    let dir =
-        PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support/catpaw-desk");
+    #[cfg(windows)]
+    let dir = PathBuf::from(std::env::var_os("APPDATA")?).join("catpaw-desk");
+    #[cfg(not(windows))]
+    let dir = std::env::home_dir()?.join("Library/Application Support/catpaw-desk");
     dir.join(DB).is_file().then_some(dir)
 }
 

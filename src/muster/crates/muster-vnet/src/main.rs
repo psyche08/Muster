@@ -1,6 +1,4 @@
 #[cfg(windows)]
-mod tpm;
-#[cfg(windows)]
 mod windows;
 
 #[cfg(windows)]

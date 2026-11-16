@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -27,6 +28,12 @@ pub struct PtyConfig {
 impl Default for PtyConfig {
     fn default() -> Self {
         Self {
+            #[cfg(windows)]
+            shell: PathBuf::from(
+                std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()),
+            )
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+            #[cfg(unix)]
             shell: std::env::var_os("SHELL")
                 .map(PathBuf::from)
                 .filter(|p| p.is_absolute())
@@ -42,7 +49,15 @@ struct Session {
     id: String,
     command: String,
     grid: Mutex<Grid>,
+    #[cfg(unix)]
     master: std::fs::File,
+    #[cfg(windows)]
+    master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
+    #[cfg(windows)]
+    writer: Mutex<Box<dyn Write + Send>>,
+    #[cfg(windows)]
+    child: Mutex<Option<Box<dyn portable_pty::Child + Send + Sync>>>,
+    #[cfg(unix)]
     child: Mutex<Option<std::process::Child>>,
     writes: Mutex<()>,
     frames: broadcast::Sender<TerminalFrame>,
@@ -50,6 +65,16 @@ struct Session {
 }
 
 impl Session {
+    fn write(&self, bytes: &[u8]) -> std::io::Result<()> {
+        #[cfg(windows)]
+        {
+            self.writer.lock().unwrap().write_all(bytes)
+        }
+        #[cfg(unix)]
+        {
+            (&self.master).write_all(bytes)
+        }
+    }
     fn summary(&self) -> TerminalSession {
         let grid = self.grid.lock().unwrap();
         let title = if grid.title.is_empty() {
@@ -83,6 +108,7 @@ pub struct PtyService {
     list_changed: broadcast::Sender<()>,
 }
 
+#[cfg(unix)]
 #[repr(C)]
 struct Winsize {
     ws_row: u16,
@@ -91,6 +117,7 @@ struct Winsize {
     ws_ypixel: u16,
 }
 
+#[cfg(unix)]
 fn set_winsize(fd: i32, cols: u16, rows: u16) -> std::io::Result<()> {
     let size = Winsize {
         ws_row: rows,
@@ -129,6 +156,7 @@ impl PtyService {
             .ok_or_else(|| Error::NotFound(format!("session {id}")))
     }
 
+    #[cfg(unix)]
     pub(crate) fn contains(&self, id: &str) -> bool {
         self.sessions
             .lock()
@@ -209,72 +237,100 @@ impl PtyService {
             return Err(Error::Unavailable("too many terminal sessions".into()));
         }
         let (cols, rows) = (self.config.cols, self.config.rows);
-        let mut master = -1i32;
-        let mut slave = -1i32;
-        let mut size = Winsize {
-            ws_row: rows,
-            ws_col: cols,
-            ws_xpixel: 0,
-            ws_ypixel: 0,
+        #[cfg(unix)]
+        let (master_file, child, reader) = {
+            let mut master = -1i32;
+            let mut slave = -1i32;
+            let mut size = Winsize {
+                ws_row: rows,
+                ws_col: cols,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            };
+            // SAFETY: openpty fills the two descriptors; the name buffer is
+            // optional. The termios and winsize pointers are `*mut` in the macOS
+            // binding and `*const` on Linux; a `*mut` coerces to both.
+            if unsafe {
+                libc::openpty(
+                    &mut master,
+                    &mut slave,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    &mut size as *mut Winsize as *mut libc::winsize,
+                )
+            } < 0
+            {
+                return Err(Error::Unavailable(format!(
+                    "openpty: {}",
+                    std::io::Error::last_os_error()
+                )));
+            }
+            // SAFETY: fresh descriptors we own.
+            let master_file = unsafe { std::fs::File::from_raw_fd(master) };
+            // SAFETY: as above.
+            let slave_file = unsafe { std::fs::File::from_raw_fd(slave) };
+            // SAFETY: setting close-on-exec on the master so the child does not inherit it.
+            unsafe { libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC) };
+            let mut cmd = std::process::Command::new(command);
+            cmd.args(args).env_remove("TMUX");
+            if let Some(cwd) = cwd {
+                cmd.current_dir(cwd);
+            }
+            cmd.env("TERM", "xterm-256color")
+                .env("COLORTERM", "truecolor")
+                .stdin(
+                    slave_file
+                        .try_clone()
+                        .map_err(|e| Error::Unavailable(e.to_string()))?,
+                )
+                .stdout(
+                    slave_file
+                        .try_clone()
+                        .map_err(|e| Error::Unavailable(e.to_string()))?,
+                )
+                .stderr(slave_file);
+            // SAFETY: only async-signal-safe calls between fork and exec.
+            unsafe {
+                use std::os::unix::process::CommandExt;
+                cmd.pre_exec(|| {
+                    if libc::setsid() < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    if libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+            let child = cmd
+                .spawn()
+                .map_err(|e| Error::Unavailable(format!("{}: {e}", command.display())))?;
+            let reader = master_file
+                .try_clone()
+                .map_err(|e| Error::Unavailable(e.to_string()))?;
+            (master_file, child, reader)
         };
-        // SAFETY: openpty fills the two descriptors; the name buffer is
-        // optional. The termios and winsize pointers are `*mut` in the macOS
-        // binding and `*const` on Linux; a `*mut` coerces to both.
-        if unsafe {
-            libc::openpty(
-                &mut master,
-                &mut slave,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                &mut size as *mut Winsize as *mut libc::winsize,
-            )
-        } < 0
-        {
-            return Err(Error::Unavailable(format!(
-                "openpty: {}",
-                std::io::Error::last_os_error()
-            )));
-        }
-        // SAFETY: fresh descriptors we own.
-        let master_file = unsafe { std::fs::File::from_raw_fd(master) };
-        // SAFETY: as above.
-        let slave_file = unsafe { std::fs::File::from_raw_fd(slave) };
-        // SAFETY: setting close-on-exec on the master so the child does not inherit it.
-        unsafe { libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC) };
-        let mut cmd = std::process::Command::new(command);
-        cmd.args(args).env_remove("TMUX");
-        if let Some(cwd) = cwd {
-            cmd.current_dir(cwd);
-        }
-        cmd.env("TERM", "xterm-256color")
-            .env("COLORTERM", "truecolor")
-            .stdin(
-                slave_file
-                    .try_clone()
-                    .map_err(|e| Error::Unavailable(e.to_string()))?,
-            )
-            .stdout(
-                slave_file
-                    .try_clone()
-                    .map_err(|e| Error::Unavailable(e.to_string()))?,
-            )
-            .stderr(slave_file);
-        // SAFETY: only async-signal-safe calls between fork and exec.
-        unsafe {
-            use std::os::unix::process::CommandExt;
-            cmd.pre_exec(|| {
-                if libc::setsid() < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                if libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-        let child = cmd
-            .spawn()
-            .map_err(|e| Error::Unavailable(format!("{}: {e}", command.display())))?;
+        #[cfg(windows)]
+        let (master_file, child, reader, writer) = {
+            use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+            let unavailable = |e: anyhow::Error| Error::Unavailable(e.to_string());
+            let pair = native_pty_system()
+                .openpty(PtySize {
+                    cols,
+                    rows,
+                    ..Default::default()
+                })
+                .map_err(unavailable)?;
+            let mut cmd = CommandBuilder::new(command);
+            cmd.args(args);
+            if let Some(cwd) = cwd {
+                cmd.cwd(cwd);
+            }
+            let reader = pair.master.try_clone_reader().map_err(unavailable)?;
+            let writer = pair.master.take_writer().map_err(unavailable)?;
+            let child = pair.slave.spawn_command(cmd).map_err(unavailable)?;
+            (Mutex::new(pair.master), child, reader, Mutex::new(writer))
+        };
         let id = format!("{prefix}{}", self.next_id.fetch_add(1, Ordering::Relaxed));
         let (frames, _) = broadcast::channel(256);
         let session = Arc::new(Session {
@@ -282,6 +338,8 @@ impl PtyService {
             command: command.to_string_lossy().into_owned(),
             grid: Mutex::new(Grid::new(cols, rows)),
             master: master_file,
+            #[cfg(windows)]
+            writer,
             child: Mutex::new(Some(child)),
             writes: Mutex::new(()),
             frames,
@@ -293,19 +351,26 @@ impl PtyService {
             .insert(id.clone(), session.clone());
         let _ = self.list_changed.send(());
         let service = self.clone();
-        let reader = session
-            .master
-            .try_clone()
-            .map_err(|e| Error::Unavailable(e.to_string()))?;
         tokio::task::spawn_blocking(move || service.read_loop(session, reader));
         Ok(self.get(&id)?.summary())
     }
 
-    fn read_loop(&self, session: Arc<Session>, mut reader: std::fs::File) {
+    fn read_loop(
+        &self,
+        session: Arc<Session>,
+        #[cfg(unix)] mut reader: std::fs::File,
+        #[cfg(windows)] mut reader: Box<dyn Read + Send>,
+    ) {
         let mut buf = vec![0u8; 16384];
         let mut deadline = None;
         loop {
             if let Some(until) = deadline {
+                #[cfg(windows)]
+                let ready = {
+                    let _ = until;
+                    false
+                };
+                #[cfg(unix)]
                 let ready = Instant::now() < until && readable_before(reader.as_raw_fd(), until);
                 if !ready {
                     let mut grid = session.grid.lock().unwrap();
@@ -326,7 +391,7 @@ impl PtyService {
             let replies = session.grid.lock().unwrap().feed(&buf[..n]);
             if !replies.is_empty() {
                 let _guard = session.writes.lock().unwrap();
-                let _ = (&session.master).write_all(&replies);
+                let _ = session.write(&replies);
             }
         }
         {
@@ -406,7 +471,7 @@ impl PtyService {
         let bytes = bytes.to_vec();
         tokio::task::spawn_blocking(move || {
             let _guard = session.writes.lock().unwrap();
-            (&session.master).write_all(&bytes)
+            session.write(&bytes)
         })
         .await
         .map_err(|e| Error::Unavailable(e.to_string()))?
@@ -421,6 +486,18 @@ impl PtyService {
             if grid.cols() == cols && grid.rows() == rows {
                 return Ok(());
             }
+            #[cfg(windows)]
+            session
+                .master
+                .lock()
+                .unwrap()
+                .resize(portable_pty::PtySize {
+                    cols,
+                    rows,
+                    ..Default::default()
+                })
+                .map_err(|e| Error::Unavailable(format!("resize: {e}")))?;
+            #[cfg(unix)]
             set_winsize(session.master.as_raw_fd(), cols, rows)
                 .map_err(|e| Error::Unavailable(format!("resize: {e}")))?;
             grid.resize(cols, rows);
@@ -434,7 +511,14 @@ impl PtyService {
         let session = self.get(id)?;
         if let Some(child) = session.child.lock().unwrap().as_mut() {
             // SAFETY: signalling our own child.
-            unsafe { libc::kill(child.id() as i32, libc::SIGHUP) };
+            #[cfg(windows)]
+            child
+                .kill()
+                .map_err(|e| Error::Unavailable(e.to_string()))?;
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(child.id() as i32, libc::SIGHUP)
+            };
         }
         Ok(())
     }
@@ -459,6 +543,7 @@ impl PtyService {
 }
 
 /// Wait only until this burst's frame deadline, never once per output chunk.
+#[cfg(unix)]
 fn readable_before(fd: i32, deadline: Instant) -> bool {
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -481,7 +566,7 @@ fn readable_before(fd: i32, deadline: Instant) -> bool {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::time::Duration;
@@ -635,5 +720,38 @@ mod tests {
         assert!(ended);
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(service.sessions().await.unwrap().is_empty());
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn powershell_runs_in_conpty_and_accepts_a_resize() {
+        let service = PtyService::new(PtyConfig::default());
+        let session = service.create(None, false).await.unwrap();
+        service.resize(&session.id, 96, 24).await.unwrap();
+        service
+            .input(&session.id, b"Write-Output (6 * 7 + 1000)\r")
+            .await
+            .unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                if service
+                    .history(&session.id, 100)
+                    .await
+                    .unwrap()
+                    .iter()
+                    .any(|line| line.text.trim() == "1042")
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+        service.close(&session.id).await.unwrap();
+        result.unwrap();
     }
 }

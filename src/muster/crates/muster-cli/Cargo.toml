@@ -12,6 +12,7 @@ name = "muster"
 path = "src/main.rs"
 
 [dependencies]
+muster-local = { path = "../muster-local" }
 muster-proto = { path = "../muster-proto" }
 muster-rpc = { path = "../muster-rpc" }
 muster-paths = { path = "../muster-paths" }

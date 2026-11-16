@@ -1,6 +1,7 @@
 [package]
 name = "muster-vnet"
 version = "0.1.0"
+default-run = "muster-vnet"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -9,13 +10,11 @@ publish.workspace = true
 [target.'cfg(windows)'.dependencies]
 anyhow.workspace = true
 clap.workspace = true
-p256.workspace = true
-sha2.workspace = true
 tokio.workspace = true
 muster-core = { path = "../muster-core" }
 muster-net = { path = "../muster-net" }
 muster-store = { path = "../muster-store" }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+muster-windows-tpm = { path = "../muster-windows-tpm" }
 
 [lints]
 workspace = true

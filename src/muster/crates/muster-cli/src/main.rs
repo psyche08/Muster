@@ -603,7 +603,7 @@ async fn serve_acp(argv: &[String]) -> anyhow::Result<()> {
         .clone()
         .or_else(|| muster_paths::state_dir().map(|d| muster_paths::socket_path(&d)))
         .unwrap_or_else(|| PathBuf::from("musterd.sock"));
-    let stream = tokio::net::UnixStream::connect(&path)
+    let stream = muster_local::connect(&path)
         .await
         .map_err(|e| anyhow::anyhow!("musterd at {}: {e}", path.display()))?;
     let client = muster_rpc::Client::new(stream);
@@ -658,7 +658,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     let path = socket_path(&args);
-    let stream = tokio::net::UnixStream::connect(&path)
+    let stream = muster_local::connect(&path)
         .await
         .map_err(|e| anyhow::anyhow!("musterd at {}: {e}", path.display()))?;
     let local = Client::new(stream);

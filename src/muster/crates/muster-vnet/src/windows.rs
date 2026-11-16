@@ -38,7 +38,7 @@ pub async fn run() -> Result<()> {
         .share_mode(0)
         .open(path.join("owner.lock"))
         .context("acquire vnet process lock")?;
-    let signer: SharedSigner = Arc::new(super::tpm::Tpm::open()?);
+    let signer: SharedSigner = Arc::new(muster_windows_tpm::Tpm::open()?);
     println!("Device {}", signer.public_key().device_id());
     if options.identity {
         return Ok(());
@@ -65,7 +65,8 @@ pub async fn run() -> Result<()> {
     let relay = match &invite {
         Some(invite) => invite.relay.clone(),
         None => store
-            .meta_string("vnet.relay")?
+            .meta_string("relay")?
+            .or(store.meta_string("vnet.relay")?)
             .context("enrollment relay missing")?,
     };
     let record = DeviceRecord::new(

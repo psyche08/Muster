@@ -811,6 +811,7 @@ fn link_label(member: &v1::MemberView) -> String {
 fn key_label(backend: &str) -> &str {
     match backend {
         "sep" => "Secure Enclave",
+        "tpm" => "Windows TPM",
         "soft" => "software (development)",
         "platform" => "platform keystore",
         "" => "not reported",

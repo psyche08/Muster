@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Muster" Language="1033" Version="$(var.Version)" Manufacturer="Muster" UpgradeCode="{CAB25324-77BE-419C-A736-84F6003C67CC}">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Muster is installed." />
+    <InstallExecuteSequence><RemoveExistingProducts After="InstallInitialize"/></InstallExecuteSequence>
+    <MediaTemplate EmbedCab="yes" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="Muster">
+          <Component Id="Desktop" Guid="{68F0DABC-BEC6-4AA3-BBB6-EC4F4C22A95F}" Win64="yes">
+            <File Id="DesktopExe" Source="Muster.exe" KeyPath="yes">
+              <Shortcut Id="DesktopShortcut" Directory="ProgramMenuFolder" Name="Muster" WorkingDirectory="INSTALLDIR" Advertise="yes"/>
+            </File>
+          </Component>
+          <Component Id="Core" Guid="{CE73C83D-17E1-4489-B756-E337CCA2B3A7}" Win64="yes"><File Id="CoreDll" Source="muster_ffi.dll" KeyPath="yes"/></Component>
+          <Component Id="Daemon" Guid="{8BD1E0DB-1AEC-4089-88BC-B48483E92E2A}" Win64="yes"><File Id="DaemonExe" Source="musterd.exe" KeyPath="yes"/></Component>
+          <Component Id="TunHelper" Guid="{38954D60-7B85-48F7-A0DE-C9907EC4EB46}" Win64="yes"><File Id="TunExe" Source="muster-tun.exe" KeyPath="yes"/></Component>
+          <Component Id="Vnet" Guid="{B43C7A8D-9677-4F94-9C3F-F30AA5586A78}" Win64="yes"><File Id="VnetExe" Source="muster-vnet.exe" KeyPath="yes"/></Component>
+          <Component Id="Driver" Guid="{D1AB0BA7-2253-43F8-9A91-95129FADF7CC}" Win64="yes"><File Id="DriverDll" Source="wintun.dll" KeyPath="yes"/></Component>
+          <Component Id="License" Guid="{E45BD58F-A14C-4D58-8B80-5A13120E446C}" Win64="yes"><File Id="LicenseFile" Source="LICENSE.txt" KeyPath="yes"/></Component>
+          <Component Id="RuntimeNotices" Guid="{D790532B-4408-44AA-A529-86CB1EAE940C}" Win64="yes"><File Id="RuntimeNoticesFile" Source="Runtime-Notices.txt" KeyPath="yes"/></Component>
+          <Component Id="DriverLicense" Guid="{1E71100C-892F-4E59-8387-D27BEEAD35EF}" Win64="yes"><File Id="DriverLicenseFile" Source="Wintun-LICENSE.txt" KeyPath="yes"/></Component>
+          <Component Id="Host" Guid="{86934614-BF04-4A9D-95D0-A080899A268C}" Win64="yes"><File Id="BrowserHost" Source="muster-browser-host.exe" KeyPath="yes"/></Component>
+          <Component Id="Manifest" Guid="{56F56780-D5C9-467B-B289-1D23AE6815C9}" Win64="yes">
+            <File Id="HostManifest" Source="dev.linsheng.muster.browser.json" KeyPath="yes"/>
+            <RegistryValue Root="HKLM" Key="Software\Google\Chrome\NativeMessagingHosts\dev.linsheng.muster.browser" Type="string" Value="[#HostManifest]"/>
+          </Component>
+          <Directory Id="CLIDIR" Name="cli"><Component Id="Cli" Guid="{7A19824C-F6D0-40A3-98FD-D6D7D635FB7E}" Win64="yes"><File Id="CliExe" Source="cli/muster.exe" KeyPath="yes"/></Component></Directory>
+          <Directory Id="EXTENSION" Name="AgentHaloBrowser">
+            <Component Id="ExtensionManifest" Guid="{7FAFC17E-E31C-4961-9869-FF871C29CA58}" Win64="yes"><File Id="ExtensionJson" Source="AgentHaloBrowser/manifest.json" KeyPath="yes"/></Component>
+            <Component Id="Worker" Guid="{09A4443D-8E40-4384-8DB1-77DDAD1161E4}" Win64="yes"><File Id="WorkerJs" Source="AgentHaloBrowser/sw.js" KeyPath="yes"/></Component>
+            <Component Id="Jumper" Guid="{BD4770FB-B449-46BB-B596-B332B9522DE0}" Win64="yes"><File Id="JumperJs" Source="AgentHaloBrowser/jumper.js" KeyPath="yes"/></Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder"/>
+    </Directory>
+    <Feature Id="MusterDesktop" Title="Muster" Level="1">
+      <ComponentRef Id="Desktop"/><ComponentRef Id="Core"/><ComponentRef Id="Daemon"/><ComponentRef Id="Cli"/><ComponentRef Id="Vnet"/><ComponentRef Id="TunHelper"/>
+      <ComponentRef Id="Driver"/><ComponentRef Id="License"/><ComponentRef Id="DriverLicense"/><ComponentRef Id="RuntimeNotices"/>
+      <ComponentRef Id="Host"/><ComponentRef Id="Manifest"/><ComponentRef Id="ExtensionManifest"/><ComponentRef Id="Worker"/><ComponentRef Id="Jumper"/>
+    </Feature>
+  </Product>
+</Wix>

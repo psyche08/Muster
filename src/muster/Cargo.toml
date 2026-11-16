@@ -3,6 +3,8 @@
 resolver = "3"
 members = [
     "crates/muster-core",
+    "crates/muster-local",
+    "crates/muster-windows-tpm",
     "crates/muster-net",
     "crates/muster-vnet",
     "crates/muster-relay",

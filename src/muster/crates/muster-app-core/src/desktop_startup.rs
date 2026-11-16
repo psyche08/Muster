@@ -120,11 +120,7 @@ impl Coordinator {
 
 async fn ready(socket: &Path) -> bool {
     matches!(
-        tokio::time::timeout(
-            Duration::from_millis(250),
-            tokio::net::UnixStream::connect(socket)
-        )
-        .await,
+        tokio::time::timeout(Duration::from_millis(250), muster_local::connect(socket)).await,
         Ok(Ok(_))
     )
 }
@@ -146,7 +142,7 @@ async fn wait_ready(socket: &Path, budget: Duration, interval: Duration) -> bool
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};

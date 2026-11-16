@@ -20,6 +20,7 @@ name = "musterd"
 path = "src/main.rs"
 
 [dependencies]
+muster-local = { path = "../muster-local" }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 sha2.workspace = true

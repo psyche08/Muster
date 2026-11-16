@@ -377,7 +377,6 @@ pub unsafe extern "C" fn muster_desktop_prepare(
             return -1;
         }
     };
-    #[cfg(unix)]
     let result = {
         static COORDINATOR: std::sync::LazyLock<muster_app_core::desktop_startup::Coordinator> =
             std::sync::LazyLock::new(muster_app_core::desktop_startup::Coordinator::default);
@@ -398,13 +397,6 @@ pub unsafe extern "C" fn muster_desktop_prepare(
                 ))),
             }
         })
-    };
-    #[cfg(not(unix))]
-    let result: Result<(), muster_app_core::Error> = {
-        let _ = (path, action);
-        Err(muster_app_core::Error::Unavailable(
-            "Unix desktop preparation is unsupported on this platform".into(),
-        ))
     };
     match result {
         Ok(()) => 0,

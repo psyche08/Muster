@@ -214,6 +214,8 @@ pub struct Daemon {
     /// Named local services' standing dispatch grants (ADR 0199).
     pub(crate) dispatch: dispatch::Dispatch,
     config: DaemonConfig,
+    #[cfg(windows)]
+    _identity_owner: Option<std::fs::File>,
     store: Arc<Store>,
     signer: SharedSigner,
     roster: SharedRoster,
@@ -276,7 +278,33 @@ impl Daemon {
             config.version = build_info::installed_version();
         }
         std::fs::create_dir_all(&config.dir)?;
-        let store = Arc::new(Store::open(&config.dir.join("musterd.db"))?);
+        let database = config.dir.join("musterd.db");
+        #[cfg(windows)]
+        let (_identity_owner, database) = {
+            use std::os::windows::fs::OpenOptionsExt;
+            // All processes using the per-user TPM key share the same ownership
+            // lock, including an existing standalone network-only installation.
+            if signer.is_none() && config.signer.is_none() {
+                let root = std::path::PathBuf::from(
+                    std::env::var_os("LOCALAPPDATA")
+                        .ok_or_else(|| anyhow::anyhow!("LOCALAPPDATA missing"))?,
+                )
+                .join("Muster");
+                let vnet = root.join("Vnet");
+                std::fs::create_dir_all(&vnet)?;
+                let lock = std::fs::OpenOptions::new().create(true).write(true).truncate(false).share_mode(0)
+                    .open(vnet.join("owner.lock")).map_err(|e| anyhow::anyhow!("cannot acquire Windows device identity; close the active Muster daemon or vnet process: {e}"))?;
+                let db = if config.dir == root {
+                    vnet.join("node.sqlite3")
+                } else {
+                    database
+                };
+                (Some(lock), db)
+            } else {
+                (None, database)
+            }
+        };
+        let store = Arc::new(Store::open(&database)?);
         let signer = match (signer, &config.signer) {
             (Some(signer), _) => signer,
             (None, Some(factory)) => factory(&store)?,
@@ -303,10 +331,24 @@ impl Daemon {
                 store.set_meta("relay", relay.as_bytes())?;
                 Some(relay.clone())
             }
-            None => store.meta_string("relay")?,
+            None => {
+                let relay = store.meta_string("relay")?;
+                #[cfg(windows)]
+                let relay = relay.or(store.meta_string("vnet.relay")?);
+                relay
+            }
         };
         let relay = parse_relay(relay_text.as_deref()).await;
         let roster: SharedRoster = Arc::new(RwLock::new(store.load_roster()?));
+        #[cfg(windows)]
+        if store.meta("policy")?.is_none() {
+            store.set_policy(&muster_core::LocalPolicy {
+                open_ports: Vec::new(),
+                offer_agent: false,
+                offer_terminal: false,
+                ..Default::default()
+            })?;
+        }
         let policy: SharedPolicy = Arc::new(RwLock::new(store.policy()?));
         let node = Node::start(
             node_config(&config, relay, stored_push_token(&store)),
@@ -365,6 +407,8 @@ impl Daemon {
         let blackout = None;
         let daemon = Arc::new(Self {
             blackout,
+            #[cfg(windows)]
+            _identity_owner,
             locked_use,
             scheduler,
             dispatch,
@@ -424,6 +468,7 @@ impl Daemon {
         daemon.wire_node(&node);
         if daemon.config.listen {
             daemon.listen().await?;
+            #[cfg(unix)]
             daemon
                 .locked_use
                 .listen(daemon.config.dir.join("locked-use.sock"))
@@ -549,10 +594,11 @@ impl Daemon {
 
     async fn listen(self: &Arc<Self>) -> anyhow::Result<()> {
         let path = self.config.socket_path();
+        #[cfg(unix)]
         if path.exists() {
             std::fs::remove_file(&path)?;
         }
-        let listener = tokio::net::UnixListener::bind(&path)?;
+        let listener = muster_local::Listener::bind(&path)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -685,6 +731,11 @@ impl Daemon {
         }
         #[allow(unused_mut)]
         let mut config = VnetConfig::default();
+        #[cfg(windows)]
+        {
+            config.name = Some("MusterVnet".into());
+            config.use_helper = true;
+        }
         #[cfg(target_os = "macos")]
         let (helper, helper_address) = {
             use std::os::fd::{FromRawFd, IntoRawFd, OwnedFd};
@@ -928,6 +979,7 @@ impl Daemon {
             task.abort();
         }
         self.node().shutdown().await;
+        #[cfg(unix)]
         let _ = std::fs::remove_file(self.config.socket_path());
     }
 }
@@ -1047,6 +1099,12 @@ fn retired_websocket_host(text: &str) -> Option<&str> {
 /// The machine's name for a device that was given none: gethostname(2)
 /// without a `.local` suffix (macOS under launchd has neither
 /// /etc/hostname nor $HOSTNAME), then the file and the variable.
+#[cfg(windows)]
+fn hostname() -> String {
+    std::env::var("COMPUTERNAME").unwrap_or_else(|_| "device".into())
+}
+
+#[cfg(unix)]
 fn hostname() -> String {
     let mut buf = [0u8; 256];
     // SAFETY: buf is a valid, writable buffer of the stated length.

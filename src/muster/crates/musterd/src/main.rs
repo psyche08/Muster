@@ -33,7 +33,7 @@ struct Args {
     #[arg(long, default_value = "desktop")]
     kind: String,
     /// Bring up the vnet TUN (needs root on Linux)
-    #[arg(long, default_value_t = cfg!(target_os = "macos"))]
+    #[arg(long, default_value_t = cfg!(any(target_os = "macos",windows)))]
     vnet: bool,
     /// Disable the desktop virtual interface (macOS enables it by default).
     #[arg(long)]

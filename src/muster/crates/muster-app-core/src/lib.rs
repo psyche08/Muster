@@ -9,7 +9,6 @@ pub mod backend;
 mod cache;
 mod catalog;
 mod chat_hosts;
-#[cfg(unix)]
 pub mod desktop_startup;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod desktop_update;

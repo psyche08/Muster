@@ -484,12 +484,15 @@ fn spawn_bridge(
                             match pinned_destination(&session_root,&launch.provider).map_err(|e|e.to_string())? {
                                 Destination::Unavailable=>Err("Provider is unavailable".into()),
                                 Destination::Cli(program)=>{
-                                    forward_cli(&program,&launch,&root,&mut reader,&mut write).await
+                                    #[cfg(unix)]
+                                    {forward_cli(&program,&launch,&root,&mut reader,&mut write).await}
+                                    #[cfg(windows)]
+                                    {let _ = program; Err("Multica container CLI bridge requires Unix".into())}
                                 },
                                 Destination::Desktop=>{
                                     let cli=root.join("bin/multica");
                                     let credential=muster_acp::TaskCredential::create(&root.join(".runtime-credentials"),&cli,&launch.env)?;
-                                    let local=tokio::net::UnixStream::connect(&socket).await.map_err(|e|e.to_string())?;
+                                    let local=muster_local::connect(&socket).await.map_err(|e|e.to_string())?;
                                     let run = launch.env.get("MULTICA_TASK_ID").ok_or("Missing Multica run")?;
                                     let host = muster_acp::NativeHost::new(muster_rpc::Client::new(local), &launch.provider, session_root, credential);
                                     let issue=http.and_then(|http|muster_acp::TaskIssue::new(&server_url,&launch.env,http));

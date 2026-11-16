@@ -896,6 +896,7 @@ impl Owner {
         Ok(Resp::Ack(v1::Ack {}))
     }
 
+    #[cfg(unix)]
     pub async fn listen(self: &Arc<Self>, path: std::path::PathBuf) -> anyhow::Result<()> {
         use std::os::unix::fs::PermissionsExt;
         let Some(os) = self.os.clone() else {

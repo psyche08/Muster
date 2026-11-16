@@ -14,6 +14,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -120,13 +121,21 @@ fn peer_pid(stream: &UnixStream) -> Option<u32> {
     (rc == 0 && cred.pid > 0).then_some(cred.pid as u32)
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
 fn peer_pid(_stream: &UnixStream) -> Option<u32> {
     None
 }
 
 /// One request and its reply. `expected` refuses, before writing, a socket
 /// another process serves.
+#[cfg(not(unix))]
+fn call(_: &Path, _: Option<u32>, _: Value, _: Duration) -> Result<(u32, Value), CallError> {
+    Err(CallError::NotSent(
+        "DeepSeek desktop plugin requires a verified Unix peer".into(),
+    ))
+}
+
+#[cfg(unix)]
 fn call(
     socket: &Path,
     expected: Option<u32>,

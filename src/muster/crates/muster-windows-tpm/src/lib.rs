@@ -1,3 +1,4 @@
+#![cfg(windows)]
 //! Per-user, non-exportable Windows TPM identity. Only public material leaves CNG.
 use std::ptr::{null, null_mut};
 
