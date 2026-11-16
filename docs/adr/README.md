@@ -337,3 +337,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0219](0219-release-apple-1-1-46.md) | Accepted | Publish Apple 1.1.46 with device readmission and background approval reads |
 | [0220](0220-background-only-native-creation.md) | Accepted; source and tests verified, device acceptance pending | Create native sessions only while the provider is in the background |
 | [0221](0221-multica-workspace-folder-sessions.md) | Accepted; source and tests verified, device acceptance pending | Create Multica sessions in the run's workspace folder |
+| [0222](0222-locked-use-dims-displays.md) | Accepted; source, tests and locked Codex device runs verified, locked Claude device run pending | Locked Use dims the displays instead of covering them |

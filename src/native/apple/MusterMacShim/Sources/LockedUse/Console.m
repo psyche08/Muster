@@ -9,7 +9,8 @@
 #import <unistd.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>
 
-static NSMutableArray<NSWindow *> *panels;
+// The black panels, by display: only the displays Rust could not dim (ADR 0222).
+static NSMutableDictionary<NSNumber *, NSWindow *> *panels;
 
 // Remote activity wakes the real system lock UI without synthetic input.
 // Rust owns the lifetime and releases the assertion before submitting auth.
@@ -126,29 +127,52 @@ NSPanel *muster_black_panel(NSScreen *screen, BOOL ignoresMouse) {
     return panel;
 }
 
-bool muster_console_cover(void) {
+static NSScreen *screen_for(uint32_t display) {
+    for (NSScreen *screen in NSScreen.screens) {
+        if ([screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue] == display) return screen;
+    }
+    return nil;
+}
+
+// Panels on exactly these displays; none when every display was dimmed.
+bool muster_console_cover(const uint32_t *displays, uint32_t count) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     if (panels) return false;
-    panels = [NSMutableArray array];
-    for (NSScreen *screen in NSScreen.screens) {
-        NSPanel *panel = muster_black_panel(screen, NO);
-        [panels addObject:panel];
+    panels = [NSMutableDictionary dictionary];
+    bool covered = true;
+    for (uint32_t i = 0; i < count; i++) {
+        NSScreen *screen = screen_for(displays[i]);
+        if (!screen) { covered = false; break; }
+        panels[@(displays[i])] = muster_black_panel(screen, NO);
     }
     [NSApp finishLaunching];
-    return panels.count > 0;
+    return covered;
 }
 
+// Takes the panel off every display not listed. A display that was asleep
+// is covered first and dimmed once it has woken (ADR 0222).
+void muster_console_cover_keep(const uint32_t *displays, uint32_t count) {
+    for (NSNumber *display in panels.allKeys) {
+        bool keep = false;
+        for (uint32_t i = 0; i < count && !keep; i++) keep = displays[i] == display.unsignedIntValue;
+        if (keep) continue;
+        [panels[display] orderOut:nil];
+        [panels removeObjectForKey:display];
+    }
+}
+
+// Rust checks that the displays are the same ones; this checks each panel.
 bool muster_console_cover_healthy(bool unlocked) {
-    NSArray<NSScreen *> *screens = NSScreen.screens;
-    if (!panels || !screens.count || panels.count != screens.count) return false;
+    if (!panels) return false;
     // Switching out of loginwindow can reorder the user-session windows.
     // Reassert the existing nonactivating cover before observing its state;
     // never activate it or move focus away from the AX target.
-    if (unlocked) for (NSWindow *panel in panels) [panel orderFrontRegardless];
-    for (NSUInteger i = 0; i < screens.count; i++) {
-        NSWindow *panel = panels[i];
-        if (!panel.visible || !NSEqualRects(panel.frame, screens[i].frame)) return false;
+    if (unlocked) for (NSWindow *panel in panels.allValues) [panel orderFrontRegardless];
+    for (NSNumber *display in panels) {
+        NSWindow *panel = panels[display];
+        NSScreen *screen = screen_for(display.unsignedIntValue);
+        if (!screen || !panel.visible || !NSEqualRects(panel.frame, screen.frame)) return false;
         // Query only our known cover. Enumerating every Electron window can
         // stall the watchdog across the 250 ms freshness boundary at unlock.
         // The same ownership, opacity, layer and onscreen checks still apply.
@@ -180,7 +204,7 @@ void muster_console_pump(void) {
 }
 
 void muster_console_uncover(void) {
-    for (NSWindow *panel in panels) [panel orderOut:nil];
+    for (NSWindow *panel in panels.allValues) [panel orderOut:nil];
     panels = nil;
 }
 

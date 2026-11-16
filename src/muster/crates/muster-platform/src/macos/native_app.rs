@@ -1348,6 +1348,8 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     let (mut composer, mut send) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
     let mut subroles = Vec::new();
+    // Per node: inside a region that holds a conversation of its own.
+    let mut auxiliary = Vec::new();
     let mut elements = Vec::new();
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
@@ -1382,21 +1384,25 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
             stop = Some(ScanStop::NodeRead(None));
             break;
         };
-        let is_composer = profile.controls().composer.matches(&field);
-        let is_send = !is_composer && profile.controls().send.matches(&field);
+        let subrole = values[7]
+            .as_ref()
+            .and_then(ax::value_string)
+            .unwrap_or_default();
+        // A side chat's controls are not the session's (ADR 0221).
+        let aside = parent.is_some_and(|p: usize| auxiliary[p])
+            || profile.controls().is_auxiliary_region(&subrole, &field);
+        let is_composer = !aside && profile.controls().composer.matches(&field);
+        let is_send = !aside && !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
-        let queued_delete = is_button
+        let queued_delete = !aside
+            && is_button
             && profile
                 .controls()
                 .queue
                 .as_ref()
                 .is_some_and(|queue| queue.row.matches(&field));
-        subroles.push(
-            values[7]
-                .as_ref()
-                .and_then(ax::value_string)
-                .unwrap_or_default(),
-        );
+        subroles.push(subrole);
+        auxiliary.push(aside);
         nodes.push(ControlNode {
             parent,
             composer: is_composer,

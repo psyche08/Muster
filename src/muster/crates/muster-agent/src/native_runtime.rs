@@ -39,6 +39,18 @@ impl NativeConsole {
         matches!(self, Self::Covered | Self::Background(_))
     }
 
+    /// Whether a creation admitted in this console may go on in `now`. A
+    /// background creation goes on while any other app owns the foreground:
+    /// a switch among other apps does not touch the provider. It stops once
+    /// the provider is the active app or no app owns the foreground (ADR 0220,
+    /// rule 1; ADR 0221).
+    pub fn creation_continues(self, now: Self) -> bool {
+        match self {
+            Self::Background(_) => matches!(now, Self::Background(_)),
+            _ => self == now,
+        }
+    }
+
     /// Called after looking for an eligible form. A provider permit protects UI
     /// actions, not a wait for its owner to switch applications.
     pub fn check_wait(self, provider_held: bool, provider: &str) -> Result<(), Error> {
@@ -367,6 +379,45 @@ pub fn codex_lists_directory(bytes: &[u8], cwd: &Path) -> Option<bool> {
     }))
 }
 
+/// The name of the one Claude environment whose only folder is `cwd`, read
+/// from the app's own `ccd-session-presets.json`. The form shows an
+/// environment only by name, so a name that any other environment also uses
+/// names no folder. Unreadable state, a remote target or extra folders prove
+/// nothing (ADR 0221).
+pub fn claude_environment(bytes: &[u8], cwd: &Path) -> Option<String> {
+    let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let cwd = cwd.to_str().filter(|_| cwd.is_absolute())?;
+    let presets: Vec<&serde_json::Value> = state["byAccount"]
+        .as_object()?
+        .values()
+        .filter_map(|account| account["presets"].as_array())
+        .flatten()
+        .collect();
+    let exact = |p: &serde_json::Value| {
+        let target = &p["target"];
+        target["kind"].as_str() == Some("local")
+            && target["cwd"].as_str() == Some(cwd)
+            && target
+                .get("additionalFolders")
+                .is_none_or(|f| f.as_array().is_some_and(Vec::is_empty))
+    };
+    let mut names = presets
+        .iter()
+        .filter(|p| exact(p))
+        .filter_map(|p| p["name"].as_str().map(str::trim))
+        // The form's own local choice carries this name.
+        .filter(|n| !n.is_empty() && *n != "This computer");
+    let name = names.next()?;
+    if names.any(|n| n != name)
+        || presets
+            .iter()
+            .any(|p| p["name"].as_str().map(str::trim) == Some(name) && !exact(p))
+    {
+        return None;
+    }
+    Some(name.to_owned())
+}
+
 pub fn selected_codex_directory(bytes: &[u8], cwd: &Path) -> bool {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return false;
@@ -403,6 +454,48 @@ fn project_in_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_claude_environment_names_exactly_one_folder() {
+        let state = |presets: &str| {
+            format!(r#"{{"byAccount":{{"a":{{"presets":[{presets}]}},"b":{{"builtIns":{{}}}}}}}}"#)
+        };
+        let ws = Path::new("/srv/multica/ws-1");
+        let own = r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-1"}}"#;
+        assert_eq!(
+            claude_environment(state(own).as_bytes(), ws).as_deref(),
+            Some("WS")
+        );
+        let empty_extra = r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":[]}}"#;
+        assert_eq!(
+            claude_environment(state(empty_extra).as_bytes(), ws).as_deref(),
+            Some("WS")
+        );
+        for presets in [
+            // Another folder, a remote target, extra folders, no name.
+            r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-2"}}"#,
+            r#"{"name":"WS","target":{"kind":"ssh","cwd":"/srv/multica/ws-1"}}"#,
+            r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/x"]}}"#,
+            r#"{"target":{"kind":"local","cwd":"/srv/multica/ws-1"}}"#,
+            r#"{"name":"This computer","target":{"kind":"local","cwd":"/srv/multica/ws-1"}}"#,
+            // The same name on another folder, or two names for the folder.
+            &format!(r#"{own},{{"name":"WS","target":{{"kind":"local","cwd":"/srv/other"}}}}"#),
+            &format!(
+                r#"{own},{{"name":"WS2","target":{{"kind":"local","cwd":"/srv/multica/ws-1"}}}}"#
+            ),
+        ] {
+            assert_eq!(
+                claude_environment(state(presets).as_bytes(), ws),
+                None,
+                "{presets}"
+            );
+        }
+        assert_eq!(claude_environment(b"not json", ws), None);
+        assert_eq!(
+            claude_environment(state(own).as_bytes(), Path::new("srv/multica/ws-1")),
+            None
+        );
+    }
+
     #[test]
     fn multica_sessions_live_in_the_workspace_folder() {
         let run = "6df77065-0000-4000-8000-000000000001";
@@ -473,6 +566,20 @@ mod tests {
         }
         assert_eq!(NativeConsole::observe(false, None, Process(1)), Waiting);
         assert_eq!(NativeConsole::observe(true, None, Nobody), Covered);
+    }
+
+    #[test]
+    fn a_background_creation_stops_only_when_the_provider_or_nobody_is_in_front() {
+        use NativeConsole::*;
+        assert!(Background(7).creation_continues(Background(7)));
+        assert!(Background(7).creation_continues(Background(8)));
+        for now in [Provider, Waiting, Covered] {
+            assert!(!Background(7).creation_continues(now));
+        }
+        assert!(Covered.creation_continues(Covered));
+        for now in [Provider, Waiting, Background(7)] {
+            assert!(!Covered.creation_continues(now));
+        }
     }
 
     #[test]

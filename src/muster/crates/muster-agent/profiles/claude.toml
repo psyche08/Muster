@@ -89,6 +89,10 @@ permission_card_prefix = "Permission request:"
 draft = "value"
 # An empty composer reports an empty value.
 placeholders = []
+# A side chat opens inside the session's primary pane as a landmark region
+# named "Side chat", with its own Prompt composer and Send button (recorded
+# 2026-11-16, Claude desktop Code tab). Its controls are not the session's.
+auxiliary_regions = ["Side chat"]
 
 [controls.composer]
 roles = ["AXTextArea"]

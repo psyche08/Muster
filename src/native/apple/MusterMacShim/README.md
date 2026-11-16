@@ -13,10 +13,17 @@ decides anything; it signs when asked.
 - `LockedUse/Console.m`: the Locked Use console adapters that
   `muster-platform/src/macos/locked_use.rs` calls: wake and display
   assertions, the console session sample, the lock-screen Return key, the
-  cover panels, locking, and the plugin socket's peer check. `muster-platform/build.rs`
+  black panels for displays the cover cannot dim, locking, and the plugin
+  socket's peer check. `muster-platform/build.rs`
   always compiles it on macOS; Rust owns every lease, authorization and
   watchdog decision. `Tests/DisplayAwakeTests.m` checks that its display
   assertions are released (build it with Console.m, see its header).
+- `LockedUse/Dimming.m`: display brightness for the Locked Use cover
+  (ADR 0222): DisplayServices for displays macOS controls, DDC/CI (VCP 0x10)
+  over `IOAVService` for other external displays, as m1ddc reaches them on
+  Apple silicon, and the display UUIDs the brightness record is keyed by.
+  Every private symbol is looked up with `dlsym`. Rust decides what is dimmed
+  and when a level is put back (`muster-platform/src/macos/dimming.rs`).
 - `Notice/Notice.m`: the top-right notice panel that
   `muster-platform/src/macos/notice.rs` shows in its helper process
   (`muster-panel --muster-notice`, from the bundle's `Contents/Helpers`:

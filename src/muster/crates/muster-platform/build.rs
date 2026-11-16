@@ -22,6 +22,7 @@ fn main() {
     let mut objects = Vec::new();
     for (source, object) in [
         ("LockedUse/Console.m", "console.o"),
+        ("LockedUse/Dimming.m", "dimming.o"),
         ("Display/Blackout.m", "blackout.o"),
         ("Notice/Notice.m", "notice.o"),
         ("Vision/Vision.m", "vision.o"),
@@ -67,6 +68,7 @@ fn main() {
         "ScreenCaptureKit",
         "ImageIO",
         "CoreGraphics",
+        "ColorSync",
     ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }

@@ -49,6 +49,36 @@ fn unique(root: &Element, test: impl Fn(&Element) -> bool) -> Result<Option<Elem
         _ => Err(conflict("Ambiguous native control")),
     }
 }
+/// Deeper than any recorded app tree; reached only by a cycle.
+const MAX_ANCESTRY: usize = 256;
+
+/// A composer of the session's own view: not one inside a region that holds
+/// a conversation of its own, such as Claude's side chat (ADR 0221). An
+/// ancestry too deep to read counts as no composer.
+fn session_composer(profile: &App, n: &Element) -> bool {
+    let controls = profile.controls();
+    if !controls.composer.matches(n) {
+        return false;
+    }
+    if controls.auxiliary_regions.is_empty() {
+        return true;
+    }
+    let mut parent = n.element("AXParent");
+    for _ in 0..MAX_ANCESTRY {
+        let Some(node) = parent else {
+            return true;
+        };
+        let subrole = node.string("AXSubrole").unwrap_or_default();
+        if controls.is_auxiliary_region(&subrole, &node) {
+            return false;
+        }
+        if node.role() == "AXWindow" {
+            return true;
+        }
+        parent = node.element("AXParent");
+    }
+    false
+}
 fn windows(root: &Element) -> Vec<Element> {
     root.attribute("AXWindows")
         .map(|v| Element::elements_of(&v))
@@ -125,8 +155,11 @@ impl Guard {
             ));
         }
         if self.mode != NativeConsole::Covered
-            && self.mode
-                != NativeConsole::observe(false, Some(self.pid), super::events::foreground_owner())
+            && !self.mode.creation_continues(NativeConsole::observe(
+                false,
+                Some(self.pid),
+                super::events::foreground_owner(),
+            ))
         {
             return Err(conflict(
                 "Foreground application changed during native creation",
@@ -242,8 +275,7 @@ async fn settled_windows(
         if require_renderer {
             ready &= !previous.is_empty();
             for window in &previous {
-                ready &=
-                    unique(window, |n| guard.profile.controls().composer.matches(n))?.is_some();
+                ready &= unique(window, |n| session_composer(guard.profile, n))?.is_some();
             }
         }
         if !ready {
@@ -272,7 +304,7 @@ async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Resu
         if !windows(root).contains(window) {
             return Err(conflict("Native startup window was replaced"));
         }
-        let ready = unique(window, |n| guard.profile.controls().composer.matches(n))?.is_some();
+        let ready = unique(window, |n| session_composer(guard.profile, n))?.is_some();
         if ready {
             let since = ready_since.get_or_insert_with(Instant::now);
             if since.elapsed() >= Duration::from_millis(700) {
@@ -299,6 +331,18 @@ fn codex_project_state() -> Option<Vec<u8>> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".codex")))?;
     std::fs::read(home.join(".codex-global-state.json")).ok()
+}
+
+/// Claude's environments, each a name for a folder (ADR 0221).
+fn claude_environment_state() -> Option<Vec<u8>> {
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    std::fs::read(home.join("Library/Application Support/Claude/ccd-session-presets.json")).ok()
+}
+
+/// The environment the form names, when its one folder is `cwd`.
+fn claude_environment(cwd: &Path) -> Option<String> {
+    claude_environment_state()
+        .and_then(|state| muster_agent::native_runtime::claude_environment(&state, cwd))
 }
 
 /// Advisory only. The provider lock and complete live form proof still
@@ -359,20 +403,37 @@ fn selection_matches(
 ) -> Result<Option<Selection>, Error> {
     let all = nodes(page)?;
     let proof = if provider == "claude" {
-        let good = all.iter().any(|n| {
+        let environments: Vec<_> = all
+            .iter()
+            .filter(|n| n.role() == "AXPopUpButton")
+            .filter_map(|n| n.string("AXDescription"))
+            .filter_map(|d| d.strip_prefix("Environment: ").map(str::to_owned))
+            .collect();
+        let folders = all.iter().any(|n| {
             n.role() == "AXPopUpButton"
-                && n.string("AXDescription").as_deref() == Some("Environment: This computer")
-        }) && all.iter().any(|n| {
-            n.role() == "AXPopUpButton"
-                && n.string("AXHelp").is_some_and(|display| {
-                    let home = std::env::var_os("HOME").map(PathBuf::from);
-                    muster_agent::native_runtime::directory_label_matches(
-                        &display,
-                        cwd,
-                        home.as_deref(),
-                    ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
-                })
+                && n.string("AXDescription")
+                    .is_some_and(|d| d.starts_with("Folder: "))
         });
+        // A named environment carries its one folder and shows no folder
+        // picker; "This computer" shows the folder it is set to.
+        let named = matches!(environments.as_slice(), [name] if name != "This computer")
+            && !folders
+            && claude_environment(cwd).as_deref() == environments.first().map(String::as_str);
+        let good = named
+            || all.iter().any(|n| {
+                n.role() == "AXPopUpButton"
+                    && n.string("AXDescription").as_deref() == Some("Environment: This computer")
+            }) && all.iter().any(|n| {
+                n.role() == "AXPopUpButton"
+                    && n.string("AXHelp").is_some_and(|display| {
+                        let home = std::env::var_os("HOME").map(PathBuf::from);
+                        muster_agent::native_runtime::directory_label_matches(
+                            &display,
+                            cwd,
+                            home.as_deref(),
+                        ) && n.string("AXDescription") == Some(format!("Folder: {display}"))
+                    })
+            });
         good.then_some(Selection::Claude)
     } else {
         let labels: Vec<_> = all
@@ -521,9 +582,90 @@ async fn choose(
     })
 }
 
-/// Claude's new-session form names its environment and folder in two
-/// pickers. Choose "This computer" and the exact folder from the app's own
-/// lists. Muster never adds a folder: one Claude does not list fails.
+/// Opens the environment picker and presses the local environment `name`,
+/// first showing the rest of the local list when the app folds it. Only
+/// items under the picker's "Local" group count; the picker is closed again
+/// without one.
+async fn choose_claude_environment(
+    guard: &Guard,
+    window: &Element,
+    environment: &Element,
+    name: &str,
+) -> Result<(), Error> {
+    if !menu_items(window)?.is_empty() {
+        return Err(conflict("A menu is already open in the provider window"));
+    }
+    guard.press(environment)?;
+    let mut expanded = false;
+    let mut deadline = Instant::now() + Duration::from_secs(2);
+    let outcome = loop {
+        guard.check()?;
+        let local = unique(window, |n| {
+            n.role() == "AXGroup" && n.string("AXTitle").as_deref() == Some("Local")
+        });
+        let items = match local {
+            Ok(Some(group)) => nodes(&group)?
+                .into_iter()
+                .filter(|n| n.role().starts_with("AXMenuItem"))
+                .collect(),
+            Ok(None) => Vec::new(),
+            Err(error) => break Err(error),
+        };
+        let matching: Vec<_> = items
+            .iter()
+            .filter(|i| item_labels(i).iter().any(|l| l == name))
+            .collect();
+        match matching.as_slice() {
+            [item] => break Ok((*item).clone()),
+            [_, _, ..] => break Err(conflict("Claude lists the environment more than once")),
+            [] => {}
+        }
+        let more: Vec<_> = items
+            .iter()
+            .filter(|i| {
+                i.string("AXTitle")
+                    .and_then(|t| t.strip_prefix("More ").map(|n| n.parse::<u32>().is_ok()))
+                    .unwrap_or(false)
+            })
+            .collect();
+        if !expanded && let [more] = more.as_slice() {
+            guard.press(more)?;
+            expanded = true;
+            deadline = Instant::now() + Duration::from_secs(2);
+        } else if Instant::now() >= deadline {
+            break Err(if items.is_empty() {
+                unavailable("The environment picker did not open; nothing was submitted")
+            } else {
+                Error::Invalid(format!(
+                    "Claude does not list the {name} environment; nothing was submitted"
+                ))
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    match outcome {
+        Ok(item) => guard.press(&item),
+        Err(error) => {
+            // Toggle only the picker this step opened; never a global Escape.
+            if !menu_items(window)?.is_empty() {
+                guard.press(environment)?;
+                let deadline = Instant::now() + Duration::from_secs(2);
+                while !menu_items(window)?.is_empty() && Instant::now() < deadline {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    guard.check()?;
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
+/// Claude's new-session form names a folder through its environment picker:
+/// a named environment of the app's own is one folder, and "This computer"
+/// adds a folder picker. Prefer the environment whose one folder is `cwd`;
+/// otherwise choose "This computer" and the exact folder from the app's
+/// recent list. Muster never adds a folder or an environment: one Claude
+/// does not list fails.
 async fn choose_claude_directory(
     guard: &Guard,
     window: &Element,
@@ -532,6 +674,12 @@ async fn choose_claude_directory(
 ) -> Result<(), Error> {
     let environment =
         picker(page, "Environment: ")?.ok_or_else(|| unavailable("No environment picker"))?;
+    if let Some(name) = claude_environment(cwd) {
+        if environment.string("AXDescription") == Some(format!("Environment: {name}")) {
+            return Ok(());
+        }
+        return choose_claude_environment(guard, window, &environment, &name).await;
+    }
     if environment.string("AXDescription").as_deref() != Some("Environment: This computer") {
         choose(
             guard,
@@ -664,7 +812,14 @@ fn ready_background_window(
     guard: &Guard,
     provider: &str,
     cwd: &Path,
+    explain: bool,
 ) -> Result<Option<BackgroundTarget>, Error> {
+    // A covered creation looks once; it logs why a window offers no route.
+    let skip = |index: usize, reason: &str| {
+        if explain {
+            log::info!("Native creation in-app route: window={index} {reason}");
+        }
+    };
     let live = windows(root);
     let pin = CODEX_WINDOW
         .lock()
@@ -680,27 +835,42 @@ fn ready_background_window(
     let mut routes = Vec::new();
     let mut candidates = Vec::new();
     let focused = root.element("AXFocusedWindow");
-    for window in live {
+    if explain {
+        log::info!(
+            "Native creation in-app route: windows={} pinned={} project_button={}",
+            live.len(),
+            pin.is_some(),
+            project_action.is_some()
+        );
+    }
+    for (index, window) in live.into_iter().enumerate() {
         if provider == "codex" && pin.as_ref().is_some_and(|p| p != &window) {
+            skip(index, "not the pinned window");
             continue;
         }
-        let Ok(tree) = nodes(&window) else { continue };
+        let Ok(tree) = nodes(&window) else {
+            skip(index, "tree unreadable");
+            continue;
+        };
         if tree.iter().any(|n| {
             n.role() == "AXSheet" || n.string("AXSubrole").as_deref() == Some("AXApplicationDialog")
         }) {
+            skip(index, "sheet or dialog");
             continue;
         }
         let editors: Vec<_> = tree
             .iter()
-            .filter(|n| guard.profile.controls().composer.matches(*n))
+            .filter(|n| session_composer(guard.profile, n))
             .collect();
         let [editor] = editors.as_slice() else {
+            skip(index, &format!("composers={}", editors.len()));
             continue;
         };
         if editor
             .string("AXValue")
             .is_none_or(|v| !guard.profile.is_empty(&v))
         {
+            skip(index, "composer not empty");
             continue;
         }
         let pages: Vec<_> = tree.iter().filter(|n| new_page(provider, n)).collect();
@@ -717,6 +887,21 @@ fn ready_background_window(
             candidates.push(window);
             continue;
         }
+        if explain {
+            let page = pages.first();
+            skip(
+                index,
+                &format!(
+                    "pages={} empty_marker={:?} project={:?} focused={}",
+                    pages.len(),
+                    page.map(|p| empty_session_marker(p).ok()),
+                    page.map(|p| selection_matches(provider, p, cwd, true)
+                        .map(|m| m.is_some())
+                        .ok()),
+                    focused.as_ref() == Some(&window)
+                ),
+            );
+        }
         let action = match provider {
             "codex" => project_action
                 .as_deref()
@@ -725,15 +910,22 @@ fn ready_background_window(
             _ => None,
         };
         if let Some((attribute, name)) = action {
-            let mut buttons = tree
+            let found: Vec<_> = tree
                 .iter()
-                .filter(|n| n.role() == "AXButton" && n.string(attribute).as_deref() == Some(name));
-            if let (Some(button), None) = (buttons.next(), buttons.next()) {
-                routes.push((window, button.clone()));
+                .filter(|n| n.role() == "AXButton" && n.string(attribute).as_deref() == Some(name))
+                .take(2)
+                .collect();
+            if let [button] = found.as_slice() {
+                routes.push((window, (*button).clone()));
+            } else {
+                skip(index, &format!("route buttons={}", found.len()));
             }
+        } else {
+            skip(index, "no route control");
         }
     }
     if candidates.len() > 1 {
+        skip(candidates.len(), "forms shown in several unfocused windows");
         return Ok(None);
     }
     if let Some(window) = candidates.pop() {
@@ -775,6 +967,7 @@ impl Admission {
                 &self.guard,
                 self.guard.profile.app.provider,
                 cwd,
+                false,
             )
             .is_ok_and(|now| now == self.background_window)
     }
@@ -893,7 +1086,9 @@ async fn prepare(
                     if guard.check().is_err() {
                         break None;
                     }
-                    if let Some(window) = ready_background_window(&root, &guard, provider, cwd)? {
+                    if let Some(window) =
+                        ready_background_window(&root, &guard, provider, cwd, false)?
+                    {
                         break Some(window);
                     }
                     if Instant::now() >= until {
@@ -935,6 +1130,41 @@ async fn prepare(
     })
 }
 
+/// Follows an in-app route of ADR 0220, rule 2: presses the window's control
+/// for a new session, if the form is not already shown, and pins a Codex
+/// window. Returns the window, whether Codex reuses it, and whether it is
+/// Claude's main window.
+fn in_app_route(
+    guard: &Guard,
+    root: &Element,
+    provider: &str,
+    target: BackgroundTarget,
+    stage: &dyn Fn(&str),
+) -> Result<(Element, bool, bool), Error> {
+    let window = target.window;
+    if let Some(action) = target.action {
+        guard.check()?;
+        if !windows(root).contains(&window) || !window.contains(&action) {
+            return Err(conflict("Background creation target was replaced"));
+        }
+        guard.press(&action)?;
+    }
+    if provider == "codex" {
+        let mut pin = CODEX_WINDOW.lock().unwrap();
+        let same = pin
+            .as_ref()
+            .and_then(|p| p.live(guard.pid, guard.start, std::slice::from_ref(&window)))
+            .is_some();
+        stage(if same {
+            "background_pinned_window_reused"
+        } else {
+            "background_window_pinned"
+        });
+        *pin = Some(CreationWindow::new(guard.pid, guard.start, window.clone()));
+    }
+    Ok((window, provider == "codex", provider == "claude"))
+}
+
 /// Submits the first message of a new session. A requested `model` or
 /// `effort` (names as the app shows them; empty keeps the app's choice) is
 /// chosen and read back on the new session's form first; one the app does
@@ -970,31 +1200,11 @@ pub async fn submit(
         .to_str()
         .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?;
     let pid = guard.pid;
-    let background = background_window.is_some();
-    let (window, reused_codex, reuses_main) = if let Some(target) = background_window {
-        let window = target.window;
-        if let Some(action) = target.action {
-            guard.check()?;
-            if !windows(&root).contains(&window) || !window.contains(&action) {
-                return Err(conflict("Background creation target was replaced"));
-            }
-            guard.press(&action)?;
+    let mut background = background_window.is_some();
+    let (window, reused_codex, reuses_main) = 'route: {
+        if let Some(target) = background_window {
+            break 'route in_app_route(&guard, &root, provider, target, &stage)?;
         }
-        if provider == "codex" {
-            let mut pin = CODEX_WINDOW.lock().unwrap();
-            let same = pin
-                .as_ref()
-                .and_then(|p| p.live(pid, guard.start, std::slice::from_ref(&window)))
-                .is_some();
-            stage(if same {
-                "background_pinned_window_reused"
-            } else {
-                "background_window_pinned"
-            });
-            *pin = Some(CreationWindow::new(pid, guard.start, window.clone()));
-        }
-        (window, provider == "codex", provider == "claude")
-    } else {
         let was_running = !launched;
         // Only a covered console reaches the foreground route (ADR 0220).
         let before_activation = if was_running {
@@ -1013,7 +1223,7 @@ pub async fn submit(
         // if the provider ignores raise; missing/ambiguous editors fail closed.
         stage("windows_ready");
         for window in &before {
-            let composer = unique(window, |n| profile.controls().composer.matches(n))?
+            let composer = unique(window, |n| session_composer(profile, n))?
                 .ok_or_else(|| unavailable("Existing native composer is unavailable"))?;
             if composer
                 .string("AXValue")
@@ -1021,6 +1231,16 @@ pub async fn submit(
             {
                 return Err(conflict("Existing native draft is preserved"));
             }
+        }
+        // Under cover, too, the in-app route is used when a window offers
+        // it, and the directory route only when none does (ADR 0221). The
+        // directory route reloads a form that is already shown, after the
+        // form was verified and before the draft is written. The windows
+        // are read here, once the app is active and they have settled.
+        if let Some(target) = ready_background_window(&root, &guard, provider, cwd, true)? {
+            stage("covered_in_app_route");
+            background = true;
+            break 'route in_app_route(&guard, &root, provider, target, &stage)?;
         }
         // Claude's documented code/new route targets its main renderer. Identify
         // that shell before navigation; only its verified empty new-session form
@@ -1210,7 +1430,7 @@ pub async fn submit(
                 && background
                 && provider == "claude"
                 && !chose_directory
-                && picker(&page, "Folder: ")?.is_some()
+                && picker(&page, "Environment: ")?.is_some()
             {
                 chose_directory = true;
                 stage("choose_directory");
@@ -1218,7 +1438,7 @@ pub async fn submit(
                 continue;
             }
             if let Some(project) = project {
-                let composer = unique(&page, |n| profile.controls().composer.matches(n))?;
+                let composer = unique(&page, |n| session_composer(profile, n))?;
                 form_state.2 = composer.is_some();
                 if let Some(composer) = composer {
                     super::navigation_restore::track_new_page(profile.provider(), &window, &page);

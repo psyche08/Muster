@@ -85,6 +85,22 @@ impl Drop for Pending<'_> {
     }
 }
 
+/// Whether the Mac is locked, read while no Locked Use transaction holds the
+/// console. A transaction unlocks the Mac under cover for its own operation
+/// and locks it again when it ends, so a run that arrives meanwhile waits for
+/// it instead of taking the unlocked path (ADR 0221).
+async fn console_locked(daemon: &Arc<Daemon>, cancel: &CancellationToken) -> Result<bool, Error> {
+    loop {
+        if let Ok(_console) = daemon.locked_use.writes.try_read() {
+            return Ok(daemon.platform().locked());
+        }
+        tokio::select! {
+            _ = cancel.cancelled() => return Err(Error::Conflict("Multica creation cancelled while queued".into())),
+            _ = tokio::time::sleep(Duration::from_millis(200)) => {}
+        }
+    }
+}
+
 pub(super) async fn start(
     daemon: &Arc<Daemon>,
     mut o: v1::AgentSchedulerOperate,
@@ -101,7 +117,7 @@ pub(super) async fn start(
     let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
     // Wait outside the provider/console locks and the once-only delivery
     // ledger. Each live Multica run owns its own cancellable wait.
-    let project = if enrolled && !granted()? && !daemon.platform().locked() {
+    let project = if enrolled && !granted()? && !console_locked(daemon, cancel).await? {
         super::trusted_multica::verified_destination(daemon, &o, true).await?
     } else {
         None
@@ -115,7 +131,7 @@ pub(super) async fn start(
             }),
     )?;
     #[cfg(target_os = "macos")]
-    if !granted()? && !daemon.platform().locked() {
+    if !granted()? && !console_locked(daemon, cancel).await? {
         let directory = project
             .as_ref()
             .map(|route| route.directory.as_path())
@@ -130,7 +146,7 @@ pub(super) async fn start(
                 ));
             }
             preflight(daemon, &o.provider)?;
-            if daemon.platform().locked() || granted()? {
+            if granted()? || console_locked(daemon, cancel).await? {
                 break;
             }
             if project
@@ -163,7 +179,7 @@ pub(super) async fn start(
             }
         }
     }
-    if !granted()? && !daemon.platform().locked() {
+    if !granted()? && !console_locked(daemon, cancel).await? {
         let (directory, prompt) = if let Some(route) = &project {
             log::info!(
                 "scheduler: verified unlocked Multica project for {}",
@@ -205,7 +221,7 @@ pub(super) async fn start(
             && let Some(route) =
                 super::trusted_multica::verified_destination(daemon, &o, false).await?
         {
-            if cancel.is_cancelled() || !daemon.platform().locked() {
+            if cancel.is_cancelled() || !console_locked(daemon, cancel).await? {
                 return Err(Error::Conflict(
                     "Multica dispatch or locked console changed".into(),
                 ));
@@ -289,6 +305,36 @@ pub(super) async fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_run_reads_the_lock_only_once_locked_use_gives_the_console_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::DaemonConfig::new(dir.path().join("state"));
+        config.listen = false;
+        config.agent = None;
+        config.cloud = false;
+        config.bind = "127.0.0.1:0".parse().unwrap();
+        let daemon = Daemon::start_with(config, Arc::new(crate::DefaultPlatform), None)
+            .await
+            .unwrap();
+        let cancel = CancellationToken::new();
+        let held = daemon.locked_use.writes.clone().write_owned().await;
+        let early =
+            tokio::time::timeout(Duration::from_millis(500), console_locked(&daemon, &cancel))
+                .await;
+        assert!(early.is_err(), "read while a transaction held the console");
+        drop(held);
+        assert_eq!(
+            console_locked(&daemon, &cancel).await.unwrap(),
+            daemon.platform().locked()
+        );
+        let _held = daemon.locked_use.writes.clone().write_owned().await;
+        cancel.cancel();
+        assert!(matches!(
+            console_locked(&daemon, &cancel).await,
+            Err(Error::Conflict(_))
+        ));
+    }
     #[test]
     fn grant_is_for_one_unchanged_first_turn() {
         let mut o = v1::AgentSchedulerOperate {
