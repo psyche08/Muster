@@ -271,7 +271,7 @@ superseding decisions get new numbers and bidirectional links.
 | [0153](0153-large-session-history-costs.md) | Accepted; source verified, device acceptance pending | Bound repeated cache, validation, provider history and display work |
 | [0154](0154-wait-for-slow-codex-windows.md) | Accepted; installed, local Codex creation accepted, scheduler recovered; Claude, remote and locked creation pending | Wait up to 90 s for slow Codex windows before navigation, and install 1.1.27 (117) |
 | [0155](0155-remove-finish-session-script.md) | Accepted | Remove `scripts/finish-session.sh`; land with the AGENTS.md steps run directly |
-| [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; installation pending | Bound container exec resources and wrapper reconciliation |
+| [0156](0156-container-process-resource-lifecycle.md) | Accepted; source verified; runtime installed, container migrated to init; end-to-end pending | Bound container exec resources and wrapper reconciliation |
 | [0157](0157-publish-apple-1-1-27.md) | Accepted | Publish the paired macOS and iOS 1.1.27 (117) OTA release |
 | [0158](0158-queued-message-actions-and-codex-paginated-runtime.md) | Accepted; source and tests verified, installation and runtime acceptance pending | Retire Claude queued prompts by dequeue priority and Send now requeues, add queued Send now and Delete actions, and read paginated Codex runtime state |
 | [0159](0159-grow-the-history-window.md) | Accepted; source and tests verified, installation and device acceptance pending | Grow the conversation history window on earlier and newer navigation, up to 1,000 records, instead of sliding it |
