@@ -26,6 +26,7 @@ ALLOWED = {
     # Infrastructure: storage, transport, relay, push.
     "muster-store": {"muster-core"},
     "muster-rpc": {"muster-proto", "muster-core"},
+    "muster-vnet": {"muster-core", "muster-net", "muster-store"},
     "muster-net": {"muster-core"},
     "muster-relay": {"muster-core", "muster-net"},
     "muster-apns": set(),

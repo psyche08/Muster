@@ -192,6 +192,7 @@ pub struct Node {
     reconfigure: tokio::sync::Mutex<()>,
     requested: std::sync::atomic::AtomicU64,
     completed: tokio::sync::watch::Sender<u64>,
+    vnet_only: bool,
     signer: SharedSigner,
     identity: TlsIdentity,
     trust: Trust,
@@ -224,6 +225,28 @@ impl Node {
         roster: SharedRoster,
         policy: SharedPolicy,
     ) -> Result<Arc<Self>, Error> {
+        Self::start_inner(config, signer, roster, policy, false).await
+    }
+
+    /// Run the network control protocols and vnet datagrams only. A node in
+    /// this mode may join via an invite but never hosts pairing or forwarding.
+    pub async fn start_vnet_only(
+        mut config: NodeConfig,
+        signer: SharedSigner,
+        roster: SharedRoster,
+        policy: SharedPolicy,
+    ) -> Result<Arc<Self>, Error> {
+        config.datagrams = true;
+        Self::start_inner(config, signer, roster, policy, true).await
+    }
+
+    async fn start_inner(
+        config: NodeConfig,
+        signer: SharedSigner,
+        roster: SharedRoster,
+        policy: SharedPolicy,
+        vnet_only: bool,
+    ) -> Result<Arc<Self>, Error> {
         let identity = TlsIdentity::new(signer.clone())?;
         let trust = Trust::new(roster);
         let (presence, presence_changes) = crate::presence::Board::new(match config.relay {
@@ -248,6 +271,7 @@ impl Node {
             reconfigure: tokio::sync::Mutex::new(()),
             requested: std::sync::atomic::AtomicU64::new(0),
             completed: tokio::sync::watch::channel(0).0,
+            vnet_only,
             signer,
             identity,
             trust,
@@ -1316,13 +1340,15 @@ impl Node {
                 let member = node.trust.is_member(&peer);
                 let handler = node.handler.lock().unwrap().clone();
                 let allowed = match (hello.service.as_str(), member) {
-                    (pair::SERVICE, _) => true,
+                    (pair::SERVICE, _) => !node.vnet_only,
                     (_, false) => false,
                     (gossip::SERVICE | heartbeat::SERVICE, true) => true,
                     (crate::scope_compat::SERVICE, true) => {
                         hello.version == crate::scope_compat::VERSION
                     }
-                    (_, true) if !node.is_service_host(&node.device_id()) => false,
+                    (_, true) if node.vnet_only || !node.is_service_host(&node.device_id()) => {
+                        false
+                    }
                     (forward::SERVICE, true) => true,
                     (_, true) => handler.is_some(),
                 };

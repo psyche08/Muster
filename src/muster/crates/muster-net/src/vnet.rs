@@ -309,6 +309,12 @@ impl Vnet {
         if helper_fd.is_some() {
             tun_config.close_fd_on_drop(false);
         }
+        #[cfg(windows)]
+        {
+            let exe = std::env::current_exe().map_err(|e| Error::Io(e.to_string()))?;
+            let dll = exe.with_file_name("wintun.dll");
+            tun_config.platform_config(|p| p.wintun_file(dll));
+        }
         let device =
             tun::create_as_async(&tun_config).map_err(|e| Error::Io(format!("tun: {e}")))?;
         log::info!("vnet up: {address}/{} mtu {}", cidr.1, config.mtu);

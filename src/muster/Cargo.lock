@@ -2454,6 +2454,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "muster-vnet"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "muster-core",
+ "muster-net",
+ "muster-store",
+ "p256 0.13.2",
+ "sha2 0.10.9",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "muster-web"
 version = "0.1.0"
 dependencies = [
