@@ -335,3 +335,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0217](0217-transcript-view-initializers-internal.md) | Accepted; source verified, iOS simulator build passes | Keep the transcript views' memberwise initializers internal under Xcode 26.4 |
 | [0218](0218-removed-device-readd.md) | Accepted; source and tests verified, paired-device acceptance pending | Let a removed device rejoin through a fresh admin-approved Add |
 | [0219](0219-release-apple-1-1-46.md) | Accepted | Publish Apple 1.1.46 with device readmission and background approval reads |
+| [0220](0220-background-only-native-creation.md) | Accepted; source and tests verified, device acceptance pending | Create native sessions only while the provider is in the background |
+| [0221](0221-multica-workspace-folder-sessions.md) | Accepted; source and tests verified, device acceptance pending | Create Multica sessions in the run's workspace folder |

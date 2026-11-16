@@ -11,6 +11,8 @@ pub enum Destination {
 
 /// Foreground belongs to the executor. An input pause in another app never
 /// grants permission to launch, raise a window or dispatch an activating URL.
+/// While the provider itself is in front it belongs to its user: an uncovered
+/// creation waits until another app owns the foreground (ADR 0220).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NativeConsole {
     Covered,
@@ -31,15 +33,29 @@ impl NativeConsole {
         Ok(())
     }
 
+    /// Whether native creation may act on the provider now. Only a covered
+    /// console or another application's foreground qualifies (ADR 0220).
+    pub fn may_create(self) -> bool {
+        matches!(self, Self::Covered | Self::Background(_))
+    }
+
     /// Called after looking for an eligible form. A provider permit protects UI
     /// actions, not a wait for its owner to switch applications.
     pub fn check_wait(self, provider_held: bool, provider: &str) -> Result<(), Error> {
-        if provider_held && matches!(self, Self::Background(_) | Self::Waiting) {
-            return Err(Error::Conflict(format!(
-                "Bring {provider} to the foreground to start this session; nothing was submitted"
-            )));
+        if !provider_held {
+            return Ok(());
         }
-        Ok(())
+        let why = match self {
+            Self::Covered => return Ok(()),
+            Self::Provider => format!(
+                "{provider} is the active app; the session starts after you switch to another app or lock the Mac"
+            ),
+            Self::Background(_) => {
+                format!("{provider} has no background route to a new session yet")
+            }
+            Self::Waiting => format!("No app owns the foreground, so {provider} was not touched"),
+        };
+        Err(Error::Conflict(format!("{why}; nothing was submitted")))
     }
 
     pub fn observe(covered: bool, provider: Option<u32>, focus: crate::local_input::Owner) -> Self {
@@ -223,6 +239,53 @@ pub fn multica_issue_prompt(issue: &str, title: &str, body: &str) -> String {
     .to_owned()
 }
 
+/// A Multica run's working directory is `<workspace>/<run[..8]>/workdir`.
+/// Its native session is created in `<workspace>`, a folder the owner adds
+/// to each app once, never in the per-run directory (ADR 0221).
+pub fn multica_workspace_directory<'a>(workdir: &'a Path, run: &str) -> Option<&'a Path> {
+    use std::path::Component;
+    let task = run
+        .get(..8)
+        .filter(|t| t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))?;
+    if !workdir.is_absolute()
+        || !workdir
+            .components()
+            .all(|c| matches!(c, Component::RootDir | Component::Normal(_)))
+        || workdir.file_name()? != "workdir"
+    {
+        return None;
+    }
+    let run_dir = workdir.parent()?;
+    if run_dir.file_name()? != task {
+        return None;
+    }
+    let workspace = run_dir.parent()?;
+    workspace.file_name().is_some().then_some(workspace)
+}
+
+/// Sent before a Multica first turn that runs in the workspace folder, so
+/// the agent works in the run's own directory (ADR 0221).
+pub fn multica_workspace_brief(workdir: &str) -> String {
+    format!(
+        "This Multica task's working directory is {workdir}. Before anything else, \
+         change to it and read its AGENTS.md if it has one. Run every command and \
+         make every change there; the other folders here belong to other tasks."
+    )
+}
+
+/// The first turn submitted in the workspace folder: the brief, a blank
+/// line, then the run's own first turn unchanged.
+pub fn multica_workspace_prompt(workdir: &str, text: &str) -> String {
+    format!("{}\n\n{text}", multica_workspace_brief(workdir))
+}
+
+/// The run's own first turn, when `submitted` is its workspace prompt.
+pub fn strip_multica_workspace_brief<'a>(workdir: &str, submitted: &'a str) -> Option<&'a str> {
+    submitted
+        .strip_prefix(&multica_workspace_brief(workdir))?
+        .strip_prefix("\n\n")
+}
+
 /// The only alternative considered for a digest-bound receipt is a complete
 /// reversible serialization. The caller still checks the original SHA-256.
 pub fn codex_composer_original(record: &str) -> Option<String> {
@@ -291,6 +354,19 @@ pub fn codex_sidebar_project(bytes: &[u8], cwd: &Path) -> Option<String> {
     Some(label.to_owned())
 }
 
+/// Whether any of the app's local projects has `cwd` among its roots. A
+/// directory none lists cannot be reached without adding a project, which
+/// Muster never does (ADR 0220). Unreadable state proves nothing either way.
+pub fn codex_lists_directory(bytes: &[u8], cwd: &Path) -> Option<bool> {
+    let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let projects = state["local-projects"].as_object()?;
+    Some(projects.values().any(|p| {
+        p["rootPaths"]
+            .as_array()
+            .is_some_and(|roots| roots.iter().any(|r| r.as_str() == cwd.to_str()))
+    }))
+}
+
 pub fn selected_codex_directory(bytes: &[u8], cwd: &Path) -> bool {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return false;
@@ -327,6 +403,43 @@ fn project_in_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn multica_sessions_live_in_the_workspace_folder() {
+        let run = "6df77065-0000-4000-8000-000000000001";
+        let workdir = Path::new("/srv/multica/ws-1/6df77065/workdir");
+        assert_eq!(
+            multica_workspace_directory(workdir, run),
+            Some(Path::new("/srv/multica/ws-1"))
+        );
+        for other in [
+            "/srv/multica/ws-1/6df77066/workdir",
+            "/srv/multica/ws-1/6df77065/work",
+            "/srv/multica/ws-1/../6df77065/workdir",
+            "srv/multica/ws-1/6df77065/workdir",
+            "/6df77065/workdir",
+        ] {
+            assert_eq!(multica_workspace_directory(Path::new(other), run), None);
+        }
+        assert_eq!(multica_workspace_directory(workdir, "short"), None);
+        let dir = workdir.to_str().unwrap();
+        let prompt = multica_workspace_prompt(dir, "## Task\n\nDo it.");
+        assert!(prompt.starts_with("This Multica task's working directory is /srv/"));
+        assert_eq!(
+            strip_multica_workspace_brief(dir, &prompt),
+            Some("## Task\n\nDo it.")
+        );
+        assert_eq!(strip_multica_workspace_brief("/other", &prompt), None);
+        assert_eq!(strip_multica_workspace_brief(dir, "## Task"), None);
+        // Codex records the whole submission in its composer form, which
+        // reverses to the original before the brief is removed.
+        let recorded = codex_composer_record(&prompt);
+        let original = codex_composer_original(&recorded).unwrap();
+        assert_eq!(
+            strip_multica_workspace_brief(dir, &original),
+            Some("## Task\n\nDo it.")
+        );
+    }
+
     #[test]
     fn desktop_receipt_requires_the_complete_expected_input() {
         let prompt = "## Task\n\nRead `x` and **return** <one>.";
@@ -376,18 +489,31 @@ mod tests {
     }
 
     #[test]
-    fn only_pre_admission_can_wait_for_a_foreground_handoff() {
+    fn only_pre_admission_can_wait_for_the_provider_to_leave_the_foreground() {
         use NativeConsole::*;
-        for mode in [Waiting, Background(5)] {
+        for mode in [Waiting, Background(5), Provider] {
             assert!(mode.check_wait(false, "test").is_ok());
             assert!(matches!(
                 mode.check_wait(true, "test"),
                 Err(Error::Conflict(_))
             ));
         }
-        for mode in [Provider, Covered] {
-            assert!(mode.check_wait(true, "test").is_ok());
-        }
+        assert!(Covered.check_wait(true, "test").is_ok());
+        let Err(Error::Conflict(why)) = Provider.check_wait(true, "Codex") else {
+            panic!("the active provider must refuse");
+        };
+        assert!(
+            why.starts_with("Codex is the active app") && why.ends_with("nothing was submitted")
+        );
+    }
+
+    #[test]
+    fn the_active_provider_is_never_driven_for_creation() {
+        use NativeConsole::*;
+        assert!(Background(3).may_create());
+        assert!(Covered.may_create());
+        assert!(!Provider.may_create());
+        assert!(!Waiting.may_create());
     }
 
     #[test]
@@ -521,6 +647,18 @@ mod tests {
             .is_none()
         );
         assert!(matches(&state));
+        for (state, dir, listed) in [
+            (&state, "/tmp/test-work", Some(true)),
+            (&duplicate, "/tmp/test-work", Some(true)),
+            (&state, "/tmp/other", Some(false)),
+        ] {
+            let bytes = serde_json::to_vec(state).unwrap();
+            assert_eq!(codex_lists_directory(&bytes, Path::new(dir)), listed);
+        }
+        assert_eq!(
+            codex_lists_directory(b"{}", Path::new("/tmp/test-work")),
+            None
+        );
         assert!(!selected_codex_directory(
             &serde_json::to_vec(&state).unwrap(),
             Path::new("/tmp/other")

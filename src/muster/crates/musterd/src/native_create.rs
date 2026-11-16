@@ -188,9 +188,10 @@ async fn owned(
         control_guard::check()?;
         let mut prepared = if managed {
             let path = path.clone();
+            let provider = r.provider.clone();
             Some(
                 control_guard::spawn_blocking_async(async move {
-                    muster_platform::macos::native_create::managed_admission(&path).await
+                    muster_platform::macos::native_create::managed_admission(&provider, &path).await
                 })
                 .await
                 .map_err(|e| Error::Unavailable(e.to_string()))??,

@@ -55,10 +55,10 @@ impl NativeHost {
         self
     }
 
+    /// A Multica first turn, for either provider, is queued by the scheduler,
+    /// which creates it in the run's workspace folder (ADR 0221).
     fn first_request(&self, id: &str, binding: &Binding, prompt: String) -> Req {
-        if let Some(run) = &self.multica_run
-            && self.provider == "codex"
-        {
+        if let Some(run) = &self.multica_run {
             let task_id = format!("multica:{run}");
             let operation = v1::AgentSchedulerOperate {
                 op_id: task_id.clone(),
@@ -125,11 +125,7 @@ impl NativeHost {
         }
     }
     async fn creation_digest(&self, session: &str) -> Result<Option<String>, String> {
-        let Some(run) = self
-            .multica_run
-            .as_ref()
-            .filter(|_| self.provider == "codex")
-        else {
+        let Some(run) = self.multica_run.as_ref() else {
             return Ok(None);
         };
         let task_id = format!("multica:{run}");
@@ -322,23 +318,39 @@ impl Host for NativeHost {
                                 let matches = |text: &str| {
                                     hex::encode(Sha256::digest(text.as_bytes())) == *digest
                                 };
+                                // The grant binds the run's own text; a session
+                                // in the workspace folder records it after the
+                                // brief (ADR 0221).
+                                let granted = |text: &str| {
+                                    matches(text)
+                                        || (host.multica_run.is_some()
+                                            && muster_agent::native_runtime::strip_multica_workspace_brief(
+                                                &b.cwd, text,
+                                            )
+                                            .is_some_and(matches))
+                                };
                                 let bare = row.text.strip_suffix('\n').unwrap_or(&row.text);
-                                matches(&row.text)
-                                    || matches(bare)
+                                granted(&row.text)
+                                    || granted(bare)
                                     || (host.provider == "codex"
                                         && muster_agent::native_runtime::codex_composer_original(
                                             bare,
                                         )
                                         .as_deref()
-                                        .is_some_and(matches))
+                                        .is_some_and(granted))
                             }
-                            None => std::iter::once(prompt.as_str())
-                                .chain(verified_issue.as_deref())
+                            None => std::iter::once(prompt.clone())
+                                .chain(verified_issue.clone())
+                                .chain(host.multica_run.as_ref().map(|_| {
+                                    muster_agent::native_runtime::multica_workspace_prompt(
+                                        &b.cwd, &prompt,
+                                    )
+                                }))
                                 .any(|expected| {
                                     muster_agent::native_runtime::first_prompt_matches(
                                         &host.provider,
                                         &row.text,
-                                        expected,
+                                        &expected,
                                     )
                                 }),
                         }
