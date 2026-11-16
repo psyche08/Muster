@@ -81,11 +81,22 @@ fn pipe_name(path: &Path, sid: &str) -> io::Result<String> {
 pub struct Listener {
     name: String,
     sid: String,
+    allow_elevated_client: bool,
     pending: tokio::sync::Mutex<NamedPipeServer>,
 }
 
-fn instance(name: &str, sid: &str, first: bool) -> io::Result<NamedPipeServer> {
-    let sddl: Vec<u16> = format!("O:{sid}D:P(A;;GA;;;{sid})")
+fn instance(
+    name: &str,
+    sid: &str,
+    first: bool,
+    allow_elevated_client: bool,
+) -> io::Result<NamedPipeServer> {
+    let admin = if allow_elevated_client {
+        "(A;;GRGW;;;BA)"
+    } else {
+        ""
+    };
+    let sddl: Vec<u16> = format!("O:{sid}D:P(A;;GA;;;{sid}){admin}")
         .encode_utf16()
         .chain(Some(0))
         .collect();
@@ -115,22 +126,55 @@ fn instance(name: &str, sid: &str, first: bool) -> io::Result<NamedPipeServer> {
 
 impl Listener {
     pub fn bind(path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::bind_with_access(path.as_ref(), false)
+    }
+    /// Used only for a random, per-launch adapter pipe. The server must check
+    /// the client PID against its UAC-launched helper before exchanging packets.
+    pub fn bind_for_elevated_helper(path: &Path) -> io::Result<Self> {
+        Self::bind_with_access(path, true)
+    }
+    pub fn owner_sid(&self) -> &str {
+        &self.sid
+    }
+    fn bind_with_access(path: &Path, allow_elevated_client: bool) -> io::Result<Self> {
         let sid = current_sid()?;
-        let name = pipe_name(path.as_ref(), &sid)?;
-        let pending = instance(&name, &sid, true)?.into();
-        Ok(Self { name, sid, pending })
+        let name = pipe_name(path, &sid)?;
+        let pending = instance(&name, &sid, true, allow_elevated_client)?.into();
+        Ok(Self {
+            name,
+            sid,
+            pending,
+            allow_elevated_client,
+        })
     }
     pub async fn accept(&self) -> io::Result<(NamedPipeServer, ())> {
         let mut pending = self.pending.lock().await;
         pending.connect().await?;
-        let next = instance(&self.name, &self.sid, false)?;
+        let next = instance(&self.name, &self.sid, false, self.allow_elevated_client)?;
         Ok((std::mem::replace(&mut *pending, next), ()))
     }
 }
 
 pub async fn connect(path: &Path) -> io::Result<NamedPipeClient> {
-    let sid = current_sid()?;
-    let name = pipe_name(path, &sid)?;
+    connect_to_owner(path, &current_sid()?).await
+}
+
+/// Check the actual pipe owner before using an endpoint across a UAC account switch.
+pub async fn connect_to_owner(path: &Path, sid: &str) -> io::Result<NamedPipeClient> {
+    if sid.len() > 184
+        || !sid.strip_prefix("S-1-").is_some_and(|suffix| {
+            !suffix.is_empty()
+                && suffix
+                    .split('-')
+                    .all(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
+        })
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid owner SID",
+        ));
+    }
+    let name = pipe_name(path, sid)?;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
     let pipe = loop {
         match ClientOptions::new().open(&name) {

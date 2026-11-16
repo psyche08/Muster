@@ -39,7 +39,8 @@ internal sealed class Desktop : Form
     static void Button(FlowLayoutPanel bar, string text, Action action)
     {
         var b = new Button { Text = text, AutoSize = true, Height = 29, TabStop = true };
-        b.Click += (_, _) => action();
+        b.Tag = action;
+        b.Click += (_, _) => ((Action)b.Tag!)();
         bar.Controls.Add(b);
     }
     public Desktop()
@@ -139,6 +140,12 @@ internal sealed class Desktop : Form
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void Send(Intent i)
     {
+        if (current?.Screen == Page.Chat && current.Chat?.Draft is {} draft && i.ComposerAction == null)
+        {
+            var snapshot = draft.Clone();
+            snapshot.Text = input.Text;
+            i = new() { ComposerAction = new() { Draft = snapshot, Action = i } };
+        }
         core.Send(i);
     }
     async void EffectReceived(ulong id, Effect e)
@@ -193,8 +200,20 @@ internal sealed class Desktop : Form
         var rows = new List<Row>();
         var lines = new List<string>();
         void Row(string name, Intent intent) => rows.Add(new(name, intent));
-        void Act(string label, Func<Intent> intent) => Button(actions, label, () => Send(intent()));
-        ClearBar(actions);
+        int actionIndex = 0;
+        void AddAction(string label, Action invoke)
+        {
+            if (actionIndex < actions.Controls.Count && actions.Controls[actionIndex] is Button button)
+            {
+                if (button.Text != label)
+                    button.Text = label;
+                button.Tag = invoke;
+            }
+            else
+                Button(actions, label, invoke);
+            actionIndex++;
+        }
+        void Act(string label, Func<Intent> intent) => AddAction(label, () => Send(intent()));
         var inputKey = $"{page}/{v.SelectedDevice}/{v.Chat?.Draft?.Key}/{v.Terminal?.Session}";
         if (inputContext != inputKey)
         {
@@ -238,30 +257,30 @@ internal sealed class Desktop : Form
                 Act("Create invite", () => new() { ShowInvite = new() { TtlSecs = 300 } });
                 foreach (var p in v.Pending)
                 {
-                    Button(actions, "Review " + p.Name,
-                           () =>
-                           {
-                               using var dialog =
-                                   new AccessDialog("Approve device", p.Name + "\r\n" + p.Fingerprint, v.JoinAccess);
-                               if (dialog.ShowDialog(this) == DialogResult.OK)
-                                   Send(new() { DecideJoin = new() { DeviceId = p.DeviceId, Approve = true,
-                                                                     Scopes = { dialog.Scopes } } });
-                           });
+                    AddAction("Review " + p.Name,
+                              () =>
+                              {
+                                  using var dialog =
+                                      new AccessDialog("Approve device", p.Name + "\r\n" + p.Fingerprint, v.JoinAccess);
+                                  if (dialog.ShowDialog(this) == DialogResult.OK)
+                                      Send(new() { DecideJoin = new() { DeviceId = p.DeviceId, Approve = true,
+                                                                        Scopes = { dialog.Scopes } } });
+                              });
                     Act("Decline " + p.Name, () => new() { DecideJoin = new() { DeviceId = p.DeviceId } });
                 }
             }
             if (page == Page.Device && v.DeviceActions?.CanEditAccess == true &&
                 v.Network?.Members.FirstOrDefault(m => m.DeviceId == v.SelectedDevice) is {} member)
             {
-                Button(actions, "Edit access",
-                       () =>
-                       {
-                           using var dialog = new AccessDialog("Save access", member.Name + "\r\n" + member.Fingerprint,
-                                                               v.DeviceAccess);
-                           if (dialog.ShowDialog(this) == DialogResult.OK)
-                               Send(new() { SetScopes = new() { DeviceId = member.DeviceId, Role = member.Role,
-                                                                Scopes = { dialog.Scopes } } });
-                       });
+                AddAction("Edit access",
+                          () =>
+                          {
+                              using var dialog = new AccessDialog(
+                                  "Save access", member.Name + "\r\n" + member.Fingerprint, v.DeviceAccess);
+                              if (dialog.ShowDialog(this) == DialogResult.OK)
+                                  Send(new() { SetScopes = new() { DeviceId = member.DeviceId, Role = member.Role,
+                                                                   Scopes = { dialog.Scopes } } });
+                          });
             }
             if (page == Page.Invite && v.Invite != null)
                 lines.Add(v.Invite.Text);
@@ -318,6 +337,8 @@ internal sealed class Desktop : Form
                 foreach (var b in chatView.Timeline)
                     lines.AddRange(Block(b));
                 lines.Add(chatView.LoadError);
+                lines.Add(chatView.ResponseError);
+                lines.Add(chatView.ComposerDisabledReason);
                 input.PlaceholderText = chatView.ComposerPlaceholder;
                 if (lastSend is {} sent && sent.Id == chatView.SentDraftId)
                 {
@@ -326,8 +347,8 @@ internal sealed class Desktop : Form
                     lastSend = null;
                 }
                 if (chatView.Draft != null && !chatView.Sending && chatView.ComposerDisabledReason.Length == 0)
-                    Button(
-                        actions, "Send",
+                    AddAction(
+                        "Send",
                         () =>
                         {
                             if (string.IsNullOrWhiteSpace(input.Text))
@@ -344,8 +365,20 @@ internal sealed class Desktop : Form
                 foreach (var i in chatView.Interactions)
                 {
                     lines.Add(i.Prompt);
-                    foreach (var option in i.Options)
-                        Act(option, () => new() { AgentRespond = new() { Interaction = i.Id, Option = option } });
+                    if (chatView.ResponseUnknown || chatView.RespondingInteraction.Length > 0)
+                        continue;
+                    if (i.Questions.Count > 0)
+                        AddAction("Answer questions",
+                                  () =>
+                                  {
+                                      using var dialog = new Questions(i);
+                                      if (dialog.ShowDialog(this) == DialogResult.OK)
+                                          Send(new() { AgentRespond = new() { Interaction = i.Id,
+                                                                              Answers = { dialog.Answers } } });
+                                  });
+                    else
+                        foreach (var option in i.Options)
+                            Act(option, () => new() { AgentRespond = new() { Interaction = i.Id, Option = option } });
                 }
                 if (chatView.CanInterrupt)
                     Act("Interrupt", () => new() { AgentInterrupt = new() });
@@ -377,13 +410,12 @@ internal sealed class Desktop : Form
                 input.PlaceholderText = "Terminal input";
                 if (!term.Ended)
                 {
-                    Button(actions, "Send line",
-                           () =>
-                           {
-                               Send(new() { TerminalText = new() { Text = input.Text } });
-                               Send(new() { TerminalKey = new() { Key = "enter" } });
-                               input.Clear();
-                           });
+                    AddAction("Send line", () =>
+                                           {
+                                               Send(new() { TerminalText = new() { Text = input.Text } });
+                                               Send(new() { TerminalKey = new() { Key = "enter" } });
+                                               input.Clear();
+                                           });
                     Act("Ctrl+C", () => new() { TerminalKey = new() { Key = "ctrl-c" } });
                 }
                 Act("Close terminal", () => new() { CloseTerminal = new() });
@@ -421,6 +453,12 @@ internal sealed class Desktop : Form
             if (v.Browser is {} browser)
             {
                 input.PlaceholderText = "Browser operation (JSON)";
+                if (browser.Status is {} bs)
+                {
+                    lines.Add(bs.Message);
+                    if (browser.Local && bs.ExtensionPath.Length > 0)
+                        lines.Add(bs.ExtensionPath);
+                }
                 lines.Add(browser.Result);
                 Act("Run browser operation", () => new() { BrowserRun = new() { Json = input.Text } });
             }
@@ -461,6 +499,8 @@ internal sealed class Desktop : Form
             }
             break;
         }
+        while (actions.Controls.Count > actionIndex)
+            actions.Controls[actions.Controls.Count - 1].Dispose();
         if (!rows.SequenceEqual(list.Items.Cast<Row>()))
         {
             var old = list.SelectedItem as Row;

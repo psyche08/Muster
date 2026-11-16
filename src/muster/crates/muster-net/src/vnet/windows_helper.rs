@@ -26,7 +26,7 @@ fn error(e: impl std::fmt::Display) -> Error {
 fn endpoint(token: u128) -> io::Result<PathBuf> {
     Ok(std::env::current_exe()?.with_file_name(format!("MusterTun-{token:032x}")))
 }
-fn launch(addr: Ipv4Addr, prefix: u8, token: u128) -> io::Result<OwnedHandle> {
+fn launch(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> io::Result<OwnedHandle> {
     let exe = std::env::current_exe()?.with_file_name("muster-tun.exe");
     let wide = |p: &Path| {
         p.as_os_str()
@@ -39,7 +39,7 @@ fn launch(addr: Ipv4Addr, prefix: u8, token: u128) -> io::Result<OwnedHandle> {
         exe.parent()
             .ok_or_else(|| io::Error::other("missing install directory"))?,
     );
-    let args = wide(Path::new(&format!("{addr} {prefix} {token:032x}")));
+    let args = wide(Path::new(&format!("{addr} {prefix} {token:032x} {owner}")));
     unsafe {
         let mut info = SHELLEXECUTEINFOW {
             cbSize: size_of::<SHELLEXECUTEINFOW>() as _,
@@ -61,8 +61,11 @@ pub(super) async fn open(
     prefix: u8,
 ) -> Result<(PacketWriter, PacketReader), Error> {
     let token = rand::random::<u128>();
-    let listener = muster_local::Listener::bind(endpoint(token).map_err(error)?).map_err(error)?;
-    let handle = tokio::task::spawn_blocking(move || launch(addr, prefix, token))
+    let listener =
+        muster_local::Listener::bind_for_elevated_helper(&endpoint(token).map_err(error)?)
+            .map_err(error)?;
+    let owner = listener.owner_sid().to_owned();
+    let handle = tokio::task::spawn_blocking(move || launch(addr, prefix, token, &owner))
         .await
         .map_err(error)?
         .map_err(error)?;
@@ -135,7 +138,7 @@ pub fn prepare_process() -> io::Result<()> {
     }
     Ok(())
 }
-pub async fn run(addr: Ipv4Addr, prefix: u8, token: u128) -> Result<(), Error> {
+pub async fn run(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> Result<(), Error> {
     if !(1..=32).contains(&prefix)
         || addr.is_unspecified()
         || addr.is_multicast()
@@ -143,7 +146,7 @@ pub async fn run(addr: Ipv4Addr, prefix: u8, token: u128) -> Result<(), Error> {
     {
         return Err(error("invalid interface address"));
     }
-    let mut pipe = muster_local::connect(&endpoint(token).map_err(error)?)
+    let mut pipe = muster_local::connect_to_owner(&endpoint(token).map_err(error)?, owner)
         .await
         .map_err(error)?;
     let config = VnetConfig {
