@@ -102,7 +102,7 @@ async fn client(daemon: &Daemon) -> Client {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn readdress_preserves_pairing_and_persists_on_both_peers() {
+async fn readdress_and_rename_preserve_pairing_and_persist_on_both_peers() {
     let relay = relay().await;
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
@@ -175,6 +175,52 @@ async fn readdress_preserves_pairing_and_persists_on_both_peers() {
         },
     )
     .await;
+    let target = b.device_id();
+    let rename = |name: &str| {
+        Req::NetworkRename(v1::NetworkRenameRequest {
+            device_id: target.to_hex(),
+            name: name.into(),
+        })
+    };
+    assert!(musterd::handler::needs_presence(&rename("studio")));
+    assert!(remote.call(rename("studio")).await.is_err());
+    assert!(client(&b).await.call(rename("studio")).await.is_err());
+    for invalid in [" ", "two\nlines", &"a".repeat(129)] {
+        assert!(ca.call(rename(invalid)).await.is_err());
+    }
+    let mut expected = a
+        .roster()
+        .read()
+        .unwrap()
+        .state()
+        .active(&target)
+        .unwrap()
+        .record
+        .clone();
+    expected.name = "studio".into();
+    assert!(matches!(
+        ca.call(rename("  studio  ")).await.unwrap(),
+        Resp::NetworkStatus(_)
+    ));
+    let count = a.roster().read().unwrap().len();
+    ca.call(rename("studio")).await.unwrap();
+    assert_eq!(a.roster().read().unwrap().len(), count);
+    wait_for(
+        "signed name persisted at peer",
+        Duration::from_secs(10),
+        || {
+            b.store()
+                .load_roster()
+                .unwrap()
+                .state()
+                .active(&target)
+                .unwrap()
+                .record
+                == expected
+        },
+    )
+    .await;
+    assert_eq!(b.device_info().name, "studio");
     for daemon in [&a, &b] {
         assert_eq!(daemon.network_status().network_id, network_id);
         let stored = daemon.store().load_roster().unwrap();
@@ -186,6 +232,7 @@ async fn readdress_preserves_pairing_and_persists_on_both_peers() {
             stored.state().active(&b.device_id()).unwrap().record.vip,
             Some("192.168.13.12".parse().unwrap())
         );
+        assert_eq!(stored.state().active(&target).unwrap().record, expected);
         assert_eq!(stored.state().active_members().count(), 2);
     }
     assert!(matches!(

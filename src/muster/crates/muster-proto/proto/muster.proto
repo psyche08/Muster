@@ -126,6 +126,7 @@ message Request {
     AgentChatOptionsRequest agent_chat_options = 54;
     AgentChatSetOptionsRequest agent_chat_set_options = 55;
     NetworkReaddressRequest network_readdress = 56;
+    NetworkRenameRequest network_rename = 150;
     DesktopUpdateLeaseRequest desktop_update_lease = 57;
     AgentInspectRequest agent_inspect = 58;
     DiagnosticsUploadRequest diagnostics_upload = 59;
@@ -527,6 +528,10 @@ message NetworkRemoveRequest {
   string device_id = 1;
 }
 
+message NetworkRenameRequest {
+  string device_id = 1;
+  string name = 2;
+}
 message NetworkSetScopesRequest {
   string device_id = 1;
   repeated string scopes = 2;

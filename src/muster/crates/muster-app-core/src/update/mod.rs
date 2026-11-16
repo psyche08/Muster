@@ -451,6 +451,9 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::JoinNetwork(j) => network::intent_join_network(state, ctx, j),
         It::DecideJoin(d) => network::intent_decide_join(state, ctx, d),
         It::RemoveDevice(r) => network::intent_remove_device(state, ctx, r),
+        It::RenameDevice(r) => {
+            network::admin_request(state, ctx, "rename", String::new(), Req::NetworkRename(r))
+        }
         It::SetScopes(s) => network::intent_set_scopes(state, ctx, s),
         It::SetPolicy(p) => network::intent_set_policy(state, ctx, p),
         It::SelectDevice(s) => network::intent_select_device(state, s),

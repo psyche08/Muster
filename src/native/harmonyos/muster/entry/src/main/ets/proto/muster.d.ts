@@ -492,6 +492,9 @@ export namespace muster {
             /** Request networkReaddress */
             networkReaddress?: (muster.v1.INetworkReaddressRequest|null);
 
+            /** Request networkRename */
+            networkRename?: (muster.v1.INetworkRenameRequest|null);
+
             /** Request desktopUpdateLease */
             desktopUpdateLease?: (muster.v1.IDesktopUpdateLeaseRequest|null);
 
@@ -715,6 +718,9 @@ export namespace muster {
             /** Request networkReaddress. */
             public networkReaddress?: (muster.v1.INetworkReaddressRequest|null);
 
+            /** Request networkRename. */
+            public networkRename?: (muster.v1.INetworkRenameRequest|null);
+
             /** Request desktopUpdateLease. */
             public desktopUpdateLease?: (muster.v1.IDesktopUpdateLeaseRequest|null);
 
@@ -791,7 +797,7 @@ export namespace muster {
             public agentDispatch?: (muster.v1.IAgentDispatchRequest|null);
 
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -3995,6 +4001,64 @@ export namespace muster {
 
             /**
              * Gets the default type url for NetworkRemoveRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a NetworkRenameRequest. */
+        interface INetworkRenameRequest {
+
+            /** NetworkRenameRequest deviceId */
+            deviceId?: (string|null);
+
+            /** NetworkRenameRequest name */
+            name?: (string|null);
+        }
+
+        /** Represents a NetworkRenameRequest. */
+        class NetworkRenameRequest implements INetworkRenameRequest {
+
+            /**
+             * Constructs a new NetworkRenameRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.INetworkRenameRequest);
+
+            /** NetworkRenameRequest deviceId. */
+            public deviceId: string;
+
+            /** NetworkRenameRequest name. */
+            public name: string;
+
+            /**
+             * Creates a new NetworkRenameRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NetworkRenameRequest instance
+             */
+            public static create(properties?: muster.v1.INetworkRenameRequest): muster.v1.NetworkRenameRequest;
+
+            /**
+             * Encodes the specified NetworkRenameRequest message. Does not implicitly {@link muster.v1.NetworkRenameRequest.verify|verify} messages.
+             * @param message NetworkRenameRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.INetworkRenameRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NetworkRenameRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NetworkRenameRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.NetworkRenameRequest;
+
+            /**
+             * Gets the default type url for NetworkRenameRequest
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -12417,6 +12481,9 @@ export namespace muster {
             /** Intent setScopes */
             setScopes?: (muster.app.ISetScopes|null);
 
+            /** Intent renameDevice */
+            renameDevice?: (muster.v1.INetworkRenameRequest|null);
+
             /** Intent setPolicy */
             setPolicy?: (muster.app.ISetPolicy|null);
 
@@ -12634,6 +12701,9 @@ export namespace muster {
             /** Intent setScopes. */
             public setScopes?: (muster.app.ISetScopes|null);
 
+            /** Intent renameDevice. */
+            public renameDevice?: (muster.v1.INetworkRenameRequest|null);
+
             /** Intent setPolicy. */
             public setPolicy?: (muster.app.ISetPolicy|null);
 
@@ -12815,7 +12885,7 @@ export namespace muster {
             public agentLoadWork?: (muster.app.IAgentLoadWork|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -18053,6 +18123,9 @@ export namespace muster {
             /** DeviceActions canRemove */
             canRemove?: (boolean|null);
 
+            /** DeviceActions canRename */
+            canRename?: (boolean|null);
+
             /** DeviceActions blackout */
             blackout?: (muster.v1.IDisplayBlackout|null);
         }
@@ -18080,6 +18153,9 @@ export namespace muster {
 
             /** DeviceActions canRemove. */
             public canRemove: boolean;
+
+            /** DeviceActions canRename. */
+            public canRename: boolean;
 
             /** DeviceActions blackout. */
             public blackout?: (muster.v1.IDisplayBlackout|null);

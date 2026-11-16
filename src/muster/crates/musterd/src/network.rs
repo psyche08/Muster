@@ -510,6 +510,54 @@ impl Daemon {
         Ok(())
     }
 
+    pub fn rename_member(&self, device_id: &str, name: &str) -> Result<(), Error> {
+        let id =
+            DeviceId::from_hex(device_id).map_err(|e| Error::Invalid(format!("device id: {e}")))?;
+        if name.chars().any(char::is_control) {
+            return Err(Error::Invalid(
+                "Device names cannot contain control characters".into(),
+            ));
+        }
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 128 {
+            return Err(Error::Invalid(
+                "Enter a device name of 1 to 128 characters".into(),
+            ));
+        }
+        let entry = {
+            let roster = self.roster().read().unwrap();
+            if !roster.state().is_admin(&self.device_id()) {
+                return Err(Error::Unauthorized(
+                    "Only a network administrator can rename devices".into(),
+                ));
+            }
+            let member = roster
+                .state()
+                .active(&id)
+                .ok_or_else(|| Error::NotFound("Device is not an active member".into()))?;
+            if member.record.name == name {
+                return Ok(());
+            }
+            Author {
+                roster: &roster,
+                signer: self.signer().as_ref(),
+            }
+            .update(
+                id,
+                DeviceUpdate {
+                    name: Some(name.into()),
+                    role: None,
+                    scopes: None,
+                    vip: None,
+                },
+            )?
+        };
+        self.store().append_entries(std::slice::from_ref(&entry))?;
+        self.node().publish(entry)?;
+        let _ = self.changed.send(());
+        Ok(())
+    }
+
     pub fn remove_member(self: &Arc<Self>, device_id: &str) -> Result<(), Error> {
         let id =
             DeviceId::from_hex(device_id).map_err(|e| Error::Invalid(format!("device id: {e}")))?;

@@ -1362,6 +1362,7 @@ pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
         show_access: !member.scopes.is_empty() || admin,
         can_edit_access: admin && other,
         can_remove: admin && other,
+        can_rename: admin,
     }
 }
 

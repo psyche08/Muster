@@ -108,6 +108,7 @@ fn access_for(req: &Req) -> Access {
         | Req::NetworkPending(_)
         | Req::NetworkDecide(_)
         | Req::NetworkRemove(_)
+        | Req::NetworkRename(_)
         | Req::NetworkSetScopes(_)
         | Req::NetworkReaddress(_)
         | Req::PolicyGet(_)
@@ -1426,6 +1427,10 @@ async fn dispatch(
         }
         Req::NetworkRemove(r) => {
             daemon.remove_member(&r.device_id)?;
+            Resp::NetworkStatus(daemon.network_status())
+        }
+        Req::NetworkRename(r) => {
+            daemon.rename_member(&r.device_id, &r.name)?;
             Resp::NetworkStatus(daemon.network_status())
         }
         Req::NetworkSetScopes(r) => {

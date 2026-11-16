@@ -322,6 +322,8 @@ struct JoinView: View {
 struct DeviceView: View {
     let core: MusterCore
     let vm: ViewModel
+    @State private var renameTarget: String?
+    @State private var renameText = ""
     @State private var editingScopes = false
     @State private var confirmRemove = false
     @State private var ssh = false
@@ -335,6 +337,12 @@ struct DeviceView: View {
             List {
                 Section {
                     LabeledContent("Name", value: member.name)
+                    if vm.deviceActions.canRename {
+                        Button("Rename device…") {
+                            renameText = member.name
+                            renameTarget = member.deviceID
+                        }
+                    }
                     LabeledContent("Kind", value: member.kind)
                     LabeledContent("Role", value: member.role)
                     if !member.vip.isEmpty { LabeledContent("Virtual IP", value: member.vip) }
@@ -388,6 +396,14 @@ struct DeviceView: View {
                 }
             }
             .navigationTitle(member.name)
+            .alert("Rename device", isPresented: Binding(
+                get: { renameTarget != nil },
+                set: { if !$0 { renameTarget = nil } }
+            ), presenting: renameTarget) { id in
+                TextField("Device name", text: $renameText)
+                Button("Save") { core.renameDevice(id, name: renameText) }
+                Button("Cancel", role: .cancel) {}
+            }
             .sheet(isPresented: $editingScopes) {
                 AccessEditorSheet(title: "Access for \(member.name)", access: vm.deviceAccess) { scopes in
                     core.setScopes(device: member.deviceID, scopes: scopes, role: member.role)
