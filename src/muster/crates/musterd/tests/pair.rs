@@ -830,6 +830,31 @@ async fn create_invite_join_approve_call_and_remove() {
     };
     assert!(!status_b.members.iter().any(|m| m.is_self));
 
+    // The same identity needs a new invitation and an explicit admin decision.
+    let invite = a.make_invite(60).unwrap().encode();
+    let returning = b.clone();
+    let join = tokio::spawn(async move {
+        returning
+            .join(&invite, "returning", "desktop", &|_, _| {})
+            .await
+    });
+    wait_for(
+        "returning device awaiting approval",
+        Duration::from_secs(10),
+        || !a.pending_joins().joins.is_empty(),
+    )
+    .await;
+    assert!(a.roster().read().unwrap().state().active(&b_id).is_none());
+    a.decide(&b_id.to_hex(), true, &["agent.view".into()], "")
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), join)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(a.roster().read().unwrap().state().active(&b_id).is_some());
+    assert!(b.roster().read().unwrap().state().active(&b_id).is_some());
+
     a.shutdown().await;
     b.shutdown().await;
     drop(Arc::clone(&a));
