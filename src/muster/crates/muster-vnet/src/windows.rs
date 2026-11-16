@@ -99,7 +99,8 @@ pub async fn run() -> Result<()> {
     let vnet = Vnet::start(
         node.clone(),
         VnetConfig {
-            name: Some("Muster Vnet".into()),
+            // The Windows backend configures the adapter through netsh.
+            name: Some("MusterVnet".into()),
             ..Default::default()
         },
     )
