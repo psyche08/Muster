@@ -3,6 +3,7 @@ use crate::{Daemon, Error};
 use muster_store::multica::NativeSession;
 
 pub(crate) fn ordinary(daemon: &Daemon, session: &str) -> Result<(), Error> {
+    let session = muster_agent::side_chat::parent(session).unwrap_or(session);
     let identities = daemon
         .agent()
         .map(|agent| agent.native_lineage(session))

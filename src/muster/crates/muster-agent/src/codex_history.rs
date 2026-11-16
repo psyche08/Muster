@@ -166,8 +166,14 @@ impl RecencyCache {
                 size: 0,
                 archived: false,
                 hidden,
+                relation: if hidden {
+                    "subagent"
+                } else if parent.is_some() {
+                    "sidechat"
+                } else {
+                    ""
+                },
                 parent_id: parent,
-                relation: if hidden { "subagent" } else { "" },
                 meta: SessionMeta {
                     title,
                     cwd: PathBuf::from(r.get::<_, String>(2)?),

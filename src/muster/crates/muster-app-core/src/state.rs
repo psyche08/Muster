@@ -67,6 +67,7 @@ pub struct Chat {
     pub options: Option<v1::AgentChatOptions>,
     pub options_busy: bool,
     pub options_error: String,
+    pub side_request: Option<String>,
     pub completing: bool,
     pub completion: Option<(u64, String)>,
     pub completion_error: String,

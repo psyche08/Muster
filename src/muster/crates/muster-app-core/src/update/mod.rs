@@ -42,6 +42,7 @@ mod network;
 mod operations;
 mod send_recovery;
 mod shell;
+mod side_chat;
 mod terminals;
 #[cfg(test)]
 mod tests;
@@ -100,6 +101,14 @@ pub enum Msg {
     NativeCreated {
         network: Option<String>,
         device: String,
+        result: Result<v1::AgentSession, Error>,
+    },
+    SideAnswer {
+        token: String,
+        device: String,
+        origin: String,
+        draft_id: String,
+        draft: Option<app::ChatDraft>,
         result: Result<v1::AgentSession, Error>,
     },
     SendRecovered {
@@ -468,6 +477,18 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::OpenDesktopChats(o) => open_desktop_chats(state, ctx, o.provider),
         It::DesktopChatOpen(o) => desktop_chat_open(state, ctx, o.chat, o.desktop, false),
         It::ChatOptionsLoad(_) => chat_options(state, ctx, None),
+        It::SideChatAction(a) => side_chat::action(
+            state,
+            ctx,
+            if a.end {
+                v1::agent_side_question_request::Action::End
+            } else {
+                v1::agent_side_question_request::Action::Create
+            },
+            "",
+            "",
+            None,
+        ),
         It::ComposerComplete(_) => desktop_chats::complete(state, ctx),
         It::ChatSetOptions(o) => desktop_chats::intent_chat_set_options(state, ctx, o),
         It::AgentSend(s) => agents::intent_agent_send(state, ctx, s),
@@ -786,6 +807,14 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             work,
             result,
         } => agents::msg_chat_work(state, token, &device, &session, work, result),
+        Msg::SideAnswer {
+            token,
+            device,
+            origin,
+            draft_id,
+            draft,
+            result,
+        } => side_chat::answer(state, ctx, &token, device, origin, draft_id, draft, result),
         Msg::Completion {
             device,
             session,

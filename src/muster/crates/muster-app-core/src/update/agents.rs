@@ -462,6 +462,7 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         completing: false,
         completion: None,
         completion_error: String::new(),
+        side_request: None,
     });
     state
         .chat
@@ -1025,6 +1026,47 @@ pub(super) fn intent_open_agent(state: &mut State, ctx: &Ctx, o: app::OpenAgent)
 }
 
 pub(super) fn intent_agent_send(state: &mut State, ctx: &Ctx, mut s: app::AgentSend) {
+    if state
+        .chat
+        .as_ref()
+        .is_some_and(|c| muster_agent::side_chat::ended(&c.session))
+    {
+        state.toast("This session has ended; its history is read-only", true);
+        return;
+    }
+    let child = state
+        .chat
+        .as_ref()
+        .is_some_and(|c| muster_agent::side_chat::is_child(&c.session.id));
+    if let Some(question) =
+        muster_agent::side_chat::command(&s.text).or_else(|| child.then_some(s.text.as_str()))
+    {
+        if !s.attachments.is_empty() || !s.release_unconfirmed.is_empty() {
+            state.toast(
+                "Side chat takes text only and cannot release a main-chat send",
+                true,
+            );
+            return;
+        }
+        let draft = state
+            .chat
+            .as_ref()
+            .filter(|c| c.draft.text == s.text)
+            .map(|c| c.draft.clone());
+        super::side_chat::action(
+            state,
+            ctx,
+            if child {
+                v1::agent_side_question_request::Action::Ask
+            } else {
+                v1::agent_side_question_request::Action::Create
+            },
+            question,
+            &s.draft_id,
+            draft,
+        );
+        return;
+    }
     let op_id = state.op_id();
     let mut diagnostic = crate::send_diagnostics::Trace::new(
         ctx.shell.clone(),

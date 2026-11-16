@@ -213,6 +213,66 @@ fn native_completion_is_optional_and_cannot_follow_a_new_turn_or_another_chat() 
     );
 }
 
+#[tokio::test]
+async fn side_chat_command_never_enters_the_parent_send_queue_and_ended_hides_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let shell = Arc::new(QuietShell);
+    let config = crate::AppConfig {
+        dir: dir.path().into(),
+        mode: crate::Mode::Embedded {
+            relay: None,
+            name: "example".into(),
+            kind: "phone".into(),
+            bind: "127.0.0.1:0".parse().unwrap(),
+            version: String::new(),
+        },
+        allow_loopback: true,
+    };
+    let backend = Arc::new(
+        crate::backend::Backend::connect(&config, shell.clone())
+            .await
+            .unwrap(),
+    );
+    let (tx, _) = mpsc::unbounded_channel();
+    let ctx = Ctx {
+        backend,
+        shell,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = running_chat();
+    let parent = "11111111-1111-4111-8111-111111111111";
+    state.chat.as_mut().unwrap().session.id = parent.into();
+    agents::intent_agent_send(
+        &mut state,
+        &ctx,
+        app::AgentSend {
+            text: "/btw Why?".into(),
+            ..Default::default()
+        },
+    );
+    assert!(state.chat.as_ref().unwrap().side_request.is_some());
+    assert!(!state.chat.as_ref().unwrap().sending && admitted_rows(&state).is_empty());
+    let chat = state.chat.as_mut().unwrap();
+    chat.side_request = None;
+    chat.session.state = "ended".into();
+    let view = crate::render::view_model(&state).chat.unwrap();
+    assert!(!view.composer_disabled_reason.is_empty() && !view.can_create_side_chat);
+    for text in ["An ordinary send", "/btw A late side question"] {
+        agents::intent_agent_send(
+            &mut state,
+            &ctx,
+            app::AgentSend {
+                text: text.into(),
+                ..Default::default()
+            },
+        );
+    }
+    assert!(
+        state.chat.as_ref().unwrap().side_request.is_none() && admitted_rows(&state).is_empty()
+    );
+}
+
 struct QuietShell;
 impl crate::Shell for QuietShell {
     fn on_view(&self, _: &[u8]) {}
@@ -656,6 +716,7 @@ fn change_preview_requires_a_loaded_summary_and_keeps_deleted_diff() {
         completing: false,
         completion: None,
         completion_error: String::new(),
+        side_request: None,
     });
     open_change(
         &mut state,

@@ -36,6 +36,7 @@ struct ChatComposer: View {
     @Environment(\.keyboardDock) private var keyboardDock
     @ObservedObject private var keyboardPrefs = KeyboardPrefs.shared
     #endif
+    @State private var confirmingEnd = false
     @State private var text = ""
     @State private var draftRevision = ""
     @State private var composerRegistration: UUID?
@@ -133,6 +134,7 @@ struct ChatComposer: View {
                         .accessibilityLabel("选择键盘")
                         .disabled(busy)
                         #endif
+                        sideChatButton
                         Text(chat.providerLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: 0)
                         if busy { ProgressView().controlSize(.small) }
@@ -229,9 +231,23 @@ struct ChatComposer: View {
     /// Rust sets the limit to zero where attachments are not offered (desktop chats).
     private var acceptsAttachments: Bool { chat.attachmentCountLimit > 0 }
 
+    @ViewBuilder private var sideChatButton: some View {
+        if chat.canCreateSideChat {
+            Button { core.sideChat() } label: {
+                Image(systemName: "bubble.left.and.bubble.right").frame(minWidth: 32, minHeight: 32)
+            }.buttonStyle(.plain).accessibilityLabel("Side chat").help("Side chat (/btw)")
+        } else if chat.canEndSideChat {
+            Button("End side chat", role: .destructive) { confirmingEnd = true }
+                .confirmationDialog("End this side chat?", isPresented: $confirmingEnd) {
+                    Button("End side chat", role: .destructive) { core.sideChat(end: true) }
+                } message: { Text("Its history will remain available to read.") }
+        }
+    }
+
     private var controls: some View {
         HStack(spacing: 14) {
             if acceptsAttachments { attachmentMenu }
+            sideChatButton
             if style == .claude { Spacer() }
             Text(chat.providerLabel)
                 .font(.system(size: ChatStyle.secondarySize)).foregroundStyle(palette.secondary)

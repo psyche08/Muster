@@ -213,6 +213,7 @@ public final class MusterCore: MusterShell {
 
     /// The open desktop chat's model / effort choices, read from the Mac.
     public func chatOptionsLoad() { send(.chatOptionsLoad(Muster_App_ChatOptionsLoad())) }
+    public func sideChat(end: Bool = false) { send(.sideChatAction(.with { $0.end = end })) }
     public func composerComplete() { send(.composerComplete(Muster_App_ComposerComplete())) }
 
     /// Chooses a model and/or effort by name exactly as the Mac offered it.

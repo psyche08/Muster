@@ -34,13 +34,24 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": message["id"], "result": {}})
     elif method == "thread/fork":
         assert params["threadId"] == "source-thread"
-        assert params["path"] == "/tmp/rollout.jsonl"
+        if "threadSource" in params:
+            assert params["path"] == "/tmp/rollout.jsonl"
+        else:
+            assert "path" not in params
+            assert params["developerInstructions"]
         assert params["ephemeral"] is True and params["permissions"] == ":read-only"
         assert params["approvalPolicy"] == "never"
         send({"jsonrpc": "2.0", "id": message["id"], "result": {"thread": {"id": "fork-1", "ephemeral": True}}})
         notify("thread/started", {"thread": {"id": "fork-1"}})
     elif method == "turn/start":
         assert params["threadId"] == "fork-1"
+        if "turnTrigger" not in params:
+            assert params["input"][0]["text"] == "side question"
+            send({"id": message["id"], "result": {"turn": {"id": "side-turn"}}})
+            notify("turn/completed", {"threadId": "source-thread", "turn": {"status": "failed"}})
+            notify("item/completed", {"threadId": "fork-1", "item": {"type": "agentMessage", "text": "side answer"}})
+            notify("turn/completed", {"threadId": "fork-1", "turn": {"status": "completed"}})
+            continue
         assert "suggestion" in params["input"][0]["text"]
         turn = params["responsesapiClientMetadata"]["prediction_source_turn_id"]
         send({"jsonrpc": "2.0", "id": message["id"], "result": {"turn": {"id": "prediction-turn", "status": "inProgress"}}})

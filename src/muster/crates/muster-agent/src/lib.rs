@@ -55,6 +55,7 @@ pub mod receipt;
 mod recency;
 mod search;
 mod sections;
+pub mod side_chat;
 pub mod text;
 pub mod transcript;
 pub mod unconfirmed;
@@ -99,6 +100,7 @@ pub enum Error {
 pub struct AgentConfig {
     /// Private, disposable history projections; no source files are modified.
     pub history_cache: Option<PathBuf>,
+    pub side_chat_db: Option<PathBuf>,
     pub codex_home: Option<PathBuf>,
     pub claude_home: Option<PathBuf>,
     /// Claude.app's registry of desktop conversations, read for the
@@ -146,6 +148,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             history_cache: None,
+            side_chat_db: None,
             codex_home: codex::home(),
             claude_home: claude::home(),
             claude_desktop: claude::desktop_registry(),
@@ -234,6 +237,7 @@ pub struct CatalogSnapshot {
 }
 
 struct Inner {
+    sides: Option<side_chat::journal::Store>,
     metadata_generation: u64,
     sections: sections::Catalog,
     catalog: HashMap<String, Discovered>,
@@ -474,6 +478,9 @@ impl AgentService {
             .and_then(deepseek_app::socket)
             .map(deepseek_app::Link::new);
         let archive = Arc::new(muster_archive::Archive::open(config.muster_archive.clone()));
+        let sides = side_chat::journal::Store::open(config.side_chat_db.as_deref())
+            .map_err(|e| log::warn!("side chats unavailable: {e}"))
+            .ok();
         let service = Arc::new(Self {
             runtime: tokio::runtime::Handle::current(),
             queue_reader: Mutex::new(queue::Reader::default()),
@@ -484,6 +491,7 @@ impl AgentService {
             chatgpt_catalog: Mutex::new(chat_catalog::LocalCatalog::default()),
             config,
             inner: Mutex::new(Inner {
+                sides,
                 metadata_generation: 0,
                 sections: Default::default(),
                 catalog: HashMap::new(),
@@ -1965,7 +1973,7 @@ impl AgentService {
             .catalog
             .values()
             .filter(|d| {
-                matches!(d.relation, "subsession" | "fork")
+                matches!(d.relation, "subsession" | "fork" | "sidechat")
                     && !d.archived
                     && d.parent_id.as_deref() == Some(id)
                     && d.provider.as_str() == session.provider
@@ -1978,6 +1986,21 @@ impl AgentService {
             .take(200)
             .filter_map(|d| Self::project_summary(inner, &d.id))
             .collect();
+        if let Some(store) = &inner.sides {
+            session.subsessions.extend(
+                store
+                    .rows
+                    .values()
+                    .filter(|s| s.parent_session_id == id && s.provider == session.provider)
+                    .cloned(),
+            );
+            session.subsessions.sort_by(|a, b| {
+                b.updated_unix
+                    .cmp(&a.updated_unix)
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            session.subsessions.truncate(200);
+        }
         for child in session
             .subagents
             .iter_mut()
@@ -1989,6 +2012,9 @@ impl AgentService {
     }
 
     fn project_summary(inner: &Inner, id: &str) -> Option<AgentSession> {
+        if side_chat::is_child(id) {
+            return inner.sides.as_ref()?.rows.get(id).cloned();
+        }
         if desktop_chat::app_of(id).is_some() {
             return Self::project_chat(inner, id);
         }
@@ -2341,6 +2367,9 @@ impl AgentService {
             return Some(app.provider().as_str().into());
         }
         let inner = self.inner.lock().unwrap();
+        if side_chat::is_child(id) {
+            return Some(inner.sides.as_ref()?.rows.get(id)?.provider.clone());
+        }
         let provider = if cloud::is_cloud(id) {
             inner.cloud.get(id)?.provider
         } else {
@@ -2495,6 +2524,15 @@ impl AgentService {
                     .filter_map(|(id, _)| Self::project_cloud(inner, id)),
             )
             .collect();
+        if let Some(store) = &inner.sides {
+            sessions.extend(
+                store
+                    .rows
+                    .values()
+                    .filter(|s| provider.is_none_or(|p| p.as_str() == s.provider))
+                    .cloned(),
+            );
+        }
         if provider.is_none() {
             if let Some(cli) = &self.cli {
                 sessions.extend(
@@ -2619,6 +2657,16 @@ impl AgentService {
         self: &Arc<Self>,
         request: &muster_proto::v1::AgentMessagesRequest,
     ) -> Result<muster_proto::v1::AgentMessagePage, Error> {
+        if side_chat::is_child(&request.session) {
+            return self
+                .inner
+                .lock()
+                .unwrap()
+                .sides
+                .as_ref()
+                .ok_or_else(|| Error::Unavailable("Side history unavailable".into()))?
+                .history(request);
+        }
         if cli::is_cli(&request.session) {
             return self.cli_source()?.history(request).await;
         }
@@ -3071,7 +3119,27 @@ impl AgentService {
         }
     }
 
+    pub fn check_send_target(&self, id: &str) -> Result<(), Error> {
+        let summary = if cli::is_cli(id) {
+            self.cli.as_ref().and_then(|c| c.session(id))
+        } else {
+            Self::project_summary(&self.inner.lock().unwrap(), id)
+        };
+        if summary.is_some_and(|s| side_chat::ended(&s)) {
+            return Err(Error::Conflict(
+                "This session has ended; its history is read-only".into(),
+            ));
+        }
+        if side_chat::is_child(id) {
+            return Err(Error::Unavailable(
+                "Use the side chat action for this conversation".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn send_to(&self, id: &str, text: &str) -> Result<String, Error> {
+        self.check_send_target(id)?;
         if text.trim().is_empty() {
             return Err(Error::Invalid("empty message".into()));
         }
