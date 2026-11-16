@@ -1,7 +1,9 @@
 # ADR 0156: Bound container exec resources and wrapper reconciliation
 
 - Date: 2026-11-06
-- Status: Accepted; source verified; installation pending
+- Status: Accepted; source verified; patched runtime observed installed and the
+  existing Multica container migrated to init (2026-11-16); provider end-to-end
+  acceptance pending
 - Related: [ADR 0077](0077-multica-runtime-state-and-manual-upgrade.md),
   [ADR 0126](0126-multica-bridge-follows-the-container-gateway.md),
   [Multica architecture](../architecture/multica.md)
@@ -92,3 +94,62 @@ The patch does not change guest page-cache reclamation or lower its RAM limit.
   end-to-end acceptance have not been performed. A source merge does not claim
   that the currently installed runtime has changed or its accumulated heap has
   been released.
+
+## Installation and migration evidence (2026-11-16)
+
+Recorded on the operator's 16 GiB Mac. This section adds evidence; the
+decision above is unchanged.
+
+Installed runtime:
+
+- Apple container reports 1.6.1 for the CLI and API server. The installed
+  `container-runtime-linux` is signed by team `89LGY6BD53` rather than by
+  Apple and was replaced on 2026-11-10, which indicates the operator's rebuilt
+  runtime. Its build provenance against this patch was not re-derived here.
+- Exec growth, measured with macOS `footprint` on the host runtime process of
+  an idle Multica container: 7,697 KB before, 7,793 KB after 100 `/bin/true`
+  execs and 7,921 KB after 200, about 1.1 KB per exec against about 78 KiB
+  before the patch. After almost six hours of uptime and several hundred
+  monitoring execs the footprint was 7.7 MB. This is consistent with the
+  bounded exit-status cache. No plateau beyond 200 execs is claimed, and
+  `probe_exec_resources.py` was not run.
+
+Existing-container migration (README procedure, with one deviation):
+
+- Keep-alive was not switched off. Instead, Muster.app was quit with SIGTERM,
+  because it rejects the AppleScript quit event (-1708). The agent was then
+  stopped with `launchctl bootout gui/$UID/dev.linsheng.musterd`, so nothing
+  could restart the container. Reopening Muster.app re-registered the agent,
+  which restarted the Multica daemon. The keep-alive setting was never changed.
+- With no task active, the container was stopped and its writable layer was
+  committed to a dated local rollback image. Both bind mounts, the read-write
+  Multica data root and a read-only workspace mount, stayed on the host and
+  were not modified.
+- Two disposable 256 MiB containers ran from the rollback image with
+  `sleep infinity` as PID 1 and no mounts. Each started six orphaned children:
+  six zombies remained without init and none with `--init` (PID 1
+  `.cz-init`). Both containers were removed automatically. The snapshot
+  contained the daemon identity, Multica configuration, SSH material and the
+  bridge wrapper.
+- The image records Entrypoint `sleep` and Cmd `infinity`. Passing
+  `sleep infinity` as the command runs `sleep sleep infinity`, and the
+  container exits at once. Recreate it without a command.
+- Before anything was deleted, an unstarted container created with the
+  replacement flags was compared field by field with the saved
+  `container inspect` output. Only the image and `useInit` differed. The
+  init process, user, working directory, environment, CPU and memory, both
+  mounts with their read-only flag, network and MTU, DNS, ports,
+  capabilities, sysctls and platform all matched. That container and then
+  the original were deleted, and the original name was recreated with
+  `--init`.
+- Afterwards, PID 1 was `.cz-init` and the hostname was unchanged. Six
+  orphaned children in the live container left zero zombies; the old
+  container had accumulated nine from earlier daemon restarts. The Multica
+  daemon kept its identity and re-registered 15 runtimes with their previous
+  IDs. Muster rewrote the bridge wrapper for the restarted agent's new port,
+  on which the agent was listening, and the read-only mount rejected writes.
+- Not done: no provider end-to-end Multica task has run since the migration.
+  On an unlocked Mac, a Codex first turn waits for foreground routing or a
+  lock, and neither was arranged. The rollback image is now the container's
+  base image, so it must be kept while the container exists. For rollback,
+  recreate the container from that image without `--init`.
