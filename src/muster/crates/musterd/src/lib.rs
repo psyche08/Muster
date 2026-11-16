@@ -823,7 +823,13 @@ impl Daemon {
         &self.policy
     }
     pub fn name(&self) -> String {
-        self.name.read().unwrap().clone()
+        self.roster()
+            .read()
+            .unwrap()
+            .state()
+            .active(&self.device_id())
+            .map(|member| member.record.name.clone())
+            .unwrap_or_else(|| self.name.read().unwrap().clone())
     }
     pub fn kind(&self) -> DeviceKind {
         *self.kind.read().unwrap()
@@ -869,7 +875,7 @@ impl Daemon {
     pub fn own_record(&self) -> muster_core::roster::DeviceRecord {
         let mut record = muster_core::roster::DeviceRecord::new(
             self.signer.public_key(),
-            self.name(),
+            self.name.read().unwrap().clone(),
             self.kind(),
         );
         record.presence_key = self.presence_candidate().ok().flatten();

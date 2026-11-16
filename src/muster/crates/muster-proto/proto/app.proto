@@ -31,6 +31,7 @@ message Intent {
     DecideJoin decide_join = 13;
     RemoveDevice remove_device = 14;
     SetScopes set_scopes = 15;
+    muster.v1.NetworkRenameRequest rename_device = 142;
     SetPolicy set_policy = 16;
     SelectDevice select_device = 17;
     SetRelay set_relay = 19;
@@ -591,6 +592,7 @@ message DeviceActions {
   bool show_access = 3;      // the access summary has something to show
   bool can_edit_access = 4;  // this device is an admin and the member is another
   bool can_remove = 5;
+  bool can_rename = 7;
   muster.v1.DisplayBlackout blackout = 6; // present for a connected, supported Mac on mobile
 }
 

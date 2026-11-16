@@ -944,6 +944,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentChatOptionsRequest|null} [agentChatOptions] Request agentChatOptions
              * @property {muster.v1.IAgentChatSetOptionsRequest|null} [agentChatSetOptions] Request agentChatSetOptions
              * @property {muster.v1.INetworkReaddressRequest|null} [networkReaddress] Request networkReaddress
+             * @property {muster.v1.INetworkRenameRequest|null} [networkRename] Request networkRename
              * @property {muster.v1.IDesktopUpdateLeaseRequest|null} [desktopUpdateLease] Request desktopUpdateLease
              * @property {muster.v1.IAgentInspectRequest|null} [agentInspect] Request agentInspect
              * @property {muster.v1.IDiagnosticsUploadRequest|null} [diagnosticsUpload] Request diagnosticsUpload
@@ -1355,6 +1356,14 @@ export const muster = $root.muster = (() => {
             Request.prototype.networkReaddress = null;
 
             /**
+             * Request networkRename.
+             * @member {muster.v1.INetworkRenameRequest|null|undefined} networkRename
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.networkRename = null;
+
+            /**
              * Request desktopUpdateLease.
              * @member {muster.v1.IDesktopUpdateLeaseRequest|null|undefined} desktopUpdateLease
              * @memberof muster.v1.Request
@@ -1559,12 +1568,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "networkRename", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1738,6 +1747,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.DeviceSetCoverRequest.encode(message.deviceSetBlackout, writer.uint32(/* id 80, wireType 2 =*/642).fork(), q + 1).ldelim();
                 if (message.agentDispatch != null && Object.hasOwnProperty.call(message, "agentDispatch"))
                     $root.muster.v1.AgentDispatchRequest.encode(message.agentDispatch, writer.uint32(/* id 81, wireType 2 =*/650).fork(), q + 1).ldelim();
+                if (message.networkRename != null && Object.hasOwnProperty.call(message, "networkRename"))
+                    $root.muster.v1.NetworkRenameRequest.encode(message.networkRename, writer.uint32(/* id 150, wireType 2 =*/1202).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -1957,6 +1968,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 56: {
                             message.networkReaddress = $root.muster.v1.NetworkReaddressRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 150: {
+                            message.networkRename = $root.muster.v1.NetworkRenameRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 57: {
@@ -10287,6 +10302,155 @@ export const muster = $root.muster = (() => {
             };
 
             return NetworkRemoveRequest;
+        })();
+
+        v1.NetworkRenameRequest = (function() {
+
+            /**
+             * Properties of a NetworkRenameRequest.
+             * @memberof muster.v1
+             * @interface INetworkRenameRequest
+             * @property {string|null} [deviceId] NetworkRenameRequest deviceId
+             * @property {string|null} [name] NetworkRenameRequest name
+             */
+
+            /**
+             * Constructs a new NetworkRenameRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a NetworkRenameRequest.
+             * @implements INetworkRenameRequest
+             * @constructor
+             * @param {muster.v1.INetworkRenameRequest=} [properties] Properties to set
+             */
+            function NetworkRenameRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NetworkRenameRequest deviceId.
+             * @member {string} deviceId
+             * @memberof muster.v1.NetworkRenameRequest
+             * @instance
+             */
+            NetworkRenameRequest.prototype.deviceId = "";
+
+            /**
+             * NetworkRenameRequest name.
+             * @member {string} name
+             * @memberof muster.v1.NetworkRenameRequest
+             * @instance
+             */
+            NetworkRenameRequest.prototype.name = "";
+
+            /**
+             * Creates a new NetworkRenameRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.NetworkRenameRequest
+             * @static
+             * @param {muster.v1.INetworkRenameRequest=} [properties] Properties to set
+             * @returns {muster.v1.NetworkRenameRequest} NetworkRenameRequest instance
+             */
+            NetworkRenameRequest.create = function create(properties) {
+                return new NetworkRenameRequest(properties);
+            };
+
+            /**
+             * Encodes the specified NetworkRenameRequest message. Does not implicitly {@link muster.v1.NetworkRenameRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.NetworkRenameRequest
+             * @static
+             * @param {muster.v1.INetworkRenameRequest} message NetworkRenameRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NetworkRenameRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.deviceId != null && Object.hasOwnProperty.call(message, "deviceId"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.deviceId);
+                if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+                return writer;
+            };
+
+            /**
+             * Decodes a NetworkRenameRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.NetworkRenameRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.NetworkRenameRequest} NetworkRenameRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NetworkRenameRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.NetworkRenameRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.deviceId = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.name = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for NetworkRenameRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.NetworkRenameRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            NetworkRenameRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.NetworkRenameRequest";
+            };
+
+            return NetworkRenameRequest;
         })();
 
         v1.NetworkSetScopesRequest = (function() {
@@ -31854,6 +32018,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IDecideJoin|null} [decideJoin] Intent decideJoin
              * @property {muster.app.IRemoveDevice|null} [removeDevice] Intent removeDevice
              * @property {muster.app.ISetScopes|null} [setScopes] Intent setScopes
+             * @property {muster.v1.INetworkRenameRequest|null} [renameDevice] Intent renameDevice
              * @property {muster.app.ISetPolicy|null} [setPolicy] Intent setPolicy
              * @property {muster.app.ISelectDevice|null} [selectDevice] Intent selectDevice
              * @property {muster.app.ISetRelay|null} [setRelay] Intent setRelay
@@ -32002,6 +32167,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.setScopes = null;
+
+            /**
+             * Intent renameDevice.
+             * @member {muster.v1.INetworkRenameRequest|null|undefined} renameDevice
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.renameDevice = null;
 
             /**
              * Intent setPolicy.
@@ -32488,12 +32661,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -32663,6 +32836,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.app.SetCover.encode(message.setBlackout, writer.uint32(/* id 140, wireType 2 =*/1122).fork(), q + 1).ldelim();
                 if (message.setRequireLockedUseAuth != null && Object.hasOwnProperty.call(message, "setRequireLockedUseAuth"))
                     writer.uint32(/* id 141, wireType 0 =*/1128).bool(message.setRequireLockedUseAuth);
+                if (message.renameDevice != null && Object.hasOwnProperty.call(message, "renameDevice"))
+                    $root.muster.v1.NetworkRenameRequest.encode(message.renameDevice, writer.uint32(/* id 142, wireType 2 =*/1138).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -32734,6 +32909,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 15: {
                             message.setScopes = $root.muster.app.SetScopes.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 142: {
+                            message.renameDevice = $root.muster.v1.NetworkRenameRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 16: {
@@ -46359,6 +46538,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [showAccess] DeviceActions showAccess
              * @property {boolean|null} [canEditAccess] DeviceActions canEditAccess
              * @property {boolean|null} [canRemove] DeviceActions canRemove
+             * @property {boolean|null} [canRename] DeviceActions canRename
              * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceActions blackout
              */
 
@@ -46418,6 +46598,14 @@ export const muster = $root.muster = (() => {
             DeviceActions.prototype.canRemove = false;
 
             /**
+             * DeviceActions canRename.
+             * @member {boolean} canRename
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.canRename = false;
+
+            /**
              * DeviceActions blackout.
              * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
              * @memberof muster.app.DeviceActions
@@ -46465,6 +46653,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.canRemove);
                 if (message.blackout != null && Object.hasOwnProperty.call(message, "blackout"))
                     $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
+                if (message.canRename != null && Object.hasOwnProperty.call(message, "canRename"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.canRename);
                 return writer;
             };
 
@@ -46520,6 +46710,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 5: {
                             message.canRemove = reader.bool();
+                            break;
+                        }
+                    case 7: {
+                            message.canRename = reader.bool();
                             break;
                         }
                     case 6: {

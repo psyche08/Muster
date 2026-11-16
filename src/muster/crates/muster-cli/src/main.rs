@@ -82,6 +82,11 @@ enum Command {
     Remove {
         device: String,
     },
+    /// Rename an active member, addressed by name, fingerprint or device ID
+    Rename {
+        device: String,
+        name: String,
+    },
     /// Replace a member's scopes (and role). Modules: chats, agents and
     /// terminals are device-level switches; chats:<provider> (chatgpt,
     /// claude) and agents:<provider> (codex, claude, catdesk) count only under their
@@ -820,6 +825,19 @@ async fn main() -> anyhow::Result<()> {
             {
                 print_status(&s);
             }
+        }
+        Command::Rename { device, name } => {
+            let device_id = resolve_device(&client, &device).await?;
+            let Resp::NetworkStatus(status) = client
+                .call(Req::NetworkRename(v1::NetworkRenameRequest {
+                    device_id,
+                    name,
+                }))
+                .await?
+            else {
+                anyhow::bail!("unexpected rename reply")
+            };
+            print_status(&status);
         }
         Command::Scopes {
             device,

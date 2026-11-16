@@ -127,6 +127,10 @@ public final class MusterCore: MusterShell {
         send(.removeDevice(Muster_App_RemoveDevice.with { $0.deviceID = device }))
     }
 
+    public func renameDevice(_ device: String, name: String) {
+        send(.renameDevice(Muster_V1_NetworkRenameRequest.with { $0.deviceID = device; $0.name = name }))
+    }
+
     public func setScopes(device: String, scopes: [String], role: String) {
         send(.setScopes(Muster_App_SetScopes.with { $0.deviceID = device; $0.scopes = scopes; $0.role = role }))
     }
