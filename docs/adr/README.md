@@ -331,3 +331,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0213](0213-bare-sidebar-badges-and-quiet-speculative-card-reads.md) | Accepted | Recognize bare single-PR and fork sidebar badges, and keep failed speculative permission-card reads quiet |
 | [0214](0214-member-display-name.md) | Accepted | Rename an enrolled device using a signed roster update |
 | [0215](0215-side-questions.md) | Accepted | Show Codex and Claude side chats as independently addressable sub-sessions |
+| [0216](0216-background-approval-window.md) | Accepted | Resolve a background Claude window for approval inspection |

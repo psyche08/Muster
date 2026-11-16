@@ -294,7 +294,16 @@ async fn owned(
             }
         },
     );
-    crate::navigation_restore::run(daemon, app, None, covered, ownership.clone(), operation).await
+    crate::navigation_restore::run(
+        daemon,
+        app,
+        None,
+        covered,
+        ownership.clone(),
+        Default::default(),
+        operation,
+    )
+    .await
 }
 
 /// Creation through Muster's plugin inside the app (ADR 0167): the plugin's

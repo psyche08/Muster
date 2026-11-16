@@ -6,7 +6,13 @@ use std::sync::{
 };
 
 #[derive(Clone, Default)]
-pub struct Navigation(Arc<Record>);
+pub struct Navigation(Arc<Record>, Option<Inspection>);
+pub type WindowHint = Arc<dyn std::any::Any + Send + Sync>;
+#[derive(Clone)]
+pub struct Inspection {
+    pub session: Arc<str>,
+    pub hint: Option<WindowHint>,
+}
 struct Record {
     window: std::sync::OnceLock<Box<dyn std::any::Any + Send + Sync>>,
     dispatched: AtomicBool,
@@ -36,6 +42,20 @@ impl Drop for Worker {
 tokio::task_local! { pub(crate) static NAVIGATION: Navigation; }
 
 impl Navigation {
+    pub fn for_inspection(session: &str, hint: Option<WindowHint>) -> Self {
+        Self(
+            Default::default(),
+            Some(Inspection {
+                session: session.into(),
+                hint,
+            }),
+        )
+    }
+
+    pub fn inspection() -> Option<Inspection> {
+        NAVIGATION.try_with(|scope| scope.1.clone()).ok().flatten()
+    }
+
     /// Nested preparation and execution must inherit the same window, even in
     /// callers that do not request restoration (e.g. model options).
     pub async fn with_window_scope<T>(operation: impl Future<Output = T>) -> T {

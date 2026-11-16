@@ -72,6 +72,7 @@ pub(crate) async fn compact(daemon: &Arc<Daemon>, id: &str) -> Result<(), Error>
             Some(id),
             crate::locked_use::navigation_is_covered()?,
             Arc::new(_app),
+            Default::default(),
             operation,
         )
         .await;

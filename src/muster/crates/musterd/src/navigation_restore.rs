@@ -220,6 +220,7 @@ pub(crate) async fn run<T>(
     target: Option<&str>,
     covered: bool,
     ownership: Arc<dyn Send + Sync>,
+    scope: Navigation,
     operation: impl Future<Output = Result<T, Error>>,
 ) -> Result<T, Error> {
     if !agent_bridge::drives_desktop(daemon.platform().as_ref()) {
@@ -246,7 +247,6 @@ pub(crate) async fn run<T>(
     } else {
         None
     };
-    let scope = Navigation::default();
     let existing_session = target.is_some();
     let original = match &previous {
         Some(p) => Some(p.snapshot.clone()),
