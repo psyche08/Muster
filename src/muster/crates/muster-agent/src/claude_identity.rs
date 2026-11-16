@@ -48,6 +48,14 @@ fn parse(bytes: &[u8]) -> Option<Entry> {
 
 pub(crate) fn mappings(root: &Path) -> Option<Vec<(String, String)>> {
     let started = std::time::Instant::now();
+    // A cold registry on a busy desktop can consume the ordinary scan budget
+    // before the visible page is mapped. Inspection must finish the same
+    // uniqueness proof before falling through to a sidebar press.
+    let budget = if crate::native_navigation::restore::Navigation::inspection().is_some() {
+        std::time::Duration::from_secs(1)
+    } else {
+        std::time::Duration::from_millis(250)
+    };
     let mut seen = 0;
     let mut result = Vec::new();
     let mut cache = CACHE.lock().unwrap_or_else(|p| p.into_inner());
@@ -64,9 +72,7 @@ pub(crate) fn mappings(root: &Path) -> Option<Vec<(String, String)>> {
             }
             for file in std::fs::read_dir(user.path()).ok()? {
                 seen += 1;
-                if seen > crate::claude::MAX_FILES
-                    || started.elapsed() > std::time::Duration::from_millis(250)
-                {
+                if seen > crate::claude::MAX_FILES || started.elapsed() > budget {
                     return None;
                 }
                 let file = file.ok()?;

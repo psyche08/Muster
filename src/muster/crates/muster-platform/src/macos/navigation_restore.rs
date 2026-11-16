@@ -115,6 +115,7 @@ pub(super) fn track_new_page(provider: &'static str, window: &Element, page: &El
 pub struct Snapshot {
     profile: &'static App,
     single_window: bool,
+    inspection: Option<restore::Inspection>,
     target: ProcessIdentity,
     front: ProcessIdentity,
     app: Element,
@@ -150,6 +151,7 @@ impl Snapshot {
         (input::user_input_generation() == hid && front() == Some(frontmost)).then_some(Self {
             profile,
             single_window,
+            inspection: restore::Navigation::inspection(),
             target,
             front: frontmost,
             app,
@@ -163,7 +165,8 @@ impl Snapshot {
     }
     fn current_window(&self) -> Option<Element> {
         if self.single_window {
-            let current = super::session_window::selected(&self.app).ok()?;
+            let current =
+                super::session_window::selected(&self.app, self.inspection.as_ref()).ok()?;
             (Some(&current) == self.window.as_ref()).then_some(current)
         } else {
             window(&self.app)

@@ -73,6 +73,10 @@ pub trait Controller: Send + Sync {
     fn reports_delivery(&self) -> bool {
         false
     }
+    /// Previously attached OS handles, used only as a locator for a fresh read.
+    fn inspection_window(&self) -> Option<crate::native_navigation::restore::WindowHint> {
+        None
+    }
     /// Fresh read-only proof that this exact session is uniquely visible.
     /// This skips navigation only; it never authorizes or skips a write check.
     fn native_surface_ready(&self) -> Result<bool, Error> {

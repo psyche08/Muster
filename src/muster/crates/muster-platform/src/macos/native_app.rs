@@ -2517,6 +2517,10 @@ impl Controller for NativeAppController {
     async fn organize(&self, plan: &muster_agent::organization::Plan) -> Result<(), Error> {
         self.session_organize(plan).await
     }
+    fn inspection_window(&self) -> Option<muster_agent::native_navigation::restore::WindowHint> {
+        let surface = self.surface.lock().unwrap();
+        Some(Arc::new((surface.root.clone(), surface.web_area.clone())))
+    }
     fn native_surface_ready(&self) -> Result<bool, Error> {
         muster_agent::control_guard::check()?;
         if !ax::trusted()
@@ -2527,7 +2531,13 @@ impl Controller for NativeAppController {
         }
         let generation = self.input_generation();
         let fresh = match self.fresh_surface() {
-            Ok(surface) if surface.composer.is_some() => surface,
+            Ok(surface)
+                if surface.composer.is_some()
+                    || muster_agent::native_navigation::restore::Navigation::inspection()
+                        .is_some() =>
+            {
+                surface
+            }
             Ok(_) | Err(Error::NotFound(_)) => return Ok(false),
             Err(error) => return Err(error),
         };
@@ -2966,6 +2976,76 @@ mod inspection_tests {
         assert!(scan.complete && scan.navigation == 1 && scan.candidates.len() == 1);
         assert!(selected.contains(&scan.candidates[0]));
         assert!(super::super::session_window::root(&app).unwrap() == selected);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires a live tool approval in a named background Claude session"]
+    async fn read_required_background_approval_on_device() {
+        use muster_agent::native_navigation::restore::Navigation;
+        let session = std::env::var("MUSTER_INSPECT_TEST_SESSION").unwrap();
+        let marker = std::env::var("MUSTER_INSPECT_TEST_MARKER").unwrap();
+        assert!(!marker.is_empty());
+        let [pid] = app_pids(&CLAUDE_APP)[..] else {
+            panic!("need one Claude process")
+        };
+        let front = super::super::events::foreground_owner();
+        assert!(matches!(front, Owner::Process(other) if other != pid));
+        let scope = Navigation::for_inspection(&session, None);
+        scope
+            .scope(async {
+                let resolver = claude_resolver();
+                let selected = select_session(
+                    &CLAUDE_APP,
+                    pid,
+                    &session,
+                    "",
+                    false,
+                    &resolver,
+                    false,
+                    true,
+                )
+                .await
+                .expect("select the target without activating Claude");
+                let window = selected.surface.root.clone();
+                let minimized = window.bool("AXMinimized");
+                if std::env::var_os("MUSTER_INSPECT_TEST_MINIMIZED").is_some() {
+                    assert_eq!(minimized, Some(true));
+                }
+                let key = WebAreaKey::of(&selected.surface.web_area);
+                assert_eq!(resolver(&key).as_deref(), Some(session.as_str()));
+                let (tx, _rx) = tokio::sync::mpsc::channel(32);
+                let controller = NativeAppController::attach_prepared(
+                    selected,
+                    resolver,
+                    tx,
+                    Arc::new(|| None),
+                    Arc::new(|_| panic!("read requested a send receipt")),
+                    Arc::new(|| Ok(Vec::new())),
+                    tokio::runtime::Handle::current(),
+                )
+                .unwrap();
+                controller.refresh_interactions().await.unwrap();
+                let pending = controller.pending();
+                let cards: Vec<_> = pending
+                    .iter()
+                    .filter(|p| p.session == session && p.kind == "approval" && !p.optional)
+                    .collect();
+                let [card] = cards.as_slice() else {
+                    panic!("expected one required approval")
+                };
+                assert!(
+                    card.prompt.contains(&marker),
+                    "test command missing from live card"
+                );
+                assert!(card.options.len() >= 2);
+                assert_eq!(window.bool("AXMinimized"), minimized);
+                assert_eq!(super::super::events::foreground_owner(), front);
+                eprintln!(
+                    "marker matched, options={:?}, minimized={minimized:?}, foreground preserved",
+                    card.options
+                );
+            })
+            .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]

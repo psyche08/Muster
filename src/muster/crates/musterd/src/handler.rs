@@ -3053,6 +3053,11 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
             Some(&destination),
             crate::locked_use::navigation_is_covered()?,
             Arc::new(_app),
+            if what == "inspect" && app.provider() == "claude" {
+                agent.inspection_navigation(&destination)
+            } else {
+                Default::default()
+            },
             operation,
         )
         .await;

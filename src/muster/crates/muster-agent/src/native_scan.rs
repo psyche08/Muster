@@ -95,6 +95,21 @@ pub fn preferred_window<'a, W: PartialEq>(
         .or_else(|| windows.iter().find(|w| eligible(w)))
 }
 
+/// Inspect a single window. An exact session can be read in place even when
+/// minimized. Within an evidence class keep the provider's own window order.
+pub fn inspection_window<'a, W: PartialEq>(
+    places: &'a [(W, bool, bool)],
+    focused: Option<&W>,
+    main: Option<&W>,
+) -> Option<&'a W> {
+    places
+        .iter()
+        .min_by_key(|(w, exact, minimized)| {
+            (!exact, *minimized, Some(w) != focused, Some(w) != main)
+        })
+        .map(|(w, _, _)| w)
+}
+
 /// Which of several views of one conversation an operation runs in, or
 /// `None` to refuse as ambiguous.
 ///
@@ -349,6 +364,18 @@ mod tests {
         assert_eq!(choose(Some(2), Some(3), &[1, 3]), Some(3));
         assert_eq!(choose(Some(9), None, &[2, 3]), Some(2));
         assert_eq!(choose(Some(2), Some(3), &[]), None);
+    }
+
+    #[test]
+    fn inspection_prefers_exact_background_windows_even_when_minimized() {
+        let places = [(1, false, false), (2, true, true), (3, true, false)];
+        assert_eq!(inspection_window(&places, Some(&1), None), Some(&3));
+        assert_eq!(inspection_window(&places[..2], Some(&1), None), Some(&2));
+        assert_eq!(inspection_window(&places[1..2], None, None), Some(&2));
+        let fallback = [(1, false, true), (2, false, false)];
+        assert_eq!(inspection_window(&fallback, Some(&1), None), Some(&2));
+        assert_eq!(inspection_window(&fallback[..1], None, None), Some(&1));
+        assert_eq!(inspection_window::<i32>(&[], None, None), None);
     }
 
     #[test]

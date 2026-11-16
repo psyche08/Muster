@@ -2956,6 +2956,12 @@ impl AgentService {
         }
     }
 
+    pub fn inspection_navigation(&self, id: &str) -> native_navigation::restore::Navigation {
+        let controller = self.inner.lock().unwrap().controllers.get(id).cloned();
+        let hint = controller.and_then(|c| c.inspection_window());
+        native_navigation::restore::Navigation::for_inspection(id, hint)
+    }
+
     pub fn controller_events(&self) -> mpsc::Sender<(String, ControllerEvent)> {
         self.controller_events.clone()
     }
