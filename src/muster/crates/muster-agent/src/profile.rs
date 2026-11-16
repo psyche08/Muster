@@ -212,6 +212,10 @@ pub struct Controls {
     /// The text area a prompt is drafted in.
     pub composer: Selector,
     pub composer_scope: crate::native_scan::ComposerScope,
+    /// Names of landmark regions that hold a conversation of their own inside
+    /// the session's view, such as Claude's side chat. A composer, submit or
+    /// queued-message control inside one is not the session's (ADR 0221).
+    pub auxiliary_regions: &'static [&'static str],
     /// What the composer reports as its value while empty.
     pub placeholders: &'static [&'static str],
     pub draft: Draft,
@@ -758,6 +762,7 @@ impl Controls {
     pub const UNRECORDED: Controls = Controls {
         composer: Selector::NONE,
         composer_scope: crate::native_scan::ComposerScope::WebArea,
+        auxiliary_regions: &[],
         placeholders: &[],
         draft: Draft::Value,
         send: Selector::NONE,
@@ -775,6 +780,16 @@ impl Controls {
     pub fn is_draft(&self, value: &str) -> bool {
         let trimmed = value.trim();
         !trimmed.is_empty() && !self.placeholders.contains(&trimmed)
+    }
+
+    /// Whether `node`, whose subrole is `subrole`, is one of the regions in
+    /// `auxiliary_regions`.
+    pub fn is_auxiliary_region(&self, subrole: &str, node: &impl AxQuery) -> bool {
+        subrole == "AXLandmarkRegion"
+            && [node.title(), node.description()]
+                .into_iter()
+                .flatten()
+                .any(|name| self.auxiliary_regions.contains(&name.as_str()))
     }
 }
 
@@ -1014,20 +1029,60 @@ mod tests {
     fn codex_submits(tree: &AxTree) -> Vec<usize> {
         crate::native_send::composer_submits(&control_nodes(&CODEX, tree))
     }
+    /// As the platform scan reads them: nothing inside an auxiliary region
+    /// is a control of the session.
     fn control_nodes(controls: &Controls, tree: &AxTree) -> Vec<crate::native_send::ControlNode> {
         let queue = controls.queue.as_ref().unwrap();
+        let mut aside = Vec::with_capacity(tree.nodes.len());
         tree.nodes
             .iter()
             .map(|n| {
-                let composer = controls.composer.matches(n);
+                let inside = n.parent.is_some_and(|p: usize| aside[p])
+                    || controls.is_auxiliary_region(&n.subrole, n);
+                aside.push(inside);
+                let composer = !inside && controls.composer.matches(n);
                 crate::native_send::ControlNode {
                     parent: n.parent,
                     composer,
-                    submit: !composer && controls.send.matches(n),
-                    queued_delete: queue.row.matches(n),
+                    submit: !inside && !composer && controls.send.matches(n),
+                    queued_delete: !inside && queue.row.matches(n),
                 }
             })
             .collect()
+    }
+
+    /// Claude's side chat (recorded 2026-11-16, Claude desktop Code tab) is
+    /// a "Side chat" region inside the primary pane, with its own Prompt
+    /// composer and Send. Neither is the session's: the scan keeps the main
+    /// composer and its Send.
+    #[test]
+    fn a_claude_side_chat_is_not_the_session_composer() {
+        let tree = tree(
+            r#"
+AXWebArea title="Session - Claude Code"
+  AXGroup/AXLandmarkMain
+    AXGroup/AXLandmarkRegion title="Primary pane" desc="Primary pane"
+      AXGroup
+        AXTextArea title="Prompt" desc="Prompt"
+        AXButton title="Send" desc="Send"
+      AXGroup/AXLandmarkRegion title="Side chat" desc="Side chat"
+        AXGroup
+          AXTextArea title="Prompt" desc="Prompt"
+          AXButton title="Send" desc="Send"
+"#,
+        );
+        assert_eq!(found(&tree, &CLAUDE.composer), vec![4, 8]);
+        let nodes = control_nodes(&CLAUDE, &tree);
+        let subroles: Vec<_> = tree.nodes.iter().map(|n| n.subrole.clone()).collect();
+        let chosen = crate::native_scan::choose_composer(CLAUDE.composer_scope, &nodes, &subroles);
+        assert_eq!(chosen, Some(4));
+        assert_eq!(crate::native_send::composer_submits_for(&nodes, 4), vec![5]);
+        // Only a landmark region with that name, and only in Claude's profile.
+        let side = &tree.nodes[6];
+        assert!(CLAUDE.is_auxiliary_region("AXLandmarkRegion", side));
+        assert!(!CLAUDE.is_auxiliary_region("AXGroup", side));
+        assert!(!CLAUDE.is_auxiliary_region("AXLandmarkRegion", &tree.nodes[2]));
+        assert!(!CODEX.is_auxiliary_region("AXLandmarkRegion", side));
     }
 
     /// Claude's queued rows carry their own Send now, so its sends are kept

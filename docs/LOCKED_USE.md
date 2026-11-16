@@ -13,6 +13,34 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
+### 2026-11-16: the cover dims the displays it can
+
+[ADR 0222](adr/0222-locked-use-dims-displays.md) changes what the watchdog
+puts over a display. The cover still goes up as the black panel. Once the
+console is unlocked and the displays have stayed as they are for three
+seconds, the watchdog sets each display's brightness to zero and reads it
+back: through macOS for built-in and Apple displays, and over DDC/CI for
+other external displays. A display it dimmed loses its panel; only a display
+it cannot dim keeps it. A dimmed display has no window over the apps, so the
+Claude app's window is no longer occluded while Locked Use drives it.
+
+- **No DDC request while the display connection changes.** On the Mac
+  tested, a DDC request as the console locked, unlocked or a display woke
+  made the connection reset, which lost the cover and once undid a level.
+  So dimming waits for a steady, unlocked console, and the DDC reads stop
+  before the watchdog locks the console again.
+- **The cover is still checked continuously.** A display whose level is not
+  zero, a DDC display that stops answering, or a change of displays is a
+  lost cover, and it stops the transaction as a lost panel does.
+- **The levels come back.** The watchdog records them before it changes any
+  and puts native levels back at release. The panel helper, started by
+  musterd, puts each DDC level back once the display has been steady again
+  for three seconds, and removes it from the record only after reading it
+  back twice.
+- **Not a black screen.** At brightness zero many external displays still
+  show a dim picture, and a person at the display can raise it with its own
+  buttons; the read-back then stops the transaction.
+
 ### 2026-11-13: a standing local dispatch grant
 
 [ADR 0199](adr/0199-local-dispatch-grant-for-locked-use.md) gives this Mac's

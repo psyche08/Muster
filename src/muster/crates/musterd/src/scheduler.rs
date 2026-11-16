@@ -294,11 +294,18 @@ fn parse(o: &v1::AgentSchedulerOperate, scope: &grant::Scope) -> Result<Parsed, 
     }
     let (inner, ledger) = match kind {
         Kind::Create => {
+            // A Multica run's grant binds its own directory and text; its
+            // session goes to the workspace folder (ADR 0221).
+            let (directory, prompt) = if scope.task_id.starts_with("multica:") {
+                multica_create::native_destination(&scope.task_id, &scope.directory, &o.text)?
+            } else {
+                (scope.directory.clone(), o.text.clone())
+            };
             let r = v1::AgentNativeCreateRequest {
                 op_id: o.op_id.clone(),
                 provider: scope.provider.clone(),
-                directory: scope.directory.clone(),
-                prompt: o.text.clone(),
+                directory,
+                prompt,
                 // The scheduler grant (ADR 0097) names no model or effort:
                 // the app's current choice is kept.
                 ..Default::default()
@@ -618,10 +625,9 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
         return Ok(recorded(&state));
     }
     preflight(daemon, &scope.provider)?;
-    let baseline = if parsed.kind == Kind::Create {
-        crate::native_create::baseline(daemon, &scope.provider, &scope.directory)
-    } else {
-        Vec::new()
+    let baseline = match &parsed.inner {
+        Inner::Create(r) => crate::native_create::baseline(daemon, &r.provider, &r.directory),
+        _ => Vec::new(),
     };
     // Reserved and stored before anything touches the desktop.
     let admission = scheduler.update(daemon.store(), |r| {
