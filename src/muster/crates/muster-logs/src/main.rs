@@ -1,7 +1,8 @@
-//! muster-logs: the log collector on muster.linsheng.dev (ADR 0228).
+//! muster-logs: the log collector (ADR 0228), behind nginx as
+//! muster-logs.linsheng.dev:8443 (ADR 0229).
 //!
-//!   muster-logs serve --listen 0.0.0.0:9444 --cert fullchain.pem --key privkey.pem --root /var/lib/muster-logs
-//!   muster-logs serve --listen 127.0.0.1:9180 --plain --root …   (behind a local TLS proxy)
+//!   muster-logs serve --plain --root /var/lib/muster-logs   (127.0.0.1:9180, behind nginx)
+//!   muster-logs serve --listen 0.0.0.0:9444 --cert fullchain.pem --key privkey.pem --root …
 //!   muster-logs check-config --cert fullchain.pem --key privkey.pem
 
 use std::net::SocketAddr;
@@ -24,13 +25,14 @@ struct Args {
 enum Command {
     /// Take uploads until stopped.
     Serve {
-        #[arg(long, default_value = "0.0.0.0:9444")]
+        #[arg(long, default_value = "127.0.0.1:9180")]
         listen: SocketAddr,
         #[arg(long, required_unless_present = "plain")]
         cert: Option<PathBuf>,
         #[arg(long, required_unless_present = "plain")]
         key: Option<PathBuf>,
-        /// Plain HTTP for a TLS proxy on this host; loopback addresses only.
+        /// Plain HTTP for a TLS proxy on this host, which names the client
+        /// in `X-Real-IP`; loopback addresses only.
         #[arg(long, conflicts_with_all = ["cert", "key"])]
         plain: bool,
         #[arg(long, default_value = "/var/lib/muster-logs")]
@@ -77,10 +79,6 @@ async fn main() -> Result<()> {
             let mut options = Options::new(root);
             options.retention_days = retention_days.max(1);
             options.device_daily_bytes = device_daily_mib.max(1) << 20;
-            if tls.is_none() {
-                // Every client arrives from the proxy's address.
-                options.source_uploads_per_hour = None;
-            }
             let collector = Arc::new(Collector::new(options));
             let sweeper = collector.clone();
             tokio::spawn(async move {

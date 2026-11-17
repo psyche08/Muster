@@ -1,24 +1,20 @@
-# The log collector beside the relay (ADR 0228): HTTPS on TCP 9444 with the
-# relay's certificate, read through the muster-relay group. The relay's
-# certificate renewal restarts muster-relay; PartOf restarts this with it.
+# The log collector (ADR 0228, 0229): plain HTTP on loopback behind nginx,
+# which serves muster-logs.linsheng.dev on the public 8443 and names each
+# client in X-Real-IP. Nothing but the local proxy can reach it.
 [Unit]
 Description=muster log collector (hourly redacted desktop logs, grouped by network)
 Documentation=https://github.com/psyche08/muster
-After=network-online.target muster-relay.service
+After=network-online.target
 Wants=network-online.target
-PartOf=muster-relay.service
 
 [Service]
 Type=simple
 User=muster-logs
 Group=muster-logs
-SupplementaryGroups=muster-relay
 EnvironmentFile=/etc/muster/logs.env
 Environment=RUST_LOG=info
-ExecStart=/opt/muster/bin/muster-logs serve \
+ExecStart=/opt/muster/bin/muster-logs serve --plain \
     --listen ${LOGS_LISTEN} \
-    --cert ${LOGS_CERT} \
-    --key ${LOGS_KEY} \
     --root /var/lib/muster-logs \
     --retention-days ${LOGS_RETENTION_DAYS} \
     --device-daily-mib ${LOGS_DEVICE_DAILY_MIB}
@@ -29,7 +25,9 @@ Restart=always
 RestartSec=2
 LimitNOFILE=65536
 
-# Hardening: the only writable place is the state directory.
+# Hardening: loopback only, and the only writable place is the state directory.
+IPAddressDeny=any
+IPAddressAllow=localhost
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

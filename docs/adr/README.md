@@ -342,4 +342,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0224](0224-claude-sidebar-status-in-row-name.md) | Accepted; source and tests verified, device acceptance pending | Match Claude sidebar rows whose name includes their status word |
 | [0225](0225-multica-run-grant-closes-after-its-first-turn.md) | Accepted; source and tests verified, device acceptance pending | Close a Multica run's grant once its first turn returns |
 | [0226](0226-task-local-scopes-are-plain-functions.md) | Accepted; source and tests verified | Make task-local scopes plain functions so they stop doubling futures |
-| [0228](0228-hourly-redacted-log-upload.md) | Accepted; source and tests verified, collector deployment pending | Desktops upload redacted log increments hourly, grouped by network |
+| [0228](0228-hourly-redacted-log-upload.md) | Accepted; source and tests verified; endpoint and deployment superseded by 0229 | Desktops upload redacted log increments hourly, grouped by network |
+| [0229](0229-log-collector-behind-nginx-on-8443.md) | Accepted; source and tests verified, collector deployment pending | Put the log collector behind nginx as muster-logs.linsheng.dev:8443 |

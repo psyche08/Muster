@@ -24,8 +24,8 @@ pub const VERSION: u8 = 1;
 pub const CONTENT_TYPE: &str = "application/x-muster-logs";
 /// Where the collector takes uploads.
 pub const PATH: &str = "/v1/logs";
-/// The production collector, beside the relay on muster.linsheng.dev.
-pub const DEFAULT_URL: &str = "https://muster.linsheng.dev:9444/v1/logs";
+/// The production collector, behind nginx on the public 8443 (ADR 0229).
+pub const DEFAULT_URL: &str = "https://muster-logs.linsheng.dev:8443/v1/logs";
 
 /// The longest manifest accepted.
 pub const MAX_MANIFEST: usize = 64 * 1024;
