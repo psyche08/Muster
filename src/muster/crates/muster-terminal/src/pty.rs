@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsRawHandle, BorrowedHandle, OwnedHandle};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -52,11 +54,11 @@ struct Session {
     #[cfg(unix)]
     master: std::fs::File,
     #[cfg(windows)]
-    master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
+    master: Mutex<Option<Box<dyn portable_pty::MasterPty + Send>>>,
     #[cfg(windows)]
     writer: Mutex<Box<dyn Write + Send>>,
     #[cfg(windows)]
-    child: Mutex<Option<Box<dyn portable_pty::Child + Send + Sync>>>,
+    child: OwnedHandle,
     #[cfg(unix)]
     child: Mutex<Option<std::process::Child>>,
     writes: Mutex<()>,
@@ -311,7 +313,7 @@ impl PtyService {
             (master_file, child, reader)
         };
         #[cfg(windows)]
-        let (master_file, child, reader, writer) = {
+        let (master_file, mut child, child_handle, reader, writer) = {
             use portable_pty::{CommandBuilder, PtySize, native_pty_system};
             let unavailable = |e: anyhow::Error| Error::Unavailable(e.to_string());
             let pair = native_pty_system()
@@ -329,7 +331,20 @@ impl PtyService {
             let reader = pair.master.try_clone_reader().map_err(unavailable)?;
             let writer = pair.master.take_writer().map_err(unavailable)?;
             let child = pair.slave.spawn_command(cmd).map_err(unavailable)?;
-            (Mutex::new(pair.master), child, reader, Mutex::new(writer))
+            let raw = child
+                .as_raw_handle()
+                .ok_or_else(|| Error::Unavailable("missing shell process handle".into()))?;
+            // The child owns this handle while we duplicate it for explicit close.
+            let handle = unsafe { BorrowedHandle::borrow_raw(raw) }
+                .try_clone_to_owned()
+                .map_err(|e| Error::Unavailable(e.to_string()))?;
+            (
+                Mutex::new(Some(pair.master)),
+                child,
+                handle,
+                reader,
+                Mutex::new(writer),
+            )
         };
         let id = format!("{prefix}{}", self.next_id.fetch_add(1, Ordering::Relaxed));
         let (frames, _) = broadcast::channel(256);
@@ -340,6 +355,9 @@ impl PtyService {
             master: master_file,
             #[cfg(windows)]
             writer,
+            #[cfg(windows)]
+            child: child_handle,
+            #[cfg(unix)]
             child: Mutex::new(Some(child)),
             writes: Mutex::new(()),
             frames,
@@ -350,9 +368,21 @@ impl PtyService {
             .unwrap()
             .insert(id.clone(), session.clone());
         let _ = self.list_changed.send(());
+        #[cfg(windows)]
+        {
+            // ConPTY keeps its output pipe open after the shell exits. Close the
+            // pseudoconsole while the separate reader can drain the final frame.
+            let owner = session.clone();
+            tokio::task::spawn_blocking(move || {
+                let _ = child.wait();
+                let master = owner.master.lock().unwrap().take();
+                drop(master);
+            });
+        }
+        let summary = session.summary();
         let service = self.clone();
         tokio::task::spawn_blocking(move || service.read_loop(session, reader));
-        Ok(self.get(&id)?.summary())
+        Ok(summary)
     }
 
     fn read_loop(
@@ -407,6 +437,7 @@ impl PtyService {
                 ..Default::default()
             });
         }
+        #[cfg(unix)]
         if let Some(mut child) = session.child.lock().unwrap().take() {
             let _ = child.wait();
         }
@@ -491,6 +522,8 @@ impl PtyService {
                 .master
                 .lock()
                 .unwrap()
+                .as_ref()
+                .ok_or_else(|| Error::NotFound(format!("session {id} ended")))?
                 .resize(portable_pty::PtySize {
                     cols,
                     rows,
@@ -509,16 +542,23 @@ impl PtyService {
 
     pub async fn close(&self, id: &str) -> Result<(), Error> {
         let session = self.get(id)?;
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+            use windows_sys::Win32::System::Threading::{TerminateProcess, WaitForSingleObject};
+            let handle = session.child.as_raw_handle();
+            // The duplicate refers to this precise launch even if its PID is reused.
+            if unsafe { TerminateProcess(handle, 1) } == 0 {
+                let error = std::io::Error::last_os_error();
+                if unsafe { WaitForSingleObject(handle, 0) } != WAIT_OBJECT_0 {
+                    return Err(Error::Unavailable(error.to_string()));
+                }
+            }
+        }
+        #[cfg(unix)]
         if let Some(child) = session.child.lock().unwrap().as_mut() {
             // SAFETY: signalling our own child.
-            #[cfg(windows)]
-            child
-                .kill()
-                .map_err(|e| Error::Unavailable(e.to_string()))?;
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(child.id() as i32, libc::SIGHUP)
-            };
+            unsafe { libc::kill(child.id() as i32, libc::SIGHUP) };
         }
         Ok(())
     }
@@ -753,5 +793,12 @@ mod windows_tests {
         .await;
         service.close(&session.id).await.unwrap();
         result.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !service.sessions().await.unwrap().is_empty() {
+                tokio::time::sleep(Duration::from_millis(30)).await;
+            }
+        })
+        .await
+        .expect("closed ConPTY releases its output reader");
     }
 }

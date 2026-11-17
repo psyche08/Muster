@@ -2493,6 +2493,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "vte",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

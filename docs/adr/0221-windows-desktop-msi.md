@@ -37,3 +37,11 @@ checks the pipe owner's SID before sending a request. A separate elevated
 Wintun helper connects to a random endpoint; the daemon checks the kernel's
 client PID against the process it launched. ConPTY hosts the local shell.
 The installer leaves the standalone-node runtime and user data in place.
+
+Windows device acceptance exercised an install, major upgrade from a fixture,
+repair, uninstall and fresh installation. Desktop RPC reported the same TPM
+identity and overlay address after taking over from the standalone node, and
+source-bound IPv4 probes reached an existing member. The initial ConPTY test
+hung after the shell exited. A separate process waiter now closes the
+pseudoconsole while the reader drains the last output. The Windows test
+verifies input, resize, output and removal of the closed terminal session.

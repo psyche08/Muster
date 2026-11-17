@@ -38,3 +38,4 @@ workspace = true
 [target.'cfg(windows)'.dependencies]
 portable-pty = "0.9"
 anyhow.workspace = true
+windows-sys = { version = "0.61", features = ["Win32_System_Threading"] }
