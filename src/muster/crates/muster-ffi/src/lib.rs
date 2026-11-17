@@ -349,6 +349,117 @@ pub extern "C" fn muster_desktop_update_startup() {
     muster_app_core::desktop_update::startup();
 }
 
+/// The one desktop startup coordinator: the first look and the Start button
+/// share its admission, so neither runs while the other is in flight.
+#[cfg(unix)]
+static DESKTOP_STARTUP: std::sync::LazyLock<muster_app_core::desktop_startup::Coordinator> =
+    std::sync::LazyLock::new(muster_app_core::desktop_startup::Coordinator::default);
+
+/// The arguments both desktop startup calls share, checked.
+fn desktop_arguments<'a>(
+    socket: *const c_char,
+    managed: u8,
+    action: Option<unsafe extern "C" fn(u32) -> i32>,
+    error_out: *mut *mut c_char,
+) -> Option<&'a str> {
+    if !error_out.is_null() {
+        // SAFETY: writable out-pointer required by the contract.
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    if socket.is_null() || managed > 1 || (managed == 1 && action.is_none()) {
+        set_error(error_out, "invalid desktop startup arguments".into());
+        return None;
+    }
+    // SAFETY: valid string required by the contract.
+    match unsafe { CStr::from_ptr(socket) }.to_str() {
+        Ok(path) if !path.is_empty() => Some(path),
+        _ => {
+            set_error(error_out, "invalid desktop socket path".into());
+            None
+        }
+    }
+}
+
+/// The platform's service adapter as Rust sees it. Inspect answers with the
+/// facts' bits (negative is a failure); every other action answers 0 done,
+/// 1 macOS wants the owner's approval, 3 the owner cancelled the password
+/// prompt, anything else a native failure.
+#[cfg(unix)]
+fn desktop_service(
+    action: Option<unsafe extern "C" fn(u32) -> i32>,
+) -> impl Fn(muster_app_core::desktop_startup::ServiceAction) -> Result<u32, muster_app_core::Error>
+{
+    use muster_app_core::desktop_startup::ServiceAction;
+    move |a| {
+        // The managed argument validation guarantees this callback exists.
+        let callback = action
+            .ok_or_else(|| muster_app_core::Error::Invalid("missing service callback".into()))?;
+        // SAFETY: callback validity required by the contract.
+        let code = unsafe { callback(a as u32) };
+        match (a, code) {
+            (ServiceAction::Inspect, code) if code >= 0 => Ok(code as u32),
+            (_, 0) => Ok(0),
+            (_, 1) => Err(muster_app_core::Error::Unavailable(
+                "Allow Muster in System Settings > General > Login Items & Extensions, then try again"
+                    .into(),
+            )),
+            (_, 3) => Err(muster_app_core::Error::Unavailable(
+                "安装 musterd 登录代理需要管理员密码，已取消。".into(),
+            )),
+            (_, code) => Err(muster_app_core::Error::Unavailable(format!(
+                "Native service preparation failed ({code}); see desktop startup logs"
+            ))),
+        }
+    }
+}
+
+/// What the app shows before its main page. Call on a worker thread
+/// outside a Rust runtime; it may wait a few seconds for a daemon launchd
+/// is still starting. Changes nothing.
+///
+/// # Safety
+/// `socket` must be a valid NUL-terminated UTF-8 string. `error_out`, when
+/// non-null, must be writable. The callback must remain valid for this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn muster_desktop_check(
+    socket: *const c_char,
+    managed: u8,
+    resumed: u8,
+    action: Option<unsafe extern "C" fn(u32) -> i32>,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    let Some(path) = desktop_arguments(socket, managed, action, error_out) else {
+        return -1;
+    };
+    if resumed > 1 {
+        set_error(error_out, "invalid desktop startup arguments".into());
+        return -1;
+    }
+    #[cfg(unix)]
+    let result = DESKTOP_STARTUP
+        .check_blocking(
+            std::path::Path::new(path),
+            managed == 1,
+            resumed == 1,
+            desktop_service(action),
+        )
+        .map(|startup| startup.code());
+    #[cfg(not(unix))]
+    let result: Result<i32, muster_app_core::Error> = {
+        let _ = (path, action);
+        Err(muster_app_core::Error::Unavailable(
+            "Unix desktop preparation is unsupported on this platform".into(),
+        ))
+    };
+    match result {
+        Ok(code) => code,
+        Err(error) => {
+            set_error(error_out, error.to_string());
+            -1
+        }
+    }
+}
+
 /// Prepare the desktop socket. Call on a worker thread outside a Rust runtime.
 ///
 /// # Safety
@@ -361,44 +472,15 @@ pub unsafe extern "C" fn muster_desktop_prepare(
     action: Option<unsafe extern "C" fn(u32) -> i32>,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if !error_out.is_null() {
-        // SAFETY: writable out-pointer required by the contract.
-        unsafe { *error_out = std::ptr::null_mut() };
-    }
-    if socket.is_null() || managed > 1 || (managed == 1 && action.is_none()) {
-        set_error(error_out, "invalid desktop startup arguments".into());
+    let Some(path) = desktop_arguments(socket, managed, action, error_out) else {
         return -1;
-    }
-    // SAFETY: valid string required by the contract.
-    let path = match unsafe { CStr::from_ptr(socket) }.to_str() {
-        Ok(path) if !path.is_empty() => path,
-        _ => {
-            set_error(error_out, "invalid desktop socket path".into());
-            return -1;
-        }
     };
     #[cfg(unix)]
-    let result = {
-        static COORDINATOR: std::sync::LazyLock<muster_app_core::desktop_startup::Coordinator> =
-            std::sync::LazyLock::new(muster_app_core::desktop_startup::Coordinator::default);
-        COORDINATOR.prepare_blocking(std::path::Path::new(path), managed == 1, |a| {
-            // The managed argument validation guarantees this callback exists.
-            let callback = action.ok_or_else(|| {
-                muster_app_core::Error::Invalid("missing service callback".into())
-            })?;
-            // SAFETY: callback validity required by the contract.
-            match unsafe { callback(a as u32) } {
-                0 => Ok(()),
-                1 => Err(muster_app_core::Error::Unavailable(
-                    "Enable Muster in System Settings > General > Login Items, then try again"
-                        .into(),
-                )),
-                code => Err(muster_app_core::Error::Unavailable(format!(
-                    "Native service preparation failed ({code}); see desktop startup logs"
-                ))),
-            }
-        })
-    };
+    let result = DESKTOP_STARTUP.prepare_blocking(
+        std::path::Path::new(path),
+        managed == 1,
+        desktop_service(action),
+    );
     #[cfg(not(unix))]
     let result: Result<(), muster_app_core::Error> = {
         let _ = (path, action);

@@ -19,12 +19,42 @@ import AppKit
 import IOKit.pwr_mgt
 #endif
 
+/// How a desktop app brings up its musterd before the main page (ADR 0227).
+/// Both closures run Shared Rust off the main thread.
+public struct DesktopLaunch: Sendable {
+    /// The installed app, whose daemon launchd runs (false: a development
+    /// build next to a daemon started by hand).
+    public var managed: Bool
+    public var check: @Sendable () async throws -> DesktopStartup
+    public var prepare: @Sendable () async throws -> Void
+
+    public init(managed: Bool,
+                check: @escaping @Sendable () async throws -> DesktopStartup,
+                prepare: @escaping @Sendable () async throws -> Void) {
+        self.managed = managed
+        self.check = check
+        self.prepare = prepare
+    }
+}
+
+/// What the app asks before its main page.
+public enum DesktopGate: Equatable {
+    /// musterd is not running.
+    case start(needsAdmin: Bool, managed: Bool)
+    /// musterd runs from an older registration.
+    case migrate(needsAdmin: Bool)
+}
+
 @MainActor
 public final class MusterModel: ObservableObject {
     private var appliedDiagnosticMarker = ""
     @Published public private(set) var vm = ViewModel()
     @Published public private(set) var started = false
     @Published public var startError: String?
+    /// A desktop's question before its main page; nil once answered.
+    @Published public private(set) var gate: DesktopGate?
+    /// The gate's Start or Move is running.
+    @Published public private(set) var gateBusy = false
     /// An effect waiting for the camera (iOS) or a pasted invite (macOS).
     @Published public var scanRequest: UInt64?
     /// Local authentication in progress: the reason shown to the user.
@@ -34,6 +64,7 @@ public final class MusterModel: ObservableObject {
     public let keys: MusterKeys
     private var config: MusterConfig?
     private var preparation: (@Sendable () async throws -> Void)?
+    private var desktop: DesktopLaunch?
     private var startupTask: Task<Void, Never>?
 
     public init(keys: MusterKeys? = nil) {
@@ -58,6 +89,7 @@ public final class MusterModel: ObservableObject {
         guard core == nil, startupTask == nil else { return }
         self.config = config
         preparation = prepare
+        desktop = nil
         startError = nil
         guard let prepare else { createCore(config: config); return }
         startupTask = Task { [weak self] in
@@ -70,6 +102,74 @@ public final class MusterModel: ObservableObject {
                 self?.startError = "\(error)"
             }
         }
+    }
+
+    /// Starts a desktop: the main page opens only once musterd answers.
+    /// When it does not, or runs from an older registration, the app asks
+    /// first (`gate`), unless Muster itself stopped it a moment ago.
+    public func start(config: MusterConfig, desktop: DesktopLaunch) {
+        guard core == nil, startupTask == nil else { return }
+        self.config = config
+        self.desktop = desktop
+        preparation = nil
+        startError = nil
+        gate = nil
+        startupTask = Task { [weak self] in
+            defer { self?.startupTask = nil }
+            do {
+                let startup = try await desktop.check()
+                try Task.checkCancellation()
+                switch startup {
+                case .ready:
+                    self?.createCore(config: config)
+                case .start(_, automatic: true):
+                    do {
+                        try await desktop.prepare()
+                    } catch {
+                        self?.gate = .start(needsAdmin: false, managed: desktop.managed)
+                        throw error
+                    }
+                    try Task.checkCancellation()
+                    self?.createCore(config: config)
+                case .start(let needsAdmin, automatic: false):
+                    self?.gate = .start(needsAdmin: needsAdmin, managed: desktop.managed)
+                case .migrate(let needsAdmin):
+                    self?.gate = .migrate(needsAdmin: needsAdmin)
+                }
+            } catch {
+                self?.startError = "\(error)"
+            }
+        }
+    }
+
+    /// The gate's Start (or Move): install and start musterd, then open the
+    /// main page. A failure stays on the gate with its message.
+    public func startService() {
+        guard gate != nil, let config, let desktop, core == nil, startupTask == nil else { return }
+        startError = nil
+        gateBusy = true
+        startupTask = Task { [weak self] in
+            defer {
+                self?.startupTask = nil
+                self?.gateBusy = false
+            }
+            do {
+                try await desktop.prepare()
+                try Task.checkCancellation()
+                self?.gate = nil
+                self?.createCore(config: config)
+            } catch {
+                self?.startError = "\(error)"
+            }
+        }
+    }
+
+    /// The move can wait: musterd already answers.
+    public func continueWithoutMigration() {
+        guard case .migrate = gate, let config, core == nil, startupTask == nil else { return }
+        gate = nil
+        startError = nil
+        createCore(config: config)
     }
 
     private func createCore(config: MusterConfig) {
@@ -118,7 +218,11 @@ public final class MusterModel: ObservableObject {
     /// not running yet).
     public func retry() {
         guard let config, core == nil else { return }
-        start(config: config, prepare: preparation)
+        if let desktop {
+            start(config: config, desktop: desktop)
+        } else {
+            start(config: config, prepare: preparation)
+        }
     }
 
     public func lifecycle(_ phase: ScenePhase) {

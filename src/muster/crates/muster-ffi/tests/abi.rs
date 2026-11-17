@@ -243,10 +243,16 @@ fn bad_config_reports_an_error() {
     unsafe { muster_string_free(error) };
 }
 
+/// The desktop startup calls share one coordinator, which refuses a second
+/// caller while one is in flight; the tests take turns.
+#[cfg(unix)]
+static DESKTOP: Mutex<()> = Mutex::new(());
+
 #[cfg(unix)]
 #[test]
 fn desktop_preparation_validates_abi_and_preserves_healthy_service() {
     use muster_ffi::muster_desktop_prepare;
+    let _turn = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
     let mut error = std::ptr::null_mut();
     // SAFETY: null input is explicitly handled; out-pointer is writable.
     assert_eq!(
@@ -284,4 +290,67 @@ fn desktop_preparation_validates_abi_and_preserves_healthy_service() {
             .contains("Login Items")
     );
     unsafe { muster_string_free(error) };
+}
+
+/// The first look changes nothing, says what to show, and reports a
+/// cancelled password as an error rather than a start.
+#[cfg(unix)]
+#[test]
+fn desktop_check_reports_what_to_show_and_never_acts() {
+    use muster_ffi::{muster_desktop_check, muster_desktop_prepare};
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static ACTIONS: AtomicU32 = AtomicU32::new(0);
+    let _turn = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
+    // Agent missing, no job: the first start needs the password.
+    unsafe extern "C" fn fresh_mac(action: u32) -> i32 {
+        ACTIONS.fetch_or(1 << action, Ordering::SeqCst);
+        match action {
+            3 => 0,
+            2 => 3,
+            _ => panic!("nothing after a cancelled install"),
+        }
+    }
+    let mut error = std::ptr::null_mut();
+    let dir = tempfile::tempdir().unwrap();
+    let missing = std::ffi::CString::new(dir.path().join("missing").to_str().unwrap()).unwrap();
+    // A resumed flag other than 0 or 1 is refused.
+    assert_eq!(
+        unsafe { muster_desktop_check(missing.as_ptr(), 1, 2, Some(fresh_mac), &mut error) },
+        -1
+    );
+    unsafe { muster_string_free(error) };
+    assert_eq!(
+        unsafe { muster_desktop_check(missing.as_ptr(), 1, 1, Some(fresh_mac), &mut error) },
+        1 | 16
+    );
+    assert!(error.is_null());
+    assert_eq!(
+        ACTIONS.load(Ordering::SeqCst),
+        1 << 3,
+        "check only inspects"
+    );
+    assert_eq!(
+        unsafe { muster_desktop_prepare(missing.as_ptr(), 1, Some(fresh_mac), &mut error) },
+        -1
+    );
+    assert!(
+        unsafe { CStr::from_ptr(error) }
+            .to_str()
+            .unwrap()
+            .contains("管理员密码")
+    );
+    unsafe { muster_string_free(error) };
+    // A daemon run by hand: no callbacks at all.
+    assert_eq!(
+        unsafe { muster_desktop_check(missing.as_ptr(), 0, 0, None, &mut error) },
+        1
+    );
+    let path = dir.path().join("s");
+    let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+    let path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+    assert_eq!(
+        unsafe { muster_desktop_check(path.as_ptr(), 0, 0, None, &mut error) },
+        0
+    );
+    assert!(error.is_null());
 }

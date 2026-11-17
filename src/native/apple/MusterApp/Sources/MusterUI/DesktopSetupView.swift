@@ -94,7 +94,7 @@ struct DesktopSetupView: View {
             }
             if setup.restartRequired {
                 Label("新授权需要重启 Muster 后生效", systemImage: "arrow.clockwise").font(.headline)
-                Text("重启应用和后台服务，保留配对与数据。远程连接将短暂中断。")
+                Text("重启应用、后台服务 musterd 和它的辅助进程（面板、浏览器桥接、扩展组件），保留配对与数据。远程连接将短暂中断。")
                     .font(.callout).foregroundStyle(.secondary)
                 Button("重启 Muster", action: restart).buttonStyle(.borderedProminent).disabled(!setup.canRestart)
             }

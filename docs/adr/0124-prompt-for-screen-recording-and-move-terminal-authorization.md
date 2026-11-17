@@ -1,7 +1,7 @@
 # ADR 0124: Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page
 
 - Date: 2026-11-04
-- Status: Accepted; source and tests verified, installed and verified on the owner's Mac. The restart rule, the path named for the grant, and the choice of which terminal source to prompt for are superseded by [ADR 0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md); the rest stands.
+- Status: Accepted; source and tests verified, installed and verified on the owner's Mac. The restart rule, the path named for the grant, and the choice of which terminal source to prompt for are superseded by [ADR 0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md); the startup prompt for a missing Screen Recording grant is superseded by [ADR 0227](0227-system-launchagent-startup-gate-and-full-restart.md) (the page opens by itself only for Accessibility); the rest stands.
 - Related: [ADR 0116](0116-failure-screenshot-analysis.md) (the capture that
   needs Screen Recording), [ADR 0006](0006-desktop-presence-and-console-routing.md)
   (the bundled daemon whose permissions these are),

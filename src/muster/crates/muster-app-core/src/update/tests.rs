@@ -3651,3 +3651,60 @@ async fn a_locked_permission_card_read_reserves_no_provider_queue() {
     assert_eq!(prepared[1].provider_queue, "claude");
     accept.abort();
 }
+
+/// Asking for Accessibility that is already granted shows nothing: no
+/// system prompt from musterd and no Settings pane (ADR 0227).
+#[tokio::test]
+async fn a_granted_accessibility_is_never_asked_for_again() {
+    struct Effects(std::sync::Mutex<usize>);
+    impl crate::Shell for Effects {
+        fn on_view(&self, _: &[u8]) {}
+        fn on_effect(&self, _: u64, _: &[u8]) {
+            *self.0.lock().unwrap() += 1;
+        }
+        fn hw_public_key(&self) -> Option<Vec<u8>> {
+            None
+        }
+        fn hw_sign(&self, _: &[u8]) -> Option<Vec<u8>> {
+            None
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("musterd.sock");
+    let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+    let shell = Arc::new(Effects(std::sync::Mutex::new(0)));
+    let config = crate::AppConfig {
+        dir: dir.path().into(),
+        mode: crate::Mode::Socket { path },
+        allow_loopback: false,
+    };
+    let backend = Arc::new(
+        crate::backend::Backend::connect(&config, shell.clone())
+            .await
+            .unwrap(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let ctx = Ctx {
+        shell: shell.clone(),
+        backend,
+        tx,
+        cache: Arc::new(crate::cache::Cache::new(dir.path().join("cache"))),
+    };
+    let mut state = State::new(false, None);
+    let mac = |accessibility: &str| v1::DeviceInfo {
+        platform: "macos".into(),
+        state: Some(v1::DeviceState {
+            accessibility: accessibility.into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    state.self_info = Some(mac("granted"));
+    network::intent_request_accessibility(&mut state, &ctx);
+    assert_eq!(state.busy, 0);
+    assert_eq!(*shell.0.lock().unwrap(), 0);
+    state.self_info = Some(mac("missing"));
+    network::intent_request_accessibility(&mut state, &ctx);
+    assert_eq!(state.busy, 1, "the daemon is asked to prompt");
+    assert_eq!(*shell.0.lock().unwrap(), 1, "and the Settings pane opens");
+}

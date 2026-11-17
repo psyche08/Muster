@@ -28,6 +28,32 @@ public enum MusterRuntimeError: Error, CustomStringConvertible {
     }
 }
 
+/// What a desktop app shows before its main page (ADR 0227); Shared Rust
+/// decides, from what the platform's service adapter reports.
+public enum DesktopStartup: Equatable, Sendable {
+    /// musterd answers from the system LaunchAgent: open the main page.
+    case ready
+    /// musterd does not answer. Ask before starting it unless `automatic`
+    /// (Muster stopped it itself a moment ago and no password is needed).
+    case start(needsAdmin: Bool, automatic: Bool)
+    /// musterd answers from an older registration: offer the move.
+    case migrate(needsAdmin: Bool)
+
+    /// The C ABI's code: 0 ready, 1 start, 2 migrate; +16 needs the
+    /// administrator's password, +32 starts without asking.
+    public init?(code: Int32) {
+        guard code >= 0, code & ~0x33 == 0 else { return nil }
+        let admin = code & 16 != 0
+        let automatic = code & 32 != 0
+        switch code & 0xf {
+        case 0 where !admin && !automatic: self = .ready
+        case 1: self = .start(needsAdmin: admin, automatic: automatic)
+        case 2 where !automatic: self = .migrate(needsAdmin: admin)
+        default: return nil
+        }
+    }
+}
+
 /// One running core. Thread-safe: every method may be called from any thread.
 public final class MusterRuntime {
     private var core: OpaquePointer?
@@ -39,6 +65,20 @@ public final class MusterRuntime {
     }
 
     public static func desktopUpdateStartup() { muster_desktop_update_startup() }
+
+    /// What to show before the main page. Changes nothing; may wait a few
+    /// seconds for a daemon launchd is still starting. Call off the main
+    /// thread. `resumed`: Muster's own restart or update opened this app.
+    public static func checkDesktop(socket: String, managed: Bool, resumed: Bool,
+                                    action: @convention(c) (UInt32) -> Int32) throws -> DesktopStartup {
+        var error: UnsafeMutablePointer<CChar>?
+        let result = socket.withCString { muster_desktop_check($0, managed ? 1 : 0, resumed ? 1 : 0, action, &error) }
+        defer { muster_string_free(error) }
+        guard let startup = DesktopStartup(code: result) else {
+            throw MusterRuntimeError.create(error.map { String(cString: $0) } ?? "Desktop service check failed (\(result))")
+        }
+        return startup
+    }
 
     public static func prepareDesktop(socket: String, managed: Bool,
                                       action: @convention(c) (UInt32) -> Int32) throws {

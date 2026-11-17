@@ -3,6 +3,12 @@
 # installs it into /Applications together with the Locked Use system plugin.
 # TCC and launchd keep a stable identity for the bundled daemon. The plugin
 # installation is requested by musterd through its SMAppService root helper.
+# launchd runs musterd from the system LaunchAgent
+# /Library/LaunchAgents/dev.linsheng.musterd.plist (ADR 0227). This script
+# never writes it: when it already matches the new bundle the daemon is
+# loaded again as the console user; otherwise the app asks for the
+# administrator's password on its start page, or you install it yourself
+# with the sudo command printed at the end.
 #
 #   scripts/install-mac.sh                       # Developer ID Application: <team 89LGY6BD53>
 #   TEAM=XXXXXXXXXX scripts/install-mac.sh
@@ -72,6 +78,17 @@ done
 launchctl bootout "gui/$(id -u)/dev.linsheng.musterd" >/dev/null 2>&1 || true
 rm -rf /Applications/Muster.app
 ditto "$app" /Applications/Muster.app
+agent=/Library/LaunchAgents/dev.linsheng.musterd.plist
+template=/Applications/Muster.app/Contents/Resources/SystemLaunchAgent/dev.linsheng.musterd.plist
+if [ -f "$agent" ] && [ "$(stat -f %u "$agent")" = 0 ] && cmp -s "$agent" "$template"; then
+  # Unchanged definition: no password, the user's own launchd domain.
+  launchctl bootstrap "gui/$(id -u)" "$agent"
+  echo "musterd loaded from $agent"
+else
+  echo "musterd's system LaunchAgent is missing or older than this build."
+  echo "Muster will ask for the administrator's password when it opens, or run:"
+  echo "  sudo install -o root -g wheel -m 0644 '$template' '$agent'"
+fi
 echo "Locked Use installation will be verified by musterd through the root helper after launch."
 echo "installed /Applications/Muster.app ($(codesign -dv /Applications/Muster.app 2>&1 | grep Authority= | head -1))"
 # LaunchServices needs a moment after the bundle is replaced (-609 otherwise).

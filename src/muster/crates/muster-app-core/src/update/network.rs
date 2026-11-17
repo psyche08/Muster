@@ -663,6 +663,16 @@ pub(super) fn intent_request_accessibility(state: &mut State, ctx: &Ctx) {
         log::debug!("accessibility is a desktop matter; ignored");
         return;
     }
+    // Already granted: no system prompt and no Settings pane (ADR 0227).
+    if state
+        .self_info
+        .as_ref()
+        .and_then(|i| i.state.as_ref())
+        .is_some_and(|s| s.accessibility == "granted")
+    {
+        log::debug!("accessibility already granted; not asking again");
+        return;
+    }
     state.busy += 1;
     let client = ctx.backend.local();
     spawn(ctx, async move {

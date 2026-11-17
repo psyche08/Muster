@@ -81,9 +81,13 @@ differ.
 
 ## Where the files are (macOS)
 
-The daemon ships inside the bundle and runs as a LaunchAgent the app
-registers on first launch (SMAppService; approve it under System Settings
-› General › Login Items if asked):
+The daemon ships inside the bundle and launchd runs it from the system
+LaunchAgent `/Library/LaunchAgents/dev.linsheng.musterd.plist`
+([ADR 0227](../../../../docs/adr/0227-system-launchagent-startup-gate-and-full-restart.md)).
+When musterd is not running the app asks before its main page; the first
+start (and any start after the LaunchAgent's definition changed) asks for
+the administrator's password to write that file. Upgrading the app with an
+unchanged definition needs no password:
 
 | | |
 |---|---|
@@ -91,7 +95,8 @@ registers on first launch (SMAppService; approve it under System Settings
 | `Muster.app/Contents/Helpers/muster` | the command line, same origin; `alias muster=/Applications/Muster.app/Contents/Helpers/muster` (not next to the app executable: `muster` and `Muster` collide on a case-insensitive volume). Every Muster process on the Mac runs from the installed bundle, none from a build tree |
 | `Muster.app/Contents/Helpers/muster-panel` | the AppKit panel helper: the idle-compaction banner ([ADR 0087](../../../../docs/adr/0087-idle-compaction-on-a-locked-or-busy-mac.md)) and the Locked Use console cover, each one borderless and non-activating, on a main thread the daemon has none of. Not in `Contents/MacOS`: an AppKit process there takes `Muster.app` as its main bundle and registers with Launch Services under the app's own bundle id, which hid the app's windows from the Accessibility API ([ADR 0128](../../../../docs/adr/0128-the-panel-helper-keeps-its-own-identity.md)). Build it with `cargo build --release -p muster-platform --bin muster-panel` |
 | `Muster.app/Contents/Helpers/l4forwarder` | the TCP/UDP forwarder addon ([ADR 0107](../../../../docs/adr/0107-l4forwarder-in-muster-app.md)), copied from `release/l4forwarder` under `$CARGO_TARGET_DIR` or `addons/l4forwarder/target`; build it with `(cd addons/l4forwarder && cargo build --release --locked)`. musterd runs it while `l4forwarder.json` is in the state directory |
-| `Muster.app/Contents/Library/LaunchAgents/dev.linsheng.musterd.plist` | its LaunchAgent (`Apps/macOS/dev.linsheng.musterd.plist`) |
+| `Muster.app/Contents/Resources/SystemLaunchAgent/dev.linsheng.musterd.plist` | the LaunchAgent template (`Apps/macOS/dev.linsheng.musterd.system.plist`), copied byte for byte to `/Library/LaunchAgents/dev.linsheng.musterd.plist`, root:wheel 0644 |
+| `Muster.app/Contents/Library/LaunchAgents/dev.linsheng.musterd.plist` | the SMAppService plist of older installations (`Apps/macOS/dev.linsheng.musterd.plist`), kept only so the app can unregister that job when it moves it |
 | `~/Library/Application Support/Muster/` | store (`musterd.db`), socket (`musterd.sock`), the app's own state, and `l4forwarder.json` when forwarding is configured |
 | `~/Library/Logs/Muster/musterd.log` | the daemon's log (`musterd --log`); the addon's is `l4forwarder.log` beside it |
 | `~/Library/Logs/Muster/app.log` | the app's own log, from its shared-Rust core at info, kept to two files of 8 MiB (`app.log`, `app.log.1`; [ADR 0137](../../../../docs/adr/0137-keep-the-desktop-apps-log-in-a-file.md)) |
@@ -110,11 +115,9 @@ a Mac administering its own daemon over the socket never prompts.
 Development builds: sign the Mac target with your team
 (`DEVELOPMENT_TEAM=… CODE_SIGN_STYLE=Automatic`); an unsigned build has
 no application identifier, so the keychain refuses it and the app runs
-with software keys. After every rebuild launchd still holds the previous
-build's code requirement for the agent (`spawn failed`, EX_CONFIG); the
-app re-registers it when the socket does not appear, and
-`launchctl bootout gui/$(id -u)/dev.linsheng.musterd` before launching
-does the same by hand.
+with software keys. Only the copy in `/Applications` touches launchd: a
+build run from DerivedData waits for a musterd you start yourself and says
+so before its main page.
 
 ## Installing on this Mac
 
@@ -129,9 +132,20 @@ command or package installer is used.
 
 /Applications and a Developer ID signature give TCC and launchd a stable
 identity: the Accessibility grant (System Settings › Privacy & Security ›
-Accessibility › musterd) and the LaunchAgent survive rebuilds. A build
-from DerivedData signed with a development certificate works too, but
-every rebuild re-registers the agent and may lose TCC grants.
+Accessibility › musterd) and the LaunchAgent survive rebuilds.
+
+The script never writes `/Library/LaunchAgents`. When the installed
+LaunchAgent already matches the new bundle it loads it again as you; when
+it is missing or older, the app asks for the administrator's password on
+its start page, or you install it yourself:
+
+```sh
+sudo install -o root -g wheel -m 0644 /Applications/Muster.app/Contents/Resources/SystemLaunchAgent/dev.linsheng.musterd.plist /Library/LaunchAgents/dev.linsheng.musterd.plist
+```
+
+Removing Muster: `launchctl bootout gui/$(id -u)/dev.linsheng.musterd`, then
+`sudo rm /Library/LaunchAgents/dev.linsheng.musterd.plist` (the password
+again) and the app.
 
 ## Running it by hand
 
@@ -142,7 +156,7 @@ MUSTER_DIR=$HOME/.muster-dev target/release/musterd --relay 127.0.0.1:9443 --loo
 MUSTER_DIR=$HOME/.muster-dev open build/DerivedData/Build/Products/Debug/Muster.app   # or Run in Xcode
 ```
 
-With `MUSTER_DIR` set the app does not register the LaunchAgent and talks
+With `MUSTER_DIR` set the app does not touch launchd and talks
 to that directory's socket (keep the path short: macOS limits socket paths
 to 104 bytes). In the iPhone simulator,
 `xcodebuild ... CODE_SIGN_IDENTITY=-` (ad-hoc, not `CODE_SIGNING_ALLOWED=NO`):

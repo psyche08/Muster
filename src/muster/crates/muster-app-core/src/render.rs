@@ -1413,7 +1413,13 @@ fn desktop_setup(state: &State) -> app::DesktopSetupView {
         restart_required: state.desktop_restart_required || !screen_recording_ready,
         can_restart: state.can_restart_desktop(),
         error: state.desktop_setup_error.clone(),
-        visible: !state.desktop_setup_dismissed && (state.desktop_restart_required || !accessibility_ready || !screen_recording_ready || (!plugin_ready && !checking)),
+        // The page opens by itself only while Accessibility is missing, or
+        // once its grant lands in this session and the restart that makes
+        // it take is offered. With Accessibility granted, Screen Recording
+        // and the Locked Use plugin wait in Settings, which opens the same
+        // page (ADR 0227).
+        visible: !state.desktop_setup_dismissed
+            && (device.accessibility == "missing" || state.desktop_accessibility_granted),
         accessibility_ready, screen_recording_ready, plugin_ready, checking,
         screen_recording_message: if screen_recording_ready {
             "musterd 已获准读取窗口画面。"
@@ -1524,22 +1530,51 @@ mod desktop_setup_tests {
         assert!(!desktop_setup(&state).visible);
     }
 
-    /// Screen Recording is musterd's own permission, so a missing one has to
-    /// reach the startup prompt the same way Accessibility does. An OS that
-    /// has no such permission reports nothing and is never prompted.
+    /// A missing Screen Recording grant is shown and its restart offered in
+    /// the page, but with Accessibility granted it no longer opens the page
+    /// by itself (ADR 0227). An OS that has no such permission reports
+    /// nothing and is never asked.
     #[test]
-    fn missing_screen_recording_prompts_but_an_unreporting_os_does_not() {
+    fn missing_screen_recording_waits_in_the_page_while_accessibility_is_granted() {
         let mut state = ready();
         device(&mut state).screen_recording = "missing".into();
         let view = desktop_setup(&state);
-        assert!(view.visible && !view.screen_recording_ready);
+        assert!(!view.visible && !view.screen_recording_ready && !view.ready);
         assert!(view.screen_recording_message.contains("屏幕录制"));
         // The grant only reaches a new process, so the restart that makes it
         // take is offered straight away rather than waited for.
         assert!(view.restart_required);
+        device(&mut state).accessibility = "missing".into();
+        assert!(desktop_setup(&state).visible);
+        device(&mut state).accessibility = "granted".into();
         device(&mut state).screen_recording = String::new();
         let view = desktop_setup(&state);
         assert!(view.screen_recording_ready && !view.visible && !view.restart_required);
+    }
+
+    /// The page opens by itself for a missing Accessibility grant and for
+    /// the restart once that grant lands; never again once it is granted,
+    /// whatever else is outstanding, and never on an unknown answer.
+    #[test]
+    fn a_granted_accessibility_never_brings_the_page_back() {
+        let mut state = ready();
+        device(&mut state).screen_recording = "missing".into();
+        device(&mut state).locked_use_setup = "needs_installation".into();
+        state.desktop_restart_required = true;
+        assert!(!desktop_setup(&state).visible);
+        device(&mut state).accessibility = String::new();
+        assert!(!desktop_setup(&state).visible);
+        device(&mut state).accessibility = "missing".into();
+        let view = desktop_setup(&state);
+        assert!(view.visible && !view.accessibility_ready);
+        // The grant lands while the app runs: the page stays (or comes back)
+        // to offer the restart that makes it take.
+        state.desktop_setup_dismissed = true;
+        device(&mut state).accessibility = "granted".into();
+        state.desktop_accessibility_granted = true;
+        state.desktop_setup_dismissed = false;
+        let view = desktop_setup(&state);
+        assert!(view.visible && view.accessibility_ready && view.restart_required);
     }
 
     /// Terminal Automation left the setup dialog: it no longer decides
@@ -1641,9 +1676,10 @@ mod desktop_setup_tests {
         let mut state = ready();
         device(&mut state).locked_use_setup = "needs_installation".into();
         let view = desktop_setup(&state);
-        assert!(view.visible && view.can_install && !view.plugin_ready);
+        // Offered in the page Settings opens, not by itself (ADR 0227).
+        assert!(!view.visible && view.can_install && !view.plugin_ready && !view.ready);
         device(&mut state).locked_use_setup = "ready".into();
-        assert!(!desktop_setup(&state).visible);
+        assert!(desktop_setup(&state).ready);
     }
 }
 

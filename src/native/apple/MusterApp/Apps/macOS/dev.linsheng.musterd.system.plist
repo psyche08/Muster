@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The system LaunchAgent for musterd (ADR 0227). Muster.app installs
+         this file, byte for byte, as
+         /Library/LaunchAgents/dev.linsheng.musterd.plist (root:wheel 0644):
+         that copy is the one step that needs the administrator's password.
+         launchd loads it into every console user's session at login; the
+         app loads, starts and stops the job as the user. The program is the
+         daemon inside the installed app, so the TCC identity stays the
+         app's (ADR 0125, ADR 0128). Files: ~/Library/Application
+         Support/Muster (store, socket) and ~/Library/Logs/Muster/musterd.log
+         (the log argument). Changing this file makes every installed Mac ask for
+         the password once more. -->
+    <key>Label</key>
+    <string>dev.linsheng.musterd</string>
+    <key>Program</key>
+    <string>/Applications/Muster.app/Contents/MacOS/musterd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Muster.app/Contents/MacOS/musterd</string>
+        <string>--log</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>dev.linsheng.muster</string>
+    </array>
+</dict>
+</plist>
