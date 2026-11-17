@@ -29,6 +29,9 @@ ALLOWED = {
     "muster-net": {"muster-core"},
     "muster-relay": {"muster-core", "muster-net"},
     "muster-apns": set(),
+    # Log upload: the device's uploader and the collector; signs with the
+    # device key, so it reads identities from the foundation.
+    "muster-logs": {"muster-core"},
     # Services (the integration layer): Agent Halo, terminals, the browser host.
     "muster-agent": {"muster-proto", "muster-core"},
     "muster-terminal": {"muster-proto", "muster-core"},
@@ -52,6 +55,7 @@ ALLOWED = {
         "muster-agent",
         "muster-platform",
         "muster-paths",
+        "muster-logs",  # The hourly log uploader the daemon composes (ADR 0227).
     },
     # A client of the daemon's socket, like the command line: it serves an
     # external task scheduler's protocol and hands every turn to musterd.

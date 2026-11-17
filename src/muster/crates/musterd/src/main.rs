@@ -53,6 +53,15 @@ struct Args {
     /// Accept loopback candidates (two daemons on one host)
     #[arg(long)]
     loopback: bool,
+    /// Upload new log lines, redacted, once an hour to this collector
+    /// (ADR 0228). Release builds default to muster.linsheng.dev; debug
+    /// builds upload only when given one. $MUSTER_LOG_UPLOAD sets it too
+    /// ("off" turns it off).
+    #[arg(long)]
+    log_upload_url: Option<String>,
+    /// Never upload logs.
+    #[arg(long)]
+    no_log_upload: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -209,6 +218,12 @@ async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
         other => anyhow::bail!("--terminal {other:?}: auto, iterm2, ghostty, pty or off"),
     };
     config.authorized_keys = args.authorized_keys;
+    config.log_upload = log_upload_url(
+        args.log_upload_url,
+        args.no_log_upload,
+        std::env::var("MUSTER_LOG_UPLOAD").ok(),
+        !cfg!(debug_assertions),
+    );
     let daemon = Daemon::start(config).await?;
     let ctrl_c = tokio::signal::ctrl_c();
     #[cfg(unix)]
@@ -226,6 +241,52 @@ async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
     log::info!("musterd stopping");
     daemon.shutdown().await;
     Ok(())
+}
+
+/// Where logs go: the flag, else `$MUSTER_LOG_UPLOAD`, else the production
+/// collector in a release build. `--no-log-upload` or "off" (0, false, no)
+/// in the variable turns it off.
+fn log_upload_url(
+    flag: Option<String>,
+    off: bool,
+    env: Option<String>,
+    release: bool,
+) -> Option<String> {
+    let env = env.map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    let env_off = env.as_deref().is_some_and(|v| {
+        matches!(
+            v.to_ascii_lowercase().as_str(),
+            "off" | "0" | "false" | "no"
+        )
+    });
+    if off || env_off {
+        return None;
+    }
+    flag.or(env)
+        .or_else(|| release.then(|| muster_logs::wire::DEFAULT_URL.to_string()))
+}
+
+#[cfg(test)]
+mod upload_tests {
+    use super::log_upload_url;
+
+    #[test]
+    fn release_builds_upload_unless_told_not_to() {
+        let url = Some(muster_logs::wire::DEFAULT_URL.to_string());
+        assert_eq!(log_upload_url(None, false, None, true), url);
+        assert_eq!(log_upload_url(None, false, None, false), None);
+        assert_eq!(log_upload_url(None, true, None, true), None);
+        for off in ["off", "0", "FALSE", " no "] {
+            assert_eq!(log_upload_url(None, false, Some(off.into()), true), None);
+        }
+        let local = Some("http://127.0.0.1:9180/v1/logs".to_string());
+        assert_eq!(log_upload_url(None, false, local.clone(), false), local);
+        assert_eq!(
+            log_upload_url(local.clone(), false, Some("".into()), false),
+            local
+        );
+        assert_eq!(log_upload_url(local, false, Some("off".into()), true), None);
+    }
 }
 
 #[cfg(all(test, target_os = "macos"))]

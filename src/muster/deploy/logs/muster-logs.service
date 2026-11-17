@@ -1,0 +1,49 @@
+# The log collector beside the relay (ADR 0228): HTTPS on TCP 9444 with the
+# relay's certificate, read through the muster-relay group. The relay's
+# certificate renewal restarts muster-relay; PartOf restarts this with it.
+[Unit]
+Description=muster log collector (hourly redacted desktop logs, grouped by network)
+Documentation=https://github.com/psyche08/muster
+After=network-online.target muster-relay.service
+Wants=network-online.target
+PartOf=muster-relay.service
+
+[Service]
+Type=simple
+User=muster-logs
+Group=muster-logs
+SupplementaryGroups=muster-relay
+EnvironmentFile=/etc/muster/logs.env
+Environment=RUST_LOG=info
+ExecStart=/opt/muster/bin/muster-logs serve \
+    --listen ${LOGS_LISTEN} \
+    --cert ${LOGS_CERT} \
+    --key ${LOGS_KEY} \
+    --root /var/lib/muster-logs \
+    --retention-days ${LOGS_RETENTION_DAYS} \
+    --device-daily-mib ${LOGS_DEVICE_DAILY_MIB}
+StateDirectory=muster-logs
+StateDirectoryMode=0700
+UMask=0077
+Restart=always
+RestartSec=2
+LimitNOFILE=65536
+
+# Hardening: the only writable place is the state directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

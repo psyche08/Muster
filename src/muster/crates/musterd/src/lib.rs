@@ -15,6 +15,7 @@ pub mod ghostty;
 pub mod handler;
 pub mod l4forwarder;
 pub mod locked_use;
+pub mod log_upload;
 pub mod multica;
 #[cfg(target_os = "macos")]
 mod navigation_restore;
@@ -129,6 +130,9 @@ pub struct DaemonConfig {
     /// = the installed package's, else the crate's; an app embedding the
     /// daemon passes its own.
     pub version: String,
+    /// Where the hourly log upload goes (ADR 0228); `None` uploads nothing.
+    /// Only the daemon binary sets it: tests and embedded daemons never upload.
+    pub log_upload: Option<String>,
 }
 
 pub type SignerFactory = Arc<dyn Fn(&Store) -> anyhow::Result<SharedSigner> + Send + Sync>;
@@ -145,6 +149,7 @@ impl std::fmt::Debug for DaemonConfig {
             .field("listen", &self.listen)
             .field("cloud", &self.cloud)
             .field("version", &self.version)
+            .field("log_upload", &self.log_upload)
             .finish()
     }
 }
@@ -169,6 +174,7 @@ impl DaemonConfig {
             signer: None,
             authorized_keys: None,
             version: String::new(),
+            log_upload: None,
         }
     }
 
@@ -456,6 +462,12 @@ impl Daemon {
             && let Some(supervisor) = l4forwarder::Supervisor::for_daemon(&daemon.config.dir)
         {
             let task = tokio::spawn(supervisor.run());
+            daemon.tasks.lock().unwrap().push(task);
+        }
+        if daemon.config.listen
+            && let Some(url) = daemon.config.log_upload.clone()
+            && let Some(task) = log_upload::spawn(&daemon, url)
+        {
             daemon.tasks.lock().unwrap().push(task);
         }
         // A window the owner opened earlier is open again after a restart; a
