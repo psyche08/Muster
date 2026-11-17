@@ -40,7 +40,7 @@ host with the .NET 10 SDK, protoc, Rust's x86_64-pc-windows-gnu target,
 mingw-w64, bash, curl, unzip, shasum, Python 3, wixl and msiextract.
 CARGO_TARGET_DIR is the shell's existing Cargo build directory.
 
-    src/native/windows/installer/build-msi.sh 1.1.49 /absolute/output/directory
+    src/native/windows/installer/build-msi.sh 1.1.50 /absolute/output/directory
 
 WINTUN_ARCHIVE can point to a local copy of the pinned Wintun ZIP. The build
 checks its SHA-256 and extracts the completed MSI to compare every installed
