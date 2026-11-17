@@ -1,0 +1,60 @@
+[package]
+name = "muster-logs"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Hourly incremental, redacted log upload from desktops, and its collector (grouped by network)"
+
+[features]
+default = ["server"]
+# The collector (`muster-logs serve`); musterd links the client half only
+# (`default-features = false`).
+server = [
+    "dep:clap",
+    "dep:env_logger",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:rustls",
+    "dep:rustls-pemfile",
+    "dep:tokio-rustls",
+]
+
+[[bin]]
+name = "muster-logs"
+path = "src/main.rs"
+required-features = ["server"]
+
+[dependencies]
+muster-core = { path = "../muster-core" }
+anyhow.workspace = true
+flate2 = "1"
+hex.workspace = true
+hmac.workspace = true
+log.workspace = true
+rand.workspace = true
+regex = "1"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+# server
+clap = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+http-body-util = { version = "0.1", optional = true }
+hyper = { version = "1", features = ["http1", "server"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { version = "2", optional = true }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"], optional = true }
+
+[dev-dependencies]
+rcgen = { workspace = true, features = ["pem"] }
+tempfile = "3"
+
+[lints]
+workspace = true

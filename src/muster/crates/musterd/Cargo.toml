@@ -36,6 +36,7 @@ muster-terminal = { path = "../muster-terminal" }
 muster-agent = { path = "../muster-agent" }
 muster-platform = { path = "../muster-platform" }
 muster-paths = { path = "../muster-paths" }
+muster-logs = { path = "../muster-logs", default-features = false }
 anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
