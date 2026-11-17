@@ -237,6 +237,44 @@ async fn a_refused_upload_keeps_the_lines_for_the_next_hour() {
     assert_eq!(off, Outcome::Disabled);
 }
 
+/// Behind nginx every connection comes from loopback; the per-address limit
+/// counts the client the proxy names in `X-Real-IP`.
+#[tokio::test]
+async fn behind_the_proxy_the_address_limit_counts_the_named_client() {
+    let root = tempfile::tempdir().unwrap();
+    let mut options = Options::new(root.path().into());
+    options.source_uploads_per_hour = Some(1);
+    let (_, url) = collector(options).await;
+    let via = |client: &str| {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-real-ip", client.parse().unwrap());
+        reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap()
+    };
+    let upload = |client: reqwest::Client| {
+        let url = url.clone();
+        async move {
+            let device = Device::new(Some(NETWORK));
+            device.append("INFO behind nginx\n");
+            upload::upload_once(&client, &device.config(&url), &device.identity()).await
+        }
+    };
+    let first = upload(via("192.0.2.10")).await.unwrap();
+    assert!(
+        matches!(first, Outcome::Sent { chunks: 1, .. }),
+        "{first:?}"
+    );
+    let second = upload(via("192.0.2.10")).await.unwrap_err();
+    assert!(second.contains("429"), "{second}");
+    let other = upload(via("192.0.2.11")).await.unwrap();
+    assert!(
+        matches!(other, Outcome::Sent { chunks: 1, .. }),
+        "{other:?}"
+    );
+}
+
 #[tokio::test]
 async fn the_collector_answers_garbage_and_health_checks() {
     let root = tempfile::tempdir().unwrap();

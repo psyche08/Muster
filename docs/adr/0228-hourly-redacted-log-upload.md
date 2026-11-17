@@ -1,7 +1,7 @@
 # ADR 0228: Desktops upload redacted log increments hourly, grouped by network
 
 - Date: 2026-11-17
-- Status: Accepted; source and tests verified, collector deployment pending
+- Status: Accepted; source and tests verified; endpoint and deployment superseded by [ADR 0229](0229-log-collector-behind-nginx-on-8443.md)
 - Related: [SECURITY.md](../SECURITY.md) §6–§8, [MODULES.md](../MODULES.md),
   [deploy/relay](../../src/muster/deploy/relay/README.md),
   [deploy/logs](../../src/muster/deploy/logs/README.md)
@@ -171,6 +171,11 @@ The collector checks, before it keeps anything:
 - that every member decompresses to exactly its `raw_len`.
 
 ### Endpoint and transport
+
+> Superseded by [ADR 0229](0229-log-collector-behind-nginx-on-8443.md):
+> devices send to `https://muster-logs.linsheng.dev:8443/v1/logs`, and nginx
+> passes uploads to the collector on loopback. The text below records the
+> original decision.
 
 Devices send to `https://muster.linsheng.dev:9444/v1/logs`. The collector is
 its own process beside the relay, on TCP 9444, because the relay's port does

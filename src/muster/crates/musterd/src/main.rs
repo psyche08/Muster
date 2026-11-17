@@ -54,7 +54,7 @@ struct Args {
     #[arg(long)]
     loopback: bool,
     /// Upload new log lines, redacted, once an hour to this collector
-    /// (ADR 0228). Release builds default to muster.linsheng.dev; debug
+    /// (ADR 0228). Release builds default to muster-logs.linsheng.dev:8443; debug
     /// builds upload only when given one. $MUSTER_LOG_UPLOAD sets it too
     /// ("off" turns it off).
     #[arg(long)]

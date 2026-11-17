@@ -1,5 +1,6 @@
-//! The collector: `POST /v1/logs` over HTTPS on muster.linsheng.dev, and
-//! `GET /healthz`. Each upload is verified (signature, digest, limits,
+//! The collector: `POST /v1/logs` and `GET /healthz`, behind nginx as
+//! `muster-logs.linsheng.dev:8443` (ADR 0229) or on its own TLS listener.
+//! Each upload is verified (signature, digest, limits,
 //! clock), ranges already held are dropped, and every new chunk's gzip
 //! member is appended to its stream's file for the day:
 //!
@@ -49,7 +50,8 @@ pub struct Options {
     pub device_daily_bytes: u64,
     /// Uploads one device may make per hour (it makes one, plus retries).
     pub device_uploads_per_hour: u32,
-    /// Uploads one source address may make per hour; `None` behind a proxy.
+    /// Uploads one source address may make per hour; `None` turns it off.
+    /// Behind the local proxy the address is the proxy's `X-Real-IP`.
     pub source_uploads_per_hour: Option<u32>,
     /// How far an upload's clock may be from the collector's.
     pub max_skew: Duration,
@@ -311,6 +313,20 @@ fn clip(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).take(64).collect()
 }
 
+/// The client's address as the local proxy reports it. Only a plain
+/// listener asks, and a plain listener is on loopback (the binary refuses
+/// anything else), so the header comes from the proxy, which sets it.
+fn proxied_source<B>(request: &Request<B>) -> Option<IpAddr> {
+    request
+        .headers()
+        .get("x-real-ip")?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
 fn admit<K: std::hash::Hash + Eq>(buckets: &mut HashMap<K, Bucket>, key: K, per_hour: u32) -> bool {
     let now = Instant::now();
     let rate = f64::from(per_hour) / 3600.0;
@@ -412,7 +428,8 @@ pub fn tls_config(cert: &Path, key: &Path) -> Result<rustls::ServerConfig> {
 }
 
 /// Serves until the listener fails. `tls` is `None` only behind a local
-/// proxy (the caller checks that the listener is loopback).
+/// proxy (the caller checks that the listener is loopback), which names the
+/// client in `X-Real-IP`.
 pub async fn serve(
     listener: TcpListener,
     tls: Option<Arc<rustls::ServerConfig>>,
@@ -484,6 +501,7 @@ async fn handle(
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/healthz") => reply(StatusCode::OK, "ok\n"),
         (&Method::POST, wire::PATH) => {
+            let source = source.or_else(|| proxied_source(&request));
             let declared = request
                 .headers()
                 .get(hyper::header::CONTENT_LENGTH)
