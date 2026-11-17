@@ -1,7 +1,9 @@
 # ADR 0213: Recognize bare sidebar badges and keep speculative card reads quiet
 
 - Date: 2026-11-15
-- Status: Accepted; device acceptance pending
+- Status: Accepted; device acceptance pending. Amended by
+  [ADR 0224](0224-claude-sidebar-status-in-row-name.md): a row whose name
+  includes its status word also matches.
 - Related: [ADR 0010](0010-native-sidebar-metadata.md), [ADR 0109](0109-uuid-session-refresh-and-permission-lifetime.md), [ADR 0201](0201-background-claude-card-selection.md)
 
 ## Context

@@ -115,6 +115,8 @@ pub fn read_label<N: LabelNode>(control: &N) -> (Option<Vec<String>>, usize, usi
 /// Whether a sidebar row names `expected`. With `standalone_title` (see
 /// [`crate::profile::SessionList`]), a row whose name carries a status also
 /// matches through one exact title plus recognized status/provenance text.
+/// A row with metadata must be named either the title followed by its
+/// metadata, or the visual-order join of all its labels, status included.
 pub fn title_matches(
     standalone_title: bool,
     expected: &str,
@@ -168,7 +170,18 @@ pub fn title_matches(
         composite.push(' ');
         composite.push_str(label);
     }
-    !has_metadata || title == composite
+    // Claude may instead name the row with every passive label, status
+    // included, joined in visual order (ADR 0224). Each label passed the
+    // checks above; this is the same exact comparison against that join.
+    !has_metadata
+        || title == composite
+        || title
+            == labels
+                .iter()
+                .rev()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(" ")
 }
 
 fn metadata_label(label: &str) -> bool {
@@ -655,6 +668,154 @@ mod tests {
             labels.push(TITLE.into());
             assert!(!title_matches(true, TITLE, true, &name, "", Some(&labels)));
         }
+    }
+
+    /// Claude's Code sidebar on 2026-11-17 named a row with its status word
+    /// and its pull-request badge, the visual-order join of every passive
+    /// label. The status-free composite missed it, and every Agent request
+    /// to the session failed with "did not expose this session in its
+    /// sidebar".
+    #[test]
+    fn row_named_with_status_and_metadata_matches_the_visual_join() {
+        for (status, badge) in [
+            ("Running", "Merged · 2 pull requests"),
+            ("Awaiting input", "Open · 1 pull request"),
+            ("Idle", "Merge conflicts · 3 pull requests"),
+            ("Unread response", "Merged"),
+            ("Working", "Forked from 示例父任务"),
+        ] {
+            let row = Node(
+                "AXButton",
+                None,
+                true,
+                vec![Node(
+                    "AXGroup",
+                    None,
+                    true,
+                    vec![
+                        Node("AXStaticText", Some(TITLE), false, vec![]),
+                        Node("AXStaticText", Some(status), false, vec![]),
+                        Node("AXStaticText", Some(badge), false, vec![]),
+                    ],
+                )],
+            );
+            let (labels, _, _, stop) = read_label(&row);
+            assert_eq!(stop, "complete");
+            let labels = labels.as_deref();
+            let name = format!("{TITLE} {status} {badge}");
+            assert!(
+                title_matches(true, TITLE, true, &name, "", labels),
+                "{name}"
+            );
+            let bare = format!("{TITLE} {badge}");
+            assert!(
+                title_matches(true, TITLE, true, &bare, "", labels),
+                "{bare}"
+            );
+            assert!(!title_matches(true, TITLE, false, &name, "", labels));
+            assert!(!title_matches(false, TITLE, true, &name, "", labels));
+            assert!(!title_matches(true, "示例应用", true, &name, "", labels));
+            for other in [
+                format!("{TITLE} {badge} {status}"),
+                format!("{status} {TITLE} {badge}"),
+                format!("{TITLE}  {status} {badge}"),
+                format!("{TITLE} {status}"),
+                format!("{name} extra"),
+                "Unrelated row".to_owned(),
+            ] {
+                assert!(
+                    !title_matches(true, TITLE, true, &other, "", labels),
+                    "{other:?} is not this row's name"
+                );
+            }
+            // A status word in the name must be one of the row's labels.
+            let without_status = [badge.into(), TITLE.into()];
+            assert!(!title_matches(
+                true,
+                TITLE,
+                true,
+                &name,
+                "",
+                Some(&without_status)
+            ));
+            let doubled = [badge.into(), status.into(), TITLE.into(), TITLE.into()];
+            assert!(!title_matches(
+                true,
+                TITLE,
+                true,
+                &format!("{TITLE} {TITLE} {status} {badge}"),
+                "",
+                Some(&doubled)
+            ));
+        }
+    }
+
+    /// Read from the same sidebar on 2026-11-17: a delegated, running row
+    /// puts its status after the provenance, not after the title.
+    #[test]
+    fn captured_delegated_running_row_matches_in_its_own_visual_order() {
+        let origin = "Started by Claude from 示例父任务";
+        let row = Node(
+            "AXButton",
+            None,
+            true,
+            vec![Node(
+                "AXGroup",
+                None,
+                true,
+                vec![
+                    Node("AXStaticText", Some(TITLE), false, vec![]),
+                    Node("AXStaticText", Some(origin), false, vec![]),
+                    Node("AXStaticText", Some("Running"), false, vec![]),
+                ],
+            )],
+        );
+        let (labels, _, _, stop) = read_label(&row);
+        assert_eq!(stop, "complete");
+        let labels = labels.as_deref();
+        let name = format!("{TITLE} {origin} Running");
+        assert!(title_matches(true, TITLE, true, &name, "", labels));
+        assert!(!title_matches(true, TITLE, false, &name, "", labels));
+        assert!(!title_matches(
+            true,
+            TITLE,
+            true,
+            &format!("{TITLE} Running {origin}"),
+            "",
+            labels
+        ));
+    }
+
+    #[test]
+    fn visual_join_still_rejects_unknown_labels() {
+        for (extra, badge) in [
+            ("Paused", "Merged · 2 pull requests"),
+            ("running", "Open · 1 pull request"),
+            ("Running", "Closed"),
+            ("Running", "Merged · 0 pull requests"),
+            ("Running", "Other session"),
+        ] {
+            let labels = [badge.into(), extra.into(), TITLE.into()];
+            let name = format!("{TITLE} {extra} {badge}");
+            assert!(
+                !title_matches(true, TITLE, true, &name, "", Some(&labels)),
+                "{name}"
+            );
+        }
+        let labels = [
+            "Merged · 2 pull requests".into(),
+            "Running".into(),
+            "Other session".into(),
+            TITLE.into(),
+        ];
+        assert!(!title_matches(
+            true,
+            TITLE,
+            true,
+            &format!("{TITLE} Other session Running Merged · 2 pull requests"),
+            "",
+            Some(&labels)
+        ));
     }
 
     #[test]
