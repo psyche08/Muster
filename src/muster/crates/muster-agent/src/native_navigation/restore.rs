@@ -90,8 +90,9 @@ impl Navigation {
         let mut rx = self.0.workers.subscribe();
         let _ = rx.wait_for(|n| *n == 0).await;
     }
-    pub async fn scope<T>(&self, f: impl Future<Output = T>) -> T {
-        NAVIGATION.scope(self.clone(), f).await
+    /// Not an `async fn`, which would hold `f` twice (ADR 0226).
+    pub fn scope<F: Future>(&self, f: F) -> tokio::task::futures::TaskLocalFuture<Navigation, F> {
+        NAVIGATION.scope(self.clone(), f)
     }
     pub fn dispatched(&self) -> bool {
         self.0.dispatched.load(Ordering::Acquire)

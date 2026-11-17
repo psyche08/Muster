@@ -1,6 +1,7 @@
 //! A scoped, live admission check. Controllers call it immediately before
 //! each side effect; cancellation invalidates authority before cleanup starts.
 use std::{future::Future, sync::Arc};
+use tokio::task::futures::TaskLocalFuture;
 tokio::task_local! { static CHECK: Arc<dyn Fn() -> bool + Send + Sync>; }
 tokio::task_local! { static WORK: WorkQueue; }
 tokio::task_local! { static DELIVERY: Delivery; }
@@ -32,8 +33,11 @@ impl Delivery {
         let state = self.0.lock().unwrap();
         !state.attempted && (!state.entered || state.tracked)
     }
-    pub async fn scope<T>(&self, future: impl Future<Output = T>) -> T {
-        DELIVERY.scope(self.clone(), future).await
+    /// A plain function, not an `async fn`, as are this module's other
+    /// scopes: an `async fn` would keep `future` and the scoped copy of it,
+    /// doubling every caller's future (ADR 0226).
+    pub fn scope<F: Future>(&self, future: F) -> TaskLocalFuture<Delivery, F> {
+        DELIVERY.scope(self.clone(), future)
     }
     /// Captured by the write guard before submission and retained for late receipts.
     pub fn set_confirmation(&self, confirmation: Confirmation) {
@@ -99,8 +103,8 @@ impl WorkQueue {
     pub fn is_idle(&self) -> bool {
         self.0.lock().unwrap().active == 0
     }
-    pub async fn scope<T>(&self, future: impl Future<Output = T>) -> T {
-        WORK.scope(self.clone(), future).await
+    pub fn scope<F: Future>(&self, future: F) -> TaskLocalFuture<WorkQueue, F> {
+        WORK.scope(self.clone(), future)
     }
     /// Release an operation's exclusion permits only after its last OS worker.
     /// Registration and deferred release share the same mutex, including when
@@ -188,11 +192,11 @@ where
     let runtime = tokio::runtime::Handle::current();
     spawn_blocking(move || runtime.block_on(future))
 }
-pub async fn scope<T>(
+pub fn scope<F: Future>(
     check: Arc<dyn Fn() -> bool + Send + Sync>,
-    future: impl Future<Output = T>,
-) -> T {
-    CHECK.scope(check, future).await
+    future: F,
+) -> TaskLocalFuture<Arc<dyn Fn() -> bool + Send + Sync>, F> {
+    CHECK.scope(check, future)
 }
 /// Clone the current live check for an operation-owned cleanup worker.
 pub fn current_check() -> Option<Arc<dyn Fn() -> bool + Send + Sync>> {
