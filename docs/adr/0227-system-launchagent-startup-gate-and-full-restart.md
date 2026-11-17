@@ -76,7 +76,7 @@ What was there before:
   | --- | --- |
   | Inspect | Reports facts and changes nothing. The agent file is missing, current (same bytes, owner root, no group or world write), or outdated. The job is absent, stopped or running. Its origin comes from the `path =` line of `launchctl print`: the system plist, or anything else. |
   | Install | The password step above. |
-  | Register | No job: `bootstrap`. Stopped system job: `kickstart` without `-k`. Running system job: left alone. Job from another origin: unregister the old SMAppService agent, `bootout` whatever remains, wait for it to unload, then `bootstrap`. |
+  | Register | No job: unregister an older installation's SMAppService agent if it is still registered (`install-mac.sh` boots its job out, so the registration can outlive the job, and both would claim the label at the next login), then `bootstrap`. Stopped system job: `kickstart` without `-k`. Running system job: left alone. Job from another origin: unregister the old SMAppService agent, `bootout` whatever remains, wait for it to unload, then `bootstrap`. |
   | Reload | `bootout`, wait, `bootstrap`. Runs only after an Install changed the definition of a loaded job. |
   | RecoverStopped | Starts a loaded job that is not running. |
 

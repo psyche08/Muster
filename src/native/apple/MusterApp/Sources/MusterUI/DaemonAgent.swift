@@ -123,7 +123,12 @@ public enum DaemonAgent {
     private static func register() throws -> Int32 {
         let job = try inspectJob()
         switch (job.state, job.origin) {
-        case (.absent, _): return try bootstrap()
+        case (.absent, _):
+            // An older installation's registration may outlive its job
+            // (install-mac.sh boots it out): without this, both would claim
+            // the label at the next login.
+            unregisterLegacy()
+            return try bootstrap()
         case (.running, .system): return 0
         case (.stopped, .system): return try kickstart()
         default:
@@ -181,17 +186,25 @@ public enum DaemonAgent {
     /// The SMAppService agent (or a `launchctl submit` job) of an older
     /// installation: unregister it, then make sure launchd let it go.
     private static func removeLegacy() throws {
-        let service = SMAppService.agent(plistName: legacyPlist)
-        if service.status != .notRegistered && service.status != .notFound {
-            do { try service.unregister() } catch {
-                NSLog("muster: desktop startup: legacy unregister failed: %@", "\(error)")
-            }
-        }
+        unregisterLegacy()
         if try inspectJob().state != .absent {
             _ = try launchctl(["bootout", MacInstall.daemonService])
         }
         guard try waitUntilAbsent() else {
             throw NSError(domain: "MusterLaunchAgent", code: 2, userInfo: [NSLocalizedDescriptionKey: "the old musterd job did not unload"])
+        }
+    }
+
+    /// Only before a bootstrap: unregistering boots out a loaded job of
+    /// the same label, whoever loaded it.
+    private static func unregisterLegacy() {
+        let service = SMAppService.agent(plistName: legacyPlist)
+        guard service.status != .notRegistered && service.status != .notFound else { return }
+        do {
+            try service.unregister()
+            NSLog("muster: desktop startup: legacy registration removed")
+        } catch {
+            NSLog("muster: desktop startup: legacy unregister failed: %@", "\(error)")
         }
     }
 
