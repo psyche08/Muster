@@ -1,7 +1,7 @@
 # ADR 0227: musterd runs from a system LaunchAgent, the app starts it before its main page, and a restart restarts every Muster process
 
 - Date: 2026-11-17
-- Status: Accepted; source and tests verified, installation and device acceptance pending
+- Status: Accepted; installed and verified on the owner's Mac, except the next login, an update, and the restart button itself
 - Related: [ADR 0021](0021-desktop-startup-retry.md) (Shared Rust owns desktop startup; extended), [ADR 0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) (its startup prompt for Screen Recording is superseded here), [ADR 0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md), [ADR 0128](0128-the-panel-helper-keeps-its-own-identity.md), [ADR 0164](0164-the-daemons-main-thread-serves-the-window-server.md), `docs/architecture/runtime.md` §3.3
 
 ## Context
@@ -227,10 +227,15 @@ Which steps need the administrator's password:
   says what is written.
 - **Development builds** no longer self-register. Run musterd by hand, or
   use the installed copy's daemon on the shared socket.
-- **Grants after the move.** Whether Accessibility and Screen Recording
-  carry over to the system job is expected but not yet observed. The
-  executable path and signature are unchanged, but the responsible process
-  for TCC changes from an SMAppService job to a plain LaunchAgent.
+- **Grants after the move.** Accessibility and Screen Recording carried
+  over to the system job on the owner's Mac. The executable path and
+  signature are unchanged; only the job that runs it changed.
+- **One Login Items record.** Background Task Management keys the record by
+  label, so the system agent reuses the record that SMAppService made for
+  `dev.linsheng.musterd`. Whether that lets smd load the bundle's old
+  definition at the next login, ahead of the system agent, is not yet
+  observed. If it does, the app sees a job of another origin and offers the
+  move again.
 - **A forced kill.** A helper that ignores SIGTERM for 10 s is killed. For
   the Locked Use watchdog this can leave displays dimmed (ADR 0222 §6), but
   a restart is refused while Locked Use runs.
@@ -267,17 +272,65 @@ Source and tests, on this Mac (2026-11-17):
     reopens with `--muster-restarted`.
 - `xcodegen generate` regenerated `Muster.xcodeproj` from `project.yml`.
 
-Not run, and pending on the owner's Mac:
+On the owner's Mac (2026-11-17), installed from this branch:
 
-- A signed Release build and installation (`scripts/install-mac.sh`; the
-  keychain must be unlocked by the owner).
-- The first launch: the start page, the administrator prompt, the file in
-  `/Library/LaunchAgents`, the old SMAppService job unregistered, and
-  `launchctl print gui/$(id -u)/dev.linsheng.musterd` showing
-  `path = /Library/LaunchAgents/dev.linsheng.musterd.plist`.
-- `muster info` after the move, showing Accessibility and Screen Recording
-  still granted. If not, the owner grants them again; Muster changes no
-  privacy setting itself.
+- **Build.** The release Rust binaries, then `xcodebuild` Release signed
+  with the Developer ID certificate that the provisioning profile names,
+  then the steps of `install-mac.sh` after its build, unchanged. The
+  certificate was passed by hash: two certificates in the keychain share
+  the name, and with the name `install-mac.sh` looks up, Xcode picked the
+  one the profile does not include. That lookup predates this change. The
+  designated requirement matches the previous installation.
+- **Before.** musterd ran from SMAppService (`path = (submitted by
+  smd.114)`), nothing was in `/Library/LaunchAgents`, and `device_info`
+  reported Accessibility and Screen Recording granted and Locked Use ready.
+  `install-mac.sh` booted the job out and printed the `sudo install` line.
+- **First launch.** The app log shows
+  `facts=Facts { agent: Missing, job: Absent, origin: None }
+  startup=Start { needs_admin: true, automatic: false }`. The start page
+  appeared; the owner chose 安装并启动… and entered the password in the
+  macOS administrator prompt. `install`, `Register` and `ready` followed
+  within four seconds.
+- **The file and the job.** `/Library/LaunchAgents/dev.linsheng.musterd.plist`
+  is root:wheel 0644 and identical to the bundled template.
+  `launchctl print` shows `path = /Library/LaunchAgents/dev.linsheng.musterd.plist`,
+  `type = LaunchAgent`, the absolute program path, running.
+- **The old registration.** The unified log shows the app's SMAppService
+  `Unregister … error: 0` and smd's bootout completing, then launchd
+  spawning musterd from the system plist. Background Task Management then
+  re-enabled the same Login Items record for the system agent, and smd
+  tried to load the bundle's definition, skipping it because the job was
+  already running. See Consequences.
+- **Grants.** After the move, `device_info` reports Accessibility and Screen
+  Recording granted and Locked Use ready. The app opened on its main page;
+  the permission page did not appear.
+- **Restart.** The button appears only after a grant in the current
+  session. Every grant was already in place, and Muster changes no privacy
+  setting, so the button was not pressed. The relauncher text of
+  `DesktopRestart.script` was run instead, with the targets the adapter's
+  filter yields (musterd and `muster-browser-host`), and the app was quit
+  from its menu.
+  - The relauncher exited 0 after 11 s.
+  - musterd, `muster-browser-host` and the app all have new PIDs. Chrome
+    started the browser host again.
+  - The app reopened with `--muster-restarted`. Its check reported
+    `agent: Current, job: Running, origin: System`, so it opened the main
+    page directly.
+  - `muster-panel` and `l4forwarder` were not running, so their restart was
+    not observed.
+  - musterd logged "musterd stopping" on SIGTERM but did not exit within
+    10 s. launchd reports `last terminating signal = Killed: 9`. Every stop
+    in `musterd.log` since 2026-11-16 took about 10 s, so this predates the
+    change; the SIGKILL step is what lets the restart finish.
+  - Run by hand, the restart skipped the app's own check for work in
+    flight. A Muster dispatch that was waiting for the Claude app to leave
+    the foreground was interrupted and recorded as rejected before anything
+    was submitted. The button runs that check first.
+
+Not observed yet:
+
+- The next login: whether the system agent or the bundle's old definition
+  loads first (see Consequences).
 - An update with an unchanged template, completing without a password.
-- "重启 Muster", observed through new start times of musterd, `muster-panel`
-  and `muster-browser-host`.
+- The restart button itself, and the restart of `muster-panel` and
+  `l4forwarder`.
