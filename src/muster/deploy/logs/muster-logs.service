@@ -1,0 +1,47 @@
+# The log collector (ADR 0228, 0229): plain HTTP on loopback behind nginx,
+# which serves muster-logs.linsheng.dev on the public 8443 and names each
+# client in X-Real-IP. Nothing but the local proxy can reach it.
+[Unit]
+Description=muster log collector (hourly redacted desktop logs, grouped by network)
+Documentation=https://github.com/psyche08/muster
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=muster-logs
+Group=muster-logs
+EnvironmentFile=/etc/muster/logs.env
+Environment=RUST_LOG=info
+ExecStart=/opt/muster/bin/muster-logs serve --plain \
+    --listen ${LOGS_LISTEN} \
+    --root /var/lib/muster-logs \
+    --retention-days ${LOGS_RETENTION_DAYS} \
+    --device-daily-mib ${LOGS_DEVICE_DAILY_MIB}
+StateDirectory=muster-logs
+StateDirectoryMode=0700
+UMask=0077
+Restart=always
+RestartSec=2
+LimitNOFILE=65536
+
+# Hardening: loopback only, and the only writable place is the state directory.
+IPAddressDeny=any
+IPAddressAllow=localhost
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

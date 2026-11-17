@@ -6,6 +6,7 @@ members = [
     "crates/muster-net",
     "crates/muster-relay",
     "crates/muster-apns",
+    "crates/muster-logs",
     "crates/muster-proto",
     "crates/muster-store",
     "crates/muster-rpc",

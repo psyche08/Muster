@@ -343,3 +343,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0225](0225-multica-run-grant-closes-after-its-first-turn.md) | Accepted; source and tests verified, device acceptance pending | Close a Multica run's grant once its first turn returns |
 | [0226](0226-task-local-scopes-are-plain-functions.md) | Accepted; source and tests verified | Make task-local scopes plain functions so they stop doubling futures |
 | [0227](0227-system-launchagent-startup-gate-and-full-restart.md) | Accepted; installed and verified on the owner's Mac, except the next login, an update, and the restart button itself | musterd runs from a system LaunchAgent, the app starts it before its main page, and a restart restarts every Muster process |
+| [0228](0228-hourly-redacted-log-upload.md) | Accepted; source and tests verified; endpoint and deployment superseded by 0229 | Desktops upload redacted log increments hourly, grouped by network |
+| [0229](0229-log-collector-behind-nginx-on-8443.md) | Accepted; source and tests verified, collector deployment pending | Put the log collector behind nginx as muster-logs.linsheng.dev:8443 |
