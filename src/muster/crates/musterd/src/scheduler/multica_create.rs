@@ -101,6 +101,30 @@ async fn console_locked(daemon: &Arc<Daemon>, cancel: &CancellationToken) -> Res
     }
 }
 
+/// Runs the one operation a Multica run's grant exists for, then closes the
+/// grant, whether the host issued it for a trusted dispatch or the local owner
+/// granted the proposal (ADR 0225). Nothing else uses it: later turns are
+/// ordinary sends, and status and reconciliation read a closed grant. Left
+/// live, it would hold the Mac's one live scheduler grant until it expired.
+async fn run_once(
+    daemon: &Arc<Daemon>,
+    o: v1::AgentSchedulerOperate,
+    cancel: &CancellationToken,
+    cancelled: &str,
+) -> Result<Resp, Error> {
+    let task_id = o.task_id.clone();
+    let result = if cancel.is_cancelled() {
+        Err(Error::Conflict(cancelled.into()))
+    } else {
+        operate(daemon, o).await
+    };
+    daemon.scheduler.update(daemon.store(), |registry| {
+        registry.revoke(&task_id, now_ms()).map_err(refused)
+    })?;
+    log::info!("scheduler: Multica grant closed for {task_id}");
+    result
+}
+
 pub(super) async fn start(
     daemon: &Arc<Daemon>,
     mut o: v1::AgentSchedulerOperate,
@@ -248,18 +272,13 @@ pub(super) async fn start(
                     .map_err(refused)
             })?;
             log::info!("scheduler: host verified Multica dispatch and issued grant for {task_id}");
-            let result = if cancel.is_cancelled() {
-                Err(Error::Conflict(
-                    "Multica dispatch cancelled before execution".into(),
-                ))
-            } else {
-                operate(daemon, o).await
-            };
-            scheduler.update(daemon.store(), |registry| {
-                registry.revoke(&task_id, now_ms()).map_err(refused)
-            })?;
-            log::info!("scheduler: trusted Multica grant closed for {task_id}");
-            return result;
+            return run_once(
+                daemon,
+                o,
+                cancel,
+                "Multica dispatch cancelled before execution",
+            )
+            .await;
         }
         let _pending = {
             let mut slot = scheduler.pending_multica.lock().unwrap();
@@ -294,12 +313,13 @@ pub(super) async fn start(
             }
         }
     }
-    if cancel.is_cancelled() {
-        return Err(Error::Conflict(
-            "Multica request cancelled before submission".into(),
-        ));
-    }
-    operate(daemon, o).await
+    run_once(
+        daemon,
+        o,
+        cancel,
+        "Multica request cancelled before submission",
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -335,6 +355,96 @@ mod tests {
             Err(Error::Conflict(_))
         ));
     }
+    #[tokio::test]
+    async fn a_runs_grant_closes_after_its_one_operation_whoever_issued_it() {
+        use v1::agent_scheduler_request::Action;
+        let dir = tempfile::tempdir().unwrap();
+        let workdir = dir.path().join("ws-1/6df77065/workdir");
+        std::fs::create_dir_all(&workdir).unwrap();
+        let workdir = std::fs::canonicalize(workdir)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let mut config = crate::DaemonConfig::new(dir.path().join("state"));
+        config.listen = false;
+        config.agent = None;
+        config.cloud = false;
+        config.bind = "127.0.0.1:0".parse().unwrap();
+        let daemon = Daemon::start_with(config, Arc::new(crate::DefaultPlatform), None)
+            .await
+            .unwrap();
+        // The local owner grants a reviewed proposal with a long lifetime.
+        let grant = |task_id: &str| v1::AgentSchedulerRequest {
+            action: Some(Action::Grant(v1::AgentSchedulerGrant {
+                task_id: task_id.into(),
+                contract_sha256: hex::encode(Sha256::digest(b"first")),
+                provider: "claude".into(),
+                directory: workdir.clone(),
+                model: "native-app".into(),
+                effort: "default".into(),
+                ttl_seconds: 900,
+            })),
+        };
+        let turn = |task_id: &str, text: &str| v1::AgentSchedulerOperate {
+            task_id: task_id.into(),
+            op_id: task_id.into(),
+            role: "producer".into(),
+            kind: "create".into(),
+            provider: "claude".into(),
+            directory: workdir.clone(),
+            text: text.into(),
+            ..Default::default()
+        };
+        let first = "multica:6df77065-0000-4000-8000-000000000001";
+        call(&daemon, grant(first)).await.unwrap();
+        assert!(daemon.scheduler.live(first));
+
+        // Cancelled before submission: nothing runs, and the grant closes.
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        assert!(matches!(
+            run_once(&daemon, turn(first, "first"), &cancelled, "cancelled").await,
+            Err(Error::Conflict(_))
+        ));
+        assert!(!daemon.scheduler.live(first));
+        // A closed grant still answers status, as the bridge reads it.
+        let Resp::AgentScheduler(s) = status(&daemon, first, None).unwrap() else {
+            panic!("status of a closed grant");
+        };
+        assert!(!s.live);
+
+        // The next run is not refused for a finished run's grant, and an
+        // operation that ends in a refusal closes its grant too.
+        let next = "multica:6df77065-0000-4000-8000-000000000002";
+        call(&daemon, grant(next)).await.unwrap();
+        assert!(matches!(
+            run_once(
+                &daemon,
+                turn(next, "changed"),
+                &CancellationToken::new(),
+                "cancelled"
+            )
+            .await,
+            Err(Error::Unauthorized(_))
+        ));
+        assert!(!daemon.scheduler.live(next));
+        // A repeat on a closed grant is refused, never run.
+        assert!(
+            run_once(
+                &daemon,
+                turn(first, "first"),
+                &CancellationToken::new(),
+                "cancelled"
+            )
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("revoked")
+        );
+        daemon.shutdown().await;
+    }
+
     #[test]
     fn grant_is_for_one_unchanged_first_turn() {
         let mut o = v1::AgentSchedulerOperate {

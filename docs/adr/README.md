@@ -340,3 +340,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0222](0222-locked-use-dims-displays.md) | Superseded by 0223 | Locked Use dims the displays instead of covering them |
 | [0223](0223-locked-use-blackens-displays-with-a-gamma-table.md) | Accepted; device verified | Locked Use blackens the displays with a gamma table |
 | [0224](0224-claude-sidebar-status-in-row-name.md) | Accepted; source and tests verified, device acceptance pending | Match Claude sidebar rows whose name includes their status word |
+| [0225](0225-multica-run-grant-closes-after-its-first-turn.md) | Accepted; source and tests verified, device acceptance pending | Close a Multica run's grant once its first turn returns |
