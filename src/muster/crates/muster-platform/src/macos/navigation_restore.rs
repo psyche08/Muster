@@ -94,11 +94,13 @@ pub struct CreationForm {
     provider: &'static str,
 }
 tokio::task_local! { pub(super) static FORM: std::sync::Arc<std::sync::Mutex<Option<CreationForm>>>; }
-pub async fn track_form<T>(
+/// Not an `async fn`, which would hold `operation` twice (ADR 0226).
+pub fn track_form<F: Future>(
     slot: std::sync::Arc<std::sync::Mutex<Option<CreationForm>>>,
-    operation: impl Future<Output = T>,
-) -> T {
-    FORM.scope(slot, operation).await
+    operation: F,
+) -> tokio::task::futures::TaskLocalFuture<std::sync::Arc<std::sync::Mutex<Option<CreationForm>>>, F>
+{
+    FORM.scope(slot, operation)
 }
 pub fn current_form() -> std::sync::Arc<std::sync::Mutex<Option<CreationForm>>> {
     FORM.try_with(Clone::clone).unwrap_or_default()
