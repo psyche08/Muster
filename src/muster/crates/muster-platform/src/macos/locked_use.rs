@@ -1,5 +1,5 @@
 //! macOS facts and effects for the Rust-owned console transaction.
-use super::{ax, codesign, dimming, input, procs};
+use super::{ax, codesign, cover, input, procs};
 use crate::locked_use::{ConsoleGuard, ConsoleSample, GuardSample, LockedUseOs, UnlockCheck};
 use async_trait::async_trait;
 use muster_core::locked_use::{Console, Screen};
@@ -28,8 +28,6 @@ pub struct MacLockedUse {
 }
 impl MacLockedUse {
     pub fn new(dir: &Path) -> Self {
-        // A cover that was killed with its daemon may have left a display dimmed.
-        restore_dimmed(dir);
         Self { dir: dir.into() }
     }
 }
@@ -58,59 +56,6 @@ fn lock() {
         muster_console_lock();
     }
 }
-
-/// The panel helper's first argument for putting dimmed displays back.
-pub const RESTORE_FLAG: &str = "--locked-use-restore";
-
-/// Starts the panel helper to put back and confirm the levels in the
-/// record, if there is one: those a cover wrote back as it ended, and those
-/// of a cover that was killed. Not awaited; the helper may wait for a display
-/// to wake, and only one runs at a time. Its lines go to this log.
-fn restore_dimmed(dir: &Path) {
-    if !dir.join(dimming::RECORD).exists() {
-        return;
-    }
-    let started = super::bundle::panel().and_then(|panel| {
-        Command::new(panel)
-            .arg(RESTORE_FLAG)
-            .arg(dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| e.to_string())
-    });
-    match started {
-        Ok(mut child) => {
-            log::debug!("Locked Use: checking the display levels in the record");
-            let output = child.stdout.take();
-            std::thread::spawn(move || {
-                if let Some(output) = output {
-                    use std::io::BufRead;
-                    for line in std::io::BufReader::new(output)
-                        .lines()
-                        .map_while(Result::ok)
-                    {
-                        log::info!("Locked Use: {line}");
-                    }
-                }
-                let _ = child.wait();
-            });
-        }
-        Err(e) => log::warn!("Locked Use: cannot put back dimmed displays: {e}"),
-    }
-}
-
-/// `muster-panel --locked-use-restore <dir>`, on the helper's main thread.
-pub fn restore(args: &[String]) -> Result<(), String> {
-    match args {
-        [dir] => {
-            dimming::restore_saved(Path::new(dir), |line| println!("{line}"));
-            Ok(())
-        }
-        _ => Err("invalid restore arguments".into()),
-    }
-}
 #[async_trait]
 impl LockedUseOs for MacLockedUse {
     fn available(&self) -> Result<(), String> {
@@ -125,7 +70,6 @@ impl LockedUseOs for MacLockedUse {
         Ok(())
     }
     fn update_ready(&self) -> Result<(), String> {
-        restore_dimmed(&self.dir);
         let marker = self.dir.join("locked-use.pending");
         if marker.exists() {
             let previous = std::fs::read_to_string(&marker).unwrap_or_default();
@@ -187,13 +131,13 @@ impl LockedUseOs for MacLockedUse {
             let mut byte = [0];
             while output.read_exact(&mut byte).is_ok() {
                 if byte[0] == b'D' {
-                    let mut counts = [0; 3];
+                    let mut counts = [0; 2];
                     if output.read_exact(&mut counts).is_err() {
                         break;
                     }
-                    let [native, ddc, panels] = counts;
+                    let [black, panels] = counts;
                     log::info!(
-                        "Locked Use watchdog: displays dimmed natively={native} over DDC={ddc}; under the black panel={panels}"
+                        "Locked Use watchdog: displays black={black}; under the black panel={panels}"
                     );
                     continue;
                 }
@@ -202,7 +146,7 @@ impl LockedUseOs for MacLockedUse {
                     if output.read_exact(&mut code).is_err() {
                         break;
                     }
-                    log::warn!("Locked Use watchdog: {}", dimming::Note::describe(code[0]));
+                    log::warn!("Locked Use watchdog: {}", cover::Note::describe(code[0]));
                     continue;
                 }
                 if byte[0] == b'L' {
@@ -212,7 +156,7 @@ impl LockedUseOs for MacLockedUse {
                     }
                     log::warn!(
                         "Locked Use watchdog: cover lost: {}",
-                        dimming::Fault::describe(payload)
+                        cover::Fault::describe(payload)
                     );
                     continue;
                 }
@@ -238,7 +182,6 @@ impl LockedUseOs for MacLockedUse {
             input,
             rx,
             last: None,
-            dir: self.dir.clone(),
         }))
     }
     async fn request_unlock(&self, check: UnlockCheck) -> Result<(), String> {
@@ -515,16 +458,6 @@ struct Guard {
     input: ChildStdin,
     rx: std::sync::mpsc::Receiver<GuardEvent>,
     last: Option<(u8, Instant)>,
-    dir: PathBuf,
-}
-impl Drop for Guard {
-    fn drop(&mut self) {
-        // The watchdog wrote its DDC levels back and left them in the record
-        // to be confirmed; one that was killed took its panels with it but
-        // not the brightness. A watchdog that is still running holds the
-        // record, and the helper waits for it.
-        restore_dimmed(&self.dir);
-    }
 }
 fn drain_guard_events(
     rx: &std::sync::mpsc::Receiver<GuardEvent>,
@@ -640,7 +573,7 @@ fn fresh_guard_events(
 }
 // Dropping a Child does not kill it: EOF makes the independent watchdog
 // quarantine the display until a different login audit session is observed.
-// Its cover, dimmed or black, stays for that long.
+// Its cover, black table or panel, stays for that long.
 
 fn initial_screen_matches(expected: &str, observed: Screen) -> bool {
     matches!(
@@ -683,14 +616,9 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    // Killing the watchdog used to take the cover with it; a dimmed display
-    // stays dark, so a termination signal puts the levels back first.
-    for signal in [libc::SIGTERM, libc::SIGHUP, libc::SIGINT] {
-        unsafe {
-            libc::signal(signal, on_terminate as *const () as libc::sighandler_t);
-        }
-    }
-    let mut shield = dimming::Shield::raise(Path::new(&args[0]))?;
+    // Whatever ends the watchdog takes the cover with it: the panels close
+    // and macOS puts the gamma tables back.
+    let mut shield = cover::Shield::raise()?;
     let mut frame = vec![b'D'];
     frame.extend_from_slice(&shield.counts());
     unsafe {
@@ -710,10 +638,6 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
     // deadline, possibly split across reads.
     let mut extension: Option<Vec<u8>> = None;
     loop {
-        if TERMINATED.load(std::sync::atomic::Ordering::SeqCst) {
-            // The shield puts the levels back as it drops.
-            return Err("terminated".into());
-        }
         unsafe {
             muster_console_pump();
         }
@@ -774,8 +698,8 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
         } else {
             None
         };
-        // The displays are dimmed once the console is unlocked and they have
-        // been steady for a while; the owner logs the new counts.
+        // The displays are blackened once the console is unlocked and they
+        // have been steady for a while; the owner logs the new counts.
         if !stopping && shield.settle(now.screen == Screen::Unlocked) {
             let mut frame = vec![b'D'];
             frame.extend_from_slice(&shield.counts());
@@ -821,8 +745,7 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
             }
         }
         if stopping {
-            // No DDC request while the console locks again: on the Mac tested,
-            // one then made the display connection reset.
+            // Nothing more is blackened once the cover begins to end.
             shield.quiet();
             // Quarantine may outlive an interrupted operation. It must not
             // keep the display awake after authority has ended.
@@ -859,11 +782,6 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
             last_report = Instant::now();
         }
     }
-}
-
-static TERMINATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-extern "C" fn on_terminate(_: libc::c_int) {
-    TERMINATED.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// The owner must write a heartbeat at least this often.

@@ -21,7 +21,7 @@ pub mod sep;
 mod session_window;
 pub mod vision;
 
-mod dimming;
+mod cover;
 pub mod locked_use;
 
 pub mod automation;
