@@ -74,7 +74,7 @@ pub(super) fn selected(app: &Element, inspection: Option<&Inspection>) -> Result
     selected.ok_or_else(|| Error::Unavailable("No usable desktop session window".into()))
 }
 
-pub(super) fn root(app: &Element) -> Result<Element, Error> {
+pub(crate) fn root(app: &Element) -> Result<Element, Error> {
     Navigation::bind_window(selected(app, Navigation::inspection().as_ref())?)
 }
 

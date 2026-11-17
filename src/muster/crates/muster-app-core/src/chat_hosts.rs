@@ -64,7 +64,7 @@ pub fn choose(
     }
     if answers.is_empty() {
         return Err(format!(
-            "No Mac is reachable to show {} chats. Desktop chats run on a Mac with Muster and {} open",
+            "No desktop is reachable to show {} chats. Desktop chats run on a desktop with Muster and {} open",
             app.name(),
             app.name()
         ));
@@ -80,7 +80,7 @@ pub fn choose(
         })
         .collect();
     Err(format!(
-        "No Mac can show {} chats now — {}",
+        "No desktop can show {} chats now — {}",
         app.name(),
         reasons.join("; ")
     ))
@@ -162,7 +162,7 @@ mod tests {
         assert!(
             choose(ChatApp::Claude, &[])
                 .unwrap_err()
-                .contains("No Mac is reachable")
+                .contains("No desktop is reachable")
         );
     }
 }

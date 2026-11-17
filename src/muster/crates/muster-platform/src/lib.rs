@@ -7,6 +7,8 @@
 //! wait for the P0 device checks in docs/P0-validation.md.
 
 pub mod locked_use;
+#[cfg(any(windows, target_os = "macos"))]
+pub mod native_chat;
 pub mod signer;
 #[cfg(windows)]
 mod windows;

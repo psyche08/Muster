@@ -18,12 +18,19 @@ packets only. Agent and terminal sharing are off for a new Windows policy.
 An administrator on the Muster network can review a joining device's
 fingerprint and choose its scopes before accepting it.
 
-The desktop renders the shared network, agent, chat, file, Git, terminal,
-browser, Multica and settings views. It can browse a remote Multica workspace.
-Hosting the Apple-container Multica backend, attaching to a local native
-provider chat UI, and signing a remote presence challenge require separate
-Windows implementations. Windows Hello local confirmation is independent of
-the remote presence signature. To use the Chrome integration, load the
+The Chats page can control a local Claude or ChatGPT desktop app in an
+unlocked interactive session. Keep the provider signed in. ChatGPT reads the
+same typed local catalog used by the Mac client. The adapter checks the
+provider identity and acts on individual UI Automation controls.
+
+Choose **Presence key** to register a separate TPM-backed P-256 candidate.
+Complete the native Windows key-protection prompt. An existing network
+administrator can then enroll the public candidate as described in
+[Presence enrollment](../../../docs/PRESENCE_ENROLLMENT.md). Every protected
+signature requires the key provider's interactive authorization. Windows Hello
+local confirmation is independent of this key.
+
+To use the Chrome integration, load the
 installed AgentHaloBrowser folder as an unpacked extension in Chrome.
 
 ## Build
@@ -33,7 +40,7 @@ host with the .NET 10 SDK, protoc, Rust's x86_64-pc-windows-gnu target,
 mingw-w64, bash, curl, unzip, shasum, Python 3, wixl and msiextract.
 CARGO_TARGET_DIR is the shell's existing Cargo build directory.
 
-    src/native/windows/installer/build-msi.sh 1.1.47 /absolute/output/directory
+    src/native/windows/installer/build-msi.sh 1.1.48 /absolute/output/directory
 
 WINTUN_ARCHIVE can point to a local copy of the pinned Wintun ZIP. The build
 checks its SHA-256 and extracts the completed MSI to compare every installed

@@ -1,6 +1,8 @@
 //! Lock state of the interactive session that owns this daemon, including RDP.
 use windows_sys::Win32::System::RemoteDesktop::*;
 
+pub(crate) mod chat;
+mod provider;
 pub struct Windows;
 fn session() -> Option<WTSINFOEX_LEVEL1_W> {
     let mut buffer = std::ptr::null_mut();
@@ -28,6 +30,15 @@ fn session() -> Option<WTSINFOEX_LEVEL1_W> {
 }
 
 impl crate::Platform for Windows {
+    fn accessibility(&self) -> Option<bool> {
+        Some(!crate::Platform::locked(self))
+    }
+    fn debug(&self, what: &str, arg: &str) -> Result<String, String> {
+        match what {
+            "ax-chat" => crate::native_chat::diagnostic(arg),
+            _ => Err(format!("no Windows diagnostic {what:?}")),
+        }
+    }
     fn locked(&self) -> bool {
         !session().is_some_and(|s| {
             s.SessionState == WTSActive && s.SessionFlags as u32 == WTS_SESSIONSTATE_UNLOCK

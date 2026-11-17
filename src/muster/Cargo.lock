@@ -2299,6 +2299,7 @@ name = "muster-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "clap",
  "muster-acp",
  "muster-browser",
@@ -2408,6 +2409,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+ "windows",
  "windows-sys 0.61.2",
 ]
 

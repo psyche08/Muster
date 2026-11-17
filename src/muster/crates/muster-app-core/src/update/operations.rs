@@ -124,10 +124,13 @@ pub(super) fn op_request_from(
                             .into(),
                     ));
                 }
-                if !info.services.iter().any(|s| s == "agent.chat.locked.v1") {
+                if !info
+                    .services
+                    .iter()
+                    .any(|s| s == "agent.chat.locked.v1" || s == "agent.chat.interactive.v1")
+                {
                     return Err(Error::Unavailable(
-                        "Update Muster on the target Mac to load or send Chat through Locked Use"
-                            .into(),
+                        "Update Muster on the target desktop to enable chat control".into(),
                     ));
                 }
             }

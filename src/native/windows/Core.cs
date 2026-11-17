@@ -16,6 +16,8 @@ internal sealed class Core : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void EffectCallback(nint ctx, ulong id, nint bytes, nuint length);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate nint PresenceCallback(nint ctx, nint bytes, nuint capacity);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     delegate int ServiceCallback(uint action);
     [StructLayout(LayoutKind.Sequential)]
     struct Platform
@@ -23,7 +25,8 @@ internal sealed class Core : IDisposable
         public nint Context;
         public ViewCallback View;
         public EffectCallback Effect;
-        public nint Key, Sign, Presence;
+        public nint Key, Sign;
+        public PresenceCallback Presence;
     }
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
@@ -45,6 +48,7 @@ internal sealed class Core : IDisposable
     nint handle;
     public Core(Action<ViewModel> view, Action<ulong, Effect> effect)
     {
+        platform.Presence = Presence.CopyCandidate;
         platform.View = (_, p, n) => view(ViewModel.Parser.ParseFrom(Copy(p, n)));
         platform.Effect = (_, id, p, n) => effect(id, Effect.Parser.ParseFrom(Copy(p, n)));
     }

@@ -99,7 +99,11 @@ enum Command {
         role: String,
     },
     /// Inspect the desktop's registered public Presence candidate.
-    Presence,
+    Presence {
+        /// Register a local shell's public candidate (base64 SEC1).
+        #[arg(long)]
+        register: Option<String>,
+    },
     /// Approve/revoke a member's desktop Presence key as the network admin.
     EnrollPresence {
         device: String,
@@ -856,9 +860,17 @@ async fn main() -> anyhow::Result<()> {
                 print_status(&s);
             }
         }
-        Command::Presence => {
-            let Resp::PresenceInfo(info) =
-                client.call(Req::DevicePresence(Default::default())).await?
+        Command::Presence { register } => {
+            use base64::Engine;
+            let public_key = register
+                .map(|s| base64::engine::general_purpose::STANDARD.decode(s))
+                .transpose()?
+                .unwrap_or_default();
+            let Resp::PresenceInfo(info) = client
+                .call(Req::DevicePresence(v1::DevicePresenceRequest {
+                    public_key,
+                }))
+                .await?
             else {
                 anyhow::bail!("unexpected Presence reply");
             };

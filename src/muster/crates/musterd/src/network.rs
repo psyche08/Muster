@@ -261,11 +261,15 @@ impl Daemon {
             services.push("agent.send.status.v1".to_string());
             services.push("agent.send.confirm.v1".to_string());
             services.push("agent.questions.v1".to_string());
-            if cfg!(target_os = "macos") {
+            if crate::agent_bridge::drives_desktop(self.platform().as_ref()) {
                 // Desktop Chat mode (Claude / ChatGPT apps through Accessibility).
                 services.push("agent.chat".to_string());
                 services.push("agent.chat.catalog.v1".to_string());
                 services.push("agent.chat.options".to_string());
+                #[cfg(windows)]
+                services.push("agent.chat.interactive.v1".to_string());
+            }
+            if cfg!(target_os = "macos") {
                 services.push("agent.options.v1".to_string());
                 services.push("agent.completion.v1".to_string());
                 services.push("agent.chat.locked.v1".to_string());

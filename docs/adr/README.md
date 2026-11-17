@@ -337,3 +337,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0219](0219-release-apple-1-1-46.md) | Accepted | Publish Apple 1.1.46 with device readmission and background approval reads |
 | [0220](0220-windows-vnet-node.md) | Accepted for development | Run a network-only node on Windows |
 | [0221](0221-windows-desktop-msi.md) | In development | Windows desktop and MSI distribution |
+| [0222](0222-windows-desktop-control.md) | In development | Windows desktop chat control and presence |

@@ -66,7 +66,10 @@ internal sealed class Desktop : Form
         Button(nav, "Terminals",
                () => Send(new() { OpenTerminals = new() { DeviceId = current?.SelectedDevice ?? "" } }));
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
-        Button(nav, "Multica", () => Go(Page.Multica));
+        Button(nav, "Presence key", async () => {
+            try { await Presence.Register(Handle); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Muster presence key"); }
+        });
         Button(nav, "Settings", () => Go(Page.Settings));
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
         list.DoubleClick += (_, _) => OpenRow();
@@ -155,6 +158,17 @@ internal sealed class Desktop : Form
         {
             status.Text = e.Notify.Title + "  " + e.Notify.Body;
             result.Ok = true;
+        }
+        else if (e.Authenticate != null)
+        {
+            try
+            {
+                var hwnd = Handle;
+                result.Data = ByteString.CopyFrom(await Task.Run(() =>
+                    Presence.Sign(hwnd, e.Authenticate.Reason, e.Authenticate.Message.ToByteArray())));
+                result.Ok = true;
+            }
+            catch (Exception ex) { result.Error = ex.Message; }
         }
         else if (e.LocalAuth != null && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
