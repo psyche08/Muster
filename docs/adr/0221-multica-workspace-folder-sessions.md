@@ -7,7 +7,9 @@
   [0220](0220-background-only-native-creation.md);
   [0187](0187-trusted-multica-dispatch.md), [0191](0191-native-multica-receipts.md),
   [0199](0199-local-dispatch-grant-for-locked-use.md),
-  [0222](0222-locked-use-dims-displays.md) (the locked Claude first turn)
+  [0222](0222-locked-use-dims-displays.md) and
+  [0223](0223-locked-use-blackens-displays-with-a-gamma-table.md) (the locked
+  Claude first turn)
 
 ## Context
 
@@ -145,8 +147,11 @@ cover, Claude's new-session form never appeared in its accessibility tree
 within the Locked Use window: not after the "New" button (decision 10), and,
 on 2026-11-13, not after the directory route either. The run fails before
 anything is submitted. [ADR 0222](0222-locked-use-dims-displays.md) dims the displays instead of covering them,
-so the Claude window is no longer occluded; whether its form then appears
-under cover is not yet tested on the device.
+so the Claude window is no longer occluded. On 2026-11-17 the form then
+appeared under the dimmed display and was verified, but the display
+connection reset before submission and the transaction stopped.
+[ADR 0223](0223-locked-use-blackens-displays-with-a-gamma-table.md) blackens
+the displays with a gamma table instead, with no request to the display.
 
 Under cover, a creation now navigates a window that is already open in the
 same way as in the background. A Claude creation there picks its folder by
@@ -198,4 +203,9 @@ person pressing New would.
     after its provider, run directory and contract hash were checked. Locked
     Use admitted it, and Muster pressed "New" under cover. The form did not
     appear within the Locked Use window, which ended with nothing submitted.
+  - Claude, 2026-11-17, under the ADR 0222 dimmed display, granted by the
+    owner: after the in-app route in the open window, the form appeared and
+    was verified 3.8 s after admission. The display connection reset 2 s after
+    the dimming; the cover counted as lost and nothing was submitted
+    (ADR 0222, Verification).
 - Device, unlocked Mac (pending with this build).

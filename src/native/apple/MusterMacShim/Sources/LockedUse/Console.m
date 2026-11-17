@@ -9,7 +9,7 @@
 #import <unistd.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>
 
-// The black panels, by display: only the displays Rust could not dim (ADR 0222).
+// The black panels, by display: only the displays Rust could not blacken (ADR 0223).
 static NSMutableDictionary<NSNumber *, NSWindow *> *panels;
 
 // Remote activity wakes the real system lock UI without synthetic input.
@@ -134,7 +134,7 @@ static NSScreen *screen_for(uint32_t display) {
     return nil;
 }
 
-// Panels on exactly these displays; none when every display was dimmed.
+// Panels on exactly these displays.
 bool muster_console_cover(const uint32_t *displays, uint32_t count) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -150,8 +150,8 @@ bool muster_console_cover(const uint32_t *displays, uint32_t count) {
     return covered;
 }
 
-// Takes the panel off every display not listed. A display that was asleep
-// is covered first and dimmed once it has woken (ADR 0222).
+// Takes the panel off every display not listed. Every display is covered
+// first and loses its panel once its gamma table is black (ADR 0223).
 void muster_console_cover_keep(const uint32_t *displays, uint32_t count) {
     for (NSNumber *display in panels.allKeys) {
         bool keep = false;

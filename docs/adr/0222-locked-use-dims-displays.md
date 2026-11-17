@@ -1,8 +1,9 @@
 # ADR 0222: Locked Use dims the displays instead of covering them
 
 - Date: 2026-11-16
-- Status: Accepted; source, tests and locked Codex device runs verified,
-  locked Claude device run pending
+- Status: Superseded by [ADR 0223](0223-locked-use-blackens-displays-with-a-gamma-table.md)
+  — under a locked Claude first turn, the DDC read-back made the display
+  connection reset; a black gamma table needs no request to the display
 - Related: [LOCKED_USE.md](../LOCKED_USE.md),
   [0128](0128-the-panel-helper-keeps-its-own-identity.md) (the panel helper),
   [0221](0221-multica-workspace-folder-sessions.md) (the locked Claude first
@@ -193,5 +194,13 @@ leaves the display to the panel. None asked for a privacy permission.
   The kernel logged no connection reset, the display kept its ID and UUID
   throughout, it read back its original level afterwards, and no record was
   left.
-- Device, Locked Use, a Claude Multica first turn under the dimmed display
-  (pending; it needs the owner's grant).
+- Device, Locked Use, 2026-11-17, the same Mac, locked, this design, a
+  Claude Multica first turn the owner granted: the console unlocked under the
+  panel, and the display was dimmed over DDC and lost its panel three seconds
+  later. Claude's new-session form appeared and was verified 3.8 seconds
+  after admission, which it never did under the panel. Two seconds after the
+  dimming, while the options were prepared, the kernel reset the display
+  connection, and macOS showed a different display. The cover counted as
+  lost, the transaction stopped and relocked, and nothing was submitted. The
+  helper put the level back six seconds after the relock. ADR 0223
+  replaces DDC with a gamma table.

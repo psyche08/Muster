@@ -13,7 +13,32 @@ unlock, plugin terminal-state ordering, physical input, and multiple-display beh
 
 ## 1. Confirmed Direction and Choices for This Phase
 
-### 2026-11-16: the cover dims the displays it can
+### 2026-11-17: the cover blackens the displays with a gamma table
+
+[ADR 0223](adr/0223-locked-use-blackens-displays-with-a-gamma-table.md)
+replaces the dimming of 2026-11-16. Under a locked Claude first turn the
+dimmed display let Claude's form appear, but the DDC read-back made the
+display connection reset two seconds later and the cover was lost. Now,
+once the console is unlocked and the displays have stayed as they are for
+three seconds, the watchdog sets each display's gamma table to all zeros and
+reads it back. A display that reads back black loses its panel; only a
+display that does not keeps it.
+
+- **Nothing is sent to the display.** The table lives in the window server,
+  so the display connection is not touched, and a person at the display
+  cannot make it brighter.
+- **The cover is still checked continuously.** A table that no longer reads
+  back black, or a change of displays, is a lost cover and stops the
+  transaction.
+- **The tables come back by themselves.** The watchdog has ColorSync put them
+  back at release, and macOS does so when the watchdog ends any other way.
+  The brightness record and its restore helper are gone.
+- **Black, not dim.** A blackened display shows nothing, the lock screen
+  included, until the cover is released.
+
+### 2026-11-16: the cover dims the displays it can (superseded)
+
+Superseded on 2026-11-17 by ADR 0223, above.
 
 [ADR 0222](adr/0222-locked-use-dims-displays.md) changes what the watchdog
 puts over a display. The cover still goes up as the black panel. Once the
