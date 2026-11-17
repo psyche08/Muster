@@ -553,9 +553,11 @@ you intended. Review the message and confirm its UTF-8 SHA-256 equals
 digest, provider and directory, a short TTL, and named model and effort
 (e.g. `native-app` and `default`, since this creation retains Codex's current
 choices). The bridge consumes the grant for its pending operation. Do not
-also submit an `operate` request. Status then shows the durable operation
-and its provider session. The local grant owner can revoke the grant when
-finished. An expired proposal requires a new authorized dispatch.
+also submit an `operate` request. Once that operation returns, the bridge
+closes the grant however it ended, so it never holds the Mac's one live
+grant for another run (ADR 0225). Status then shows the durable operation
+and its provider session. An expired proposal or a failed run requires a
+new authorized dispatch.
 
 ### Automatic authorization of an owner's initial Multica issue
 
