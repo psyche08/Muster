@@ -76,6 +76,9 @@ char *muster_core_ssh_public_key(MusterCore *core);
 /* Stops the core and frees it. */
 void muster_core_free(MusterCore *core);
 
+/* True for a canonical desktop presence or Locked Use challenge. */
+uint8_t muster_is_presence_challenge(const uint8_t *bytes, size_t length);
+
 void muster_string_free(char *s);
 
 #ifdef __cplusplus

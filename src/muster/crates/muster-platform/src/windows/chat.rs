@@ -83,6 +83,11 @@ impl Element {
             ) {
                 return pattern.Expand();
             }
+            if let Ok(toggle) =
+                node.GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
+            {
+                return toggle.Toggle();
+            }
             node.GetCurrentPatternAs::<IUIAutomationLegacyIAccessiblePattern>(
                 UIA_LegacyIAccessiblePatternId,
             )?
@@ -251,6 +256,7 @@ fn read(root: &Element) -> WinResult<(AxTree, Vec<Element>)> {
             UIA_ValueValuePropertyId,
             UIA_LegacyIAccessibleValuePropertyId,
             UIA_SelectionItemIsSelectedPropertyId,
+            UIA_ToggleToggleStatePropertyId,
             UIA_LandmarkTypePropertyId,
         ] {
             cache.AddProperty(prop)?;
@@ -264,8 +270,7 @@ fn read(root: &Element) -> WinResult<(AxTree, Vec<Element>)> {
         let mut stack = vec![(top, None::<usize>)];
         while let Some((n, parent)) = stack.pop() {
             if tree.nodes.len() >= 12000 || started.elapsed() > Duration::from_secs(4) {
-                tree.complete = false;
-                break;
+                return Err(unavailable());
             }
             let properties = n.CachedAriaProperties()?.to_string();
             let (role, mut subrole) = role(
@@ -297,10 +302,17 @@ fn read(root: &Element) -> WinResult<(AxTree, Vec<Element>)> {
             let selected =
                 bool::try_from(&n.GetCachedPropertyValue(UIA_SelectionItemIsSelectedPropertyId)?)
                     .unwrap_or(false)
+                    || i32::try_from(&n.GetCachedPropertyValue(UIA_ToggleToggleStatePropertyId)?)
+                        .ok()
+                        == Some(ToggleState_On.0)
                     || properties.split(';').any(|v| {
                         matches!(
                             v,
-                            "selected=true" | "checked=true" | "current=page" | "current=true"
+                            "selected=true"
+                                | "pressed=true"
+                                | "checked=true"
+                                | "current=page"
+                                | "current=true"
                         )
                     });
             let i = tree.nodes.len();

@@ -406,3 +406,16 @@ pub unsafe extern "C" fn muster_desktop_prepare(
         }
     }
 }
+
+/// Validate an app-core presence challenge before opening the Windows TPM key.
+///
+/// # Safety
+/// A non-null pointer must span the indicated number of readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn muster_is_presence_challenge(bytes: *const u8, length: usize) -> u8 {
+    if bytes.is_null() || length > isize::MAX as usize {
+        return 0;
+    }
+    muster_app_core::is_presence_challenge(unsafe { std::slice::from_raw_parts(bytes, length) })
+        as u8
+}

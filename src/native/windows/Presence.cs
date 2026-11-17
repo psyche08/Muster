@@ -84,9 +84,14 @@ internal static class Presence
         if (cli.ExitCode != 0) throw new InvalidOperationException(error);
     }
 
+    [DllImport("muster_ffi.dll", CallingConvention = CallingConvention.Cdecl)]
+    static extern byte muster_is_presence_challenge(byte[] message, nuint length);
+
     public static byte[] Sign(nint parent, string reason, byte[] message)
     {
-        if (!message.AsSpan().StartsWith("MUSTER-PRESENCE-V1"u8) || message.Length <= "MUSTER-PRESENCE-V1"u8.Length + 8)
+        // The shared core validates and encodes the requested operation, including
+        // both RPC presence and domain-separated Locked Use challenges.
+        if (string.IsNullOrWhiteSpace(reason) || muster_is_presence_challenge(message, (nuint)message.Length) != 1)
             throw new CryptographicException("Invalid Muster presence challenge.");
         using (var probe = CngKey.Open(KeyName, Provider, CngKeyOpenOptions.Silent)) Validate(probe);
         using var key = CngKey.Open(KeyName, Provider);
