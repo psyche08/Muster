@@ -338,3 +338,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0220](0220-background-only-native-creation.md) | Accepted; source and tests verified, device acceptance pending | Create native sessions only while the provider is in the background |
 | [0221](0221-multica-workspace-folder-sessions.md) | Accepted; source and tests verified, device acceptance pending | Create Multica sessions in the run's workspace folder |
 | [0222](0222-locked-use-dims-displays.md) | Accepted; source, tests and locked Codex device runs verified, locked Claude device run pending | Locked Use dims the displays instead of covering them |
+| [0224](0224-claude-sidebar-status-in-row-name.md) | Accepted; source and tests verified, device acceptance pending | Match Claude sidebar rows whose name includes their status word |

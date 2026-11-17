@@ -3,7 +3,9 @@
 > Privacy note: operational identities in this record are anonymized examples; see [public content policy](../PUBLIC_CONTENT.md). Technical outcomes and acceptance limits are unchanged.
 
 - Date: 2026-10-22
-- Status: Accepted
+- Status: Accepted. Amended by [ADR 0224](0224-claude-sidebar-status-in-row-name.md):
+  a row named by the visual-order join of all its labels, status included,
+  also matches.
 - Related: ADR 0007; ARCHITECTURE.md §3.6.2 and §4
 
 ## Context
