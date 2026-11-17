@@ -222,7 +222,7 @@ records a specific decision and does not revive code on its delete list.
 | [0121](0121-generated-xcode-project-follows-project-yml.md) | Accepted; source verified, fleet build pending | `project.yml` is the Mac project's only version, and drift is reported |
 | [0122](0122-wait-for-the-app-to-exit-before-replacing-it.md) | Accepted; source verified, install verified | Wait for Muster to exit before replacing its bundle |
 | [0123](0123-the-daemon-leaves-the-dock.md) | Superseded by 0127 | The daemon leaves the Dock instead of moving out of the bundle |
-| [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
+| [0124](0124-prompt-for-screen-recording-and-move-terminal-authorization.md) | Accepted; partly superseded by ADR 0125 and ADR 0227 | Prompt for Screen Recording at startup, and move terminal authorization to the Terminals page |
 | [0125](0125-screen-recording-is-the-bundles-and-only-a-restart-takes-it.md) | Accepted; source and tests verified, device evidence recorded | Screen Recording is the bundle's grant, and only a daemon restart takes it |
 | [0126](0126-multica-bridge-follows-the-container-gateway.md) | Accepted; source and tests verified, installation and runtime pending | The Multica runtime bridge follows the container gateway |
 | [0127](0127-the-daemon-stays-out-of-launch-services.md) | Accepted; premise corrected by 0131 | The daemon stays out of Launch Services instead of leaving the Dock |
@@ -342,3 +342,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0224](0224-claude-sidebar-status-in-row-name.md) | Accepted; source and tests verified, device acceptance pending | Match Claude sidebar rows whose name includes their status word |
 | [0225](0225-multica-run-grant-closes-after-its-first-turn.md) | Accepted; source and tests verified, device acceptance pending | Close a Multica run's grant once its first turn returns |
 | [0226](0226-task-local-scopes-are-plain-functions.md) | Accepted; source and tests verified | Make task-local scopes plain functions so they stop doubling futures |
+| [0227](0227-system-launchagent-startup-gate-and-full-restart.md) | Accepted; source and tests verified, installation and device acceptance pending | musterd runs from a system LaunchAgent, the app starts it before its main page, and a restart restarts every Muster process |

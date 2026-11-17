@@ -18,7 +18,10 @@ public struct MusterRootView: View {
 
     public var body: some View {
         Group {
-            if let error = model.startError {
+            if let gate = model.gate {
+                DesktopGateView(gate: gate, busy: model.gateBusy, error: model.startError,
+                                start: { model.startService() }, later: { model.continueWithoutMigration() })
+            } else if let error = model.startError {
                 ContentUnavailableView {
                     Label("Muster could not start", systemImage: "exclamationmark.triangle")
                 } description: {

@@ -380,6 +380,10 @@ pub struct State {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub auto_update: crate::desktop_update::auto::Schedule,
     pub desktop_restart_required: bool,
+    /// This session saw Accessibility go from missing to granted: the one
+    /// change that brings the setup page back by itself, to offer the
+    /// restart (ADR 0227).
+    pub desktop_accessibility_granted: bool,
     pub desktop_permissions: Option<[Option<bool>; 3]>,
     pub desktop_setup_dismissed: bool,
     pub desktop_setup_error: String,
@@ -518,6 +522,7 @@ impl State {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             auto_update: Default::default(),
             desktop_restart_required: false,
+            desktop_accessibility_granted: false,
             desktop_permissions: None,
             desktop_setup_dismissed: false,
             desktop_setup_error: String::new(),
@@ -627,12 +632,18 @@ impl State {
             },
         ];
         if let Some(before) = self.desktop_permissions {
-            if before
+            let granted: Vec<bool> = before
                 .iter()
                 .zip(now)
-                .any(|(old, new)| *old == Some(false) && new == Some(true))
-            {
+                .map(|(old, new)| *old == Some(false) && new == Some(true))
+                .collect();
+            if granted.iter().any(|g| *g) {
                 self.desktop_restart_required = true;
+            }
+            // Only Accessibility reopens a page the owner closed; the other
+            // grants wait in it for when the owner opens it (ADR 0227).
+            if granted[0] {
+                self.desktop_accessibility_granted = true;
                 self.desktop_setup_dismissed = false;
             }
             for (value, previous) in now.iter_mut().zip(before) {
@@ -953,10 +964,33 @@ mod desktop_restart_tests {
         device.accessibility = "granted".into();
         state.observe_desktop_permissions(&device);
         assert!(state.desktop_restart_required);
+        assert!(state.desktop_accessibility_granted);
         assert!(!state.desktop_setup_dismissed);
         let mut relaunched = State::new(false, None);
         relaunched.observe_desktop_permissions(&device);
         assert!(!relaunched.desktop_restart_required);
+        assert!(!relaunched.desktop_accessibility_granted);
+    }
+
+    /// Another grant landing still asks for a restart, but leaves a page
+    /// the owner closed closed: Accessibility is already granted.
+    #[test]
+    fn only_an_accessibility_grant_reopens_the_setup_page() {
+        let mut state = State::new(false, None);
+        let mut device = v1::DeviceState {
+            accessibility: "granted".into(),
+            locked_use_setup: "needs_installation".into(),
+            iterm2_automation: "missing".into(),
+            ..Default::default()
+        };
+        state.observe_desktop_permissions(&device);
+        state.desktop_setup_dismissed = true;
+        device.locked_use_setup = "ready".into();
+        device.iterm2_automation = "granted".into();
+        state.observe_desktop_permissions(&device);
+        assert!(state.desktop_restart_required);
+        assert!(!state.desktop_accessibility_granted);
+        assert!(state.desktop_setup_dismissed);
     }
     #[test]
     fn restart_is_blocked_during_locked_use_or_operations() {

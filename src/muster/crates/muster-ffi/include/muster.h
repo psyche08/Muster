@@ -31,11 +31,26 @@ typedef struct MusterPlatform {
 } MusterPlatform;
 
 void muster_desktop_update_startup(void);
-/* Synchronous worker-thread preparation; not callable from a Rust runtime.
- * managed: 0 custom socket, 1 bundled service. action: 0 register, 1 recover
- * stopped service; return 0 success, 1 approval required, other native error.
- * No callback after return. Result 0 ready, -1 error (free *error_out with
- * muster_string_free). socket is a NUL-terminated UTF-8 path. */
+/* Desktop startup (ADR 0021, ADR 0227). Both run synchronously on a worker
+ * thread and are not callable from a Rust runtime; they share one admission.
+ * socket is a NUL-terminated UTF-8 path. managed: 0 a daemon run by hand
+ * (no callbacks), 1 the bundled service. No callback after return.
+ * action: 0 register (run the system LaunchAgent's job; never stop a
+ * running one), 1 recover a stopped job, 2 install the system LaunchAgent
+ * (asks for the administrator's password), 3 inspect, 4 reload the system
+ * job after an install changed it. Inspect returns facts >= 0: bits 0-1
+ * agent (0 missing, 1 current, 2 outdated), 2-3 job (0 absent, 1 stopped,
+ * 2 running), 4-5 origin (0 none, 1 system LaunchAgent, 2 other). Other
+ * actions return 0 success, 1 approval required, 3 cancelled by the owner,
+ * any other value a native error.
+ * check: what to show first; changes nothing. resumed: 1 when Muster's own
+ * restart or update relaunched the app. Returns 0 ready, 1 start musterd,
+ * 2 offer the move to the system LaunchAgent; plus 16 when that needs the
+ * administrator's password, plus 32 when it starts without asking; -1 error.
+ * prepare: install, register and wait for readiness. Returns 0 ready, -1
+ * error. Free *error_out with muster_string_free. */
+int32_t muster_desktop_check(const char *socket, uint8_t managed, uint8_t resumed,
+                             int32_t (*action)(uint32_t), char **error_out);
 int32_t muster_desktop_prepare(const char *socket, uint8_t managed,
                              int32_t (*action)(uint32_t), char **error_out);
 /* Logging to stderr at `level` (0 = off, 1 = error, 2 = warn, 3 = info, 4 = debug). */
