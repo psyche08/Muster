@@ -336,7 +336,7 @@ superseding decisions get new numbers and bidirectional links.
 | [0218](0218-removed-device-readd.md) | Accepted; source and tests verified, paired-device acceptance pending | Let a removed device rejoin through a fresh admin-approved Add |
 | [0219](0219-release-apple-1-1-46.md) | Accepted | Publish Apple 1.1.46 with device readmission and background approval reads |
 | [0220](0220-background-only-native-creation.md) | Accepted; source and tests verified, device acceptance pending | Create native sessions only while the provider is in the background |
-| [0221](0221-multica-workspace-folder-sessions.md) | Accepted; source and tests verified, device acceptance pending | Create Multica sessions in the run's workspace folder |
+| [0221](0221-multica-workspace-folder-sessions.md) | Accepted; source and tests verified, device acceptance pending; decision 7 superseded by 0230 | Create Multica sessions in the run's workspace folder |
 | [0222](0222-locked-use-dims-displays.md) | Superseded by 0223 | Locked Use dims the displays instead of covering them |
 | [0223](0223-locked-use-blackens-displays-with-a-gamma-table.md) | Accepted; device verified | Locked Use blackens the displays with a gamma table |
 | [0224](0224-claude-sidebar-status-in-row-name.md) | Accepted; source and tests verified, device acceptance pending | Match Claude sidebar rows whose name includes their status word |
@@ -345,3 +345,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0227](0227-system-launchagent-startup-gate-and-full-restart.md) | Accepted; installed and verified on the owner's Mac, except the next login, an update, and the restart button itself | musterd runs from a system LaunchAgent, the app starts it before its main page, and a restart restarts every Muster process |
 | [0228](0228-hourly-redacted-log-upload.md) | Accepted; source and tests verified; endpoint and deployment superseded by 0229 | Desktops upload redacted log increments hourly, grouped by network |
 | [0229](0229-log-collector-behind-nginx-on-8443.md) | Accepted; source and tests verified, collector deployment pending | Put the log collector behind nginx as muster-logs.linsheng.dev:8443 |
+| [0230](0230-claude-environment-by-main-folder.md) | Accepted; source and tests verified, device acceptance pending | Pick a Claude environment by its main folder, extra folders included |

@@ -379,11 +379,12 @@ pub fn codex_lists_directory(bytes: &[u8], cwd: &Path) -> Option<bool> {
     }))
 }
 
-/// The name of the one Claude environment whose only folder is `cwd`, read
-/// from the app's own `ccd-session-presets.json`. The form shows an
-/// environment only by name, so a name that any other environment also uses
-/// names no folder. Unreadable state, a remote target or extra folders prove
-/// nothing (ADR 0221).
+/// The name of the one local Claude environment whose main folder is `cwd`,
+/// read from the app's own `ccd-session-presets.json`. Its extra folders do
+/// not matter: a session started from it runs in the main folder and has the
+/// extra folders attached (ADR 0230). The form shows an environment only by
+/// name, so a name that any other environment also uses names no folder.
+/// Unreadable state or a remote target prove nothing.
 pub fn claude_environment(bytes: &[u8], cwd: &Path) -> Option<String> {
     let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     let cwd = cwd.to_str().filter(|_| cwd.is_absolute())?;
@@ -395,11 +396,7 @@ pub fn claude_environment(bytes: &[u8], cwd: &Path) -> Option<String> {
         .collect();
     let exact = |p: &serde_json::Value| {
         let target = &p["target"];
-        target["kind"].as_str() == Some("local")
-            && target["cwd"].as_str() == Some(cwd)
-            && target
-                .get("additionalFolders")
-                .is_none_or(|f| f.as_array().is_some_and(Vec::is_empty))
+        target["kind"].as_str() == Some("local") && target["cwd"].as_str() == Some(cwd)
     };
     let mut names = presets
         .iter()
@@ -455,7 +452,7 @@ fn project_in_directory(
 mod tests {
     use super::*;
     #[test]
-    fn a_claude_environment_names_exactly_one_folder() {
+    fn a_claude_environment_names_its_main_folder() {
         let state = |presets: &str| {
             format!(r#"{{"byAccount":{{"a":{{"presets":[{presets}]}},"b":{{"builtIns":{{}}}}}}}}"#)
         };
@@ -470,17 +467,33 @@ mod tests {
             claude_environment(state(empty_extra).as_bytes(), ws).as_deref(),
             Some("WS")
         );
+        // Extra folders are attached to the session; its folder is the main one.
+        let extra = r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/x","/srv/y"]}}"#;
+        assert_eq!(
+            claude_environment(state(extra).as_bytes(), ws).as_deref(),
+            Some("WS")
+        );
+        // Only the main folder names the environment, never an extra one.
+        assert_eq!(
+            claude_environment(state(extra).as_bytes(), Path::new("/srv/x")),
+            None
+        );
         for presets in [
-            // Another folder, a remote target, extra folders, no name.
+            // Another folder, a remote target, no name.
             r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-2"}}"#,
             r#"{"name":"WS","target":{"kind":"ssh","cwd":"/srv/multica/ws-1"}}"#,
-            r#"{"name":"WS","target":{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/x"]}}"#,
+            r#"{"name":"WS","target":{"kind":"ssh","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/x"]}}"#,
             r#"{"target":{"kind":"local","cwd":"/srv/multica/ws-1"}}"#,
             r#"{"name":"This computer","target":{"kind":"local","cwd":"/srv/multica/ws-1"}}"#,
+            r#"{"name":"This computer","target":{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/x"]}}"#,
             // The same name on another folder, or two names for the folder.
             &format!(r#"{own},{{"name":"WS","target":{{"kind":"local","cwd":"/srv/other"}}}}"#),
+            &format!(r#"{extra},{{"name":"WS","target":{{"kind":"local","cwd":"/srv/other"}}}}"#),
             &format!(
                 r#"{own},{{"name":"WS2","target":{{"kind":"local","cwd":"/srv/multica/ws-1"}}}}"#
+            ),
+            &format!(
+                r#"{extra},{{"name":"WS2","target":{{"kind":"local","cwd":"/srv/multica/ws-1","additionalFolders":["/srv/z"]}}}}"#
             ),
         ] {
             assert_eq!(

@@ -1,7 +1,9 @@
 # ADR 0221: Create Multica sessions in the run's workspace folder
 
 - Date: 2026-11-16
-- Status: Accepted; source and tests verified, device acceptance pending
+- Status: Accepted; source and tests verified, device acceptance pending;
+  decision 7 (single-folder environments only) superseded by
+  [ADR 0230](0230-claude-environment-by-main-folder.md)
 - Related: amends [0184](0184-multica-task-authorized-codex-creation.md),
   [0192](0192-unlocked-multica-project-directory.md) and
   [0220](0220-background-only-native-creation.md);
