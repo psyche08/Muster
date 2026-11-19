@@ -333,13 +333,14 @@ fn codex_project_state() -> Option<Vec<u8>> {
     std::fs::read(home.join(".codex-global-state.json")).ok()
 }
 
-/// Claude's environments, each a name for a folder (ADR 0221).
+/// Claude's environments, each a name for a main folder (ADR 0221, 0230).
 fn claude_environment_state() -> Option<Vec<u8>> {
     let home = PathBuf::from(std::env::var_os("HOME")?);
     std::fs::read(home.join("Library/Application Support/Claude/ccd-session-presets.json")).ok()
 }
 
-/// The environment the form names, when its one folder is `cwd`.
+/// The environment the form names, when its main folder is `cwd`. Its extra
+/// folders are attached to the session and do not change its folder.
 fn claude_environment(cwd: &Path) -> Option<String> {
     claude_environment_state()
         .and_then(|state| muster_agent::native_runtime::claude_environment(&state, cwd))
@@ -414,8 +415,9 @@ fn selection_matches(
                 && n.string("AXDescription")
                     .is_some_and(|d| d.starts_with("Folder: "))
         });
-        // A named environment carries its one folder and shows no folder
-        // picker; "This computer" shows the folder it is set to.
+        // A named environment carries its main folder (and any extra ones)
+        // and shows no folder picker; "This computer" shows the folder it is
+        // set to (ADR 0230).
         let named = matches!(environments.as_slice(), [name] if name != "This computer")
             && !folders
             && claude_environment(cwd).as_deref() == environments.first().map(String::as_str);
@@ -661,11 +663,11 @@ async fn choose_claude_environment(
 }
 
 /// Claude's new-session form names a folder through its environment picker:
-/// a named environment of the app's own is one folder, and "This computer"
-/// adds a folder picker. Prefer the environment whose one folder is `cwd`;
-/// otherwise choose "This computer" and the exact folder from the app's
-/// recent list. Muster never adds a folder or an environment: one Claude
-/// does not list fails.
+/// a named environment of the app's own runs in its main folder, with any
+/// extra folders attached, and "This computer" adds a folder picker. Prefer
+/// the environment whose main folder is `cwd` (ADR 0230); otherwise choose
+/// "This computer" and the exact folder from the app's recent list. Muster
+/// never adds a folder or an environment: one Claude does not list fails.
 async fn choose_claude_directory(
     guard: &Guard,
     window: &Element,
