@@ -346,3 +346,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0228](0228-hourly-redacted-log-upload.md) | Accepted; source and tests verified; endpoint and deployment superseded by 0229 | Desktops upload redacted log increments hourly, grouped by network |
 | [0229](0229-log-collector-behind-nginx-on-8443.md) | Accepted; source and tests verified, collector deployment pending | Put the log collector behind nginx as muster-logs.linsheng.dev:8443 |
 | [0230](0230-claude-environment-by-main-folder.md) | Accepted; source and tests verified, device acceptance pending | Pick a Claude environment by its main folder, extra folders included |
+| [0231](0231-release-apple-1-1-47.md) | Accepted; versions prepared, build and publication pending | Publish Apple 1.1.47 with Claude environments by main folder |
