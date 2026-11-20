@@ -41,3 +41,13 @@ The new regression reproduced the new-session timeout on the preceding
 implementation. With the startup deadline applied, one reopen returned a new
 generation, the old handle rejected input and the new shell returned the
 expected arithmetic result. The 19 default Windows library tests also passed.
+
+On an isolated software node built from the release source, the Windows GUI
+opened the synthetic conversation from Agents after its final shell ended.
+Selecting Terminal once opened a replacement. Text entered through the
+WinForms grid produced the expected computed line in its accessible screen.
+An independent RPC run received a full frame, resized the replacement, read
+its computed output and queried its live generation. In one separate
+diagnostic run, an external tmux list-sessions probe on the private socket
+hung while the node still answered DeviceInfo. Its cause is unresolved.
+These runs used an isolated development GUI and did not switch the live node.
