@@ -25,6 +25,7 @@ internal sealed class Desktop : Form
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
     readonly TranscriptSteps transcript = new();
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
+    RunHistoryDialog? runHistory;
     (string Device, string Session)? terminalTab;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
@@ -355,6 +356,7 @@ internal sealed class Desktop : Form
     {
         current = v;
         var page = v.Screen;
+        runHistory?.Display(page == Page.Chat ? v.Chat : null);
         title.Text=page is Page.Home or Page.Onboarding ? v.Network?.Name is {Length:>0} n ? n : "Muster network" : page.ToString();
         status.Text = v.Toasts.LastOrDefault()?.Text ?? v.Join?.Message ?? "";
         var rows = new List<Row>();
@@ -599,6 +601,15 @@ internal sealed class Desktop : Form
                         terminalTab = chatKey;
                         Send(new() { SessionTerminalAction = new() { Action = SessionTerminalAction.Types.Action.Start } });
                         Render(v);
+                    });
+                lines.Add(chatView.CodeError);
+                if (chatKey != null && chatView.CodeRuns.Count > 0)
+                    AddAction("Recent runs", () =>
+                    {
+                        using var dialog = new RunHistoryDialog(chatView, Send);
+                        runHistory = dialog;
+                        try { dialog.ShowDialog(this); }
+                        finally { runHistory = null; }
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });

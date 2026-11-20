@@ -75,6 +75,10 @@ dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c
 dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c Release -- --screenshots $captures
 ```
 
+同一测试还会生成 `recent-runs.png`。在对话页点 **Recent runs** 可查看 Shared Rust
+返回的执行记录。用例覆盖已知和未知退出码、截断输出、记录重排和移除、回传资格变化，
+以及切换设备或对话。点击回传按钮时，测试只检查生成的 Intent；真实提供方回执需单独验收。
+
 实机验收时在 Terminals 选择本机，新建专用的 Built-in terminal。在网格内输入
 算式，先检查回显，再用方向键编辑并按 Return 确认计算结果。调整窗口大小后核对
 目录行的列数和行数。Ctrl+Shift+V 粘贴，拖选后 Ctrl+Shift+C 复制，Ctrl+Tab
