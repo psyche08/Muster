@@ -1,6 +1,6 @@
 //! Everything the core knows, owned by the reducer task alone.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use muster_proto::app::{self, Screen};
 use muster_proto::v1;
@@ -424,7 +424,7 @@ pub struct State {
     pub agent_catalog_pages: Vec<(String, v1::AgentCatalogGroup, v1::AgentSessionPage)>,
     pub agent_organizing: std::collections::HashSet<String>,
     pub catalog_watches: HashMap<String, Watch>,
-    pub agents_pending: usize,
+    pub agents_pending: HashSet<String>,
     pub multica: v1::MulticaStatus,
     pub multica_page: v1::MulticaPage,
     pub multica_query: v1::MulticaBrowseRequest,
@@ -441,9 +441,8 @@ pub struct State {
     pub multica_mutation_applied: bool,
     pub multica_mutation_uncertain: bool,
     pub vision: v1::VisionStatus,
-    /// Errors of the list refresh in flight; they replace the shown ones
-    /// when it completes, so a refresh does not blink them away.
-    pub agents_errors: Vec<String>,
+    /// Latest catalog failure per device, kept across sibling updates and retries.
+    pub agents_errors: BTreeMap<String, String>,
     pub chat: Option<Chat>,
     /// Desktop Chat mode: one device's Claude or ChatGPT conversations.
     pub desktop_chats: app::DesktopChatsView,
@@ -567,7 +566,7 @@ impl State {
             agent_catalog_pages: Vec::new(),
             agent_organizing: Default::default(),
             catalog_watches: HashMap::new(),
-            agents_pending: 0,
+            agents_pending: HashSet::new(),
             multica: v1::MulticaStatus::default(),
             multica_page: v1::MulticaPage::default(),
             multica_query: v1::MulticaBrowseRequest::default(),
@@ -584,7 +583,7 @@ impl State {
             multica_mutation_applied: false,
             multica_mutation_uncertain: false,
             vision: v1::VisionStatus::default(),
-            agents_errors: Vec::new(),
+            agents_errors: BTreeMap::new(),
             chat: None,
             desktop_chats: app::DesktopChatsView::default(),
             desktop_chats_view: 0,

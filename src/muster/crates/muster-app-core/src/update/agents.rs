@@ -201,7 +201,6 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
     };
     state.agents.device_id = filter.clone();
     super::catalog::restart_search(state, ctx);
-    state.agents_errors.clear();
     state
         .agents
         .sessions
@@ -219,11 +218,15 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
         .filter(|m| filter == "*" || m.device_id == filter)
         .map(|m| (m.device_id, m.name, m.is_self))
         .collect();
+    state.agents_pending = devices.iter().map(|(id, _, _)| id.clone()).collect();
     state
         .agents
         .sessions
-        .retain(|s| devices.iter().any(|(id, _, _)| id == &s.device_id));
-    state.agents_pending = devices.len();
+        .retain(|s| state.agents_pending.contains(&s.device_id));
+    state
+        .agents_errors
+        .retain(|id, _| state.agents_pending.contains(id));
+    state.agents.errors = state.agents_errors.values().cloned().collect();
     // A refresh every few seconds must not flip the view: loading shows
     // only while there is nothing to list yet.
     state.agents.loading = !devices.is_empty() && state.agents.sessions.is_empty();
@@ -1487,13 +1490,16 @@ pub(super) fn msg_agents(
     if epoch != state.agents_epoch {
         return;
     }
-    state.agents_pending = state.agents_pending.saturating_sub(1);
-    state.agents.loading = state.agents.loading && state.agents_pending > 0;
+    state.agents_pending.remove(&device);
+    state.agents.loading &= !state.agents_pending.is_empty();
     // A late answer from a Mac that has gone offline since must not bring
     // its sessions back, nor overwrite its cache.
     match result {
-        _ if state.offline(&device) => {}
+        _ if state.offline(&device) => {
+            state.agents_errors.remove(&device);
+        }
         Ok(page) => {
+            state.agents_errors.remove(&device);
             ctx.cache
                 .put(cache_key(state, "agents", &device, ""), &page);
             state.agent_catalog_groups.retain(|g| g.device_id != device);
@@ -1549,10 +1555,12 @@ pub(super) fn msg_agents(
                     .then_with(|| a.id.cmp(&b.id))
             });
         }
-        Err(error) => state.agents_errors.push(error.to_string()),
+        Err(error) => {
+            state.agents_errors.insert(device, error.to_string());
+        }
     }
-    if state.agents_pending == 0 {
-        state.agents.errors = std::mem::take(&mut state.agents_errors);
+    if state.agents_pending.is_empty() {
+        state.agents.errors = state.agents_errors.values().cloned().collect();
     }
 }
 
