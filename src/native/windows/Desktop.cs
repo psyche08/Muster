@@ -14,12 +14,15 @@ internal sealed class Desktop : Form
         public override string ToString() => Label;
     }
     readonly FlowLayoutPanel nav = Bar(), actions = Bar();
-    readonly Label title = new() { Dock = DockStyle.Top, Height = 46, TextAlign = ContentAlignment.MiddleLeft,
+    readonly Label title = new() { Dock = DockStyle.Top, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft,
                                    Font = new Font("Segoe UI", 17) };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 30, AutoEllipsis = true };
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
+    readonly Label chatWelcome = new() { Dock = DockStyle.Fill, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
+        Text = "Select a conversation or start a new chat." };
+    readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
     readonly TranscriptSteps transcript = new();
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
     (string Device, string Session)? terminalTab;
@@ -59,13 +62,20 @@ internal sealed class Desktop : Form
         MinimumSize = new Size(740, 480);
         Size = new Size(1050, 700);
         Padding = new Padding(16);
+        void SizeTitle() => title.Height = title.Font.Height + LogicalToDeviceUnits(8);
+        title.FontChanged += (_, _) => SizeTitle();
+        title.DpiChangedAfterParent += (_, _) => SizeTitle();
+        SizeTitle();
         var body = new Panel { Dock = DockStyle.Fill };
         body.Controls.Add(conversationTerminal);
         terminal.ClipboardError += message => status.Text = message;
         body.Controls.Add(terminal);
         body.Controls.Add(preview);
         body.Controls.Add(output);
+        body.Controls.Add(chatWelcome);
         body.Controls.Add(list);
+        body.Controls.Add(chatSidebar);
+        body.Resize += (_, _) => chatSidebar.Width = Math.Min(LogicalToDeviceUnits(340), body.ClientSize.Width / 3);
         actions.Dock = DockStyle.Bottom;
         Controls.Add(body);
         Controls.Add(input);
@@ -74,6 +84,7 @@ internal sealed class Desktop : Form
         Controls.Add(title);
         Controls.Add(nav);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly);
+        chatSidebar.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
         conversationTerminal.ReturnToChat += () =>
@@ -537,25 +548,7 @@ internal sealed class Desktop : Form
             }
             break;
         case Page.DesktopChats:
-            if (v.DesktopChats != null)
-            {
-                var c = v.DesktopChats;
-                foreach (var choice in c.Choices)
-                    Act(choice.Label, () => new() { OpenDesktopChats = new() { Provider = choice.Id } });
-                if (c.DeviceName.Length > 0) lines.Add($"Through {c.DeviceName}");
-                if (c.Loading) lines.Add("Updating conversations…");
-                if (c.DeviceId.Length > 0 && c.Opening.Length == 0)
-                {
-                    Act("New chat", () => new() { DesktopChatOpen = new() });
-                    if (c.Catalog?.ChatMode == false)
-                        Act("Switch to Chat mode", () => new() { DesktopChatOpen = new() { Desktop = true } });
-                }
-                if (c.Opening.Length > 0) lines.Add("Opening conversation…");
-                if (c.Catalog != null)
-                    foreach (var chat in c.Catalog.Chats)
-                        Row(chat.Title, new() { DesktopChatOpen = new() { Chat = chat.Id } });
-                lines.Add(c.Error);
-            }
+            title.Text = "Chats";
             break;
         case Page.Chat:
             if (v.Chat is {} chatView)
@@ -833,12 +826,16 @@ internal sealed class Desktop : Form
                 list.SelectedItem = old;
             list.EndUpdate();
         }
+        bool showChatSidebar = page == Page.DesktopChats || (page == Page.Chat && v.Workspace == Page.DesktopChats);
+        chatWelcome.Visible = page == Page.DesktopChats && v.DesktopChats is { DeviceId.Length: > 0 };
+        chatSidebar.Visible = showChatSidebar;
+        chatSidebar.Display(showChatSidebar ? v.DesktopChats : null, chatKey?.Device ?? "", chatKey?.Session ?? "");
         bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
         preview.Visible = showingSource;
         bool showingTerminal = page == Page.Terminal && v.Terminal != null;
         conversationTerminal.Visible = inWorkspaceTerminal;
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
-        output.Visible = !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         terminal.Display(showingTerminal ? v.Terminal : null);
