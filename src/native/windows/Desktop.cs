@@ -20,14 +20,19 @@ internal sealed class Desktop : Form
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
-    readonly TextBox input =
+    readonly ChatInput input =
         new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
     readonly ConcurrentQueue<(ulong, Effect)> effects = new();
     readonly Core core;
+    readonly List<(Button Button, bool NeedsText)> composerButtons = new();
+    void UpdateComposerButtons()
+    {
+        foreach (var (button, needsText) in composerButtons)
+            button.Enabled = needsText ? !string.IsNullOrWhiteSpace(input.Text) : input.TextLength == 0;
+    }
     ViewModel? pending, current;
     bool opening, ready;
-    (string Key, string Text, string Id)? lastSend;
     string inputContext = "";
     static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
                                             Padding = new Padding(0, 2, 0, 2) };
@@ -73,6 +78,7 @@ internal sealed class Desktop : Form
         });
         Button(nav, "Settings", () => Go(Page.Settings));
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
+        input.TextChanged += (_, _) => UpdateComposerButtons();
         list.DoubleClick += (_, _) => OpenRow();
         list.KeyDown += (_, e) =>
         {
@@ -148,15 +154,11 @@ internal sealed class Desktop : Form
             Send(r.Action);
     }
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
-    void Send(Intent i)
+    void Send(Intent intent) => core.Send(input.WithDraft(intent));
+    void Submit(string releaseToken = "")
     {
-        if (current?.Screen == Page.Chat && current.Chat?.Draft is {} draft && i.ComposerAction == null)
-        {
-            var snapshot = draft.Clone();
-            snapshot.Text = input.Text;
-            i = new() { ComposerAction = new() { Draft = snapshot, Action = i } };
-        }
-        core.Send(i);
+        if (input.Submission(releaseToken) is {} intent)
+            Send(intent);
     }
     async void EffectReceived(ulong id, Effect e)
     {
@@ -221,6 +223,7 @@ internal sealed class Desktop : Form
         var rows = new List<Row>();
         var lines = new List<string>();
         void Row(string name, Intent intent) => rows.Add(new(name, intent));
+        composerButtons.Clear();
         int actionIndex = 0;
         void AddAction(string label, Action invoke)
         {
@@ -232,14 +235,21 @@ internal sealed class Desktop : Form
             }
             else
                 Button(actions, label, invoke);
+            actions.Controls[actionIndex].Enabled = true;
             actionIndex++;
+        }
+        void ComposerButton(string label, bool needsText, Action invoke)
+        {
+            AddAction(label, invoke);
+            composerButtons.Add(((Button)actions.Controls[actionIndex - 1], needsText));
         }
         void Act(string label, Func<Intent> intent) => AddAction(label, () => Send(intent()));
         var inputKey = $"{page}/{v.SelectedDevice}/{v.Chat?.Draft?.Key}/{v.Terminal?.Session}";
+        input.ShowDraft(page == Page.Chat ? v.Chat : null);
         if (inputContext != inputKey)
         {
             inputContext = inputKey;
-            input.Text = page == Page.Chat ? v.Chat?.Draft?.Text ?? "" : "";
+            if (page != Page.Chat) input.Clear();
         }
         input.Visible = page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Terminal or Page.Browser or Page.Agents;
         input.PlaceholderText = "";
@@ -417,28 +427,28 @@ internal sealed class Desktop : Form
                 lines.Add(chatView.ResponseError);
                 lines.Add(chatView.ComposerDisabledReason);
                 input.PlaceholderText = chatView.ComposerPlaceholder;
-                if (lastSend is {} sent && sent.Id == chatView.SentDraftId)
+                bool busy = chatView.Sending || chatView.Completing;
+                bool canSubmit = chatView.Draft != null && !busy && chatView.ComposerDisabledReason.Length == 0;
+                if (canSubmit)
+                    ComposerButton("Send", true, () => Submit());
+                if (chatView.Unconfirmed is {} refusal)
                 {
-                    if (sent.Key == chatView.Draft?.Key && input.Text == sent.Text)
-                        input.Clear();
-                    lastSend = null;
+                    lines.Add("Delivery of the previous message is unconfirmed.");
+                    lines.Add(refusal.Message);
+                    if (canSubmit)
+                        ComposerButton("Retry current draft", true, () => Submit(refusal.Token));
+                    if (!busy)
+                        Act("Dismiss delivery notice", () => new() { ResolveAgentSend = new() { Token = refusal.Token, Dismiss = true } });
                 }
-                if (chatView.Draft != null && !chatView.Sending && chatView.ComposerDisabledReason.Length == 0)
-                    AddAction(
-                        "Send",
-                        () =>
-                        {
-                            if (string.IsNullOrWhiteSpace(input.Text))
-                                return;
-                            var draft = chatView.Draft.Clone();
-                            draft.Text = input.Text;
-                            if (lastSend is not {} previous || previous.Key != draft.Key || previous.Text != draft.Text)
-                                lastSend = (draft.Key, draft.Text, Guid.NewGuid().ToString());
-                            Send(new() { ComposerAction = new() {
-                                Draft = draft,
-                                Action = new() { AgentSend = new() { Text = draft.Text, DraftId = lastSend.Value.Id } }
-                            } });
-                        });
+                if (chatView.CanComplete && !busy)
+                    ComposerButton("Read suggestion", false, () => Send(new() { ComposerComplete = new() }));
+                if (chatView.ComposerSuggestion.Length > 0)
+                {
+                    lines.Add(chatView.ComposerSuggestion);
+                    if (!busy)
+                        ComposerButton("Use suggestion", false, () => input.Text = chatView.ComposerSuggestion);
+                }
+                lines.Add(chatView.CompletionError);
                 foreach (var i in chatView.Interactions)
                 {
                     lines.Add(i.Prompt);
@@ -597,6 +607,7 @@ internal sealed class Desktop : Form
             }
             break;
         }
+        UpdateComposerButtons();
         while (actions.Controls.Count > actionIndex)
             actions.Controls[actions.Controls.Count - 1].Dispose();
         if (!rows.SequenceEqual(list.Items.Cast<Row>()))
