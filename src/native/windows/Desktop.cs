@@ -20,6 +20,7 @@ internal sealed class Desktop : Form
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
+    readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ChatInput input =
         new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
@@ -56,6 +57,9 @@ internal sealed class Desktop : Form
         Size = new Size(1050, 700);
         Padding = new Padding(16);
         var body = new Panel { Dock = DockStyle.Fill };
+        terminal.Intent += Send;
+        terminal.ClipboardError += message => status.Text = message;
+        body.Controls.Add(terminal);
         body.Controls.Add(preview);
         body.Controls.Add(output);
         body.Controls.Add(list);
@@ -354,7 +358,7 @@ internal sealed class Desktop : Form
             inputContext = inputKey;
             if (page != Page.Chat) input.Clear();
         }
-        input.Visible = page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Terminal or Page.Browser or Page.Agents;
+        input.Visible = page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents;
         input.PlaceholderText = "";
         switch (page)
         {
@@ -676,21 +680,11 @@ internal sealed class Desktop : Form
             if (v.Terminal is {} term)
             {
                 title.Text = term.Session.Length == 0 ? "Terminal" : $"{term.Source} · {term.Session}";
-                if (term.Ended || term.Status.Length > 0)
-                    lines.Add(term.Ended && term.Status.Length > 0 ? "Ended · " + term.Status
-                              : term.Ended ? "Ended" : term.Status);
-                lines.AddRange(term.Lines.Select(l => l.Text));
-                input.PlaceholderText = "Terminal input";
-                if (!term.Ended)
-                {
-                    AddAction("Send line", () =>
-                                           {
-                                               Send(new() { TerminalText = new() { Text = input.Text } });
-                                               Send(new() { TerminalKey = new() { Key = "enter" } });
-                                               input.Clear();
-                                           });
-                    Act("Ctrl+C", () => new() { TerminalKey = new() { Key = "ctrl-c" } });
-                }
+                if (status.Text.Length == 0)
+                    status.Text = term.Ended && term.Status.Length > 0 ? "Ended · " + term.Status
+                                  : term.Ended ? "Ended" : term.Status;
+                if (term.CanPaste && !term.Ended)
+                    AddAction("Paste (Ctrl+Shift+V)", () => { terminal.PasteClipboard(); terminal.Focus(); });
                 Act("Close terminal", () => new() { CloseTerminal = new() });
             }
             break;
@@ -806,8 +800,11 @@ internal sealed class Desktop : Form
         }
         bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
         preview.Visible = showingSource;
-        output.Visible = !showingSource;
+        bool showingTerminal = page == Page.Terminal && v.Terminal != null;
+        output.Visible = !showingSource && !showingTerminal;
+        terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
+        terminal.Display(showingTerminal ? v.Terminal : null);
         var text = string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x)));
         if (output.Text != text)
         {

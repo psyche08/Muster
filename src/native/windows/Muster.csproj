@@ -17,6 +17,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="WindowsAgentCatalog" />
     <InternalsVisibleTo Include="WindowsWorktree" />
+    <InternalsVisibleTo Include="WindowsTerminal" />
     <PackageReference Include="Google.Protobuf" Version="3.34.0" />
   </ItemGroup>
   <Target Name="GenerateProtocol" BeforeTargets="CoreCompile">

@@ -360,3 +360,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0242](0242-muster-remote-desktop-engines.md) | Proposed; not enabled | Bundle remote desktop engines behind Muster authorization |
 | [0243](0243-windows-session-file-previews.md) | In development | Show session files and recorded changes on Windows |
 | [0244](0244-windows-terminal-catalog.md) | Accepted | Select the terminal host on Windows |
+| [0245](0245-windows-interactive-terminal-grid.md) | Accepted | Render and operate the shared terminal grid on Windows |
