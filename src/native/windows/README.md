@@ -89,7 +89,22 @@ store, run the fixture and use a second shell to call its printed socket:
 Press Enter in the fixture shell to shut it down. It binds to loopback and
 starts with agent discovery, cloud access and vnet off. Use the built CLI
 from the Cargo target directory or the installed CLI under Muster's cli
-folder. Both development modes accept -Release to reuse a release build.
+folder.
+
+To open the development GUI against its own fresh daemon, close the current
+Muster window and run:
+
+    ./src/native/windows/dev.ps1 -Mode Isolated
+
+The launcher builds all components from this checkout and prints the explicit
+socket and CLI paths. The maximized **Muster (isolated development)** window
+uses a temporary client cache and a software-signed test device. Close the GUI
+to shut down its daemon and discard the temporary state. The installed daemon
+and vnet can stay online throughout. Reopen the fixed shortcut to return to
+the installed GUI. If a GUI is already open, the isolated launcher exits with
+a message before displaying a development window.
+
+All development modes accept -Release to reuse a release build.
 Starting a real Wintun adapter requires Windows administrator approval.
 
 ## Build

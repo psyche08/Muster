@@ -56,9 +56,12 @@ internal sealed class Desktop : Form
         b.Click += (_, _) => ((Action)b.Tag!)();
         bar.Controls.Add(b);
     }
-    public Desktop(bool attachOnly)
+    readonly bool deviceAuthAvailable;
+    public Desktop(bool attachOnly) : this(attachOnly, null) { }
+    internal Desktop(bool attachOnly, string? fixtureSocket)
     {
-        Text = attachOnly ? "Muster (development)" : "Muster";
+        deviceAuthAvailable = fixtureSocket == null;
+        Text = !deviceAuthAvailable ? "Muster (isolated development)" : attachOnly ? "Muster (development)" : "Muster";
         MinimumSize = new Size(740, 480);
         Size = new Size(1050, 700);
         Padding = new Padding(16);
@@ -83,7 +86,7 @@ internal sealed class Desktop : Form
         Controls.Add(status);
         Controls.Add(title);
         Controls.Add(nav);
-        core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly);
+        core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
         chatSidebar.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
@@ -109,10 +112,11 @@ internal sealed class Desktop : Form
             Send(new() { OpenTerminals = new() { DeviceId = device } });
         });
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
-        Button(nav, "Presence key", async () => {
-            try { await Presence.Register(Handle, core.Socket); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Muster presence key"); }
-        });
+        if (deviceAuthAvailable)
+            Button(nav, "Presence key", async () => {
+                try { await Presence.Register(Handle, core.Socket); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Muster presence key"); }
+            });
         Button(nav, "Settings", () => Go(Page.Settings));
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
         input.ReturnPressed += () => Submit();
@@ -285,7 +289,7 @@ internal sealed class Desktop : Form
             status.Text = e.Notify.Title + "  " + e.Notify.Body;
             result.Ok = true;
         }
-        else if (e.Authenticate != null)
+        else if (deviceAuthAvailable && e.Authenticate != null)
         {
             try
             {
@@ -296,7 +300,7 @@ internal sealed class Desktop : Form
             }
             catch (Exception ex) { result.Error = ex.Message; }
         }
-        else if (e.LocalAuth != null && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+        else if (deviceAuthAvailable && e.LocalAuth != null && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
             try
             {

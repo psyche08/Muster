@@ -51,6 +51,8 @@ internal static class Program
 
             ShowWindowAsync(hwnd, 6); // SW_MINIMIZE
             Until(() => IsIconic(hwnd), "Minimize failed");
+            bool opened = DesktopInstance.Run(name, () => throw new InvalidOperationException("Second GUI created"), activateExisting: false);
+            if (opened || !IsIconic(hwnd)) throw new InvalidOperationException("Isolated launch activated the live owner");
             var second = Launch();
             Until(() => second.HasExited && !IsIconic(hwnd) && IsZoomed(hwnd), "Repeated launch did not restore the maximized owner");
             ShowWindowAsync(hwnd, 9); // SW_RESTORE

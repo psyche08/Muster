@@ -12,6 +12,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Muster</AssemblyName>
+    <DefineConstants Condition="'$(MusterIsolatedDevelopment)' == 'true'">$(DefineConstants);MUSTER_ISOLATED_DEVELOPMENT</DefineConstants>
     <Version>1.1.51</Version>
   </PropertyGroup>
   <ItemGroup>
