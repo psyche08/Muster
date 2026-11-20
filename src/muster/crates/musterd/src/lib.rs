@@ -241,7 +241,7 @@ pub struct Daemon {
     agent: Option<Arc<AgentService>>,
     terminal: Option<Arc<Terminal>>,
     additional_terminals: Vec<Arc<Terminal>>,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     tmux: Arc<Terminal>,
     platform: Arc<dyn Platform>,
     vnet: Mutex<Option<Arc<Vnet>>>,
@@ -390,7 +390,7 @@ impl Daemon {
             .cloned()
             .map(Terminal::new)
             .collect();
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         let tmux = Arc::new(Terminal::Tmux(muster_terminal::tmux::TmuxService::new(
             config.dir.join("tmux.sock"),
         )));
@@ -439,7 +439,7 @@ impl Daemon {
             agent,
             terminal,
             additional_terminals,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             tmux,
             platform,
             vnet: Mutex::new(None),
@@ -987,8 +987,17 @@ impl Daemon {
             blackout.stop().await;
         }
         self.locked_use.shutdown();
-        for task in self.tasks.lock().unwrap().drain(..) {
+        // Drop the listening endpoint before a replacement daemon binds the same name.
+        let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
+        for task in &tasks {
             task.abort();
+        }
+        for task in tasks {
+            let _ = task.await;
+        }
+        #[cfg(windows)]
+        if let Terminal::Tmux(service) = self.tmux.as_ref() {
+            service.detach_clients().await;
         }
         self.node().shutdown().await;
         #[cfg(unix)]

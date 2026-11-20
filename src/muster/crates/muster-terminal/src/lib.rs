@@ -15,7 +15,7 @@ pub mod pty;
 #[cfg(unix)]
 pub mod runs;
 pub mod ssh;
-#[cfg(any(unix, all(test, windows)))]
+#[cfg(any(unix, windows))]
 pub mod tmux;
 
 use std::path::PathBuf;
@@ -290,7 +290,7 @@ pub enum Terminal {
     Iterm2(Arc<TerminalService>),
     Ghostty(Arc<ghostty::GhosttyService>),
     Pty(Arc<pty::PtyService>),
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     Tmux(Arc<tmux::TmuxService>),
 }
 
@@ -308,7 +308,7 @@ impl Terminal {
             Terminal::Iterm2(_) => "iterm2",
             Terminal::Ghostty(_) => "ghostty",
             Terminal::Pty(_) => "pty",
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(_) => "tmux",
         }
     }
@@ -318,7 +318,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.available(),
             Terminal::Ghostty(t) => t.available(),
             Terminal::Pty(t) => t.available(),
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.available(),
         }
     }
@@ -328,7 +328,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.sessions().await,
             Terminal::Ghostty(t) => t.sessions().await,
             Terminal::Pty(t) => t.sessions().await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.sessions().await,
         }
     }
@@ -341,7 +341,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.watch_sessions(out).await,
             Terminal::Ghostty(t) => t.watch_sessions(out).await,
             Terminal::Pty(t) => t.watch_sessions(out).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.watch_sessions(out).await,
         }
     }
@@ -356,7 +356,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.attach(session, since_rev, frames).await,
             Terminal::Ghostty(t) => t.attach(session, since_rev, frames).await,
             Terminal::Pty(t) => t.attach(session, since_rev, frames).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.attach(session, since_rev, frames).await,
         }
     }
@@ -366,7 +366,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.input(session, bytes).await,
             Terminal::Ghostty(t) => t.input(session, bytes).await,
             Terminal::Pty(t) => t.input(session, bytes).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.input(session, bytes).await,
         }
     }
@@ -380,7 +380,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.create(profile, background).await,
             Terminal::Ghostty(t) => t.create().await,
             Terminal::Pty(t) => t.create(profile, background).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(_) => Err(Error::Protocol("Open tmux from an agent session".into())),
         }
     }
@@ -408,7 +408,7 @@ impl Terminal {
                 "Ghostty resizing is not supported; resize its native window on the Mac".into(),
             )),
             Terminal::Pty(t) => t.resize(session, cols, rows).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.resize(session, cols, rows).await,
         }
     }
@@ -418,7 +418,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.close(session).await,
             Terminal::Ghostty(t) => t.close(session).await,
             Terminal::Pty(t) => t.close(session).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.close(session).await,
         }
     }
@@ -428,7 +428,7 @@ impl Terminal {
             Terminal::Iterm2(t) => t.history(session, lines).await,
             Terminal::Ghostty(t) => t.history(session, lines).await,
             Terminal::Pty(t) => t.history(session, lines).await,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Terminal::Tmux(t) => t.history(session, lines).await,
         }
     }

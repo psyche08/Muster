@@ -686,14 +686,14 @@ async fn terminal_agent(daemon: &Daemon, session: &str) -> Result<Option<String>
     if !session.starts_with("tmux-") {
         return Ok(None);
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
             unreachable!()
         };
         return Ok(Some(service.agent_session(session).await?));
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     Err(Error::Unavailable("Managed terminal unavailable".into()))
 }
 async fn ordinary_terminal_request(daemon: &Daemon, request: &Req) -> Result<(), Error> {
@@ -1207,11 +1207,11 @@ fn terminal_for<'a>(
     session: &'a str,
 ) -> Result<(&'a Arc<muster_terminal::Terminal>, &'a str), Error> {
     if session.starts_with("tmux-") {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             return Ok((&daemon.tmux, session));
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             return Err(Error::Unavailable("tmux requires a Unix host".into()));
         }
@@ -1931,7 +1931,7 @@ async fn dispatch(
             let agent = agent_of(daemon)?
                 .session(&r.session)
                 .ok_or_else(|| Error::Invalid("agent session not found".into()))?;
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             {
                 use muster_proto::Message as _;
                 let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
@@ -1949,7 +1949,7 @@ async fn dispatch(
                 )
                 .await?
             }
-            #[cfg(not(unix))]
+            #[cfg(not(any(unix, windows)))]
             {
                 let _ = agent;
                 return Err(Error::Unavailable("tmux requires a Unix host".into()));
