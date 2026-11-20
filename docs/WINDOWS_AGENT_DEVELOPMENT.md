@@ -85,8 +85,7 @@ dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c
 宿主的窗格。另做端到端验收时，从 Agents 打开有工作目录的测试会话，先在输入框留一段
 未发送的草稿，再点 **Workspace terminal**。核对目录、连接状态和回到 **Conversation**
 后的草稿。**Disconnect** 分离视图；**Terminal actions…** 中的重启与结束会改变宿主上的
-测试 shell。可在支持 tmux 且已授权的宿主上验证分离后重连到同一 shell。Windows 目标
-当前会返回 `tmux requires a Unix host`。记录目标返回的错误以及相应操作是否仍可用。
+测试 shell。可在支持 tmux 且已授权的宿主上验证分离后重连到同一 shell。Windows 宿主需要包含托管终端支持的 musterd 和 MSYS2 tmux。旧节点仍可能报告 `tmux requires a Unix host`；先在 Settings 核对节点的版本和提交。
 
 调试 Windows 宿主的 tmux 兼容性时，用专用测试 socket 创建两个合成会话。用
 `display-message -p -t '=会话名:'` 读取 `#{session_name}` 和 `#{session_id}`，
@@ -112,6 +111,22 @@ cargo test --manifest-path src/muster/Cargo.toml -p muster-terminal --lib window
 它覆盖普通盘符路径和带扩展前缀的规范路径，第二个目录名含中文、空格和
 `#{session_id}`。重启到缺失目录应返回错误，原会话仍能恢复。关闭测试用的
 PowerShell 窗口即可丢弃上述环境设置。正式 daemon 重启及 GUI 重连还需单独验收。
+
+### 通过隔离 daemon 验证 Windows 托管终端
+
+在普通用户 PowerShell 中把 `MUSTER_MSYS2_ROOT` 设为可信 MSYS2 安装目录的绝对路径。
+目录下应有 `usr\bin\tmux.exe`、`sh.exe`、运行库和终端数据。daemon 默认也会检查其
+可执行文件旁的 `msys64`。该路径由宿主选择；工作目录里的程序不会作为 tmux 启动。
+
+```powershell
+$env:MUSTER_MSYS2_ROOT = 'D:\Developer\msys64'
+cargo test --manifest-path src/muster/Cargo.toml -p musterd --test windows_managed_terminal managed_shell_through_windows_daemon_restart -- --ignored
+```
+
+此测试以软件身份启动两个先后运行的普通用户节点进程。它通过真实命名管道发现合成
+会话、创建 shell、核对重复请求的回执并读取首帧。第一个节点退出后，第二个节点
+应能从同一 shell 读取变量。显式重启会话后，原句柄应失效。测试自行结束专用
+shell。含运行时的完整发行包、在线节点切换、远端授权和真实 GUI 重连需分别验收。
 
 ## 与已交付的 ZIP 对照
 

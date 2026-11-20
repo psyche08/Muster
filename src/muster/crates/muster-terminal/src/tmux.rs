@@ -11,6 +11,17 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+#[cfg(windows)]
+const CLIENT_ENV: &[(&str, &str)] = &[
+    ("MSYS", "noglob"),
+    ("CHERE_INVOKING", "1"),
+    ("SHELL", "/usr/bin/sh"),
+    ("TERM", "xterm-256color"),
+    ("TMUX", ""),
+];
+#[cfg(not(windows))]
+const CLIENT_ENV: &[(&str, &str)] = &[];
+
 pub struct TmuxService {
     pty: Arc<PtyService>,
     pub(crate) socket: PathBuf,
@@ -21,7 +32,22 @@ pub struct TmuxService {
     prefix: String,
 }
 impl TmuxService {
-    pub fn new(socket: PathBuf) -> Arc<Self> {
+    #[cfg(windows)]
+    fn program() -> Option<PathBuf> {
+        let root = match std::env::var_os("MUSTER_MSYS2_ROOT") {
+            Some(root) => PathBuf::from(root),
+            None => std::env::current_exe().ok()?.parent()?.join("msys64"),
+        };
+        let bin = root.join("usr/bin");
+        let program = bin.join("tmux.exe");
+        (root.is_absolute()
+            && program.is_file()
+            && bin.join("sh.exe").is_file()
+            && bin.join("msys-2.0.dll").is_file())
+        .then_some(program)
+    }
+    #[cfg(unix)]
+    fn program() -> Option<PathBuf> {
         let mut candidates = vec![
             PathBuf::from("/opt/homebrew/bin/tmux"),
             PathBuf::from("/usr/local/bin/tmux"),
@@ -34,12 +60,15 @@ impl TmuxService {
                     .map(|p| p.join("tmux")),
             );
         }
+        candidates.into_iter().find(|p| p.is_file())
+    }
+    pub fn new(socket: PathBuf) -> Arc<Self> {
         Arc::new(Self {
             pty: PtyService::new(PtyConfig::default()),
             socket,
             #[cfg(unix)]
             runs: Mutex::new(()),
-            program: candidates.into_iter().find(|p| p.is_file()),
+            program: Self::program(),
             sessions: Mutex::new(HashMap::new()),
             prefix: format!(
                 "tmux-{}-{}-",
@@ -72,22 +101,32 @@ impl TmuxService {
         directory: Option<&Path>,
     ) -> Result<std::process::Output, Error> {
         let program = self.program.as_ref().ok_or_else(|| {
-            Error::Unavailable("Install tmux on the session's device first".into())
+            #[cfg(windows)]
+            let message = "Install tmux in the host's MSYS2 runtime and configure MUSTER_MSYS2_ROOT for musterd";
+            #[cfg(unix)]
+            let message = "Install tmux on the session's device first";
+            Error::Unavailable(message.into())
         })?;
         let mut cmd = tokio::process::Command::new(program);
+        // Control queries have no interactive input. The attached client gets its own PTY.
+        cmd.stdin(std::process::Stdio::null());
+        #[cfg(windows)]
+        cmd.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
         if let Some(directory) = directory {
             cmd.current_dir(directory);
         }
         cmd.args(self.args())
             .args(args)
             .env_remove("TMUX")
+            .envs(CLIENT_ENV.iter().copied())
             .kill_on_drop(true);
         tokio::time::timeout(Duration::from_secs(5), cmd.output())
             .await
             .map_err(|_| {
-                Error::Unavailable(
-                    "tmux command timed out; check the session before retrying".into(),
-                )
+                Error::Unavailable(format!(
+                    "tmux {} timed out; check the session before retrying",
+                    args.first().unwrap_or(&"command")
+                ))
             })?
             .map_err(|e| Error::Unavailable(format!("tmux: {e}")))
     }
@@ -128,40 +167,40 @@ impl TmuxService {
                 "Session working directory is missing or unavailable".into(),
             ));
         }
-        if action != 0 {
-            if exists {
-                let instance = self.session_target(&name).await?;
-                let old = self.handle(&instance).await?;
-                self.checked(&["kill-session", "-t", &instance]).await?;
-                if let Some(id) = sessions.remove(&old) {
-                    let _ = self.pty.close(&id).await;
-                }
+        let create = [
+            "new-session",
+            "-d",
+            "-s",
+            &name,
+            "-c",
+            ".",
+            "-x",
+            "120",
+            "-y",
+            "40",
+        ];
+        if exists && action != 0 {
+            let instance = self.session_target(&name).await?;
+            let old = self.handle(&instance).await?;
+            let mut commands = vec!["kill-session", "-t", &instance];
+            let directory = if action == 2 {
+                // Keep the client on the server while replacing its last session.
+                // A second client could otherwise connect to an exiting server.
+                commands.push(";");
+                commands.extend(create);
+                Some(Path::new(cwd))
+            } else {
+                None
+            };
+            Self::checked_output(self.run_in(&commands, directory).await?)?;
+            if let Some(id) = sessions.remove(&old) {
+                let _ = self.pty.close(&id).await;
             }
-            if action == 1 {
-                return Ok(String::new());
-            }
+        } else if !exists && action != 1 {
+            Self::checked_output(self.run_in(&create, Some(Path::new(cwd))).await?)?;
         }
-        if !exists || action == 2 {
-            // A native path can contain tmux format syntax or Windows drive
-            // separators. Let the client inherit it as its actual directory.
-            let output = self
-                .run_in(
-                    &[
-                        "new-session",
-                        "-d",
-                        "-s",
-                        &name,
-                        "-c",
-                        ".",
-                        "-x",
-                        "120",
-                        "-y",
-                        "40",
-                    ],
-                    Some(Path::new(cwd)),
-                )
-                .await?;
-            Self::checked_output(output)?;
+        if action == 1 {
+            return Ok(String::new());
         }
         let target = self.session_target(&name).await?;
         let mut handle = self.handle(&target).await?;
@@ -325,7 +364,13 @@ impl TmuxService {
             .await?;
         let TerminalSession { id, .. } = self
             .pty
-            .create_command(self.program.as_ref().unwrap(), &args, None, &self.prefix)
+            .create_command(
+                self.program.as_ref().unwrap(),
+                &args,
+                None,
+                &self.prefix,
+                CLIENT_ENV,
+            )
             .await?;
         sessions.insert(handle.into(), id.clone());
         Ok(id)
@@ -346,6 +391,7 @@ impl TmuxService {
 
     /// A native app starts this as a fresh process. Handle validation happens
     /// both here and atomically in tmux immediately before attaching.
+    #[cfg(unix)]
     pub async fn native_command(&self, handle: &str) -> Result<String, Error> {
         let (command, _) = self.desktop_commands(handle).await?;
         Ok(format!("/bin/sh -c {}", shell_quote(&command)))
@@ -353,6 +399,7 @@ impl TmuxService {
 
     /// Commands are bound to the server-side generation. The
     /// conditional and attach execute on the same tmux command queue.
+    #[cfg(unix)]
     async fn desktop_commands(&self, handle: &str) -> Result<(String, String), Error> {
         let target = self.target(handle).await?;
         let program = self
@@ -429,12 +476,14 @@ impl TmuxService {
         out: tokio::sync::mpsc::Sender<muster_proto::v1::TerminalFrame>,
     ) -> Result<(), Error> {
         let id = self.resolve(handle).await?;
+        #[cfg(unix)]
         let (desktop, iterm2) = self.desktop_commands(handle).await?;
         let (tx, mut rx) = tokio::sync::mpsc::channel(16);
         let reader = self.pty.attach(&id, since_rev, tx);
         tokio::pin!(reader);
         let decorate = |mut frame: muster_proto::v1::TerminalFrame| {
             frame.session = handle.into();
+            #[cfg(unix)]
             if frame.full {
                 frame.desktop_attach_command = desktop.clone();
                 frame.iterm2_attach_command = iterm2.clone();
@@ -472,6 +521,17 @@ impl TmuxService {
     ) -> Result<Vec<muster_proto::v1::TerminalLine>, Error> {
         self.pty.history(&self.resolve(handle).await?, lines).await
     }
+    #[cfg(windows)]
+    pub async fn detach_clients(&self) {
+        // These handles belong to our ConPTY clients. The tmux server owns the shells.
+        let mut sessions = self.sessions.lock().await;
+        for (_, client) in sessions.drain() {
+            if self.pty.contains(&client) {
+                let _ = self.pty.close(&client).await;
+            }
+        }
+    }
+
     /// A view close is detach only. AgentTerminal END is the explicit kill.
     pub async fn close(&self, handle: &str) -> Result<(), Error> {
         self.target(handle).await.map(|_| ())

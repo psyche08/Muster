@@ -142,6 +142,7 @@ impl LockedUseOs for Port {
         self.0.locks.fetch_add(1, Ordering::SeqCst);
         self.0.unlocked.store(false, Ordering::SeqCst);
     }
+    #[cfg(unix)]
     fn plugin_peer(&self, _: &std::os::unix::net::UnixStream) -> bool {
         false
     }

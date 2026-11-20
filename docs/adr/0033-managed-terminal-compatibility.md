@@ -127,3 +127,28 @@ directories reported by the panes. The second directory contained Unicode,
 spaces and literal tmux format syntax. A failed restart into a missing directory
 preserved each handle. The Windows terminal library suite also passed, including
 its missing-runtime check. The live daemon and vnet stayed online.
+
+## Windows conversation terminal host
+
+Use the existing agent-bound session, operation ledger, terminal authorization
+and generation checks on Windows. Run MSYS2 tmux through ConPTY. Resolve the
+runtime relative to musterd (msys64), or from an explicitly configured absolute
+MUSTER_MSYS2_ROOT. Never resolve the executable from a workspace or PATH.
+Pass the daemon's native per-node socket path and scope MSYS2 environment
+settings to its child processes. Ordinary PowerShell terminals keep their
+existing environment. A missing runtime must surface a host prerequisite.
+
+Windows frames omit the Apple terminal attach commands. Managed command runs
+need separate support for durable run records. Verify start, reconnect, forced
+generation change and stale-handle rejection against a disposable Windows
+node with a developer-provided runtime. Record portable runtime distribution
+and live-node upgrade separately.
+
+The two-process named-pipe test exposed two host lifecycle failures. An
+administrative tmux client reading the daemon's stdin could stall, and a
+ConPTY attachment could keep a stopped daemon process alive. Use null stdin
+for tmux control commands and detach the daemon's own bridge processes during
+shutdown. Restart uses a single tmux command queue so killing the final session
+cannot race the next client against server exit. The replacement still gets a
+new handle. The local Windows test observed two separate daemon processes, an
+unchanged shell variable after reconnect, and rejection of the replaced handle.

@@ -158,7 +158,7 @@ impl PtyService {
             .ok_or_else(|| Error::NotFound(format!("session {id}")))
     }
 
-    #[cfg(any(unix, all(test, windows)))]
+    #[cfg(any(unix, windows))]
     pub(crate) fn contains(&self, id: &str) -> bool {
         self.sessions
             .lock()
@@ -223,7 +223,7 @@ impl PtyService {
         } else {
             vec![]
         };
-        self.create_command(Path::new(&command), &args, None, "pty-")
+        self.create_command(Path::new(&command), &args, None, "pty-", &[])
             .await
     }
 
@@ -234,6 +234,7 @@ impl PtyService {
         args: &[String],
         cwd: Option<&Path>,
         prefix: &str,
+        env: &[(&str, &str)],
     ) -> Result<TerminalSession, Error> {
         if self.sessions.lock().unwrap().len() >= self.config.max_sessions {
             return Err(Error::Unavailable("too many terminal sessions".into()));
@@ -274,7 +275,7 @@ impl PtyService {
             // SAFETY: setting close-on-exec on the master so the child does not inherit it.
             unsafe { libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC) };
             let mut cmd = std::process::Command::new(command);
-            cmd.args(args).env_remove("TMUX");
+            cmd.args(args).env_remove("TMUX").envs(env.iter().copied());
             if let Some(cwd) = cwd {
                 cmd.current_dir(cwd);
             }
@@ -325,6 +326,9 @@ impl PtyService {
                 .map_err(unavailable)?;
             let mut cmd = CommandBuilder::new(command);
             cmd.args(args);
+            for &(name, value) in env {
+                cmd.env(name, value);
+            }
             if let Some(cwd) = cwd {
                 cmd.cwd(cwd);
             }
@@ -615,7 +619,7 @@ mod tests {
     async fn lagged_viewer_recovers_without_replaying_older_deltas() {
         let service = PtyService::new(PtyConfig::default());
         let created = service
-            .create_command(Path::new("/bin/sleep"), &["30".into()], None, "pty-")
+            .create_command(Path::new("/bin/sleep"), &["30".into()], None, "pty-", &[])
             .await
             .unwrap();
         let session = service.get(&created.id).unwrap();
@@ -666,7 +670,7 @@ mod tests {
         let service = PtyService::new(PtyConfig::default());
         let created = service.create_command(Path::new("/bin/sh"), &[
             "-c".into(), "read start; i=0; while [ $i -lt 2000 ]; do printf 'line-%s\\n' $i; i=$((i+1)); done; printf 'BURST-DONE\\n'".into()
-        ], None, "pty-").await.unwrap();
+        ], None, "pty-", &[]).await.unwrap();
         let (tx, mut rx) = mpsc::channel(256);
         let svc = service.clone();
         let id = created.id.clone();
