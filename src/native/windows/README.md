@@ -1,6 +1,7 @@
 # Muster for Windows x64
 
-Launch **Muster** from the Start menu. The MSI installs a self-contained
+Launch **Muster** from the Start menu. The desktop opens maximized with its
+normal title bar. Reopening it activates the existing window. The MSI installs a self-contained
 WinForms application, the Rust application core, daemon, CLI, browser native
 messaging host, standalone virtual network node, Wintun and its adapter
 helper. Installation does not launch Muster or change OpenSSH.
@@ -42,7 +43,8 @@ From a PowerShell 7.4 or later shell with Cargo, the MSVC tools, protoc and the
 
 This builds a desktop client and the Rust FFI into a user-writable Cargo
 target directory and opens **Muster (development)**. Start the installed
-Muster node once before using this mode. Client rebuilds and restarts reuse
+Muster node once before using this mode. Close the current GUI before launching a different client build. Installed
+and development clients share a single main window. Client restarts reuse
 its owner-checked pipe and existing vnet. The development client keeps its
 own logs and view cache. Actions in this window operate on the live node.
 
