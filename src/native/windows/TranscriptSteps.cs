@@ -36,16 +36,43 @@ internal sealed class TranscriptSteps
             else if (chat.LoadError.Length == 0)
                 yield return chat.Session?.TranscriptNotice is { Length: > 0 } notice ? notice : "No messages yet";
         }
-        foreach (var block in chat.Timeline)
-            foreach (string line in Block(block, block.Id))
+        foreach (var (block, work, expanded) in VisibleBlocks())
+            foreach (string line in Block(block, work, expanded))
                 yield return line;
     }
 
-    IEnumerable<string> Block(ChatBlock b, string work)
+    IEnumerable<(ChatBlock Block, string Work, bool Expanded)> VisibleBlocks()
+    {
+        if (chat == null) yield break;
+        foreach (var root in chat.Timeline)
+            foreach (var entry in Walk(root, root.Id, !HasSteps(root) || IsOpen(root))) yield return entry;
+
+        static IEnumerable<(ChatBlock, string, bool)> Walk(ChatBlock block, string work, bool expanded)
+        {
+            yield return (block, work, expanded);
+            if (expanded)
+                foreach (var child in block.Children)
+                    foreach (var entry in Walk(child, work, true)) yield return entry;
+        }
+    }
+
+    IEnumerable<string> Block(ChatBlock b, string work, bool expanded)
     {
         if (b.Title.Length > 0) yield return b.Title;
-        if (b.Message is {} m) yield return $"{m.Role}  {m.Text}";
-        if (b.Id == work && HasSteps(b) && !IsOpen(b)) yield break;
+        if (b.Message is {} m)
+        {
+            if (b.Parts.Any(p => p.Kind == "code"))
+            {
+                yield return m.Role;
+                foreach (var part in b.Parts)
+                {
+                    if (part.Kind == "code") yield return CodeLabel(part);
+                    yield return part.Text.ReplaceLineEndings(Environment.NewLine);
+                }
+            }
+            else yield return $"{m.Role}  {m.Text}";
+        }
+        if (!expanded) yield break;
         if (b.Details == "loading") yield return "Loading steps…";
         if (b.Details == "failed") yield return b.DetailsError;
         foreach (var row in b.ActivityRows)
@@ -56,9 +83,46 @@ internal sealed class TranscriptSteps
             if (row.Detail.Length > 0) yield return row.Detail;
             if (row.Output.Length > 0) yield return $"Output\r\n{row.Output}";
         }
-        foreach (var child in b.Children)
-            foreach (string line in Block(child, work))
-                yield return line;
+    }
+
+    static string CodeLabel(MessagePart part) => part.Language.Length > 0 ? $"Code · {part.Language}" : "Code";
+
+    sealed record CodeBlock(string Message, int Index, string Language, string Text);
+
+    IEnumerable<CodeBlock> VisibleCode()
+    {
+        foreach (var (block, _, _) in VisibleBlocks())
+        {
+            if (block.Message == null) continue;
+            for (int index = 0; index < block.Parts.Count; index++)
+                if (block.Parts[index] is { Kind: "code", Text.Length: > 0 } part)
+                    yield return new(block.Message.Id, index, part.Language, part.Text);
+        }
+    }
+
+    public bool HasCode => VisibleCode().Any();
+
+    public ContextMenuStrip? CopyCode(Action<string> copy)
+    {
+        var blocks = VisibleCode().ToArray();
+        if (blocks.Length == 1)
+        {
+            copy(blocks[0].Text);
+            return null;
+        }
+        if (blocks.Length == 0) return null;
+        var openedIn = scope;
+        var menu = new ContextMenuStrip { AccessibleName = "Copy code block" };
+        for (int index = 0; index < blocks.Length; index++)
+        {
+            var block = blocks[index];
+            string language = block.Language.Length > 0 ? Label(block.Language) : "Code";
+            menu.Items.Add($"{index + 1}. {language} — {Label(block.Text)}", null, (_, _) =>
+            {
+                if (scope == openedIn && VisibleCode().Contains(block)) copy(block.Text);
+            });
+        }
+        return menu;
     }
 
     static IEnumerable<(string Activity, ChatActivityRow Row)> Rows(ChatBlock block)
