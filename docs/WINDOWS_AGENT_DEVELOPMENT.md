@@ -63,6 +63,10 @@ Unicode 差异和历史改动入口，并保存当前文件及历史差异截图
 dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
 ```
 
+在已有代码块的对话里点 **Copy code**。只有一个可见代码块时会直接复制；有多个时，
+菜单按显示顺序列出语言与内容摘要。控件测试用合成消息核对完整源码，包含缩进、
+空行、Unicode 和末尾换行。测试在内存中接收复制内容，可保留开发机的剪贴板。
+
 同一项目还会操作对话页的 **Work steps** 原生菜单。实机验收时，选择一段已有工具输出的
 测试对话。按轮次和用户提示找到对应记录，展开步骤、勾选工具查看输出，再折叠该轮次。
 切换设备后核对展开状态。读取失败时，展开的轮次应显示宿主错误，可用 **Retry loading steps**

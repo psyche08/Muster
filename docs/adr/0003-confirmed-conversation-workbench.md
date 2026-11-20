@@ -66,3 +66,18 @@ Exercise selection across refresh and removal, truncation and unknown exits,
 delivery changes, scoped returns and navigation with synthetic views in real
 Windows controls. Host-side command execution and provider receipts require
 separate end-to-end evidence.
+
+## Desktop conversation code blocks
+
+The Apple desktop code card displays and copies the full projected source.
+Its command launch button is compiled for iOS. Windows should expose the
+desktop copy action for all displayed code languages, including blocks that
+have no execution handle. Use the shared message parts for display and copy.
+Keep the raw message fallback for older views, and keep collapsed work hidden.
+A platform Markdown parser could disagree with the shared block boundaries.
+
+Copy one visible block directly or let the user choose among multiple blocks.
+Keep the exact source, including indentation and final newlines. An open menu
+must not copy a replaced block or a block from another conversation. Exercise
+these cases with synthetic messages and a clipboard sink, without executing
+code or sending messages to a provider.

@@ -72,6 +72,56 @@ internal static class TranscriptStepsTests
               "stale action after navigating away and back");
         using (var menu = Menu()) Group(menu, 1).DropDownItems[0].PerformClick();
         Check(!steps.Lines().Contains("Read sample · completed"), "collapse Rust-default-expanded steps");
+        CopyCodeBlocks();
         Console.WriteLine("Passed native work disclosure, lazy loading, retry, context isolation and transcript notices.");
+    }
+
+    static void CopyCodeBlocks()
+    {
+        static void Check(bool yes, string name)
+        {
+            if (!yes) throw new InvalidOperationException(name);
+        }
+        var steps = new TranscriptSteps();
+        var copied = new List<string>();
+        var view = new ChatView { DeviceId = "sample", Session = new() { Id = "one" }, MessageCount = 2 };
+        const string source = "  echo 'sample & 🙂'\r\n\r\n  echo done\n";
+        var block = new ChatBlock { Id = "block", Kind = "message",
+            Message = new() { Id = "message", Role = "assistant", Text = "legacy transcript" },
+            Parts = { new MessagePart { Kind = "markdown", Text = "Example" },
+                      new MessagePart { Kind = "code", Language = "sh", Text = source } } };
+        view.Timeline.Add(block);
+        steps.Display(view);
+        Check(steps.Lines().SequenceEqual(new[] { "assistant", "Example", "Code · sh", source.ReplaceLineEndings(Environment.NewLine) }), "ordered shared parts");
+        Check(steps.HasCode && steps.CopyCode(copied.Add) == null && copied.Single() == source, "exact single-block copy");
+        var child = new ChatBlock { Id = "child", Kind = "message", Message = new() { Id = "nested", Role = "user" },
+            Parts = { new MessagePart { Kind = "code", Language = "python", Text = "    value = 2\n" } } };
+        view.Timeline.Add(new ChatBlock { Id = "work", Kind = "working", Children = { child } });
+        steps.Display(view);
+        Check(steps.CopyCode(copied.Add) == null && copied.Count == 2, "collapsed work exposed hidden code");
+        view.Timeline[1].DefaultExpanded = true;
+        steps.Display(view);
+        using var menu = steps.CopyCode(copied.Add)!;
+        Check(menu.Items.Count == 2 && menu.Items[0].Text!.Contains("&&") && copied.Count == 2, "menu selection or label");
+        steps.Display(view.Clone());
+        menu.Items[1].PerformClick();
+        Check(copied.Last() == child.Parts[0].Text, "nested source after refresh");
+        var edited = view.Clone();
+        edited.Timeline[0].Parts[1].Text += "change";
+        steps.Display(edited);
+        menu.Items[0].PerformClick();
+        Check(copied.Count == 3, "stale code was copied");
+        var other = view.Clone();
+        other.DeviceId = "other";
+        steps.Display(other);
+        steps.Display(view);
+        menu.Items[1].PerformClick();
+        Check(copied.Count == 3, "stale menu survived navigation");
+        view.Timeline.RemoveAt(1);
+        block.Parts.Clear();
+        steps.Display(view);
+        Check(!steps.HasCode && steps.CopyCode(copied.Add) == null &&
+            steps.Lines().Single().Contains("legacy transcript"), "older history fallback");
+        Console.WriteLine("Passed desktop code presentation, exact copy, disclosure and stale clipboard action checks.");
     }
 }

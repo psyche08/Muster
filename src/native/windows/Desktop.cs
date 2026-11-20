@@ -252,6 +252,20 @@ internal sealed class Desktop : Form
     }
 
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
+    void CopySource(string text)
+    {
+        if (text.Contains('\0'))
+        {
+            MessageBox.Show(this, "This code contains a null character and cannot be copied as clipboard text.", "Copy code");
+            return;
+        }
+        try { Clipboard.SetText(text); status.Text = "Code copied"; }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Copy code", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
     void Send(Intent intent) => core.Send(input.WithDraft(intent));
     void Import(Action import)
     {
@@ -614,6 +628,18 @@ internal sealed class Desktop : Form
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
                 lines.AddRange(transcript.Lines());
+                if (transcript.HasCode)
+                {
+                    int copyIndex = actionIndex;
+                    AddAction("Copy code", () =>
+                    {
+                        var menu = transcript.CopyCode(CopySource);
+                        if (menu == null) return;
+                        var anchor = actions.Controls[copyIndex];
+                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+                        menu.Show(anchor, new Point(0, anchor.Height));
+                    });
+                }
                 if (transcript.HasStepsMenu)
                 {
                     int menuIndex = actionIndex;
