@@ -54,7 +54,7 @@ internal static class Presence
         catch { return -1; } // FFI callbacks must not unwind into Rust.
     }
 
-    public static async Task Register(nint parent)
+    public static async Task Register(nint parent, string socket)
     {
         byte[] candidate = await Task.Run(() => {
             if (!CngKey.Exists(KeyName, Provider))
@@ -72,6 +72,8 @@ internal static class Presence
         });
         var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "cli", "muster.exe"))
             { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+        info.ArgumentList.Add("--socket");
+        info.ArgumentList.Add(socket);
         info.ArgumentList.Add("presence");
         info.ArgumentList.Add("--register");
         info.ArgumentList.Add(Convert.ToBase64String(candidate));

@@ -31,10 +31,10 @@ internal sealed class Core : IDisposable
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     static extern int muster_desktop_check([MarshalAs(UnmanagedType.LPUTF8Str)] string socket, byte managed,
-                                           byte resumed, ServiceCallback inspect, out nint error);
+                                           byte resumed, ServiceCallback? inspect, out nint error);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     static extern int muster_desktop_prepare([MarshalAs(UnmanagedType.LPUTF8Str)] string socket, byte managed,
-                                             ServiceCallback start, out nint error);
+                                             ServiceCallback? start, out nint error);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     static extern nint muster_core_new(byte[] config, nuint length, ref Platform platform, out nint error);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
@@ -51,8 +51,11 @@ internal sealed class Core : IDisposable
     static extern void muster_core_free(nint core);
     Platform platform;
     nint handle;
-    public Core(Action<ViewModel> view, Action<ulong, Effect> effect)
+    readonly bool attachOnly;
+    public string Socket => Path.Combine(attachOnly ? InstalledDirectory : StateDirectory, "musterd.sock");
+    public Core(Action<ViewModel> view, Action<ulong, Effect> effect, bool attachOnly)
     {
+        this.attachOnly = attachOnly;
         muster_log_init_file(3);
         platform.Presence = Presence.CopyCandidate;
         platform.View = (_, p, n) => view(ViewModel.Parser.ParseFrom(Copy(p, n)));
@@ -76,16 +79,17 @@ internal sealed class Core : IDisposable
                 muster_string_free(pointer);
         }
     }
-    static string StateDirectory => Environment.GetEnvironmentVariable("MUSTER_DIR") ??
-                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Muster");
+    static string InstalledDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Muster");
+    static string StateDirectory => Environment.GetEnvironmentVariable("MUSTER_DIR") ?? InstalledDirectory;
     static string DaemonPath => Path.Combine(AppContext.BaseDirectory, "musterd.exe");
     static int Inspect(uint action) => action == 3 && File.Exists(DaemonPath) ? 1 : -1;
     public bool NeedsStart()
     {
-        int phase = muster_desktop_check(Path.Combine(StateDirectory, "musterd.sock"), 1, 0, Inspect, out var error);
+        int phase = muster_desktop_check(Socket, (byte)(attachOnly ? 0 : 1), 0, attachOnly ? null : Inspect, out var error);
         return phase switch
         {
             0 => false,
+            1 when attachOnly => throw new InvalidOperationException("Start the installed Muster background service, then retry."),
             1 => true,
             -1 => throw Error(error),
             _ => throw new InvalidOperationException($"Unexpected desktop startup phase {phase}")
@@ -94,7 +98,7 @@ internal sealed class Core : IDisposable
     public void Open()
     {
         string dir = StateDirectory;
-        string socket = Path.Combine(dir, "musterd.sock");
+        string socket = Socket;
         using var owned = new Process { StartInfo = new ProcessStartInfo(
                                             DaemonPath,
                                             "--log") { UseShellExecute = false, CreateNoWindow = true } };
@@ -123,7 +127,7 @@ internal sealed class Core : IDisposable
                 return 2;
             }
         }
-        if (muster_desktop_prepare(socket, 1, Start, out var error) != 0)
+        if (muster_desktop_prepare(socket, (byte)(attachOnly ? 0 : 1), attachOnly ? null : Start, out var error) != 0)
             throw Error(error);
         byte[] config = JsonSerializer.SerializeToUtf8Bytes(new { dir, socket, mode = "socket" });
         handle = muster_core_new(config, (nuint)config.Length, ref platform, out error);

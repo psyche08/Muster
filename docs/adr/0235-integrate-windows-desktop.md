@@ -42,3 +42,19 @@ catalog behavior. Build the MSI and compare the extracted payload against the
 build inputs. Check the installed version, daemon, adapter and member identity
 after an in-place upgrade. Record read-only chat recovery, remote catalog
 access, presence verification and enrollment independently.
+
+## Windows acceptance on 2026-11-20
+
+The x64 release build and administrative extraction matched each packaged
+binary to its staged input. The unsigned MSI upgraded the previous install
+in place. The installed client and daemon ran, and the member identity and
+assigned address were preserved. The Wintun helper's elevation request was
+cancelled. Adapter startup and traffic after the upgrade remain pending.
+
+A read-only directory lookup and reopen recovered both messages in the
+existing desktop chat. The first read while the client was rendering was
+empty. Subscription and snapshot calls returned the peer's authorization
+refusal on one device and a catalog snapshot on a second device. The presence
+candidate remained registered and unenrolled. The cross-machine signature and
+altered-request rejection were observed on the prior build. The new build
+passed the encoding test and has no fresh cross-machine signing result.

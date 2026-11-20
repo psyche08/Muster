@@ -43,9 +43,9 @@ internal sealed class Desktop : Form
         b.Click += (_, _) => ((Action)b.Tag!)();
         bar.Controls.Add(b);
     }
-    public Desktop()
+    public Desktop(bool attachOnly)
     {
-        Text = "Muster";
+        Text = attachOnly ? "Muster (development)" : "Muster";
         MinimumSize = new Size(740, 480);
         Size = new Size(1050, 700);
         Padding = new Padding(16);
@@ -59,6 +59,7 @@ internal sealed class Desktop : Form
         Controls.Add(status);
         Controls.Add(title);
         Controls.Add(nav);
+        core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly);
         Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
         Button(nav, "Network", () => Go(Page.Home));
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
@@ -67,7 +68,7 @@ internal sealed class Desktop : Form
                () => Send(new() { OpenTerminals = new() { DeviceId = current?.SelectedDevice ?? "" } }));
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
         Button(nav, "Presence key", async () => {
-            try { await Presence.Register(Handle); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
+            try { await Presence.Register(Handle, core.Socket); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Muster presence key"); }
         });
         Button(nav, "Settings", () => Go(Page.Settings));
@@ -81,7 +82,6 @@ internal sealed class Desktop : Form
                 e.Handled = true;
             }
         };
-        core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)));
         timer.Tick += (_, _) =>
         {
             if (!ready)

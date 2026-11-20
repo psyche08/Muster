@@ -33,6 +33,32 @@ local confirmation is independent of this key.
 To use the Chrome integration, load the
 installed AgentHaloBrowser folder as an unpacked extension in Chrome.
 
+## Develop as a standard user
+
+From a PowerShell 7.4 or later shell with Cargo, the MSVC tools, protoc and the
+.NET 10 SDK, use the following from the repository root:
+
+    ./src/native/windows/dev.ps1
+
+This builds a desktop client and the Rust FFI into a user-writable Cargo
+target directory and opens **Muster (development)**. Start the installed
+Muster node once before using this mode. Client rebuilds and restarts reuse
+its owner-checked pipe and existing vnet. The development client keeps its
+own logs and view cache. Actions in this window operate on the live node.
+
+To exercise daemon changes with a synthetic identity and a fresh temporary
+store, run the fixture and use a second shell to call its printed socket:
+
+    ./src/native/windows/dev.ps1 -Mode Daemon
+    muster --socket <printed-path> info
+
+Press Enter in the fixture shell to shut it down. It binds to loopback and
+starts with agent discovery, cloud access and vnet off. Use the built CLI
+from the Cargo target directory or the installed CLI under Muster's cli
+folder. Both development modes accept -Release to reuse a release build.
+Installing an MSI or starting an actual Wintun adapter requires Windows
+administrator approval.
+
 ## Build
 
 On Windows x64, use PowerShell 7.4 or later, the x64 MSVC Rust toolchain,
