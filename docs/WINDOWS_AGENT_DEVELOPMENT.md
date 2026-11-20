@@ -52,6 +52,13 @@ dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c
 将焦点移回其他控件。关闭视图会保留 PowerShell，完成后在自己的测试会话中输入
 `exit` 并确认它从目录移除。物理输入法候选窗、远端终端权限需另外验证。
 
+对话内终端也由上述 WindowsTerminal 项目验收。`conversation-terminal.png` 是模拟已连接
+宿主的窗格。另做端到端验收时，从 Agents 打开有工作目录的测试会话，先在输入框留一段
+未发送的草稿，再点 **Workspace terminal**。核对目录、连接状态和回到 **Conversation**
+后的草稿。**Disconnect** 分离视图；**Terminal actions…** 中的重启与结束会改变宿主上的
+测试 shell。可在支持 tmux 且已授权的宿主上验证分离后重连到同一 shell。Windows 目标
+当前会返回 `tmux requires a Unix host`。记录目标返回的错误以及相应操作是否仍可用。
+
 ## 与已交付的 ZIP 对照
 
 如需证明截图来自特定包，在相同源码提交上给测试构建传入发行版本，例如

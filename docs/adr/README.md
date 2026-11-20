@@ -362,3 +362,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0244](0244-windows-terminal-catalog.md) | Accepted | Select the terminal host on Windows |
 | [0245](0245-windows-interactive-terminal-grid.md) | Accepted | Render and operate the shared terminal grid on Windows |
 | [0246](0246-desktop-chat-history-availability.md) | Accepted | Distinguish unobserved desktop chat history from an empty conversation |
+| [0247](0247-windows-conversation-terminal.md) | Accepted | Open the session terminal from a Windows conversation |

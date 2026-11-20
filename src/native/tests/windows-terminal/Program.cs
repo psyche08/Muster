@@ -100,6 +100,7 @@ internal static class Program
         grid.Key(Keys.Return); grid.MessageInput(0x0102, 'x'); grid.PasteText("text");
         form.Width += 40; Pump(180);
         Check(intents.Count == 0, "Ended terminal received input or resize");
+        ConversationTerminalTests.Run(args);
         Console.WriteLine($"Passed styled grid, cursor, selection, Unicode input, paste and resize at {grid.DeviceDpi} DPI.");
     }
 }
