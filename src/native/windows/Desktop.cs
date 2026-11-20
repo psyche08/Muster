@@ -471,6 +471,25 @@ internal sealed class Desktop : Form
                 lines.Add($"Local node version    {Reported(v.Self?.Version)}");
                 lines.Add($"Local node commit    {Reported(v.Self?.Commit)}");
             }
+            if (page is Page.Settings or Page.Onboarding)
+            {
+                var self = v.Self;
+                var state = self?.State;
+                lines.Add($"Local relay    {(self == null ? "not reported" : self.Relay.Length == 0 ? "none configured" : self.Relay)}");
+                lines.Add($"Relay registration    {Reported(state?.Relay)}");
+                if (page == Page.Settings)
+                {
+                    lines.Add($"Assigned virtual IP    {Reported(state?.Vip)}");
+                    lines.Add($"Local vnet    {state?.VnetUp switch { true => "up", false => "down", null => "not reported" }}");
+                }
+                if (self != null)
+                    AddAction("Change local relay", () =>
+                    {
+                        using var editor = new RelayDialog(self.Relay);
+                        if (editor.ShowDialog(this) == DialogResult.OK)
+                            Send(new() { SetRelay = new() { Relay = editor.Endpoint } });
+                    });
+            }
             if (v.Network != null)
             {
                 lines.Add(v.Network.VnetCidr);
