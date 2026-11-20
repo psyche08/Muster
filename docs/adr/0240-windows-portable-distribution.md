@@ -92,3 +92,25 @@ MSYS2 fstab usertemp mount so shell applications use the Windows user's
 temporary directory and can create scratch files outside the version tree.
 Verify that Bash can read a Windows-created marker and create a reciprocal
 file through /tmp. Check that its startup warning disappears.
+
+## Rehearse a daemon update before switching the installed node
+
+A shortcut update can leave a previous daemon serving the hardware identity.
+To check an old-to-new store transition under a standard user token, run the
+software-identity node fixture from each source revision in order against one
+temporary directory. Close stdin and wait for clean shutdown before starting
+the successor. Provide the two released CLIs and address only the fixture
+socket. Compare both clients' observations with the expected binary versions,
+identity, signed network membership, role, scopes, assigned VIP and relay.
+
+The normal production binary with a different state directory still opens the
+per-user Windows TPM owner lock. The existing software fixture exercises the
+daemon library and local RPC while keeping its own identity and store. This
+rehearsal covers persistence and mixed client versions. Verify production
+binary startup, TPM use, protected helper consent and packet traffic separately.
+
+On Windows the 1.1.70 and 1.1.83 released CLIs read both source-matched
+fixture nodes. A clean process handoff retained the generated device identity,
+fingerprint, network ID, roster, member name, role, scopes, VIP and configured
+loopback relay. The production daemon remained online throughout. The test
+runner is in `src/native/tests/windows-node-upgrade.ps1`.
