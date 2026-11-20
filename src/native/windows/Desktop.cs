@@ -306,17 +306,17 @@ internal sealed class Desktop : Form
     }
 
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
-    void CopySource(string text)
+    void CopySource(string text, string kind)
     {
         if (text.Contains('\0'))
         {
-            MessageBox.Show(this, "This code contains a null character and cannot be copied as clipboard text.", "Copy code");
+            MessageBox.Show(this, "This text contains a null character and cannot be copied as clipboard text.", "Copy " + kind);
             return;
         }
-        try { Clipboard.SetText(text); status.Text = "Code copied"; }
+        try { Clipboard.SetText(text); status.Text = kind == "diff" ? "Diff copied" : "Code copied"; }
         catch (System.Runtime.InteropServices.ExternalException ex)
         {
-            MessageBox.Show(this, ex.Message, "Copy code", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, ex.Message, "Copy " + kind, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 
@@ -746,10 +746,20 @@ internal sealed class Desktop : Form
                     int copyIndex = actionIndex;
                     AddAction("Copy code", () =>
                     {
-                        var menu = transcript.CopyCode(CopySource);
+                        var menu = transcript.CopyCode(text => CopySource(text, "code"));
                         if (menu == null) return;
                         var anchor = actions.Controls[copyIndex];
                         menu.ShowBelow(anchor);
+                    });
+                }
+                if (transcript.HasDiffs)
+                {
+                    int menuIndex = actionIndex;
+                    AddAction("File diffs…", () =>
+                    {
+                        var menu = transcript.DiffMenu(text => CopySource(text, "diff"),
+                            () => { if (current != null) Render(current); });
+                        menu.ShowBelow(actions.Controls[menuIndex]);
                     });
                 }
                 if (transcript.HasStepsMenu)

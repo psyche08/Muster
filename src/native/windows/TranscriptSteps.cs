@@ -3,7 +3,7 @@ using Muster.App;
 namespace Muster.Windows;
 
 // The core supplies ordered blocks, tool/result pairing, status and lazy detail state.
-internal sealed class TranscriptSteps
+internal sealed partial class TranscriptSteps
 {
     ChatView? chat;
     object scope = new();
@@ -16,6 +16,7 @@ internal sealed class TranscriptSteps
         {
             groups.Clear();
             tools.Clear();
+            expandedDiffs.Clear();
             scope = new();
         }
         chat = next;
@@ -63,6 +64,16 @@ internal sealed class TranscriptSteps
 
     IEnumerable<string> Block(ChatBlock b, string work, bool expanded)
     {
+        if (b.Kind == "diff" && b.Diffs.Count != 0)
+        {
+            foreach (var file in b.Diffs)
+            {
+                yield return DiffLabel(file);
+                if (expandedDiffs.Contains((file.Id, file.Path)))
+                    foreach (string line in DiffLines(file)) yield return line;
+            }
+            yield break;
+        }
         if (b.Message is {} m)
         {
             if (b.Parts.Any(p => p.Kind == "code"))

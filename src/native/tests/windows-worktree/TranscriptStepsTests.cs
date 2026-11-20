@@ -80,6 +80,7 @@ internal static class TranscriptStepsTests
         using (var menu = Menu()) Group(menu, 1).DropDownItems[0].PerformClick();
         Check(!steps.Lines().Contains("Read sample · completed"), "collapse Rust-default-expanded steps");
         CopyCodeBlocks();
+        FileDiffs();
         Console.WriteLine("Passed native work disclosure, lazy loading, retry, context isolation and transcript notices.");
     }
 
@@ -130,5 +131,57 @@ internal static class TranscriptStepsTests
         Check(!steps.HasCode && steps.CopyCode(copied.Add) == null &&
             steps.Lines().Single().Contains("legacy transcript"), "older history fallback");
         Console.WriteLine("Passed desktop code presentation, exact copy, disclosure and stale clipboard action checks.");
+    }
+
+    static void FileDiffs()
+    {
+        var view = new ChatView { DeviceId = "host", Session = new() { Id = "chat" }, MessageCount = 1 };
+        const string patch = "--- a/a&b\r\n+++ b/a&b\r\n@@ -8 +9 @@\r\n-before\r\n+after\r\n+outside preview\n";
+        var file = new ChatDiffFile { Id = "diff:0", Path = "a&b", Added = 2, Removed = 1,
+            Patch = patch, Truncated = true,
+            Lines = { new ChatDiffLine { OldLine = 8, Kind = "delete", Text = "before" },
+                      new ChatDiffLine { NewLine = 9, Kind = "add", Text = "after" } } };
+        var block = new ChatBlock { Kind = "diff", Message = new() { Text = "raw transcript" },
+            Diffs = { file, new ChatDiffFile { Id = "diff:1", Path = "other" } } };
+        view.Timeline.Add(block);
+        var steps = new TranscriptSteps();
+        steps.Display(view);
+        var copied = new List<string>();
+        int redraws = 0;
+        ContextMenuStrip Menu() => steps.DiffMenu(copied.Add, () => redraws++);
+        static ToolStripItemCollection Choices(ContextMenuStrip menu) => ((ToolStripMenuItem)menu.Items[0]).DropDownItems;
+        if (!steps.HasDiffs || !steps.Lines().SequenceEqual(new[] { "a&b    +2 −1", "other    +0 −0" }))
+            throw new InvalidOperationException("Expected ordered collapsed file summaries");
+        using var open = Menu();
+        if (!open.Items[0].Text!.Contains("a&&b") || ((ToolStripMenuItem)open.Items[1]).DropDownItems[1].Enabled)
+            throw new InvalidOperationException("File labels or empty patch action");
+        Choices(open)[0].PerformClick();
+        var lines = steps.Lines();
+        if (redraws != 1 || !lines.Any(s => s.TrimStart() == "8        − before") ||
+            !lines.Any(s => s.TrimStart() == "9  + after") || !lines.Any(s => s.StartsWith("Preview shortened")) ||
+            lines.Any(s => s.Contains("outside preview")))
+            throw new InvalidOperationException("Incorrect bounded diff preview: " + string.Join("|", lines));
+        using var expanded = Menu();
+        steps.Display(view.Clone());
+        Choices(expanded)[1].PerformClick();
+        if (copied.Single() != patch) throw new InvalidOperationException("Copy altered or shortened the supplied patch");
+        Choices(expanded)[0].PerformClick();
+        if (steps.Lines().Count != 2) throw new InvalidOperationException("Hide diff did not collapse the file");
+        var changed = view.Clone();
+        changed.Timeline[0].Diffs[0].Patch = "replacement";
+        steps.Display(changed);
+        Choices(open)[1].PerformClick();
+        var other = view.Clone();
+        other.DeviceId = "another-host";
+        steps.Display(other);
+        steps.Display(view);
+        Choices(open)[0].PerformClick();
+        Choices(open)[1].PerformClick();
+        if (copied.Count != 1 || redraws != 2) throw new InvalidOperationException("Stale diff menu acted");
+        block.Diffs.Clear();
+        steps.Display(view);
+        if (steps.HasDiffs || !steps.Lines().Single().Contains("raw transcript"))
+            throw new InvalidOperationException("Missing legacy transcript fallback");
+        Console.WriteLine("Passed per-file diff disclosure, bounded lines, full patch copy and stale menu checks.");
     }
 }
