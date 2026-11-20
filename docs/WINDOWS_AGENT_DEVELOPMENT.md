@@ -63,6 +63,11 @@ Unicode 差异和历史改动入口，并保存当前文件及历史差异截图
 dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
 ```
 
+同一命令也生成 `session-trace.png`。在会话里点 **Trace**，按轮次查看已加载的记录。
+可通过搜索命中详情，选择时间条或树中的记录核对开始时间、结束时间及原始输出。
+在等宽与实际时间模式间切换；没有时间戳的记录仍可从树中查看。需要旧记录时点
+**Earlier messages**，随后点 **Conversation** 回到同一对话。此流程只读取历史。
+
 同一命令生成 `history-images.png`。合成对话含红、蓝两张 JPEG 和一份无效图片。
 测试在实际渲染的像素中检查色带出现在对应文字之前，再通过含 120 张图片的历史
 验证滚动到末尾和回到开头。切换会话时检查旧图清除。无需上传图片或发送消息。

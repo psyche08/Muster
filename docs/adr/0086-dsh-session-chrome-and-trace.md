@@ -151,3 +151,18 @@ Separate source/tests, build, rendering and device acceptance states:
 [ADR 0103](0103-visible-tabs-and-provider-aggregation.md) supersedes only the
 secondary-view overflow menu: all session tabs are direct controls in a horizontally scrollable strip on
 narrow windows. The other chrome and trace decisions remain in force.
+
+## Windows session trace
+
+The Windows conversation previously had no trace surface. Give it a direct
+Trace action and an inline native view over the same Shared Rust spans. Render
+a searchable turn-grouped ledger, a selectable three-lane overview in sequence
+or recorded time, and the selected span's details. Use the existing earlier
+history intent. Keep missing times unknown, and scope selection, filtering and
+collapse state to the open device and session. Returning to the conversation
+preserves its draft. A second parser for provider logs could disagree with the
+authorized projection and would require another data access path.
+
+Exercise the real controls with pre-turn records, multiple turns, filtering,
+timed and untimed events, refresh, pagination and a change of session. Check
+the normal entry with an isolated Windows GUI and synthetic provider history.
