@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 base64 = "0.22"
+muster-core = { path = "../muster-core" }
 muster-local = { path = "../muster-local" }
 muster-proto = { path = "../muster-proto" }
 muster-rpc = { path = "../muster-rpc" }

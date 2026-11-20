@@ -2311,6 +2311,7 @@ dependencies = [
  "clap",
  "muster-acp",
  "muster-browser",
+ "muster-core",
  "muster-local",
  "muster-paths",
  "muster-proto",

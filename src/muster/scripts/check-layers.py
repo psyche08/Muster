@@ -64,7 +64,7 @@ ALLOWED = {
     # A client of the daemon's socket, like the command line: it serves an
     # external task scheduler's protocol and hands every turn to musterd.
     "muster-acp": {"muster-agent", "muster-proto", "muster-rpc"},
-    "muster-cli": {"muster-local", "muster-proto", "muster-rpc", "muster-paths", "muster-browser", "muster-acp"},
+    "muster-cli": {"muster-local", "muster-proto", "muster-rpc", "muster-paths", "muster-browser", "muster-acp", "muster-core"},
     # Clients: the shells' core and its C ABI. app-core embeds the daemon on
     # phones (§3.3), so it may depend on musterd.
     "muster-app-core": {

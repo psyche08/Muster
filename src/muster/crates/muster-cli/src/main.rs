@@ -197,8 +197,9 @@ enum Command {
         session: String,
     },
     /// Desktop Chat mode: the conversations the Claude or ChatGPT app lists
-    /// (provider claude | codex); --all requests cached history, rebuilding when due
+    /// (provider ChatGPT, codex or Claude); --all requests cached history, rebuilding when due
     Chats {
+        #[arg(value_parser = chat_provider)]
         provider: String,
         #[arg(long)]
         all: bool,
@@ -206,6 +207,7 @@ enum Command {
     /// Show a desktop chat (a session id from `chats`) in its app, or a new
     /// one when omitted; then `send` / `messages` work on the printed id
     ChatOpen {
+        #[arg(value_parser = chat_provider)]
         provider: String,
         #[arg(default_value = "")]
         chat: String,
@@ -439,6 +441,17 @@ fn print_op(resp: Resp) -> anyhow::Result<()> {
         other => println!("{other:?}"),
     }
     Ok(())
+}
+
+fn chat_provider(label: &str) -> Result<String, String> {
+    muster_core::apps::chat_app(label)
+        .map(|app| app.provider.to_owned())
+        .ok_or_else(|| {
+            format!(
+                "Choose a desktop chat provider ({})",
+                muster_core::apps::chat_providers().join(", ")
+            )
+        })
 }
 
 async fn json_rpc(client: &Client, path: &std::path::Path, timeout: u64) -> anyhow::Result<()> {
@@ -1428,6 +1441,26 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn desktop_chat_cli_resolves_the_app_label_and_preserves_the_wire_provider() {
+        for (label, expected) in [
+            ("ChatGPT", "codex"),
+            ("codex", "codex"),
+            ("Claude", "claude"),
+        ] {
+            for verb in ["chats", "chat-open"] {
+                let args = Args::try_parse_from(["muster", verb, label]).unwrap();
+                match args.command {
+                    Command::Chats { provider, .. } | Command::ChatOpen { provider, .. } => {
+                        assert_eq!(provider, expected)
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        assert!(Args::try_parse_from(["muster", "chat-open", "orca"]).is_err());
+    }
+
     #[test]
     fn rpc_json_rejects_unknown_fields_instead_of_dropping_mutation_parameters() {
         let request: Req = serde_json::from_str(r#"{"agent_respond":{"session":"s","interaction":"q","op_id":"one","answers":[{"question_id":"q1","option_ids":["a"]}]}}"#).unwrap();

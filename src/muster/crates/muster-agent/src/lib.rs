@@ -2326,15 +2326,27 @@ impl AgentService {
         Some(id)
     }
 
+    // A new-chat placeholder has no transcript until its first send resolves
+    // to a conversation. Every other ID needs an actual window observation.
+    fn observed_chat<'a>(inner: &'a Inner, id: &str) -> Result<Option<&'a ChatEntry>, Error> {
+        match inner.chats.get(id) {
+            Some(entry) => Ok(Some(entry)),
+            None if desktop_chat::is_new_session(id) => Ok(None),
+            None => Err(Error::Unavailable(
+                "This conversation has not been observed. Reopen it from the desktop Chats list to read its history.".into(),
+            )),
+        }
+    }
+
     fn chat_messages(
         &self,
         id: &str,
         tail: usize,
         before: Option<&str>,
-    ) -> (Vec<AgentMessage>, bool) {
+    ) -> Result<(Vec<AgentMessage>, bool), Error> {
         let inner = self.inner.lock().unwrap();
-        let Some(entry) = inner.chats.get(id) else {
-            return (Vec::new(), false);
+        let Some(entry) = Self::observed_chat(&inner, id)? else {
+            return Ok((Vec::new(), false));
         };
         let t = &entry.transcript;
         let tail = if tail == 0 { 50 } else { tail.min(2000) };
@@ -2355,7 +2367,7 @@ impl AgentService {
                 }
             })
             .collect();
-        (messages, start > 0)
+        Ok((messages, start > 0))
     }
 
     /// Resolve the provider for access checks without constructing a detail tree.
@@ -2759,9 +2771,7 @@ impl AgentService {
                 .get(&request.session)
                 .map(|entry| &entry.messages)
         } else if desktop_chat::app_of(&request.session).is_some() {
-            let all = inner
-                .chats
-                .get(&request.session)
+            let all = Self::observed_chat(&inner, &request.session)?
                 .map(|entry| {
                     entry
                         .transcript
@@ -2808,7 +2818,7 @@ impl AgentService {
         before: Option<&str>,
     ) -> Result<(Vec<AgentMessage>, bool), Error> {
         if desktop_chat::app_of(id).is_some() {
-            return Ok(self.chat_messages(id, tail, before));
+            return self.chat_messages(id, tail, before);
         }
         if cloud::is_cloud(id) {
             self.ensure_cloud_open(id).await?;
