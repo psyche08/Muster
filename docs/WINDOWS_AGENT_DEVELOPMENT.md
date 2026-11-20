@@ -120,6 +120,13 @@ PowerShell 窗口即可丢弃上述环境设置。正式 daemon 重启及 GUI �
 PowerShell 会话中运行该测试程序，参数为
 `--ignored --exact managed_shell_through_windows_daemon_restart`。只保留系统 PATH
 可以验证 shell 能独立执行随包的 `cat`，在恢复后从原工作目录读回文件。
+1.1.72 起还可运行 `--ignored --exact packaged_shell_shares_the_windows_user_temp_directory`，
+验证 Windows 和 Bash 能在当前用户的临时目录中相互读写文件。
+
+通过 GUI 验收时，在合成对话输入未发送草稿，打开 **Workspace terminal**。先点击网格
+获得焦点，再用 `cat` 读取合成项目中的测试文件。自绘网格通过 MSAA 的名称
+`Terminal` 和 `accValue` 提供画面文本。核对 **Disconnect → Connect** 后输出仍在，
+并核对 **Conversation** 恢复原草稿。
 
 在普通用户 PowerShell 中把 `MUSTER_MSYS2_ROOT` 设为可信 MSYS2 安装目录的绝对路径。
 目录下应有 `usr\bin\tmux.exe`、`sh.exe`、运行库和终端数据。daemon 默认也会检查其

@@ -83,3 +83,12 @@ path. Test production runtime discovery without a configured external runtime,
 with an ordinary Windows PATH, including a shell file command and recovery
 through two separate host processes. Report installed-node activation and
 Wintun separately.
+
+### User temporary directory
+
+The installed terminal integration opened a shell and read a workspace file,
+but the first GUI frame showed Bash warning that /tmp did not exist. Ship an
+MSYS2 fstab usertemp mount so shell applications use the Windows user's
+temporary directory and can create scratch files outside the version tree.
+Verify that Bash can read a Windows-created marker and create a reciprocal
+file through /tmp. Check that its startup warning disappears.
