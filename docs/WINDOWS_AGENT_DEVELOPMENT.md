@@ -130,6 +130,13 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 包哈希、DPI、截图路径和通过的断言。完整 ZIP 构建、普通用户更新、固定快捷方式、
 连接在线节点及隔离 daemon 的操作见 [Windows README](../src/native/windows/README.md)。
 
+便携包更新后，从固定快捷方式打开 **Settings**。`Desktop version` 是当前 GUI 的版本；
+`Local node version` 和 `Local node commit` 来自节点上报。用该包的
+`cli\muster.exe info` 核对在线节点版本。若旧 daemon 继续提供网络服务，桌面和节点
+可以显示不同版本。从 1.1.66 起，Windows 便携 CLI 的 `--version` 可离线报告
+其自身发行版本；未打入发行版本的开发 CLI 会显示 crate 版本。在设备详情中，`Device version` 和 `Device commit` 对应当前
+所选设备。字段显示 `not reported` 时，在验收记录中将其标为未上报。
+
 ## 在线窗口与人工确认
 
 需要核对真实窗口、焦点或单实例激活时，先确认进程路径、版本及所属用户，再定位

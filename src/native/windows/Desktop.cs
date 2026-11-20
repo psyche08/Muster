@@ -335,6 +335,8 @@ internal sealed class Desktop : Form
             result.Error = $"{e.EfCase} is unavailable on this Windows client.";
         core.Answer(id, result);
     }
+    static string Reported(string? value) => string.IsNullOrWhiteSpace(value) ? "not reported" : value;
+
     void Render(ViewModel v)
     {
         current = v;
@@ -401,8 +403,17 @@ internal sealed class Desktop : Form
         case Page.Settings:
         case Page.Invite:
             if (v.Self != null)
-                lines.Add(
-                    $"{v.Self.Name}    {v.Self.Fingerprint}\r\n{v.Self.Platform}    {v.Self.Version}    {v.Self.KeyLabel}");
+            {
+                var platform = page == Page.Settings ? v.Self.Platform : $"{v.Self.Platform}    {v.Self.Version}";
+                lines.Add($"{v.Self.Name}    {v.Self.Fingerprint}\r\n{platform}    {v.Self.KeyLabel}");
+            }
+            if (page == Page.Settings)
+            {
+                var desktopVersion = typeof(Desktop).Assembly.GetName().Version?.ToString(3);
+                lines.Add($"Desktop version    {Reported(desktopVersion)}");
+                lines.Add($"Local node version    {Reported(v.Self?.Version)}");
+                lines.Add($"Local node commit    {Reported(v.Self?.Commit)}");
+            }
             if (v.Network != null)
             {
                 lines.Add(v.Network.VnetCidr);
@@ -410,8 +421,15 @@ internal sealed class Desktop : Form
                 {
                     Row($"{m.Name}    {m.Vip}", new() { SelectDevice = new() { DeviceId = m.DeviceId } });
                     if (m.DeviceId == v.SelectedDevice)
+                    {
                         lines.Add(
                             $"{m.Name}\r\n{m.Fingerprint}\r\n{m.ConnectionStatus}\r\n{string.Join(", ",m.Scopes)}");
+                        if (page == Page.Device)
+                        {
+                            lines.Add($"Device version    {Reported(m.Version)}");
+                            lines.Add($"Device commit    {Reported(m.Commit)}");
+                        }
+                    }
                 }
             }
             if (v.Network?.HasNetwork != true)

@@ -45,3 +45,24 @@ policy and a missing hashing cmdlet. The ZIP includes a command launcher
 using process-scoped RemoteSigned and the updater hashes with .NET. The
 updated entry point deployed a full copy of the preceding version under a
 standard token while the existing GUI, daemon and packet helper stayed up.
+
+## Identify the running desktop and node
+
+A portable desktop can be updated while an earlier daemon continues serving
+the network. Windows previously displayed the daemon version beside the
+platform name. Settings will label the running GUI assembly version and the
+local node's reported version and commit separately. Device details will show
+the selected member's reported version and commit, as on macOS. Missing fields
+remain visibly unavailable. Reading the active shortcut or a package manifest
+cannot identify either running process after an update.
+
+Use the Shared Rust view for node and member metadata. No restart or inferred
+upgrade status is needed to present these values. Verify a newer desktop
+connected to an older daemon through the normal shortcut, compare the screen
+to local RPC, and check a selected member and missing metadata independently.
+
+The installed Windows CLI also rejected a top-level `--version`. Let its
+argument parser report the portable release stamp offline. An unstamped Windows
+development build reports its CLI crate version. The existing `info` command
+continues to obtain the node version over RPC. Verify both commands against a
+newly packaged CLI connected to a preceding daemon.
