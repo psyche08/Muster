@@ -369,3 +369,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0251](0251-windows-local-relay-settings.md) | Accepted | Show and configure the local relay on Windows |
 | [0252](0252-windows-network-member-details.md) | Accepted | Display the selected network member on Windows |
 | [0253](0253-windows-network-invitations.md) | Accepted | Display and paste network invitations on Windows |
+| [0254](0254-windows-conversation-options.md) | Accepted | Show conversation model and reasoning options in a Windows dialog |

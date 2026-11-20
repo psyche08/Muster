@@ -24,6 +24,8 @@ internal static class Program
             ["--screenshots", var directory] => Directory.CreateDirectory(directory).FullName,
             _ => throw new ArgumentException("Usage: WindowsAgentCatalog [--screenshots DIRECTORY]")
         };
+        ChatOptionsTests.Run();
+        Console.WriteLine("Passed conversation options, refresh and scope changes.");
         InvitePanelTests.Run();
         Console.WriteLine("Passed network invite pixel decoding, copy, renewal, expiry and clearing.");
         DesktopChatSidebarTests.Run(captures);

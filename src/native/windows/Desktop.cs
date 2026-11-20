@@ -32,6 +32,7 @@ internal sealed class Desktop : Form
     (string Device, string Session)? tabScope;
     SessionTab selectedTab;
     RunHistoryDialog? runHistory;
+    ChatOptionsDialog? chatOptions;
     readonly InvitePanel invitePanel;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
@@ -47,7 +48,7 @@ internal sealed class Desktop : Form
             button.Enabled = needsText ? input.CanSubmitPayload : input.TextLength == 0;
     }
     ViewModel? pending, current;
-    bool opening, ready, focusNetworkList;
+    bool opening, ready, appActive, focusNetworkList;
     string inputContext = "";
     static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
                                             Padding = new Padding(0, 2, 0, 2) };
@@ -206,8 +207,6 @@ internal sealed class Desktop : Form
                 EffectReceived(item.Item1, item.Item2);
         };
         Shown += async (_, _) => await Connect();
-        Activated += (_, _) => core.Lifecycle(0);
-        Deactivate += (_, _) => core.Lifecycle(1);
         FormClosing += (_, e) =>
         {
             if (opening)
@@ -219,6 +218,17 @@ internal sealed class Desktop : Form
             core.Dispose();
         };
     }
+    protected override void WndProc(ref Message message)
+    {
+        const int WM_ACTIVATEAPP = 0x001C;
+        if (message.Msg == WM_ACTIVATEAPP)
+        {
+            appActive = message.WParam != IntPtr.Zero;
+            if (ready) core.Lifecycle(appActive ? 0u : 1u);
+        }
+        base.WndProc(ref message);
+    }
+
     async Task Connect(bool start = false)
     {
         if (opening)
@@ -240,7 +250,7 @@ internal sealed class Desktop : Form
             ready = true;
             nav.Enabled = true;
             timer.Start();
-            core.Lifecycle(0);
+            core.Lifecycle(appActive ? 0u : 1u);
             Send(new() { Refresh = new() });
         }
         catch (Exception e)
@@ -421,6 +431,7 @@ internal sealed class Desktop : Form
         current = v;
         var page = v.Screen;
         runHistory?.Display(page == Page.Chat ? v.Chat : null);
+        chatOptions?.Display(page == Page.Chat ? v.Chat : null);
         title.Text=page is Page.Home or Page.Onboarding ? v.Network?.Name is {Length:>0} n ? n : "Muster network" : page.ToString();
         status.Text = v.Toasts.LastOrDefault()?.Text ?? v.Join?.Message ?? "";
         var rows = new List<Row>();
@@ -834,21 +845,14 @@ internal sealed class Desktop : Form
                     Act("Start side chat", () => new() { SideChatAction = new() });
                 if (chatView.CanEndSideChat)
                     Act("End side chat", () => new() { SideChatAction = new() { End = true } });
-                if (chatView.CanChooseModel && !chatView.ChatOptionsBusy)
-                {
-                    Act("Model and effort", () => new() { ChatOptionsLoad = new() });
-                    if (chatView.ChatOptions is {} options)
+                if (chatView.CanChooseModel && chatView.Session != null)
+                    AddAction("Model and effort", () =>
                     {
-                        foreach (var model in options.Models)
-                            if (model.Selected) lines.Add($"Model: {model.Name}");
-                            else Act(model.Name, () => new() { ChatSetOptions = new() { Model = model.Name } });
-                        foreach (var effort in options.Efforts)
-                            if (!effort.Selected) Act(effort.Name, () => new() { ChatSetOptions = new() { Effort = effort.Name } });
-                        if (options.Effort.Length > 0) lines.Add($"Effort: {options.Effort}");
-                        lines.Add(options.Note);
-                    }
-                }
-                lines.Add(chatView.ChatOptionsError);
+                        using var dialog = new ChatOptionsDialog(chatView, Send);
+                        chatOptions = dialog;
+                        try { dialog.ShowDialog(this); }
+                        finally { chatOptions = null; }
+                    });
                 if (chatView.HasNewer)
                     Act("Newer messages", () => new() { AgentLoadEarlier = new() { Newer = true } });
                 if (chatView.CanInterrupt)
