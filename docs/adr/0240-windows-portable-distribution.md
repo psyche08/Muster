@@ -114,3 +114,17 @@ fixture nodes. A clean process handoff retained the generated device identity,
 fingerprint, network ID, roster, member name, role, scopes, VIP and configured
 loopback relay. The production daemon remained online throughout. The test
 runner is in `src/native/tests/windows-node-upgrade.ps1`.
+
+Build each generation in a separate Cargo target directory. When the two
+worktrees reused one target directory for the 1.1.70 to 1.1.86 rehearsal,
+the newer daemon resolved earlier local crate artifacts and failed to compile
+its run history service. Sharing downloaded registry sources is sufficient.
+Compare the reported revisions with the two source revisions, along with the
+existing identity and roster checks.
+
+With separate compilation directories the 1.1.70 and 1.1.86 release CLIs
+each read both fixture nodes. Their reported commits matched the original and
+candidate source checkouts. The generated identity, network membership,
+permissions, VIP, name and relay survived the process handoff. The installed
+GUI and staged daemon bytes matched the portable archive; only the GUI and
+CLI were switched on the real node.

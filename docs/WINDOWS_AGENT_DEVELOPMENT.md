@@ -33,19 +33,23 @@
 
 准备两个发行版本各自的干净源码工作树和便携包 CLI。将路径分别赋给
 `$previousTree`、`$nextTree`、`$previousCli` 和 `$nextCli`。两个工作树均需包含
-`fixture_node_process` 测试入口。以下命令可复用配置在开发目录的 Cargo 缓存。
-每次构建完成立即另存测试程序，以便共用 target 目录时也能保留两代二进制。
+`fixture_node_process` 测试入口。两代可以共用 Cargo 下载缓存，每棵源码树使用独立的
+`CARGO_TARGET_DIR`。混用编译产物曾导致新版节点链接到旧版工作区 crate，报告缺失接口。
+下面将测试程序和编译产物放在用户可写的开发目录。
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
-$fixtures = [IO.Directory]::CreateTempSubdirectory('muster-fixture-builds-').FullName
+$fixtures = Join-Path 'D:\Developer\Muster\gui-check' ('node-upgrade-' + [guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($fixtures) | Out-Null
 function Build-NodeFixture($tree, $cli, $name) {
     $version = & $cli --version
     if ($version -notmatch '^muster (\d+\.\d+\.\d+)$') { throw 'Expected a release CLI' }
     $saved = $env:MUSTER_WINDOWS_VERSION
+    $savedTarget = $env:CARGO_TARGET_DIR
     try {
         $env:MUSTER_WINDOWS_VERSION = $Matches[1]
+        $env:CARGO_TARGET_DIR = Join-Path $fixtures "target-$name"
         $manifest = Join-Path $tree 'src/muster/Cargo.toml'
         $exe = @(cargo test --manifest-path $manifest --locked -p musterd --test windows_managed_terminal --no-run --message-format=json-render-diagnostics |
             ForEach-Object { ConvertFrom-Json $_ } |
@@ -53,7 +57,10 @@ function Build-NodeFixture($tree, $cli, $name) {
             ForEach-Object executable)
         if ($exe.Count -ne 1) { throw 'Expected one fixture binary' }
         (Copy-Item -LiteralPath $exe[0] -Destination (Join-Path $fixtures "$name.exe") -PassThru).FullName
-    } finally { $env:MUSTER_WINDOWS_VERSION = $saved }
+    } finally {
+        $env:MUSTER_WINDOWS_VERSION = $saved
+        $env:CARGO_TARGET_DIR = $savedTarget
+    }
 }
 $oldNode = Build-NodeFixture $previousTree $previousCli 'previous'
 $newNode = Build-NodeFixture $nextTree $nextCli 'next'
