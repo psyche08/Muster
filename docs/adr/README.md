@@ -364,3 +364,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0246](0246-desktop-chat-history-availability.md) | Accepted | Distinguish unobserved desktop chat history from an empty conversation |
 | [0247](0247-windows-conversation-terminal.md) | Accepted | Open the session terminal from a Windows conversation |
 | [0248](0248-windows-transcript-work-steps.md) | Accepted | Inspect conversation work steps on Windows |
+| [0249](0249-windows-desktop-chat-sidebar.md) | Accepted | Keep the desktop chat directory beside the Windows conversation |

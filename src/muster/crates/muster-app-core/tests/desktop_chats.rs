@@ -317,7 +317,7 @@ fn options(session: &str, selected: &str) -> v1::AgentChatOptions {
 async fn start(server: Arc<Server>) -> (AppCore, Arc<TestShell>, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let listener = muster_local::Listener::bind(&socket).unwrap();
     tokio::spawn(async move {
         loop {
             let Ok((stream, _)) = listener.accept().await else {
