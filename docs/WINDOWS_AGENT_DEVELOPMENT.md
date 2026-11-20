@@ -273,6 +273,23 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 或账户登录由用户在系统窗口完成。验证聊天优先只读重开已有测试会话，新增真实
 消息发送应提前说明用途。公开文档和版本库只使用合成截图、路径和设备记录。
 
+## 验收网络邀请
+
+在隔离测试网络的管理员窗口中打开 **Settings → Create invite**。应能看到二维码、
+可选择的邀请原文和倒计时。点 **New invite** 后核对新二维码对应新文本。以下命令
+会从控件实际绘制的像素解码合成邀请，核对复制内容、更新、过期显示和离开页面后的清理。
+测试将复制内容留在内存中，保留系统剪贴板。
+
+```powershell
+dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.csproj -c Release
+```
+
+加入端在未加入网络时点 **Join with invite**。输入框为空时会打开粘贴对话框。
+先取消并核对节点仍未加入，再用格式错误的合成邀请检查失败详情和 **Try again**。
+跨节点验收用两台不同软件身份的临时节点和回环 relay。在第二个节点粘贴有效邀请，
+由第一个节点核对加入者指纹并批准。两端应报告同一网络 ID 和一致的成员记录。
+记录默认有效期、节点数量和是否成功即可，邀请原文和二维码无需写入日志。
+
 ## 核对网络设备详情
 
 从 **Network** 或 **Settings** 单击设备行，也可用方向键选择后按 Enter。打开本机和
