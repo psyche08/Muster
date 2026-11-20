@@ -23,10 +23,13 @@ ALLOWED = {
     "muster-core": set(),
     "muster-proto": set(),
     "muster-paths": set(),
+    "muster-local": set(),
+    "muster-windows-tpm": {"muster-core"},
     # Infrastructure: storage, transport, relay, push.
     "muster-store": {"muster-core"},
     "muster-rpc": {"muster-proto", "muster-core"},
-    "muster-net": {"muster-core"},
+    "muster-vnet": {"muster-windows-tpm", "muster-core", "muster-net", "muster-store"},
+    "muster-net": {"muster-core", "muster-local"},
     "muster-relay": {"muster-core", "muster-net"},
     "muster-apns": set(),
     # Log upload: the device's uploader and the collector; signs with the
@@ -35,14 +38,15 @@ ALLOWED = {
     # Services (the integration layer): Agent Halo, terminals, the browser host.
     "muster-agent": {"muster-proto", "muster-core"},
     "muster-terminal": {"muster-proto", "muster-core"},
-    "muster-browser": {"muster-paths"},
+    "muster-browser": {"muster-local", "muster-paths"},
     # The web window serves one foreign origin on a loopback port; it knows
     # nothing of Muster's own types.
-    "muster-web": set(),
+    "muster-web": {"muster-local"},
     # OS adapters: what only the operating system provides, behind traits.
-    "muster-platform": {"muster-proto", "muster-agent", "muster-store", "muster-core"},
+    "muster-platform": {"muster-windows-tpm", "muster-proto", "muster-agent", "muster-store", "muster-core"},
     # Composition: the daemon and its command line.
     "musterd": {
+        "muster-local",
         "muster-acp",  # Native scheduler framing composed by the daemon bridge.
         "muster-browser",
         "muster-web",
@@ -59,11 +63,12 @@ ALLOWED = {
     },
     # A client of the daemon's socket, like the command line: it serves an
     # external task scheduler's protocol and hands every turn to musterd.
-    "muster-acp": {"muster-proto", "muster-rpc"},
-    "muster-cli": {"muster-proto", "muster-rpc", "muster-paths", "muster-browser", "muster-acp"},
+    "muster-acp": {"muster-agent", "muster-proto", "muster-rpc"},
+    "muster-cli": {"muster-local", "muster-proto", "muster-rpc", "muster-paths", "muster-browser", "muster-acp"},
     # Clients: the shells' core and its C ABI. app-core embeds the daemon on
     # phones (§3.3), so it may depend on musterd.
     "muster-app-core": {
+        "muster-local",
         "muster-agent",
         "muster-proto",
         "muster-rpc",
@@ -72,7 +77,7 @@ ALLOWED = {
         "muster-core",
         "muster-net",
     },
-    "muster-ffi": {"muster-app-core", "muster-terminal"},
+    "muster-ffi": {"muster-paths", "muster-app-core", "muster-terminal"},
 }
 
 SECTION = re.compile(r"^\[(?P<name>[^\]]+)\]\s*$")

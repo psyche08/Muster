@@ -399,14 +399,11 @@ pub async fn chat_catalog(
     } else {
         None
     };
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     {
-        let live = muster_platform::macos::native_chat::catalog(
-            app,
-            &agent,
-            full_history && local.is_none(),
-        )
-        .await?;
+        let live =
+            muster_platform::native_chat::catalog(app, &agent, full_history && local.is_none())
+                .await?;
         if let Some(mut catalog) = local {
             catalog.app_running = live.app_running;
             catalog.chat_mode = live.chat_mode;
@@ -419,10 +416,12 @@ pub async fn chat_catalog(
             Ok(live)
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (agent, app, full_history, local);
-        Err(crate::Error::Unavailable("desktop chats need a Mac".into()))
+        Err(crate::Error::Unavailable(
+            "desktop chat control is unavailable on this platform".into(),
+        ))
     }
 }
 
@@ -451,14 +450,16 @@ pub async fn open_chat(
             ));
         }
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     {
-        Ok(muster_platform::macos::native_chat::open(app, &agent, chat).await?)
+        Ok(muster_platform::native_chat::open(app, &agent, chat).await?)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (agent, app, chat);
-        Err(crate::Error::Unavailable("desktop chats need a Mac".into()))
+        Err(crate::Error::Unavailable(
+            "desktop chat control is unavailable on this platform".into(),
+        ))
     }
 }
 
@@ -475,14 +476,16 @@ pub async fn chat_options(
     if !drives_desktop(platform) {
         return Err(no_desktop_control());
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     {
-        Ok(muster_platform::macos::native_chat::options(app, &agent, session, set).await?)
+        Ok(muster_platform::native_chat::options(app, &agent, session, set).await?)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (agent, app, session, set);
-        Err(crate::Error::Unavailable("desktop chats need a Mac".into()))
+        Err(crate::Error::Unavailable(
+            "desktop chat control is unavailable on this platform".into(),
+        ))
     }
 }
 
@@ -494,14 +497,16 @@ pub async fn inspect_chat_options(
     if !drives_desktop(platform) {
         return Err(no_desktop_control());
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     {
-        Ok(muster_platform::macos::native_chat::inspect_options(app).await?)
+        Ok(muster_platform::native_chat::inspect_options(app).await?)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = app;
-        Err(crate::Error::Unavailable("desktop chats need a Mac".into()))
+        Err(crate::Error::Unavailable(
+            "desktop chat control is unavailable on this platform".into(),
+        ))
     }
 }
 
@@ -514,14 +519,16 @@ pub async fn set_chat_mode(
     if !drives_desktop(platform) {
         return Err(no_desktop_control());
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     {
-        Ok(muster_platform::macos::native_chat::set_mode(app, chat).await?)
+        Ok(muster_platform::native_chat::set_mode(app, chat).await?)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (app, chat);
-        Err(crate::Error::Unavailable("desktop chats need a Mac".into()))
+        Err(crate::Error::Unavailable(
+            "desktop chat control is unavailable on this platform".into(),
+        ))
     }
 }
 

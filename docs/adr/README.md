@@ -347,3 +347,7 @@ superseding decisions get new numbers and bidirectional links.
 | [0229](0229-log-collector-behind-nginx-on-8443.md) | Accepted; source and tests verified, collector deployment pending | Put the log collector behind nginx as muster-logs.linsheng.dev:8443 |
 | [0230](0230-claude-environment-by-main-folder.md) | Accepted; source and tests verified, device acceptance pending | Pick a Claude environment by its main folder, extra folders included |
 | [0231](0231-release-apple-1-1-47.md) | Accepted; versions prepared, build and publication pending | Publish Apple 1.1.47 with Claude environments by main folder |
+| [0232](0232-windows-vnet-node.md) | Accepted for development | Run a network-only node on Windows |
+| [0233](0233-windows-desktop-msi.md) | In development | Windows desktop and MSI distribution |
+| [0234](0234-windows-desktop-control.md) | In development | Windows desktop chat control and presence |
+| [0235](0235-integrate-windows-desktop.md) | In development | Integrate the Windows desktop with the current shared runtime |

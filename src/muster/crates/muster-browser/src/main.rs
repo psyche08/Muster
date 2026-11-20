@@ -12,54 +12,60 @@ fn install(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 async fn run() -> Result<()> {
-    use std::os::fd::AsRawFd;
-    use std::os::unix::fs::{
-        DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt,
-    };
-    use tokio::net::UnixListener;
     let path = socket_path()?;
-    let dir = path.parent().context("missing socket parent")?;
-    std::fs::create_dir_all(dir.parent().context("missing state parent")?)?;
-    match std::fs::DirBuilder::new().mode(0o700).create(dir) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => return Err(e.into()),
-    }
-    let meta = std::fs::symlink_metadata(dir)?;
-    // The private directory protects the bind/chmod interval and socket path.
-    ensure!(
-        meta.is_dir() && meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o077 == 0,
-        "browser directory must be owned by this user and mode 0700"
-    );
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(dir.join("host.lock"))?;
-    ensure!(
-        unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
-        "another Chrome profile already owns the browser bridge"
-    );
-    if let Ok(meta) = std::fs::symlink_metadata(&path) {
-        ensure!(
-            meta.file_type().is_socket(),
-            "refusing to replace non-socket bridge path"
-        );
-        std::fs::remove_file(&path)?;
-    }
-    let listener = UnixListener::bind(&path)?;
-    struct Cleanup(std::path::PathBuf);
-    impl Drop for Cleanup {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
+    #[cfg(unix)]
+    let (listener, _lock, _cleanup) = {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::{
+            DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt,
+        };
+        use tokio::net::UnixListener;
+        let path = socket_path()?;
+        let dir = path.parent().context("missing socket parent")?;
+        std::fs::create_dir_all(dir.parent().context("missing state parent")?)?;
+        match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
         }
-    }
-    let _cleanup = Cleanup(path.clone());
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        // The private directory protects the bind/chmod interval and socket path.
+        ensure!(
+            meta.is_dir() && meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o077 == 0,
+            "browser directory must be owned by this user and mode 0700"
+        );
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(dir.join("host.lock"))?;
+        ensure!(
+            unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+            "another Chrome profile already owns the browser bridge"
+        );
+        if let Ok(meta) = std::fs::symlink_metadata(&path) {
+            ensure!(
+                meta.file_type().is_socket(),
+                "refusing to replace non-socket bridge path"
+            );
+            std::fs::remove_file(&path)?;
+        }
+        let listener = UnixListener::bind(&path)?;
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(path.clone());
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        (listener, lock, _cleanup)
+    };
+    #[cfg(windows)]
+    let listener = muster_local::Listener::bind(&path)?;
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     tokio::spawn(async move {
         let mut stdin = tokio::io::stdin();
@@ -114,7 +120,20 @@ async fn run() -> Result<()> {
             }
         };
         let response = if matches!(request, Request::JumperWhoami {}) {
-            jumper::probe(dir, &mut stdout, &mut rx, &mut next_id).await
+            #[cfg(unix)]
+            {
+                jumper::probe(
+                    path.parent().context("missing socket parent")?,
+                    &mut stdout,
+                    &mut rx,
+                    &mut next_id,
+                )
+                .await
+            }
+            #[cfg(windows)]
+            {
+                Err(anyhow::anyhow!("Jumper probe requires its Unix client"))
+            }
         } else {
             exchange(
                 &mut stdout,
@@ -197,7 +216,6 @@ fn main() -> Result<()> {
         args.first().map(String::as_str) == Some(ORIGIN),
         "native host requires the registered extension origin"
     );
-    #[cfg(unix)]
     {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -207,9 +225,5 @@ fn main() -> Result<()> {
         // pipe after a timeout: returning closes this process and the native port.
         runtime.shutdown_background();
         result
-    }
-    #[cfg(not(unix))]
-    {
-        bail!("browser native host currently supports macOS and Linux")
     }
 }

@@ -617,3 +617,70 @@ async fn member_connection_direction_and_phone_service_boundary() {
     }
     relay_task.abort();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn vnet_only_member_accepts_datagrams_and_refuses_service_streams() {
+    let (relay, relay_task) = spawn_relay().await;
+    let admin = Arc::new(SoftSigner::generate());
+    let member = Arc::new(SoftSigner::generate());
+    let mut roster = Roster::new();
+    let genesis = Author {
+        roster: &roster,
+        signer: admin.as_ref(),
+    }
+    .genesis(
+        "vnet",
+        (Ipv4Addr::new(192, 168, 14, 0), 24),
+        DeviceRecord::new(admin.public_key(), "admin", DeviceKind::Desktop),
+    )
+    .unwrap();
+    roster.insert(genesis).unwrap();
+    let add = Author {
+        roster: &roster,
+        signer: admin.as_ref(),
+    }
+    .add(DeviceRecord::new(
+        member.public_key(),
+        "win",
+        DeviceKind::Desktop,
+    ))
+    .unwrap();
+    roster.insert(add).unwrap();
+    let roster = Arc::new(RwLock::new(roster));
+    let policy = Arc::new(RwLock::new(LocalPolicy::default()));
+    let peer = Node::start(config(relay), admin, roster.clone(), policy.clone())
+        .await
+        .unwrap();
+    let win = Node::start_vnet_only(config(relay), member, roster, policy)
+        .await
+        .unwrap();
+    win.set_handler(Arc::new(Echo));
+    wait_for("member link", Duration::from_secs(10), || {
+        peer.connection_to(&win.device_id()).is_some()
+    })
+    .await;
+    for service in [
+        "echo",
+        muster_net::forward::SERVICE,
+        muster_net::pair::SERVICE,
+    ] {
+        assert!(matches!(
+            peer.open(win.device_id(), service, 1).await,
+            Err(muster_net::Error::Unauthorized(_))
+        ));
+    }
+    let mut rx = win.take_datagrams().unwrap();
+    let data = bytes::Bytes::from_static(b"vnet packet");
+    peer.connection_to(&win.device_id())
+        .unwrap()
+        .send_datagram(data.clone())
+        .unwrap();
+    let (source, received) = tokio::time::timeout(Duration::from_secs(3), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!((source, received), (peer.device_id(), data));
+    win.shutdown().await;
+    peer.shutdown().await;
+    relay_task.abort();
+}

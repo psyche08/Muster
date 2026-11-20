@@ -54,10 +54,11 @@ muster-agent     → proto, core                muster-terminal → proto, core
 muster-browser   → paths                      muster-web   → (none)
 muster-platform  → proto, agent, store, core
 musterd          → browser, web, core, net, proto, store, rpc, terminal, agent, platform, paths, acp, logs
-muster-acp       → proto, rpc
+muster-acp       → agent, proto, rpc
 muster-cli       → proto, rpc, paths, browser, acp
+muster-vnet     → core, net, store (Windows network-only process)
 muster-app-core  → agent, proto, rpc, musterd, terminal, core, net
-muster-ffi       → app-core, terminal
+muster-ffi       → app-core, paths, terminal
 ```
 
 Two edges cross the simple layer order on purpose:
@@ -68,6 +69,8 @@ Two edges cross the simple layer order on purpose:
 - `muster-platform → muster-agent`: the OS adapter implements the service's
   `Controller` trait and evaluates the service's profile selectors over live
   elements. The service never depends back on the adapter.
+
+Windows desktop RPC, browser and Web local endpoints use muster-local for owner-checked named pipes. Unix uses its existing local sockets. The muster-windows-tpm crate implements device signing for the Windows daemon and standalone vnet.
 
 Adding a dependency means editing the map in the script and this table in
 the same change, so the direction stays a decision rather than an accident.

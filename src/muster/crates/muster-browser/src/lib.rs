@@ -263,12 +263,10 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(
     Ok(())
 }
 
-#[cfg(unix)]
 pub async fn call(path: &Path, request: &Request) -> Result<Value> {
     request.validate()?;
     let deadline = request.deadline();
-    let mut stream =
-        tokio::time::timeout(DEADLINE, tokio::net::UnixStream::connect(path)).await??;
+    let mut stream = tokio::time::timeout(DEADLINE, muster_local::connect(path)).await??;
     // Never retry after any bytes have been sent: a mutation may have executed.
     let exchange = async {
         // Host serializes operations. Do not queue a write in the socket backlog:

@@ -67,5 +67,6 @@ pub trait LockedUseOs: Send + Sync {
     async fn request_unlock(&self, check: UnlockCheck) -> Result<(), String>;
     fn lock(&self);
     /// Authenticates an accepted plugin connection. UID alone is insufficient.
+    #[cfg(unix)]
     fn plugin_peer(&self, stream: &std::os::unix::net::UnixStream) -> bool;
 }

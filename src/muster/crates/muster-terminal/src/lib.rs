@@ -11,7 +11,6 @@ pub mod commands;
 pub mod ghostty;
 pub mod grid;
 pub mod iterm2;
-#[cfg(unix)]
 pub mod pty;
 #[cfg(unix)]
 pub mod runs;
@@ -273,7 +272,6 @@ pub fn line_delta(previous: &[String], current: &[String]) -> Option<LineDelta> 
 pub enum TerminalKind {
     Iterm2(TerminalConfig),
     Ghostty(GhosttyPlatform),
-    #[cfg(unix)]
     Pty(pty::PtyConfig),
 }
 
@@ -291,7 +289,6 @@ impl std::fmt::Debug for GhosttyPlatform {
 pub enum Terminal {
     Iterm2(Arc<TerminalService>),
     Ghostty(Arc<ghostty::GhosttyService>),
-    #[cfg(unix)]
     Pty(Arc<pty::PtyService>),
     #[cfg(unix)]
     Tmux(Arc<tmux::TmuxService>),
@@ -302,7 +299,6 @@ impl Terminal {
         Arc::new(match kind {
             TerminalKind::Iterm2(config) => Terminal::Iterm2(TerminalService::new(config)),
             TerminalKind::Ghostty(os) => Terminal::Ghostty(ghostty::GhosttyService::new(os.0)),
-            #[cfg(unix)]
             TerminalKind::Pty(config) => Terminal::Pty(pty::PtyService::new(config)),
         })
     }
@@ -311,7 +307,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(_) => "iterm2",
             Terminal::Ghostty(_) => "ghostty",
-            #[cfg(unix)]
             Terminal::Pty(_) => "pty",
             #[cfg(unix)]
             Terminal::Tmux(_) => "tmux",
@@ -322,7 +317,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.available(),
             Terminal::Ghostty(t) => t.available(),
-            #[cfg(unix)]
             Terminal::Pty(t) => t.available(),
             #[cfg(unix)]
             Terminal::Tmux(t) => t.available(),
@@ -333,7 +327,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.sessions().await,
             Terminal::Ghostty(t) => t.sessions().await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.sessions().await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.sessions().await,
@@ -347,7 +340,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.watch_sessions(out).await,
             Terminal::Ghostty(t) => t.watch_sessions(out).await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.watch_sessions(out).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.watch_sessions(out).await,
@@ -363,7 +355,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.attach(session, since_rev, frames).await,
             Terminal::Ghostty(t) => t.attach(session, since_rev, frames).await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.attach(session, since_rev, frames).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.attach(session, since_rev, frames).await,
@@ -374,7 +365,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.input(session, bytes).await,
             Terminal::Ghostty(t) => t.input(session, bytes).await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.input(session, bytes).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.input(session, bytes).await,
@@ -389,7 +379,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.create(profile, background).await,
             Terminal::Ghostty(t) => t.create().await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.create(profile, background).await,
             #[cfg(unix)]
             Terminal::Tmux(_) => Err(Error::Protocol("Open tmux from an agent session".into())),
@@ -418,7 +407,6 @@ impl Terminal {
             Terminal::Ghostty(_) => Err(Error::Unavailable(
                 "Ghostty resizing is not supported; resize its native window on the Mac".into(),
             )),
-            #[cfg(unix)]
             Terminal::Pty(t) => t.resize(session, cols, rows).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.resize(session, cols, rows).await,
@@ -429,7 +417,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.close(session).await,
             Terminal::Ghostty(t) => t.close(session).await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.close(session).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.close(session).await,
@@ -440,7 +427,6 @@ impl Terminal {
         match self {
             Terminal::Iterm2(t) => t.history(session, lines).await,
             Terminal::Ghostty(t) => t.history(session, lines).await,
-            #[cfg(unix)]
             Terminal::Pty(t) => t.history(session, lines).await,
             #[cfg(unix)]
             Terminal::Tmux(t) => t.history(session, lines).await,

@@ -704,7 +704,7 @@ mod tests {
         for ignore in [false, true] {
             let dir = tempfile::tempdir().unwrap();
             let socket = dir.path().join("rpc.sock");
-            let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+            let listener = muster_local::Listener::bind(&socket).unwrap();
             let server = Arc::new(Server {
                 sends: Default::default(),
             });
@@ -887,7 +887,7 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let socket = dir.path().join("rpc.sock");
-        let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+        let listener = muster_local::Listener::bind(&socket).unwrap();
         let server = Arc::new(Server {
             confirmed: false.into(),
             queries: 0.into(),
@@ -1019,7 +1019,7 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let socket = dir.path().join("rpc.sock");
-        let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+        let listener = muster_local::Listener::bind(&socket).unwrap();
         let server = Arc::new(Server {
             confirmed: false.into(),
             queries: 0.into(),

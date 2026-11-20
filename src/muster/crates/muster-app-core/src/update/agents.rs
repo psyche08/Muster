@@ -329,9 +329,18 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                             }));
                         }
                     }
+                    // Surface a definitive refusal from the watch itself. Retrying
+                    // the equivalent snapshot cannot authorize this subscription.
+                    if let Err(muster_rpc::Error::Remote {
+                        code: v1::error::Code::Unauthorized,
+                        message,
+                    }) = active.take().expect("started catalog watch").finish().await
+                    {
+                        return Err(Error::Unauthorized(message));
+                    }
                     // Older daemons may not stream catalogs. A bounded snapshot
                     // remains a compatibility fallback before reconnecting.
-                    if let Ok(Ok(Resp::AgentSessions(mut page))) = tokio::time::timeout(
+                    let snapshot = tokio::time::timeout(
                         Duration::from_secs(3),
                         unary(
                             &client,
@@ -343,7 +352,8 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                         ),
                     )
                     .await
-                    {
+                    .map_err(|_| Error::Unavailable("catalog snapshot timed out".into()))??;
+                    if let Resp::AgentSessions(mut page) = snapshot {
                         for session in &mut page.sessions {
                             session.device_id = device.clone();
                             session.device_name = name.clone();
@@ -362,9 +372,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                         retry = 3;
                         return Ok(());
                     }
-                    Err::<(), Error>(Error::Unavailable(
-                        "catalog subscription ended; reconnecting".into(),
-                    ))
+                    Err(unexpected())
                 };
                 let result = tokio::select! {
                     _ = token.cancelled() => None,

@@ -15,6 +15,12 @@ use muster_store::Store;
 /// The best signer this machine offers, created on first use and kept in
 /// the store (the SEP blob is useless off this machine; the software key
 /// is development only).
+#[cfg(windows)]
+pub fn device_signer(_: &Store) -> anyhow::Result<SharedSigner> {
+    Ok(Arc::new(muster_windows_tpm::Tpm::open()?))
+}
+
+#[cfg(not(windows))]
 pub fn device_signer(store: &Store) -> anyhow::Result<SharedSigner> {
     #[cfg(all(target_os = "macos", feature = "sep"))]
     {

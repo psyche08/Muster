@@ -47,7 +47,7 @@ impl Backend {
     pub async fn connect(config: &AppConfig, shell: Arc<dyn Shell>) -> Result<Backend, Error> {
         match &config.mode {
             Mode::Socket { path } => {
-                let stream = tokio::net::UnixStream::connect(path).await.map_err(|e| {
+                let stream = muster_local::connect(path).await.map_err(|e| {
                     Error::Unavailable(format!("musterd at {}: {e}", path.display()))
                 })?;
                 let local = Client::new(stream);

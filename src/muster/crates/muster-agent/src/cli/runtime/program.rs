@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 pub(crate) fn resolve(agent: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = std::env::home_dir();
     let mut candidates = Vec::new();
     if cfg!(target_os = "macos") && agent == "codex" {
         let mut roots = vec![PathBuf::from("/Applications")];

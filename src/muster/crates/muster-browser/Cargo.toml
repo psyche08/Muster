@@ -12,6 +12,7 @@ name = "muster-browser-host"
 path = "src/main.rs"
 
 [dependencies]
+muster-local = { path = "../muster-local" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

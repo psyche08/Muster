@@ -2307,7 +2307,7 @@ async fn native_creation_targets_the_terminal_device_and_sends_only_the_managed_
     }
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("fixture.sock");
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let listener = muster_local::Listener::bind(&socket).unwrap();
     let server = Arc::new(Server(Mutex::new(Vec::new()), false.into()));
     let handler = server.clone();
     let accept = tokio::spawn(async move {
@@ -2470,7 +2470,7 @@ async fn remote_terminal_bursts_wait_for_ack_and_preserve_input_order() {
     }
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("input.sock");
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let listener = muster_local::Listener::bind(&socket).unwrap();
     let (calls, mut received) = mpsc::unbounded_channel();
     let server = Arc::new(Server(calls));
     let accept = tokio::spawn(async move {
@@ -3573,7 +3573,7 @@ async fn a_locked_permission_card_read_reserves_no_provider_queue() {
     }
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("fixture.sock");
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+    let listener = muster_local::Listener::bind(&socket).unwrap();
     let server = Arc::new(Server(Mutex::new(Vec::new())));
     let handler = server.clone();
     let accept = tokio::spawn(async move {
@@ -3671,7 +3671,7 @@ async fn a_granted_accessibility_is_never_asked_for_again() {
     }
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("musterd.sock");
-    let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+    let _listener = muster_local::Listener::bind(&path).unwrap();
     let shell = Arc::new(Effects(std::sync::Mutex::new(0)));
     let config = crate::AppConfig {
         dir: dir.path().into(),

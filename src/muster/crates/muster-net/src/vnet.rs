@@ -18,11 +18,16 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::Error;
 use crate::node::Node;
 
+#[cfg(windows)]
+pub mod windows_helper;
+
 const FLOW_TTL: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Debug)]
 pub struct VnetConfig {
     pub mtu: u16,
+    #[cfg(windows)]
+    pub use_helper: bool,
     /// A TUN the platform already opened (macOS: from the NetHelper over XPC).
     /// start() consumes this descriptor, including when initialization fails.
     pub existing_fd: Option<i32>,
@@ -34,6 +39,8 @@ impl Default for VnetConfig {
     fn default() -> Self {
         Self {
             mtu: crate::tls::VNET_MTU,
+            #[cfg(windows)]
+            use_helper: false,
             existing_fd: None,
             name: None,
         }
@@ -45,8 +52,11 @@ fn interface_config(address: Ipv4Addr, prefix: u8, config: &VnetConfig) -> tun::
     tun_config
         .address(address)
         .netmask(Ipv4Addr::from(!0u32 << (32 - u32::from(prefix))))
-        .mtu(config.mtu)
         .up();
+    // The tun Windows backend also applies this value to IPv6, which
+    // rejects our IPv4-only overlay MTU when it is below 1280.
+    #[cfg(not(windows))]
+    tun_config.mtu(config.mtu);
     if let Some(name) = &config.name {
         tun_config.tun_name(name);
     }
@@ -276,6 +286,77 @@ pub struct Vnet {
     replies: tokio::sync::mpsc::Sender<Bytes>,
 }
 
+fn open_tun(
+    #[allow(unused_mut)] mut tun_config: tun::Configuration,
+    #[allow(unused_variables)] mtu: u16,
+) -> Result<(tun::DeviceWriter, tun::DeviceReader), Error> {
+    #[cfg(windows)]
+    {
+        let exe = std::env::current_exe().map_err(|e| Error::Io(e.to_string()))?;
+        let dll = exe.with_file_name("wintun.dll");
+        tun_config.platform_config(|p| p.wintun_file(dll));
+    }
+    let device = tun::create_as_async(&tun_config).map_err(|e| Error::Io(format!("tun: {e}")))?;
+    #[cfg(windows)]
+    {
+        use tun::AbstractDevice;
+        let index = device
+            .tun_index()
+            .map_err(|e| Error::Io(format!("adapter index: {e}")))?;
+        let system =
+            std::env::var_os("SystemRoot").ok_or_else(|| Error::Io("SystemRoot missing".into()))?;
+        let output =
+            std::process::Command::new(std::path::PathBuf::from(system).join("System32/netsh.exe"))
+                .args(["interface", "ipv4", "set", "subinterface"])
+                .arg(index.to_string())
+                .arg(format!("mtu={}", mtu))
+                .arg("store=active")
+                .output()
+                .map_err(|e| Error::Io(format!("configure IPv4 MTU: {e}")))?;
+        if !output.status.success() {
+            return Err(Error::Io(format!(
+                "configure IPv4 MTU ({}): {} {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+    }
+    let (writer, reader) = device
+        .split()
+        .map_err(|e| Error::Io(format!("tun split: {e}")))?;
+    Ok((writer, reader))
+}
+
+enum PacketReader {
+    Tun(tun::DeviceReader),
+    #[cfg(windows)]
+    Pipe(tokio::io::ReadHalf<tokio::net::windows::named_pipe::NamedPipeServer>),
+}
+enum PacketWriter {
+    Tun(tun::DeviceWriter),
+    #[cfg(windows)]
+    Pipe(tokio::io::WriteHalf<tokio::net::windows::named_pipe::NamedPipeServer>),
+}
+impl PacketReader {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Tun(r) => r.read(buf).await,
+            #[cfg(windows)]
+            Self::Pipe(r) => windows_helper::read_packet(r, buf).await,
+        }
+    }
+}
+impl PacketWriter {
+    async fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        match self {
+            Self::Tun(w) => w.write_all(buf).await,
+            #[cfg(windows)]
+            Self::Pipe(w) => windows_helper::write_packet(w, buf).await,
+        }
+    }
+}
+
 impl Vnet {
     /// Brings the interface up with this device's vip and starts both
     /// directions. Fails when this device has no vip (phones) or no network.
@@ -309,12 +390,19 @@ impl Vnet {
         if helper_fd.is_some() {
             tun_config.close_fd_on_drop(false);
         }
-        let device =
-            tun::create_as_async(&tun_config).map_err(|e| Error::Io(format!("tun: {e}")))?;
+        #[cfg(windows)]
+        let (writer, reader) = if config.use_helper {
+            windows_helper::open(address, cidr.1).await?
+        } else {
+            let (w, r) = open_tun(tun_config, config.mtu)?;
+            (PacketWriter::Tun(w), PacketReader::Tun(r))
+        };
+        #[cfg(not(windows))]
+        let (writer, reader) = {
+            let (w, r) = open_tun(tun_config, config.mtu)?;
+            (PacketWriter::Tun(w), PacketReader::Tun(r))
+        };
         log::info!("vnet up: {address}/{} mtu {}", cidr.1, config.mtu);
-        let (writer, reader) = device
-            .split()
-            .map_err(|e| Error::Io(format!("tun split: {e}")))?;
         let (replies, local) = tokio::sync::mpsc::channel(64);
         let vnet = Arc::new(Self {
             node: node.clone(),
@@ -370,7 +458,7 @@ impl Vnet {
         self.helper_fd.lock().unwrap().take();
     }
 
-    async fn outbound_loop(self: Arc<Self>, mut reader: tun::DeviceReader) {
+    async fn outbound_loop(self: Arc<Self>, mut reader: PacketReader) {
         let mut buf = vec![0u8; 65536];
         loop {
             let n = match reader.read(&mut buf).await {
@@ -439,7 +527,7 @@ impl Vnet {
         self: Arc<Self>,
         mut inbound: tokio::sync::mpsc::Receiver<(DeviceId, Bytes)>,
         mut local: tokio::sync::mpsc::Receiver<Bytes>,
-        mut writer: tun::DeviceWriter,
+        mut writer: PacketWriter,
     ) {
         let mut last_expiry = Instant::now();
         loop {

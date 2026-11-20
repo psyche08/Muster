@@ -7,7 +7,11 @@
 //! wait for the P0 device checks in docs/P0-validation.md.
 
 pub mod locked_use;
+#[cfg(any(windows, target_os = "macos"))]
+pub mod native_chat;
 pub mod signer;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(target_os = "macos")]
 pub mod macos;
@@ -63,7 +67,11 @@ pub fn platform() -> Arc<dyn Platform> {
     {
         Arc::new(macos::lock::MacPlatform)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        Arc::new(windows::Windows)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         Arc::new(DefaultPlatform)
     }

@@ -3373,7 +3373,7 @@ async fn create_native_terminal(
     }
     let terminal = crate::native_terminals::source(daemon, &r.source)?;
     let profile = (!r.profile.is_empty()).then_some(r.profile.as_str());
-    let command = if r.managed_session.is_empty() {
+    let command: Option<String> = if r.managed_session.is_empty() {
         None
     } else {
         #[cfg(unix)]

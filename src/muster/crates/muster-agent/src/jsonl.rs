@@ -58,7 +58,7 @@ pub fn home(records: &Records) -> Option<PathBuf> {
     {
         return Some(PathBuf::from(dir));
     }
-    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(records.home.dir))
+    std::env::home_dir().map(|h| h.join(records.home.dir))
 }
 
 /// Whether a record is one the grammar says to ignore entirely.
