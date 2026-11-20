@@ -1120,7 +1120,7 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
     let (_dir, ctx, mut state) = phone().await;
     state.screen = Screen::Agents;
     state.agents_epoch = 7;
-    state.agents_pending = 2;
+    state.agents_pending = ["mac".into(), "mini".into()].into();
     state.agents.loading = false;
     state.agents.errors = vec!["old".into()];
     let failure = || Err(crate::Error::Unavailable("mac offline".into()));
@@ -1142,7 +1142,7 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
 
     // A first load shows loading until every device answered.
     state.agents_epoch = 8;
-    state.agents_pending = 2;
+    state.agents_pending = ["mac".into(), "mini".into()].into();
     state.agents.loading = true;
     agents::msg_agents(
         &mut state,
@@ -1159,6 +1159,38 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
         "mini".into(),
         Ok(v1::AgentSessionPage::default()),
     );
+    assert!(!state.agents.loading);
+    assert!(state.agents.errors.is_empty());
+}
+
+#[tokio::test]
+async fn live_catalog_outcomes_belong_to_the_reporting_device() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.network = Some(network_of(vec![mac("a", "online"), mac("b", "online")]));
+    agents::open_agents(&mut state, &ctx);
+    let epoch = state.agents_epoch;
+    let page = || Ok(v1::AgentSessionPage::default());
+    let denied = || Err(crate::Error::Unauthorized("sharing is off".into()));
+    let lost = || Err(crate::Error::Unavailable("link lost".into()));
+
+    for _ in 0..2 {
+        agents::msg_agents(&mut state, &ctx, epoch, "a".into(), denied());
+        assert!(state.agents.loading, "only one device has answered");
+    }
+    agents::msg_agents(&mut state, &ctx, epoch, "b".into(), lost());
+    assert!(!state.agents.loading);
+    assert_eq!(state.agents.errors.len(), 2);
+    agents::msg_agents(&mut state, &ctx, epoch, "b".into(), page());
+    agents::msg_agents(&mut state, &ctx, epoch, "b".into(), page());
+    assert_eq!(state.agents.errors, [denied().unwrap_err().to_string()]);
+    agents::msg_agents(&mut state, &ctx, epoch - 1, "a".into(), page());
+    assert_eq!(state.agents.errors.len(), 1);
+    agents::msg_agents(&mut state, &ctx, epoch, "a".into(), page());
+    assert!(state.agents.errors.is_empty());
+
+    agents::msg_agents(&mut state, &ctx, epoch, "b".into(), lost());
+    state.network = Some(network_of(vec![mac("b", "offline")]));
+    agents::load_catalog(&mut state, &ctx);
     assert!(!state.agents.loading);
     assert!(state.agents.errors.is_empty());
 }
@@ -1402,7 +1434,11 @@ async fn an_offline_macs_sessions_are_neither_polled_nor_shown() {
     );
     state.agents.sessions = vec![session_on("mini", "a"), session_on("pro", "b")];
     agents::open_agents(&mut state, &ctx);
-    assert_eq!(state.agents_pending, 1, "only the online Mac is asked");
+    assert_eq!(
+        state.agents_pending.len(),
+        1,
+        "only the online Mac is asked"
+    );
     assert!(state.agents.sessions.iter().all(|s| s.device_id == "mini"));
     // A late answer from the offline Mac changes nothing.
     let epoch = state.agents_epoch;
@@ -1446,7 +1482,7 @@ async fn a_mac_coming_back_online_is_listed_again() {
         mac("pro", "offline"),
     ]));
     agents::open_agents(&mut state, &ctx);
-    assert_eq!(state.agents_pending, 1);
+    assert_eq!(state.agents_pending.len(), 1);
     let epoch = state.agents_epoch;
     // A reconnect inside its retries is not a change worth a reload.
     network::msg_network(
@@ -1461,7 +1497,7 @@ async fn a_mac_coming_back_online_is_listed_again() {
         network_of(vec![mac("mini", "online"), mac("pro", "online")]),
     );
     assert_eq!(state.agents_epoch, epoch + 1);
-    assert_eq!(state.agents_pending, 2);
+    assert_eq!(state.agents_pending.len(), 2);
 }
 
 /// A failed chat watch names the Mac, says when the daemon reports it

@@ -149,6 +149,21 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 或账户登录由用户在系统窗口完成。验证聊天优先只读重开已有测试会话，新增真实
 消息发送应提前说明用途。公开文档和版本库只使用合成截图、路径和设备记录。
 
+## 复核多设备 Agents 目录
+
+在 **Agents** 中用设备筛选器复核出错的宿主，再回到所有设备。对已配对的目标，
+先用 `muster status` 查看连接状态。如需检查订阅，把已安装的 CLI 路径和目标
+设备 ID 分别赋给 `$musterCli` 和 `$deviceId`。以下命令只请求目录，在六秒后取消观察。
+
+```powershell
+'{"agent_watch":{"catalog_only":true,"provider_pages":true,"grouped":true,"limit":10}}' |
+    & $musterCli --target $deviceId rpc --request - --timeout 6
+```
+
+分别记录设备是否在线、是否收到首个目录快照、是否收到明确的权限拒绝。收到快照后，
+CLI 仍可在观察时限结束时报告超时。记录结果时只需事件类型和计数，省略会话标题。
+一台设备持续推送时，其他设备的错误应保留到对应设备成功恢复或移出当前筛选。
+
 ## 复核桌面对话历史
 
 在普通用户终端运行 `muster chats ChatGPT`，用当前目录中的完整会话 ID

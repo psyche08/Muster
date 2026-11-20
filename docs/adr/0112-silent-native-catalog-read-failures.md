@@ -48,3 +48,17 @@ Source verification: 523 agent/app-core/platform library tests passed, with five
 existing ignores; strict Clippy passed. The initial sandbox run could not create
 Unix sockets; the same suite passed when local sockets were permitted. Mac/iOS
 builds, installation and OTA publication remain pending for this candidate.
+
+## Concurrent device subscriptions
+
+An initial refresh waits for the first result from each requested device.
+A live subscription can deliver many frames during that same refresh. Counting
+frames as devices finishes the refresh too early, and draining a shared error
+list lets one device's next frame erase another device's refusal.
+
+Shared Rust will track initial replies and the latest catalog error by device ID
+inside the existing refresh epoch. Publish the collected errors after all
+initial replies, in a stable order. Further replies replace only that device's
+outcome. A refresh with no eligible devices clears obsolete errors immediately.
+Provider metadata notices remain silent. Verify duplicate and late deliveries,
+two independent failures, recovery and an empty set of eligible devices.
