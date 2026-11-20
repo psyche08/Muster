@@ -94,9 +94,24 @@ dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c
 再从 tmux 侧检查调整后的尺寸。关闭第一个测试进程，用第二个进程恢复同一 shell
 中的变量。显式重启其中一个会话后，核对旧句柄失效，另一个会话仍可输入。
 
-在 MSYS2 tmux 3.8 上，直接传入带盘符的 Windows 工作目录可能让 shell 落到
-用户主目录。用同一套 MSYS2 的 `cygpath -u` 转换目录，在服务端核对
-`#{pane_current_path}`。单独记录适配器测试、daemon 重启及 GUI 重连的结果。
+共享适配器通过操作系统设置 tmux 客户端的工作目录，再以 `-c .` 创建会话。
+在本机已有 MSYS2 tmux 时，可在单独的普通用户 PowerShell 窗口运行下列回归测试。
+将第一行换成实际运行时的绝对路径。测试使用该目录中的 `tmux.exe` 和 `cygpath.exe`。
+
+```powershell
+$env:MUSTER_TEST_MSYS2_BIN = 'D:\Developer\msys64\usr\bin'
+$env:MSYS = 'noglob'
+$env:CHERE_INVOKING = '1'
+$env:TERM = 'xterm-256color'
+$env:SHELL = '/usr/bin/sh'
+cargo test --manifest-path src/muster/Cargo.toml -p muster-terminal --lib windows_tmux_preserves_each_native_working_directory -- --ignored
+```
+
+`noglob` 保留查询参数中的花括号，`CHERE_INVOKING` 让登录 shell 保留客户端的目录。
+测试在临时 socket 上创建两个会话，从窗格读回工作目录，再与磁盘上的目录核对。
+它覆盖普通盘符路径和带扩展前缀的规范路径，第二个目录名含中文、空格和
+`#{session_id}`。重启到缺失目录应返回错误，原会话仍能恢复。关闭测试用的
+PowerShell 窗口即可丢弃上述环境设置。正式 daemon 重启及 GUI 重连还需单独验收。
 
 ## 与已交付的 ZIP 对照
 
