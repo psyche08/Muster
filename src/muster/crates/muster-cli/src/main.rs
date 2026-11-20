@@ -8,6 +8,10 @@ use muster_rpc::Client;
 
 #[derive(Parser, Debug)]
 #[command(name = "muster", about = "Muster command line")]
+#[cfg_attr(
+    windows,
+    command(version = option_env!("MUSTER_WINDOWS_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")))
+)]
 struct Args {
     /// musterd socket (default: musterd.sock in $MUSTER_DIR or the platform's
     /// state directory, e.g. ~/Library/Application Support/Muster on macOS)
