@@ -210,7 +210,8 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 **Local relay** 和 **Relay registration** 分别对应 `relay` 和 `state.relay`。
 **Assigned virtual IP** 对应 `state.vip`，**Local vnet** 对应 `state.vnet_up`。
 已有虚拟地址时隧道仍可能显示 down。验证 **Change local relay** 时，用本文的隔离窗口
-修改端点，并用带 `--socket $fixtureSocket` 的 CLI 复查。在线窗口可只打开后点 Cancel。
+修改端点，并用带 `--socket $fixtureSocket` 的 CLI 复查。未加入网络的隔离节点刷新后会回到引导页，再打开 **Settings** 核对完整状态。
+在线窗口可只打开后点 Cancel。
 公开记录只需注明各项是否一致。
 
 ## 在线窗口与人工确认

@@ -16,7 +16,9 @@ Render the local DeviceInfo endpoint, relay registration state, assigned VIP
 and tunnel state from the shared view. Keep missing node state visible.
 Offer the existing local SetRelay intent from Settings and onboarding. Seed
 the editor with the current endpoint. Cancel, blank and unchanged input should
-leave the node alone. Rust retains endpoint interpretation and reconfiguration.
+leave the node alone. Use a WinForms dialog owned by the desktop window so
+keyboard navigation, cancellation and modal focus can be checked in isolation.
+Disable submission for blank and unchanged input. Rust retains endpoint interpretation and reconfiguration.
 
 ## Alternatives
 
@@ -33,3 +35,9 @@ portable update. Applying a different endpoint can interrupt peer connectivity.
 Compare installed Settings with a local DeviceInfo read. Exercise a changed
 endpoint with a disposable software-identity node. Verify cancellation keeps
 the original endpoint. Record tunnel traffic and hardware enrollment separately.
+
+A Windows software-identity fixture exercised the owned modal from Settings.
+Cancel retained the original endpoint. Blank and unchanged input disabled
+submission. A changed loopback endpoint with surrounding spaces was trimmed
+and read back through DeviceInfo. Refresh returned the unjoined node to
+onboarding; reopening Settings showed all four values from that node.

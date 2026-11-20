@@ -485,10 +485,9 @@ internal sealed class Desktop : Form
                 if (self != null)
                     AddAction("Change local relay", () =>
                     {
-                        var relay = Microsoft.VisualBasic.Interaction.InputBox(
-                            "Relay address (host:port) for this device", "Change local relay", self.Relay).Trim();
-                        if (relay.Length > 0 && relay != self.Relay)
-                            Send(new() { SetRelay = new() { Relay = relay } });
+                        using var editor = new RelayDialog(self.Relay);
+                        if (editor.ShowDialog(this) == DialogResult.OK)
+                            Send(new() { SetRelay = new() { Relay = editor.Endpoint } });
                     });
             }
             if (v.Network != null)
