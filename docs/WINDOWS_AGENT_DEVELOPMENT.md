@@ -266,10 +266,18 @@ cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-terminal pow
 测试另行验证用 Enter 选中菜单项时回调恰好执行一次。
 
 验收时把三种初始状态分开记录：从未启动过 shell、恢复已有 shell、结束最后一个
-shell 后再启动。隔离节点上，前两种已能从 GUI 连接。第三种复现过
-`tmux new-session timed out`；点一次 **Connect** 后虽显示已连接，后续
-`has-session` 查询仍可能超时。记录窗口中的具体错误，并用一条合成命令的结果验证
-可用性。
+shell 后再启动。旧版宿主在第三种情况下曾报告 `tmux new-session timed out`。
+先核对运行中的 daemon 版本。将 `MUSTER_MSYS2_ROOT` 指向便携包的 `msys64` 后，
+从仓库根目录运行下列回归。它结束最后一个合成 shell，一次启动下一代，核对旧句柄
+失效，并从新 shell 读回计算结果。
+
+```powershell
+cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-terminal reopen_after_ending_the_last_shell -- --ignored
+```
+
+从 GUI 复核时只选择一次 **Terminal**，等待连接完成后在新 shell 输入合成命令并
+核对输出。通过原始 RPC 验收可沿用 CLI 默认的 30 秒请求时限；手动设置过短的
+时限可能在宿主完成前取消请求。
 
 ## 与已交付的 ZIP 对照
 

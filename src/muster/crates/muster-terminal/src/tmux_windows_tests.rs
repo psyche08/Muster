@@ -119,6 +119,35 @@ async fn observed(mut check: impl AsyncFnMut() -> bool) -> bool {
 }
 
 #[tokio::test]
+#[ignore = "requires the packaged MSYS2 tmux runtime"]
+async fn reopen_after_ending_the_last_shell() {
+    let root = tempfile::tempdir().unwrap();
+    let service = TmuxService::new(root.path().join("s"));
+    let program = service.program.as_ref().expect("set MUSTER_MSYS2_ROOT");
+    let _cleanup = FixtureServer(program.clone(), service.args().await.unwrap());
+    let cwd = root.path().to_str().unwrap();
+    let old = service.action("fixture", cwd, 0).await.unwrap();
+    service.action("fixture", cwd, 1).await.unwrap();
+
+    let current = service.action("fixture", cwd, 0).await.unwrap();
+    assert_ne!(current, old);
+    assert!(service.input(&old, b"stale").await.is_err());
+    service
+        .input(&current, b"echo $((37 + 42))\r")
+        .await
+        .unwrap();
+    assert!(
+        observed(async || service
+            .history(&current, 80)
+            .await
+            .unwrap()
+            .iter()
+            .any(|row| row.text.trim() == "79"))
+        .await
+    );
+}
+
+#[tokio::test]
 #[ignore = "requires the packaged MSYS2 runtime and Windows PowerShell in ConPTY"]
 async fn powershell_desktop_client_shares_only_the_selected_generation() {
     let root = tempfile::Builder::new()

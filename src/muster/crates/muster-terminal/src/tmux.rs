@@ -173,7 +173,14 @@ impl TmuxService {
             .env_remove("TMUX")
             .envs(CLIENT_ENV.iter().copied())
             .kill_on_drop(true);
-        tokio::time::timeout(Duration::from_secs(5), cmd.output())
+        // Starting MSYS2 tmux on its previous socket can take over five seconds
+        // after the last session exits, including collection of the command output.
+        let timeout = if cfg!(windows) && directory.is_some() {
+            Duration::from_secs(15)
+        } else {
+            Duration::from_secs(5)
+        };
+        tokio::time::timeout(timeout, cmd.output())
             .await
             .map_err(|_| {
                 Error::Unavailable(format!(
