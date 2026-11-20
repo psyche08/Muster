@@ -370,3 +370,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0252](0252-windows-network-member-details.md) | Accepted | Display the selected network member on Windows |
 | [0253](0253-windows-network-invitations.md) | Accepted | Display and paste network invitations on Windows |
 | [0254](0254-windows-conversation-options.md) | Accepted | Show conversation model and reasoning options in a Windows dialog |
+| [0255](0255-windows-managed-terminal-handoff.md) | Accepted | Attach a Windows desktop client to a conversation shell |

@@ -227,6 +227,25 @@ tmux 的套接字地址最多 107 字节；新版节点会尝试随包 cygpath �
 应能从同一 shell 读取变量。显式重启会话后，原句柄应失效。测试自行结束专用
 shell。含运行时的完整发行包、在线节点切换、远端授权和真实 GUI 重连需分别验收。
 
+### 将 Windows 会话终端接到另一个 PowerShell 窗口
+
+在合成会话的终端里点 **Connect**，然后打开 **Terminal actions… → Copy desktop connection command**。
+在**运行该会话的 Windows 设备**打开一个普通用户 PowerShell，粘贴并运行命令。
+Muster 和新窗口应能看到同一条命令的结果。外接窗口使用宿主返回的会话代际，
+不会改变 Muster 的终端尺寸。关闭外接窗口可继续使用原 shell；显式重启会话后，
+旧命令应退出。旧版 Windows 宿主可能未提供连接命令。
+
+回归测试使用发行包的 MSYS2、系统 Windows PowerShell 和独立 ConPTY。将
+`$env:MUSTER_MSYS2_ROOT` 指向展开的便携包内的 `payload\msys64` 或已安装版本的
+`msys64`，然后运行：
+
+```powershell
+cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-terminal powershell_desktop_client -- --ignored
+```
+
+测试在接入前保留半条合成命令，接入后补完并核对两端的输出，再从第二个窗口输入。
+仅看到两个客户端已连接不能证明输入完整。此测试使用临时专用 socket，在线节点可继续运行。
+
 ## 与已交付的 ZIP 对照
 
 如需证明截图来自特定包，在相同源码提交上给测试构建传入发行版本，例如
