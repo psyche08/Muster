@@ -81,7 +81,7 @@ internal static class DesktopInstance
         catch (AbandonedMutexException) { return true; }
     }
 
-    public static void Run(string name, Func<Form> create, string? installedPath = null)
+    public static bool Run(string name, Func<Form> create, string? installedPath = null, bool activateExisting = true)
     {
         using var user = WindowsIdentity.GetCurrent();
         var marker = name + "." + user.User!.Value;
@@ -91,7 +91,11 @@ internal static class DesktopInstance
         while (!Acquire(gate, 50))
         {
             var window = FindMarkedWindow(marker);
-            if (window != 0) { Activate(window); return; }
+            if (window != 0)
+            {
+                if (activateExisting) Activate(window);
+                return false;
+            }
             if (wait.Elapsed >= TimeSpan.FromSeconds(10))
                 throw new TimeoutException("Muster is already starting in this session.");
         }
@@ -100,8 +104,8 @@ internal static class DesktopInstance
             var legacy = installedPath == null ? 0 : FindInstalledWindow(installedPath, user.User!);
             if (legacy != 0)
             {
-                Activate(legacy);
-                return;
+                if (activateExisting) Activate(legacy);
+                return false;
             }
             using var form = create();
             nint marked = 0;
@@ -115,6 +119,7 @@ internal static class DesktopInstance
             if (form.IsHandleCreated) Mark();
             form.WindowState = FormWindowState.Maximized;
             Application.Run(form);
+            return true;
         }
         finally { gate.ReleaseMutex(); }
     }

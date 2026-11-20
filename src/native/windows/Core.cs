@@ -26,7 +26,7 @@ internal sealed class Core : IDisposable
         public ViewCallback View;
         public EffectCallback Effect;
         public nint Key, Sign;
-        public PresenceCallback Presence;
+        public PresenceCallback? Presence;
     }
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
@@ -52,12 +52,14 @@ internal sealed class Core : IDisposable
     Platform platform;
     nint handle;
     readonly bool attachOnly;
-    public string Socket => Path.Combine(attachOnly ? InstalledDirectory : StateDirectory, "musterd.sock");
-    public Core(Action<ViewModel> view, Action<ulong, Effect> effect, bool attachOnly)
+    readonly string? fixtureSocket;
+    public string Socket => fixtureSocket ?? Path.Combine(attachOnly ? InstalledDirectory : StateDirectory, "musterd.sock");
+    public Core(Action<ViewModel> view, Action<ulong, Effect> effect, bool attachOnly, string? fixtureSocket)
     {
-        this.attachOnly = attachOnly;
+        this.attachOnly = attachOnly || fixtureSocket != null;
+        this.fixtureSocket = fixtureSocket;
         muster_log_init_file(3);
-        platform.Presence = Presence.CopyCandidate;
+        if (fixtureSocket == null) platform.Presence = Presence.CopyCandidate;
         platform.View = (_, p, n) => view(ViewModel.Parser.ParseFrom(Copy(p, n)));
         platform.Effect = (_, id, p, n) => effect(id, Effect.Parser.ParseFrom(Copy(p, n)));
     }
@@ -89,6 +91,7 @@ internal sealed class Core : IDisposable
         return phase switch
         {
             0 => false,
+            1 when fixtureSocket != null => throw new InvalidOperationException("The isolated development daemon is unavailable."),
             1 when attachOnly => throw new InvalidOperationException("Start the installed Muster background service, then retry."),
             1 => true,
             -1 => throw Error(error),

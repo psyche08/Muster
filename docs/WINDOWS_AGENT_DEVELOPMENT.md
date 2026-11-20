@@ -1,5 +1,29 @@
 # Windows 开发调试指南（面向 Agent）
 
+## 普通用户联调 GUI、FFI 和 daemon
+
+在仓库根目录用 PowerShell 7.4 或更高版本运行。开发工具和 Cargo 产物可放在
+用户可写的开发目录。先关闭现有 Muster 主窗口，在线 daemon 和 vnet 可继续运行。
+
+```powershell
+./src/native/windows/dev.ps1 -Mode Isolated
+```
+
+脚本从同一工作树构建实际 GUI、Rust FFI、CLI 和使用软件身份的本地测试 daemon。
+在 **Muster (isolated development)** 窗口操作；另开终端，把脚本打印的两个路径
+分别赋给 `$musterCli` 和 `$fixtureSocket`，再运行：
+
+```powershell
+& $musterCli --socket $fixtureSocket info
+& $musterCli --socket $fixtureSocket presence
+```
+
+核对节点名称为 `Development desktop`、指纹与在线节点不同、vnet 关闭。
+始终传入打印的 socket；省略它会连接已安装节点。可在测试窗口中创建网络，
+随后用同一个 socket 核对网络状态。关闭测试窗口会结束隔离 daemon 并丢弃临时数据。
+重新打开固定快捷方式即可回到在线节点。若已有主窗口，隔离启动会退出并提示关闭
+该窗口。客户端改动必须访问真实设备时仍然可以使用 `-Mode Client`。
+
 ## 在独立进程中操作窗口并截图
 
 调试 Muster 自己的 WinForms 表单时，优先运行仓库的控件测试。测试进程加载实际的
