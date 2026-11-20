@@ -24,6 +24,7 @@ internal sealed class Desktop : Form
         Text = "Select a conversation or start a new chat." };
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
     readonly TranscriptSteps transcript = new();
+    readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
     RunHistoryDialog? runHistory;
     (string Device, string Session)? terminalTab;
@@ -76,6 +77,7 @@ internal sealed class Desktop : Form
         body.Controls.Add(terminal);
         body.Controls.Add(preview);
         body.Controls.Add(output);
+        body.Controls.Add(history);
         body.Controls.Add(chatWelcome);
         body.Controls.Add(list);
         body.Controls.Add(chatSidebar);
@@ -375,6 +377,7 @@ internal sealed class Desktop : Form
         status.Text = v.Toasts.LastOrDefault()?.Text ?? v.Join?.Message ?? "";
         var rows = new List<Row>();
         var lines = new List<string>();
+        var images = new List<TranscriptImage>();
         void Row(string name, Intent intent, string catalogKey = "") => rows.Add(new(name, intent, catalogKey));
         composerButtons.Clear();
         int actionIndex = 0;
@@ -627,7 +630,7 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                lines.AddRange(transcript.Lines());
+                transcript.AppendTo(lines, images);
                 if (transcript.HasCode)
                 {
                     int copyIndex = actionIndex;
@@ -910,11 +913,13 @@ internal sealed class Desktop : Form
         bool showingTerminal = page == Page.Terminal && v.Terminal != null;
         conversationTerminal.Visible = inWorkspaceTerminal;
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
-        output.Visible = page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        history.Display(chatKey, lines, images);
+        history.Visible = images.Count > 0;
+        output.Visible = images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         terminal.Display(showingTerminal ? v.Terminal : null);
-        var text = string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x)));
+        var text = images.Count == 0 ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         if (output.Text != text)
         {
             int pos = output.SelectionStart;

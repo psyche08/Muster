@@ -3,6 +3,13 @@ using Muster.Windows;
 
 internal static class TranscriptStepsTests
 {
+    static List<string> Lines(this TranscriptSteps steps)
+    {
+        var lines = new List<string>();
+        steps.AppendTo(lines, []);
+        return lines;
+    }
+
     public static void Run()
     {
         static void Check(bool yes, string name)

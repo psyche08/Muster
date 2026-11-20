@@ -8,11 +8,11 @@ namespace Muster.Windows;
 
 internal static class AttachmentPreview
 {
-    public static async Task<Bitmap> Decode(ByteString bytes, uint longestSide)
+    public static async Task<Bitmap> Decode(ByteString bytes, uint longestSide, Guid? codec = null)
     {
         using var source = new MemoryStream(bytes.ToByteArray(), writable: false);
         using var stream = source.AsRandomAccessStream();
-        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var decoder = codec is {} id ? await BitmapDecoder.CreateAsync(id, stream) : await BitmapDecoder.CreateAsync(stream);
         double scale = Math.Min(1, (double)longestSide / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
         var transform = new BitmapTransform {
             ScaledWidth = Math.Max(1, (uint)(decoder.PixelWidth * scale)),
