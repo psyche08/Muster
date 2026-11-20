@@ -25,7 +25,7 @@ internal sealed class DesktopChatSidebar : UserControl
         bar.Controls.AddRange([create, switchMode]);
         Controls.AddRange([chats, status, bar, provider]);
         Resize += (_, _) => status.MaximumSize = new Size(Math.Max(1, ClientSize.Width - Padding.Horizontal), 0);
-        provider.SelectionChangeCommitted += (_, _) =>
+        provider.SelectedIndexChanged += (_, _) =>
         {
             if (provider.SelectedItem is ChatProvider p && p.Id != view?.Provider)
                 Intent?.Invoke(new() { OpenDesktopChats = new() { Provider = p.Id } });

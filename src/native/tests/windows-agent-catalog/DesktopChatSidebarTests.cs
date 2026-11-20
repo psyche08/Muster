@@ -78,10 +78,11 @@ internal static class DesktopChatSidebarTests
         sidebar.Display(work);
         mode.PerformClick(); create.PerformClick();
         Check(intents[^2].DesktopChatOpen.Desktop && !intents[^1].DesktopChatOpen.Desktop, "switch mode and new chat");
+        int previousCount = intents.Count;
         combo.SelectedIndex = 1;
-        typeof(ComboBox).GetMethod("OnSelectionChangeCommitted", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(combo, [EventArgs.Empty]);
-        Check(intents.Last().OpenDesktopChats.Provider == "claude", "selected provider ID");
+        Check(intents.Count == previousCount + 1 && intents[^1].OpenDesktopChats.Provider == "claude", "selected provider ID");
+        sidebar.Display(work);
+        Check(intents.Count == previousCount + 1, "rendering the current provider does not navigate");
         sidebar.Display(null);
         Check(list.Items.Count == 0 && !list.Enabled, "leaving desktop chats");
         Console.WriteLine($"Passed desktop chat directory selection, refresh, busy, cache and empty states at {host.DeviceDpi} DPI.");
