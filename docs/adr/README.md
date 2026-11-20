@@ -352,3 +352,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0234](0234-windows-desktop-control.md) | In development | Windows desktop chat control and presence |
 | [0235](0235-integrate-windows-desktop.md) | In development | Integrate the Windows desktop with the current shared runtime |
 | [0236](0236-unprivileged-windows-development.md) | In development | Run the Windows client and isolated daemon fixtures under a standard user token |
+| [0237](0237-windows-composer-draft-revisions.md) | In development | Bind Windows chat actions to the active editor revision |
