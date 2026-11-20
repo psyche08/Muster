@@ -118,8 +118,9 @@ impl TmuxService {
         }
         if action != 0 {
             if exists {
-                let old = self.handle(&target).await?;
-                self.checked(&["kill-session", "-t", &target]).await?;
+                let instance = self.session_target(&name).await?;
+                let old = self.handle(&instance).await?;
+                self.checked(&["kill-session", "-t", &instance]).await?;
                 if let Some(id) = sessions.remove(&old) {
                     let _ = self.pty.close(&id).await;
                 }
@@ -143,11 +144,7 @@ impl TmuxService {
             ])
             .await?;
         }
-        // Some tmux commands parse -t as a pane/window, others as a session.
-        // Resolve once to its native ID instead of reinterpreting a name.
-        let target = self
-            .checked(&["display-message", "-p", "-t", &target, "#{session_id}"])
-            .await?;
+        let target = self.session_target(&name).await?;
         let mut handle = self.handle(&target).await?;
         if handle.is_empty() {
             handle = format!(
@@ -174,6 +171,29 @@ impl TmuxService {
             ));
         }
         Ok(String::from_utf8_lossy(&result.stdout).trim().into())
+    }
+
+    async fn session_target(&self, name: &str) -> Result<String, Error> {
+        // display-message takes a pane target. The colon identifies the exact
+        // session component even when its active window has a different name.
+        let row = self
+            .checked(&[
+                "display-message",
+                "-p",
+                "-t",
+                &format!("={name}:"),
+                "#{session_name}\t#{session_id}",
+            ])
+            .await?;
+        row.split_once('\t')
+            .filter(|(actual, id)| *actual == name && Self::is_native_id(id))
+            .map(|(_, id)| id.to_owned())
+            .ok_or_else(|| Error::NotFound("Managed terminal identity unavailable".into()))
+    }
+
+    fn is_native_id(id: &str) -> bool {
+        id.strip_prefix('$')
+            .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
     }
 
     async fn handle(&self, target: &str) -> Result<String, Error> {
@@ -244,9 +264,7 @@ impl TmuxService {
                     && name.strip_prefix("muster-").is_some_and(|suffix| {
                         !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_hexdigit())
                     })
-                    && target.strip_prefix('$').is_some_and(|suffix| {
-                        !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit())
-                    })
+                    && Self::is_native_id(target)
                 {
                     return Ok((*target).into());
                 }
@@ -460,6 +478,15 @@ mod tests {
         assert!(TmuxService::name("").is_err());
         assert!(TmuxService::name(&"a".repeat(257)).is_err());
     }
+    #[test]
+    fn native_session_ids_require_a_numeric_suffix() {
+        assert!(TmuxService::is_native_id("$0"));
+        assert!(TmuxService::is_native_id("$123"));
+        for invalid in ["", "$", "1", "%1", "$1:"] {
+            assert!(!TmuxService::is_native_id(invalid));
+        }
+    }
+
     struct Cleanup(PathBuf);
     impl Drop for Cleanup {
         fn drop(&mut self) {
@@ -806,6 +833,14 @@ mod tests {
             .unwrap();
         wait_text(&resumed, &restarted, "AFTER=fresh").await;
         let other = resumed.action("agent-two", dir, 0).await.unwrap();
+        assert!(resumed.session_target("muster-missing").await.is_err());
+        assert_ne!(restarted, other);
+        assert_eq!(resumed.agent_session(&other).await.unwrap(), "agent-two");
+        assert_eq!(resumed.action("agent-one", "", 0).await.unwrap(), restarted);
+        assert_eq!(
+            resumed.agent_session(&restarted).await.unwrap(),
+            "agent-one"
+        );
         wait_text(&resumed, &other, "work").await;
         resumed.action("agent-one", "", 1).await.unwrap();
         let target = format!("={}", TmuxService::name("agent-one").unwrap());
