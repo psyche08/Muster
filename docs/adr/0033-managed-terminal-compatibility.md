@@ -152,3 +152,24 @@ shutdown. Restart uses a single tmux command queue so killing the final session
 cannot race the next client against server exit. The replacement still gets a
 new handle. The local Windows test observed two separate daemon processes, an
 unchanged shell variable after reconnect, and rejection of the replaced handle.
+
+## Windows socket addresses in deep node directories
+
+The portable shell could use a long Unicode Windows temporary directory while
+tmux rejected the same node's full socket filename before connecting. Its
+Unix-domain address field holds 107 bytes plus the terminator. MSYS2 can name
+the same socket through a shorter mount path, including its user-temp mount.
+
+Keep the node's socket and run records in their existing directory. For an
+over-length Windows address, ask the bundled or explicitly configured runtime's
+cygpath for an absolute POSIX spelling and check the address length. Cache a
+successful conversion for use by both control and ConPTY clients. Ordinary
+short addresses keep their existing spelling. Avoid a shared temporary socket,
+a second server name or a working-directory-relative address. If the runtime
+cannot name the same socket within the limit, report how to choose a shorter
+node directory.
+
+Exercise a real packaged shell through a node restart below a deep Unicode
+temporary directory. Verify the original shell value and stale-handle checks,
+and verify the ordinary short-directory case. Keep the running production
+identity separate from the software identity in the test.

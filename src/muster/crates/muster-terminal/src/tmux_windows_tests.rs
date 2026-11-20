@@ -14,13 +14,12 @@ fn cygpath(bin: &Path, mode: &str, path: &Path) -> PathBuf {
 
 // Shut down only the server under this test's freshly created directory,
 // including on assertion failure. ConPTY readers can then finish on their own.
-struct FixtureServer(Arc<TmuxService>);
+struct FixtureServer(PathBuf, Vec<String>);
 
 impl Drop for FixtureServer {
     fn drop(&mut self) {
-        let service = &self.0;
-        let _ = Command::new(service.program.as_ref().unwrap())
-            .args(service.args())
+        let _ = Command::new(&self.0)
+            .args(&self.1)
             .arg("kill-server")
             .output();
     }
@@ -40,8 +39,8 @@ async fn windows_tmux_preserves_each_native_working_directory() {
     let root = tempfile::tempdir().unwrap();
     let socket = cygpath(&bin, "-u", &root.path().join("s"));
     let mut service = TmuxService::new(socket);
-    Arc::get_mut(&mut service).unwrap().program = Some(tmux);
-    let _cleanup = FixtureServer(service.clone());
+    Arc::get_mut(&mut service).unwrap().program = Some(tmux.clone());
+    let _cleanup = FixtureServer(tmux, service.args().await.unwrap());
 
     for (agent, workspace) in [("first", "first work"), ("second", "第二 #{session_id}")] {
         let directory = root.path().join(workspace);
@@ -94,4 +93,17 @@ async fn missing_tmux_reports_the_host_prerequisite() {
         service.action("fixture", root.path().to_str().unwrap(), 0).await,
         Err(Error::Unavailable(message)) if message.contains("Install tmux")
     ));
+}
+
+#[tokio::test]
+#[ignore = "requires MSYS2 with tmux and cygpath"]
+async fn oversized_socket_with_no_short_mount_reports_the_limit() {
+    let root = tempfile::tempdir().unwrap();
+    let socket = root.path().join("x".repeat(120));
+    let service = TmuxService::new(socket.clone());
+    let result = service.args().await;
+    assert!(
+        matches!(result, Err(Error::Unavailable(message)) if message.contains("shorter node directory"))
+    );
+    assert!(!socket.exists());
 }
