@@ -424,7 +424,7 @@ internal sealed class Desktop : Form
             if (page == Page.Settings)
             {
                 if (deviceAuthAvailable)
-                    Button(actions, "Register presence candidate", () => ShowPresenceReport(() => Presence.Register(Handle, core.Socket)));
+                    AddAction("Register presence candidate", () => ShowPresenceReport(() => Presence.Register(Handle, core.Socket)));
                 var desktopVersion = typeof(Desktop).Assembly.GetName().Version?.ToString(3);
                 lines.Add($"Desktop version    {Reported(desktopVersion)}");
                 lines.Add($"Local node version    {Reported(v.Self?.Version)}");
