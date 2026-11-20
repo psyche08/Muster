@@ -8,10 +8,12 @@
 
 Windows displayed the local node identity at the top of every member detail.
 Two devices could thus appear on one detail page. Member rows omitted the link,
-and selected phones received service shortcuts in the Windows shell.
+and selected phones received service shortcuts in the Windows shell. The
+Network navigation button requested Home, which the shared core maps to Agents.
 
 ## Decision
 
+Route the Network shortcut to Settings and focus its member list.
 Open member details by ID from the roster with a click or keyboard activation.
 Present only the selected member on that page. Draw link text, build details,
 grouped access and service availability from the shared view. Keep navigation

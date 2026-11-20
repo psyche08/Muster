@@ -46,7 +46,7 @@ internal sealed class Desktop : Form
             button.Enabled = needsText ? input.CanSubmitPayload : input.TextLength == 0;
     }
     ViewModel? pending, current;
-    bool opening, ready;
+    bool opening, ready, focusNetworkList;
     string inputContext = "";
     static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
                                             Padding = new Padding(0, 2, 0, 2) };
@@ -104,7 +104,16 @@ internal sealed class Desktop : Form
         related.Open += Send;
         conversationTerminal.ReturnToChat += () => SelectTab(SessionTab.Conversation);
         Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
-        Button(nav, "Network", () => Go(Page.Home));
+        Button(nav, "Network", () =>
+        {
+            if (current?.Screen == Page.Settings)
+                FocusNetworkList();
+            else
+            {
+                focusNetworkList = true;
+                Go(Page.Settings);
+            }
+        });
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
         Button(nav, "Chats", () => Send(new() { OpenDesktopChats = new() }));
         Button(nav, "Terminals", () =>
@@ -254,6 +263,12 @@ internal sealed class Desktop : Form
             Send(new() { SessionTerminalAction = new() { Action = tab == SessionTab.Terminal
                 ? SessionTerminalAction.Types.Action.Start : SessionTerminalAction.Types.Action.Detach } });
         Render(current);
+    }
+    void FocusNetworkList()
+    {
+        if (!list.Visible || list.Items.Count == 0) return;
+        if (list.SelectedIndex < 0) list.SelectedIndex = 0;
+        list.Focus();
     }
     void OpenRow()
     {
@@ -991,6 +1006,11 @@ internal sealed class Desktop : Form
         output.Visible = !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
+        if (focusNetworkList && page == Page.Settings)
+        {
+            focusNetworkList = false;
+            FocusNetworkList();
+        }
         terminal.Display(showingTerminal ? v.Terminal : null);
         var text = images.Count == 0 ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         if (output.Text != text)
