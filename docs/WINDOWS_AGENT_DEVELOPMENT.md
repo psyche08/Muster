@@ -114,6 +114,13 @@ PowerShell 窗口即可丢弃上述环境设置。正式 daemon 重启及 GUI �
 
 ### 通过隔离 daemon 验证 Windows 托管终端
 
+1.1.71 起，便携包在 `musterd.exe` 同级提供 `msys64`。正常运行时无需设置环境变量。
+验收发行包时，可把测试生成的 `windows_managed_terminal-*.exe` 复制到临时目录，
+在同级放入从 ZIP 解出的 `payload/msys64`。在没有 `MUSTER_MSYS2_ROOT` 的普通
+PowerShell 会话中运行该测试程序，参数为
+`--ignored --exact managed_shell_through_windows_daemon_restart`。只保留系统 PATH
+可以验证 shell 能独立执行随包的 `cat`，在恢复后从原工作目录读回文件。
+
 在普通用户 PowerShell 中把 `MUSTER_MSYS2_ROOT` 设为可信 MSYS2 安装目录的绝对路径。
 目录下应有 `usr\bin\tmux.exe`、`sh.exe`、运行库和终端数据。daemon 默认也会检查其
 可执行文件旁的 `msys64`。该路径由宿主选择；工作目录里的程序不会作为 tmux 启动。

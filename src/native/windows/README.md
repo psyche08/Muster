@@ -16,7 +16,10 @@ with the same path on each update. Choose a location where only your account
 and administrators can replace executables or rename their parent directories.
 Use the same procedure for each new ZIP. A single-file WinForms app, Rust
 core, daemon, CLI, Chrome host and extension, network node, Wintun DLL,
-packet helper and license notices are included. PowerShell verifies the file
+packet helper and license notices are included. The managed conversation terminal
+uses the bundled MSYS2 shell, tmux and file utilities in `msys64`. Matching MSYS2
+source packages with build recipes are in `Terminal-Sources/` in the ZIP.
+`Terminal-Runtime.txt` identifies their versions and checksums. PowerShell verifies the file
 hashes and switches the shortcut after staging the new release.
 
 The desktop opens maximized with its normal title bar. Reopening the shortcut
@@ -124,3 +127,11 @@ x86_64-pc-windows-gnu target, mingw-w64, bash, curl, unzip, shasum and Python
 WINTUN_ARCHIVE can point to a local copy of the pinned Wintun ZIP. Both
 builds verify the driver archive, validate all executable images as x64 and
 read back the ZIP to compare its payload hashes. A development ZIP is unsigned.
+
+The two portable builders use the same pinned MSYS2 archives. They need a tar
+reader with Zstandard support (the Windows system tar on the supported host).
+For an offline build set `MUSTER_MSYS2_ARCHIVES` to a directory containing all
+binary and source archives named in
+[`terminal_runtime.py`](installer/terminal_runtime.py). Without this setting
+the packager fetches the same files from the MSYS2 repository. Each input
+is verified before extraction.

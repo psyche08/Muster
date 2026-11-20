@@ -120,7 +120,7 @@ fn history(id: &str) -> Req {
 }
 
 #[tokio::test]
-#[ignore = "requires MSYS2 with tmux; set MUSTER_MSYS2_ROOT"]
+#[ignore = "requires MSYS2 with tmux next to the test executable or in MUSTER_MSYS2_ROOT"]
 async fn managed_shell_through_windows_daemon_restart() {
     let root = tempfile::tempdir().unwrap();
     let day = root.path().join("codex/sessions/2026/01/01");
@@ -143,7 +143,15 @@ async fn managed_shell_through_windows_daemon_restart() {
                 .output();
         }
     }
-    let runtime = std::path::PathBuf::from(std::env::var_os("MUSTER_MSYS2_ROOT").unwrap());
+    let runtime = std::env::var_os("MUSTER_MSYS2_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("msys64")
+        });
     assert!(runtime.is_absolute());
     let _cleanup = Cleanup(
         runtime.join("usr/bin/tmux.exe"),
@@ -218,7 +226,7 @@ async fn managed_shell_through_windows_daemon_restart() {
         &client,
         &id,
         "read",
-        b"printf 'result=%s\\n' \"$((fixture_value+1))\"\r",
+        b"printf 'result=%s\\n' \"$((fixture_value+1))\" > terminal-result.txt && cat terminal-result.txt\r",
     )
     .await;
     tokio::time::timeout(Duration::from_secs(8), async {

@@ -6,7 +6,9 @@ from pathlib import Path
 import re
 import sys
 from tempfile import TemporaryDirectory
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
+
+from terminal_runtime import stage_runtime
 
 PAYLOAD = (
     "Muster.exe", "musterd.exe", "muster-tun.exe", "muster-vnet.exe",
@@ -24,17 +26,21 @@ def build(stage, version, output):
     output.mkdir(parents=True, exist_ok=True)
     name = f"Muster-{version}-win-x64.zip"
     with TemporaryDirectory(dir=output) as work:
-        archive = Path(work) / name
+        work = Path(work)
+        runtime, sources = stage_runtime(work)
+        archive = work / name
         checksums = {}
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as package:
-            for item in PAYLOAD:
-                data = (stage / item).read_bytes()
+            for item in (*PAYLOAD, *runtime):
+                data = ((stage if item in PAYLOAD else work) / item).read_bytes()
                 if item.endswith((".dll", ".exe")):
                     offset = int.from_bytes(data[60:64], "little")
                     if data[:2] != b"MZ" or data[offset:offset + 6] != bytes.fromhex("504500006486"):
                         raise ValueError(f"Expected x64 PE image in {item}")
                 checksums[item] = sha256(data).hexdigest()
                 package.writestr("payload/" + item, data)
+            for source_package in sources:
+                package.write(source_package, "Terminal-Sources/" + source_package.name, compress_type=ZIP_STORED)
             for script in ("Apply-Update.cmd", "Apply-Update.ps1"):
                 package.write(source / script, script)
             package.write(source.parent / "README.md", "README.md")
