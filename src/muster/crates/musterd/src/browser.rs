@@ -28,37 +28,66 @@ pub fn permission(request: &muster_browser::Request) -> muster_core::Permission 
 
 pub async fn setup(daemon: &Daemon, install: bool) -> Result<v1::BrowserStatus, Error> {
     let executable = std::env::current_exe().map_err(|e| Error::Unavailable(e.to_string()))?;
-    let contents = executable
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| Error::Unavailable("Muster app bundle unavailable".into()))?;
-    let extension = contents.join("Resources/AgentHaloBrowser");
-    let host = contents.join("Helpers/muster-browser-host");
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| Error::Unavailable("home directory unavailable".into()))?;
-    let manifest_dir = if cfg!(target_os = "macos") {
-        std::path::PathBuf::from(home)
-            .join("Library/Application Support/Google/Chrome/NativeMessagingHosts")
-    } else {
-        std::path::PathBuf::from(home).join(".config/google-chrome/NativeMessagingHosts")
-    };
-    if install {
-        if !extension.join("manifest.json").is_file() {
+    #[cfg(windows)]
+    let (extension, installed) = {
+        // Windows Installer owns the host manifest and HKLM native messaging
+        // registration, including repair, upgrades and uninstall.
+        let dir = executable
+            .parent()
+            .ok_or_else(|| Error::Unavailable("installation directory missing".into()))?;
+        let extension = dir.join("AgentHaloBrowser");
+        let manifest = dir.join(format!("{}.json", muster_browser::HOST));
+        let installed = std::fs::read(&manifest)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some_and(|m| {
+                m["path"] == "muster-browser-host.exe"
+                    && m["allowed_origins"] == serde_json::json!([muster_browser::ORIGIN])
+            })
+            && dir.join("muster-browser-host.exe").is_file();
+        if install && !installed {
             return Err(Error::Unavailable(
-                "Install the current Muster desktop app containing Agent Halo Browser first".into(),
+                "Repair the Muster MSI to register the browser host".into(),
             ));
         }
-        muster_browser::install_host(&host, &manifest_dir)
-            .map_err(|e| Error::Unavailable(e.to_string()))?;
-    }
-    let installed = std::fs::read(manifest_dir.join(format!("{}.json", muster_browser::HOST)))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .is_some_and(|m| {
-            m["path"].as_str() == host.to_str()
-                && m["allowed_origins"] == serde_json::json!([muster_browser::ORIGIN])
-                && host.is_file()
-        });
+        (extension, installed)
+    };
+    #[cfg(not(windows))]
+    let (extension, installed) = {
+        let contents = executable
+            .parent()
+            .and_then(|p| p.parent())
+            .ok_or_else(|| Error::Unavailable("Muster app bundle unavailable".into()))?;
+        let extension = contents.join("Resources/AgentHaloBrowser");
+        let host = contents.join("Helpers/muster-browser-host");
+        let home = std::env::var_os("HOME")
+            .ok_or_else(|| Error::Unavailable("home directory unavailable".into()))?;
+        let manifest_dir = if cfg!(target_os = "macos") {
+            std::path::PathBuf::from(home)
+                .join("Library/Application Support/Google/Chrome/NativeMessagingHosts")
+        } else {
+            std::path::PathBuf::from(home).join(".config/google-chrome/NativeMessagingHosts")
+        };
+        if install {
+            if !extension.join("manifest.json").is_file() {
+                return Err(Error::Unavailable(
+                    "Install the current Muster desktop app containing Agent Halo Browser first"
+                        .into(),
+                ));
+            }
+            muster_browser::install_host(&host, &manifest_dir)
+                .map_err(|e| Error::Unavailable(e.to_string()))?;
+        }
+        let installed = std::fs::read(manifest_dir.join(format!("{}.json", muster_browser::HOST)))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some_and(|m| {
+                m["path"].as_str() == host.to_str()
+                    && m["allowed_origins"] == serde_json::json!([muster_browser::ORIGIN])
+                    && host.is_file()
+            });
+        (extension, installed)
+    };
     let connected = muster_browser::call(
         &muster_browser::socket_in(&daemon.config.dir),
         &muster_browser::Request::Ping {},

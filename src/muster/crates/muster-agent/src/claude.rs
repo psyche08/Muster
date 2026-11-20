@@ -305,9 +305,15 @@ fn collect_candidates(
 /// `claude-code-sessions/<org>/<user>/<id>.json`, naming the Claude Code
 /// session it drives as `cliSessionId`.
 pub fn desktop_registry() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join("Library/Application Support/Claude/claude-code-sessions")
-    })
+    #[cfg(windows)]
+    {
+        std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Claude/claude-code-sessions"))
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::home_dir()
+            .map(|home| home.join("Library/Application Support/Claude/claude-code-sessions"))
+    }
 }
 
 /// A registry file's modification time and size, and the session it drives

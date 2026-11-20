@@ -41,3 +41,7 @@ muster-relay = { path = "../muster-relay" }
 
 [lints]
 workspace = true
+
+[target.'cfg(windows)'.dependencies]
+muster-local = { path = "../muster-local" }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_Pipes", "Win32_System_SystemInformation"] }

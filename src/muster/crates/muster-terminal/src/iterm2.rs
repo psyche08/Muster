@@ -9,12 +9,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
+#[cfg(unix)]
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as _;
+#[cfg(unix)]
 use tokio::net::UnixStream;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
+#[cfg(unix)]
 use tokio_tungstenite::tungstenite::Message;
+#[cfg(unix)]
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+#[cfg(unix)]
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 use crate::proto::client_originated_message::Submessage as Req;
@@ -33,7 +38,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Screen updates within this window collapse into one fetch.
 const COALESCE: Duration = Duration::from_millis(16);
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "iterm2_tests.rs"]
 mod simulation_tests;
 
@@ -130,6 +135,12 @@ pub struct Iterm2 {
 }
 
 impl Iterm2 {
+    #[cfg(not(unix))]
+    pub async fn connect(_: &Path, _: &Cookie, _: &str) -> Result<Arc<Self>, Error> {
+        Err(Error::Unavailable("iTerm2 requires macOS".into()))
+    }
+
+    #[cfg(unix)]
     pub async fn connect(
         socket: &Path,
         cookie: &Cookie,
@@ -791,7 +802,7 @@ fn create_window_request(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod creation_tests {
     use super::*;
     #[test]
@@ -817,7 +828,7 @@ mod creation_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod native_protocol_tests {
     use super::*;
     use crate::proto::*;
@@ -945,7 +956,7 @@ mod native_protocol_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod disconnect_tests {
     use super::*;
     #[tokio::test]

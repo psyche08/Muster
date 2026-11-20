@@ -9,7 +9,6 @@ pub mod backend;
 mod cache;
 mod catalog;
 mod chat_hosts;
-#[cfg(unix)]
 pub mod desktop_startup;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod desktop_update;
@@ -265,4 +264,48 @@ async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx, dir: PathBuf) {
     update::flush_chat_cache(&mut state, &ctx);
     state.cancel_all();
     ticker.abort();
+}
+
+/// Check the two canonical challenge encodings the app core hands to a
+/// desktop presence signer. The OS shell still authorizes every signature.
+pub fn is_presence_challenge(message: &[u8]) -> bool {
+    use muster_proto::Message;
+    if let Some(payload) = message.strip_prefix(b"MUSTER-PRESENCE-V1") {
+        let Some((id, body)) = payload.split_at_checked(8) else {
+            return false;
+        };
+        let Ok(request) = muster_proto::v1::Request::decode(body) else {
+            return false;
+        };
+        let Some(op) = request.req else { return false };
+        return muster_proto::presence_message(u64::from_be_bytes(id.try_into().unwrap()), &op)
+            == message;
+    }
+    let Some(payload) = message.strip_prefix(b"MUSTER-LOCKED-USE-V1\0") else {
+        return false;
+    };
+    muster_core::locked_use::Challenge::decode(payload)
+        .is_ok_and(|c| c.signing_message() == message)
+}
+
+#[cfg(test)]
+mod presence_encoding_tests {
+    use super::is_presence_challenge;
+    use muster_proto::v1::request::Req;
+
+    #[test]
+    fn signer_accepts_canonical_requests_and_rejects_arbitrary_payloads() {
+        let challenge = muster_proto::presence_message(9, &Req::DeviceInfo(Default::default()));
+        assert!(is_presence_challenge(&challenge));
+        for bytes in [
+            b"arbitrary".as_slice(),
+            b"MUSTER-PRESENCE-V1",
+            b"MUSTER-LOCKED-USE-V1\0invalid",
+        ] {
+            assert!(!is_presence_challenge(bytes));
+        }
+        let mut malformed = challenge;
+        malformed.push(0);
+        assert!(!is_presence_challenge(&malformed));
+    }
 }

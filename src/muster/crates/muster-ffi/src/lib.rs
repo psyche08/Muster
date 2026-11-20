@@ -351,7 +351,6 @@ pub extern "C" fn muster_desktop_update_startup() {
 
 /// The one desktop startup coordinator: the first look and the Start button
 /// share its admission, so neither runs while the other is in flight.
-#[cfg(unix)]
 static DESKTOP_STARTUP: std::sync::LazyLock<muster_app_core::desktop_startup::Coordinator> =
     std::sync::LazyLock::new(muster_app_core::desktop_startup::Coordinator::default);
 
@@ -384,7 +383,6 @@ fn desktop_arguments<'a>(
 /// facts' bits (negative is a failure); every other action answers 0 done,
 /// 1 macOS wants the owner's approval, 3 the owner cancelled the password
 /// prompt, anything else a native failure.
-#[cfg(unix)]
 fn desktop_service(
     action: Option<unsafe extern "C" fn(u32) -> i32>,
 ) -> impl Fn(muster_app_core::desktop_startup::ServiceAction) -> Result<u32, muster_app_core::Error>
@@ -435,7 +433,6 @@ pub unsafe extern "C" fn muster_desktop_check(
         set_error(error_out, "invalid desktop startup arguments".into());
         return -1;
     }
-    #[cfg(unix)]
     let result = DESKTOP_STARTUP
         .check_blocking(
             std::path::Path::new(path),
@@ -444,13 +441,6 @@ pub unsafe extern "C" fn muster_desktop_check(
             desktop_service(action),
         )
         .map(|startup| startup.code());
-    #[cfg(not(unix))]
-    let result: Result<i32, muster_app_core::Error> = {
-        let _ = (path, action);
-        Err(muster_app_core::Error::Unavailable(
-            "Unix desktop preparation is unsupported on this platform".into(),
-        ))
-    };
     match result {
         Ok(code) => code,
         Err(error) => {
@@ -475,19 +465,11 @@ pub unsafe extern "C" fn muster_desktop_prepare(
     let Some(path) = desktop_arguments(socket, managed, action, error_out) else {
         return -1;
     };
-    #[cfg(unix)]
     let result = DESKTOP_STARTUP.prepare_blocking(
         std::path::Path::new(path),
         managed == 1,
         desktop_service(action),
     );
-    #[cfg(not(unix))]
-    let result: Result<(), muster_app_core::Error> = {
-        let _ = (path, action);
-        Err(muster_app_core::Error::Unavailable(
-            "Unix desktop preparation is unsupported on this platform".into(),
-        ))
-    };
     match result {
         Ok(()) => 0,
         Err(error) => {
@@ -495,4 +477,17 @@ pub unsafe extern "C" fn muster_desktop_prepare(
             -1
         }
     }
+}
+
+/// Validate an app-core presence challenge before opening the Windows TPM key.
+///
+/// # Safety
+/// A non-null pointer must span the indicated number of readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn muster_is_presence_challenge(bytes: *const u8, length: usize) -> u8 {
+    if bytes.is_null() || length > isize::MAX as usize {
+        return 0;
+    }
+    muster_app_core::is_presence_challenge(unsafe { std::slice::from_raw_parts(bytes, length) })
+        as u8
 }

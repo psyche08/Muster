@@ -356,11 +356,7 @@ fn not_ready(socket: &Path, started: Instant) -> Error {
 
 async fn ready(socket: &Path) -> bool {
     matches!(
-        tokio::time::timeout(
-            Duration::from_millis(250),
-            tokio::net::UnixStream::connect(socket)
-        )
-        .await,
+        tokio::time::timeout(Duration::from_millis(250), muster_local::connect(socket)).await,
         Ok(Ok(_))
     )
 }
@@ -386,6 +382,13 @@ async fn wait_ready(socket: &Path, budget: Duration, interval: Duration) -> bool
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    // A Windows pipe has one client per instance. Accept each readiness
+    // probe so the fixture keeps serving subsequent checks like musterd.
+    fn listening(path: impl AsRef<Path>) -> tokio::task::JoinHandle<()> {
+        let listener = muster_local::Listener::bind(path).unwrap();
+        tokio::spawn(async move { while listener.accept().await.is_ok() {} })
+    }
+
     fn limits() -> Limits {
         Limits {
             initial: Duration::from_millis(20),
@@ -435,7 +438,7 @@ mod tests {
     async fn a_healthy_system_job_opens_the_main_page_without_asking() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s");
-        let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let _listener = listening(&path);
         let only_inspect = |a| match a {
             ServiceAction::Inspect => Ok(healthy()),
             other => panic!("a healthy service must not be touched: {other:?}"),
@@ -501,7 +504,7 @@ mod tests {
         let late = path.clone();
         let listener = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(5)).await;
-            tokio::net::UnixListener::bind(late).unwrap()
+            listening(late)
         });
         let startup = Coordinator::default()
             .check_with(&path, true, false, |_| Ok(healthy()), limits())
@@ -515,7 +518,7 @@ mod tests {
     async fn a_running_daemon_from_an_older_registration_is_offered_the_move() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s");
-        let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let _listener = listening(&path);
         let check = |code: u32| {
             let path = path.clone();
             async move {
@@ -550,7 +553,7 @@ mod tests {
     async fn migration_installs_then_replaces_the_old_registration() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s");
-        let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let _listener = listening(&path);
         let run = |code: u32| {
             let path = path.clone();
             async move {
@@ -638,7 +641,7 @@ mod tests {
                             listeners
                                 .lock()
                                 .unwrap()
-                                .push(tokio::net::UnixListener::bind(path).unwrap());
+                                .push(listening(path));
                         });
                     }
                     Ok(facts(Agent::Current, Job::Stopped, Origin::System))
@@ -769,7 +772,7 @@ mod tests {
             Err(Error::Busy(_))
         ));
         drop(first);
-        let _listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let _listener = listening(&path);
         coordinator
             .prepare_with(&path, true, |_| Ok(healthy()), limits())
             .await

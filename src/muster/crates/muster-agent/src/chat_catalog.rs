@@ -38,7 +38,27 @@ impl LocalCatalog {
             .map(|name| home.join("sqlite").join(name))
             .filter(|p| p.is_file())
             .collect();
-        let result = if let [path] = paths.as_slice() {
+        let selected = match paths.as_slice() {
+            [path] => Some(path),
+            [first, second] => {
+                // A release and development install can coexist. Ignore a
+                // database only when its own typed table proves it has no
+                // ChatGPT account. A busy or unreadable file is ambiguous.
+                let count = |path: &Path| -> Option<i64> {
+                    let db =
+                        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+                    db.busy_timeout(Duration::from_millis(150)).ok()?;
+                    db.query_row("SELECT COUNT(*) FROM local_thread_catalog_hosts WHERE host_kind = 'chatgpt'", [], |row| row.get(0)).ok()
+                };
+                match (count(first), count(second)) {
+                    (Some(1), Some(0)) => Some(first),
+                    (Some(0), Some(1)) => Some(second),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let result = if let Some(path) = selected {
             self.read(path)
                 .map_err(|e| Error::Unavailable(format!("ChatGPT local catalog: {e}")))
         } else {
@@ -300,6 +320,22 @@ mod tests {
         conn.execute_batch("DELETE FROM local_thread_catalog_hosts WHERE host_id='other'; DROP TABLE local_thread_catalog_metadata;").unwrap();
         assert!(source.read_home(dir.path()).is_err());
         assert!(source.catalog.chats.is_empty());
+    }
+
+    #[test]
+    fn two_databases_require_one_typed_account_in_total() {
+        let dir = tempfile::tempdir().unwrap();
+        let _live = database(dir.path());
+        let other = Connection::open(dir.path().join("sqlite/codex-dev.db")).unwrap();
+        other
+            .execute_batch("CREATE TABLE local_thread_catalog_hosts(host_kind TEXT)")
+            .unwrap();
+        let mut catalog = LocalCatalog::default();
+        assert!(catalog.read_home(dir.path()).is_ok());
+        other
+            .execute_batch("INSERT INTO local_thread_catalog_hosts VALUES ('chatgpt')")
+            .unwrap();
+        assert!(catalog.read_home(dir.path()).is_err());
     }
 
     #[test]

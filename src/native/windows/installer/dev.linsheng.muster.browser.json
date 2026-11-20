@@ -1,0 +1,7 @@
+{
+  "name": "dev.linsheng.muster.browser",
+  "description": "Muster browser native host",
+  "type": "stdio",
+  "path": "muster-browser-host.exe",
+  "allowed_origins": ["chrome-extension://ngfbfehgemldmajkjhjahbechooakidc/"]
+}

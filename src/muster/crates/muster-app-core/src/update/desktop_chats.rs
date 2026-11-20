@@ -79,12 +79,16 @@ pub(super) async fn chat_catalog_of(
         }
         if provider == "codex" && !info.services.iter().any(|s| s == "agent.chat.catalog.v1") {
             return Err(Error::Invalid(
-                "update Muster on this Mac for the typed ChatGPT catalog".into(),
+                "update Muster on this desktop for the typed ChatGPT catalog".into(),
             ));
         }
-        if !info.services.iter().any(|s| s == "agent.chat.locked.v1") {
+        if !info
+            .services
+            .iter()
+            .any(|s| s == "agent.chat.locked.v1" || s == "agent.chat.interactive.v1")
+        {
             return Err(Error::Unavailable(
-                "update Muster on this Mac to load Chat through Locked Use".into(),
+                "update Muster on this desktop to enable chat control".into(),
             ));
         }
         match unary(

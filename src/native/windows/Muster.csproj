@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Muster</AssemblyName>
+    <Version>1.1.51</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.34.0" />
+  </ItemGroup>
+  <Target Name="GenerateProtocol" BeforeTargets="CoreCompile">
+    <MakeDir Directories="$(IntermediateOutputPath)protocol"/>
+    <Exec Command="protoc -I &quot;../../muster/crates/muster-proto/proto&quot; --csharp_out=&quot;$(IntermediateOutputPath)protocol&quot; ../../muster/crates/muster-proto/proto/muster.proto ../../muster/crates/muster-proto/proto/app.proto"/>
+    <ItemGroup><Compile Include="$(IntermediateOutputPath)protocol/*.cs" /></ItemGroup>
+  </Target>
+</Project>

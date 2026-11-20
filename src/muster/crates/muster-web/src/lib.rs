@@ -31,8 +31,8 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use muster_local::Listener;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
 use tokio::task::{JoinHandle, JoinSet};
 
 /// The whole request head, including the blank line.
@@ -193,32 +193,39 @@ impl Window {
         socket: &Path,
         upstream: Arc<dyn Upstream>,
     ) -> Result<Self, Error> {
-        use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
-        let dir = socket
-            .parent()
-            .ok_or_else(|| Error::Origin("the window's socket has no directory".into()))?;
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(dir)?;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-        if let Ok(meta) = std::fs::symlink_metadata(socket) {
-            if !meta.file_type().is_socket() {
-                return Err(Error::Origin(format!(
-                    "{} exists and is not a socket",
-                    socket.display()
-                )));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
+            let dir = socket
+                .parent()
+                .ok_or_else(|| Error::Origin("the window's socket has no directory".into()))?;
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(dir)?;
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+            if let Ok(meta) = std::fs::symlink_metadata(socket) {
+                if !meta.file_type().is_socket() {
+                    return Err(Error::Origin(format!(
+                        "{} exists and is not a socket",
+                        socket.display()
+                    )));
+                }
+                if std::os::unix::net::UnixStream::connect(socket).is_ok() {
+                    return Err(Error::Origin(format!(
+                        "{} is already served",
+                        socket.display()
+                    )));
+                }
+                std::fs::remove_file(socket)?;
             }
-            if std::os::unix::net::UnixStream::connect(socket).is_ok() {
-                return Err(Error::Origin(format!(
-                    "{} is already served",
-                    socket.display()
-                )));
-            }
-            std::fs::remove_file(socket)?;
         }
-        let listener = UnixListener::bind(socket)?;
-        std::fs::set_permissions(socket, std::fs::Permissions::from_mode(0o600))?;
+        let listener = Listener::bind(socket)?;
+        #[cfg(unix)]
+        std::fs::set_permissions(
+            socket,
+            <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o600),
+        )?;
         log::info!("web window {} serves {origin}", socket.display());
         let accept = tokio::spawn(accept(listener, origin.clone(), upstream.clone()));
         Ok(Self {
@@ -250,11 +257,12 @@ impl Window {
 impl Drop for Window {
     fn drop(&mut self) {
         self.accept.abort();
+        #[cfg(unix)]
         let _ = std::fs::remove_file(&self.socket);
     }
 }
 
-async fn accept(listener: UnixListener, origin: Origin, upstream: Arc<dyn Upstream>) {
+async fn accept(listener: Listener, origin: Origin, upstream: Arc<dyn Upstream>) {
     // Whoever opened this socket is this user: the directory admits no one
     // else. That is the machine's owner, who may do anything the browser may.
     let owner: Gate = Arc::new(|| Ok(Grant::Act));
