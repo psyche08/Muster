@@ -39,6 +39,19 @@ Unicode 差异和历史改动入口，并保存当前文件及历史差异截图
 dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
 ```
 
+终端控件测试在独立窗口中绘制带样式的行和光标，检查鼠标选区、普通字符、
+补充平面字符、输入法提交消息、组合键、粘贴和尺寸上报。它可以输出一张合成截图。
+
+```powershell
+dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c Release -- --screenshots $captures
+```
+
+实机验收时在 Terminals 选择本机，新建专用的 Built-in terminal。在网格内输入
+算式，先检查回显，再用方向键编辑并按 Return 确认计算结果。调整窗口大小后核对
+目录行的列数和行数。Ctrl+Shift+V 粘贴，拖选后 Ctrl+Shift+C 复制，Ctrl+Tab
+将焦点移回其他控件。关闭视图会保留 PowerShell，完成后在自己的测试会话中输入
+`exit` 并确认它从目录移除。物理输入法候选窗、远端终端权限需另外验证。
+
 ## 与已交付的 ZIP 对照
 
 如需证明截图来自特定包，在相同源码提交上给测试构建传入发行版本，例如
