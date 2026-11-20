@@ -53,3 +53,10 @@ retained shell state and stale-handle checks passed across separate software
 node processes in both short and deep Unicode directories. The existing
 Windows terminal UI suite passed at 192 DPI. The running TPM-backed daemon
 and a physical Unix client were outside these isolated runs.
+
+A separate interactive Windows PowerShell terminal also ran the command
+returned by the full frame of an isolated software node. The external terminal
+displayed the result of a command started before attachment. The original
+terminal then displayed the result entered from the external one. Restarting
+the synthetic session closed the external client. Running the old command
+again left the replacement session with zero external clients.

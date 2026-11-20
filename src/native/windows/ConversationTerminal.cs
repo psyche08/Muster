@@ -108,7 +108,6 @@ internal sealed class ConversationTerminal : UserControl
     void ShowOptions()
     {
         var menu = CreateOptions();
-        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-        menu.Show(options, new Point(0, options.Height));
+        menu.ShowBelow(options);
     }
 }

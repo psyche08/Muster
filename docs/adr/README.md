@@ -371,3 +371,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0253](0253-windows-network-invitations.md) | Accepted | Display and paste network invitations on Windows |
 | [0254](0254-windows-conversation-options.md) | Accepted | Show conversation model and reasoning options in a Windows dialog |
 | [0255](0255-windows-managed-terminal-handoff.md) | Accepted | Attach a Windows desktop client to a conversation shell |
+| [0256](0256-windows-button-menu-lifetime.md) | Accepted | Bind Windows action menus to their anchor control |
