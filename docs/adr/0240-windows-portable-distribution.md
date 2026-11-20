@@ -39,3 +39,9 @@ deployment, a damaged file and switching the shortcut with older binaries in
 use. Verify the per-user browser registration, GUI single instance and daemon
 and tunnel continuity on Windows. Report compilation, package signature and
 physical network acceptance separately.
+
+On Windows, the first test exposed the default Windows PowerShell script
+policy and a missing hashing cmdlet. The ZIP includes a command launcher
+using process-scoped RemoteSigned and the updater hashes with .NET. The
+updated entry point deployed a full copy of the preceding version under a
+standard token while the existing GUI, daemon and packet helper stayed up.

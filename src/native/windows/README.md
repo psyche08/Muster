@@ -2,12 +2,14 @@
 
 ## Install or update
 
-Verify the downloaded x64 ZIP against its published SHA-256. Extract it to a
-temporary directory, open an ordinary Windows PowerShell there and run:
+Verify the downloaded x64 ZIP against its published SHA-256. For a trusted downloaded ZIP, use Properties > Unblock if Windows marked it
+as downloaded. Extract it to a temporary directory. Open an ordinary shell
+there and run:
 
-    .\Apply-Update.ps1
+    .\Apply-Update.cmd
 
-The script prints the fixed shortcut at
+The launcher uses Windows PowerShell with RemoteSigned for that process.
+Organizational group policy still applies. The script prints the fixed shortcut at
 `%LOCALAPPDATA%\Programs\Muster\Muster.lnk`. Pin this shortcut or copy a
 shortcut to it. To use a different private directory, pass `-Destination`
 with the same path on each update. Choose a location where only your account

@@ -35,7 +35,8 @@ def build(stage, version, output):
                         raise ValueError(f"Expected x64 PE image in {item}")
                 checksums[item] = sha256(data).hexdigest()
                 package.writestr("payload/" + item, data)
-            package.write(source / "Apply-Update.ps1", "Apply-Update.ps1")
+            for script in ("Apply-Update.cmd", "Apply-Update.ps1"):
+                package.write(source / script, script)
             package.write(source.parent / "README.md", "README.md")
             package.writestr("release.json", json.dumps({"version": version, "files": checksums}, indent=2))
         with ZipFile(archive) as package:

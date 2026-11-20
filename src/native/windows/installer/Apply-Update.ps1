@@ -18,7 +18,13 @@ function Test-Payload([string]$Directory) {
     if ($files.Count -ne $hashes.Count) { throw 'Package file count mismatch' }
     foreach ($file in $files) {
         $relative = $file.FullName.Substring($Directory.Length + 1).Replace('\', '/')
-        if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne $hashes[$relative]) {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $stream = [IO.File]::OpenRead($file.FullName)
+            try { $digest = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
+            finally { $stream.Dispose() }
+        } finally { $sha.Dispose() }
+        if ($digest -ne $hashes[$relative]) {
             throw "Package verification failed: $relative"
         }
     }
