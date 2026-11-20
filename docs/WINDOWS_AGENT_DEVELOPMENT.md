@@ -24,6 +24,47 @@
 重新打开固定快捷方式即可回到在线节点。若已有主窗口，隔离启动会退出并提示关闭
 该窗口。客户端改动必须访问真实设备时仍然可以使用 `-Mode Client`。
 
+## 免 UAC 演练两个版本的节点升级
+
+要检查旧节点退出后，新节点能否读回相同的身份、地址和成员记录，使用
+`windows_managed_terminal` 测试程序里的软件身份节点。普通 Windows 终端即可运行，
+在线 GUI 和 daemon 可以继续工作。生产 `musterd.exe` 即使传入另一个 `--dir`，
+仍会获取当前用户的 TPM 身份锁。
+
+准备两个发行版本各自的干净源码工作树和便携包 CLI。将路径分别赋给
+`$previousTree`、`$nextTree`、`$previousCli` 和 `$nextCli`。两个工作树均需包含
+`fixture_node_process` 测试入口。以下命令可复用配置在开发目录的 Cargo 缓存。
+每次构建完成立即另存测试程序，以便共用 target 目录时也能保留两代二进制。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
+$fixtures = [IO.Directory]::CreateTempSubdirectory('muster-fixture-builds-').FullName
+function Build-NodeFixture($tree, $cli, $name) {
+    $version = & $cli --version
+    if ($version -notmatch '^muster (\d+\.\d+\.\d+)$') { throw 'Expected a release CLI' }
+    $saved = $env:MUSTER_WINDOWS_VERSION
+    try {
+        $env:MUSTER_WINDOWS_VERSION = $Matches[1]
+        $manifest = Join-Path $tree 'src/muster/Cargo.toml'
+        $exe = @(cargo test --manifest-path $manifest --locked -p musterd --test windows_managed_terminal --no-run --message-format=json-render-diagnostics |
+            ForEach-Object { ConvertFrom-Json $_ } |
+            Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'windows_managed_terminal' -and $_.executable } |
+            ForEach-Object executable)
+        if ($exe.Count -ne 1) { throw 'Expected one fixture binary' }
+        (Copy-Item -LiteralPath $exe[0] -Destination (Join-Path $fixtures "$name.exe") -PassThru).FullName
+    } finally { $env:MUSTER_WINDOWS_VERSION = $saved }
+}
+$oldNode = Build-NodeFixture $previousTree $previousCli 'previous'
+$newNode = Build-NodeFixture $nextTree $nextCli 'next'
+./src/native/tests/windows-node-upgrade.ps1 -PreviousFixture $oldNode -NextFixture $newNode -PreviousCli $previousCli -NextCli $nextCli
+```
+
+脚本用旧版创建合成网络，保存设备名称和回环 relay，等旧进程正常退出，再用新版打开同一数据库。
+两版 CLI 都会从两代节点读取设备信息。脚本比较身份、指纹、网络 ID、虚拟地址、角色和权限，
+退出时删除临时数据库和软件密钥。记录测试输出的版本和提交，和两棵源码树的 HEAD 分别核对。
+构建的两个测试程序保留在 `$fixtures`。生产切换后的节点版本、TPM 验签和实际隧道流量仍需分别验收。
+
 ## 在独立进程中操作窗口并截图
 
 调试 Muster 自己的 WinForms 表单时，优先运行仓库的控件测试。测试进程加载实际的
