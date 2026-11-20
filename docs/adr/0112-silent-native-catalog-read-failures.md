@@ -62,3 +62,16 @@ initial replies, in a stable order. Further replies replace only that device's
 outcome. A refresh with no eligible devices clears obsolete errors immediately.
 Provider metadata notices remain silent. Verify duplicate and late deliveries,
 two independent failures, recovery and an empty set of eligible devices.
+
+The Windows agent guide verifies the per-device result with a bounded,
+catalog-only subscription. Count the RPC's list changes and classify its end
+from the error envelope or CLI diagnostic. This lets an operator see a
+healthy sibling stream and a specific refusal without logging conversation
+titles. Exercise both outcomes with the same CLI used by the desktop.
+
+In a Windows device check, relay-connected desktops delivered initial
+snapshots and remained subscribed until the observer cancelled. A reachable
+direct peer refused catalog access. Filtering the installed GUI to the
+refusing peer showed the policy error. Filtering to an allowed peer showed
+its catalog rows. Returning to all devices restored the refusal. The guide's
+probe was run verbatim against both kinds of peer.

@@ -364,16 +364,49 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 
 在 **Agents** 中用设备筛选器复核出错的宿主，再回到所有设备。对已配对的目标，
 先用 `muster status` 查看连接状态。如需检查订阅，把已安装的 CLI 路径和目标
-设备 ID 分别赋给 `$musterCli` 和 `$deviceId`。以下命令只请求目录，在六秒后取消观察。
+设备 ID 分别赋给 `$musterCli` 和 `$deviceId`。在普通用户 PowerShell 中运行以下
+Python 3 探针。它只请求目录，在内存中统计快照，输出观察时长和结束原因。
 
 ```powershell
-'{"agent_watch":{"catalog_only":true,"provider_pages":true,"grouped":true,"limit":10}}' |
-    & $musterCli --target $deviceId rpc --request - --timeout 6
+@'
+import json, subprocess, sys, time
+cli, member = sys.argv[1:]
+request = {"agent_watch": {"catalog_only": True, "provider_pages": True, "grouped": True, "limit": 10}}
+start = time.monotonic()
+result = subprocess.run([cli, "--target", member, "rpc", "--request", "-", "--timeout", "15"],
+                        input=json.dumps(request).encode(), capture_output=True, timeout=30)
+snapshots = 0
+errors = [result.stderr.decode("utf-8", errors="replace")]
+for line in result.stdout.splitlines():
+    record = json.loads(line)
+    event = record.get("event", {}).get("agent_event", {}).get("ev", {})
+    snapshots += int("list_changed" in event)
+    if "error" in record:
+        errors.append(record["error"])
+reason = " ".join(errors).lower()
+if "unauthorized" in reason:
+    end = "permission refused"
+elif "rpc timed out and was cancelled" in reason:
+    end = "observer deadline"
+elif result.returncode == 0:
+    end = "peer finished"
+else:
+    end = f"RPC error (exit {result.returncode})"
+print(f"snapshots={snapshots} elapsed={time.monotonic()-start:.1f}s end={end}")
+'@ | python - $musterCli $deviceId
 ```
 
-分别记录设备是否在线、是否收到首个目录快照、是否收到明确的权限拒绝。收到快照后，
-CLI 仍可在观察时限结束时报告超时。记录结果时只需事件类型和计数，省略会话标题。
-一台设备持续推送时，其他设备的错误应保留到对应设备成功恢复或移出当前筛选。
+`snapshots` 大于零且 `end=observer deadline` 表示收到了该成员的目录，订阅持续到
+本次观察结束。快照为零且到达观察时限，表示窗口内未收到首个目录。
+`end=permission refused` 表示对端明确拒绝访问。用 Agents 的设备筛选器选择该成员，
+核对页面显示的具体权限，再返回所有设备。一台设备持续推送时，其他设备的错误应保留到
+对应设备成功恢复或移出当前筛选。
+
+用 UI Automation 核对此流程时，在 GUI 进程的可见顶层窗口中，按标题 `Muster` 和
+`ControlType.Window` 找主窗，再按 `ControlType.MenuItem` 找设备选项。菜单已展开时，
+`MainWindowHandle` 可能指向弹出菜单。Agents 错误正文在只读输出框的
+`ValuePattern.Current.Value` 中。选中允许访问的单台设备后，应出现该设备的目录行；
+回到 **All devices** 后，核对被拒成员的错误仍然可见。
 
 ## 只读核对在场密钥
 
