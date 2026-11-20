@@ -1,0 +1,24 @@
+name: remote desktop engine checks
+
+on:
+  pull_request:
+    paths:
+      - 'addons/remote-desktop/**'
+      - '.github/workflows/remote-desktop.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'addons/remote-desktop/**'
+      - '.github/workflows/remote-desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  moonlight-core:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S addons/remote-desktop -B "$RUNNER_TEMP/remote-desktop" -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+      - run: cmake --build "$RUNNER_TEMP/remote-desktop" --parallel
+      - run: ctest --test-dir "$RUNNER_TEMP/remote-desktop" --output-on-failure

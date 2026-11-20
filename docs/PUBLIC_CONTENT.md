@@ -45,6 +45,10 @@ in fixtures; do not paste real account, task or device records into them.
 A reserved name covers everything under it, so `api.example.com` is as
 synthetic as `example.com` and an address-shaped fixture on either — URL
 userinfo such as `user:pass@api.example.com` included — is not a finding.
+For the remote desktop vendor snapshots, reviewed upstream attribution and
+package metadata or synthetic paths are matched by exact file, rule and line
+digest. New or modified lines are scanned normally. Credentials and internal
+references cannot be exempted this way.
 The check reports file/line and rule names without printing candidate secrets.
 It checks tracked UTF-8 content only, not Git history, images or remote services.
 
