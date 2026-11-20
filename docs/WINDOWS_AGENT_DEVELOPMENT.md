@@ -63,6 +63,11 @@ Unicode 差异和历史改动入口，并保存当前文件及历史差异截图
 dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
 ```
 
+同一用例生成 `related-sessions.png`。从 Agents 打开父会话，分别选择 **Subagents**
+和 **Sessions**。核对标题、状态、关系和只读标记；空列表仍可进入。用鼠标或 Enter 打开
+子会话，再点 **Open parent conversation** 回到父会话。使用相同标题的合成子项检查实际打开的
+记录，切换设备后再核对同 ID 的目标。在窄窗口下检查标签可横向滚动。
+
 同一命令也生成 `session-trace.png`。在会话里点 **Trace**，按轮次查看已加载的记录。
 可通过搜索命中详情，选择时间条或树中的记录核对开始时间、结束时间及原始输出。
 在等宽与实际时间模式间切换；没有时间戳的记录仍可从树中查看。需要旧记录时点

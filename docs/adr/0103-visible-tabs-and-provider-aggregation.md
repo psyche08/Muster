@@ -63,3 +63,20 @@ signing/notarization, installation and physical acceptance distinct.
 [ADR 0104](0104-three-category-session-catalog.md) supersedes provider and
 single-device native-section grouping with Pin, Section and Recent. The visible
 scrolling tab strip remains unchanged.
+
+## Windows session navigation
+
+The Windows conversation could open a parent but had no direct views for the
+two related-session lists. Use a single native, horizontally scrollable row
+for Conversation, Trace, Subagents, Sessions and Terminal. Keep an empty list
+reachable. Render Rust's ordered direct children, projected relationship,
+read-only flag and state. Opening a child uses the enclosing chat's device
+and the selected row's exact session ID. Filtering the global catalog by name
+would lose hidden children and could choose the wrong device. Selecting a
+related view reads the current projection without starting a terminal.
+
+Keep tabs and selection scoped to the device and parent. Retain selection by
+child ID across refreshes and clear it when the row disappears. Exercise empty
+lists, colliding titles, reorder/removal, terminal availability and navigation
+with synthetic records. Verify child and parent navigation via the normal
+Agents entry point in an isolated Windows GUI.

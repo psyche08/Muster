@@ -27,9 +27,11 @@ internal sealed class Desktop : Form
     readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SessionTrace trace = new() { Dock = DockStyle.Fill, Visible = false };
-    (string Device, string Session)? traceTab;
+    readonly RelatedSessions related = new() { Dock = DockStyle.Fill, Visible = false };
+    readonly SessionTabs sessionTabs = new() { Visible = false };
+    (string Device, string Session)? tabScope;
+    SessionTab selectedTab;
     RunHistoryDialog? runHistory;
-    (string Device, string Session)? terminalTab;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ChatInput input =
@@ -74,6 +76,7 @@ internal sealed class Desktop : Form
         title.DpiChangedAfterParent += (_, _) => SizeTitle();
         SizeTitle();
         var body = new Panel { Dock = DockStyle.Fill };
+        body.Controls.Add(related);
         body.Controls.Add(trace);
         body.Controls.Add(conversationTerminal);
         terminal.ClipboardError += message => status.Text = message;
@@ -90,19 +93,16 @@ internal sealed class Desktop : Form
         Controls.Add(input);
         Controls.Add(actions);
         Controls.Add(status);
+        Controls.Add(sessionTabs);
         Controls.Add(title);
         Controls.Add(nav);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
         chatSidebar.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
-        conversationTerminal.ReturnToChat += () =>
-        {
-            if (current == null || terminalTab == null) return;
-            terminalTab = null;
-            core.Send(new() { SessionTerminalAction = new() { Action = SessionTerminalAction.Types.Action.Detach } });
-            Render(current);
-        };
+        sessionTabs.Chosen += SelectTab;
+        related.Open += Send;
+        conversationTerminal.ReturnToChat += () => SelectTab(SessionTab.Conversation);
         Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
         Button(nav, "Network", () => Go(Page.Home));
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
@@ -233,6 +233,17 @@ internal sealed class Desktop : Form
         {
             opening = false;
         }
+    }
+    void SelectTab(SessionTab tab)
+    {
+        if (current?.Chat?.Session == null || tabScope == null || selectedTab == tab) return;
+        if (tab == SessionTab.Terminal && current.Chat.Terminal?.Available != true) return;
+        var previous = selectedTab;
+        selectedTab = tab;
+        if (tab == SessionTab.Terminal || previous == SessionTab.Terminal)
+            Send(new() { SessionTerminalAction = new() { Action = tab == SessionTab.Terminal
+                ? SessionTerminalAction.Types.Action.Start : SessionTerminalAction.Types.Action.Detach } });
+        Render(current);
     }
     void OpenRow()
     {
@@ -426,11 +437,17 @@ internal sealed class Desktop : Form
         (string Device, string Session)? chatKey = page == Page.Chat && v.Chat?.Session is {} openChatSession
             ? (v.Chat.DeviceId, openChatSession.Id) : null;
         transcript.Display(page == Page.Chat ? v.Chat : null);
-        if (terminalTab != chatKey) terminalTab = null;
-        if (traceTab != chatKey) traceTab = null;
-        bool inTrace = traceTab != null;
-        bool inWorkspaceTerminal = terminalTab != null && v.Chat?.Terminal != null;
-        input.Visible = !inTrace && !inWorkspaceTerminal && (page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents);
+        if (tabScope != chatKey)
+        {
+            tabScope = chatKey;
+            selectedTab = SessionTab.Conversation;
+        }
+        bool inRelated = selectedTab is SessionTab.Subagents or SessionTab.Sessions;
+        bool inTrace = selectedTab == SessionTab.Trace;
+        bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
+        sessionTabs.Visible = chatKey != null;
+        if (chatKey != null) sessionTabs.Display(v.Chat!, selectedTab);
+        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -616,28 +633,13 @@ internal sealed class Desktop : Form
             if (v.Chat is {} chatView)
             {
                 title.Text = chatView.Session?.Title ?? "Chat";
-                if (inWorkspaceTerminal) break;
-                if (chatKey != null)
+                if (inWorkspaceTerminal || inRelated) break;
+                if (inTrace)
                 {
-                    AddAction(inTrace ? "Conversation" : "Trace", () =>
-                    {
-                        traceTab = inTrace ? null : chatKey;
-                        Render(v);
-                    });
-                    if (inTrace)
-                    {
-                        if (chatView.HasEarlier)
-                            Act("Earlier messages", () => new() { AgentLoadEarlier = new() });
-                        break;
-                    }
+                    if (chatView.HasEarlier)
+                        Act("Earlier messages", () => new() { AgentLoadEarlier = new() });
+                    break;
                 }
-                if (chatView.Terminal is { Available: true } && chatKey != null)
-                    AddAction("Workspace terminal", () =>
-                    {
-                        terminalTab = chatKey;
-                        Send(new() { SessionTerminalAction = new() { Action = SessionTerminalAction.Types.Action.Start } });
-                        Render(v);
-                    });
                 lines.Add(chatView.CodeError);
                 if (chatKey != null && chatView.CodeRuns.Count > 0)
                     AddAction("Recent runs", () =>
@@ -933,10 +935,12 @@ internal sealed class Desktop : Form
         conversationTerminal.Visible = inWorkspaceTerminal;
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
         history.Display(chatKey, lines, images);
+        related.Visible = inRelated;
+        related.Display(inRelated ? v.Chat : null, selectedTab);
         trace.Visible = inTrace;
         trace.Display(inTrace ? v.Chat : null);
         history.Visible = !inTrace && images.Count > 0;
-        output.Visible = !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         terminal.Display(showingTerminal ? v.Terminal : null);
