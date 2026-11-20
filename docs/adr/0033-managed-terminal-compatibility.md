@@ -78,3 +78,28 @@ Runtime: isolated PTY/tmux tests passed. Actual iTerm2/Ghostty GUI acceptance,
 iOS device build/installation, and physical-device latency remain unverified.
 Desktop-first sizing, controller ownership and pane management remain follow-up
 scope, as stated above.
+
+## Exact session lookup on tmux 3.8
+
+A Windows compatibility check using MSYS2 tmux 3.8 found that a bare exact
+session name passed to `display-message -t` produced empty session fields even
+though `has-session` succeeded. The former accepts a pane target. Shared Rust
+will specify the session component explicitly, require the returned name to
+match, and require a native numeric session ID before using it for handle
+lookup, attachment or removal. An empty target cannot identify a terminal.
+
+Keep the existing generation handles and validate the session on the dedicated
+socket. Verify lookup with two live synthetic sessions, resume and end them
+independently, and check missing or malformed identity fields. Separately test
+ConPTY input, the returned grid and host-observed resize on Windows.
+
+On Windows, the MSYS2 tmux 3.8 fixture returned distinct native IDs for the
+two exact session selectors. An isolated build of the shared service using
+ConPTY recovered the same shell variable in a second client process. Restart
+invalidated the old handle and ending that session left its sibling usable.
+A separate ConPTY round trip returned the computed result and resized the
+viewport to 94 by 27, including the tmux status line. These probes ran outside
+musterd. Directly passing a Windows drive path to tmux selected the home
+directory, while the equivalent MSYS2 path selected the requested directory.
+Windows host integration still needs directory conversion and daemon-level
+acceptance before it can offer managed terminals.

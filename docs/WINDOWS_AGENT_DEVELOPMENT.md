@@ -88,6 +88,16 @@ dotnet run --project src/native/tests/windows-terminal/WindowsTerminal.csproj -c
 测试 shell。可在支持 tmux 且已授权的宿主上验证分离后重连到同一 shell。Windows 目标
 当前会返回 `tmux requires a Unix host`。记录目标返回的错误以及相应操作是否仍可用。
 
+调试 Windows 宿主的 tmux 兼容性时，用专用测试 socket 创建两个合成会话。用
+`display-message -p -t '=会话名:'` 读取 `#{session_name}` 和 `#{session_id}`，
+核对名字和数字 ID。通过 ConPTY 输入一个算式，在返回的完整网格里读到计算结果，
+再从 tmux 侧检查调整后的尺寸。关闭第一个测试进程，用第二个进程恢复同一 shell
+中的变量。显式重启其中一个会话后，核对旧句柄失效，另一个会话仍可输入。
+
+在 MSYS2 tmux 3.8 上，直接传入带盘符的 Windows 工作目录可能让 shell 落到
+用户主目录。用同一套 MSYS2 的 `cygpath -u` 转换目录，在服务端核对
+`#{pane_current_path}`。单独记录适配器测试、daemon 重启及 GUI 重连的结果。
+
 ## 与已交付的 ZIP 对照
 
 如需证明截图来自特定包，在相同源码提交上给测试构建传入发行版本，例如
