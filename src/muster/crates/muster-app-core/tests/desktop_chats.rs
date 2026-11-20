@@ -48,6 +48,7 @@ fn message(id: &str, role: &str, text: &str) -> v1::AgentMessage {
 #[derive(Default)]
 struct Server {
     chat_service: bool,
+    hidden_window: std::sync::atomic::AtomicBool,
     legacy_catalog: bool,
     legacy_locked: bool,
     locked_load: bool,
@@ -128,10 +129,11 @@ impl Handler for Server {
                             });
                         }
                     }
+                    let visible = !self.hidden_window.load(Ordering::SeqCst);
                     Resp::AgentChats(v1::AgentChatCatalog {
                         provider: r.provider,
-                        app_running: true,
-                        chat_mode: true,
+                        app_running: visible,
+                        chat_mode: visible,
                         chats: vec![
                             v1::AgentChat {
                                 id: LISTED.into(),
@@ -697,6 +699,33 @@ async fn chatgpt_is_first_and_default_and_uses_the_probe_catalog() {
     assert_eq!(choices, [("codex", "ChatGPT"), ("claude", "Claude")]);
     assert_eq!(server.catalogs.load(Ordering::SeqCst), 1);
     assert_eq!(server.full_catalogs.load(Ordering::SeqCst), 0);
+
+    // A saved list can outlive its only visible provider window.
+    server.hidden_window.store(true, Ordering::SeqCst);
+    intent(&core, app::intent::It::Refresh(app::Refresh {}));
+    shell
+        .wait_for("hidden window recovery hint", |v| {
+            v.desktop_chats.as_ref().is_some_and(|d| {
+                !d.loading
+                    && d.device_id.is_empty()
+                    && d.error.contains("Show one main window for ChatGPT")
+            })
+        })
+        .await;
+    server.hidden_window.store(false, Ordering::SeqCst);
+    intent(&core, app::intent::It::Refresh(app::Refresh {}));
+    shell
+        .wait_for("visible ChatGPT window selected again", |v| {
+            v.desktop_chats.as_ref().is_some_and(|d| {
+                !d.loading
+                    && d.device_id == "local"
+                    && d.error.is_empty()
+                    && d.catalog.as_ref().is_some_and(|c| c.chats.len() == 2)
+            })
+        })
+        .await;
+    assert_eq!(server.opens.load(Ordering::SeqCst), 0);
+    assert!(server.sends.lock().unwrap().is_empty());
     core.backend().local().close();
     core.shutdown();
 }

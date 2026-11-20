@@ -96,6 +96,14 @@ pub fn chat_label(provider: &str) -> Option<&'static str> {
         .map(|c| c.label)
 }
 
+/// Recovery when the native probe cannot identify a usable provider window.
+pub fn chat_window_unavailable(provider: &str) -> String {
+    let label = chat_app(provider)
+        .and_then(|app| app.chat.as_ref())
+        .map_or("the chat app", |chat| chat.label);
+    format!("Show one main window for {label} on this desktop, then try again.")
+}
+
 /// Agent providers, in list order.
 pub fn agent_providers() -> Vec<&'static str> {
     APPS.iter()

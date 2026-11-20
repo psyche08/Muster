@@ -47,3 +47,21 @@ Test both history readers on unobserved temporary and stable IDs, on a blank
 new chat and after observing a conversation. Exercise ordinary, outline and
 paged reads, provider argument parsing and the actual Windows named pipe.
 Verify the live node and isolated daemon separately.
+
+## Recovering an unavailable provider window
+
+A complete typed directory can be available while the provider has no usable
+desktop window. On Windows the signed app can remain in the tray with all
+its windows hidden. The live catalog probe then reports the same availability
+as a closed app. Opening the official app from Start made the same probe
+succeed while leaving the directory count unchanged.
+
+Use the shared provider label and ask the user to show a single main window
+and retry. Use this guidance for host selection, CLI catalog output and native
+process lookup. Keep a missing observation or detached controller scoped to
+reopening the actual conversation. Inferring process exit from a window probe
+would give the wrong recovery step. Listing saved conversations still provides
+no authority to attach to a hidden or ambiguous window. Verify the offline
+catalog with saved rows, alternative-host selection and the typed history
+read after observation. Keep the device's before/after probe distinct from a
+verified read of a particular conversation.

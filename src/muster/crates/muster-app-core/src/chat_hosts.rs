@@ -22,7 +22,9 @@ pub struct Candidate {
 /// and chat operations there would fail at once.
 pub fn unusable(app: ChatApp, catalog: &v1::AgentChatCatalog) -> Option<String> {
     if !catalog.app_running {
-        return Some(format!("{} is not running", app.name()));
+        return Some(muster_core::apps::chat_window_unavailable(
+            app.provider().as_str(),
+        ));
     }
     if catalog.busy == "agent" {
         return Some(format!("{} is in use by an agent operation", app.name()));
@@ -132,15 +134,19 @@ mod tests {
 
     #[test]
     fn skips_macs_an_agent_holds_or_without_the_app() {
+        // A provider can have a complete saved list while its window is hidden.
+        let mut hidden = catalog(false, false, "", false);
+        hidden.history_complete = true;
+        hidden.chats.push(v1::AgentChat {
+            id: "saved".into(),
+            ..Default::default()
+        });
         let answers = vec![
             (
                 mac("Held", 1, true),
                 Ok(catalog(true, true, "agent", false)),
             ),
-            (
-                mac("Closed", 1, false),
-                Ok(catalog(false, false, "", false)),
-            ),
+            (mac("Closed", 1, false), Ok(hidden)),
             (
                 mac("Old", 1, false),
                 Err("does not offer desktop chats".into()),
@@ -157,7 +163,10 @@ mod tests {
             none.contains("Held: ChatGPT is in use by an agent operation"),
             "{none}"
         );
-        assert!(none.contains("Closed: ChatGPT is not running"), "{none}");
+        assert!(
+            none.contains("Closed: Show one main window for ChatGPT"),
+            "{none}"
+        );
         assert!(none.contains("Old: does not offer desktop chats"), "{none}");
         assert!(
             choose(ChatApp::Claude, &[])
