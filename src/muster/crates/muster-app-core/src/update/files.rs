@@ -6,6 +6,8 @@ pub(super) fn open_files(state: &mut State, ctx: &Ctx, path: String) {
     let Some((device, session)) = chat_target(state) else {
         return;
     };
+    state.files_revision += 1;
+    let revision = state.files_revision;
     state.files = Some(app::FilesView {
         device_id: device.clone(),
         session: session.clone(),
@@ -34,6 +36,7 @@ pub(super) fn open_files(state: &mut State, ctx: &Ctx, path: String) {
         }
         .await;
         Msg::Files {
+            revision,
             device,
             session,
             result,
@@ -50,22 +53,101 @@ pub(super) fn session_file_link(cwd: &str, link: &str) -> Result<String, &'stati
             .map(|_| link.to_owned())
             .ok_or("Invalid delivered file link");
     }
-    let base =
-        url::Url::from_directory_path(cwd).map_err(|_| "Session directory is unavailable")?;
-    let mut url = base.join(link).map_err(|_| "Invalid file link")?;
-    url.set_fragment(None);
-    url.set_query(None);
-    if url.scheme() != "file" {
+    // The session can live on a different OS. Work with its path components
+    // without converting through the viewing machine's filesystem.
+    let drive_path = |p: &str| {
+        let b = p.as_bytes();
+        b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'/' | b'\\')
+    };
+    let verbatim = cwd.strip_prefix(r"\\?\");
+    let cwd = verbatim.unwrap_or(cwd);
+    let unc = verbatim
+        .and_then(|p| p.strip_prefix(r"UNC\"))
+        .or_else(|| cwd.strip_prefix(r"\\"))
+        .or_else(|| cwd.strip_prefix("//"));
+    let windows = unc.is_some() || drive_path(cwd);
+    let mut base = url::Url::parse("file:///").expect("static file URL");
+    let directory = if let Some(unc) = unc {
+        let (host, rest) = unc
+            .split_once(['/', '\\'])
+            .ok_or("Session directory is unavailable")?;
+        if host.is_empty()
+            || rest
+                .split(['/', '\\'])
+                .next()
+                .unwrap_or_default()
+                .is_empty()
+        {
+            return Err("Session directory is unavailable");
+        }
+        base.set_host(Some(host))
+            .map_err(|_| "Invalid session host")?;
+        rest.replace('\\', "/")
+    } else if windows {
+        cwd.replace('\\', "/")
+    } else if cwd.starts_with('/') {
+        cwd.to_owned()
+    } else {
+        return Err("Session directory is unavailable");
+    };
+    let mut root = Vec::new();
+    for part in directory.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                if root.len() <= usize::from(windows) {
+                    return Err("Invalid session directory");
+                }
+                root.pop();
+            }
+            _ => root.push(part),
+        }
+    }
+    base.path_segments_mut()
+        .expect("file URL has a path")
+        .clear()
+        .extend(&root)
+        .push("");
+    let url = if windows && drive_path(link) {
+        base.join(&format!("file:///{}", link.replace('\\', "/")))
+    } else {
+        base.join(link)
+    }
+    .map_err(|_| "Invalid file link")?;
+    if url.scheme() != "file" || url.host_str() != base.host_str() {
         return Err("Unsupported file link");
     }
-    let path = url.to_file_path().map_err(|_| "Invalid file link")?;
-    let rel = path
-        .strip_prefix(cwd)
-        .map_err(|_| "File is outside the session directory")?;
-    if rel.as_os_str().is_empty() {
+    let parts: Vec<_> = url
+        .path_segments()
+        .ok_or("Invalid file link")?
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            percent_encoding::percent_decode_str(part)
+                .decode_utf8()
+                .map_err(|_| "Invalid file link")
+        })
+        .collect::<Result<_, _>>()?;
+    if parts.len() < root.len()
+        || !root.iter().zip(&parts).enumerate().all(|(i, (a, b))| {
+            if windows && unc.is_none() && i == 0 {
+                a.eq_ignore_ascii_case(b)
+            } else {
+                *a == b.as_ref()
+            }
+        })
+    {
+        return Err("File is outside the session directory");
+    }
+    let rel = &parts[root.len()..];
+    if rel.is_empty() {
         return Err("Select a file to preview");
     }
-    Ok(rel.to_string_lossy().into_owned())
+    if rel.iter().any(|p| {
+        p == "." || p == ".." || p.contains(['/', '\0']) || (windows && p.contains(['\\', ':']))
+    }) {
+        return Err("Invalid file link");
+    }
+    Ok(rel.join("/"))
 }
 
 pub(super) fn open_change(state: &mut State, request: app::OpenChange) {
@@ -104,6 +186,8 @@ pub(super) fn open_file(state: &mut State, ctx: &Ctx, path: String) {
     let Some((device, session)) = chat_target(state) else {
         return;
     };
+    state.file_revision += 1;
+    let revision = state.file_revision;
     state.file = Some(app::FileView {
         device_id: device.clone(),
         session: session.clone(),
@@ -135,6 +219,7 @@ pub(super) fn open_file(state: &mut State, ctx: &Ctx, path: String) {
         }
         .await;
         Msg::File {
+            revision,
             device,
             session,
             path,
@@ -147,6 +232,8 @@ pub(super) fn open_git(state: &mut State, ctx: &Ctx, diff_commit: String) {
     let Some((device, session)) = chat_target(state) else {
         return;
     };
+    state.git_revision += 1;
+    let revision = state.git_revision;
     state.git = Some(app::GitView {
         device_id: device.clone(),
         session: session.clone(),
@@ -177,6 +264,7 @@ pub(super) fn open_git(state: &mut State, ctx: &Ctx, diff_commit: String) {
         }
         .await;
         Msg::Git {
+            revision,
             device,
             session,
             result,
@@ -196,6 +284,7 @@ pub(super) fn intent_open_file_link(state: &mut State, ctx: &Ctx, o: app::OpenFi
 
 pub(super) fn msg_files(
     state: &mut State,
+    revision: u64,
     device: String,
     session: String,
     result: Result<v1::FileList, Error>,
@@ -203,7 +292,7 @@ pub(super) fn msg_files(
     let Some(files) = &mut state.files else {
         return;
     };
-    if files.device_id != device || files.session != session {
+    if files.device_id != device || files.session != session || revision != state.files_revision {
         return;
     }
     files.loading = false;
@@ -218,13 +307,19 @@ pub(super) fn msg_files(
 
 pub(super) fn msg_file(
     state: &mut State,
+    revision: u64,
     device: String,
     session: String,
     path: String,
     result: Result<v1::FileContent, Error>,
 ) {
     let Some(file) = &mut state.file else { return };
-    if file.device_id != device || file.session != session || file.path != path || file.is_diff {
+    if file.device_id != device
+        || file.session != session
+        || revision != state.file_revision
+        || file.path != path
+        || file.is_diff
+    {
         return;
     }
     file.loading = false;
@@ -240,12 +335,13 @@ pub(super) fn msg_file(
 
 pub(super) fn msg_git(
     state: &mut State,
+    revision: u64,
     device: String,
     session: String,
     result: Result<v1::GitLog, Error>,
 ) {
     let Some(git) = &mut state.git else { return };
-    if git.device_id != device || git.session != session {
+    if git.device_id != device || git.session != session || revision != state.git_revision {
         return;
     }
     git.loading = false;

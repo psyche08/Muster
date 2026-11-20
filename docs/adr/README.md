@@ -358,3 +358,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0240](0240-windows-portable-distribution.md) | In development | Distribute the full Windows application as a per-user ZIP |
 | [0241](0241-windows-agent-session-actions.md) | In development | Expose session creation and catalog actions on Windows |
 | [0242](0242-muster-remote-desktop-engines.md) | Proposed; not enabled | Bundle remote desktop engines behind Muster authorization |
+| [0243](0243-windows-session-file-previews.md) | In development | Show session files and recorded changes on Windows |

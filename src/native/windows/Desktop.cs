@@ -17,9 +17,10 @@ internal sealed class Desktop : Form
     readonly Label title = new() { Dock = DockStyle.Top, Height = 46, TextAlign = ContentAlignment.MiddleLeft,
                                    Font = new Font("Segoe UI", 17) };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 30, AutoEllipsis = true };
-    readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false };
+    readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
+    readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ChatInput input =
         new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
@@ -55,6 +56,7 @@ internal sealed class Desktop : Form
         Size = new Size(1050, 700);
         Padding = new Padding(16);
         var body = new Panel { Dock = DockStyle.Fill };
+        body.Controls.Add(preview);
         body.Controls.Add(output);
         body.Controls.Add(list);
         actions.Dock = DockStyle.Bottom;
@@ -541,6 +543,19 @@ internal sealed class Desktop : Form
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
                 foreach (var b in chatView.Timeline)
                     lines.AddRange(Block(b));
+                var changedTurns = WorktreeNavigation.ChangedTurns(chatView.Timeline).ToArray();
+                if (changedTurns.Length > 0)
+                {
+                    int menuIndex = actionIndex;
+                    AddAction("Changed files", () =>
+                    {
+                        var menu = new ContextMenuStrip();
+                        WorktreeNavigation.AddChanges(menu, changedTurns, Send);
+                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+                        var anchor = actions.Controls[menuIndex];
+                        menu.Show(anchor, new Point(0, anchor.Height));
+                    });
+                }
                 lines.Add(chatView.LoadError);
                 lines.Add(chatView.ResponseError);
                 lines.Add(chatView.ComposerDisabledReason);
@@ -669,29 +684,48 @@ internal sealed class Desktop : Form
         case Page.Files:
             if (v.Files is {} files)
             {
-                title.Text = files.Path;
-                foreach (var f in files.Entries)
+                title.Text = files.Path.Length == 0 ? "Files" : files.Path;
+                if (files.Path.Length != 0)
+                    Row("↑  Parent directory", WorktreeNavigation.Parent(files.Path));
+                AddAction("Open file link…", () =>
                 {
-                    var path = (files.Path.TrimEnd('/') + "/" + f.Name).TrimStart('/');
-                    Row(f.Name, f.Dir ? new() { OpenFiles = new() { Path = path } }
-                                      : new() { OpenFile = new() { Path = path } });
+                    string link = Microsoft.VisualBasic.Interaction.InputBox("File link in this session", "Open file link");
+                    if (!string.IsNullOrWhiteSpace(link)) Send(new() { OpenFileLink = new() { Url = link.Trim() } });
+                });
+                if (files.Loading) lines.Add("Loading directory…");
+                foreach (var entry in files.Entries)
+                {
+                    string label = entry.Dir ? entry.Name + "/" : $"{entry.Name}    {entry.Size:N0} B";
+                    Row(label, WorktreeNavigation.Entry(files.Path, entry));
                 }
             }
             break;
         case Page.File:
-            if (v.File != null)
+            if (v.File is {} file)
             {
-                title.Text = v.File.Path;
-                lines.Add(v.File.Error);
-                lines.Add(v.File.Content.ToStringUtf8());
+                title.Text = file.Path;
+                preview.ShowFile(file);
+                if (file.IsDiff && file.CurrentPath.Length > 0)
+                    Act("Current file", () => new() { OpenFile = new() { Path = file.CurrentPath } });
             }
             break;
         case Page.Git:
             if (v.Git is {} git)
             {
-                foreach (var commit in git.Commits)
-                    Row(commit.Subject, new() { OpenGit = new() { DiffCommit = commit.Hash } });
-                lines.Add(git.Diff);
+                if (git.DiffCommit.Length != 0)
+                {
+                    title.Text = "Git diff";
+                    preview.ShowCommit(git);
+                    Act("Git log", () => new() { OpenGit = new() });
+                }
+                else
+                {
+                    title.Text = "Git log";
+                    if (git.Loading) lines.Add("Loading commits…");
+                    foreach (var commit in git.Commits)
+                        Row($"{commit.Subject}    {commit.Hash[..Math.Min(8, commit.Hash.Length)]} · {commit.Author} {WorktreeNavigation.Time(commit.TsUnix)}",
+                            new() { OpenGit = new() { DiffCommit = commit.Hash } });
+                }
             }
             break;
         case Page.Browser:
@@ -757,6 +791,9 @@ internal sealed class Desktop : Form
                 list.SelectedItem = old;
             list.EndUpdate();
         }
+        bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
+        preview.Visible = showingSource;
+        output.Visible = !showingSource;
         list.Visible = rows.Count > 0;
         var text = string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x)));
         if (output.Text != text)

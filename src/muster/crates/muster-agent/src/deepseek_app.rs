@@ -13,6 +13,7 @@
 //! Mac must be unlocked are decided by the daemon as for any controller.
 
 use std::collections::{HashMap, HashSet};
+#[cfg(unix)]
 use std::io::{BufRead, BufReader, Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
@@ -1032,6 +1033,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn revoked_authority_reaches_the_socket_worker_before_any_write() {
         let dir = tempfile::tempdir().unwrap();
@@ -1049,6 +1051,7 @@ mod tests {
         assert!(server.join().unwrap().is_empty());
     }
 
+    #[cfg(unix)]
     #[test]
     fn unmatched_or_ambiguous_bound_replies_never_confirm_or_release_a_send() {
         for reply in [
@@ -1071,8 +1074,23 @@ mod tests {
         }
     }
 
+    #[cfg(not(unix))]
+    #[test]
+    fn unix_plugin_transport_is_unavailable_without_a_verified_peer() {
+        assert!(matches!(
+            call(
+                Path::new("fixture.sock"),
+                None,
+                json!({"op":"status"}),
+                TIMEOUT
+            ),
+            Err(CallError::NotSent(_))
+        ));
+    }
+
     /// A one-shot plugin stand-in on a real socket: the reply it gives, and
     /// the request it read.
+    #[cfg(unix)]
     fn serve_once(socket: &Path, reply: Option<&'static str>) -> std::thread::JoinHandle<String> {
         let listener = std::os::unix::net::UnixListener::bind(socket).unwrap();
         std::thread::spawn(move || {
@@ -1086,6 +1104,7 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
     #[test]
     fn task_session_requires_live_capabilities_and_an_exact_receipt() {
         let dir = tempfile::tempdir().unwrap();
@@ -1142,6 +1161,7 @@ mod tests {
         thread.join().unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_call_is_bound_to_the_serving_process() {
         let dir = tempfile::tempdir().unwrap();
@@ -1168,6 +1188,7 @@ mod tests {
 
     /// A plugin stand-in that answers each of `replies` connections from
     /// the request it read, echoing its id and binding; the requests read.
+    #[cfg(unix)]
     fn serve(
         socket: &Path,
         replies: Vec<fn(&Value) -> Value>,
@@ -1192,6 +1213,7 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
     fn creating(socket: &Path, capabilities: Value) -> Arc<Link> {
         let link = Link::new(socket.to_path_buf());
         let state = json!({"control":{"version":1,"domain":"app","provider":"deepseek",
@@ -1218,6 +1240,7 @@ mod tests {
 
     /// One creation of `session-a` against a stand-in answering `replies`:
     /// its result and the operations the stand-in read.
+    #[cfg(unix)]
     fn create_against(
         link: &Link,
         socket: &Path,
@@ -1233,10 +1256,12 @@ mod tests {
     }
 
     /// The App's confirmation of the session a `task.create.v1` asked for.
+    #[cfg(unix)]
     fn made(r: &Value) -> Value {
         json!({"ok":true,"result":{"sessionId":r["sessionId"],"cwd":r["cwd"],"store":r["store"]}})
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_session_is_created_through_the_task_contract_then_prompted() {
         let dir = tempfile::tempdir().unwrap();
@@ -1290,6 +1315,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_refused_creation_is_not_sent_and_a_lost_one_is_never_replayed() {
         let dir = tempfile::tempdir().unwrap();
@@ -1342,6 +1368,7 @@ mod tests {
         assert_eq!(ops, ["task.create.v1", "prompt", "prompt.lookup"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_lost_reply_leaves_the_outcome_unknown_and_a_refusal_is_named() {
         let dir = tempfile::tempdir().unwrap();
