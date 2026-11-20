@@ -39,6 +39,11 @@ Unicode 差异和历史改动入口，并保存当前文件及历史差异截图
 dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
 ```
 
+同一项目还会操作对话页的 **Work steps** 原生菜单。实机验收时，选择一段已有工具输出的
+测试对话。按轮次和用户提示找到对应记录，展开步骤、勾选工具查看输出，再折叠该轮次。
+切换设备后核对展开状态。读取失败时，展开的轮次应显示宿主错误，可用 **Retry loading steps**
+重试。普通消息输入框应保留未发送的草稿。验收只需读取已有记录。
+
 终端控件测试在独立窗口中绘制带样式的行和光标，检查鼠标选区、普通字符、
 补充平面字符、输入法提交消息、组合键、粘贴和尺寸上报。它可以输出一张合成截图。
 

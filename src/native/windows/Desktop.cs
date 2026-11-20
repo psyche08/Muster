@@ -20,6 +20,7 @@ internal sealed class Desktop : Form
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
+    readonly TranscriptSteps transcript = new();
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
     (string Device, string Session)? terminalTab;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
@@ -371,6 +372,7 @@ internal sealed class Desktop : Form
         }
         (string Device, string Session)? chatKey = page == Page.Chat && v.Chat?.Session is {} openChatSession
             ? (v.Chat.DeviceId, openChatSession.Id) : null;
+        transcript.Display(page == Page.Chat ? v.Chat : null);
         if (terminalTab != chatKey) terminalTab = null;
         bool inWorkspaceTerminal = terminalTab != null && v.Chat?.Terminal != null;
         input.Visible = !inWorkspaceTerminal && (page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents);
@@ -569,8 +571,18 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                foreach (var b in chatView.Timeline)
-                    lines.AddRange(Block(b));
+                lines.AddRange(transcript.Lines());
+                if (transcript.HasStepsMenu)
+                {
+                    int menuIndex = actionIndex;
+                    AddAction("Work steps", () =>
+                    {
+                        var menu = transcript.Menu(core.Send, () => { if (current != null) Render(current); });
+                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+                        var anchor = actions.Controls[menuIndex];
+                        menu.Show(anchor, new Point(0, anchor.Height));
+                    });
+                }
                 var changedTurns = WorktreeNavigation.ChangedTurns(chatView.Timeline).ToArray();
                 if (changedTurns.Length > 0)
                 {
@@ -837,15 +849,5 @@ internal sealed class Desktop : Form
             output.Text = text;
             output.Select(Math.Min(pos, text.Length), 0);
         }
-    }
-    static IEnumerable<string> Block(ChatBlock b)
-    {
-        if (b.Title.Length > 0)
-            yield return b.Title;
-        if (b.Message is {} m)
-            yield return $"{m.Role}  {m.Text}";
-        foreach (var child in b.Children)
-            foreach (string line in Block(child))
-                yield return line;
     }
 }
