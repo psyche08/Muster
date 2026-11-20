@@ -445,20 +445,10 @@ pub(super) fn recovered(
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests::SignedTestShell as Shell;
     use super::*;
-    use muster_core::{HwSigner, SoftSigner};
+    use muster_core::SoftSigner;
 
-    struct Shell(SoftSigner);
-    impl crate::Shell for Shell {
-        fn on_view(&self, _: &[u8]) {}
-        fn on_effect(&self, _: u64, _: &[u8]) {}
-        fn hw_public_key(&self) -> Option<Vec<u8>> {
-            Some(self.0.public_key().raw().to_vec())
-        }
-        fn hw_sign(&self, message: &[u8]) -> Option<Vec<u8>> {
-            self.0.sign(message).ok()
-        }
-    }
     async fn fixture(path: &std::path::Path) -> (State, Ctx) {
         let shell = Arc::new(Shell(SoftSigner::generate()));
         let config = crate::AppConfig {

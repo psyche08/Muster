@@ -12,7 +12,15 @@ pub(crate) fn hosts(state: &State) -> Vec<v1::MemberView> {
     state
         .reachable_service_devices()
         .into_iter()
-        .filter(|m| m.kind == "desktop")
+        .filter(|m| {
+            let info = if m.is_self {
+                state.self_info.as_ref()
+            } else {
+                state.manual_devices.get(&m.device_id)
+            };
+            m.kind == "desktop"
+                && info.is_none_or(|i| i.platform.is_empty() || i.platform == "macos")
+        })
         .collect()
 }
 
