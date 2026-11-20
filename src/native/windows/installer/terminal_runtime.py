@@ -69,6 +69,8 @@ def stage_runtime(work):
     profile.parent.mkdir()
     profile.write_bytes(b'export PATH="/usr/bin:$PATH"\n')
     files.append("msys64/etc/profile")
+    (root / "etc/fstab").write_bytes(b"none /tmp usertemp binary,posix=0 0 0\n")
+    files.append("msys64/etc/fstab")
 
     sources = []
     notices = ["Windows conversation terminal", "",

@@ -255,3 +255,32 @@ async fn managed_shell_through_windows_daemon_restart() {
             .success()
     );
 }
+
+#[test]
+#[ignore = "requires the portable ZIP's msys64 next to the test executable"]
+fn packaged_shell_shares_the_windows_user_temp_directory() {
+    let bin = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("msys64/usr/bin");
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join("from-windows"), "windows").unwrap();
+    let script = temp.path().join("check.sh");
+    fs::write(&script, r#"cd "/tmp/$MUSTER_FIXTURE_BASENAME" && test "$(/usr/bin/cat from-windows)" = windows && printf shell > from-shell"#).unwrap();
+    let output = std::process::Command::new(bin.join("sh.exe"))
+        .args(["--login", "-s"])
+        .stdin(fs::File::open(script).unwrap())
+        .env("MUSTER_FIXTURE_BASENAME", temp.path().file_name().unwrap())
+        .env("HOME", temp.path())
+        .env("MSYS", "noglob")
+        .output()
+        .unwrap();
+    let diagnostics = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{diagnostics}");
+    assert!(
+        !diagnostics.contains("could not find /tmp"),
+        "{diagnostics}"
+    );
+    assert_eq!(fs::read(temp.path().join("from-shell")).unwrap(), b"shell");
+}
