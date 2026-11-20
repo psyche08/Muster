@@ -8,7 +8,7 @@ pub const COMMIT: &str = env!("MUSTER_GIT_COMMIT");
 /// The installed package's version (Velopack's `sq.version` beside the
 /// executable on macOS and Windows), else the crate's.
 pub fn installed_version() -> String {
-    if let Some(version) = option_env!("MUSTER_MSI_VERSION") {
+    if let Some(version) = option_env!("MUSTER_WINDOWS_VERSION") {
         return version.to_owned();
     }
     std::env::current_exe()

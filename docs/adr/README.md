@@ -355,3 +355,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0237](0237-windows-composer-draft-revisions.md) | In development | Bind Windows chat actions to the active editor revision |
 | [0238](0238-windows-composer-attachments-and-return.md) | In development | Adapt chat attachments and Return to Windows |
 | [0239](0239-windows-single-maximized-desktop.md) | In development | Open one maximized Windows desktop per user session |
+| [0240](0240-windows-portable-distribution.md) | In development | Distribute the full Windows application as a per-user ZIP |
