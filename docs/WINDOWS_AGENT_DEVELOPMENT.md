@@ -32,6 +32,13 @@ Windows 已按实际 DPI 完成布局。在空白状态和可提交状态各取�
 且消息框至少能显示三行文字。`DrawToBitmap` 记录 WinForms 控件渲染。桌面合成器、
 受保护系统窗口或其他应用的画面不在这项测试的覆盖范围内。
 
+源码和 Git 差异预览可用同样的方法验收。以下命令覆盖文本、二进制、错误、截断、
+Unicode 差异和历史改动入口，并保存当前文件及历史差异截图。
+
+```powershell
+dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c Release -- --screenshots $captures
+```
+
 ## 与已交付的 ZIP 对照
 
 如需证明截图来自特定包，在相同源码提交上给测试构建传入发行版本，例如

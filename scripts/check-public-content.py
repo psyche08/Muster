@@ -99,7 +99,8 @@ def main():
         matches = sorted(set(findings(text)))
         if not matches:
             continue
-        lines = text.split("\n")
+        # Git may check out the same reviewed line with CRLF on Windows.
+        lines = text.replace("\r\n", "\n").split("\n")
         for line, rule in matches:
             if recognized_vendor_line(name, rule, lines[line - 1]):
                 continue

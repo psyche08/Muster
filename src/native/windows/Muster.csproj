@@ -16,6 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="WindowsAgentCatalog" />
+    <InternalsVisibleTo Include="WindowsWorktree" />
     <PackageReference Include="Google.Protobuf" Version="3.34.0" />
   </ItemGroup>
   <Target Name="GenerateProtocol" BeforeTargets="CoreCompile">

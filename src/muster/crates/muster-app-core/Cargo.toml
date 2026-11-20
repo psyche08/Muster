@@ -23,6 +23,7 @@ log.workspace = true
 hex.workspace = true
 serde_json.workspace = true
 url = "2"
+percent-encoding = "2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 velopack = { version = "=1.2.158", features = ["public-utils"] }

@@ -343,17 +343,20 @@ pub enum Msg {
         status: String,
     },
     Files {
+        revision: u64,
         device: String,
         session: String,
         result: Result<v1::FileList, Error>,
     },
     File {
+        revision: u64,
         device: String,
         session: String,
         path: String,
         result: Result<v1::FileContent, Error>,
     },
     Git {
+        revision: u64,
         device: String,
         session: String,
         result: Result<v1::GitLog, Error>,
@@ -961,21 +964,24 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
         } => terminals::msg_ssh_connected(state, session, key_type, fingerprint),
         Msg::SshOutput { session, bytes } => terminals::msg_ssh_output(state, session, bytes),
         Msg::Files {
+            revision,
             device,
             session,
             result,
-        } => files::msg_files(state, device, session, result),
+        } => files::msg_files(state, revision, device, session, result),
         Msg::File {
+            revision,
             device,
             session,
             path,
             result,
-        } => files::msg_file(state, device, session, path, result),
+        } => files::msg_file(state, revision, device, session, path, result),
         Msg::Git {
+            revision,
             device,
             session,
             result,
-        } => files::msg_git(state, device, session, result),
+        } => files::msg_git(state, revision, device, session, result),
         Msg::SshEnded { session, status } => terminals::msg_ssh_ended(state, session, status),
     }
 }

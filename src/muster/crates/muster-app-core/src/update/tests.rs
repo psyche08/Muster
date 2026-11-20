@@ -669,6 +669,25 @@ fn file_links_are_relative_to_the_session_and_cannot_escape_it() {
         session_file_link("/repo", "file:///repo/src/a.rs"),
         Ok("src/a.rs".into())
     );
+    assert_eq!(
+        session_file_link(r"C:\Example\repo", "docs/a%20b.md#part"),
+        Ok("docs/a b.md".into())
+    );
+    assert_eq!(
+        session_file_link(r"C:\Example\repo", "file:///c:/Example/repo/new.txt"),
+        Ok("new.txt".into())
+    );
+    assert_eq!(
+        session_file_link(r"\\server\share\repo", "docs/a.txt"),
+        Ok("docs/a.txt".into())
+    );
+    assert_eq!(
+        session_file_link("/space #/100%/demo", "a.md"),
+        Ok("a.md".into())
+    );
+    assert_eq!(session_file_link("/", "a.md"), Ok("a.md".into()));
+    assert!(session_file_link(r"C:\Example", "file:///D:/Example/a").is_err());
+    assert!(session_file_link(r"\\server\share", "file://other/share/a").is_err());
     assert!(session_file_link("/repo", "../private/key").is_err());
     assert!(session_file_link("/repo", "file:///outside/key").is_err());
     assert!(session_file_link("/repo", "https://example.com/a").is_err());
@@ -3738,4 +3757,92 @@ async fn a_granted_accessibility_is_never_asked_for_again() {
     network::intent_request_accessibility(&mut state, &ctx);
     assert_eq!(state.busy, 1, "the daemon is asked to prompt");
     assert_eq!(*shell.0.lock().unwrap(), 1, "and the Settings pane opens");
+}
+
+#[tokio::test]
+async fn worktree_only_applies_latest_read_of_each_kind() {
+    let (_dir, ctx, _) = phone().await;
+    let mut state = running_chat();
+    let (device, session) = state.chat_target().unwrap();
+
+    open_files(&mut state, &ctx, "first".into());
+    let old_dir = state.files_revision;
+    open_files(&mut state, &ctx, "next".into());
+    open_file(&mut state, &ctx, "notes.md".into());
+    let old_file = state.file_revision;
+    open_file(&mut state, &ctx, "notes.md".into());
+    open_git(&mut state, &ctx, String::new());
+    let old_git = state.git_revision;
+    open_git(&mut state, &ctx, "abc123".into());
+
+    files::msg_files(
+        &mut state,
+        old_dir,
+        device.clone(),
+        session.clone(),
+        Ok(v1::FileList {
+            path: "first".into(),
+            ..Default::default()
+        }),
+    );
+    files::msg_file(
+        &mut state,
+        old_file,
+        device.clone(),
+        session.clone(),
+        "notes.md".into(),
+        Err(Error::Unavailable("stale file error".into())),
+    );
+    files::msg_git(
+        &mut state,
+        old_git,
+        device.clone(),
+        session.clone(),
+        Err(Error::Unavailable("stale log error".into())),
+    );
+    assert!(state.files.as_ref().unwrap().loading);
+    assert_eq!(state.files.as_ref().unwrap().path, "next");
+    assert!(state.file.as_ref().unwrap().loading && state.file.as_ref().unwrap().error.is_empty());
+    assert!(state.git.as_ref().unwrap().loading && state.toasts.is_empty());
+
+    let (dir, file, git) = (
+        state.files_revision,
+        state.file_revision,
+        state.git_revision,
+    );
+    files::msg_files(
+        &mut state,
+        dir,
+        device.clone(),
+        session.clone(),
+        Ok(v1::FileList {
+            path: "next".into(),
+            ..Default::default()
+        }),
+    );
+    files::msg_file(
+        &mut state,
+        file,
+        device.clone(),
+        session.clone(),
+        "notes.md".into(),
+        Ok(v1::FileContent {
+            path: "notes.md".into(),
+            content: b"latest".to_vec(),
+            ..Default::default()
+        }),
+    );
+    files::msg_git(
+        &mut state,
+        git,
+        device,
+        session,
+        Ok(v1::GitLog {
+            diff: "+latest".into(),
+            ..Default::default()
+        }),
+    );
+    assert!(!state.files.as_ref().unwrap().loading);
+    assert_eq!(state.file.as_ref().unwrap().content, b"latest");
+    assert_eq!(state.git.as_ref().unwrap().diff, "+latest");
 }
