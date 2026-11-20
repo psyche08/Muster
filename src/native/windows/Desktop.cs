@@ -71,8 +71,16 @@ internal sealed class Desktop : Form
         Button(nav, "Network", () => Go(Page.Home));
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
         Button(nav, "Chats", () => Send(new() { OpenDesktopChats = new() }));
-        Button(nav, "Terminals",
-               () => Send(new() { OpenTerminals = new() { DeviceId = current?.SelectedDevice ?? "" } }));
+        Button(nav, "Terminals", () =>
+        {
+            string device = current?.Screen switch
+            {
+                Page.Agents => current.Agents?.DeviceId ?? "",
+                Page.Device => current.SelectedDevice,
+                _ => ""
+            };
+            Send(new() { OpenTerminals = new() { DeviceId = device } });
+        });
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
         Button(nav, "Presence key", async () => {
             try { await Presence.Register(Handle, core.Socket); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
@@ -320,6 +328,19 @@ internal sealed class Desktop : Form
             actions.Controls[actionIndex].Enabled = true;
             actionIndex++;
         }
+        void DeviceFilter(string selected, Action<string> choose)
+        {
+            if (v.ServiceDevices.Count == 0) return;
+            int index = actionIndex;
+            string name = DeviceMenu.Label(v.ServiceDevices, selected);
+            AddAction("Device: " + name, () =>
+            {
+                var anchor = actions.Controls[index];
+                var menu = DeviceMenu.Create(v.ServiceDevices, selected, choose);
+                menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+                menu.Show(anchor, new Point(0, anchor.Height));
+            });
+        }
         void ComposerButton(string label, bool needsText, Action invoke)
         {
             AddAction(label, invoke);
@@ -461,27 +482,7 @@ internal sealed class Desktop : Form
                     AddAction(agents.NativeCreating ? "Creating desktop session…" : "New desktop session", () => CreateSession(true));
                     actions.Controls[actionIndex - 1].Enabled = !agents.NativeCreating;
                 }
-                if (v.ServiceDevices.Count > 0)
-                {
-                    int filterIndex = actionIndex;
-                    var filterDevice = v.ServiceDevices.FirstOrDefault(m => m.DeviceId == agents.DeviceId);
-                    AddAction("Device: " + (filterDevice?.Name ?? "All devices"), () =>
-                    {
-                        var menu = new ContextMenuStrip();
-                        void Choice(string label, string id, bool active)
-                        {
-                            var item = new ToolStripMenuItem(label) { Checked = active };
-                            item.Click += (_, _) => Send(new() { OpenAgents = new() { DeviceId = id } });
-                            menu.Items.Add(item);
-                        }
-                        Choice("All devices", "*", agents.DeviceId == "*");
-                        foreach (var device in v.ServiceDevices)
-                            Choice(device.Name, device.DeviceId, device.DeviceId == agents.DeviceId);
-                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-                        var anchor = actions.Controls[filterIndex];
-                        menu.Show(anchor, new Point(0, anchor.Height));
-                    });
-                }
+                DeviceFilter(agents.DeviceId, id => Send(new() { OpenAgents = new() { DeviceId = id } }));
                 input.PlaceholderText = "Search sessions";
                 Act("Search", () => Catalog(AgentCatalogAction.Types.Kind.Search, input.Text));
                 if (agents.Query.Length > 0)
@@ -654,18 +655,30 @@ internal sealed class Desktop : Form
         case Page.Terminals:
             if (v.Terminals is {} t)
             {
+                DeviceFilter(t.DeviceId, id => Send(new() { OpenTerminals = new() { DeviceId = id } }));
+                if (t.DeviceId.Length > 0 && t.DeviceId != "*")
+                    Act("Device details", () => new() { SelectDevice = new() { DeviceId = t.DeviceId } });
+                if (t.Sessions.Count == 0)
+                    lines.Add(t.Loading ? "Loading terminals…" : "No terminals");
                 foreach (var s in t.Sessions)
-                    Row($"{s.Title}    {s.DeviceName}",
+                    Row($"{(s.Title.Length == 0 ? s.Id : s.Title)}    {s.DeviceName} · {s.Source} · {s.Cols}×{s.Rows}",
                         new() { OpenTerminal = new() { Session = s.Id, DeviceId = s.DeviceId } });
                 if (t.CanCreate)
                     foreach (var src in t.Sources)
+                    {
                         Act("New " + src.Label, () => new() { TerminalCreate = new() { Source = src.Source } });
+                        actions.Controls[actionIndex - 1].Enabled = !v.Busy;
+                    }
                 lines.AddRange(t.Errors);
             }
             break;
         case Page.Terminal:
             if (v.Terminal is {} term)
             {
+                title.Text = term.Session.Length == 0 ? "Terminal" : $"{term.Source} · {term.Session}";
+                if (term.Ended || term.Status.Length > 0)
+                    lines.Add(term.Ended && term.Status.Length > 0 ? "Ended · " + term.Status
+                              : term.Ended ? "Ended" : term.Status);
                 lines.AddRange(term.Lines.Select(l => l.Text));
                 input.PlaceholderText = "Terminal input";
                 if (!term.Ended)
