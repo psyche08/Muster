@@ -164,6 +164,17 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 CLI 仍可在观察时限结束时报告超时。记录结果时只需事件类型和计数，省略会话标题。
 一台设备持续推送时，其他设备的错误应保留到对应设备成功恢复或移出当前筛选。
 
+## 只读核对在场密钥
+
+在已安装的 GUI 中打开 **Presence key**，用同一发行包的
+`cli\muster.exe presence --summary` 核对两行结果。若使用隔离 daemon，给 CLI
+显式传入开发脚本打印的 `--socket`。记录候选公钥注册状态和网络管理员 enrollment
+状态。查询失败时记录错误。**Settings → Register presence candidate** 会访问 TPM
+并注册候选公钥，只读验收使用前一个入口即可。
+
+签名验收单独记录挑战、Windows 本人确认、对端验签以及改动请求 ID 后的拒绝结果。
+每次验收标注日期和版本，区分历史验签记录与本次节点状态。
+
 ## 复核桌面对话历史
 
 在普通用户终端运行 `muster chats ChatGPT`，用当前目录中的完整会话 ID

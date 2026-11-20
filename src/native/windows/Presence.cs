@@ -54,7 +54,7 @@ internal static class Presence
         catch { return -1; } // FFI callbacks must not unwind into Rust.
     }
 
-    public static async Task Register(nint parent, string socket)
+    public static async Task<string> Register(nint parent, string socket)
     {
         byte[] candidate = await Task.Run(() => {
             if (!CngKey.Exists(KeyName, Provider))
@@ -70,17 +70,28 @@ internal static class Presence
             using var key = CngKey.Open(KeyName, Provider, CngKeyOpenOptions.Silent);
             return ValidatedPublicKey(key);
         });
+        return await ReadReport(socket, candidate);
+    }
+
+    public static async Task<string> ReadReport(string socket, byte[]? candidate = null)
+    {
         var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "cli", "muster.exe"))
-            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
         info.ArgumentList.Add("--socket");
         info.ArgumentList.Add(socket);
         info.ArgumentList.Add("presence");
-        info.ArgumentList.Add("--register");
-        info.ArgumentList.Add(Convert.ToBase64String(candidate));
-        using var cli = Process.Start(info) ?? throw new InvalidOperationException("Could not register the presence key.");
-        string error = await cli.StandardError.ReadToEndAsync();
-        await cli.WaitForExitAsync();
-        if (cli.ExitCode != 0) throw new InvalidOperationException(error);
+        info.ArgumentList.Add("--summary");
+        if (candidate != null)
+        {
+            info.ArgumentList.Add("--register");
+            info.ArgumentList.Add(Convert.ToBase64String(candidate));
+        }
+        using var cli = Process.Start(info) ?? throw new InvalidOperationException("Could not start the Muster CLI.");
+        var report = cli.StandardOutput.ReadToEndAsync();
+        var error = cli.StandardError.ReadToEndAsync();
+        await Task.WhenAll(report, error, cli.WaitForExitAsync());
+        if (cli.ExitCode != 0) throw new InvalidOperationException((await error).Trim());
+        return (await report).Trim();
     }
 
     [DllImport("muster_ffi.dll", CallingConvention = CallingConvention.Cdecl)]
