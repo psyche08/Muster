@@ -32,6 +32,7 @@ internal sealed class Desktop : Form
     (string Device, string Session)? tabScope;
     SessionTab selectedTab;
     RunHistoryDialog? runHistory;
+    readonly InvitePanel invitePanel;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ChatInput input =
@@ -76,6 +77,8 @@ internal sealed class Desktop : Form
         title.DpiChangedAfterParent += (_, _) => SizeTitle();
         SizeTitle();
         var body = new Panel { Dock = DockStyle.Fill };
+        invitePanel = new InvitePanel(Clipboard.SetText, () => Send(new() { ShowInvite = new() }));
+        body.Controls.Add(invitePanel);
         body.Controls.Add(related);
         body.Controls.Add(trace);
         body.Controls.Add(conversationTerminal);
@@ -359,6 +362,12 @@ internal sealed class Desktop : Form
             status.Text = e.Notify.Title + "  " + e.Notify.Body;
             result.Ok = true;
         }
+        else if (e.ScanQr != null)
+        {
+            using var dialog = new PasteInviteDialog();
+            result.Ok = dialog.ShowDialog(this) == DialogResult.OK;
+            if (result.Ok) result.Text = dialog.Invitation;
+        }
         else if (deviceAuthAvailable && e.Authenticate != null)
         {
             try
@@ -472,7 +481,7 @@ internal sealed class Desktop : Form
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
         sessionTabs.Visible = chatKey != null;
         if (chatKey != null) sessionTabs.Display(v.Chat!, selectedTab);
-        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents);
+        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat or Page.Browser or Page.Agents);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -534,11 +543,22 @@ internal sealed class Desktop : Form
             }
             break;
         }
+        case Page.Invite:
+            title.Text = "Invite a device";
+            break;
+        case Page.Join:
+            title.Text = "Joining network";
+            lines.Add(v.Join?.Phase switch {
+                "failed" => "Could not join network", "waiting_approval" => "Waiting for approval",
+                "joined" => "Joined", "connecting" => "Connecting…", _ => "Joining network"
+            });
+            lines.Add(v.Join?.Message ?? "");
+            if (v.Join?.Phase == "failed")
+                Act("Try again", () => new() { JoinNetwork = new() });
+            break;
         case Page.Home:
         case Page.Onboarding:
-        case Page.Join:
         case Page.Settings:
-        case Page.Invite:
             if (v.Self != null)
             {
                 var platform = page == Page.Settings ? v.Self.Platform : $"{v.Self.Platform}    {v.Self.Version}";
@@ -587,12 +607,12 @@ internal sealed class Desktop : Form
                 input.PlaceholderText = "Network name or invitation";
                 Act("Create network", () => new() { CreateNetwork = new() { Name = input.Text.Trim() } });
                 Act("Join with invite", () => new() { JoinNetwork = new() { InviteText = input.Text.Trim(),
-                                                                            DeviceName = Environment.MachineName,
-                                                                            DeviceKind = "desktop" } });
+                                                                            DeviceName = v.Self?.Name ?? "",
+                                                                            DeviceKind = v.Self?.Kind ?? "" } });
             }
             if (v.CanInvite)
             {
-                Act("Create invite", () => new() { ShowInvite = new() { TtlSecs = 300 } });
+                Act("Create invite", () => new() { ShowInvite = new() });
                 foreach (var p in v.Pending)
                 {
                     AddAction("Review " + p.Name,
@@ -607,8 +627,6 @@ internal sealed class Desktop : Form
                     Act("Decline " + p.Name, () => new() { DecideJoin = new() { DeviceId = p.DeviceId } });
                 }
             }
-            if (page == Page.Invite && v.Invite != null)
-                lines.Add(v.Invite.Text);
             if (v.SelectedDevice.Length > 0 && v.SelectedDeviceHasServices)
             {
                 Act("Agents on device", () => new() { OpenAgents = new() { DeviceId = v.SelectedDevice } });
@@ -1003,7 +1021,8 @@ internal sealed class Desktop : Form
         trace.Visible = inTrace;
         trace.Display(inTrace ? v.Chat : null);
         history.Visible = !inTrace && images.Count > 0;
-        output.Visible = !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        invitePanel.Display(page == Page.Invite && v.CanInvite ? v.Invite : null, page == Page.Invite && v.CanInvite);
+        output.Visible = page != Page.Invite && !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         if (focusNetworkList && page == Page.Settings)

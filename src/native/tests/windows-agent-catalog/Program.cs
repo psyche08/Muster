@@ -24,6 +24,8 @@ internal static class Program
             ["--screenshots", var directory] => Directory.CreateDirectory(directory).FullName,
             _ => throw new ArgumentException("Usage: WindowsAgentCatalog [--screenshots DIRECTORY]")
         };
+        InvitePanelTests.Run();
+        Console.WriteLine("Passed network invite pixel decoding, copy, renewal, expiry and clearing.");
         DesktopChatSidebarTests.Run(captures);
         var win = new MemberView { DeviceId = "fixture-w", Name = "Test device" };
         var mac = new MemberView { DeviceId = "fixture-m", Name = "Test Mac" };
