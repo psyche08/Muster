@@ -7,7 +7,7 @@ $release = Get-Content -Raw -LiteralPath "$PSScriptRoot\release.json" | ConvertF
 if ($release.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid package version' }
 $hashes = @{}
 foreach ($entry in $release.files.psobject.Properties) {
-    if ($entry.Name -notmatch '^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*\.[a-zA-Z0-9.]+$' -or
+    if ($entry.Name -notmatch '\A[a-zA-Z0-9_-]+(?:[./][a-zA-Z0-9_-]+)*\z' -or
         $entry.Value -notmatch '^[a-fA-F0-9]{64}$' -or $hashes.ContainsKey($entry.Name)) {
         throw "Invalid package entry: $($entry.Name)"
     }

@@ -66,3 +66,20 @@ argument parser report the portable release stamp offline. An unstamped Windows
 development build reports its CLI crate version. The existing `info` command
 continues to obtain the node version over RPC. Verify both commands against a
 newly packaged CLI connected to a preceding daemon.
+
+## Ship the managed terminal runtime
+
+The Windows host from ADR 0033 can reconnect a conversation shell across
+daemon restarts, but depends on a separately provisioned MSYS2 installation.
+Include an executable-adjacent MSYS2 tree in the native and cross-built ZIP.
+Select files from digest-pinned MSYS2 archives and include terminal data,
+interactive shell file utilities and license notices. Include the matching
+upstream source packages and build recipes in the outer ZIP so recipients
+can obtain them offline without installing source into each running version.
+Do not copy files from a developer's live MSYS2 tree.
+
+Verify every runtime file through the existing release manifest and update
+path. Test production runtime discovery without a configured external runtime,
+with an ordinary Windows PATH, including a shell file command and recovery
+through two separate host processes. Report installed-node activation and
+Wintun separately.
