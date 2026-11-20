@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) struct Workbench {
     pub preview: Option<Prepared>,
     pub runs: HashMap<String, Run>,
-    polling: HashSet<String>,
+    pub(super) polling: HashSet<String>,
     starting: HashSet<String>,
     pub errors: HashMap<String, String>,
     status_errors: HashSet<String>,
@@ -60,7 +60,7 @@ pub(super) fn action(state: &mut State, ctx: &Ctx, action: app::CodeAction) {
         return;
     }
     if action.action == 4 {
-        poll(state, ctx);
+        poll(state, ctx, true);
         return;
     }
     let Some(chat) = state.chat.as_ref().filter(|c| eligible(c)) else {
@@ -205,7 +205,7 @@ pub(super) fn started(
                     app::SessionTerminalAction { action: 0 },
                 );
             }
-            poll(state, ctx);
+            poll(state, ctx, false);
         }
         Err(e) => {
             state.code.errors.insert(
@@ -215,11 +215,20 @@ pub(super) fn started(
         }
     }
 }
-pub(super) fn poll(state: &mut State, ctx: &Ctx) {
+fn supports_history(info: &v1::DeviceInfo) -> bool {
+    // Unix hosts served the RPC before it was advertised separately.
+    info.platform != "windows"
+        || info
+            .services
+            .iter()
+            .any(|s| s == muster_proto::TERMINAL_RUN_HISTORY)
+}
+
+pub(super) fn poll(state: &mut State, ctx: &Ctx, explicit: bool) {
     if !state.foreground {
         return;
     }
-    let mut origins: HashMap<String, (String, String, String)> = HashMap::new();
+    let mut origins = HashMap::new();
     if state.screen == Screen::Chat
         && let Some(c) = state.chat.as_ref().filter(|c| eligible(c))
     {
@@ -229,6 +238,7 @@ pub(super) fn poll(state: &mut State, ctx: &Ctx) {
                 c.device.clone(),
                 c.session.id.clone(),
                 c.session.provider.clone(),
+                explicit,
             ),
         );
     }
@@ -240,12 +250,26 @@ pub(super) fn poll(state: &mut State, ctx: &Ctx) {
         {
             origins.insert(
                 origin(&r.device, &run.session),
-                (r.device.clone(), run.session.clone(), r.provider.clone()),
+                (
+                    r.device.clone(),
+                    run.session.clone(),
+                    r.provider.clone(),
+                    true,
+                ),
             );
         }
     }
-    for (scope, (device, session, provider)) in origins {
-        if !state.code.polling.insert(scope) {
+    for (scope, (device, session, provider, required)) in origins {
+        let info = if state.is_self(&device) {
+            state.self_info.as_ref()
+        } else {
+            state.manual_devices.get(&device)
+        };
+        if !required && info.is_some_and(|i| !supports_history(i)) {
+            continue;
+        }
+        let check_device = !required && info.is_none();
+        if !state.code.polling.insert(scope.clone()) {
             continue;
         }
         let backend = ctx.backend.clone();
@@ -253,6 +277,13 @@ pub(super) fn poll(state: &mut State, ctx: &Ctx) {
         spawn(ctx, async move {
             let result = tokio::time::timeout(Duration::from_secs(8), async {
                 let client = backend.client_for(&device, &self_id).await?;
+                if check_device
+                    && let Ok(Resp::DeviceInfo(info)) =
+                        unary(&client, Req::DeviceInfo(v1::DeviceInfoRequest {})).await
+                    && !supports_history(&info)
+                {
+                    return Ok(None);
+                }
                 match unary(
                     &client,
                     Req::TerminalRuns(v1::TerminalRunsRequest {
@@ -261,12 +292,17 @@ pub(super) fn poll(state: &mut State, ctx: &Ctx) {
                 )
                 .await?
                 {
-                    Resp::TerminalRuns(list) => Ok(list.runs),
+                    Resp::TerminalRuns(list) => Ok(Some(list.runs)),
                     _ => Err(unexpected()),
                 }
             })
             .await
             .unwrap_or_else(|_| Err(Error::Unavailable("Run status timed out".into())));
+            let result = match result {
+                Ok(Some(records)) => Ok(records),
+                Ok(None) => return Msg::CodeHistoryUnsupported(scope),
+                Err(error) => Err(error),
+            };
             Msg::CodeRuns {
                 device,
                 session,
@@ -448,6 +484,24 @@ pub(super) fn cancelled(state: &mut State, device: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn passive_run_history_recognizes_windows_reader_and_older_unix_hosts() {
+        let mut info = v1::DeviceInfo {
+            platform: "windows".into(),
+            services: vec!["terminal".into()],
+            ..Default::default()
+        };
+        assert!(!supports_history(&info));
+        info.services
+            .push(muster_proto::TERMINAL_RUN_HISTORY.into());
+        assert!(supports_history(&info));
+        info.services.clear();
+        for host in ["macos", "linux", ""] {
+            info.platform = host.into();
+            assert!(supports_history(&info));
+        }
+    }
+
     #[test]
     fn run_delivery_is_origin_bound_and_unknown_never_becomes_retryable() {
         let mut state = State::new(false, Some("self".into()));

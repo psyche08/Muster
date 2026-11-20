@@ -18,6 +18,9 @@ pub mod diagnostics;
 pub mod locked_use;
 pub mod outline;
 
+/// DeviceInfo capability for reading recorded workspace command results.
+pub const TERMINAL_RUN_HISTORY: &str = "terminal.runs.v1";
+
 pub const MAX_ENVELOPE: usize = 8 * 1024 * 1024;
 /// The largest diagnostics upload; fits an envelope with room to spare.
 pub const MAX_DIAGNOSTICS: usize = 6 * 1024 * 1024;

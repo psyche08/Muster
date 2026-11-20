@@ -81,3 +81,19 @@ Keep the exact source, including indentation and final newlines. An open menu
 must not copy a replaced block or a block from another conversation. Exercise
 these cases with synthetic messages and a clipboard sink, without executing
 code or sending messages to a provider.
+
+## Windows host run-history reads
+
+Opening a workspace conversation sent TerminalRuns to an older Windows host
+that only implemented the Unix handler. Share the bounded record reader and
+pane reconciliation on Windows. Advertise terminal.runs.v1 for the read RPC.
+The daemon retains the existing terminal-read and provider-read authorization,
+ledger lookup and provider readiness rules. The feature indicates the ability
+to read records independently of the ability to start a new command.
+
+Use DeviceInfo for passive discovery. A Windows host predating the reader
+should not receive unsolicited status polls. Older Unix hosts already served
+this RPC. Explicit refreshes and runs awaiting reconciliation still query the
+host and report failures. Verify mixed-version discovery, an empty store,
+persisted and unavailable results, session isolation and daemon restart.
+A GUI-only update can continue to use the previous online node.

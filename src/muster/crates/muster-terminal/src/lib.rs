@@ -12,7 +12,7 @@ pub mod ghostty;
 pub mod grid;
 pub mod iterm2;
 pub mod pty;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub mod runs;
 pub mod ssh;
 #[cfg(any(unix, windows))]

@@ -253,6 +253,8 @@ impl Daemon {
         }
         if self.agent().is_some() {
             services.push("agent".to_string());
+            #[cfg(any(unix, windows))]
+            services.push(muster_proto::TERMINAL_RUN_HISTORY.to_string());
             if self.agent().is_some_and(|a| a.cli_source().is_ok()) {
                 services.push("agent.orca.v1".to_string());
             }

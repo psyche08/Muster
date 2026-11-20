@@ -1891,7 +1891,7 @@ async fn dispatch(
             }
         }
         Req::TerminalRuns(r) => {
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             {
                 let muster_terminal::Terminal::Tmux(service) = daemon.tmux.as_ref() else {
                     unreachable!()
@@ -1916,7 +1916,7 @@ async fn dispatch(
                 }
                 Resp::TerminalRuns(v1::TerminalRunList { runs })
             }
-            #[cfg(not(unix))]
+            #[cfg(not(any(unix, windows)))]
             {
                 let _ = r;
                 return Err(Error::Unavailable("tmux requires a Unix host".into()));
