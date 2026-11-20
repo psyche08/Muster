@@ -287,6 +287,7 @@ pub enum Msg {
         result: Result<v1::TerminalSessionList, Error>,
     },
     CodeTick,
+    CodeHistoryUnsupported(String),
     CodeStarted {
         prepared: Box<code_runs::Prepared>,
         auto_return: bool,
@@ -613,7 +614,10 @@ fn intent_navigate(state: &mut State, ctx: &Ctx, n: app::Navigate) {
 
 pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
     match msg {
-        Msg::CodeTick => code_runs::poll(state, ctx),
+        Msg::CodeTick => code_runs::poll(state, ctx, false),
+        Msg::CodeHistoryUnsupported(scope) => {
+            state.code.polling.remove(&scope);
+        }
         Msg::CodeStarted {
             prepared,
             auto_return,

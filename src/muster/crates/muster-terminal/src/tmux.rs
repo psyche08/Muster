@@ -25,7 +25,6 @@ const CLIENT_ENV: &[(&str, &str)] = &[];
 pub struct TmuxService {
     pty: Arc<PtyService>,
     pub(crate) socket: PathBuf,
-    #[cfg(unix)]
     pub(crate) runs: Mutex<()>,
     program: Option<PathBuf>,
     sessions: Mutex<HashMap<String, String>>,
@@ -66,7 +65,6 @@ impl TmuxService {
         Arc::new(Self {
             pty: PtyService::new(PtyConfig::default()),
             socket,
-            #[cfg(unix)]
             runs: Mutex::new(()),
             program: Self::program(),
             sessions: Mutex::new(HashMap::new()),

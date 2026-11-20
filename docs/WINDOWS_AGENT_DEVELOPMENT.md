@@ -76,6 +76,14 @@ dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c
 切换设备后核对展开状态。读取失败时，展开的轮次应显示宿主错误，可用 **Retry loading steps**
 重试。普通消息输入框应保留未发送的草稿。验收只需读取已有记录。
 
+打开有工作目录的旧 Windows 会话时，普通历史阅读可用。支持读取执行记录的新版节点
+在 `muster info` 的服务列表中上报 `terminal.runs.v1`。验证读取 RPC 和重启恢复时，
+从仓库根目录运行下面的隔离用例。它使用临时节点和合成记录，核对退出码及回传状态。
+
+```powershell
+cargo test --locked --manifest-path src/muster/Cargo.toml -p musterd --test windows_managed_terminal windows_host_reads_scoped_run_history_after_restart
+```
+
 终端控件测试在独立窗口中绘制带样式的行和光标，检查鼠标选区、普通字符、
 补充平面字符、输入法提交消息、组合键、粘贴和尺寸上报。它可以输出一张合成截图。
 

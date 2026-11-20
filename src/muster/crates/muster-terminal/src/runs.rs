@@ -3,15 +3,17 @@
 use crate::{Error, tmux::TmuxService};
 use muster_proto::{
     Message,
-    v1::{AgentMessage, TerminalRun, TerminalRunRequest},
+    v1::{AgentMessage, TerminalRun},
 };
-use std::{
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::path::{Path, PathBuf};
 const OUTPUT_LIMIT: usize = 32 * 1024;
 
+#[cfg(unix)]
 use crate::commands::shell;
+#[cfg(unix)]
+use muster_proto::v1::TerminalRunRequest;
+#[cfg(unix)]
+use std::time::{SystemTime, UNIX_EPOCH};
 fn id(text: &str) -> String {
     muster_proto::history::prefix_hash(&[AgentMessage {
         text: text.into(),
@@ -26,17 +28,18 @@ fn io(e: std::io::Error) -> Error {
 }
 fn write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     let tmp = path.with_extension("tmp");
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&tmp)
-        .map_err(io)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp).map_err(io)?;
     file.write_all(bytes).map_err(io)?;
     file.sync_all().map_err(io)?;
+    drop(file);
     std::fs::rename(tmp, path).map_err(io)
 }
 impl TmuxService {
@@ -47,6 +50,7 @@ impl TmuxService {
             .join("terminal-runs")
             .join(id(agent))
     }
+    #[cfg(unix)]
     pub async fn start_run(
         &self,
         cwd: &str,
@@ -214,7 +218,13 @@ impl TmuxService {
             }
             let dir = entry.path();
             let path = dir.join("run.pb");
-            if std::fs::metadata(&path).map_err(io)?.len() > 128 * 1024 {
+            // A stopped writer can leave its reserved ID without a committed record.
+            let metadata = match std::fs::metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(io(e)),
+            };
+            if metadata.len() > 128 * 1024 {
                 continue;
             }
             let mut record = TerminalRun::decode(std::fs::read(&path).map_err(io)?.as_slice())

@@ -42,6 +42,25 @@ async fn fixture_node_process() {
     daemon.shutdown().await;
 }
 
+fn fixture_root() -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    let day = root.path().join("codex/sessions/2026/01/01");
+    fs::create_dir_all(&day).unwrap();
+    let meta =
+        serde_json::json!({"type":"session_meta","payload":{"id":SESSION,"cwd":root.path()}});
+    fs::write(
+        day.join(format!("rollout-2026-01-01T00-00-00-{SESSION}.jsonl")),
+        format!("{meta}\n"),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("fixture.key"),
+        SoftSigner::generate().to_bytes(),
+    )
+    .unwrap();
+    root
+}
+
 async fn start(root: &Path) -> (tokio::process::Child, Client) {
     use std::process::Stdio;
     use tokio::io::AsyncBufReadExt;
@@ -96,6 +115,19 @@ async fn start(root: &Path) -> (tokio::process::Child, Client) {
     (child, client)
 }
 
+async fn stop(mut child: tokio::process::Child, client: Client) {
+    client.close();
+    drop(client);
+    drop(child.stdin.take());
+    assert!(
+        tokio::time::timeout(Duration::from_secs(20), child.wait())
+            .await
+            .expect("fixture daemon shutdown")
+            .unwrap()
+            .success()
+    );
+}
+
 async fn action(client: &Client, action: i32, op: &str) -> v1::OpResult {
     let Resp::OpResult(r) = client
         .call(Req::AgentTerminal(v1::AgentTerminalRequest {
@@ -122,16 +154,7 @@ fn history(id: &str) -> Req {
 #[tokio::test]
 #[ignore = "requires MSYS2 with tmux next to the test executable or in MUSTER_MSYS2_ROOT"]
 async fn managed_shell_through_windows_daemon_restart() {
-    let root = tempfile::tempdir().unwrap();
-    let day = root.path().join("codex/sessions/2026/01/01");
-    fs::create_dir_all(&day).unwrap();
-    let meta =
-        serde_json::json!({"type":"session_meta","payload":{"id":SESSION,"cwd":root.path()}});
-    fs::write(
-        day.join(format!("rollout-2026-01-01T00-00-00-{SESSION}.jsonl")),
-        format!("{meta}\n"),
-    )
-    .unwrap();
+    let root = fixture_root();
     // On panic, end only the tmux server belonging to this fixture.
     struct Cleanup(std::path::PathBuf, std::path::PathBuf);
     impl Drop for Cleanup {
@@ -157,12 +180,7 @@ async fn managed_shell_through_windows_daemon_restart() {
         runtime.join("usr/bin/tmux.exe"),
         root.path().join("node/tmux.sock"),
     );
-    fs::write(
-        root.path().join("fixture.key"),
-        SoftSigner::generate().to_bytes(),
-    )
-    .unwrap();
-    let (mut child, client) = start(root.path()).await;
+    let (child, client) = start(root.path()).await;
     let id = action(&client, 0, "first").await.result_id;
     assert!(id.starts_with("tmux-v1-"));
     assert_eq!(action(&client, 0, "first").await.status, 1);
@@ -209,18 +227,9 @@ async fn managed_shell_through_windows_daemon_restart() {
         }))
         .await
         .unwrap();
-    client.close();
-    drop(client);
-    child.stdin.take();
-    assert!(
-        tokio::time::timeout(Duration::from_secs(20), child.wait())
-            .await
-            .expect("first daemon shutdown")
-            .unwrap()
-            .success()
-    );
+    stop(child, client).await;
 
-    let (mut child, client) = start(root.path()).await;
+    let (child, client) = start(root.path()).await;
     assert_eq!(action(&client, 0, "resume").await.result_id, id);
     input(
         &client,
@@ -245,15 +254,7 @@ async fn managed_shell_through_windows_daemon_restart() {
     assert_ne!(action(&client, 2, "replace").await.result_id, id);
     assert!(client.call(history(&id)).await.is_err());
     action(&client, 1, "end").await;
-    client.close();
-    child.stdin.take();
-    assert!(
-        tokio::time::timeout(Duration::from_secs(20), child.wait())
-            .await
-            .expect("second daemon shutdown")
-            .unwrap()
-            .success()
-    );
+    stop(child, client).await;
 }
 
 #[test]
@@ -283,4 +284,94 @@ fn packaged_shell_shares_the_windows_user_temp_directory() {
         "{diagnostics}"
     );
     assert_eq!(fs::read(temp.path().join("from-shell")).unwrap(), b"shell");
+}
+
+/// Read records through the public RPC; opening a conversation needs no running shell.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn windows_host_reads_scoped_run_history_after_restart() {
+    use muster_proto::Message;
+    let root = fixture_root();
+
+    async fn records(client: &Client, session: &str) -> Vec<v1::TerminalRun> {
+        let Resp::TerminalRuns(page) = client
+            .call(Req::TerminalRuns(v1::TerminalRunsRequest {
+                session: session.into(),
+            }))
+            .await
+            .unwrap()
+        else {
+            panic!("expected host run history")
+        };
+        page.runs
+    }
+    let (node, client) = start(root.path()).await;
+    let Resp::DeviceInfo(info) = client
+        .call(Req::DeviceInfo(Default::default()))
+        .await
+        .unwrap()
+    else {
+        panic!("expected device info")
+    };
+    assert!(
+        info.services
+            .iter()
+            .any(|s| s == muster_proto::TERMINAL_RUN_HISTORY)
+    );
+    assert!(records(&client, SESSION).await.is_empty());
+    let digest: String = muster_proto::history::prefix_hash(&[v1::AgentMessage {
+        text: SESSION.into(),
+        ..Default::default()
+    }])
+    .iter()
+    .map(|b| format!("{b:02x}"))
+    .collect();
+    let dir = root.path().join("node/terminal-runs").join(digest);
+    let completed = v1::TerminalRun {
+        id: "a".repeat(64),
+        session: SESSION.into(),
+        state: "completed".into(),
+        output: "fixture result".into(),
+        exit_known: true,
+        exit_code: 7,
+        return_state: "applied".into(),
+        ..Default::default()
+    };
+    let pending = v1::TerminalRun {
+        id: "b".repeat(64),
+        state: "starting".into(),
+        exit_known: false,
+        ..completed.clone()
+    };
+    let elsewhere = v1::TerminalRun {
+        id: "c".repeat(64),
+        session: "other".into(),
+        ..completed.clone()
+    };
+    for row in [&completed, &pending, &elsewhere] {
+        let entry = dir.join(&row.id);
+        fs::create_dir_all(&entry).unwrap();
+        fs::write(entry.join("run.pb"), row.encode_to_vec()).unwrap();
+    }
+    fs::create_dir(dir.join("d".repeat(64))).unwrap();
+    let first = records(&client, SESSION).await;
+    assert_eq!(first.len(), 2);
+    let done = first.iter().find(|r| r.id == completed.id).unwrap();
+    assert_eq!(
+        (&done.output, done.exit_code, done.exit_known),
+        (&completed.output, 7, true)
+    );
+    assert!(
+        done.return_state.is_empty(),
+        "delivery is read from the ledger"
+    );
+    assert!(
+        first
+            .iter()
+            .any(|r| r.id == pending.id && r.state == "unavailable" && !r.exit_known)
+    );
+    assert!(records(&client, "other").await.is_empty());
+    stop(node, client).await;
+    let (restarted, client) = start(root.path()).await;
+    assert_eq!(records(&client, SESSION).await, first);
+    stop(restarted, client).await;
 }
