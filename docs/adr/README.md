@@ -373,3 +373,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0255](0255-windows-managed-terminal-handoff.md) | Accepted | Attach a Windows desktop client to a conversation shell |
 | [0256](0256-windows-button-menu-lifetime.md) | Accepted | Bind Windows action menus to their anchor control |
 | [0257](0257-windows-tmux-server-start-deadline.md) | Accepted | Allow the Windows tmux server to start again after its last session ends |
+| [0258](0258-windows-transcript-file-diffs.md) | Accepted | Inspect and copy per-file diffs in Windows conversations |
