@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 pub struct TmuxService {
     pty: Arc<PtyService>,
     pub(crate) socket: PathBuf,
+    #[cfg(unix)]
     pub(crate) runs: Mutex<()>,
     program: Option<PathBuf>,
     sessions: Mutex<HashMap<String, String>>,
@@ -36,6 +37,7 @@ impl TmuxService {
         Arc::new(Self {
             pty: PtyService::new(PtyConfig::default()),
             socket,
+            #[cfg(unix)]
             runs: Mutex::new(()),
             program: candidates.into_iter().find(|p| p.is_file()),
             sessions: Mutex::new(HashMap::new()),
@@ -62,10 +64,20 @@ impl TmuxService {
         ]
     }
     pub(crate) async fn run(&self, args: &[&str]) -> Result<std::process::Output, Error> {
+        self.run_in(args, None).await
+    }
+    async fn run_in(
+        &self,
+        args: &[&str],
+        directory: Option<&Path>,
+    ) -> Result<std::process::Output, Error> {
         let program = self.program.as_ref().ok_or_else(|| {
             Error::Unavailable("Install tmux on the session's device first".into())
         })?;
         let mut cmd = tokio::process::Command::new(program);
+        if let Some(directory) = directory {
+            cmd.current_dir(directory);
+        }
         cmd.args(self.args())
             .args(args)
             .env_remove("TMUX")
@@ -130,19 +142,26 @@ impl TmuxService {
             }
         }
         if !exists || action == 2 {
-            self.checked(&[
-                "new-session",
-                "-d",
-                "-s",
-                &name,
-                "-c",
-                cwd,
-                "-x",
-                "120",
-                "-y",
-                "40",
-            ])
-            .await?;
+            // A native path can contain tmux format syntax or Windows drive
+            // separators. Let the client inherit it as its actual directory.
+            let output = self
+                .run_in(
+                    &[
+                        "new-session",
+                        "-d",
+                        "-s",
+                        &name,
+                        "-c",
+                        ".",
+                        "-x",
+                        "120",
+                        "-y",
+                        "40",
+                    ],
+                    Some(Path::new(cwd)),
+                )
+                .await?;
+            Self::checked_output(output)?;
         }
         let target = self.session_target(&name).await?;
         let mut handle = self.handle(&target).await?;
@@ -164,7 +183,10 @@ impl TmuxService {
     }
 
     async fn checked(&self, args: &[&str]) -> Result<String, Error> {
-        let result = self.run(args).await?;
+        Self::checked_output(self.run(args).await?)
+    }
+
+    fn checked_output(result: std::process::Output) -> Result<String, Error> {
         if !result.status.success() {
             return Err(Error::Unavailable(
                 String::from_utf8_lossy(&result.stderr).trim().into(),
@@ -460,7 +482,11 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-#[cfg(test)]
+#[cfg(all(windows, test))]
+#[path = "tmux_windows_tests.rs"]
+mod windows_tests;
+
+#[cfg(all(unix, test))]
 mod tests {
     use super::*;
     #[test]
@@ -768,7 +794,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).unwrap();
         let _cleanup = Cleanup(root.clone());
-        let cwd = root.join("work ' $(literal)");
+        let cwd = root.join("work ' $(literal) #{session_id}");
         std::fs::create_dir(&cwd).unwrap();
         let service = TmuxService::new(root.join("s"));
         assert!(service.available(), "install tmux before running this test");
@@ -776,7 +802,7 @@ mod tests {
         let first = service.action("agent-one", dir, 0).await.unwrap();
         assert_eq!(service.action("agent-one", dir, 0).await.unwrap(), first);
         service.input(&first, b"pwd\r").await.unwrap();
-        wait_text(&service, &first, "work ' $(literal)").await;
+        wait_text(&service, &first, "work ' $(literal) #{session_id}").await;
         service
             .input(
                 &first,

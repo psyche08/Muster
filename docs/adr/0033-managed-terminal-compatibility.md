@@ -103,3 +103,27 @@ musterd. Directly passing a Windows drive path to tmux selected the home
 directory, while the equivalent MSYS2 path selected the requested directory.
 Windows host integration still needs directory conversion and daemon-level
 acceptance before it can offer managed terminals.
+
+## Preserve the host working directory
+
+tmux interprets a start-directory argument using its own path and format
+syntax. A Windows drive path can be accepted while the pane opens in the
+user's home. Start the tmux client with the validated native working directory
+and pass a constant dot as the new session's start directory. This uses the
+client's directory on the host, including when another session already runs
+on the same server. It also keeps literal format characters in directory names.
+Resume and End continue to work when the original directory has disappeared.
+
+This keeps path handling in the shared adapter and needs no drive-letter or
+mount-table translation in the UI. Check two different working directories,
+including spaces, Unicode and tmux format characters. Verify the directory
+from each live pane and verify that an invalid restart preserves its handle.
+Run the Windows check with an explicitly chosen MSYS2 developer runtime on
+a disposable socket. Production daemon integration is a separate acceptance.
+
+Windows device verification passed with MSYS2 tmux 3.8. On one isolated server,
+both the ordinary drive path and the canonical extended-length path matched the
+directories reported by the panes. The second directory contained Unicode,
+spaces and literal tmux format syntax. A failed restart into a missing directory
+preserved each handle. The Windows terminal library suite also passed, including
+its missing-runtime check. The live daemon and vnet stayed online.

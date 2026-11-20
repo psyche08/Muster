@@ -158,7 +158,7 @@ impl PtyService {
             .ok_or_else(|| Error::NotFound(format!("session {id}")))
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, all(test, windows)))]
     pub(crate) fn contains(&self, id: &str) -> bool {
         self.sessions
             .lock()

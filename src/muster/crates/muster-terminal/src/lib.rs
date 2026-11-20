@@ -15,7 +15,7 @@ pub mod pty;
 #[cfg(unix)]
 pub mod runs;
 pub mod ssh;
-#[cfg(unix)]
+#[cfg(any(unix, all(test, windows)))]
 pub mod tmux;
 
 use std::path::PathBuf;
