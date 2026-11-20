@@ -51,3 +51,18 @@ deduplication, and retained results after ending tmux passed. Simulator layouts
 were inspected at 320/402 points. Native Claude acceptance was blocked by login;
 physical iPhone installation and Android/HarmonyOS device acceptance were not
 claimed. See DESKTOP_UPDATES.md for hashes, run IDs, and evidence paths.
+
+## Windows execution history
+
+The Windows conversation screen omitted the run records and errors already
+projected by Shared Rust. Present these records in the conversation, with
+command text, working directory, output, exit information and result delivery
+shown separately. Preserve the selected run by its ID when updates arrive.
+Close the detail view when its source device or conversation changes.
+
+Use the existing Rust manual-return intent only on an explicit click for a
+record which currently permits return. Reviewing a record emits no intent.
+Exercise selection across refresh and removal, truncation and unknown exits,
+delivery changes, scoped returns and navigation with synthetic views in real
+Windows controls. Host-side command execution and provider receipts require
+separate end-to-end evidence.

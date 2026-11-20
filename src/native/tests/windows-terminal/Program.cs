@@ -101,6 +101,7 @@ internal static class Program
         form.Width += 40; Pump(180);
         Check(intents.Count == 0, "Ended terminal received input or resize");
         ConversationTerminalTests.Run(args);
+        RunHistoryTests.Run(args);
         Console.WriteLine($"Passed styled grid, cursor, selection, Unicode input, paste and resize at {grid.DeviceDpi} DPI.");
     }
 }
