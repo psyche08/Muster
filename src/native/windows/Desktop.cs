@@ -113,10 +113,7 @@ internal sealed class Desktop : Form
         });
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
         if (deviceAuthAvailable)
-            Button(nav, "Presence key", async () => {
-                try { await Presence.Register(Handle, core.Socket); status.Text = "Presence candidate registered. A network administrator can now enroll it."; }
-                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Muster presence key"); }
-            });
+            Button(nav, "Presence key", () => ShowPresenceReport(() => Presence.ReadReport(core.Socket)));
         Button(nav, "Settings", () => Go(Page.Settings));
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
         input.ReturnPressed += () => Submit();
@@ -236,6 +233,23 @@ internal sealed class Desktop : Form
         if (list.SelectedItem is Row r)
             Send(r.Action);
     }
+    bool presenceReportOpen;
+    async void ShowPresenceReport(Func<Task<string>> query)
+    {
+        if (presenceReportOpen) return;
+        presenceReportOpen = true;
+        try
+        {
+            var report = await query();
+            if (!IsDisposed) MessageBox.Show(this, report, "Muster presence key");
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed) MessageBox.Show(this, ex.Message, "Presence key request failed");
+        }
+        finally { presenceReportOpen = false; }
+    }
+
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void Send(Intent intent) => core.Send(input.WithDraft(intent));
     void Import(Action import)
@@ -409,6 +423,8 @@ internal sealed class Desktop : Form
             }
             if (page == Page.Settings)
             {
+                if (deviceAuthAvailable)
+                    Button(actions, "Register presence candidate", () => ShowPresenceReport(() => Presence.Register(Handle, core.Socket)));
                 var desktopVersion = typeof(Desktop).Assembly.GetName().Version?.ToString(3);
                 lines.Add($"Desktop version    {Reported(desktopVersion)}");
                 lines.Add($"Local node version    {Reported(v.Self?.Version)}");

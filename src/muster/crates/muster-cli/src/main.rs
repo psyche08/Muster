@@ -107,6 +107,9 @@ enum Command {
         /// Register a local shell's public candidate (base64 SEC1).
         #[arg(long)]
         register: Option<String>,
+        /// Display the local candidate and its network enrollment on separate lines.
+        #[arg(long)]
+        summary: bool,
     },
     /// Approve/revoke a member's desktop Presence key as the network admin.
     EnrollPresence {
@@ -374,6 +377,20 @@ async fn resolve_device(client: &Client, text: &str) -> anyhow::Result<String> {
         0 => anyhow::bail!("no device matches {text:?}"),
         _ => anyhow::bail!("{text:?} is ambiguous"),
     }
+}
+
+fn presence_summary(info: &v1::PresenceInfo) -> String {
+    let candidate = if info.public_key.is_empty() {
+        "Not registered"
+    } else {
+        "Registered"
+    };
+    let enrollment = if info.enrolled {
+        "Enrolled"
+    } else {
+        "Not enrolled"
+    };
+    format!("Public candidate: {candidate}\nNetwork enrollment: {enrollment}")
 }
 
 fn print_status(s: &v1::NetworkStatus) {
@@ -877,7 +894,7 @@ async fn main() -> anyhow::Result<()> {
                 print_status(&s);
             }
         }
-        Command::Presence { register } => {
+        Command::Presence { register, summary } => {
             use base64::Engine;
             let public_key = register
                 .map(|s| base64::engine::general_purpose::STANDARD.decode(s))
@@ -891,11 +908,15 @@ async fn main() -> anyhow::Result<()> {
             else {
                 anyhow::bail!("unexpected Presence reply");
             };
-            println!(
-                "candidate_registered={} enrolled={}",
-                !info.public_key.is_empty(),
-                info.enrolled
-            );
+            if summary {
+                println!("{}", presence_summary(&info));
+            } else {
+                println!(
+                    "candidate_registered={} enrolled={}",
+                    !info.public_key.is_empty(),
+                    info.enrolled
+                );
+            }
         }
         Command::EnrollPresence {
             device,
@@ -1445,6 +1466,34 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn presence_summary_reports_candidate_and_enrollment_separately() {
+        for (public_key, enrolled, expected) in [
+            (
+                vec![],
+                false,
+                "Public candidate: Not registered\nNetwork enrollment: Not enrolled",
+            ),
+            (
+                vec![4; 65],
+                false,
+                "Public candidate: Registered\nNetwork enrollment: Not enrolled",
+            ),
+            (
+                vec![4; 65],
+                true,
+                "Public candidate: Registered\nNetwork enrollment: Enrolled",
+            ),
+        ] {
+            let info = v1::PresenceInfo {
+                public_key,
+                enrolled,
+                ..Default::default()
+            };
+            assert_eq!(presence_summary(&info), expected);
+        }
+    }
+
     #[test]
     fn desktop_chat_cli_resolves_the_app_label_and_preserves_the_wire_provider() {
         for (label, expected) in [
