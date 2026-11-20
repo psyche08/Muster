@@ -107,3 +107,142 @@ async fn oversized_socket_with_no_short_mount_reports_the_limit() {
     );
     assert!(!socket.exists());
 }
+
+async fn observed(mut check: impl AsyncFnMut() -> bool) -> bool {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        while !check().await {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .is_ok()
+}
+
+#[tokio::test]
+#[ignore = "requires the packaged MSYS2 runtime and Windows PowerShell in ConPTY"]
+async fn powershell_desktop_client_shares_only_the_selected_generation() {
+    let root = tempfile::Builder::new()
+        .prefix("共享 'x’ $ ")
+        .tempdir()
+        .unwrap();
+    let service = TmuxService::new(root.path().join("s"));
+    let program = service.program.as_ref().expect("set MUSTER_MSYS2_ROOT");
+    let _cleanup = FixtureServer(program.clone(), service.args().await.unwrap());
+    let cwd = root.path().to_str().unwrap();
+    let handle = service.action("handoff", cwd, 0).await.unwrap();
+
+    // Leave a real unfinished command on this disposable shell before opening another client.
+    service
+        .input(&handle, b"printf '%s%s\\n' DESKTOP")
+        .await
+        .unwrap();
+    assert!(
+        observed(async || service
+            .history(&handle, 100)
+            .await
+            .unwrap()
+            .iter()
+            .any(|line| line.text.trim_end().ends_with("DESKTOP")))
+        .await
+    );
+
+    let (command, iterm) = service.desktop_commands(&handle).await.unwrap();
+    assert!(iterm.is_empty() && !command.is_empty());
+    let shell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let desktop = PtyService::new(PtyConfig::default());
+    let args = [
+        "-NoProfile".into(),
+        "-NoLogo".into(),
+        "-Command".into(),
+        command,
+    ];
+    let client = desktop
+        .create_command(&shell, &args, None, "test-", &[])
+        .await
+        .unwrap();
+    let target = service.target(&handle).await.unwrap();
+    let attached = observed(async || {
+        service
+            .checked(&[
+                "list-clients",
+                "-t",
+                &target,
+                "-F",
+                "#{client_flags} #{client_termfeatures}",
+            ])
+            .await
+            .unwrap()
+            .lines()
+            .any(|line| line.contains("ignore-size") && line.contains("bpaste"))
+    })
+    .await;
+    service.input(&handle, b" -SHARED\r").await.unwrap();
+    let visible = attached
+        && observed(async || {
+            desktop
+                .history(&client.id, 100)
+                .await
+                .is_ok_and(|rows| rows.iter().any(|line| line.text.contains("DESKTOP-SHARED")))
+        })
+        .await;
+    if visible {
+        desktop
+            .input(&client.id, b"printf '%s%s\\n' RETURN -PATH\r")
+            .await
+            .unwrap();
+    }
+    let returned = visible
+        && observed(async || {
+            service
+                .history(&handle, 100)
+                .await
+                .unwrap()
+                .iter()
+                .any(|line| line.text.contains("RETURN-PATH"))
+        })
+        .await;
+    if desktop.contains(&client.id) {
+        desktop.close(&client.id).await.unwrap();
+    }
+    assert!(
+        attached,
+        "second client has ignore-size and bracketed paste"
+    );
+    assert!(
+        visible,
+        "opening a second client must preserve unfinished input"
+    );
+    assert!(
+        returned,
+        "input on the second client reaches the original shell"
+    );
+
+    assert_eq!(service.action("handoff", cwd, 0).await.unwrap(), handle);
+    let overrides = service
+        .checked(&["show-options", "-sv", "terminal-overrides"])
+        .await
+        .unwrap();
+    assert_ne!(service.action("handoff", cwd, 2).await.unwrap(), handle);
+    assert_eq!(
+        service
+            .checked(&["show-options", "-sv", "terminal-overrides"])
+            .await
+            .unwrap(),
+        overrides,
+        "reconnecting must preserve existing capability overrides"
+    );
+    let stale = desktop
+        .create_command(&shell, &args, None, "stale-", &[])
+        .await
+        .unwrap();
+    let exited = observed(async || !desktop.contains(&stale.id)).await;
+    if !exited {
+        desktop.close(&stale.id).await.unwrap();
+    }
+    assert!(
+        exited,
+        "previous command cannot attach to replacement shell"
+    );
+    service.action("handoff", cwd, 1).await.unwrap();
+}

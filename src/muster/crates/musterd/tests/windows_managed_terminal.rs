@@ -212,7 +212,7 @@ async fn managed_shell_through_windows_daemon_restart() {
     assert!(
         frame.full
             && frame.session == id
-            && frame.desktop_attach_command.is_empty()
+            && !frame.desktop_attach_command.is_empty()
             && frame.iterm2_attach_command.is_empty()
     );
     stream.cancel().await;

@@ -133,6 +133,11 @@ impl TmuxService {
             &socket
         };
         Ok(vec![
+            // Capabilities that tmux normally enables after identifying a VT100-like client.
+            #[cfg(windows)]
+            "-T".into(),
+            #[cfg(windows)]
+            "bpaste,focus,title".into(),
             "-u".into(),
             "-f".into(),
             "/dev/null".into(),
@@ -395,6 +400,20 @@ impl TmuxService {
         {
             return Ok(id.clone());
         }
+        #[cfg(windows)]
+        {
+            // On ConPTY, fragments of tmux's DA probes can become shell input.
+            // An equivalent clear starting with CR and no XT tells tmux to
+            // use terminfo directly. Keep the other private-server overrides.
+            const CONPTY: &str = r"xterm-256color:XT@:clear=\015\033[H\033[2J";
+            let existing = self
+                .checked(&["show-options", "-sv", "terminal-overrides"])
+                .await?;
+            if !existing.lines().any(|line| line == CONPTY) {
+                self.checked(&["set-option", "-sa", "terminal-overrides", CONPTY])
+                    .await?;
+            }
+        }
         // The native client is permanently bound to this session instance. Do
         // not let tmux switch it to another session when this one is destroyed.
         let mut args = self.args().await?;
@@ -447,18 +466,16 @@ impl TmuxService {
 
     /// Commands are bound to the server-side generation. The
     /// conditional and attach execute on the same tmux command queue.
-    #[cfg(unix)]
     async fn desktop_commands(&self, handle: &str) -> Result<(String, String), Error> {
-        let target = self.target(handle).await?;
         let program = self
             .program
             .as_ref()
             .ok_or_else(|| Error::Unavailable("tmux is unavailable".into()))?;
-        let mut args = vec![program.to_string_lossy().into_owned()];
-        args.extend(self.args().await?);
+        let target = self.target(handle).await?;
+        let args = self.args().await?;
         let condition = format!("#{{==:#{{@muster_terminal_id}},{handle}}}");
         let attach = format!("attach-session -f ignore-size -t {}", shell_quote(&target));
-        let tail = [
+        let guard = [
             "if-shell",
             "-F",
             "-t",
@@ -466,20 +483,33 @@ impl TmuxService {
             &condition,
             &attach,
             "display-message 'Muster session ended; reconnect from its conversation'",
-        ]
-        .iter()
-        .map(|s| shell_quote(s))
-        .collect::<Vec<_>>()
-        .join(" ");
-        let base = args
+        ];
+        let args = args
             .iter()
             .map(|s| shell_quote(s))
             .collect::<Vec<_>>()
             .join(" ");
-        Ok((
-            format!("env -u TMUX {base} {tail}"),
-            format!("env -u TMUX {base} -CC {tail}"),
-        ))
+        let tail = guard.map(shell_quote).join(" ");
+        #[cfg(unix)]
+        {
+            let program = shell_quote(&program.to_string_lossy());
+            Ok((
+                format!("env -u TMUX {program} {args} {tail}"),
+                format!("env -u TMUX {program} {args} -CC {tail}"),
+            ))
+        }
+        #[cfg(windows)]
+        {
+            // The initial MSYS executable can expand braces in native arguments.
+            // Give sh a single script; its quoted tmux format reaches tmux intact.
+            let sh = powershell_quote(&program.with_file_name("sh.exe").to_string_lossy());
+            let script =
+                format!("unset TMUX; export TERM=xterm-256color; exec /usr/bin/tmux {args} {tail}");
+            Ok((
+                format!("& {sh} -c {}", powershell_quote(&script)),
+                String::new(),
+            ))
+        }
     }
 
     async fn public_sessions(&self, mut list: Vec<TerminalSession>) -> Vec<TerminalSession> {
@@ -524,14 +554,12 @@ impl TmuxService {
         out: tokio::sync::mpsc::Sender<muster_proto::v1::TerminalFrame>,
     ) -> Result<(), Error> {
         let id = self.resolve(handle).await?;
-        #[cfg(unix)]
         let (desktop, iterm2) = self.desktop_commands(handle).await?;
         let (tx, mut rx) = tokio::sync::mpsc::channel(16);
         let reader = self.pty.attach(&id, since_rev, tx);
         tokio::pin!(reader);
         let decorate = |mut frame: muster_proto::v1::TerminalFrame| {
             frame.session = handle.into();
-            #[cfg(unix)]
             if frame.full {
                 frame.desktop_attach_command = desktop.clone();
                 frame.iterm2_attach_command = iterm2.clone();
@@ -584,6 +612,20 @@ impl TmuxService {
     pub async fn close(&self, handle: &str) -> Result<(), Error> {
         self.target(handle).await.map(|_| ())
     }
+}
+
+#[cfg(windows)]
+fn powershell_quote(value: &str) -> String {
+    // PowerShell also accepts typographic single quotes as delimiters.
+    let mut literal = String::from("'");
+    for ch in value.chars() {
+        if matches!(ch, '\'' | '‘' | '’' | '‚' | '‛') {
+            literal.push(ch);
+        }
+        literal.push(ch);
+    }
+    literal.push('\'');
+    literal
 }
 
 fn shell_quote(value: &str) -> String {
@@ -705,6 +747,7 @@ mod tests {
                     &["-c".into(), command.clone()],
                     None,
                     "desktop-",
+                    &[],
                 )
                 .await
                 .unwrap();
@@ -777,6 +820,7 @@ mod tests {
                 &["-c".into(), first.desktop_attach_command],
                 None,
                 "stale-",
+                &[],
             )
             .await
             .unwrap();
