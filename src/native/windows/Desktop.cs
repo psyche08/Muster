@@ -20,6 +20,8 @@ internal sealed class Desktop : Form
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
+    readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
+    (string Device, string Session)? terminalTab;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ChatInput input =
@@ -57,7 +59,7 @@ internal sealed class Desktop : Form
         Size = new Size(1050, 700);
         Padding = new Padding(16);
         var body = new Panel { Dock = DockStyle.Fill };
-        terminal.Intent += Send;
+        body.Controls.Add(conversationTerminal);
         terminal.ClipboardError += message => status.Text = message;
         body.Controls.Add(terminal);
         body.Controls.Add(preview);
@@ -71,6 +73,15 @@ internal sealed class Desktop : Form
         Controls.Add(title);
         Controls.Add(nav);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly);
+        terminal.Intent += core.Send;
+        conversationTerminal.Intent += core.Send;
+        conversationTerminal.ReturnToChat += () =>
+        {
+            if (current == null || terminalTab == null) return;
+            terminalTab = null;
+            core.Send(new() { SessionTerminalAction = new() { Action = SessionTerminalAction.Types.Action.Detach } });
+            Render(current);
+        };
         Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
         Button(nav, "Network", () => Go(Page.Home));
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
@@ -358,7 +369,11 @@ internal sealed class Desktop : Form
             inputContext = inputKey;
             if (page != Page.Chat) input.Clear();
         }
-        input.Visible = page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents;
+        (string Device, string Session)? chatKey = page == Page.Chat && v.Chat?.Session is {} openChatSession
+            ? (v.Chat.DeviceId, openChatSession.Id) : null;
+        if (terminalTab != chatKey) terminalTab = null;
+        bool inWorkspaceTerminal = terminalTab != null && v.Chat?.Terminal != null;
+        input.Visible = !inWorkspaceTerminal && (page is Page.Onboarding or Page.Home or Page.Join or Page.Chat or Page.Browser or Page.Agents);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -544,6 +559,14 @@ internal sealed class Desktop : Form
             if (v.Chat is {} chatView)
             {
                 title.Text = chatView.Session?.Title ?? "Chat";
+                if (inWorkspaceTerminal) break;
+                if (chatView.Terminal is { Available: true } && chatKey != null)
+                    AddAction("Workspace terminal", () =>
+                    {
+                        terminalTab = chatKey;
+                        Send(new() { SessionTerminalAction = new() { Action = SessionTerminalAction.Types.Action.Start } });
+                        Render(v);
+                    });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
                 foreach (var b in chatView.Timeline)
@@ -801,7 +824,9 @@ internal sealed class Desktop : Form
         bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
         preview.Visible = showingSource;
         bool showingTerminal = page == Page.Terminal && v.Terminal != null;
-        output.Visible = !showingSource && !showingTerminal;
+        conversationTerminal.Visible = inWorkspaceTerminal;
+        conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
+        output.Visible = !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         terminal.Display(showingTerminal ? v.Terminal : null);

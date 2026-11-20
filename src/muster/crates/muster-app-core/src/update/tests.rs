@@ -1625,7 +1625,7 @@ async fn blocked_cards_notify_once_in_background_including_optional_to_blocked_t
 #[tokio::test]
 async fn session_terminal_rejects_late_results_and_detaches_without_closing_shell() {
     let dir = tempfile::tempdir().unwrap();
-    let shell = Arc::new(QuietShell);
+    let shell = Arc::new(SignedTestShell(SoftSigner::generate()));
     let config = crate::AppConfig {
         dir: dir.path().into(),
         mode: crate::Mode::Embedded {
