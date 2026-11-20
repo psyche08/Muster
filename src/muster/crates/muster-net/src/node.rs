@@ -21,6 +21,7 @@ use crate::magicsock::{MagicOptions, MagicSock, PathInfo, RelayLink, RelayState}
 use crate::pair::Pairing;
 use crate::reconnect::{CONNECT_TIMEOUT, Retry};
 use crate::relay_proto::{Frame, MAX_FRAME};
+use crate::remote_desktop;
 use crate::stream::{Hello, read_hello, write_hello};
 use crate::tls::{SharedRoster, TlsIdentity, Trust, client_config, peer_device_id, server_config};
 use crate::{Error, forward, gossip, heartbeat, pair};
@@ -203,6 +204,8 @@ pub struct Node {
     adopted: Mutex<HashMap<DeviceId, Instant>>,
     builds: Mutex<HashMap<DeviceId, Build>>,
     handler: Mutex<Option<Arc<dyn ServiceHandler>>>,
+    remote_desktop_handler: Mutex<Option<Arc<dyn remote_desktop::Handler>>>,
+    media_routes: Arc<remote_desktop::Routes>,
     close_observer: Mutex<Option<CloseObserver>>,
     /// Entries newly accepted, for persistence and UI.
     entries_tx: broadcast::Sender<Entry>,
@@ -281,6 +284,8 @@ impl Node {
             adopted: Mutex::default(),
             builds: Mutex::default(),
             handler: Mutex::new(None),
+            remote_desktop_handler: Mutex::new(None),
+            media_routes: Arc::default(),
             close_observer: Mutex::new(None),
             entries_tx,
             datagram_tx,
@@ -322,6 +327,25 @@ impl Node {
 
     pub fn set_handler(&self, handler: Arc<dyn ServiceHandler>) {
         *self.handler.lock().unwrap() = Some(handler);
+    }
+
+    pub fn set_remote_desktop_handler(&self, handler: Option<Arc<dyn remote_desktop::Handler>>) {
+        *self.remote_desktop_handler.lock().unwrap() = handler;
+    }
+
+    pub async fn open_remote_desktop(
+        self: &Arc<Self>,
+        peer: DeviceId,
+    ) -> Result<remote_desktop::Session, Error> {
+        let connection = self.connect(peer).await?;
+        let (send, recv) = self
+            .open_on(
+                &connection,
+                remote_desktop::SERVICE,
+                remote_desktop::VERSION,
+            )
+            .await?;
+        self.media_routes.register(&connection, send, recv, None)
     }
 
     pub fn device_id(&self) -> DeviceId {
@@ -1290,16 +1314,18 @@ impl Node {
         connection: Connection,
         generation: u64,
     ) {
-        if let Some(tx) = self.datagram_tx.clone() {
-            let datagram_conn = connection.clone();
-            tokio::spawn(async move {
-                while let Ok(datagram) = datagram_conn.read_datagram().await {
-                    if tx.send((peer, datagram)).await.is_err() {
-                        break;
-                    }
+        let vnet_tx = self.datagram_tx.clone();
+        let media_routes = self.media_routes.clone();
+        let datagram_conn = connection.clone();
+        tokio::spawn(async move {
+            while let Ok(datagram) = datagram_conn.read_datagram().await {
+                if !media_routes.deliver(datagram_conn.stable_id(), &datagram)
+                    && let Some(tx) = &vnet_tx
+                {
+                    let _ = tx.try_send((peer, datagram));
                 }
-            });
-        }
+            }
+        });
         loop {
             let (send, mut recv) = match connection.accept_bi().await {
                 Ok(stream) => stream,
@@ -1338,6 +1364,41 @@ impl Node {
                     return;
                 }
                 let member = node.trust.is_member(&peer);
+                if hello.service == remote_desktop::SERVICE {
+                    let remote_handler = node.remote_desktop_handler.lock().unwrap().clone();
+                    if let Some(remote_handler) = remote_handler
+                        && member
+                        && !node.vnet_only
+                        && node.is_service_host(&node.device_id())
+                        && hello.version == remote_desktop::VERSION
+                        && remote_handler.allows(peer)
+                    {
+                        let policy_node = Arc::downgrade(&node);
+                        let policy_handler = remote_handler.clone();
+                        let guard = Arc::new(move || {
+                            policy_node.upgrade().is_some_and(|node| {
+                                let installed = node.remote_desktop_handler.lock().unwrap().clone();
+                                installed
+                                    .is_some_and(|handler| Arc::ptr_eq(&handler, &policy_handler))
+                                    && node.trust.is_member(&peer)
+                                    && node.is_service_host(&node.device_id())
+                                    && policy_handler.allows(peer)
+                            })
+                        });
+                        if let Ok(mut session) =
+                            node.media_routes
+                                .register(&connection, send, recv, Some(guard))
+                            && session.send_ack(ACK_OK).await.is_ok()
+                        {
+                            session.serve(peer, remote_handler).await;
+                        }
+                    } else {
+                        let mut send = send;
+                        let _ = send.write_all(&[ACK_REFUSED]).await;
+                        let _ = send.finish();
+                    }
+                    return;
+                }
                 let handler = node.handler.lock().unwrap().clone();
                 let allowed = match (hello.service.as_str(), member) {
                     (pair::SERVICE, _) => !node.vnet_only,

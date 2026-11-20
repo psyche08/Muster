@@ -73,3 +73,28 @@ Muster service contract.
   process exit; exercise direct and relay paths between separate devices.
 - Build, signing, installation, publication, and physical acceptance are
   pending. A source import or a standalone component build is not acceptance.
+
+### Transport milestone
+
+Reserve a `remote-desktop` v1 service stream for reliable control, using the
+existing message framing with a 16 KiB limit per message. Media packets on the
+same connection start with byte `0x01` (not an IPv4 header) followed by the
+full QUIC stream identifier as a big-endian 64-bit integer. Accept up to
+1141 payload bytes per packet and queue up to 32 packets per session. Drop
+oversized, excess, or unregistered media without retransmitting or forwarding
+it as vnet. The vnet receive queue also drops overflow rather than stalling
+other datagram traffic. The transport registers at most one session per link.
+It takes a host-supplied admission predicate, rechecks it during the session,
+and drops the queue and stream on revocation, disconnect or handler return.
+No production daemon registers this handler until product authorization and
+host lock state can be enforced; do not grant access using generic port scopes.
+
+Source tests cover wrong-link/wrong-stream packets, queue limits, and reliable
+and datagram round trips between signed test peers. On 2026-11-20 the same
+fixture passed on two Apple silicon Macs through the TLS-verified Muster
+relay: a reliable control message and a 1100-byte datagram made the round trip,
+media did not enter vnet, and revocation stopped the session without closing
+PeerLink. A repeat open was refused. The Macs kept their installed releases and
+roster; SSH carried only the test executable, public keys and signed test
+entries. No engine, screen capture, input injection, native UI, direct media
+path, signing, or installation was tested.
