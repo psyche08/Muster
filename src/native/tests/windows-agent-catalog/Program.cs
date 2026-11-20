@@ -14,8 +14,16 @@ internal static class Program
         (T)form.Controls.Find(name, true).Single();
 
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        Application.SetHighDpiMode(HighDpiMode.SystemAware);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        string? captures = args switch {
+            [] => null,
+            ["--screenshots", var directory] => Directory.CreateDirectory(directory).FullName,
+            _ => throw new ArgumentException("Usage: WindowsAgentCatalog [--screenshots DIRECTORY]")
+        };
         var win = new MemberView { DeviceId = "fixture-w", Name = "Test device" };
         var mac = new MemberView { DeviceId = "fixture-m", Name = "Test Mac" };
         var view = new AgentsView {
@@ -58,6 +66,8 @@ internal static class Program
             Check(Field<TextBox>(desktop, "Prompt").Text == view.NativeCreateDraft.Prompt, "retain prompt");
         }
 
+        CaptureDesktopForm(view, captures);
+
         var row = new AgentCatalogRow {
             Key = "issued-row-key", Session = new() { Id = "child", DeviceId = mac.DeviceId, ParentSessionId = "parent" },
             CanOrganize = true, CanArchive = true
@@ -84,4 +94,58 @@ internal static class Program
         }
         Console.WriteLine("Passed CLI/native forms, refused and unavailable drafts, and catalog row actions.");
     }
+    static void CaptureDesktopForm(AgentsView view, string? captures)
+    {
+        view.NativeCreateDraft = null;
+        using var form = new AgentSessionDialog(view, true);
+        form.ShowInTaskbar = false;
+        form.StartPosition = FormStartPosition.Manual;
+        form.Location = new Point(-20000, -20000);
+        var prompt = Field<TextBox>(form, "Prompt");
+        var submit = Field<Button>(form, "Submit");
+        void Capture(string name)
+        {
+            var fields = (TableLayoutPanel)prompt.Parent!;
+            var cells = fields.Controls.Cast<Control>().OrderBy(fields.GetRow).ToArray();
+            Check(cells.Zip(cells.Skip(1)).All(pair => pair.First.Bottom <= pair.Second.Top),
+                  "fields and help must not overlap");
+            Check(prompt.ClientSize.Height >= 3 * prompt.Font.Height, "prompt needs three visible lines");
+            if (captures == null) return;
+            using var bitmap = new Bitmap(form.Width, form.Height);
+            form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+            bitmap.Save(Path.Combine(captures, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+        Exception? captureError = null;
+        form.Shown += (_, _) => form.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                Check(!submit.Enabled, "empty desktop form");
+                Capture("desktop-session-empty");
+                Field<TextBox>(form, "Directory").Text = "/work/example";
+                Field<ComboBox>(form, "Provider").SelectedItem = "codex";
+                prompt.Text = "Synthetic screenshot fixture.";
+                Check(submit.Enabled, "filled desktop form");
+                Capture("desktop-session-filled");
+                form.Size = form.MinimumSize;
+                form.PerformLayout();
+                var viewport = (ScrollableControl)prompt.Parent!.Parent!;
+                Check(viewport.VerticalScroll.Visible && submit.Visible, "compact form keeps scrolling and submission");
+                submit.PerformClick();
+            }
+            catch (Exception ex)
+            {
+                captureError = ex;
+                form.DialogResult = DialogResult.Cancel;
+            }
+        }));
+        var result = form.ShowDialog();
+        if (captureError != null) throw captureError;
+        Check(result == DialogResult.OK, "click submits form");
+        var request = form.Request().NativeCreate;
+        Check(request.Directory == "/work/example" && request.Prompt == "Synthetic screenshot fixture."
+              && request.Provider == "codex", "captured controls produce the intended request");
+        Console.WriteLine($"Captured form at {form.DeviceDpi} DPI using {typeof(AgentsView).Assembly.Location}");
+    }
+
 }

@@ -10,7 +10,5 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../windows/Muster.csproj" />
-    <Compile Include="../../windows/AgentSessionDialog.cs" Link="AgentSessionDialog.cs" />
-    <Compile Include="../../windows/AgentRowMenu.cs" Link="AgentRowMenu.cs" />
   </ItemGroup>
 </Project>

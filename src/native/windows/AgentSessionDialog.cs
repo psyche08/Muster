@@ -16,33 +16,41 @@ internal sealed class AgentSessionDialog : Form
 
     public AgentSessionDialog(AgentsView agents, bool desktop)
     {
+        SuspendLayout();
         this.desktop = desktop;
         Text = desktop ? "New desktop session" : "New CLI session";
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleDimensions = new SizeF(96, 96);
+        AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(480, desktop ? 410 : 270);
-        MinimumSize = Size;
-        var fields = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14),
-                                            ColumnCount = 1, AutoScroll = true };
+        MinimumSize = new Size(340, 230);
+        var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var fields = new TableLayoutPanel { Dock = DockStyle.Top, Padding = new Padding(14),
+                                            ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+        viewport.Controls.Add(fields);
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        void Add(Control control, bool stretch = false)
+        void Add(Control control)
         {
             int row = fields.RowCount++;
-            fields.RowStyles.Add(new RowStyle(stretch ? SizeType.Percent : SizeType.AutoSize, stretch ? 100 : 0));
+            fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             fields.Controls.Add(control, 0, row);
         }
-        void Field(string label, Control control, bool stretch = false)
+        void Field(string label, Control control)
         {
             Add(new Label { Text = label, AutoSize = true });
             control.AccessibleName = label;
-            Add(control, stretch);
+            Add(control);
         }
         Field(desktop ? "Mac" : "Device", device);
         Field(desktop ? "App" : "CLI agent", provider);
         Field("Absolute directory on the selected device", directory);
-        if (desktop) Field("First message", prompt, true);
+        if (desktop)
+        {
+            prompt.MinimumSize = new Size(0, 80);
+            Field("First message", prompt);
+        }
         Add(new Label { Text = desktop
             ? "Create and send opens a Code session on the selected Mac and sends the first message."
             : "The directory must exist and the CLI agent must be installed and signed in on the selected device.",
@@ -55,7 +63,7 @@ internal sealed class AgentSessionDialog : Form
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         buttons.Controls.Add(submit);
         buttons.Controls.Add(cancel);
-        Controls.Add(fields);
+        Controls.Add(viewport);
         Controls.Add(buttons);
         CancelButton = cancel;
         if (!desktop) AcceptButton = submit;
@@ -83,6 +91,7 @@ internal sealed class AgentSessionDialog : Form
         directory.TextChanged += (_, _) => EnableSubmit();
         prompt.TextChanged += (_, _) => EnableSubmit();
         EnableSubmit();
+        ResumeLayout(true);
     }
 
     public Intent Request()
