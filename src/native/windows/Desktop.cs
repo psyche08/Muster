@@ -9,7 +9,7 @@ namespace Muster.Windows;
 
 internal sealed class Desktop : Form
 {
-    sealed record Row(string Label, Intent Action)
+    sealed record Row(string Label, Intent Action, string CatalogKey = "")
     {
         public override string ToString() => Label;
     }
@@ -102,6 +102,25 @@ internal sealed class Desktop : Form
                 });
         };
         input.TextChanged += (_, _) => UpdateComposerButtons();
+        var rowMenu = new ContextMenuStrip();
+        list.ContextMenuStrip = rowMenu;
+        FormClosed += (_, _) => rowMenu.Dispose();
+        list.MouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+                list.SelectedIndex = list.IndexFromPoint(e.Location);
+        };
+        rowMenu.Opening += (_, e) =>
+        {
+            while (rowMenu.Items.Count > 0) rowMenu.Items[0].Dispose();
+            if (current?.Screen == Page.Agents && list.SelectedItem is Row { CatalogKey.Length: > 0 } selected)
+            {
+                var row = current.Agents.Sections.SelectMany(section => section.Rows)
+                    .FirstOrDefault(r => r.Key == selected.CatalogKey);
+                if (row != null) AgentRowMenu.Populate(rowMenu, row, Send);
+            }
+            e.Cancel = rowMenu.Items.Count == 0;
+        };
         list.DoubleClick += (_, _) => OpenRow();
         list.KeyDown += (_, e) =>
         {
@@ -283,7 +302,7 @@ internal sealed class Desktop : Form
         status.Text = v.Toasts.LastOrDefault()?.Text ?? v.Join?.Message ?? "";
         var rows = new List<Row>();
         var lines = new List<string>();
-        void Row(string name, Intent intent) => rows.Add(new(name, intent));
+        void Row(string name, Intent intent, string catalogKey = "") => rows.Add(new(name, intent, catalogKey));
         composerButtons.Clear();
         int actionIndex = 0;
         void AddAction(string label, Action invoke)
@@ -425,6 +444,42 @@ internal sealed class Desktop : Form
             {
                 Intent Catalog(AgentCatalogAction.Types.Kind kind, string value = "") =>
                     new() { AgentCatalogAction = new() { Kind = kind, Value = value } };
+                void CreateSession(bool desktop)
+                {
+                    using var dialog = new AgentSessionDialog(agents, desktop);
+                    if (dialog.ShowDialog(this) == DialogResult.OK) Send(dialog.Request());
+                }
+                if (agents.CreateHosts.Count > 0)
+                {
+                    AddAction(agents.Creating ? "Creating CLI session…" : "New CLI session", () => CreateSession(false));
+                    actions.Controls[actionIndex - 1].Enabled = !agents.Creating;
+                }
+                if (agents.NativeCreateHosts.Count > 0)
+                {
+                    AddAction(agents.NativeCreating ? "Creating desktop session…" : "New desktop session", () => CreateSession(true));
+                    actions.Controls[actionIndex - 1].Enabled = !agents.NativeCreating;
+                }
+                if (v.ServiceDevices.Count > 0)
+                {
+                    int filterIndex = actionIndex;
+                    var filterDevice = v.ServiceDevices.FirstOrDefault(m => m.DeviceId == agents.DeviceId);
+                    AddAction("Device: " + (filterDevice?.Name ?? "All devices"), () =>
+                    {
+                        var menu = new ContextMenuStrip();
+                        void Choice(string label, string id, bool active)
+                        {
+                            var item = new ToolStripMenuItem(label) { Checked = active };
+                            item.Click += (_, _) => Send(new() { OpenAgents = new() { DeviceId = id } });
+                            menu.Items.Add(item);
+                        }
+                        Choice("All devices", "*", agents.DeviceId == "*");
+                        foreach (var device in v.ServiceDevices)
+                            Choice(device.Name, device.DeviceId, device.DeviceId == agents.DeviceId);
+                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+                        var anchor = actions.Controls[filterIndex];
+                        menu.Show(anchor, new Point(0, anchor.Height));
+                    });
+                }
                 input.PlaceholderText = "Search sessions";
                 Act("Search", () => Catalog(AgentCatalogAction.Types.Kind.Search, input.Text));
                 if (agents.Query.Length > 0)
@@ -438,7 +493,7 @@ internal sealed class Desktop : Form
                         var session = row.Session;
                         if (session == null) continue;
                         Row($"    {session.Title}    {row.SourceLabel}    {row.LaunchLabel}",
-                            new() { OpenAgent = new() { Session = session.Id, DeviceId = session.DeviceId } });
+                            new() { OpenAgent = new() { Session = session.Id, DeviceId = session.DeviceId } }, row.Key);
                         if (row.Expandable)
                             Row(row.Expanded ? "      Collapse replies" : "      Expand replies",
                                 Catalog(AgentCatalogAction.Types.Kind.ToggleFamily, row.Key));
@@ -482,6 +537,8 @@ internal sealed class Desktop : Form
             if (v.Chat is {} chatView)
             {
                 title.Text = chatView.Session?.Title ?? "Chat";
+                if (chatView.Session is { ParentSessionId.Length: > 0 } child)
+                    Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
                 foreach (var b in chatView.Timeline)
                     lines.AddRange(Block(b));
                 lines.Add(chatView.LoadError);

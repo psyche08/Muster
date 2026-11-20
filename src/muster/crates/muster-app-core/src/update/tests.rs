@@ -1,6 +1,7 @@
 //! The reducer's chat flows against a quiet shell.
 
 use super::*;
+use muster_core::{HwSigner, SoftSigner};
 
 fn running_chat() -> State {
     let mut state = State::new(false, Some("local".into()));
@@ -273,6 +274,17 @@ async fn side_chat_command_never_enters_the_parent_send_queue_and_ended_hides_in
     );
 }
 
+pub(super) struct SignedTestShell(pub(super) SoftSigner);
+impl crate::Shell for SignedTestShell {
+    fn on_view(&self, _: &[u8]) {}
+    fn on_effect(&self, _: u64, _: &[u8]) {}
+    fn hw_public_key(&self) -> Option<Vec<u8>> {
+        Some(self.0.public_key().raw().to_vec())
+    }
+    fn hw_sign(&self, message: &[u8]) -> Option<Vec<u8>> {
+        self.0.sign(message).ok()
+    }
+}
 struct QuietShell;
 impl crate::Shell for QuietShell {
     fn on_view(&self, _: &[u8]) {}
@@ -950,7 +962,7 @@ async fn pasted_text_reaches_ssh_bracketed_when_asked_and_oversized_pastes_do_no
 
 async fn phone() -> (tempfile::TempDir, Ctx, State) {
     let dir = tempfile::tempdir().unwrap();
-    let shell = std::sync::Arc::new(QuietShell);
+    let shell = std::sync::Arc::new(SignedTestShell(SoftSigner::generate()));
     let config = crate::AppConfig {
         dir: dir.path().into(),
         mode: crate::Mode::Embedded {
@@ -3153,10 +3165,21 @@ async fn desktop_session_creation_validates_first_and_keeps_only_refused_input()
         mac("mini", "online"),
         mac("pro", "offline"),
         v1::MemberView {
+            is_self: true,
+            ..mac("workstation", "online")
+        },
+        mac("peer", "online"),
+        v1::MemberView {
             kind: "server".into(),
             ..mac("box", "online")
         },
     ]));
+    let windows = v1::DeviceInfo {
+        platform: "windows".into(),
+        ..Default::default()
+    };
+    state.self_info = Some(windows.clone());
+    state.manual_devices.insert("peer".into(), windows);
     let view = crate::render::view_model(&state).agents.unwrap();
     let hosts: Vec<_> = view
         .native_create_hosts
@@ -3172,6 +3195,14 @@ async fn desktop_session_creation_validates_first_and_keeps_only_refused_input()
         prompt: "Synthetic first message".into(),
     };
     for invalid in [
+        app::NativeCreate {
+            device_id: "workstation".into(),
+            ..input.clone()
+        },
+        app::NativeCreate {
+            device_id: "peer".into(),
+            ..input.clone()
+        },
         app::NativeCreate {
             device_id: "pro".into(),
             ..input.clone()
@@ -3193,11 +3224,11 @@ async fn desktop_session_creation_validates_first_and_keeps_only_refused_input()
             ..input.clone()
         },
     ] {
-        let toasts = state.toasts.len();
+        state.toasts.clear();
         native_create::create(&mut state, &ctx, invalid);
         assert!(!state.agents.native_creating);
         assert!(state.agents.native_create_draft.is_none());
-        assert_eq!(state.toasts.len(), toasts + 1);
+        assert!(state.toasts.last().is_some_and(|toast| toast.error));
     }
     native_create::create(&mut state, &ctx, input.clone());
     assert!(state.agents.native_creating);
