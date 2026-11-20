@@ -201,6 +201,18 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 其自身发行版本；未打入发行版本的开发 CLI 会显示 crate 版本。在设备详情中，`Device version` 和 `Device commit` 对应当前
 所选设备。字段显示 `not reported` 时，在验收记录中将其标为未上报。
 
+在 **Settings** 逐项核对本机网络。用同一发行包的 CLI 运行以下只读请求：
+
+```powershell
+'{"device_info":{}}' | & $musterCli rpc --request -
+```
+
+**Local relay** 和 **Relay registration** 分别对应 `relay` 和 `state.relay`。
+**Assigned virtual IP** 对应 `state.vip`，**Local vnet** 对应 `state.vnet_up`。
+已有虚拟地址时隧道仍可能显示 down。验证 **Change local relay** 时，用本文的隔离窗口
+修改端点，并用带 `--socket $fixtureSocket` 的 CLI 复查。在线窗口可只打开后点 Cancel。
+公开记录只需注明各项是否一致。
+
 ## 在线窗口与人工确认
 
 需要核对真实窗口、焦点或单实例激活时，先确认进程路径、版本及所属用户，再定位
