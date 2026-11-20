@@ -462,8 +462,7 @@ internal sealed class Desktop : Form
             {
                 var anchor = actions.Controls[index];
                 var menu = DeviceMenu.Create(v.ServiceDevices, selected, choose);
-                menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-                menu.Show(anchor, new Point(0, anchor.Height));
+                menu.ShowBelow(anchor);
             });
         }
         void ComposerButton(string label, bool needsText, Action invoke)
@@ -750,8 +749,7 @@ internal sealed class Desktop : Form
                         var menu = transcript.CopyCode(CopySource);
                         if (menu == null) return;
                         var anchor = actions.Controls[copyIndex];
-                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-                        menu.Show(anchor, new Point(0, anchor.Height));
+                        menu.ShowBelow(anchor);
                     });
                 }
                 if (transcript.HasStepsMenu)
@@ -760,9 +758,8 @@ internal sealed class Desktop : Form
                     AddAction("Work steps", () =>
                     {
                         var menu = transcript.Menu(core.Send, () => { if (current != null) Render(current); });
-                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
                         var anchor = actions.Controls[menuIndex];
-                        menu.Show(anchor, new Point(0, anchor.Height));
+                        menu.ShowBelow(anchor);
                     });
                 }
                 var changedTurns = WorktreeNavigation.ChangedTurns(chatView.Timeline).ToArray();
@@ -773,9 +770,8 @@ internal sealed class Desktop : Form
                     {
                         var menu = new ContextMenuStrip();
                         WorktreeNavigation.AddChanges(menu, changedTurns, Send);
-                        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
                         var anchor = actions.Controls[menuIndex];
-                        menu.Show(anchor, new Point(0, anchor.Height));
+                        menu.ShowBelow(anchor);
                     });
                 }
                 lines.Add(chatView.LoadError);

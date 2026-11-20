@@ -236,7 +236,8 @@ shell。含运行时的完整发行包、在线节点切换、远端授权和真
 
 ### 将 Windows 会话终端接到另一个 PowerShell 窗口
 
-在合成会话的终端里点 **Connect**，然后打开 **Terminal actions… → Copy desktop connection command**。
+从 **Agents** 打开合成对话，选择 **Terminal**。标签页会尝试连接会话；手动断开后可点 **Connect**。
+看到 **Disconnect** 表示已连接。打开 **Terminal actions… → Copy desktop connection command**。
 在**运行该会话的 Windows 设备**打开一个普通用户 PowerShell，粘贴并运行命令。
 Muster 和新窗口应能看到同一条命令的结果。外接窗口使用宿主返回的会话代际，
 不会改变 Muster 的终端尺寸。关闭外接窗口可继续使用原 shell；显式重启会话后，
@@ -252,6 +253,23 @@ cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-terminal pow
 
 测试在接入前保留半条合成命令，接入后补完并核对两端的输出，再从第二个窗口输入。
 仅看到两个客户端已连接不能证明输入完整。此测试使用临时专用 socket，在线节点可继续运行。
+
+用独立 PowerShell 窗口验收时，在原终端输入半条合成命令，接入后再补齐并回车。
+例如先输入 `printf '%s%s\n' VIEW`，接入后输入 ` -SHARED`。在新窗口核对单独一行
+`VIEW-SHARED`，再从新窗口运行同样的命令，把两段参数改为 `RETURN` 和 `-SHARED`，
+回到原终端核对 `RETURN-SHARED`。显式重启这个合成会话后，再运行旧连接命令，核对
+新一代会话没有增加外接客户端。
+
+只需验证菜单时可保留系统剪贴板。用 UI Automation 枚举测试 GUI 进程自己的可见顶层
+窗口，在弹出菜单里按 `ControlType.MenuItem` 和完整名称定位复制命令，检查其启用状态。
+保持菜单展开，正常关闭测试主窗并记录进程退出码，预期为 0。上面的 Windows 终端控件
+测试另行验证用 Enter 选中菜单项时回调恰好执行一次。
+
+验收时把三种初始状态分开记录：从未启动过 shell、恢复已有 shell、结束最后一个
+shell 后再启动。隔离节点上，前两种已能从 GUI 连接。第三种复现过
+`tmux new-session timed out`；点一次 **Connect** 后虽显示已连接，后续
+`has-session` 查询仍可能超时。记录窗口中的具体错误，并用一条合成命令的结果验证
+可用性。
 
 ## 与已交付的 ZIP 对照
 
