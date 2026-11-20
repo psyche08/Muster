@@ -62,3 +62,9 @@ The control fixture references the desktop assembly and accepts a screenshot
 output directory. The Windows agent guide documents capture and byte matching
 against the ZIP. A repeat capture at 192 DPI showed the prompt, directory,
 explanation and submit controls separately.
+
+For the New CLI session cancellation check, record which window was exercised.
+The fixture asserts the actual form's modal result. For installed-window
+acceptance, scope UI Automation to the owned dialog and verify that the Agents
+view is enabled again. The guide describes window capture separately so a PNG
+of a synthetic desktop session cannot be mistaken for a live CLI acceptance.

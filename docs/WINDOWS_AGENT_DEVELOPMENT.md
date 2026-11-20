@@ -174,6 +174,12 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 重新获取窗口树，避免把输入投到背后的主窗。物理 Esc 可能终止 Computer Use。
 此时保留在线窗口，通过独立控件测试继续可重复的验收。
 
+### 示例：不用 Computer Use 核对 New CLI session 的 Cancel
+
+- **复现取消行为**：运行上面的 `WindowsAgentCatalog` 命令。它打开真实的 CLI 表单，在测试进程内走 WinForms 的 Escape 处理路径，断言 `ShowDialog()` 返回 `DialogResult.Cancel`。同次运行的两张 PNG 来自 **New desktop session**；CLI 取消的证据是断言。整个测试使用合成数据，普通用户即可运行。
+- **操作已安装的 Muster**：在同一用户的交互桌面上，按 GUI 的进程 ID 查找标题为 **New CLI session** 的模态窗，核对它的所有者是当前 Muster 主窗。在该对话框内查找已启用的 **Cancel** 按钮，通过 UI Automation 的 `InvokePattern.Invoke()` 调用一次。重新查询窗口，确认对话框关闭且 **Agents** 主窗恢复可用。若控件树只有禁用的主窗，重新枚举该进程的顶层窗口；仍无法定位时，记录实机步骤未验证。此路径直接调用控件，无需模拟全局按键或注入 DLL。[Microsoft UI Automation](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation)
+- **留存实机画面**：需要核对实际显示效果时，可使用支持 Windows Graphics Capture 的工具，通过系统窗口选择器选中目标窗口再取图。先确认预览包含目标对话框；独立模态窗可能需要单独选择。记录窗口标题、版本和 DPI，在线截图仅保存在本机。仓库的 `--screenshots` 参数用于独立表单测试。[Microsoft 窗口捕获文档](https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture)
+
 普通应用更新、采集测试截图与 UI 测试都无需 UAC。Wintun 启动授权、TPM 在场确认
 或账户登录由用户在系统窗口完成。验证聊天优先只读重开已有测试会话，新增真实
 消息发送应提前说明用途。公开文档和版本库只使用合成截图、路径和设备记录。
