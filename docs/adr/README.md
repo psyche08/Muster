@@ -361,3 +361,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0243](0243-windows-session-file-previews.md) | In development | Show session files and recorded changes on Windows |
 | [0244](0244-windows-terminal-catalog.md) | Accepted | Select the terminal host on Windows |
 | [0245](0245-windows-interactive-terminal-grid.md) | Accepted | Render and operate the shared terminal grid on Windows |
+| [0246](0246-desktop-chat-history-availability.md) | Accepted | Distinguish unobserved desktop chat history from an empty conversation |

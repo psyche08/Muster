@@ -55,7 +55,7 @@ muster-browser   → paths                      muster-web   → (none)
 muster-platform  → proto, agent, store, core
 musterd          → browser, web, core, net, proto, store, rpc, terminal, agent, platform, paths, acp, logs
 muster-acp       → agent, proto, rpc
-muster-cli       → proto, rpc, paths, browser, acp
+muster-cli       → core (desktop app names), proto, rpc, paths, browser, acp
 muster-vnet     → core, net, store (Windows network-only process)
 muster-app-core  → agent, proto, rpc, musterd, terminal, core, net
 muster-ffi       → app-core, paths, terminal

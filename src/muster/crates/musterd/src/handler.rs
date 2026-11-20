@@ -3179,7 +3179,9 @@ fn chat_app(provider: &str) -> Result<muster_agent::desktop_chat::ChatApp, Error
     muster_agent::desktop_chat::ChatApp::from_provider(provider).ok_or_else(|| {
         Error::Invalid(format!(
             "provider must be one with a Chat mode ({})",
-            muster_core::apps::chat_providers().join(", ")
+            muster_agent::desktop_chat::ChatApp::ALL
+                .map(|app| app.provider().as_str())
+                .join(", ")
         ))
     })
 }
