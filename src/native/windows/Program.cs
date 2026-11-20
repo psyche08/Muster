@@ -12,6 +12,8 @@ internal static class Program
             MessageBox.Show("Usage: Muster.exe [--connect-installed]", "Muster");
             return;
         }
-        Application.Run(new Desktop(attach));
+        var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Muster", "Muster.exe");
+        try { DesktopInstance.Run("Muster.Windows.Desktop.v1", () => new Desktop(attach), installed); }
+        catch (TimeoutException ex) { MessageBox.Show(ex.Message, "Muster"); }
     }
 }

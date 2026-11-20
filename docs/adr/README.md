@@ -354,3 +354,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0236](0236-unprivileged-windows-development.md) | In development | Run the Windows client and isolated daemon fixtures under a standard user token |
 | [0237](0237-windows-composer-draft-revisions.md) | In development | Bind Windows chat actions to the active editor revision |
 | [0238](0238-windows-composer-attachments-and-return.md) | In development | Adapt chat attachments and Return to Windows |
+| [0239](0239-windows-single-maximized-desktop.md) | In development | Open one maximized Windows desktop per user session |
