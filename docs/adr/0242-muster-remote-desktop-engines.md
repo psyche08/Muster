@@ -1,4 +1,4 @@
-# ADR 0240: Bundle remote desktop engines behind Muster authorization
+# ADR 0242: Bundle remote desktop engines behind Muster authorization
 
 - Date: 2026-11-20
 - Status: Proposed; not enabled in the product

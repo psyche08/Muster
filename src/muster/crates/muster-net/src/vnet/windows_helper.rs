@@ -2,7 +2,7 @@
 //! owns only the named Wintun adapter and one framed local packet stream.
 use super::{Error, PacketReader, PacketWriter, VnetConfig, interface_config, open_tun};
 use std::os::windows::{
-    ffi::OsStrExt,
+    ffi::{OsStrExt, OsStringExt},
     io::{AsRawHandle, FromRawHandle, OwnedHandle},
 };
 use std::{
@@ -23,11 +23,44 @@ use windows_sys::Win32::{
 fn error(e: impl std::fmt::Display) -> Error {
     Error::Io(format!("Windows network helper: {e}"))
 }
+// The interactive daemon may live in a per-user release directory. Only
+// the administrator-provisioned helper is eligible for a UAC launch.
+fn helper_directory() -> io::Result<PathBuf> {
+    let mut path = [0u16; 260];
+    let result = unsafe {
+        SHGetFolderPathW(
+            std::ptr::null_mut(),
+            CSIDL_PROGRAM_FILES as i32,
+            std::ptr::null_mut(),
+            SHGFP_TYPE_CURRENT as u32,
+            path.as_mut_ptr(),
+        )
+    };
+    if result < 0 {
+        return Err(io::Error::other(format!(
+            "Program Files lookup failed ({result:#x})"
+        )));
+    }
+    let len = path
+        .iter()
+        .position(|unit| *unit == 0)
+        .unwrap_or(path.len());
+    if len == 0 || len == path.len() {
+        return Err(io::Error::other("invalid Program Files path"));
+    }
+    Ok(PathBuf::from(std::ffi::OsString::from_wide(&path[..len])).join("Muster"))
+}
 fn endpoint(token: u128) -> io::Result<PathBuf> {
-    Ok(std::env::current_exe()?.with_file_name(format!("MusterTun-{token:032x}")))
+    Ok(helper_directory()?.join(format!("MusterTun-{token:032x}")))
 }
 fn launch(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> io::Result<OwnedHandle> {
-    let exe = std::env::current_exe()?.with_file_name("muster-tun.exe");
+    let exe = helper_directory()?.join("muster-tun.exe");
+    if !exe.is_file() || !exe.with_file_name("wintun.dll").is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Provision muster-tun.exe and wintun.dll under Program Files\\Muster before starting vnet",
+        ));
+    }
     let wide = |p: &Path| {
         p.as_os_str()
             .encode_wide()

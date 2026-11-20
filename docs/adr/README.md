@@ -355,4 +355,6 @@ superseding decisions get new numbers and bidirectional links.
 | [0237](0237-windows-composer-draft-revisions.md) | In development | Bind Windows chat actions to the active editor revision |
 | [0238](0238-windows-composer-attachments-and-return.md) | In development | Adapt chat attachments and Return to Windows |
 | [0239](0239-windows-single-maximized-desktop.md) | In development | Open one maximized Windows desktop per user session |
-| [0240](0240-muster-remote-desktop-engines.md) | Proposed; not enabled | Bundle remote desktop engines behind Muster authorization |
+| [0240](0240-windows-portable-distribution.md) | In development | Distribute the full Windows application as a per-user ZIP |
+| [0241](0241-windows-agent-session-actions.md) | In development | Expose session creation and catalog actions on Windows |
+| [0242](0242-muster-remote-desktop-engines.md) | Proposed; not enabled | Bundle remote desktop engines behind Muster authorization |

@@ -2,7 +2,6 @@
 param(
     [Parameter(Mandatory)][version]$Version,
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [string]$WixBin = $env:WIX_BIN,
     [string]$WintunArchive = $env:WINTUN_ARCHIVE
 )
 $ErrorActionPreference = 'Stop'
@@ -10,17 +9,16 @@ $PSNativeCommandUseErrorActionPreference = $true
 $root = (Resolve-Path "$PSScriptRoot\..\..\..\..").Path
 $project = "$root\src\native\windows"
 $out = [IO.Directory]::CreateDirectory($OutputDirectory).FullName
-$name = "Muster-$Version-win-x64.msi"
+$name = "Muster-$Version-win-x64.zip"
 if (Test-Path -LiteralPath "$out\$name") { throw "Output already exists: $out\$name" }
 if ((rustc -vV) -notcontains 'host: x86_64-pc-windows-msvc') { throw 'Use the x64 MSVC Rust toolchain' }
-if (!$WixBin) { $WixBin = Split-Path (Get-Command candle.exe).Source }
-$work = [IO.Directory]::CreateTempSubdirectory('muster-msi-').FullName
+$work = [IO.Directory]::CreateTempSubdirectory('muster-portable-').FullName
 $stage = [IO.Directory]::CreateDirectory("$work\payload").FullName
 $manifest = "$root\src\muster\Cargo.toml"
-$previousVersion = $env:MUSTER_MSI_VERSION
+$previousVersion = $env:MUSTER_WINDOWS_VERSION
 Push-Location $root
 try {
-    $env:MUSTER_MSI_VERSION = $Version.ToString()
+    $env:MUSTER_WINDOWS_VERSION = $Version.ToString()
     $daemon = @(cargo build --manifest-path $manifest --release --locked --message-format=json-render-diagnostics -p musterd -p muster-cli -p muster-ffi -p muster-browser -p muster-vnet |
         ForEach-Object { ConvertFrom-Json $_ } |
         Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'musterd' -and $_.executable })
@@ -50,36 +48,13 @@ try {
     foreach ($file in 'manifest.json','sw.js','jumper.js') {
         Copy-Item -LiteralPath "$root\src\browser\agenthalo-extension\$file" -Destination $extension.FullName
     }
-    foreach ($binary in Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object Extension -in '.exe','.dll') {
-        $reader = [IO.BinaryReader]::new([IO.File]::OpenRead($binary.FullName))
-        try {
-            $reader.BaseStream.Position = 0x3c
-            $reader.BaseStream.Position = $reader.ReadInt32()
-            if ($reader.ReadUInt32() -ne 0x4550 -or $reader.ReadUInt16() -ne 0x8664) {
-                throw "Expected an x64 PE image: $($binary.Name)"
-            }
-        } finally { $reader.Dispose() }
-    }
-    & "$WixBin\candle.exe" -nologo -arch x64 "-dVersion=$Version" -dNativeWix=1 -out "$work\Muster.wixobj" "$PSScriptRoot\Muster.wxs"
-    & "$WixBin\light.exe" -nologo -b $stage -out "$work\$name" "$work\Muster.wixobj"
-    $image = "$work\verify"
-    $extract = Start-Process msiexec.exe -WindowStyle Hidden -ArgumentList "/a `"$work\$name`" /qn TARGETDIR=`"$image`"" -Wait -PassThru
-    if ($extract.ExitCode) { throw "Administrative extraction failed ($($extract.ExitCode))" }
-    $installed = @(Get-ChildItem -LiteralPath $image -Recurse -Directory -Filter Muster)
-    if ($installed.Count -ne 1) { throw 'Missing or ambiguous Muster installation directory' }
-    foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
-        $relative = [IO.Path]::GetRelativePath($stage, $file.FullName)
-        if ((Get-FileHash -LiteralPath (Join-Path $installed[0].FullName $relative)).Hash -ne (Get-FileHash -LiteralPath $file.FullName).Hash) {
-            throw "MSI payload mismatch: $relative"
-        }
-    }
-    Copy-Item -LiteralPath "$work\$name" -Destination $out
+    python -X utf8 "$PSScriptRoot\portable-zip.py" $stage $Version.ToString() $out
     Get-FileHash -LiteralPath "$out\$name"
 } finally {
     Pop-Location
-    $env:MUSTER_MSI_VERSION = $previousVersion
+    $env:MUSTER_WINDOWS_VERSION = $previousVersion
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
-    if ([IO.Path]::GetDirectoryName($work) -eq $tempRoot -and [IO.Path]::GetFileName($work).StartsWith('muster-msi-')) {
+    if ([IO.Path]::GetDirectoryName($work) -eq $tempRoot -and [IO.Path]::GetFileName($work).StartsWith('muster-portable-')) {
         Remove-Item -LiteralPath $work -Recurse -Force
     }
 }

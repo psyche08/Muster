@@ -2,7 +2,7 @@
 
 This directory holds the downstream Sunshine host and Moonlight PC source.
 Nothing here is built into a Muster release, installed, or started by Muster yet.
-See [ADR 0240](../../docs/adr/0240-muster-remote-desktop-engines.md) for the
+See [ADR 0242](../../docs/adr/0242-muster-remote-desktop-engines.md) for the
 authorization boundary and device acceptance plan.
 
 ## Downstream changes
