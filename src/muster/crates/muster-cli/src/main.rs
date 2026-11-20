@@ -1194,7 +1194,10 @@ async fn main() -> anyhow::Result<()> {
                 .await?
             {
                 if !catalog.app_running {
-                    println!("the app is not running");
+                    println!(
+                        "{}",
+                        muster_core::apps::chat_window_unavailable(&catalog.provider)
+                    );
                 } else if !catalog.chat_mode {
                     println!("the app is not in its Chat mode; `chat-open` switches it");
                 }

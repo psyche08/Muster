@@ -236,13 +236,19 @@ async fn switch_mode(app: ChatApp, guard: &Guard, root: &Element, chat: bool) ->
     .map(|_| ())
 }
 
+fn require_chat_process(app: ChatApp) -> Result<(u32, u64), Error> {
+    process(app).ok_or_else(|| {
+        Error::Unavailable(muster_core::apps::chat_window_unavailable(
+            app.provider().as_str(),
+        ))
+    })
+}
+
 /// Local diagnosis: switch `app` to Chat mode or back (`muster debug
 /// ax-chat-mode ChatGPT code`). Same guards as any navigation.
 pub async fn set_mode(app: ChatApp, chat: bool) -> Result<(), Error> {
     console_ready()?;
-    let (pid, start) = process(app).ok_or_else(|| {
-        Error::Unavailable(format!("{} is not running on this desktop", app.name()))
-    })?;
+    let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
     let guard = Guard::new(pid, start, &root);
     guard.check()?;
@@ -439,9 +445,7 @@ pub async fn open(
     session: Option<&str>,
 ) -> Result<String, Error> {
     console_ready()?;
-    let (pid, start) = process(app).ok_or_else(|| {
-        Error::Unavailable(format!("{} is not running on this desktop", app.name()))
-    })?;
+    let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
     let guard = Guard::new(pid, start, &root);
     guard.check()?;
@@ -606,9 +610,7 @@ pub async fn catalog(
 /// chosen.
 pub async fn inspect_options(app: ChatApp) -> Result<String, Error> {
     console_ready()?;
-    let (pid, start) = process(app).ok_or_else(|| {
-        Error::Unavailable(format!("{} is not running on this desktop", app.name()))
-    })?;
+    let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
     let guard = Guard::new(pid, start, &root);
     let o = open_picker(app, &guard, &root).await?;
@@ -645,7 +647,7 @@ pub fn diagnostic(name: &str) -> Result<String, String> {
         )
     })?;
     console_ready().map_err(|e| e.to_string())?;
-    let (pid, _) = process(app).ok_or_else(|| format!("{} is not running", app.name()))?;
+    let (pid, _) = require_chat_process(app).map_err(|e| e.to_string())?;
     let root = Element::application(pid);
     root.enable_manual_accessibility();
     let started = Instant::now();
@@ -1069,7 +1071,7 @@ pub async fn options(
         .get(&app)
         .cloned()
         .ok_or_else(|| {
-            Error::Unavailable(format!("{} is not running on this desktop", app.name()))
+            Error::Unavailable("Reopen this conversation from Chats to read its options.".into())
         })?;
     let _write = driver
         .write
