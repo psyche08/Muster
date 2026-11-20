@@ -46,7 +46,7 @@ internal sealed class Desktop : Form
             button.Enabled = needsText ? input.CanSubmitPayload : input.TextLength == 0;
     }
     ViewModel? pending, current;
-    bool opening, ready;
+    bool opening, ready, focusNetworkList;
     string inputContext = "";
     static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
                                             Padding = new Padding(0, 2, 0, 2) };
@@ -104,7 +104,16 @@ internal sealed class Desktop : Form
         related.Open += Send;
         conversationTerminal.ReturnToChat += () => SelectTab(SessionTab.Conversation);
         Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
-        Button(nav, "Network", () => Go(Page.Home));
+        Button(nav, "Network", () =>
+        {
+            if (current?.Screen == Page.Settings)
+                FocusNetworkList();
+            else
+            {
+                focusNetworkList = true;
+                Go(Page.Settings);
+            }
+        });
         Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
         Button(nav, "Chats", () => Send(new() { OpenDesktopChats = new() }));
         Button(nav, "Terminals", () =>
@@ -112,12 +121,12 @@ internal sealed class Desktop : Form
             string device = current?.Screen switch
             {
                 Page.Agents => current.Agents?.DeviceId ?? "",
-                Page.Device => current.SelectedDevice,
+                Page.Device when current.SelectedDeviceHasServices => current.SelectedDevice,
                 _ => ""
             };
             Send(new() { OpenTerminals = new() { DeviceId = device } });
         });
-        Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDevice ?? "" } }));
+        Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDeviceHasServices == true ? current.SelectedDevice : "" } }));
         if (deviceAuthAvailable)
             Button(nav, "Presence key", () => ShowPresenceReport(() => Presence.ReadReport(core.Socket)));
         Button(nav, "Settings", () => Go(Page.Settings));
@@ -165,7 +174,17 @@ internal sealed class Desktop : Form
             }
             e.Cancel = rowMenu.Items.Count == 0;
         };
-        list.DoubleClick += (_, _) => OpenRow();
+        list.MouseClick += (_, e) =>
+        {
+            int index = list.IndexFromPoint(e.Location);
+            if (e.Button == MouseButtons.Left && index >= 0 && list.Items[index] is Row row && row.Action.SelectDevice != null)
+                Send(row.Action);
+        };
+        list.DoubleClick += (_, _) =>
+        {
+            if (list.SelectedItem is Row row && row.Action.SelectDevice == null)
+                OpenRow();
+        };
         list.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
@@ -244,6 +263,12 @@ internal sealed class Desktop : Form
             Send(new() { SessionTerminalAction = new() { Action = tab == SessionTab.Terminal
                 ? SessionTerminalAction.Types.Action.Start : SessionTerminalAction.Types.Action.Detach } });
         Render(current);
+    }
+    void FocusNetworkList()
+    {
+        if (!list.Visible || list.Items.Count == 0) return;
+        if (list.SelectedIndex < 0) list.SelectedIndex = 0;
+        list.Focus();
     }
     void OpenRow()
     {
@@ -451,10 +476,67 @@ internal sealed class Desktop : Form
         input.PlaceholderText = "";
         switch (page)
         {
+        case Page.Device:
+        {
+            var selected = v.Network?.Members.FirstOrDefault(member => member.DeviceId == v.SelectedDevice);
+            if (selected == null)
+            {
+                lines.Add("No such device");
+                break;
+            }
+            title.Text = selected.Name;
+            lines.Add($"Name    {Reported(selected.Name)}");
+            lines.Add($"Kind    {Reported(selected.Kind)}");
+            lines.Add($"Role    {Reported(selected.Role)}");
+            lines.Add($"Virtual IP    {Reported(selected.Vip)}");
+            lines.Add($"Fingerprint    {Reported(selected.Fingerprint)}");
+            if (selected.Link.Length > 0) lines.Add($"Link    {selected.Link}");
+            if (selected.ConnectionStatus.Length > 0) lines.Add($"Connection    {selected.ConnectionStatus}");
+            lines.Add($"Device version    {Reported(selected.Version)}");
+            lines.Add($"Device commit    {Reported(selected.Commit)}");
+            if (v.SelectedDeviceHasServices)
+            {
+                Act("Chrome on device", () => new() { OpenBrowser = new() { Device = selected.DeviceId } });
+                Act("Agents on device", () => new() { OpenAgents = new() { DeviceId = selected.DeviceId } });
+                Act("Terminals on device", () => new() { OpenTerminals = new() { DeviceId = selected.DeviceId } });
+            }
+            if (v.DeviceActions is {} deviceActions)
+            {
+                if (deviceActions.ShowAccess && v.DeviceAccess is {} access)
+                {
+                    lines.Add("Access to other devices");
+                    foreach (var section in access.Sections)
+                        lines.Add($"{section.Title}    {section.Summary}");
+                    if (deviceActions.CanEditAccess)
+                        AddAction("Edit access", () =>
+                        {
+                            using var dialog = new AccessDialog("Save access", selected.Name + "\r\n" + selected.Fingerprint, access);
+                            if (dialog.ShowDialog(this) == DialogResult.OK)
+                                Send(new() { SetScopes = new() { DeviceId = selected.DeviceId, Role = selected.Role,
+                                                                 Scopes = { dialog.Scopes } } });
+                        });
+                }
+                if (deviceActions.CanRename)
+                    AddAction("Rename device", () =>
+                    {
+                        var name = Microsoft.VisualBasic.Interaction.InputBox("Device name", "Rename device", selected.Name);
+                        if (name.Trim().Length > 0 && name != selected.Name)
+                            Send(new() { RenameDevice = new() { DeviceId = selected.DeviceId, Name = name.Trim() } });
+                    });
+                if (deviceActions.CanRemove)
+                    AddAction("Remove device", () =>
+                    {
+                        if (MessageBox.Show(this, $"Remove {selected.Name} ({selected.Fingerprint}) from the network?",
+                                            "Remove device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                                            MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                            Send(new() { RemoveDevice = new() { DeviceId = selected.DeviceId } });
+                    });
+            }
+            break;
+        }
         case Page.Home:
         case Page.Onboarding:
         case Page.Join:
-        case Page.Device:
         case Page.Settings:
         case Page.Invite:
             if (v.Self != null)
@@ -495,17 +577,9 @@ internal sealed class Desktop : Form
                 lines.Add(v.Network.VnetCidr);
                 foreach (var m in v.Network.Members)
                 {
-                    Row($"{m.Name}    {m.Vip}", new() { SelectDevice = new() { DeviceId = m.DeviceId } });
-                    if (m.DeviceId == v.SelectedDevice)
-                    {
-                        lines.Add(
-                            $"{m.Name}\r\n{m.Fingerprint}\r\n{m.ConnectionStatus}\r\n{string.Join(", ",m.Scopes)}");
-                        if (page == Page.Device)
-                        {
-                            lines.Add($"Device version    {Reported(m.Version)}");
-                            lines.Add($"Device commit    {Reported(m.Commit)}");
-                        }
-                    }
+                    var parts = new[] { m.Name, m.IsSelf ? "this device" : "", m.Role, m.Vip, m.Link };
+                    Row(string.Join(" · ", parts.Where(part => part.Length > 0)),
+                        new() { SelectDevice = new() { DeviceId = m.DeviceId } });
                 }
             }
             if (v.Network?.HasNetwork != true)
@@ -533,41 +607,9 @@ internal sealed class Desktop : Form
                     Act("Decline " + p.Name, () => new() { DecideJoin = new() { DeviceId = p.DeviceId } });
                 }
             }
-            if (page == Page.Device && v.DeviceActions?.CanEditAccess == true &&
-                v.Network?.Members.FirstOrDefault(m => m.DeviceId == v.SelectedDevice) is {} member)
-            {
-                AddAction("Edit access",
-                          () =>
-                          {
-                              using var dialog = new AccessDialog(
-                                  "Save access", member.Name + "\r\n" + member.Fingerprint, v.DeviceAccess);
-                              if (dialog.ShowDialog(this) == DialogResult.OK)
-                                  Send(new() { SetScopes = new() { DeviceId = member.DeviceId, Role = member.Role,
-                                                                   Scopes = { dialog.Scopes } } });
-                          });
-            }
-            if (page == Page.Device && v.DeviceActions is {} deviceActions &&
-                v.Network?.Members.FirstOrDefault(m => m.DeviceId == v.SelectedDevice) is {} selected)
-            {
-                if (deviceActions.CanRename)
-                    AddAction("Rename device", () =>
-                    {
-                        var name = Microsoft.VisualBasic.Interaction.InputBox("Device name", "Rename device", selected.Name);
-                        if (name.Trim().Length > 0 && name != selected.Name)
-                            Send(new() { RenameDevice = new() { DeviceId = selected.DeviceId, Name = name.Trim() } });
-                    });
-                if (deviceActions.CanRemove)
-                    AddAction("Remove device", () =>
-                    {
-                        if (MessageBox.Show(this, $"Remove {selected.Name} ({selected.Fingerprint}) from the network?",
-                                            "Remove device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
-                                            MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                            Send(new() { RemoveDevice = new() { DeviceId = selected.DeviceId } });
-                    });
-            }
             if (page == Page.Invite && v.Invite != null)
                 lines.Add(v.Invite.Text);
-            if (v.SelectedDevice.Length > 0)
+            if (v.SelectedDevice.Length > 0 && v.SelectedDeviceHasServices)
             {
                 Act("Agents on device", () => new() { OpenAgents = new() { DeviceId = v.SelectedDevice } });
                 Act("Terminals on device", () => new() { OpenTerminals = new() { DeviceId = v.SelectedDevice } });
@@ -940,8 +982,10 @@ internal sealed class Desktop : Form
             list.BeginUpdate();
             list.Items.Clear();
             list.Items.AddRange(rows.ToArray());
-            if (old != null)
-                list.SelectedItem = old;
+            var memberId = old?.Action.SelectDevice?.DeviceId ?? v.SelectedDevice;
+            var memberRow = rows.Find(row => row.Action.SelectDevice?.DeviceId == memberId);
+            if (memberRow != null || old != null)
+                list.SelectedItem = memberRow ?? old;
             list.EndUpdate();
         }
         bool showChatSidebar = page == Page.DesktopChats || (page == Page.Chat && v.Workspace == Page.DesktopChats);
@@ -962,6 +1006,11 @@ internal sealed class Desktop : Form
         output.Visible = !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
+        if (focusNetworkList && page == Page.Settings)
+        {
+            focusNetworkList = false;
+            FocusNetworkList();
+        }
         terminal.Display(showingTerminal ? v.Terminal : null);
         var text = images.Count == 0 ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         if (output.Text != text)
