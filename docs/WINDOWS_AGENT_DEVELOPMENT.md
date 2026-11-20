@@ -153,7 +153,7 @@ PowerShell 会话中运行该测试程序，参数为
 1.1.72 起还可运行 `--ignored --exact packaged_shell_shares_the_windows_user_temp_directory`，
 验证 Windows 和 Bash 能在当前用户的临时目录中相互读写文件。
 
-通过 GUI 验收时，在合成对话输入未发送草稿，打开 **Workspace terminal**。先点击网格
+通过 GUI 验收时，在合成对话输入未发送草稿，打开 **Terminal** 标签。先点击网格
 获得焦点，再用 `cat` 读取合成项目中的测试文件。自绘网格通过 MSAA 的名称
 `Terminal` 和 `accValue` 提供画面文本。核对 **Disconnect → Connect** 后输出仍在，
 并核对 **Conversation** 恢复原草稿。
@@ -166,6 +166,11 @@ PowerShell 会话中运行该测试程序，参数为
 $env:MUSTER_MSYS2_ROOT = 'D:\Developer\msys64'
 cargo test --manifest-path src/muster/Cargo.toml -p musterd --test windows_managed_terminal managed_shell_through_windows_daemon_restart -- --ignored
 ```
+
+临时路径较深时，还应运行 `managed_shell_in_deep_windows_temp`。它把子进程的
+Windows TEMP 和 TMP 指向含中文和空格的深目录，然后在重启前后核对同一 shell。
+tmux 的套接字地址最多 107 字节；新版节点会尝试随包 cygpath 给出的绝对 MSYS2 路径。
+如果转换后仍超长，使用更短的开发节点目录。运行记录仍写在原节点目录。
 
 此测试以软件身份启动两个先后运行的普通用户节点进程。它通过真实命名管道发现合成
 会话、创建 shell、核对重复请求的回执并读取首帧。第一个节点退出后，第二个节点

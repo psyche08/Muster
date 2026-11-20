@@ -12,6 +12,9 @@ use std::{
 use tokio::sync::Mutex;
 
 #[cfg(windows)]
+const MAX_SOCKET_BYTES: usize = 107;
+
+#[cfg(windows)]
 const CLIENT_ENV: &[(&str, &str)] = &[
     ("MSYS", "noglob"),
     ("CHERE_INVOKING", "1"),
@@ -25,6 +28,8 @@ const CLIENT_ENV: &[(&str, &str)] = &[];
 pub struct TmuxService {
     pty: Arc<PtyService>,
     pub(crate) socket: PathBuf,
+    #[cfg(windows)]
+    short_socket: tokio::sync::OnceCell<String>,
     pub(crate) runs: Mutex<()>,
     program: Option<PathBuf>,
     sessions: Mutex<HashMap<String, String>>,
@@ -65,6 +70,8 @@ impl TmuxService {
         Arc::new(Self {
             pty: PtyService::new(PtyConfig::default()),
             socket,
+            #[cfg(windows)]
+            short_socket: tokio::sync::OnceCell::new(),
             runs: Mutex::new(()),
             program: Self::program(),
             sessions: Mutex::new(HashMap::new()),
@@ -81,14 +88,57 @@ impl TmuxService {
     pub fn available(&self) -> bool {
         self.program.is_some()
     }
-    fn args(&self) -> Vec<String> {
-        vec![
+    #[cfg(windows)]
+    async fn msys_socket(&self) -> Result<String, Error> {
+        // tmux copies the argument to sockaddr_un.sun_path before opening it.
+        // Convert with the same MSYS runtime that will resolve the mount.
+        let bin = self
+            .program
+            .as_deref()
+            .and_then(Path::parent)
+            .ok_or_else(|| Error::Unavailable("MSYS2 tmux is unavailable".into()))?;
+        let mut cmd = tokio::process::Command::new(bin.join("cygpath.exe"));
+        cmd.args(["-au", "--"])
+            .arg(&self.socket)
+            .stdin(std::process::Stdio::null())
+            .env("LC_ALL", "C.UTF-8")
+            .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
+            .kill_on_drop(true);
+        let output = tokio::time::timeout(Duration::from_secs(5), cmd.output())
+            .await
+            .map_err(|_| Error::Unavailable("MSYS2 socket path conversion timed out".into()))?
+            .map_err(|e| {
+                Error::Unavailable(format!(
+                    "Cannot convert the long tmux socket path with cygpath: {e}"
+                ))
+            })?;
+        let path = std::str::from_utf8(&output.stdout)
+            .unwrap_or("")
+            .trim_end_matches(['\r', '\n']);
+        if !output.status.success() || !path.starts_with('/') || path.len() > MAX_SOCKET_BYTES {
+            return Err(Error::Unavailable("The tmux socket path exceeds 107 bytes. Use a shorter node directory or a shorter MSYS2 mount path for that directory.".into()));
+        }
+        Ok(path.into())
+    }
+
+    async fn args(&self) -> Result<Vec<String>, Error> {
+        let socket = self.socket.to_string_lossy();
+        #[cfg(windows)]
+        let socket = if socket.len() > MAX_SOCKET_BYTES {
+            self.short_socket
+                .get_or_try_init(|| self.msys_socket())
+                .await?
+                .as_str()
+        } else {
+            &socket
+        };
+        Ok(vec![
             "-u".into(),
             "-f".into(),
             "/dev/null".into(),
             "-S".into(),
-            self.socket.to_string_lossy().into_owned(),
-        ]
+            socket.to_string(),
+        ])
     }
     pub(crate) async fn run(&self, args: &[&str]) -> Result<std::process::Output, Error> {
         self.run_in(args, None).await
@@ -113,7 +163,7 @@ impl TmuxService {
         if let Some(directory) = directory {
             cmd.current_dir(directory);
         }
-        cmd.args(self.args())
+        cmd.args(self.args().await?)
             .args(args)
             .env_remove("TMUX")
             .envs(CLIENT_ENV.iter().copied())
@@ -347,7 +397,7 @@ impl TmuxService {
         }
         // The native client is permanently bound to this session instance. Do
         // not let tmux switch it to another session when this one is destroyed.
-        let mut args = self.args();
+        let mut args = self.args().await?;
         args.extend([
             "if-shell".into(),
             "-F".into(),
@@ -405,7 +455,7 @@ impl TmuxService {
             .as_ref()
             .ok_or_else(|| Error::Unavailable("tmux is unavailable".into()))?;
         let mut args = vec![program.to_string_lossy().into_owned()];
-        args.extend(self.args());
+        args.extend(self.args().await?);
         let condition = format!("#{{==:#{{@muster_terminal_id}},{handle}}}");
         let attach = format!("attach-session -f ignore-size -t {}", shell_quote(&target));
         let tail = [
@@ -577,7 +627,8 @@ mod tests {
             let t = TmuxService::new(self.0.join("s"));
             if let Some(p) = &t.program {
                 let _ = std::process::Command::new(p)
-                    .args(t.args())
+                    .arg("-S")
+                    .arg(&t.socket)
                     .arg("kill-server")
                     .output();
             }

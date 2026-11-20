@@ -176,13 +176,24 @@ async fn managed_shell_through_windows_daemon_restart() {
                 .join("msys64")
         });
     assert!(runtime.is_absolute());
-    let _cleanup = Cleanup(
-        runtime.join("usr/bin/tmux.exe"),
-        root.path().join("node/tmux.sock"),
-    );
+    let socket = root.path().join("node/tmux.sock");
+    let cleanup_socket = if socket.to_string_lossy().len() > 107 {
+        let path = std::process::Command::new(runtime.join("usr/bin/cygpath.exe"))
+            .args(["-au", "--"])
+            .arg(&socket)
+            .env("LC_ALL", "C.UTF-8")
+            .output()
+            .unwrap();
+        assert!(path.status.success());
+        std::path::PathBuf::from(String::from_utf8(path.stdout).unwrap().trim_end())
+    } else {
+        socket.clone()
+    };
+    let _cleanup = Cleanup(runtime.join("usr/bin/tmux.exe"), cleanup_socket);
     let (child, client) = start(root.path()).await;
     let id = action(&client, 0, "first").await.result_id;
     assert!(id.starts_with("tmux-v1-"));
+    assert!(socket.exists(), "tmux must use the original node socket");
     assert_eq!(action(&client, 0, "first").await.status, 1);
     let mut stream = client
         .start(Req::TerminalAttach(v1::TerminalAttachRequest {
@@ -255,6 +266,35 @@ async fn managed_shell_through_windows_daemon_restart() {
     assert!(client.call(history(&id)).await.is_err());
     action(&client, 1, "end").await;
     stop(child, client).await;
+}
+
+#[test]
+#[ignore = "requires MSYS2 with tmux; runs the restart scenario below a long Windows temp directory"]
+fn managed_shell_in_deep_windows_temp() {
+    let root = tempfile::tempdir().unwrap();
+    let temp = root
+        .path()
+        .join("Windows terminal fixtures with spaces")
+        .join("ordinary user development workspace")
+        .join("测试目录")
+        .join("temporary files");
+    fs::create_dir_all(&temp).unwrap();
+    assert!(temp.join("node/tmux.sock").to_string_lossy().len() > 107);
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "managed_shell_through_windows_daemon_restart",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("TEMP", &temp)
+        .env("TMP", &temp)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "managed shell restart below a deep Windows temp directory"
+    );
 }
 
 #[test]
