@@ -26,28 +26,49 @@ pub fn permission(request: &muster_browser::Request) -> muster_core::Permission 
     }
 }
 
+#[cfg(windows)]
+fn registered_host() -> Option<std::path::PathBuf> {
+    use winreg::{RegKey, enums::*};
+    let key = format!(
+        r"Software\Google\Chrome\NativeMessagingHosts\{}",
+        muster_browser::HOST
+    );
+    for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+        for view in [KEY_WOW64_32KEY, KEY_WOW64_64KEY] {
+            if let Ok(entry) = RegKey::predef(hive).open_subkey_with_flags(&key, KEY_READ | view)
+                && let Ok(path) = entry.get_value::<String, _>("")
+            {
+                return Some(path.into());
+            }
+        }
+    }
+    None
+}
+
 pub async fn setup(daemon: &Daemon, install: bool) -> Result<v1::BrowserStatus, Error> {
     let executable = std::env::current_exe().map_err(|e| Error::Unavailable(e.to_string()))?;
     #[cfg(windows)]
     let (extension, installed) = {
-        // Windows Installer owns the host manifest and HKLM native messaging
-        // registration, including repair, upgrades and uninstall.
-        let dir = executable
-            .parent()
+        let manifest = registered_host();
+        let dir = manifest
+            .as_deref()
+            .and_then(std::path::Path::parent)
+            .or_else(|| executable.parent())
             .ok_or_else(|| Error::Unavailable("installation directory missing".into()))?;
         let extension = dir.join("AgentHaloBrowser");
-        let manifest = dir.join(format!("{}.json", muster_browser::HOST));
-        let installed = std::fs::read(&manifest)
-            .ok()
+        let installed = manifest
+            .as_ref()
+            .and_then(|file| std::fs::read(file).ok())
             .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
             .is_some_and(|m| {
                 m["path"] == "muster-browser-host.exe"
+                    && m["name"] == muster_browser::HOST
                     && m["allowed_origins"] == serde_json::json!([muster_browser::ORIGIN])
             })
             && dir.join("muster-browser-host.exe").is_file();
         if install && !installed {
             return Err(Error::Unavailable(
-                "Repair the Muster MSI to register the browser host".into(),
+                "Run Apply-Update.ps1 from the extracted Windows package to register the browser host".into(),
             ));
         }
         (extension, installed)

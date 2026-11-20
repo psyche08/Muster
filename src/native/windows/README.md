@@ -1,20 +1,46 @@
 # Muster for Windows x64
 
-Launch **Muster** from the Start menu. The desktop opens maximized with its
-normal title bar. Reopening it activates the existing window. The MSI installs a self-contained
-WinForms application, the Rust application core, daemon, CLI, browser native
-messaging host, standalone virtual network node, Wintun and its adapter
-helper. Installation does not launch Muster or change OpenSSH.
+## Install or update
+
+Verify the downloaded x64 ZIP against its published SHA-256. Extract it to a
+temporary directory, open an ordinary Windows PowerShell there and run:
+
+    .\Apply-Update.ps1
+
+The script prints the fixed shortcut at
+`%LOCALAPPDATA%\Programs\Muster\Muster.lnk`. Pin this shortcut or copy a
+shortcut to it. To use a different private directory, pass `-Destination`
+with the same path on each update. Choose a location where only your account
+and administrators can replace executables or rename their parent directories.
+Use the same procedure for each new ZIP. A single-file WinForms app, Rust
+core, daemon, CLI, Chrome host and extension, network node, Wintun DLL,
+packet helper and license notices are included. PowerShell verifies the file
+hashes and switches the shortcut after staging the new release.
+
+The desktop opens maximized with its normal title bar. Reopening the shortcut
+activates the current window. Close the GUI and reopen the shortcut to pick
+up new UI code. The daemon and tunnel can continue running. A daemon update
+takes effect the next time the full node starts. Earlier release directories
+can stay in place while processes still use them. For rollback, reapply a
+previous verified ZIP. Updates leave the user identity, roster, SSH settings
+and application data in place.
 
 The desktop uses the signed-in user's TPM identity. On a computer already
 running the standalone node, close that node before launching the full desktop
 for the same account. An exclusive owner lock protects the identity and roster
 against concurrent use. To keep running only the network node, leave the
-desktop closed and keep the existing node running. The MSI leaves user data
-in place during repair or uninstall.
+desktop closed and keep the existing node running.
 
 The full daemon runs in the interactive session. Windows requests elevation
-for the Wintun helper when the virtual network starts. The helper handles IP
+for the Wintun helper when the virtual network starts. An existing protected
+helper from the desktop MSI can continue serving a compatible packet protocol.
+On a fresh machine an administrator must first copy the verified package's
+`payload\muster-tun.exe` and `payload\wintun.dll` into the system
+`Program Files\Muster` directory using Explorer and approve that copy. Use
+the same separate step when a release changes the helper protocol or driver.
+Provision these files again if removing a previous MSI removes them. Keep
+the default administrator-owned Program Files permissions. Start the desktop
+from the per-user shortcut. The helper handles IP
 packets only. Agent and terminal sharing are off for a new Windows policy.
 An administrator on the Muster network can review a joining device's
 fingerprint and choose its scopes before accepting it.
@@ -32,7 +58,8 @@ signature requires the key provider's interactive authorization. Windows Hello
 local confirmation is independent of this key.
 
 To use the Chrome integration, load the
-installed AgentHaloBrowser folder as an unpacked extension in Chrome.
+active release's AgentHaloBrowser folder as an unpacked extension in Chrome.
+After an extension update, load the folder shown in the browser setup screen.
 
 ## Develop as a standard user
 
@@ -58,26 +85,21 @@ Press Enter in the fixture shell to shut it down. It binds to loopback and
 starts with agent discovery, cloud access and vnet off. Use the built CLI
 from the Cargo target directory or the installed CLI under Muster's cli
 folder. Both development modes accept -Release to reuse a release build.
-Installing an MSI or starting an actual Wintun adapter requires Windows
-administrator approval.
+Starting a real Wintun adapter requires Windows administrator approval.
 
 ## Build
 
-On Windows x64, use PowerShell 7.4 or later, the x64 MSVC Rust toolchain,
-Visual C++ build tools, .NET 10 SDK, protoc, Python 3 and WiX 3.14. Set
-WIX_BIN to the directory containing candle.exe and light.exe when those
-programs are outside PATH. The output directory must have room for the MSI.
+On Windows x64, use PowerShell 7.4 or later, x64 MSVC Rust, Visual C++ build
+tools, the .NET 10 SDK, protoc and Python 3. Build from the repository root:
 
-    ./src/native/windows/installer/build-msi.ps1 -Version 1.1.51 -OutputDirectory C:\\build\\muster
+    ./src/native/windows/installer/build-portable.ps1 -Version 1.1.55 -OutputDirectory .\artifacts
 
-From the repository root, run the following on a macOS or Linux cross-build
-host with the .NET 10 SDK, protoc, Rust's x86_64-pc-windows-gnu target,
-mingw-w64, bash, curl, unzip, shasum, Python 3, wixl and msiextract.
-CARGO_TARGET_DIR is the shell's existing Cargo build directory.
+On a Unix cross-build host, use the .NET 10 SDK, protoc, Rust's
+x86_64-pc-windows-gnu target, mingw-w64, bash, curl, unzip, shasum and Python
+3. Set CARGO_TARGET_DIR to the Cargo build directory, then run:
 
-    src/native/windows/installer/build-msi.sh 1.1.51 /absolute/output/directory
+    src/native/windows/installer/build-portable.sh 1.1.55 /absolute/output/directory
 
-WINTUN_ARCHIVE can point to a local copy of the pinned Wintun ZIP. The build
-checks its SHA-256 and extracts the completed MSI to compare every installed
-file with its input. This produces a development package. Install, launch,
-upgrade and uninstall should also be exercised on the target Windows version.
+WINTUN_ARCHIVE can point to a local copy of the pinned Wintun ZIP. Both
+builds verify the driver archive, validate all executable images as x64 and
+read back the ZIP to compare its payload hashes. A development ZIP is unsigned.
