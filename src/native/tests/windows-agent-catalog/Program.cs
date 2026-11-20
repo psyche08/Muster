@@ -26,6 +26,18 @@ internal static class Program
         };
         var win = new MemberView { DeviceId = "fixture-w", Name = "Test device" };
         var mac = new MemberView { DeviceId = "fixture-m", Name = "Test Mac" };
+        var devices = new[] { win, mac.Clone() };
+        devices[1].Name = win.Name;
+        string? selected = null;
+        using (var menu = DeviceMenu.Create(devices, mac.DeviceId, id => selected = id))
+        {
+            Check(menu.Items.Count == 3 && ((ToolStripMenuItem)menu.Items[2]).Checked,
+                  "device filter keeps the exact selected host even with duplicate labels");
+            menu.Items[1].PerformClick();
+            Check(selected == win.DeviceId, "device selection returns its opaque ID");
+            menu.Items[0].PerformClick();
+            Check(selected == "*", "all-devices filter");
+        }
         var view = new AgentsView {
             CreateHosts = { win, mac }, CreateAgents = { "codex", "claude" },
             NativeCreateHosts = { mac }, NativeCreateApps = { "claude", "codex" }
