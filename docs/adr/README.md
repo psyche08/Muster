@@ -363,3 +363,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0245](0245-windows-interactive-terminal-grid.md) | Accepted | Render and operate the shared terminal grid on Windows |
 | [0246](0246-desktop-chat-history-availability.md) | Accepted | Distinguish unobserved desktop chat history from an empty conversation |
 | [0247](0247-windows-conversation-terminal.md) | Accepted | Open the session terminal from a Windows conversation |
+| [0248](0248-windows-transcript-work-steps.md) | Accepted | Inspect conversation work steps on Windows |

@@ -84,6 +84,7 @@ internal static class Program
             ChangesIncomplete = true, Changes = { new TurnFileChange { Path = "recorded", OpenPath = "work/a",
                 CountsKnown = true, Additions = 3, Deletions = 1 } } } } };
         var turns = WorktreeNavigation.ChangedTurns([new ChatBlock { Children = { summary } }]).ToArray();
+        TranscriptStepsTests.Run();
         using var menu = new ContextMenuStrip();
         Intent? sent = null;
         WorktreeNavigation.AddChanges(menu, turns, request => sent = request);
