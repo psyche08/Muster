@@ -21,7 +21,7 @@ internal sealed class Desktop : Form
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
     readonly ChatInput input =
-        new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
     readonly ConcurrentQueue<(ulong, Effect)> effects = new();
     readonly Core core;
@@ -29,7 +29,7 @@ internal sealed class Desktop : Form
     void UpdateComposerButtons()
     {
         foreach (var (button, needsText) in composerButtons)
-            button.Enabled = needsText ? !string.IsNullOrWhiteSpace(input.Text) : input.TextLength == 0;
+            button.Enabled = needsText ? input.CanSubmitPayload : input.TextLength == 0;
     }
     ViewModel? pending, current;
     bool opening, ready;
@@ -78,6 +78,29 @@ internal sealed class Desktop : Form
         });
         Button(nav, "Settings", () => Go(Page.Settings));
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
+        input.ReturnPressed += () => Submit();
+        input.AllowDrop = true;
+        input.DragEnter += (_, e) =>
+        {
+            if (input.CanImport && e.Data != null && ChatInput.CanImportData(e.Data))
+                e.Effect = e.AllowedEffect & DragDropEffects.Copy;
+        };
+        input.DragDrop += (_, e) =>
+        {
+            if (input.CanImport && e.Data != null)
+                Import(() => input.ImportData(e.Data));
+        };
+        input.KeyDown += (_, e) =>
+        {
+            if (input.CanImport && e.KeyData == (Keys.Control | Keys.V))
+                Import(() => {
+                    if (Clipboard.GetDataObject() is {} data && ChatInput.CanImportData(data))
+                    {
+                        e.SuppressKeyPress = true;
+                        input.ImportData(data);
+                    }
+                });
+        };
         input.TextChanged += (_, _) => UpdateComposerButtons();
         list.DoubleClick += (_, _) => OpenRow();
         list.KeyDown += (_, e) =>
@@ -155,6 +178,44 @@ internal sealed class Desktop : Form
     }
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void Send(Intent intent) => core.Send(input.WithDraft(intent));
+    void Import(Action import)
+    {
+        try { import(); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Chat attachment"); }
+        if (current != null) Render(current);
+    }
+
+    void ChooseFiles()
+    {
+        string? origin = input.DraftKey;
+        using var picker = new OpenFileDialog { Title = "Add attachments", Multiselect = true };
+        if (picker.ShowDialog(this) == DialogResult.OK && input.CanImport && input.DraftKey == origin)
+            Import(() => { foreach (string path in picker.FileNames) input.AddFile(path); });
+    }
+
+    async Task ShowPreview(Muster.V1.AgentAttachment attachment)
+    {
+        try
+        {
+            using var image = await AttachmentPreview.Decode(attachment.Data, 1600);
+            if (IsDisposed || !input.Attachments.Any(item => ReferenceEquals(item, attachment))) return;
+            using var dialog = new Form { Text = attachment.Name, ClientSize = new Size(660, 450),
+                StartPosition = FormStartPosition.CenterParent, MinimizeBox = false };
+            dialog.Controls.Add(new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, Image = image });
+            dialog.ShowDialog(this);
+        }
+        catch (Exception ex) { if (!IsDisposed) MessageBox.Show(this, ex.Message, "Image preview"); }
+    }
+
+    void PasteImage()
+    {
+        Import(() =>
+        {
+            using var image = Clipboard.GetImage() ?? throw new InvalidOperationException("The clipboard contains no image.");
+            input.AddImage(image);
+        });
+    }
+
     void Submit(string releaseToken = "")
     {
         if (input.Submission(releaseToken) is {} intent)
@@ -428,7 +489,26 @@ internal sealed class Desktop : Form
                 lines.Add(chatView.ComposerDisabledReason);
                 input.PlaceholderText = chatView.ComposerPlaceholder;
                 bool busy = chatView.Sending || chatView.Completing;
-                bool canSubmit = chatView.Draft != null && !busy && chatView.ComposerDisabledReason.Length == 0;
+                bool canSubmit = input.CanSubmit;
+                if (input.CanImport)
+                {
+                    AddAction("Add files", ChooseFiles);
+                    AddAction("Paste image", PasteImage);
+                }
+                if (!input.FitsAttachmentLimits)
+                    lines.Add("Attachment limits changed. Remove files before sending.");
+                foreach (var attachment in input.Attachments)
+                {
+                    lines.Add($"{attachment.Name} ({attachment.Data.Length:N0} bytes)");
+                    if (attachment.MediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                        AddAction($"Preview {attachment.Name}", async () => await ShowPreview(attachment));
+                    if (!busy)
+                        AddAction($"Remove {attachment.Name}", () =>
+                        {
+                            input.RemoveAttachment(attachment);
+                            if (current != null) Render(current);
+                        });
+                }
                 if (canSubmit)
                     ComposerButton("Send", true, () => Submit());
                 if (chatView.Unconfirmed is {} refusal)
