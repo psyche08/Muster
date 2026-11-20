@@ -65,6 +65,9 @@ After an extension update, load the folder shown in the browser setup screen.
 
 ## Develop as a standard user
 
+For repeatable GUI input, screenshots and high-DPI checks, see the
+[Windows agent development and debugging guide](../../../docs/WINDOWS_AGENT_DEVELOPMENT.md).
+
 From a PowerShell 7.4 or later shell with Cargo, the MSVC tools, protoc and the
 .NET 10 SDK, use the following from the repository root:
 

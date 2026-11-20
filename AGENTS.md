@@ -16,6 +16,8 @@ capabilities to code on the delete list. Superseded documents live in
 - Platform code must not duplicate, reconstruct, or independently infer Shared Rust business state from JSON, booleans, HTTP success, cached metadata, or other serializable projections. Trust-bearing state and transitions must remain Rust-owned and use opaque handles or narrowly scoped platform callbacks.
 - When a product capability is missing from the Shared Rust ABI, extend Shared Rust and its ABI first. Do not implement a platform-specific business-logic fallback.
 
+For Windows GUI development and debugging, see [the agent guide](docs/WINDOWS_AGENT_DEVELOPMENT.md).
+
 ## Small-change execution defaults
 
 - Treat bounded edits (such as wording, styling or a localized input behavior) as small changes by default. Make the smallest coherent fix; do not add unrelated refactors, dependencies or a new test framework.

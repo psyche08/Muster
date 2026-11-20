@@ -51,3 +51,14 @@ fixture now reuses the synthetic signer from the send-recovery suite, allowing
 these tests to run beside the live Windows daemon. All eleven recovery cases
 and the target-selection regression passed. No provider interaction is needed
 for these tests.
+
+A capture of the shipped form at 192 DPI exposed a layout regression in the
+initial implementation. The prompt was one pixel tall and the help label
+overlapped the directory field. Use a 96-DPI design baseline, reserve a
+readable multiline editor and scroll the form body when the viewport is small.
+Validate non-overlapping visible controls as well as the resulting request.
+
+The control fixture references the desktop assembly and accepts a screenshot
+output directory. The Windows agent guide documents capture and byte matching
+against the ZIP. A repeat capture at 192 DPI showed the prompt, directory,
+explanation and submit controls separately.
