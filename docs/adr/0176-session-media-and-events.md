@@ -49,3 +49,16 @@ the temporary link workaround documented in ADR 0160. The unmodified native
 link still encounters the existing errno symbol mismatch. Android Gradle
 verification could not configure the project because the Android SDK was
 absent on this host.
+
+## Windows transcript rendering
+
+The Windows text view omitted the projected previews. Show the images in the
+same scrollable transcript as their message, in provider order. Keep recorded
+descriptions, other conversation text and text selection available. Use the
+native raster decoder for the supplied thumbnail bytes. Opening a transcript
+must not fetch an original or interpret provider text as rich text markup.
+
+Reuse decoded previews during view refreshes and discard obsolete content on
+navigation. Exercise multiple images, image-only turns, invalid data, literal
+markup, collapsed work and navigation in a Windows control. Check the displayed
+pixels as well as the message order with synthetic data.

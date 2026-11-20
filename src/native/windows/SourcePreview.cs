@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using Muster.App;
 
@@ -115,13 +114,7 @@ internal sealed class SourcePreview : UserControl
             int color = line.StartsWith("@@") ? 3 : line.StartsWith("+") && !line.StartsWith("+++") ? 1
                 : line.StartsWith("-") && !line.StartsWith("---") ? 2 : 0;
             rtf.Append(@"\cf").Append(color).Append(' ');
-            foreach (char c in line)
-            {
-                if (c == '\t') rtf.Append(@"\tab ");
-                else if (c is '\\' or '{' or '}') rtf.Append('\\').Append(c);
-                else if (c is >= ' ' and <= '~') rtf.Append(c);
-                else rtf.Append(@"\u").Append(unchecked((short)c).ToString(CultureInfo.InvariantCulture)).Append('?');
-            }
+            RichText.AppendLiteral(rtf, line);
         }
         return rtf.Append('}').ToString();
     }

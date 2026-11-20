@@ -27,18 +27,23 @@ internal sealed class TranscriptSteps
     public bool HasStepsMenu => chat?.Timeline.Any(HasSteps) == true;
     bool IsOpen(ChatBlock b) => groups.GetValueOrDefault(b.Id, b.DefaultExpanded);
 
-    public IEnumerable<string> Lines()
+    public void AppendTo(List<string> lines, List<TranscriptImage> images)
     {
-        if (chat == null) yield break;
+        if (chat == null) return;
         if (chat.MessageCount == 0)
         {
-            if (chat.Loading) yield return "Loading conversation…";
+            if (chat.Loading) lines.Add("Loading conversation…");
             else if (chat.LoadError.Length == 0)
-                yield return chat.Session?.TranscriptNotice is { Length: > 0 } notice ? notice : "No messages yet";
+                lines.Add(chat.Session?.TranscriptNotice is { Length: > 0 } notice ? notice : "No messages yet");
         }
         foreach (var (block, work, expanded) in VisibleBlocks())
-            foreach (string line in Block(block, work, expanded))
-                yield return line;
+        {
+            if (block.Title.Length > 0) lines.Add(block.Title);
+            if (block.Message is {} message)
+                foreach (var bytes in message.PreviewJpegs)
+                    images.Add(new TranscriptImage(lines.Count, bytes));
+            lines.AddRange(Block(block, work, expanded));
+        }
     }
 
     IEnumerable<(ChatBlock Block, string Work, bool Expanded)> VisibleBlocks()
@@ -58,7 +63,6 @@ internal sealed class TranscriptSteps
 
     IEnumerable<string> Block(ChatBlock b, string work, bool expanded)
     {
-        if (b.Title.Length > 0) yield return b.Title;
         if (b.Message is {} m)
         {
             if (b.Parts.Any(p => p.Kind == "code"))
