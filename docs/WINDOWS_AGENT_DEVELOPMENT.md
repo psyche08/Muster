@@ -624,6 +624,17 @@ cargo test --locked --manifest-path src/muster/Cargo.toml -p musterd --test desk
 ID 读回的两条合成消息。实机 ChatGPT 的归档状态和历史仍按上面的只读步骤验收。
 
 
+## 验收 Agents 向 Codex 桌面会话发送
+
+在 **Agents** 选择操作员指定的空闲 Codex 桌面测试会话。记录会话 ID，并确认该会话输入框为空。窗口
+标题可能重复，普通客户端的文档 URL 也可能只指向应用首页。Windows 会核对已注册的 Codex 包和
+会话链接。使用标题栏 **Chat actions → Copy → Copy deeplink** 时，适配器仅支持备份普通文本
+剪贴板格式。含图片、文件或自定义格式时会拒绝该操作。
+
+发送获准的测试文本一次，从同一会话重新读取历史，核对新增的用户消息。将送达回执和后续模型回复
+分别记录。若结果未确认，先查询原操作并检查提供方历史及草稿，再决定是否重发。实机报告写明
+正在运行的 musterd 版本，快捷方式指向的版本可能更新得更早。
+
 ## 配对桌面验收
 
 构建独立的 Moonlight 查看器后，将它放在测试 daemon 的可执行文件旁；macOS

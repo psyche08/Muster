@@ -165,6 +165,14 @@ impl WriteGuard {
         reconcile(&mut self.state.lock().unwrap())
     }
 
+    /// Only the named write can satisfy a status lookup. A released latch
+    /// contains no evidence of delivery.
+    pub fn confirmed_operation(&self, token: &str) -> bool {
+        let mut state = self.state.lock().unwrap();
+        reconcile(&mut state);
+        state.confirmed.as_deref() == Some(token)
+    }
+
     /// Admission for a new write: re-read the evidence first, then refuse
     /// while the earlier write is still unconfirmed. The refusal happens
     /// before any input, so it is a definite "not sent" for this request.

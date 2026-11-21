@@ -184,3 +184,24 @@ pub(crate) fn process(app: ChatApp) -> Option<(u32, u64)> {
     }
     found
 }
+
+pub(super) const CODE_PACKAGE: &str = "OpenAI.Codex_2p2nqsd0c76g0";
+
+pub(super) fn code_process() -> Option<(u32, u64)> {
+    let mut matches = windows().into_iter().filter_map(|(pid, _)| {
+        let process = handle(pid).ok()?;
+        let h = process.as_raw_handle();
+        let mut name = [0u16; 256];
+        let mut len = name.len() as u32;
+        if unsafe { GetPackageFamilyName(h, &mut len, name.as_mut_ptr()) } != 0
+            || len < 2
+            || String::from_utf16_lossy(&name[..len as usize - 1]) != CODE_PACKAGE
+            || !is_provider(h, ChatApp::ChatGpt)
+        {
+            return None;
+        }
+        Some((pid, start(h).ok()?))
+    });
+    let one = matches.next()?;
+    matches.next().is_none().then_some(one)
+}

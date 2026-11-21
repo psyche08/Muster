@@ -12,6 +12,8 @@ pub mod native_chat;
 pub mod signer;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+pub use windows::code::attach_code;
 
 #[cfg(target_os = "macos")]
 pub mod macos;

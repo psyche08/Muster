@@ -15,7 +15,7 @@ use windows::{
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
 
 thread_local! { static CLIENT: OnceCell<IUIAutomation> = const { OnceCell::new() }; }
-fn client() -> WinResult<IUIAutomation> {
+pub(super) fn client() -> WinResult<IUIAutomation> {
     CLIENT.with(|cell| {
         if let Some(c) = cell.get() {
             return Ok(c.clone());
@@ -52,7 +52,7 @@ impl Element {
         }
     }
     pub(crate) fn enable_manual_accessibility(&self) {} // UIA activates the Chromium provider on first request.
-    fn control(&self) -> WinResult<IUIAutomationElement> {
+    pub(super) fn control(&self) -> WinResult<IUIAutomationElement> {
         client()?;
         if self.hwnd == 0
             || provider::window(self.pid) != Some(self.hwnd)

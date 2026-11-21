@@ -36,6 +36,7 @@ pub mod local_input;
 pub mod model;
 mod muster_archive;
 pub mod native_approval;
+pub mod native_code_send;
 pub mod native_identity;
 pub mod native_navigation;
 pub mod native_options;
