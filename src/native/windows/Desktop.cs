@@ -42,6 +42,7 @@ internal sealed class Desktop : Form
     readonly InvitePanel invitePanel;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
+    readonly QueuedMessages queue = new();
     readonly ChatInput input =
         new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
@@ -115,6 +116,7 @@ internal sealed class Desktop : Form
         jump.Intent += Send;
         actions.Dock = DockStyle.Bottom;
         Controls.Add(body);
+        Controls.Add(queue);
         Controls.Add(input);
         Controls.Add(actions);
         Controls.Add(status);
@@ -125,6 +127,7 @@ internal sealed class Desktop : Form
         browserPanel.Intent += Send;
         chatSidebar.Intent += Send;
         agentSidebar.Intent += Send;
+        queue.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
         sessionTabs.Chosen += SelectTab;
@@ -524,6 +527,7 @@ internal sealed class Desktop : Form
             tabScope = chatKey;
             selectedTab = SessionTab.Conversation;
         }
+        queue.Display(page == Page.Chat && selectedTab == SessionTab.Conversation ? v.Chat : null);
         bool inRelated = selectedTab is SessionTab.Subagents or SessionTab.Sessions;
         bool inTrace = selectedTab == SessionTab.Trace;
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
@@ -786,7 +790,7 @@ internal sealed class Desktop : Form
                     });
                 }
                 lines.Add(chatView.LoadError);
-                lines.Add(chatView.ResponseError);
+                if (chatView.ResponseError != chatView.Queue?.Error) lines.Add(chatView.ResponseError);
                 lines.Add(chatView.ComposerDisabledReason);
                 input.PlaceholderText = chatView.ComposerPlaceholder;
                 bool busy = chatView.Sending || chatView.Completing;
