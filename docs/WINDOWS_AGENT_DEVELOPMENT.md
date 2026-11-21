@@ -92,6 +92,13 @@ $newNode = Build-NodeFixture $nextTree $nextCli 'next'
 两行结果。1.1.89 的隔离演练中，保持旧窗口并点 **Refresh** 仍显示旧节点版本；重新打开
 快捷方式后才读到新版提交。最后分别核对 Wintun 运行状态和对端的实际隧道流量。
 
+检查在线节点时，从固定快捷方式对应版本的 CLI 运行 `info`，核对输出中的 `relay`、
+`vip` 和 `vnet`；在 PowerShell 运行
+`Get-NetAdapter -Name MusterVnet -ErrorAction SilentlyContinue` 核对网卡。
+relay 已注册且已分配地址时，隧道仍可能处于 down。1.1.70 节点的 **Refresh** 只刷新
+成员连接。该版本启动 Wintun 的入口为节点启动、创建网络和加入网络。在现有网络上恢复
+时，保留身份和成员记录，待本人可处理系统弹窗后正常重启节点，再分别验收网卡和跨机流量。
+
 ## 在独立进程中操作窗口并截图
 
 调试 Muster 自己的 WinForms 表单时，优先运行仓库的控件测试。测试进程加载实际的
@@ -123,6 +130,12 @@ Windows 已按实际 DPI 完成布局。在空白状态和可提交状态各取�
 但截图和边界测量发现首条消息输入框只有 1 像素高。回归测试现在检查各行互不重叠，
 且消息框至少能显示三行文字。`DrawToBitmap` 记录 WinForms 控件渲染。桌面合成器、
 受保护系统窗口或其他应用的画面不在这项测试的覆盖范围内。
+
+在 **Conversation** 页核对 Locked Use 状态。Shared Rust 会分别投影等待本人确认、等待
+目标 Mac 重新锁定的文字。允许撤回时，状态旁会出现 **Cancel**。上面的控件测试在同一
+窗口切换这些投影，把 Cancel 意图收集在内存中，并生成 `locked-use-status.png`。
+检查取消后状态消失、草稿保留；目标 Mac 是否已重新锁定需要在目标端另行核实。
+Windows 系统确认窗口由本人操作。
 
 在会话输入框上方核对 **Queued messages**。测试用两条相同提示填充队列，选择第二条，
 核对完整文本及它可用的操作。合成控件测试仅记录按钮产生的交互 ID 和选项，可以安全地验证

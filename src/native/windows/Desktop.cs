@@ -43,6 +43,7 @@ internal sealed class Desktop : Form
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly QueuedMessages queue = new();
+    readonly LockedUseStatus lockedUse = new();
     readonly ChatInput input =
         new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
@@ -116,6 +117,7 @@ internal sealed class Desktop : Form
         jump.Intent += Send;
         actions.Dock = DockStyle.Bottom;
         Controls.Add(body);
+        Controls.Add(lockedUse);
         Controls.Add(queue);
         Controls.Add(input);
         Controls.Add(actions);
@@ -128,6 +130,7 @@ internal sealed class Desktop : Form
         chatSidebar.Intent += Send;
         agentSidebar.Intent += Send;
         queue.Intent += Send;
+        lockedUse.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
         sessionTabs.Chosen += SelectTab;
@@ -527,7 +530,9 @@ internal sealed class Desktop : Form
             tabScope = chatKey;
             selectedTab = SessionTab.Conversation;
         }
-        queue.Display(page == Page.Chat && selectedTab == SessionTab.Conversation ? v.Chat : null);
+        var conversation = page == Page.Chat && selectedTab == SessionTab.Conversation ? v.Chat : null;
+        queue.Display(conversation);
+        lockedUse.Display(conversation);
         bool inRelated = selectedTab is SessionTab.Subagents or SessionTab.Sessions;
         bool inTrace = selectedTab == SessionTab.Trace;
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;

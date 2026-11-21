@@ -37,6 +37,7 @@ internal static class Program
             ports.Shown += (_, _) => ports.BeginInvoke(() => ports.CancelButton!.PerformClick());
             Check(ports.ShowDialog() == DialogResult.Cancel, "Cancel accepted a port edit");
         }
+        LockedUseStatusTests.Run(captures);
         QueuedMessagesTests.Run(captures);
         AgentSidebarTests.Run();
         BrowserPanelTests.Run();

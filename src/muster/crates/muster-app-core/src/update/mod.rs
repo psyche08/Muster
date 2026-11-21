@@ -471,7 +471,11 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::SetPolicy(p) => network::intent_set_policy(state, ctx, p),
         It::SelectDevice(s) => network::intent_select_device(state, s),
         It::SetDeviceLockedUse(r) => manual_locked_use::set(state, ctx, r),
-        It::CancelLockedUse(_) => cancel_locked(state, ctx, CancelReason::User),
+        It::CancelLockedUse(_) => {
+            if state.locked.is_some() {
+                cancel_locked(state, ctx, CancelReason::User);
+            }
+        }
         It::OrcaCreate(o) => cli::create(state, ctx, o),
         It::NativeCreate(c) => native_create::create(state, ctx, c),
         It::AgentCatalogAction(a) => catalog::intent(state, ctx, a),
