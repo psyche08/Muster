@@ -582,16 +582,47 @@ pub(super) fn intent_desktop_setup_action(
     ctx: &Ctx,
     action: app::DesktopSetupAction,
 ) {
-    if state.embedded
-        || !state
-            .self_info
-            .as_ref()
-            .is_some_and(|i| i.platform == "macos")
-    {
+    use app::desktop_setup_action::Action;
+
+    if state.embedded {
         return;
     }
-    match app::desktop_setup_action::Action::try_from(action.action) {
-        Ok(app::desktop_setup_action::Action::Restart) => {
+    match Action::try_from(action.action) {
+        Ok(Action::RetryVnet) => {
+            if state.screen != Screen::Settings
+                || state.busy > 0
+                || !state
+                    .self_info
+                    .as_ref()
+                    .and_then(|info| info.state.as_ref())
+                    .is_some_and(|local| local.can_retry_vnet)
+            {
+                return;
+            }
+            state.busy += 1;
+            let client = ctx.backend.local();
+            spawn(ctx, async move {
+                let result = match unary(
+                    &client,
+                    Req::NetworkRetryVnet(v1::NetworkRetryVnetRequest {}),
+                )
+                .await
+                {
+                    Ok(Resp::Ack(_)) => Ok(None),
+                    Ok(_) => Err(unexpected()),
+                    Err(error) => Err(error),
+                };
+                Msg::Done {
+                    what: "vnet retry",
+                    result,
+                }
+            });
+        }
+        _ if !state
+            .self_info
+            .as_ref()
+            .is_some_and(|info| info.platform == "macos") => {}
+        Ok(Action::Restart) => {
             if !state.can_restart_desktop() {
                 state.desktop_setup_error =
                     "请先结束当前发送、终端连接或 Locked Use，再重启。".into();
@@ -605,12 +636,12 @@ pub(super) fn intent_desktop_setup_action(
                 app::effect::Ef::RestartDesktop(app::RestartDesktop {}),
             );
         }
-        Ok(app::desktop_setup_action::Action::Check) => {
+        Ok(Action::Check) => {
             load_basics(state, ctx);
         }
-        Ok(app::desktop_setup_action::Action::Show) => state.desktop_setup_dismissed = false,
-        Ok(app::desktop_setup_action::Action::Dismiss) => state.desktop_setup_dismissed = true,
-        Ok(app::desktop_setup_action::Action::Install) => {
+        Ok(Action::Show) => state.desktop_setup_dismissed = false,
+        Ok(Action::Dismiss) => state.desktop_setup_dismissed = true,
+        Ok(Action::Install) => {
             state.desktop_setup_error.clear();
             effect(
                 state,
@@ -1172,6 +1203,9 @@ pub(super) fn msg_done(
             }
             state.toast(format!("{what}: {error}"), true)
         }
+    }
+    if what == "vnet retry" {
+        load_basics(state, ctx);
     }
     if what == "decide" {
         load_pending(ctx);

@@ -23,6 +23,8 @@ pub mod windows_helper;
 
 const FLOW_TTL: Duration = Duration::from_secs(120);
 
+pub type VnetPlan = (Ipv4Addr, (Ipv4Addr, u8));
+
 #[derive(Clone, Debug)]
 pub struct VnetConfig {
     pub mtu: u16,
@@ -361,6 +363,16 @@ impl Vnet {
     /// Brings the interface up with this device's vip and starts both
     /// directions. Fails when this device has no vip (phones) or no network.
     pub async fn start(node: Arc<Node>, config: VnetConfig) -> Result<Arc<Self>, Error> {
+        Self::start_for_plan(node, config, None).await
+    }
+
+    /// Constrain the address used for this open to the signed plan admitted
+    /// by the caller, even if the roster changes before this worker runs.
+    pub async fn start_for_plan(
+        node: Arc<Node>,
+        config: VnetConfig,
+        expected: Option<VnetPlan>,
+    ) -> Result<Arc<Self>, Error> {
         // Take ownership before any fallible validation. tun borrows this fd;
         // the Vnet owner closes it only after both packet tasks have stopped.
         #[cfg(unix)]
@@ -384,6 +396,11 @@ impl Vnet {
                 .ok_or_else(|| Error::Protocol("no vnet range".into()))?;
             (vip, cidr)
         };
+        if expected.is_some_and(|plan| plan != (address, cidr)) {
+            return Err(Error::Protocol(
+                "virtual adapter address plan has changed".into(),
+            ));
+        }
         #[allow(unused_mut)]
         let mut tun_config = interface_config(address, cidr.1, &config);
         #[cfg(unix)]

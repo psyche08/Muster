@@ -653,6 +653,8 @@ internal sealed class Desktop : Form
                 {
                     lines.Add($"Assigned virtual IP    {Reported(state?.Vip)}");
                     lines.Add($"Local vnet    {state?.VnetUp switch { true => "up", false => "down", null => "not reported" }}");
+                    if (state?.CanRetryVnet == true)
+                        Act("Retry local vnet", () => new() { DesktopSetupAction = new() { Action = DesktopSetupAction.Types.Action.RetryVnet } });
                 }
                 if (self != null)
                     AddAction("Change local relay", () =>

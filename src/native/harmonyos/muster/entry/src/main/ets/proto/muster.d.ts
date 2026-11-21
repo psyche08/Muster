@@ -516,6 +516,9 @@ export namespace muster {
             /** Request orcaCreate */
             orcaCreate?: (muster.v1.IOrcaCreateRequest|null);
 
+            /** Request agentSideQuestion */
+            agentSideQuestion?: (muster.v1.IAgentSideQuestionRequest|null);
+
             /** Request agentComplete */
             agentComplete?: (muster.v1.IAgentCompleteRequest|null);
 
@@ -569,6 +572,9 @@ export namespace muster {
 
             /** Request agentDispatch */
             agentDispatch?: (muster.v1.IAgentDispatchRequest|null);
+
+            /** Request networkRetryVnet */
+            networkRetryVnet?: (muster.v1.INetworkRetryVnetRequest|null);
         }
 
         /** Represents a Request. */
@@ -742,6 +748,9 @@ export namespace muster {
             /** Request orcaCreate. */
             public orcaCreate?: (muster.v1.IOrcaCreateRequest|null);
 
+            /** Request agentSideQuestion. */
+            public agentSideQuestion?: (muster.v1.IAgentSideQuestionRequest|null);
+
             /** Request agentComplete. */
             public agentComplete?: (muster.v1.IAgentCompleteRequest|null);
 
@@ -796,8 +805,11 @@ export namespace muster {
             /** Request agentDispatch. */
             public agentDispatch?: (muster.v1.IAgentDispatchRequest|null);
 
+            /** Request networkRetryVnet. */
+            public networkRetryVnet?: (muster.v1.INetworkRetryVnetRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"networkRetryVnet");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -977,6 +989,9 @@ export namespace muster {
             /** Response diagnosticsSaved */
             diagnosticsSaved?: (muster.v1.IDiagnosticsSaved|null);
 
+            /** Response agentSideAnswer */
+            agentSideAnswer?: (muster.v1.IAgentSideAnswer|null);
+
             /** Response agentCompletion */
             agentCompletion?: (muster.v1.IAgentCompletion|null);
 
@@ -1083,6 +1098,9 @@ export namespace muster {
             /** Response diagnosticsSaved. */
             public diagnosticsSaved?: (muster.v1.IDiagnosticsSaved|null);
 
+            /** Response agentSideAnswer. */
+            public agentSideAnswer?: (muster.v1.IAgentSideAnswer|null);
+
             /** Response agentCompletion. */
             public agentCompletion?: (muster.v1.IAgentCompletion|null);
 
@@ -1108,7 +1126,7 @@ export namespace muster {
             public agentDispatch?: (muster.v1.IAgentDispatchStatus|null);
 
             /** Response resp. */
-            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler"|"agentDispatch");
+            public resp?: ("error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentSideAnswer"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler"|"agentDispatch");
 
             /**
              * Creates a new Response instance using the specified properties.
@@ -1467,6 +1485,52 @@ export namespace muster {
 
             /**
              * Gets the default type url for NetworkRefreshRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a NetworkRetryVnetRequest. */
+        interface INetworkRetryVnetRequest {
+        }
+
+        /** Represents a NetworkRetryVnetRequest. */
+        class NetworkRetryVnetRequest implements INetworkRetryVnetRequest {
+
+            /**
+             * Constructs a new NetworkRetryVnetRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.INetworkRetryVnetRequest);
+
+            /**
+             * Creates a new NetworkRetryVnetRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NetworkRetryVnetRequest instance
+             */
+            public static create(properties?: muster.v1.INetworkRetryVnetRequest): muster.v1.NetworkRetryVnetRequest;
+
+            /**
+             * Encodes the specified NetworkRetryVnetRequest message. Does not implicitly {@link muster.v1.NetworkRetryVnetRequest.verify|verify} messages.
+             * @param message NetworkRetryVnetRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.INetworkRetryVnetRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NetworkRetryVnetRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NetworkRetryVnetRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.NetworkRetryVnetRequest;
+
+            /**
+             * Gets the default type url for NetworkRetryVnetRequest
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -2049,6 +2113,9 @@ export namespace muster {
             /** DeviceState screenRecording */
             screenRecording?: (string|null);
 
+            /** DeviceState canRetryVnet */
+            canRetryVnet?: (boolean|null);
+
             /** DeviceState blackout */
             blackout?: (muster.v1.IDisplayBlackout|null);
         }
@@ -2112,6 +2179,9 @@ export namespace muster {
 
             /** DeviceState screenRecording. */
             public screenRecording: string;
+
+            /** DeviceState canRetryVnet. */
+            public canRetryVnet: boolean;
 
             /** DeviceState blackout. */
             public blackout?: (muster.v1.IDisplayBlackout|null);
@@ -2450,6 +2520,138 @@ export namespace muster {
 
             /**
              * Gets the default type url for AgentInspectRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of an AgentSideQuestionRequest. */
+        interface IAgentSideQuestionRequest {
+
+            /** AgentSideQuestionRequest session */
+            session?: (string|null);
+
+            /** AgentSideQuestionRequest question */
+            question?: (string|null);
+
+            /** AgentSideQuestionRequest action */
+            action?: (muster.v1.AgentSideQuestionRequest.Action|null);
+
+            /** AgentSideQuestionRequest opId */
+            opId?: (string|null);
+        }
+
+        /** Represents an AgentSideQuestionRequest. */
+        class AgentSideQuestionRequest implements IAgentSideQuestionRequest {
+
+            /**
+             * Constructs a new AgentSideQuestionRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSideQuestionRequest);
+
+            /** AgentSideQuestionRequest session. */
+            public session: string;
+
+            /** AgentSideQuestionRequest question. */
+            public question: string;
+
+            /** AgentSideQuestionRequest action. */
+            public action: muster.v1.AgentSideQuestionRequest.Action;
+
+            /** AgentSideQuestionRequest opId. */
+            public opId: string;
+
+            /**
+             * Creates a new AgentSideQuestionRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSideQuestionRequest instance
+             */
+            public static create(properties?: muster.v1.IAgentSideQuestionRequest): muster.v1.AgentSideQuestionRequest;
+
+            /**
+             * Encodes the specified AgentSideQuestionRequest message. Does not implicitly {@link muster.v1.AgentSideQuestionRequest.verify|verify} messages.
+             * @param message AgentSideQuestionRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSideQuestionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSideQuestionRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSideQuestionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSideQuestionRequest;
+
+            /**
+             * Gets the default type url for AgentSideQuestionRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace AgentSideQuestionRequest {
+
+            /** Action enum. */
+            enum Action {
+                CREATE = 0,
+                ASK = 1,
+                END = 2
+            }
+        }
+
+        /** Properties of an AgentSideAnswer. */
+        interface IAgentSideAnswer {
+
+            /** AgentSideAnswer session */
+            session?: (muster.v1.IAgentSession|null);
+        }
+
+        /** Represents an AgentSideAnswer. */
+        class AgentSideAnswer implements IAgentSideAnswer {
+
+            /**
+             * Constructs a new AgentSideAnswer.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IAgentSideAnswer);
+
+            /** AgentSideAnswer session. */
+            public session?: (muster.v1.IAgentSession|null);
+
+            /**
+             * Creates a new AgentSideAnswer instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns AgentSideAnswer instance
+             */
+            public static create(properties?: muster.v1.IAgentSideAnswer): muster.v1.AgentSideAnswer;
+
+            /**
+             * Encodes the specified AgentSideAnswer message. Does not implicitly {@link muster.v1.AgentSideAnswer.verify|verify} messages.
+             * @param message AgentSideAnswer message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IAgentSideAnswer, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an AgentSideAnswer message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns AgentSideAnswer
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.AgentSideAnswer;
+
+            /**
+             * Gets the default type url for AgentSideAnswer
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -12598,6 +12800,9 @@ export namespace muster {
             /** Intent uploadDiagnostics */
             uploadDiagnostics?: (muster.app.IUploadDiagnostics|null);
 
+            /** Intent sideChatAction */
+            sideChatAction?: (muster.app.ISideChatAction|null);
+
             /** Intent composerComplete */
             composerComplete?: (muster.app.IComposerComplete|null);
 
@@ -12818,6 +13023,9 @@ export namespace muster {
             /** Intent uploadDiagnostics. */
             public uploadDiagnostics?: (muster.app.IUploadDiagnostics|null);
 
+            /** Intent sideChatAction. */
+            public sideChatAction?: (muster.app.ISideChatAction|null);
+
             /** Intent composerComplete. */
             public composerComplete?: (muster.app.IComposerComplete|null);
 
@@ -12885,7 +13093,7 @@ export namespace muster {
             public agentLoadWork?: (muster.app.IAgentLoadWork|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -13278,7 +13486,8 @@ export namespace muster {
                 DISMISS = 1,
                 INSTALL = 2,
                 CHECK = 4,
-                RESTART = 5
+                RESTART = 5,
+                RETRY_VNET = 6
             }
         }
 
@@ -15682,6 +15891,58 @@ export namespace muster {
 
             /**
              * Gets the default type url for ChatOptionsLoad
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a SideChatAction. */
+        interface ISideChatAction {
+
+            /** SideChatAction end */
+            end?: (boolean|null);
+        }
+
+        /** Represents a SideChatAction. */
+        class SideChatAction implements ISideChatAction {
+
+            /**
+             * Constructs a new SideChatAction.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.app.ISideChatAction);
+
+            /** SideChatAction end. */
+            public end: boolean;
+
+            /**
+             * Creates a new SideChatAction instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SideChatAction instance
+             */
+            public static create(properties?: muster.app.ISideChatAction): muster.app.SideChatAction;
+
+            /**
+             * Encodes the specified SideChatAction message. Does not implicitly {@link muster.app.SideChatAction.verify|verify} messages.
+             * @param message SideChatAction message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.app.ISideChatAction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SideChatAction message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SideChatAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.app.SideChatAction;
+
+            /**
+             * Gets the default type url for SideChatAction
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -19094,6 +19355,15 @@ export namespace muster {
             /** ChatView composerSuggestion */
             composerSuggestion?: (string|null);
 
+            /** ChatView canCreateSideChat */
+            canCreateSideChat?: (boolean|null);
+
+            /** ChatView canEndSideChat */
+            canEndSideChat?: (boolean|null);
+
+            /** ChatView composerDisabledReason */
+            composerDisabledReason?: (string|null);
+
             /** ChatView canComplete */
             canComplete?: (boolean|null);
 
@@ -19223,6 +19493,15 @@ export namespace muster {
 
             /** ChatView composerSuggestion. */
             public composerSuggestion: string;
+
+            /** ChatView canCreateSideChat. */
+            public canCreateSideChat: boolean;
+
+            /** ChatView canEndSideChat. */
+            public canEndSideChat: boolean;
+
+            /** ChatView composerDisabledReason. */
+            public composerDisabledReason: string;
 
             /** ChatView canComplete. */
             public canComplete: boolean;

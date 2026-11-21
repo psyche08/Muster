@@ -135,7 +135,7 @@ message DesktopSetupAction {
   enum Action {
     reserved 3;
     reserved "ITERM";
-    SHOW = 0; DISMISS = 1; INSTALL = 2; CHECK = 4; RESTART = 5;
+    SHOW = 0; DISMISS = 1; INSTALL = 2; CHECK = 4; RESTART = 5; RETRY_VNET = 6;
   }
   Action action = 1;
 }
