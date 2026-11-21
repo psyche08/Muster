@@ -16,6 +16,17 @@ internal sealed class HistoryTranscript : RichTextBox
     List<TranscriptBlock> blocks = [];
     public List<BlockOffset> BlockOffsets { get; private set; } = [];
     bool latestPage;
+    List<TranscriptLink> links = [];
+    readonly List<TranscriptLink> nativeLinks = [];
+    public event Action<string>? ActivateLink;
+
+    // CHARFORMATW through dwEffects. RichEdit requires the full native structure size.
+    [StructLayout(LayoutKind.Sequential, Size = 92)]
+    struct CharFormat { public uint Size, Mask, Effects; }
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    static extern nint FormatSelection(nint hwnd, uint message, nint selection, ref CharFormat format);
+
     List<TranscriptImage> images = [];
     HashSet<ByteString> wanted = [];
     (string Device, string Session)? scope;
@@ -32,6 +43,20 @@ internal sealed class HistoryTranscript : RichTextBox
     {
         ReadOnly = true;
         DetectUrls = false;
+        LinkClicked += (_, e) =>
+        {
+            var link = nativeLinks.Find(l => l.Start == e.LinkStart && l.Length == e.LinkLength);
+            if (link != null) ActivateLink?.Invoke(link.Destination);
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyData != Keys.Enter) return;
+            var link = nativeLinks.Find(l => SelectionStart >= l.Start && SelectionStart < l.Start + l.Length
+                && SelectionStart + SelectionLength <= l.Start + l.Length);
+            if (link == null) return;
+            e.SuppressKeyPress = true;
+            ActivateLink?.Invoke(link.Destination);
+        };
         AccessibleName = "Conversation history";
         BackColor = SystemColors.Window;
         SelectionChanged += (_, _) => ScheduleViewport();
@@ -39,17 +64,20 @@ internal sealed class HistoryTranscript : RichTextBox
     }
 
     public void Display((string Device, string Session)? origin, List<string> text, List<TranscriptImage> pictures,
-        List<TranscriptBlock>? projected = null, bool latest = false)
+        List<TranscriptBlock>? projected = null, bool latest = false, List<TranscriptLink>? projectedLinks = null)
     {
         latestPage = latest;
         projected ??= [];
-        if (pictures.Count == 0 && images.Count == 0) return;
+        projectedLinks ??= [];
+        if (pictures.Count == 0 && images.Count == 0 && links.Count == 0 && projectedLinks.Count == 0) return;
         bool same = origin == scope;
-        if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text) && blocks.SequenceEqual(projected)) return;
+        if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text) && blocks.SequenceEqual(projected)
+            && links.SequenceEqual(projectedLinks)) return;
         scope = origin;
         blocks = projected;
         images = pictures;
-        lines = pictures.Count == 0 ? [] : text;
+        links = projectedLinks;
+        lines = pictures.Count == 0 && links.Count == 0 ? [] : text;
         if (!same || pictures.Count == 0) { sizes.Clear(); cache.Clear(); }
         else if (sizes.Count != 0)
         {
@@ -168,7 +196,8 @@ internal sealed class HistoryTranscript : RichTextBox
         var viewport = preservePosition && IsHandleCreated ? new TranscriptViewport(this, BlockOffsets) : null;
         offsets.Clear();
         BlockOffsets = [];
-        if (images.Count == 0) { Clear(); return; }
+        nativeLinks.Clear();
+        if (images.Count == 0 && links.Count == 0) { Clear(); return; }
         layoutWidth = AvailableWidth;
         var rtf = new StringBuilder(@"{\rtf1\ansi\deff0{\fonttbl{\f0\fnil Segoe UI;}}\f0\fs")
             .Append((int)Math.Round(Font.SizeInPoints * 2)).Append(' ');
@@ -225,6 +254,16 @@ internal sealed class HistoryTranscript : RichTextBox
         try
         {
             Rtf = rtf.Append('}').ToString();
+            var format = new CharFormat { Size = 92, Mask = 0x20, Effects = 0x20 }; // CFM_LINK, CFE_LINK
+            foreach (var link in links)
+            {
+                int start = textOffsets[link.Line] + link.Start;
+                Select(start, link.Length);
+                if (!SelectedText.AsSpan().SequenceEqual(lines[link.Line].AsSpan(link.Start, link.Length))) continue;
+                FormatSelection(Handle, 0x0444, 1, ref format); // EM_SETCHARFORMAT, SCF_SELECTION
+                nativeLinks.Add(link with { Start = start });
+            }
+            if (links.Count > 0) Select(0, 0);
             viewport?.Restore(this, BlockOffsets, latestPage);
         }
         finally { updating = false; }

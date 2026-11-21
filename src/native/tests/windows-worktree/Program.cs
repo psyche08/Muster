@@ -85,6 +85,7 @@ internal static class Program
                 CountsKnown = true, Additions = 3, Deletions = 1 } } } } };
         var turns = WorktreeNavigation.ChangedTurns([new ChatBlock { Children = { summary } }]).ToArray();
         TranscriptStepsTests.Run();
+        TranscriptLinkTests.Run();
         RelatedSessionTests.Run(captures);
         TraceTests.Run(captures);
         TranscriptViewportTests.Run();

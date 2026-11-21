@@ -384,3 +384,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0266](0266-windows-conversation-locked-use-status.md) | Accepted | Show pending Locked Use in Windows conversations |
 | [0267](0267-catalog-failure-notices.md) | Accepted | Preserve the cause and host of catalog failures |
 | [0268](0268-windows-turn-summary.md) | Accepted | Render per-turn usage and cost in Windows conversations |
+| [0269](0269-windows-transcript-links.md) | Accepted | Open Markdown links from Windows conversations |
