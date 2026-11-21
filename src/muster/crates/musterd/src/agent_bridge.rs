@@ -532,6 +532,42 @@ pub async fn set_chat_mode(
     }
 }
 
+pub(crate) async fn prepare_native_request(
+    daemon: &crate::Daemon,
+    agent: Arc<AgentService>,
+    session: &str,
+    request: &muster_proto::v1::request::Req,
+) -> Result<(), crate::Error> {
+    use muster_proto::v1::request::Req;
+    #[cfg(windows)]
+    if matches!(request, Req::AgentSend(_))
+        && drives_desktop(daemon.platform().as_ref())
+        && agent
+            .session(session)
+            .is_some_and(|s| s.provider == "codex" && s.mode == "code" && !s.read_only)
+        && muster_agent::native_sidebar::catalog_session_route("codex", session).is_some()
+    {
+        if !agent.retains_native_controller(session) {
+            let source = agent.send_receipt_source(session);
+            let id = session.to_owned();
+            let controller = muster_agent::control_guard::spawn_blocking(move || {
+                muster_platform::attach_code(id, source)
+            })
+            .await
+            .map_err(|_| crate::Error::Unavailable("Codex preparation worker stopped".into()))??;
+            agent.attach_native(controller);
+        }
+        return Ok(());
+    }
+    ensure_native(
+        daemon,
+        agent,
+        session,
+        matches!(request, Req::AgentInspect(_)),
+    )
+    .await
+}
+
 /// Select and verify the requested native session through Accessibility.
 /// Never create an owned provider CLI when the desktop is unavailable.
 /// A platform without desktop Accessibility selects nothing: only a

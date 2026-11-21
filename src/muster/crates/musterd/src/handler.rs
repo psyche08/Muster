@@ -2888,7 +2888,7 @@ pub(crate) async fn locked_operation(daemon: &Arc<Daemon>, request: Req) -> Resu
         })?;
         }
         if !plugin {
-            crate::agent_bridge::ensure_native(daemon, agent.clone(), &session, matches!(request, Req::AgentInspect(_)))
+            crate::agent_bridge::prepare_native_request(daemon, agent.clone(), &session, &request)
             .await
             .inspect_err(|error| {
                 // Pre-ledger failures used to leave only “operation finished” in

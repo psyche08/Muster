@@ -2,6 +2,8 @@
 use windows_sys::Win32::System::RemoteDesktop::*;
 
 pub(crate) mod chat;
+pub(crate) mod code;
+mod link_clipboard;
 mod provider;
 pub struct Windows;
 fn session() -> Option<WTSINFOEX_LEVEL1_W> {
