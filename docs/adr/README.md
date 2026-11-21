@@ -374,3 +374,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0256](0256-windows-button-menu-lifetime.md) | Accepted | Bind Windows action menus to their anchor control |
 | [0257](0257-windows-tmux-server-start-deadline.md) | Accepted | Allow the Windows tmux server to start again after its last session ends |
 | [0258](0258-windows-transcript-file-diffs.md) | Accepted | Inspect and copy per-file diffs in Windows conversations |
+| [0259](0259-windows-jump-to-latest.md) | Accepted | Jump to the latest conversation messages on Windows |
