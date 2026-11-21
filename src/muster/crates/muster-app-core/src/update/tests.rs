@@ -1010,6 +1010,55 @@ async fn phone() -> (tempfile::TempDir, Ctx, State) {
 }
 
 #[tokio::test]
+async fn user_cancellation_withdraws_a_pending_operation_and_leaves_later_reads_alone() {
+    let (_dir, ctx, mut state) = phone().await;
+    state.screen = Screen::Chat;
+    state.chat = Some(Chat {
+        sending: true,
+        draft: app::ChatDraft {
+            text: "Unsent example".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let device = state.self_id.clone();
+    state.locked = Some((device.clone(), vec![1; 32]));
+    let view = |s: &State| crate::render::view_model(s).chat.unwrap();
+    assert!(view(&state).can_cancel_locked_use);
+    assert!(view(&state).locked_use_status.contains("relock"));
+    state.presence = Some(crate::state::PendingPresence {
+        response_origin: None,
+        action_id: "read-example".into(),
+        call_id: 1,
+        device,
+        request: Req::DeviceInfo(v1::DeviceInfoRequest {}),
+        effect_id: 1,
+    });
+    state.effects.insert(1, EffectKind::Authenticate);
+    assert!(view(&state).locked_use_status.contains("Confirm"));
+    let cancel = app::Intent {
+        it: Some(It::CancelLockedUse(app::CancelLockedUse {})),
+    };
+    intent(&mut state, &ctx, cancel.clone());
+    assert!(state.locked.is_none() && state.presence.is_none() && !state.effects.contains_key(&1));
+    let cancelled = view(&state);
+    assert!(!cancelled.can_cancel_locked_use && cancelled.locked_use_status.is_empty());
+    assert_eq!(cancelled.draft.unwrap().text, "Unsent example");
+
+    let (read, mut result) = tokio::sync::oneshot::channel();
+    state.chat_calls.insert("next-read".into(), read);
+    let epoch = state.chat_call_epoch;
+    intent(&mut state, &ctx, cancel);
+    assert_eq!(state.chat_call_epoch, epoch);
+    assert!(state.chat_calls.contains_key("next-read"));
+    assert!(matches!(
+        result.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+    ctx.backend.shutdown().await;
+}
+
+#[tokio::test]
 async fn settings_saves_the_locally_displayed_policy_after_selecting_a_peer() {
     let (_dir, mut ctx, mut state) = phone().await;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();

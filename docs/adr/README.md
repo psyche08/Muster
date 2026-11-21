@@ -381,3 +381,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0263](0263-windows-back-and-settings-shortcuts.md) | Accepted | Use shared Back availability and desktop navigation shortcuts on Windows |
 | [0264](0264-windows-agent-directory.md) | Accepted | Keep the Agents directory visible beside Windows session details |
 | [0265](0265-windows-queued-messages.md) | Accepted | Show the provider message queue beside the Windows composer |
+| [0266](0266-windows-conversation-locked-use-status.md) | Accepted | Show pending Locked Use in Windows conversations |
