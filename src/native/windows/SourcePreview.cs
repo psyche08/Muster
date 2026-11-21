@@ -8,9 +8,9 @@ internal sealed class SourcePreview : UserControl
     static readonly UTF8Encoding Utf8 = new(false, true);
     readonly Label heading = new() { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4) };
     readonly Panel gutter = new() { Dock = DockStyle.Left, BackColor = SystemColors.Control };
-    readonly RichTextBox source = new() { Dock = DockStyle.Fill, ReadOnly = true, WordWrap = false,
+    readonly NamedRichTextBox source = new("Preview contents") { Dock = DockStyle.Fill, ReadOnly = true, WordWrap = false,
         BorderStyle = BorderStyle.None, DetectUrls = false, BackColor = SystemColors.Window,
-        ScrollBars = RichTextBoxScrollBars.Both, AccessibleName = "Preview contents" };
+        ScrollBars = RichTextBoxScrollBars.Both };
     readonly Font mono = new(FontFamily.GenericMonospace, 10);
     FileView? lastFile;
     GitView? lastGit;

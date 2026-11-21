@@ -543,6 +543,7 @@ internal sealed class Desktop : Form
             selectedTab = SessionTab.Conversation;
         }
         var conversation = page == Page.Chat && selectedTab == SessionTab.Conversation ? v.Chat : null;
+        output.AccessibleName = conversation != null ? "Conversation history" : $"{page} details";
         queue.Display(conversation);
         lockedUse.Display(conversation);
         bool inRelated = selectedTab is SessionTab.Subagents or SessionTab.Sessions;

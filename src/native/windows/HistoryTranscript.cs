@@ -8,7 +8,7 @@ namespace Muster.Windows;
 
 internal sealed record TranscriptImage(int Line, ByteString Bytes);
 
-internal sealed class HistoryTranscript : RichTextBox
+internal sealed class HistoryTranscript : NamedRichTextBox
 {
     sealed record Picture(Size Size, string Hex);
     readonly Dictionary<ByteString, Picture?> cache = new();
@@ -39,7 +39,7 @@ internal sealed class HistoryTranscript : RichTextBox
     bool loading, updating, scheduled;
     int layoutWidth;
 
-    public HistoryTranscript()
+    public HistoryTranscript() : base("Conversation history")
     {
         ReadOnly = true;
         DetectUrls = false;
@@ -57,7 +57,6 @@ internal sealed class HistoryTranscript : RichTextBox
             e.SuppressKeyPress = true;
             ActivateLink?.Invoke(link.Destination);
         };
-        AccessibleName = "Conversation history";
         BackColor = SystemColors.Window;
         SelectionChanged += (_, _) => ScheduleViewport();
         VScroll += (_, _) => ScheduleViewport();
