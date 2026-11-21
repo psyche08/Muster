@@ -375,3 +375,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0257](0257-windows-tmux-server-start-deadline.md) | Accepted | Allow the Windows tmux server to start again after its last session ends |
 | [0258](0258-windows-transcript-file-diffs.md) | Accepted | Inspect and copy per-file diffs in Windows conversations |
 | [0259](0259-windows-jump-to-latest.md) | Accepted | Jump to the latest conversation messages on Windows |
+| [0260](0260-windows-chrome-extension-setup.md) | Accepted | Expose Chrome extension setup and connection checks on Windows |
