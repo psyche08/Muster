@@ -98,6 +98,17 @@ internal sealed class Desktop : Form
         body.Controls.Add(preview);
         body.Controls.Add(output);
         body.Controls.Add(history);
+        history.ActivateLink += destination =>
+        {
+            if (!history.Visible || readingScope == null || current?.Screen != Page.Chat) return;
+            if (Uri.TryCreate(destination, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "mailto")
+            {
+                if (MessageBox.Show(this, uri.AbsoluteUri, "Open link", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+                catch (System.ComponentModel.Win32Exception ex) { MessageBox.Show(this, ex.Message, "Open link"); }
+            }
+            else Send(new() { OpenFileLink = new() { Url = destination } });
+        };
         body.Controls.Add(chatWelcome);
         body.Controls.Add(list);
         body.Controls.Add(chatSidebar);
@@ -481,6 +492,7 @@ internal sealed class Desktop : Form
         var lines = new List<string>();
         var images = new List<TranscriptImage>();
         var blocks = new List<TranscriptBlock>();
+        var links = new List<TranscriptLink>();
         void Row(string name, Intent intent) => rows.Add(new(name, intent));
         composerButtons.Clear();
         int actionIndex = 0;
@@ -750,7 +762,7 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                transcript.AppendTo(lines, images, blocks);
+                transcript.AppendTo(lines, images, blocks, links);
                 if (transcript.HasCode)
                 {
                     int copyIndex = actionIndex;
@@ -1031,15 +1043,16 @@ internal sealed class Desktop : Form
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
         readingScope = selectedTab == SessionTab.Conversation ? chatKey : null;
         bool latestPage = v.Chat?.HasNewer == false;
-        history.Display(readingScope, lines, images, blocks, latestPage);
+        bool rich = images.Count > 0 || links.Count > 0;
+        history.Display(readingScope, lines, images, blocks, latestPage, links);
         related.Visible = inRelated;
         related.Display(inRelated ? v.Chat : null, selectedTab);
         trace.Visible = inTrace;
         trace.Display(inTrace ? v.Chat : null);
-        history.Visible = !inTrace && images.Count > 0;
+        history.Visible = !inTrace && rich;
         browserPanel.Display(page == Page.Browser ? v.Browser : null);
         invitePanel.Display(page == Page.Invite && v.CanInvite ? v.Invite : null, page == Page.Invite && v.CanInvite);
-        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && images.Count == 0 && page is not (Page.DesktopChats or Page.Agents) && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && !rich && page is not (Page.DesktopChats or Page.Agents) && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         if (focusNetworkList && page == Page.Settings)
@@ -1048,7 +1061,7 @@ internal sealed class Desktop : Form
             FocusNetworkList();
         }
         terminal.Display(showingTerminal ? v.Terminal : null);
-        var text = images.Count == 0 ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
+        var text = !rich ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         bool textChanged = output.Text != text;
         if (textChanged)
         {
@@ -1056,8 +1069,8 @@ internal sealed class Desktop : Form
             output.Text = text;
             output.Select(Math.Min(pos, text.Length), 0);
         }
-        TextBoxBase reader = images.Count > 0 ? history : output;
-        plainOffsets = readingScope != null && images.Count == 0 ? TranscriptViewport.PlainOffsets(blocks, lines) : [];
+        TextBoxBase reader = rich ? history : output;
+        plainOffsets = readingScope != null && !rich ? TranscriptViewport.PlainOffsets(blocks, lines) : [];
         if (readingScope != null)
         {
             if (previousScope != readingScope)
@@ -1067,7 +1080,7 @@ internal sealed class Desktop : Form
             }
             else if (reader != previousReader || (reader == output && textChanged))
             {
-                previousViewport?.Restore(reader, images.Count > 0 ? history.BlockOffsets : plainOffsets, latestPage);
+                previousViewport?.Restore(reader, rich ? history.BlockOffsets : plainOffsets, latestPage);
             }
         }
         jump.Display(readingScope != null ? v.Chat : null, reader);

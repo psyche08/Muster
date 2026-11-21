@@ -19,6 +19,7 @@
     <InternalsVisibleTo Include="WindowsAgentCatalog" />
     <InternalsVisibleTo Include="WindowsWorktree" />
     <InternalsVisibleTo Include="WindowsTerminal" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
     <PackageReference Include="Google.Protobuf" Version="3.34.0" />
   </ItemGroup>

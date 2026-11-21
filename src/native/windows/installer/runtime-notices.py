@@ -21,5 +21,6 @@ for dep in framework["downloadDependencies"]:
 if len(notices) != 2:
     raise ValueError("Missing resolved runtime pack notices")
 notices.append("Google.Protobuf\n\n" + Path(__file__).with_name("Protobuf-LICENSE.txt").read_text())
+notices.append("Markdig\n\n" + Path(__file__).with_name("Markdig-LICENSE.txt").read_text(encoding="utf-8"))
 notices.append("ZXing.Net\n\n" + Path(__file__).with_name("ZXing-Net-COPYING.txt").read_text())
 Path(sys.argv[2]).write_text("\n\n".join(notices), encoding="utf-8")

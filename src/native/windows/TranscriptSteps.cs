@@ -28,7 +28,8 @@ internal sealed partial class TranscriptSteps
     public bool HasStepsMenu => chat?.Timeline.Any(HasSteps) == true;
     bool IsOpen(ChatBlock b) => groups.GetValueOrDefault(b.Id, b.DefaultExpanded);
 
-    public void AppendTo(List<string> lines, List<TranscriptImage> images, List<TranscriptBlock>? blocks = null)
+    public void AppendTo(List<string> lines, List<TranscriptImage> images, List<TranscriptBlock>? blocks = null,
+        List<TranscriptLink>? links = null)
     {
         if (chat == null) return;
         if (chat.MessageCount == 0)
@@ -44,7 +45,7 @@ internal sealed partial class TranscriptSteps
             if (block.Message is {} message)
                 foreach (var bytes in message.PreviewJpegs)
                     images.Add(new TranscriptImage(lines.Count, bytes));
-            lines.AddRange(Block(block, work, expanded));
+            foreach (var text in Block(block, work, expanded, lines, links)) lines.Add(text);
         }
     }
 
@@ -63,7 +64,7 @@ internal sealed partial class TranscriptSteps
         }
     }
 
-    IEnumerable<string> Block(ChatBlock b, string work, bool expanded)
+    IEnumerable<string> Block(ChatBlock b, string work, bool expanded, List<string> lines, List<TranscriptLink>? links)
     {
         if (b.Kind == "diff" && b.Diffs.Count != 0)
         {
@@ -82,16 +83,19 @@ internal sealed partial class TranscriptSteps
         }
         if (b.Message is {} m)
         {
+            string Prose(string text, string prefix) => links == null ? prefix + text
+                : MarkdownLinks.Display(text, prefix, lines.Count, links);
             if (b.Parts.Any(p => p.Kind == "code"))
             {
                 yield return m.Role;
                 foreach (var part in b.Parts)
                 {
                     if (part.Kind == "code") yield return CodeLabel(part);
-                    yield return part.Text.ReplaceLineEndings(Environment.NewLine);
+                    yield return part.Kind == "markdown" ? Prose(part.Text, "")
+                        : part.Text.ReplaceLineEndings(Environment.NewLine);
                 }
             }
-            else yield return $"{m.Role}  {m.Text}";
+            else yield return m.Role == "user" ? $"{m.Role}  {m.Text}" : Prose(m.Text, m.Role + "  ");
         }
         if (!expanded) yield break;
         if (b.Details == "loading") yield return "Loading steps…";
