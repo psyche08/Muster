@@ -378,3 +378,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0260](0260-windows-chrome-extension-setup.md) | Accepted | Expose Chrome extension setup and connection checks on Windows |
 | [0261](0261-windows-chrome-management-address.md) | Accepted | Copy the Chrome extension management address on Windows |
 | [0262](0262-local-settings-port-policy.md) | Accepted | Save the Settings port policy on the device that supplied it |
+| [0263](0263-windows-back-and-settings-shortcuts.md) | Accepted | Use shared Back availability and desktop navigation shortcuts on Windows |
