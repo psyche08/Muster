@@ -339,3 +339,156 @@ async fn transport_between_hosts() {
         viewer.shutdown().await;
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn fixed_engine_channels_carry_tcp_half_closes_and_udp_for_only_the_selected_engine() {
+    use muster_net::remote_desktop::gamestream::{self, EnginePorts, LocalEngine, ViewerPorts};
+    use std::net::{Ipv4Addr, SocketAddrV4};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream, UdpSocket};
+
+    struct OwnedSockets {
+        tcp: Vec<u16>,
+        udp: u16,
+    }
+    impl LocalEngine for OwnedSockets {
+        fn owns_tcp(&self, socket: SocketAddrV4) -> bool {
+            socket.ip().is_loopback() && (self.tcp.is_empty() || self.tcp.contains(&socket.port()))
+        }
+        fn owns_udp(&self, socket: SocketAddrV4) -> bool {
+            socket.ip().is_loopback() && socket.port() == self.udp
+        }
+    }
+    struct Engine {
+        ports: EnginePorts,
+        owner: Arc<OwnedSockets>,
+    }
+    impl Handler for Engine {
+        fn console_ready(&self) -> bool {
+            true
+        }
+        fn serve<'s>(
+            &'s self,
+            _: DeviceId,
+            session: &'s mut Session,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 's>> {
+            Box::pin(async move {
+                let _ = gamestream::host(session, self.ports, self.owner.clone()).await;
+            })
+        }
+    }
+    let bind = Ipv4Addr::LOCALHOST;
+    let relay = relay(bind.into()).await;
+    let relay_addr = relay.udp_addr().unwrap();
+    let relay_task = tokio::spawn(relay.serve());
+    let host_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let viewer_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let entries = signed_roster(host_key.as_ref(), viewer_key.public_key());
+    let host = node(
+        host_key,
+        &entries,
+        bind.into(),
+        RelayConfig::Udp(relay_addr),
+    )
+    .await;
+    let viewer = node(
+        viewer_key,
+        &entries,
+        bind.into(),
+        RelayConfig::Udp(relay_addr),
+    )
+    .await;
+
+    let mut host_sockets = None;
+    for base in (52000..54000u16).step_by(32) {
+        if let (Ok(rtsp), Ok(video)) = (
+            TcpListener::bind((bind, base + 21)).await,
+            UdpSocket::bind((bind, base + 9)).await,
+        ) {
+            host_sockets = Some((base, rtsp, video));
+            break;
+        }
+    }
+    let (base, rtsp, host_udp) = host_sockets.unwrap();
+    let host_engine = Arc::new(Engine {
+        ports: EnginePorts::from_local_base(base).unwrap(),
+        owner: Arc::new(OwnedSockets {
+            tcp: vec![base + 21],
+            udp: base + 9,
+        }),
+    });
+    let sharing = host
+        .share_remote_desktop(viewer.device_id(), Access::View, host_engine)
+        .unwrap();
+    let mut viewer_sockets = None;
+    for base in (55000..57000u16).step_by(32) {
+        if let Ok(sockets) = ViewerPorts::bind(EnginePorts::from_local_base(base).unwrap()).await {
+            viewer_sockets = Some((base, sockets));
+            break;
+        }
+    }
+    let (base, sockets) = viewer_sockets.unwrap();
+    let viewer_udp = UdpSocket::bind((bind, 0)).await.unwrap();
+    let owner = Arc::new(OwnedSockets {
+        tcp: vec![],
+        udp: viewer_udp.local_addr().unwrap().port(),
+    });
+    let mut session = viewer.open_remote_desktop(host.device_id()).await.unwrap();
+    let broker =
+        tokio::spawn(async move { gamestream::viewer(&mut session, sockets, owner).await });
+    let server = |listener: TcpListener| {
+        tokio::spawn(async move {
+            for _ in 0..24 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                stream.read_to_end(&mut bytes).await.unwrap();
+                stream.write_all(&bytes).await.unwrap();
+                stream.shutdown().await.unwrap();
+            }
+        })
+    };
+    let server = server(rtsp);
+    let tcp = |port| async move {
+        for i in 0..12u8 {
+            let bytes = vec![i; 18000];
+            let mut stream = TcpStream::connect((bind, port)).await.unwrap();
+            stream.write_all(&bytes).await.unwrap();
+            stream.shutdown().await.unwrap();
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).await.unwrap();
+            assert_eq!(response.len(), bytes.len());
+            assert!(response == bytes);
+        }
+    };
+    let udp = async {
+        let intruder = UdpSocket::bind((bind, 0)).await.unwrap();
+        intruder
+            .send_to(b"wrong socket", (bind, base + 9))
+            .await
+            .unwrap();
+        viewer_udp.send_to(b"ping", (bind, base + 9)).await.unwrap();
+        let mut packet = [0u8; 1200];
+        let (n, return_to) = host_udp.recv_from(&mut packet).await.unwrap();
+        assert_eq!(&packet[..n], b"ping");
+        host_udp.send_to(&[0x55; 1050], return_to).await.unwrap();
+        let (n, _) = viewer_udp.recv_from(&mut packet).await.unwrap();
+        assert_eq!(&packet[..n], &[0x55; 1050]);
+    };
+    tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(tcp(base + 21), tcp(base + 21), udp)
+    })
+    .await
+    .unwrap();
+    server.await.unwrap();
+    drop(sharing);
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3), broker)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err()
+    );
+    viewer.shutdown().await;
+    host.shutdown().await;
+    relay_task.abort();
+}
