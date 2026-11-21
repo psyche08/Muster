@@ -567,6 +567,13 @@ Windows 的 Chats 目录在打开对话后仍可从左侧访问。选择已列�
 没有另一条的测试文字。使用实际 WinForms 表单做控件断言时，没有链接或图片的正文显示在只读
 `TextBox` 中，含链接或内嵌图片的正文使用 `HistoryTranscript`。取图前先确认对应控件可见。
 
+用外部 UI Automation 客户端按当前 GUI 进程和可见控件查询。两种正文的名称都是
+**Conversation history**，控件类型分别是 Edit 和 Document。打开文件后的 Document
+名称为 **Preview contents**，Settings 的只读 Edit 名称为 **Settings details**。
+从 Agents 依次打开带链接的合成回复、文件预览和纯文本回复，检查名称、控件类型和
+实际正文，再回到 Settings 检查详情名称。独立进程读到的 Name 才能验证 RichEdit
+实际公布的值。
+
 旧回执和空会话的区别可用仓库现有的 Windows 命名管道回归单独复验。在仓库根目录运行：
 
 ```powershell
