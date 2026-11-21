@@ -354,6 +354,19 @@ internal sealed class Desktop : Form
         finally { presenceReportOpen = false; }
     }
 
+    void ConfirmEndSideChat(ChatView chat)
+    {
+        var request = input.WithDraft(new() { SideChatAction = new() { End = true } });
+        var key = request.ComposerAction?.Draft?.Key;
+        if (string.IsNullOrEmpty(key) || key != chat.Draft?.Key) return;
+        var answer = MessageBox.Show(this, "End this side chat? Its history will remain available to read.",
+            "End side chat", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        if (answer == DialogResult.OK && current?.Screen == Page.Chat &&
+            current.Chat is { CanEndSideChat: true } active && active.DeviceId == chat.DeviceId &&
+            active.Session?.Id == chat.Session?.Id && active.Draft?.Key == key)
+            core.Send(request);
+    }
+
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void CopySource(string text, string kind)
     {
@@ -875,7 +888,7 @@ internal sealed class Desktop : Form
                 if (chatView.CanCreateSideChat)
                     Act("Start side chat", () => new() { SideChatAction = new() });
                 if (chatView.CanEndSideChat)
-                    Act("End side chat", () => new() { SideChatAction = new() { End = true } });
+                    AddAction("End side chat", () => ConfirmEndSideChat(chatView));
                 if (chatView.CanChooseModel && chatView.Session != null)
                     AddAction("Model and effort", () =>
                     {

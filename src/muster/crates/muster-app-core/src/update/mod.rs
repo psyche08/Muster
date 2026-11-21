@@ -417,6 +417,11 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         if matches!(action, It::ComposerAction(_)) {
             return;
         }
+        if matches!(&action, It::SideChatAction(a) if a.end)
+            && !side_chat::confirmed_child_is_open(state, snapshot.draft.as_ref())
+        {
+            return;
+        }
         let durable = crate::drafts::saves_before(&action);
         if durable || matches!(action, It::AgentSend(_)) {
             if let Some(draft) = snapshot.draft {

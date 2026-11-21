@@ -341,6 +341,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             can_create_side_chat: muster_agent::side_chat::available(&chat.session)
                 && chat.side_request.is_none(),
             can_end_side_chat: muster_agent::side_chat::is_child(&chat.session.id)
+                && !chat.session.read_only
                 && !muster_agent::side_chat::ended(&chat.session)
                 && chat.side_request.is_none(),
             composer_disabled_reason: if muster_agent::side_chat::ended(&chat.session) {

@@ -3,6 +3,14 @@ use super::*;
 use muster_agent::side_chat::{MAX_QUESTION, available, ended, is_child};
 use v1::agent_side_question_request::Action;
 
+/// The shell can confirm before it has rendered a navigation already applied by Rust.
+pub(super) fn confirmed_child_is_open(state: &State, draft: Option<&app::ChatDraft>) -> bool {
+    let Some(key) = draft.map(|d| d.key.as_str()).filter(|key| !key.is_empty()) else {
+        return false;
+    };
+    state.screen == Screen::Chat && state.chat.as_ref().is_some_and(|c| c.draft.key == key)
+}
+
 pub(super) fn action(
     state: &mut State,
     ctx: &Ctx,
