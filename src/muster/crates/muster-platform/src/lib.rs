@@ -16,6 +16,9 @@ mod windows;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
+#[cfg(any(windows, target_os = "macos"))]
+pub mod engine_socket;
+
 use std::sync::Arc;
 
 /// What only the operating system knows about the console session.

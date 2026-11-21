@@ -1,5 +1,7 @@
 //! Reliable control and lossy media carried by one admitted PeerLink stream.
 
+pub mod gamestream;
+
 use std::collections::{HashMap, hash_map::Entry};
 use std::future::Future;
 use std::pin::Pin;
