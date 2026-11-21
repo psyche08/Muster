@@ -23,6 +23,7 @@ internal sealed class Desktop : Form
     readonly Label chatWelcome = new() { Dock = DockStyle.Fill, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
         Text = "Select a conversation or start a new chat." };
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
+    readonly JumpToLatest jump = new();
     readonly TranscriptSteps transcript = new();
     readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
     readonly ConversationTerminal conversationTerminal = new() { Dock = DockStyle.Fill, Visible = false };
@@ -92,6 +93,13 @@ internal sealed class Desktop : Form
         body.Controls.Add(list);
         body.Controls.Add(chatSidebar);
         body.Resize += (_, _) => chatSidebar.Width = Math.Min(LogicalToDeviceUnits(340), body.ClientSize.Width / 3);
+        body.Controls.Add(jump);
+        jump.BringToFront();
+        void PlaceJump() => jump.Location = new Point(body.ClientSize.Width - jump.Width - LogicalToDeviceUnits(24),
+            body.ClientSize.Height - jump.Height - LogicalToDeviceUnits(8));
+        body.Resize += (_, _) => PlaceJump();
+        jump.SizeChanged += (_, _) => PlaceJump();
+        jump.Intent += Send;
         actions.Dock = DockStyle.Bottom;
         Controls.Add(body);
         Controls.Add(input);
@@ -203,6 +211,7 @@ internal sealed class Desktop : Form
                 return;
             if (Interlocked.Exchange(ref pending, null) is {} v)
                 Render(v);
+            jump.UpdateAvailability();
             while (effects.TryDequeue(out var item))
                 EffectReceived(item.Item1, item.Item2);
         };
@@ -1048,5 +1057,7 @@ internal sealed class Desktop : Form
             output.Text = text;
             output.Select(Math.Min(pos, text.Length), 0);
         }
+        jump.Display(selectedTab == SessionTab.Conversation && chatKey != null ? v.Chat : null,
+            images.Count > 0 ? history : output);
     }
 }

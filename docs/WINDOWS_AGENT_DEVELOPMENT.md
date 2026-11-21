@@ -142,6 +142,11 @@ dotnet run --project src/native/tests/windows-worktree/WindowsWorktree.csproj -c
 在等宽与实际时间模式间切换；没有时间戳的记录仍可从树中查看。需要旧记录时点
 **Earlier messages**，随后点 **Conversation** 回到同一对话。此流程只读取历史。
 
+在长对话里向上滚动，点 **Jump to latest**，核对末行进入视口，按钮消失。用
+**Earlier messages** 退回较早的历史页，再点 **Jump to latest**；当前会话应一次回到
+最新页。普通文本和含图片的会话分别验证，切到另一设备的会话后检查滚动位置。
+此操作只读取历史，无需发送消息。
+
 同一命令生成 `history-images.png`。合成对话含红、蓝两张 JPEG 和一份无效图片。
 测试在实际渲染的像素中检查色带出现在对应文字之前，再通过含 120 张图片的历史
 验证滚动到末尾和回到开头。切换会话时检查旧图清除。无需上传图片或发送消息。

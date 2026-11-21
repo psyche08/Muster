@@ -120,10 +120,19 @@ internal static class HistoryImageTests
             throw new InvalidOperationException($"Scrolled thumbnail did not appear. Top character {history.GetCharIndexFromPosition(new Point(10,10))}, selected {history.SelectionStart}, last image Y {history.GetPositionFromCharIndex(history.TextLength-1).Y}");
         }
         WaitForPixels(true);
-        history.Focus();
-        history.Select(history.TextLength - 1, 0);
-        history.ScrollToCaret();
+        using var jump = new JumpToLatest();
+        form.Controls.Add(jump);
+        jump.BringToFront();
+        int requests = 0;
+        jump.Intent += intent => { Check(intent.AgentLoadEarlier?.Latest == true, "Expected latest history intent"); requests++; };
+        history.Select(0, 4);
+        jump.Display(many, history);
+        Check(jump.Visible && jump.Enabled, "Jump missing above the last image");
+        jump.PerformClick();
+        Check(requests == 1 && history.SelectionLength == 4, "Image jump changed the selection");
         WaitForPixels(false);
+        jump.UpdateAvailability();
+        Check(!jump.Visible, "Jump still visible at last image");
         Scroll(history.Handle, 0x00B6, 0, -10000);
         WaitForPixels(true);
         // A full DIB for all 120 occurrences would exceed 6 MB of hex even for these small thumbnails.
@@ -135,6 +144,48 @@ internal static class HistoryImageTests
         var settle = Stopwatch.StartNew();
         while (settle.ElapsedMilliseconds < 130) { Application.DoEvents(); Thread.Sleep(5); }
         Check(history.TextLength == 0, "Async completion restored a previous conversation");
+        using var plain = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
+            ReadOnly = true, WordWrap = false };
+        form.Controls.Add(plain);
+        plain.BringToFront();
+        jump.BringToFront();
+        plain.Text = "Short earlier page";
+        jump.Display(many, plain);
+        Check(!jump.Visible, "Short current page offers a jump");
+        many.HasNewer = true;
+        many.Loading = true;
+        jump.Display(many, plain);
+        Check(jump.Visible && !jump.Enabled, "In-flight earlier page allowed another request");
+        many.Loading = false;
+        jump.Display(many, plain);
+        jump.PerformClick();
+        plain.Lines = Enumerable.Range(1, 400).Select(i => $"Line {i}").ToArray();
+        many.HasNewer = false;
+        jump.Display(many, plain);
+        int LastY() => plain.GetPositionFromCharIndex(plain.TextLength - 1).Y;
+        Check(requests == 2 && !jump.Visible && LastY() >= 0 && LastY() < plain.ClientSize.Height,
+            "Latest plain-text page did not land at its last line");
+        plain.Select(0, 4);
+        plain.ScrollToCaret();
+        jump.UpdateAvailability();
+        jump.PerformClick();
+        plain.Lines = plain.Lines.Skip(180).ToArray();
+        plain.Select(0, 0);
+        plain.ScrollToCaret();
+        jump.Display(many, plain);
+        Check(requests == 3 && !jump.Visible && LastY() >= 0 && LastY() < plain.ClientSize.Height,
+            "A shorter latest projection lost the viewport after a local jump");
+        many.HasNewer = true;
+        jump.Display(many, plain);
+        jump.PerformClick();
+        plain.Select(0, 4);
+        plain.ScrollToCaret();
+        jump.Display(next, plain);
+        Check(requests == 4 && jump.Visible && plain.SelectionStart == 0 && LastY() >= plain.ClientSize.Height,
+            "A pending jump scrolled the new device's transcript");
+        jump.Display(null, null);
+        Check(!jump.Visible, "Jump visible outside conversation");
+        Console.WriteLine($"Passed jump to latest in plain and image transcripts at {history.DeviceDpi} DPI.");
         Console.WriteLine($"Passed inline history pixels, corrupt image, disclosure and selection at {history.DeviceDpi} DPI.");
     }
 }
