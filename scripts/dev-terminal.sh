@@ -19,12 +19,10 @@ cp "$CARGO_TARGET_DIR/debug/musterd" "$bundle/Contents/MacOS/musterd"
 cp "$CARGO_TARGET_DIR/debug/muster" "$bundle/Contents/MacOS/muster"
 for resource in "$bin"/*.bundle; do
   [ -d "$resource" ] || continue
-  cp -R "$resource" "$bundle/Contents/Resources/"
+  /usr/bin/ditto "$resource" "$bundle/Contents/Resources/$(basename "$resource")"
 done
-if [[ -n "${MUSTER_SUNSHINE_APP:-}" ]]; then
-  mkdir -p "$bundle/Contents/Helpers"
-  ditto "$MUSTER_SUNSHINE_APP" "$bundle/Contents/Helpers/Sunshine.app"
-fi
+python3 "$root/addons/remote-desktop/build-host.py" "$CARGO_TARGET_DIR/desktop-host" \
+  "$bundle/Contents/Helpers/Sunshine.app" "$bundle/Contents/Resources/ThirdParty/Host-Sources.tar.gz"
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

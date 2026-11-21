@@ -86,7 +86,7 @@ targets:
           # (launchd) and the command line, both from cargo's release output
           # ($CARGO_TARGET_DIR, else src/muster/target).
           BIN="$MUSTER_CARGO_TARGET_DIR/release"
-          if [ ! -x "$BIN/musterd" ]; then echo "warning: $BIN/musterd missing; build it with cargo (see README)"; exit 0; fi
+          if [ ! -x "$BIN/musterd" ]; then echo "error: $BIN/musterd missing; build it with cargo (see README)"; exit 1; fi
           install -m 0755 "$BIN/musterd" "$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/musterd"
           install -d "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
           install -m 0644 "$SRCROOT/Apps/macOS/dev.linsheng.musterd.plist" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents/"
@@ -117,10 +117,6 @@ targets:
           [ -x "$BIN/muster-browser-host" ] || { echo "error: build muster-browser first"; exit 1; }
           install -m 0755 "$BIN/muster-browser-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
-          if [ -n "${MUSTER_SUNSHINE_APP:-}" ]; then
-            /usr/bin/codesign --verify --strict --deep "$MUSTER_SUNSHINE_APP"
-            /usr/bin/ditto "$MUSTER_SUNSHINE_APP" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/Sunshine.app"
-          fi
           # Addons ship as helpers too; musterd runs l4forwarder while
           # l4forwarder.json is in its state directory (ADR 0107).
           ADDON="$L4FORWARDER_CARGO_TARGET_DIR/release/l4forwarder"
@@ -176,6 +172,14 @@ targets:
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/dev.linsheng.muster.helper.plist
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/PlugIns/MusterLockedUse.bundle/Contents/MacOS/MusterLockedUse
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/LockedUse/install.py
+      - name: Embed source-built desktop host
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          python3 "$SRCROOT/../../../../addons/remote-desktop/build-host.py" "$MUSTER_CARGO_TARGET_DIR/desktop-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/Sunshine.app" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Host-Sources.tar.gz" --identity "${EXPANDED_CODE_SIGN_IDENTITY:--}"
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/Sunshine.app/Contents/MacOS/Sunshine
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/ThirdParty/Host-Sources.tar.gz
   MusteriOS:
     type: application
     platform: iOS

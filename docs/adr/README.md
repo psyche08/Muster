@@ -397,3 +397,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0279](0279-gamestream-session-bridge.md) | Accepted | Carry fixed GameStream engine channels within an admitted session |
 | [0280](0280-native-paired-desktop.md) | Proposed | Open a paired desktop from the native device view |
 | [0281](0281-windows-codex-desktop-send.md) | Proposed | Verify the Windows Codex thread before sending |
+| [0282](0282-source-built-desktop-engines.md) | Implemented | Build the paired desktop engines from Muster source |

@@ -90,11 +90,20 @@ include("${CMAKE_MODULE_PATH}/dependencies/nv_codec_headers.cmake")
 include("${CMAKE_MODULE_PATH}/dependencies/nlohmann_json.cmake")
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
-pkg_check_modules(CURL REQUIRED libcurl)
-
-# miniupnp
-pkg_check_modules(MINIUPNP miniupnpc REQUIRED)
-include_directories(SYSTEM ${MINIUPNP_INCLUDE_DIRS})
+if(APPLE)
+    # The bundled host uses the native SDK's curl. A Homebrew libcurl would
+    # capture a runtime dependency on the developer's installation.
+    execute_process(COMMAND xcrun --sdk macosx --show-sdk-path
+            OUTPUT_VARIABLE muster_macos_sdk OUTPUT_STRIP_TRAILING_WHITESPACE
+            COMMAND_ERROR_IS_FATAL ANY)
+    find_library(MUSTER_SDK_CURL NAMES curl PATHS "${muster_macos_sdk}/usr/lib"
+            NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)
+    set(CURL_LIBRARIES "${MUSTER_SDK_CURL}")
+else()
+    pkg_check_modules(CURL REQUIRED libcurl)
+    pkg_check_modules(MINIUPNP miniupnpc REQUIRED)
+    include_directories(SYSTEM ${MINIUPNP_INCLUDE_DIRS})
+endif()
 
 # ffmpeg pre-compiled binaries
 include("${CMAKE_MODULE_PATH}/dependencies/ffmpeg.cmake")
