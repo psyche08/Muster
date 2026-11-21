@@ -36,6 +36,7 @@ internal sealed class Desktop : Form
     SessionTab selectedTab;
     RunHistoryDialog? runHistory;
     ChatOptionsDialog? chatOptions;
+    readonly BrowserPanel browserPanel = new() { Dock = DockStyle.Fill, Visible = false };
     readonly InvitePanel invitePanel;
     readonly TerminalGrid terminal = new() { Dock = DockStyle.Fill, Visible = false };
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
@@ -82,6 +83,7 @@ internal sealed class Desktop : Form
         SizeTitle();
         var body = new Panel { Dock = DockStyle.Fill };
         invitePanel = new InvitePanel(Clipboard.SetText, () => Send(new() { ShowInvite = new() }));
+        body.Controls.Add(browserPanel);
         body.Controls.Add(invitePanel);
         body.Controls.Add(related);
         body.Controls.Add(trace);
@@ -111,6 +113,7 @@ internal sealed class Desktop : Form
         Controls.Add(title);
         Controls.Add(nav);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
+        browserPanel.Intent += Send;
         chatSidebar.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
@@ -507,7 +510,7 @@ internal sealed class Desktop : Form
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
         sessionTabs.Visible = chatKey != null;
         if (chatKey != null) sessionTabs.Display(v.Chat!, selectedTab);
-        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat or Page.Browser or Page.Agents);
+        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat or Page.Agents);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -968,18 +971,7 @@ internal sealed class Desktop : Form
             }
             break;
         case Page.Browser:
-            if (v.Browser is {} browser)
-            {
-                input.PlaceholderText = "Browser operation (JSON)";
-                if (browser.Status is {} bs)
-                {
-                    lines.Add(bs.Message);
-                    if (browser.Local && bs.ExtensionPath.Length > 0)
-                        lines.Add(bs.ExtensionPath);
-                }
-                lines.Add(browser.Result);
-                Act("Run browser operation", () => new() { BrowserRun = new() { Json = input.Text } });
-            }
+            title.Text = "Agent Halo Browser";
             break;
         case Page.Multica:
             if (v.MulticaWorkspace is {} space)
@@ -1049,8 +1041,9 @@ internal sealed class Desktop : Form
         trace.Visible = inTrace;
         trace.Display(inTrace ? v.Chat : null);
         history.Visible = !inTrace && images.Count > 0;
+        browserPanel.Display(page == Page.Browser ? v.Browser : null);
         invitePanel.Display(page == Page.Invite && v.CanInvite ? v.Invite : null, page == Page.Invite && v.CanInvite);
-        output.Visible = page != Page.Invite && !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         if (focusNetworkList && page == Page.Settings)

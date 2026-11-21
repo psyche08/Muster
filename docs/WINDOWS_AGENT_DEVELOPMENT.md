@@ -381,6 +381,25 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 桌面和服务器的设备详情可进入对应宿主的 Chrome、Agents 和 Terminals。核对没有服务的
 成员时，这三个设备专属入口应隐藏。
 
+## 复核 Chrome 扩展设置
+
+从本机设备详情打开 **Chrome on device**。在普通用户终端读回同一节点的状态：
+
+```powershell
+'{"browser_setup":{"install":false}}' | & $musterCli rpc --request -
+```
+
+`installed` 表示原生宿主注册可用，`connected` 表示扩展实际回复了探测。分别记录两项。
+本机的 **Show extension folder** 打开节点上报的目录，**Open Chrome extensions** 打开
+Chrome 的扩展管理页。便携包的 `Apply-Update.cmd` 负责注册原生宿主。配置指定的浏览器
+配置文件时，在 Chrome 中选择 **Load unpacked** 并选中显示的文件夹，再回到 Muster 点
+**Check connection**。
+
+点 **Connection test** 后，编辑框应显示 ping 请求；点 **Run** 后再核对返回的能力和版本。
+验收只需 ping。切换到远端设备时，核对本机目录与启动按钮已隐藏，执行按钮提示需要认证。
+用临时软件节点和独立 Chrome 测试配置验收时，将浏览器子进程的 `MUSTER_DIR` 指向该节点
+的数据目录，以便 Chrome 启动的原生宿主连接同一测试环境。
+
 ## 复核多设备 Agents 目录
 
 在 **Agents** 中用设备筛选器复核出错的宿主，再回到所有设备。对已配对的目标，
