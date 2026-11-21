@@ -1128,6 +1128,42 @@ async fn back_releases_the_chat_watch_and_a_remote_terminal() {
 }
 
 #[tokio::test]
+async fn opening_a_session_from_a_worktree_detail_discards_the_old_detail_path() {
+    let (_dir, ctx, mut state) = phone().await;
+    let session = v1::AgentSession {
+        device_id: "host-b".into(),
+        id: "second".into(),
+        ..Default::default()
+    };
+    state.agents.sessions.push(session);
+    for detail in [Screen::File, Screen::Git] {
+        state.screen = Screen::Agents;
+        state.go(Screen::Chat);
+        state.go(Screen::Files);
+        state.go(detail);
+        state.files = Some(Default::default());
+        state.file = Some(Default::default());
+        state.git = Some(Default::default());
+        agents::intent_open_agent(
+            &mut state,
+            &ctx,
+            app::OpenAgent {
+                device_id: "host-b".into(),
+                session: "second".into(),
+            },
+        );
+        assert_eq!(state.chat.as_ref().unwrap().session.id, "second");
+        assert_eq!(
+            state.navigation_path(),
+            [Screen::Agents as i32, Screen::Chat as i32]
+        );
+        assert!(state.files.is_none() && state.file.is_none() && state.git.is_none());
+        state.back();
+        assert_eq!(state.screen, Screen::Agents);
+    }
+}
+
+#[tokio::test]
 async fn native_back_menu_validates_the_displayed_path_and_releases_hidden_chat() {
     let (_dir, ctx, mut state) = phone().await;
     state.screen = Screen::Agents;

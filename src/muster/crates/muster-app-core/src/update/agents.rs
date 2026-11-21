@@ -480,6 +480,10 @@ pub(super) fn show_chat(state: &mut State, ctx: &Ctx, device: String, session: v
         .as_mut()
         .expect("opened chat")
         .reconcile_history_start();
+    // Worktree detail pages refer to the chat being replaced.
+    while matches!(state.screen, Screen::Files | Screen::File | Screen::Git) {
+        state.back();
+    }
     state.files = None;
     state.file = None;
     state.git = None;
