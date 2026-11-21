@@ -14,15 +14,17 @@ internal sealed class Desktop : Form
         public override string ToString() => Label;
     }
     readonly FlowLayoutPanel nav = Bar(), actions = Bar();
-    readonly Button back, settings;
+    readonly FlowLayoutPanel utilities = Bar();
+    readonly Button back, settings, agentsTab, chatsTab, terminalsTab;
+    readonly TableLayoutPanel toolbar = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1,
+        Padding = new Padding(8, 2, 8, 2) };
     readonly Label title = new() { Dock = DockStyle.Top, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft,
                                    Font = new Font("Segoe UI", 17) };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 30, AutoEllipsis = true };
     readonly ListBox list = new() { Dock = DockStyle.Left, Width = 310, IntegralHeight = false, HorizontalScrollbar = true };
     readonly TextBox output = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both,
                                       ReadOnly = true, WordWrap = false };
-    readonly Label chatWelcome = new() { Dock = DockStyle.Fill, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
-        Text = "Select a conversation or start a new chat." };
+    readonly WorkspaceWelcome chatWelcome = new() { Visible = false };
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
     readonly AgentSidebar agentSidebar = new() { Dock = DockStyle.Left, Visible = false };
     List<BlockOffset> plainOffsets = [];
@@ -68,6 +70,7 @@ internal sealed class Desktop : Form
     static Button Button(FlowLayoutPanel bar, string text, Action action)
     {
         var b = new Button { Text = text, AutoSize = true, Height = 29, TabStop = true };
+        WorkspaceStyle.StyleButton(b);
         b.Tag = action;
         b.Click += (_, _) => ((Action)b.Tag!)();
         bar.Controls.Add(b);
@@ -81,7 +84,15 @@ internal sealed class Desktop : Form
         Text = !deviceAuthAvailable ? "Muster (isolated development)" : attachOnly ? "Muster (development)" : "Muster";
         MinimumSize = new Size(740, 480);
         Size = new Size(1050, 700);
-        Padding = new Padding(16);
+        BackColor = WorkspaceStyle.Canvas;
+        title.ForeColor = WorkspaceStyle.Ink;
+        status.ForeColor = WorkspaceStyle.Muted;
+        status.Visible = false;
+        status.TextChanged += (_, _) => status.Visible = status.Text.Length > 0;
+        output.BorderStyle = BorderStyle.None;
+        output.BackColor = WorkspaceStyle.Canvas;
+        var workspace = new Panel { Name = "Workspace", Dock = DockStyle.Fill };
+        var detail = new Panel { Name = "WorkspaceDetail", Dock = DockStyle.Fill, Padding = new Padding(14, 8, 14, 10) };
         void SizeTitle() => title.Height = title.Font.Height + LogicalToDeviceUnits(8);
         title.FontChanged += (_, _) => SizeTitle();
         title.DpiChangedAfterParent += (_, _) => SizeTitle();
@@ -111,12 +122,18 @@ internal sealed class Desktop : Form
         };
         body.Controls.Add(chatWelcome);
         body.Controls.Add(list);
-        body.Controls.Add(chatSidebar);
-        body.Controls.Add(agentSidebar);
+        chatWelcome.NewChat += () => Send(new() { DesktopChatOpen = new() { Chat = "" } });
+        workspace.Controls.Add(detail);
+        workspace.Controls.Add(chatSidebar);
+        workspace.Controls.Add(agentSidebar);
+        workspace.Resize += (_, _) =>
+        {
+            int width = workspace.ClientSize.Width;
+            agentSidebar.Width = chatSidebar.Width = Math.Min(width / 2, Math.Max(LogicalToDeviceUnits(240), width / 4));
+        };
         body.Resize += (_, _) =>
         {
             int third = body.ClientSize.Width / 3;
-            agentSidebar.Width = chatSidebar.Width = Math.Min(LogicalToDeviceUnits(340), third);
             list.Width = Math.Min(LogicalToDeviceUnits(310), third);
         };
         body.Controls.Add(jump);
@@ -127,15 +144,24 @@ internal sealed class Desktop : Form
         jump.SizeChanged += (_, _) => PlaceJump();
         jump.Intent += Send;
         actions.Dock = DockStyle.Bottom;
-        Controls.Add(body);
-        Controls.Add(lockedUse);
-        Controls.Add(queue);
-        Controls.Add(input);
-        Controls.Add(actions);
-        Controls.Add(status);
-        Controls.Add(sessionTabs);
-        Controls.Add(title);
-        Controls.Add(nav);
+        detail.Controls.Add(body);
+        detail.Controls.Add(lockedUse);
+        detail.Controls.Add(queue);
+        detail.Controls.Add(input);
+        detail.Controls.Add(actions);
+        detail.Controls.Add(status);
+        detail.Controls.Add(sessionTabs);
+        detail.Controls.Add(title);
+        Controls.Add(workspace);
+        utilities.WrapContents = false;
+        utilities.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        utilities.Anchor = AnchorStyles.Right;
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        toolbar.Controls.Add(nav, 0, 0);
+        toolbar.Controls.Add(utilities, 1, 0);
+        toolbar.BackColor = nav.BackColor = utilities.BackColor = WorkspaceStyle.Sidebar;
+        Controls.Add(toolbar);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
         browserPanel.Intent += Send;
         chatSidebar.Intent += Send;
@@ -153,7 +179,7 @@ internal sealed class Desktop : Form
                 Send(new() { Navigate = new() { Back = true, BackCount = 1, ExpectedPath = { view.NavigationPath } } });
         });
         back.Visible = false;
-        Button(nav, "Network", () =>
+        void Network()
         {
             if (current?.Screen == Page.Settings)
                 FocusNetworkList();
@@ -162,10 +188,10 @@ internal sealed class Desktop : Form
                 focusNetworkList = true;
                 Go(Page.Settings);
             }
-        });
-        Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
-        Button(nav, "Chats", () => Send(new() { OpenDesktopChats = new() }));
-        Button(nav, "Terminals", () =>
+        }
+        agentsTab = Button(nav, "Agents", () => Send(new() { OpenAgents = new() { DeviceId = "*" } }));
+        chatsTab = Button(nav, "Chats", () => Send(new() { OpenDesktopChats = new() }));
+        terminalsTab = Button(nav, "Terminals", () =>
         {
             string device = current?.Screen switch
             {
@@ -175,15 +201,25 @@ internal sealed class Desktop : Form
             };
             Send(new() { OpenTerminals = new() { DeviceId = device } });
         });
-        Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDeviceHasServices == true ? current.SelectedDevice : "" } }));
-        if (deviceAuthAvailable)
-            Button(nav, "Presence key", () => ShowPresenceReport(() => Presence.ReadReport(core.Socket)));
-        settings = Button(nav, "Settings", () => Go(Page.Settings));
+        var tools = new Button { Text = "Tools ▾", AccessibleName = "Tools", AutoSize = true };
+        WorkspaceStyle.StyleButton(tools);
+        utilities.Controls.Add(tools);
+        tools.Click += (_, _) =>
+        {
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("Network", null, (_, _) => Network());
+            menu.Items.Add("Browser", null, (_, _) => Send(new() { OpenBrowser = new() {
+                Device = current?.SelectedDeviceHasServices == true ? current.SelectedDevice : "" } }));
+            if (deviceAuthAvailable)
+                menu.Items.Add("Presence key", null, (_, _) => ShowPresenceReport(() => Presence.ReadReport(core.Socket)));
+            menu.ShowBelow(tools);
+        };
+        settings = Button(utilities, "Settings", () => Go(Page.Settings));
         var tips = new ToolTip();
         tips.SetToolTip(back, "Back (Alt+Left)");
         tips.SetToolTip(settings, "Settings (Ctrl+,)");
         Disposed += (_, _) => tips.Dispose();
-        Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
+        Button(utilities, "Refresh", () => Send(new() { Refresh = new() }));
         input.ReturnPressed += () => Submit();
         input.AllowDrop = true;
         input.DragEnter += (_, e) =>
@@ -249,6 +285,15 @@ internal sealed class Desktop : Form
             core.Dispose();
         };
     }
+    public void InstallPowerMenu()
+    {
+        var menu = new PowerMenu(PowerMenu.PreferenceKey) { Dock = DockStyle.None, GripStyle = ToolStripGripStyle.Hidden,
+            BackColor = WorkspaceStyle.Sidebar, Margin = new Padding(2), Anchor = AnchorStyles.Left };
+        MainMenuStrip = menu;
+        utilities.Controls.Add(menu);
+        utilities.Controls.SetChildIndex(menu, 0);
+    }
+
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
         if (ready && current != null && Control.FromChildHandle(message.HWnd) is not TerminalGrid)
@@ -283,7 +328,7 @@ internal sealed class Desktop : Form
         if (opening)
             return;
         opening = true;
-        nav.Enabled = false;
+        toolbar.Enabled = false;
         ClearBar(actions);
         title.Text = "Connecting to Muster";
         try
@@ -297,7 +342,7 @@ internal sealed class Desktop : Form
             }
             await Task.Run(core.Open);
             ready = true;
-            nav.Enabled = true;
+            toolbar.Enabled = true;
             timer.Start();
             core.Lifecycle(appActive ? 0u : 1u);
             Send(new() { Refresh = new() });
@@ -488,7 +533,7 @@ internal sealed class Desktop : Form
     }
     static string Reported(string? value) => string.IsNullOrWhiteSpace(value) ? "not reported" : value;
 
-    void Render(ViewModel v)
+    internal void Render(ViewModel v)
     {
         var previousScope = readingScope;
         TextBoxBase previousReader = history.Visible ? history : output;
@@ -497,6 +542,15 @@ internal sealed class Desktop : Form
         current = v;
         back.Visible = v.CanGoBack;
         var page = v.Screen;
+        foreach (var (button, route) in new[] { (agentsTab, Page.Agents), (chatsTab, Page.DesktopChats), (terminalsTab, Page.Terminals) })
+        {
+            bool selected = v.Workspace == route;
+            button.BackColor = selected ? WorkspaceStyle.Selected : WorkspaceStyle.Canvas;
+            button.ForeColor = selected ? WorkspaceStyle.SelectedText : WorkspaceStyle.Ink;
+            button.AccessibleDescription = selected ? "Current workspace" : null;
+        }
+        title.Visible = page is not (Page.Agents or Page.DesktopChats);
+        output.WordWrap = page == Page.Chat;
         runHistory?.Display(page == Page.Chat ? v.Chat : null);
         chatOptions?.Display(page == Page.Chat ? v.Chat : null);
         title.Text=page is Page.Home or Page.Onboarding ? v.Network?.Name is {Length:>0} n ? n : "Muster network" : page.ToString();
@@ -506,6 +560,7 @@ internal sealed class Desktop : Form
         var images = new List<TranscriptImage>();
         var blocks = new List<TranscriptBlock>();
         var links = new List<TranscriptLink>();
+        var speakers = new HashSet<int>();
         void Row(string name, Intent intent) => rows.Add(new(name, intent));
         composerButtons.Clear();
         int actionIndex = 0;
@@ -778,7 +833,7 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                transcript.AppendTo(lines, images, blocks, links);
+                transcript.AppendTo(lines, images, blocks, links, speakers);
                 if (transcript.HasCode)
                 {
                     int copyIndex = actionIndex;
@@ -1048,8 +1103,8 @@ internal sealed class Desktop : Form
             page is Page.Chat or Page.Files or Page.File or Page.Git);
         agentSidebar.Visible = showAgents;
         agentSidebar.Display(showAgents ? v.Agents : null, v.ServiceDevices, chatKey);
-        chatWelcome.Visible = page == Page.Agents || page == Page.DesktopChats && v.DesktopChats is { DeviceId.Length: > 0 };
-        chatWelcome.Text = page == Page.Agents ? "Select a session or start a new one." : "Select a conversation or start a new chat.";
+        chatWelcome.Visible = page is Page.Agents or Page.DesktopChats;
+        if (chatWelcome.Visible) chatWelcome.Display(page == Page.DesktopChats, v.DesktopChats);
         chatSidebar.Visible = showChatSidebar;
         chatSidebar.Display(showChatSidebar ? v.DesktopChats : null, chatKey?.Device ?? "", chatKey?.Session ?? "");
         bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
@@ -1059,8 +1114,7 @@ internal sealed class Desktop : Form
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
         readingScope = selectedTab == SessionTab.Conversation ? chatKey : null;
         bool latestPage = v.Chat?.HasNewer == false;
-        bool rich = images.Count > 0 || links.Count > 0;
-        history.Display(readingScope, lines, images, blocks, latestPage, links);
+        bool rich = speakers.Count > 0 || images.Count > 0 || links.Count > 0;
         related.Visible = inRelated;
         related.Display(inRelated ? v.Chat : null, selectedTab);
         trace.Visible = inTrace;
@@ -1077,6 +1131,7 @@ internal sealed class Desktop : Form
             FocusNetworkList();
         }
         terminal.Display(showingTerminal ? v.Terminal : null);
+        history.Display(readingScope, lines, images, blocks, latestPage, links, speakers);
         var text = !rich ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         bool textChanged = output.Text != text;
         if (textChanged)

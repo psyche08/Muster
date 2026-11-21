@@ -21,9 +21,15 @@ internal sealed class DesktopChatSidebar : UserControl
     public DesktopChatSidebar()
     {
         AccessibleName = "Desktop chats";
-        Padding = new Padding(0, 0, 8, 0);
+        BackColor = WorkspaceStyle.Sidebar;
+        Padding = new Padding(12, 12, 12, 10);
+        chats.BorderStyle = BorderStyle.None;
+        chats.BackColor = BackColor;
+        chats.ItemHeight = chats.Font.Height + LogicalToDeviceUnits(8);
+        WorkspaceStyle.StyleButton(create);
+        WorkspaceStyle.StyleButton(switchMode);
         bar.Controls.AddRange([create, switchMode]);
-        Controls.AddRange([chats, status, bar, provider]);
+        Controls.AddRange([chats, status, bar, provider, WorkspaceStyle.DirectoryHeading("Conversations")]);
         Resize += (_, _) => status.MaximumSize = new Size(Math.Max(1, ClientSize.Width - Padding.Horizontal), 0);
         provider.SelectedIndexChanged += (_, _) =>
         {

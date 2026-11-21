@@ -59,7 +59,7 @@ unlocked interactive session. Keep the provider signed in. ChatGPT reads the
 same typed local catalog used by the Mac client. The adapter checks the
 provider identity and acts on individual UI Automation controls.
 
-Choose **Presence key** to inspect candidate registration and network enrollment.
+Choose **Tools → Presence key** to inspect candidate registration and network enrollment.
 To register the local TPM-backed P-256 candidate, open **Settings** and choose
 **Register presence candidate**. Complete the native Windows key-protection prompt. An existing network
 administrator can then enroll the public candidate as described in

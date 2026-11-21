@@ -58,7 +58,6 @@ internal sealed class Core : IDisposable
     {
         this.attachOnly = attachOnly || fixtureSocket != null;
         this.fixtureSocket = fixtureSocket;
-        muster_log_init_file(3);
         if (fixtureSocket == null) platform.Presence = Presence.CopyCandidate;
         platform.View = (_, p, n) => view(ViewModel.Parser.ParseFrom(Copy(p, n)));
         platform.Effect = (_, id, p, n) => effect(id, Effect.Parser.ParseFrom(Copy(p, n)));
@@ -87,6 +86,7 @@ internal sealed class Core : IDisposable
     static int Inspect(uint action) => action == 3 && File.Exists(DaemonPath) ? 1 : -1;
     public bool NeedsStart()
     {
+        muster_log_init_file(3);
         int phase = muster_desktop_check(Socket, (byte)(attachOnly ? 0 : 1), 0, attachOnly ? null : Inspect, out var error);
         return phase switch
         {

@@ -14,6 +14,7 @@ internal sealed class HistoryTranscript : NamedRichTextBox
     readonly Dictionary<ByteString, Picture?> cache = new();
     List<string> lines = [];
     List<TranscriptBlock> blocks = [];
+    HashSet<int> speakers = [];
     public List<BlockOffset> BlockOffsets { get; private set; } = [];
     bool latestPage;
     List<TranscriptLink> links = [];
@@ -58,25 +59,29 @@ internal sealed class HistoryTranscript : NamedRichTextBox
             ActivateLink?.Invoke(link.Destination);
         };
         BackColor = SystemColors.Window;
+        BorderStyle = BorderStyle.None;
         SelectionChanged += (_, _) => ScheduleViewport();
         VScroll += (_, _) => ScheduleViewport();
     }
 
     public void Display((string Device, string Session)? origin, List<string> text, List<TranscriptImage> pictures,
-        List<TranscriptBlock>? projected = null, bool latest = false, List<TranscriptLink>? projectedLinks = null)
+        List<TranscriptBlock>? projected = null, bool latest = false, List<TranscriptLink>? projectedLinks = null, HashSet<int>? speakerLines = null)
     {
         latestPage = latest;
         projected ??= [];
         projectedLinks ??= [];
-        if (pictures.Count == 0 && images.Count == 0 && links.Count == 0 && projectedLinks.Count == 0) return;
+        speakerLines ??= [];
+        if (pictures.Count == 0 && images.Count == 0 && links.Count == 0 && projectedLinks.Count == 0
+            && speakers.Count == 0 && speakerLines.Count == 0) return;
         bool same = origin == scope;
         if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text) && blocks.SequenceEqual(projected)
-            && links.SequenceEqual(projectedLinks)) return;
+            && links.SequenceEqual(projectedLinks) && speakers.SetEquals(speakerLines)) return;
         scope = origin;
         blocks = projected;
         images = pictures;
         links = projectedLinks;
-        lines = pictures.Count == 0 && links.Count == 0 ? [] : text;
+        speakers = speakerLines;
+        lines = pictures.Count == 0 && links.Count == 0 && speakers.Count == 0 ? [] : text;
         if (!same || pictures.Count == 0) { sizes.Clear(); cache.Clear(); }
         else if (sizes.Count != 0)
         {
@@ -196,7 +201,7 @@ internal sealed class HistoryTranscript : NamedRichTextBox
         offsets.Clear();
         BlockOffsets = [];
         nativeLinks.Clear();
-        if (images.Count == 0 && links.Count == 0) { Clear(); return; }
+        if (images.Count == 0 && links.Count == 0 && speakers.Count == 0) { Clear(); return; }
         layoutWidth = AvailableWidth;
         var rtf = new StringBuilder(@"{\rtf1\ansi\deff0{\fonttbl{\f0\fnil Segoe UI;}}\f0\fs")
             .Append((int)Math.Round(Font.SizeInPoints * 2)).Append(' ');
@@ -239,6 +244,7 @@ internal sealed class HistoryTranscript : NamedRichTextBox
             foreach (var part in lines[line].AsSpan().EnumerateLines())
             {
                 Paragraph();
+                rtf.Append(speakers.Contains(line) ? @"\pard\li120\ri140\sb200\sa60\b " : @"\pard\li120\ri140\sa40\b0 ");
                 RichText.AppendLiteral(rtf, part);
                 offset += part.Length;
             }

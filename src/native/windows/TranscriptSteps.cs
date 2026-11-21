@@ -29,7 +29,7 @@ internal sealed partial class TranscriptSteps
     bool IsOpen(ChatBlock b) => groups.GetValueOrDefault(b.Id, b.DefaultExpanded);
 
     public void AppendTo(List<string> lines, List<TranscriptImage> images, List<TranscriptBlock>? blocks = null,
-        List<TranscriptLink>? links = null)
+        List<TranscriptLink>? links = null, HashSet<int>? speakers = null)
     {
         if (chat == null) return;
         if (chat.MessageCount == 0)
@@ -42,6 +42,11 @@ internal sealed partial class TranscriptSteps
         {
             if (block.Id.Length > 0) blocks?.Add(new(block.Id, lines.Count, images.Count));
             if (block.Title.Length > 0) lines.Add(block.Title);
+            if (block.Kind is not ("summary" or "diff") && block.Message is { Role.Length: > 0 } author)
+            {
+                speakers?.Add(lines.Count);
+                lines.Add(author.Role switch { "user" => "You", "assistant" => "Assistant", _ => author.Role });
+            }
             if (block.Message is {} message)
                 foreach (var bytes in message.PreviewJpegs)
                     images.Add(new TranscriptImage(lines.Count, bytes));
@@ -87,7 +92,6 @@ internal sealed partial class TranscriptSteps
                 : MarkdownLinks.Display(text, prefix, lines.Count, links);
             if (b.Parts.Any(p => p.Kind == "code"))
             {
-                yield return m.Role;
                 foreach (var part in b.Parts)
                 {
                     if (part.Kind == "code") yield return CodeLabel(part);
@@ -95,7 +99,7 @@ internal sealed partial class TranscriptSteps
                         : part.Text.ReplaceLineEndings(Environment.NewLine);
                 }
             }
-            else yield return m.Role == "user" ? $"{m.Role}  {m.Text}" : Prose(m.Text, m.Role + "  ");
+            else yield return m.Role == "user" ? m.Text : Prose(m.Text, "");
         }
         if (!expanded) yield break;
         if (b.Details == "loading") yield return "Loading steps…";
