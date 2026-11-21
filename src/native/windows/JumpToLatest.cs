@@ -17,9 +17,6 @@ internal sealed class JumpToLatest : Button
     [DllImport("user32.dll")]
     static extern bool GetScrollInfo(nint window, int bar, ref ScrollInfo info);
 
-    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
-    static extern nint SendMessage(nint window, uint message, nint action, nint unused);
-
     TextBoxBase? reader;
     (string Device, string Session)? scope;
     bool hasNewer, loading, waitingForLatest;
@@ -48,17 +45,16 @@ internal sealed class JumpToLatest : Button
         UpdateAvailability();
     }
 
+    internal static bool CanScrollDown(TextBoxBase reader)
+    {
+        var info = new ScrollInfo { Size = (uint)Marshal.SizeOf<ScrollInfo>(), Mask = 7 };
+        return GetScrollInfo(reader.Handle, 1, ref info) && info.Page > 0 &&
+            info.Position < (long)info.Maximum - info.Page + 1;
+    }
+
     public void UpdateAvailability()
     {
-        bool show = false;
-        if (reader is { IsHandleCreated: true, Visible: true })
-        {
-            // SB_VERT, with range, page size and current thumb position.
-            var info = new ScrollInfo { Size = (uint)Marshal.SizeOf<ScrollInfo>(), Mask = 7 };
-            show = hasNewer || (GetScrollInfo(reader.Handle, 1, ref info) && info.Page > 0 &&
-                info.Position < (long)info.Maximum - info.Page + 1);
-        }
-        Visible = show;
+        Visible = reader is { IsHandleCreated: true, Visible: true } && (hasNewer || CanScrollDown(reader));
         Enabled = !hasNewer || !loading;
     }
 
@@ -78,6 +74,6 @@ internal sealed class JumpToLatest : Button
     void ScrollToEnd()
     {
         if (reader is { IsHandleCreated: true })
-            SendMessage(reader.Handle, 0x0115, 7, 0); // WM_VSCROLL / SB_BOTTOM preserves selection.
+            TranscriptViewport.End(reader);
     }
 }

@@ -13,6 +13,9 @@ internal sealed class HistoryTranscript : RichTextBox
     sealed record Picture(Size Size, string Hex);
     readonly Dictionary<ByteString, Picture?> cache = new();
     List<string> lines = [];
+    List<TranscriptBlock> blocks = [];
+    public List<BlockOffset> BlockOffsets { get; private set; } = [];
+    bool latestPage;
     List<TranscriptImage> images = [];
     HashSet<ByteString> wanted = [];
     (string Device, string Session)? scope;
@@ -25,9 +28,6 @@ internal sealed class HistoryTranscript : RichTextBox
     bool loading, updating, scheduled;
     int layoutWidth;
 
-    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
-    static extern nint ScrollMessage(nint window, uint message, nint unused, ref Point position);
-
     public HistoryTranscript()
     {
         ReadOnly = true;
@@ -38,12 +38,16 @@ internal sealed class HistoryTranscript : RichTextBox
         VScroll += (_, _) => ScheduleViewport();
     }
 
-    public void Display((string Device, string Session)? origin, List<string> text, List<TranscriptImage> pictures)
+    public void Display((string Device, string Session)? origin, List<string> text, List<TranscriptImage> pictures,
+        List<TranscriptBlock>? projected = null, bool latest = false)
     {
+        latestPage = latest;
+        projected ??= [];
         if (pictures.Count == 0 && images.Count == 0) return;
         bool same = origin == scope;
-        if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text)) return;
+        if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text) && blocks.SequenceEqual(projected)) return;
         scope = origin;
+        blocks = projected;
         images = pictures;
         lines = pictures.Count == 0 ? [] : text;
         if (!same || pictures.Count == 0) { sizes.Clear(); cache.Clear(); }
@@ -161,7 +165,9 @@ internal sealed class HistoryTranscript : RichTextBox
 
     void RenderDocument(bool preservePosition)
     {
+        var viewport = preservePosition && IsHandleCreated ? new TranscriptViewport(this, BlockOffsets) : null;
         offsets.Clear();
+        BlockOffsets = [];
         if (images.Count == 0) { Clear(); return; }
         layoutWidth = AvailableWidth;
         var rtf = new StringBuilder(@"{\rtf1\ansi\deff0{\fonttbl{\f0\fnil Segoe UI;}}\f0\fs")
@@ -173,6 +179,7 @@ internal sealed class HistoryTranscript : RichTextBox
             if (!first) { rtf.Append(@"\par "); offset++; }
             first = false;
         }
+        var textOffsets = new int[lines.Count + 1];
         int next = 0;
         for (int line = 0; line <= lines.Count; line++)
         {
@@ -199,6 +206,7 @@ internal sealed class HistoryTranscript : RichTextBox
                     .Append(' ').Append(picture?.Hex ?? Placeholder).Append('}');
                 offset++; // RichEdit counts an embedded object as one character.
             }
+            textOffsets[line] = first ? 0 : offset + 1;
             if (line == lines.Count || lines[line].Length == 0) continue;
             foreach (var part in lines[line].AsSpan().EnumerateLines())
             {
@@ -207,26 +215,17 @@ internal sealed class HistoryTranscript : RichTextBox
                 offset += part.Length;
             }
         }
-        int anchor = preservePosition ? GetCharIndexFromPosition(new Point(6, 4)) : 0;
-        int anchorY = preservePosition ? GetPositionFromCharIndex(anchor).Y : 0;
-        var position = Point.Empty;
-        int start = preservePosition ? SelectionStart : 0;
-        int length = preservePosition ? SelectionLength : 0;
-        if (preservePosition) ScrollMessage(Handle, 0x04DD, 0, ref position); // EM_GETSCROLLPOS
+        foreach (var block in blocks)
+        {
+            int start = block.Picture < images.Count && images[block.Picture].Line == block.Line
+                ? offsets[block.Picture] : textOffsets[block.Line];
+            BlockOffsets.Add(new(block.Id, Math.Min(start, offset)));
+        }
         updating = true;
         try
         {
             Rtf = rtf.Append('}').ToString();
-            start = Math.Min(start, TextLength);
-            Select(start, Math.Min(length, TextLength - start));
-            if (preservePosition)
-            {
-                anchor = Math.Min(anchor, Math.Max(0, TextLength - 1));
-                var after = Point.Empty;
-                ScrollMessage(Handle, 0x04DD, 0, ref after);
-                position.Y = Math.Max(0, after.Y + GetPositionFromCharIndex(anchor).Y - anchorY);
-            }
-            ScrollMessage(Handle, 0x04DE, 0, ref position);
+            viewport?.Restore(this, BlockOffsets, latestPage);
         }
         finally { updating = false; }
     }
