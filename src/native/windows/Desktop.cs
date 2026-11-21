@@ -14,6 +14,7 @@ internal sealed class Desktop : Form
         public override string ToString() => Label;
     }
     readonly FlowLayoutPanel nav = Bar(), actions = Bar();
+    readonly Button back, settings;
     readonly Label title = new() { Dock = DockStyle.Top, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft,
                                    Font = new Font("Segoe UI", 17) };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 30, AutoEllipsis = true };
@@ -61,12 +62,13 @@ internal sealed class Desktop : Form
         while (bar.Controls.Count > 0)
             bar.Controls[0].Dispose();
     }
-    static void Button(FlowLayoutPanel bar, string text, Action action)
+    static Button Button(FlowLayoutPanel bar, string text, Action action)
     {
         var b = new Button { Text = text, AutoSize = true, Height = 29, TabStop = true };
         b.Tag = action;
         b.Click += (_, _) => ((Action)b.Tag!)();
         bar.Controls.Add(b);
+        return b;
     }
     readonly bool deviceAuthAvailable;
     public Desktop(bool attachOnly) : this(attachOnly, null) { }
@@ -120,7 +122,12 @@ internal sealed class Desktop : Form
         sessionTabs.Chosen += SelectTab;
         related.Open += Send;
         conversationTerminal.ReturnToChat += () => SelectTab(SessionTab.Conversation);
-        Button(nav, "Back", () => Send(new() { Navigate = new() { Back = true } }));
+        back = Button(nav, "Back", () =>
+        {
+            if (current is { CanGoBack: true } view)
+                Send(new() { Navigate = new() { Back = true, BackCount = 1, ExpectedPath = { view.NavigationPath } } });
+        });
+        back.Visible = false;
         Button(nav, "Network", () =>
         {
             if (current?.Screen == Page.Settings)
@@ -146,7 +153,11 @@ internal sealed class Desktop : Form
         Button(nav, "Browser", () => Send(new() { OpenBrowser = new() { Device = current?.SelectedDeviceHasServices == true ? current.SelectedDevice : "" } }));
         if (deviceAuthAvailable)
             Button(nav, "Presence key", () => ShowPresenceReport(() => Presence.ReadReport(core.Socket)));
-        Button(nav, "Settings", () => Go(Page.Settings));
+        settings = Button(nav, "Settings", () => Go(Page.Settings));
+        var tips = new ToolTip();
+        tips.SetToolTip(back, "Back (Alt+Left)");
+        tips.SetToolTip(settings, "Settings (Ctrl+,)");
+        Disposed += (_, _) => tips.Dispose();
         Button(nav, "Refresh", () => Send(new() { Refresh = new() }));
         input.ReturnPressed += () => Submit();
         input.AllowDrop = true;
@@ -232,6 +243,24 @@ internal sealed class Desktop : Form
             core.Dispose();
         };
     }
+    protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+    {
+        if (ready && current != null && Control.FromChildHandle(message.HWnd) is not TerminalGrid)
+        {
+            if (keyData == (Keys.Control | Keys.Oemcomma))
+            {
+                settings.PerformClick();
+                return true;
+            }
+            if (keyData == (Keys.Alt | Keys.Left) && back.Visible)
+            {
+                back.PerformClick();
+                return true;
+            }
+        }
+        return base.ProcessCmdKey(ref message, keyData);
+    }
+
     protected override void WndProc(ref Message message)
     {
         const int WM_ACTIVATEAPP = 0x001C;
@@ -447,6 +476,7 @@ internal sealed class Desktop : Form
         var previousViewport = previousScope != null && previousReader.Visible
             ? new TranscriptViewport(previousReader, history.Visible ? history.BlockOffsets : plainOffsets) : null;
         current = v;
+        back.Visible = v.CanGoBack;
         var page = v.Screen;
         runHistory?.Display(page == Page.Chat ? v.Chat : null);
         chatOptions?.Display(page == Page.Chat ? v.Chat : null);

@@ -381,6 +381,10 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 桌面和服务器的设备详情可进入对应宿主的 Chrome、Agents 和 Terminals。核对没有服务的
 成员时，这三个设备专属入口应隐藏。
 
+在 **Agents** 根页面核对工具栏隐藏 **Back**。按 **Ctrl+,** 进入 **Settings**，选择
+一个成员后，按 **Alt+Left** 应先返回设置，再按一次返回 Agents。按钮和快捷键采用
+同一份 Shared Rust 导航状态。终端网格获得焦点时，按键交给终端处理。
+
 ## 复核本机开放端口
 
 在 **Settings → Edit open ports** 中，每行填写一条 Muster 规则。先在隔离节点上读回
