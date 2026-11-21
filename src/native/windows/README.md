@@ -22,6 +22,10 @@ source packages with build recipes are in `Terminal-Sources/` in the ZIP.
 `Terminal-Runtime.txt` identifies their versions and checksums. PowerShell verifies the file
 hashes and switches the shortcut after staging the new release.
 
+The **Power** menu controls idle sleep while the desktop runs. **Keep Awake**
+is on by default. Enable **Keep Screen On** to keep the display awake as well.
+The desktop remembers both choices for the current Windows user.
+
 The desktop opens maximized with its normal title bar. Reopening the shortcut
 activates the current window. Close the GUI and reopen the shortcut to pick
 up new UI code. The daemon and tunnel can continue running. A daemon update
