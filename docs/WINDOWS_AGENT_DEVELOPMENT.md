@@ -390,13 +390,20 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 ```
 
 `installed` 表示原生宿主注册可用，`connected` 表示扩展实际回复了探测。分别记录两项。
-本机的 **Show extension folder** 打开节点上报的目录，**Open Chrome extensions** 打开
-Chrome 的扩展管理页。便携包的 `Apply-Update.cmd` 负责注册原生宿主。配置指定的浏览器
-配置文件时，在 Chrome 中选择 **Load unpacked** 并选中显示的文件夹，再回到 Muster 点
-**Check connection**。
+本机的 **Show extension folder** 打开节点上报的目录。点 **Copy extensions address**，
+在要配置的 Chrome 配置文件中将 `chrome://extensions/` 粘贴到地址栏，按 Enter。
+也可通过 Chrome 菜单中的 **Extensions → Manage extensions** 进入。打开 **Developer mode**，
+选择 **Load unpacked** 并选中 Muster 显示的目录，再回到 Muster 点 **Check connection**。
+便携包的 `Apply-Update.cmd` 负责注册原生宿主。Chrome 会保存手动选择的解压目录。
+复核升级时分别记录已注册的宿主路径和测试配置中扩展的来源目录。
+
+验收导航时使用独立的临时 Chrome 配置。通过 UI Automation 核对该窗口的地址栏和
+页面标题 **Extensions**。本机 Chrome 158 在首次启动和已有窗口两种情况下，接收
+命令行地址后都停在新标签页；从地址栏输入相同地址后进入了扩展管理页。
+检查启动参数只能证明应用发出了请求。
 
 点 **Connection test** 后，编辑框应显示 ping 请求；点 **Run** 后再核对返回的能力和版本。
-验收只需 ping。切换到远端设备时，核对本机目录与启动按钮已隐藏，执行按钮提示需要认证。
+验收只需 ping。切换到远端设备时，核对本机目录和复制地址按钮已隐藏，执行按钮提示需要认证。
 用临时软件节点和独立 Chrome 测试配置验收时，将浏览器子进程的 `MUSTER_DIR` 指向该节点
 的数据目录，以便 Chrome 启动的原生宿主连接同一测试环境。
 
