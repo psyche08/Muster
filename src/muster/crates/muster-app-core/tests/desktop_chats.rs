@@ -56,6 +56,7 @@ struct Server {
     coding_options: bool,
     catalogs: AtomicUsize,
     full_catalogs: AtomicUsize,
+    delayed_probe: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
     opens: AtomicUsize,
     sends: Mutex<Vec<String>>,
     grow: Notify,
@@ -120,6 +121,10 @@ impl Handler for Server {
                 Req::AgentChats(r) => {
                     assert!(matches!(r.provider.as_str(), "claude" | "codex"));
                     self.catalogs.fetch_add(1, Ordering::SeqCst);
+                    let delayed = self.delayed_probe.lock().unwrap().take();
+                    if let Some(release) = delayed {
+                        let _ = release.await;
+                    }
                     if r.full_history {
                         self.full_catalogs.fetch_add(1, Ordering::SeqCst);
                         if self.locked_load {
@@ -726,6 +731,85 @@ async fn chatgpt_is_first_and_default_and_uses_the_probe_catalog() {
         .await;
     assert_eq!(server.opens.load(Ordering::SeqCst), 0);
     assert!(server.sends.lock().unwrap().is_empty());
+    core.backend().local().close();
+    core.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn restored_directory_waits_for_a_live_host_before_opening() {
+    let server = Arc::new(Server {
+        chat_service: true,
+        ..Default::default()
+    });
+    let (core, shell, _dir) = start(server.clone()).await;
+    let open_list = |provider: &str| {
+        intent(
+            &core,
+            app::intent::It::OpenDesktopChats(app::OpenDesktopChats {
+                provider: provider.into(),
+            }),
+        )
+    };
+    for provider in ["claude", "codex"] {
+        open_list(provider);
+        shell
+            .wait(|v| {
+                v.desktop_chats
+                    .as_ref()
+                    .is_some_and(|d| d.provider == provider && !d.loading && d.device_id == "local")
+            })
+            .await;
+    }
+
+    let (release, gate) = tokio::sync::oneshot::channel();
+    *server.delayed_probe.lock().unwrap() = Some(gate);
+    server.hidden_window.store(true, Ordering::SeqCst);
+    open_list("claude");
+    let view = shell
+        .wait(|v| {
+            v.desktop_chats
+                .as_ref()
+                .is_some_and(|d| d.provider == "claude" && d.loading && d.catalog.is_some())
+        })
+        .await
+        .desktop_chats
+        .unwrap();
+    assert_eq!(view.catalog.as_ref().unwrap().chats.len(), 2);
+    assert!(
+        view.device_id.is_empty(),
+        "unverified cached host was published"
+    );
+    assert!(view.device_name.is_empty());
+    intent(
+        &core,
+        app::intent::It::DesktopChatOpen(app::DesktopChatOpen {
+            chat: LISTED.into(),
+            desktop: false,
+        }),
+    );
+    release.send(()).unwrap();
+    shell
+        .wait(|v| {
+            v.desktop_chats.as_ref().is_some_and(|d| {
+                !d.loading && d.device_id.is_empty() && !d.error.is_empty() && d.catalog.is_some()
+            })
+        })
+        .await;
+    assert_eq!(server.opens.load(Ordering::SeqCst), 0);
+    server.hidden_window.store(false, Ordering::SeqCst);
+    intent(&core, app::intent::It::Refresh(app::Refresh {}));
+    shell
+        .wait(|v| {
+            v.desktop_chats
+                .as_ref()
+                .is_some_and(|d| !d.loading && d.device_id == "local")
+        })
+        .await;
+    assert_eq!(
+        server.opens.load(Ordering::SeqCst),
+        0,
+        "failed open was replayed on refresh"
+    );
     core.backend().local().close();
     core.shutdown();
 }

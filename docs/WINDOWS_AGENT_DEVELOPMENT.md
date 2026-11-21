@@ -576,7 +576,15 @@ Windows 的 Chats 目录在打开对话后仍可从左侧访问。选择已列�
 
 **复验重启后的目录重开**。在隔离环境准备两个同名、稳定 ID 不同且正文可区分的合成会话。
 从 **Chats** 打开第一条，记录目录返回的 ID 和正文。关闭测试 GUI 和合成 RPC 服务，
-保留客户端数据目录。启动新的测试服务和 GUI，从相同提供方的当前目录先打开另一条，
+保留客户端数据目录。启动新的测试服务和 GUI，让服务暂缓返回宿主探测结果。核对旧目录行仍然可见、
+状态栏未显示旧宿主，且目录打开操作和 **New chat** 均禁用。让新宿主按相反顺序返回同名会话，
+核对状态栏显示新宿主，目录恢复可操作。可用下面的 Shared Rust 集成测试复验探测失败后的恢复。
+
+```powershell
+cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-app-core --test desktop_chats restored_directory_waits_for_a_live_host_before_opening
+```
+
+从相同提供方的当前目录先打开另一条，
 再按之前记录的稳定 ID 打开原条目。两次都检查当前选中行和可见正文，并确认正文中
 没有另一条的测试文字。使用实际 WinForms 表单做控件断言时，没有链接或图片的正文显示在只读
 `TextBox` 中，含链接或内嵌图片的正文使用 `HistoryTranscript`。取图前先确认对应控件可见。
