@@ -30,7 +30,17 @@ internal static class Program
         try
         {
             bool opened = DesktopInstance.Run("Muster.Windows.Desktop.v1",
-                () => new Desktop(attach, fixture), installed, activateExisting: fixture == null);
+                () =>
+                {
+                    var desktop = new Desktop(attach, fixture);
+                    if (!attach && fixture == null)
+                    {
+                        var menu = new PowerMenu(PowerMenu.PreferenceKey);
+                        desktop.MainMenuStrip = menu;
+                        desktop.Controls.Add(menu);
+                    }
+                    return desktop;
+                }, installed, activateExisting: fixture == null);
             return !opened && fixture != null ? 2 : 0;
         }
         catch (TimeoutException ex)
