@@ -39,3 +39,10 @@ backend and read the resulting local policy. Verify that the daemon rejects
 an invalid list without a partial write. Check draft editing, Cancel and
 other policy fields in the Windows form. Exercise the packaged GUI against
 an isolated node and use read-only checks against the installed node.
+
+On 2026-11-21, the installed 1.1.94 Windows GUI saved one TCP and one UDP
+rule on an isolated 1.1.70 node. After both processes closed, a 1.1.94 node
+opened the same database. The fixed shortcut reopened Settings with the
+original fingerprint and the new node version and commit. Both rules appeared
+in the editor, and the full policy matched the value saved before restart.
+The production daemon kept its process ID and policy throughout.
