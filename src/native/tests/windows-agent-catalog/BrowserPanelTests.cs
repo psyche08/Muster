@@ -13,7 +13,14 @@ internal static class BrowserPanelTests
         using var form = new Form { ClientSize = new(900, 650), StartPosition = FormStartPosition.Manual,
             Location = new(-20000, -20000), ShowInTaskbar = false };
         var launches = new List<System.Diagnostics.ProcessStartInfo>();
-        using var panel = new BrowserPanel(launches.Add) { Dock = DockStyle.Fill };
+        string? copied = null;
+        bool clipboardBusy = true;
+        void Copy(string value)
+        {
+            if (clipboardBusy) throw new System.Runtime.InteropServices.ExternalException();
+            copied = value;
+        }
+        using var panel = new BrowserPanel(launches.Add, Copy) { Dock = DockStyle.Fill };
         form.Controls.Add(panel);
         form.Show();
         var buttons = panel.Controls.OfType<TableLayoutPanel>().Single().Controls.OfType<FlowLayoutPanel>()
@@ -33,12 +40,13 @@ internal static class BrowserPanelTests
         Button("Show extension folder").PerformClick();
         Check(Path.GetFileName(launches.Single().FileName) == "explorer.exe" &&
             launches.Single().ArgumentList.Single() == local.Status.ExtensionPath, "Folder shortcut changed its target");
-        if (BrowserPanel.FindChrome() is {} chrome)
-        {
-            Button("Open Chrome extensions").PerformClick();
-            Check(launches.Count == 2 && launches.Last().FileName == chrome &&
-                launches.Last().ArgumentList.Single() == "chrome://extensions/", "Chrome shortcut changed its target");
-        }
+        var copy = Button("Copy extensions address");
+        copy.PerformClick();
+        Check(copied == null && copy.Text == "Clipboard busy — retry", "Busy clipboard should allow a retry");
+        clipboardBusy = false;
+        copy.PerformClick();
+        Check(copied == "chrome://extensions/" && copy.Text == "Address copied" && launches.Count == 1,
+            "Copy must put the management address on the clipboard");
         Button("Connection test").PerformClick();
         panel.Display(local.Clone());
         Check(sent.Count == 0 && request.Text == "{\"op\":\"ping\"}", "A preset ran or a status render lost the edit");
@@ -55,7 +63,7 @@ internal static class BrowserPanelTests
             Status = new() { Connected = true, ExtensionPath = @"C:\Other\AgentHaloBrowser" } };
         panel.Display(remote);
         Check(request.Text == remote.Draft && result.Text == remote.Result && !path.Visible && path.Text.Length == 0 &&
-            !Button("Show extension folder").Visible && !Button("Open Chrome extensions").Visible, "Remote target inherited local setup");
+            !Button("Show extension folder").Visible && !copy.Visible, "Remote target inherited local setup");
         Button("List tabs").PerformClick();
         Check(request.Text == local.Draft && sent.Count == 2, "List tabs unexpectedly sent a request");
         Button("Run & authenticate").PerformClick();
@@ -66,7 +74,7 @@ internal static class BrowserPanelTests
             request.Height >= request.Font.Height, "Browser form fields are clipped");
         panel.Display(null);
         panel.Display(local);
-        Check(request.Text == local.Draft && result.Text == "" && panel.Visible, "Reopening used a stale target");
+        Check(copy.Visible && copy.Text == "Copy extensions address" && request.Text == local.Draft && result.Text == "" && panel.Visible, "Reopening used a stale target");
         Console.WriteLine($"Passed Windows browser setup, busy gate, drafts and target switching at {panel.DeviceDpi} DPI.");
     }
 }

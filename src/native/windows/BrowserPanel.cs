@@ -1,11 +1,12 @@
 using System.Diagnostics;
-using Microsoft.Win32;
+using System.Runtime.InteropServices;
 using Muster.App;
 
 namespace Muster.Windows;
 
 internal sealed class BrowserPanel : UserControl
 {
+    const string ExtensionsAddress = "chrome://extensions/";
     readonly Label connection = new() { AutoSize = true, Name = "BrowserConnection" };
     readonly Label guidance = new() { AutoSize = true };
     readonly TextBox pathBox = new() { AccessibleName = "Extension folder", ReadOnly = true, Dock = DockStyle.Fill };
@@ -28,9 +29,9 @@ internal sealed class BrowserPanel : UserControl
         return button;
     }
 
-    public BrowserPanel() : this(info => { using var process = Process.Start(info); }) { }
+    public BrowserPanel() : this(info => { using var process = Process.Start(info); }, Clipboard.SetText) { }
 
-    internal BrowserPanel(Action<ProcessStartInfo> start)
+    internal BrowserPanel(Action<ProcessStartInfo> start, Action<string> copyText)
     {
         this.start = start;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, AutoScroll = true };
@@ -53,7 +54,7 @@ internal sealed class BrowserPanel : UserControl
             guidance.MaximumSize = connection.MaximumSize = new Size(width, 0);
         };
         folder = Add(setup, "Show extension folder", ShowFolder);
-        extensions = Add(setup, "Open Chrome extensions", OpenExtensions);
+        extensions = Add(setup, "Copy extensions address", () => CopyAddress(copyText));
         Add(setup, "Check connection", () => Intent?.Invoke(new() { BrowserSetup = new() }));
         Add(operations, "List tabs", () => request.Text = "{\"op\":\"tabs\"}");
         Add(operations, "Connection test", () => request.Text = "{\"op\":\"ping\"}");
@@ -66,6 +67,7 @@ internal sealed class BrowserPanel : UserControl
         if (next == null) { current = null; return; }
         if (current == null || current.Device != next.Device || current.Draft != next.Draft)
             request.Text = next.Draft;
+        if (current == null || current.Device != next.Device || current.Local != next.Local) extensions.Text = "Copy extensions address";
         current = next;
         string target = next.Local ? "Local Chrome" : "Remote Chrome";
         connection.Text = next.Busy ? $"{target} · Waiting for browser…" :
@@ -73,7 +75,7 @@ internal sealed class BrowserPanel : UserControl
             $"{target} · {(next.Status.Connected ? "Connected" : "Setup needed")}\r\n{next.Status.Message}";
         guidance.Text = next.Local
             ? (next.Status?.Installed == false ? "Run Apply-Update.cmd from the extracted Muster package to register the native host. " : "") +
-              "In Chrome extensions, turn on Developer mode, choose Load unpacked and select the AgentHaloBrowser folder."
+              $"In Chrome, paste {ExtensionsAddress} into the address bar and press Enter. Turn on Developer mode, choose Load unpacked and select the AgentHaloBrowser folder."
             : "Complete Chrome extension setup on the target device, then check the connection here.";
         guidance.Visible = next.Status?.Connected != true;
         string path = next.Local ? next.Status?.ExtensionPath ?? "" : "";
@@ -97,40 +99,18 @@ internal sealed class BrowserPanel : UserControl
         Launch(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), path);
     }
 
-    void OpenExtensions()
+    void CopyAddress(Action<string> copyText)
     {
         if (current?.Local != true) return;
-        string? chrome = FindChrome();
-        if (chrome != null) Launch(chrome, "chrome://extensions/");
-        else MessageBox.Show(this, "Open chrome://extensions/ in Google Chrome.", "Chrome extension");
-    }
-
-    internal static string? FindChrome()
-    {
-        const string key = @"Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe";
-        foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
+        try
         {
-            try
-            {
-                using var app = hive.OpenSubKey(key);
-                if (app?.GetValue("") is not string value) continue;
-                string registered = value.Trim('"');
-                if (Path.IsPathFullyQualified(registered) &&
-                    string.Equals(Path.GetFileName(registered), "chrome.exe", StringComparison.OrdinalIgnoreCase) && File.Exists(registered))
-                    return registered;
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
-            {
-                // Continue with the standard installation directories if App Paths is inaccessible.
-            }
+            copyText(ExtensionsAddress);
+            extensions.Text = "Address copied";
         }
-        foreach (var location in new[] { Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolder.ProgramFiles,
-                                         Environment.SpecialFolder.ProgramFilesX86 })
+        catch (ExternalException)
         {
-            string chrome = Path.Combine(Environment.GetFolderPath(location), "Google", "Chrome", "Application", "chrome.exe");
-            if (File.Exists(chrome)) return chrome;
+            extensions.Text = "Clipboard busy — retry";
         }
-        return null;
     }
 
     void Launch(string executable, string argument)
