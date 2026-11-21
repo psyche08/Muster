@@ -24,6 +24,19 @@ internal static class Program
             ["--screenshots", var directory] => Directory.CreateDirectory(directory).FullName,
             _ => throw new ArgumentException("Usage: WindowsAgentCatalog [--screenshots DIRECTORY]")
         };
+        using (var ports = new OpenPortsDialog(["tcp/22", "udp/5353"]))
+        {
+            var field = Field<TextBox>(ports, "PortRules");
+            var save = ports.Controls.OfType<TableLayoutPanel>().Single().Controls.OfType<FlowLayoutPanel>()
+                .Single().Controls.OfType<Button>().Single(b => b.Text == "Save");
+            Check(!save.Enabled && ports.Rules.SequenceEqual(["tcp/22", "udp/5353"]), "Port editor lost its initial list");
+            field.Lines = [" udp/53 ", "", "tcp/8080"];
+            Check(save.Enabled && ports.Rules.SequenceEqual(["udp/53", "tcp/8080"]), "Port editor changed the draft");
+            field.Clear();
+            Check(save.Enabled && ports.Rules.Length == 0, "Cannot clear all ports");
+            ports.Shown += (_, _) => ports.BeginInvoke(() => ports.CancelButton!.PerformClick());
+            Check(ports.ShowDialog() == DialogResult.Cancel, "Cancel accepted a port edit");
+        }
         BrowserPanelTests.Run();
         ChatOptionsTests.Run();
         Console.WriteLine("Passed conversation options, refresh and scope changes.");

@@ -377,3 +377,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0259](0259-windows-jump-to-latest.md) | Accepted | Jump to the latest conversation messages on Windows |
 | [0260](0260-windows-chrome-extension-setup.md) | Accepted | Expose Chrome extension setup and connection checks on Windows |
 | [0261](0261-windows-chrome-management-address.md) | Accepted | Copy the Chrome extension management address on Windows |
+| [0262](0262-local-settings-port-policy.md) | Accepted | Save the Settings port policy on the device that supplied it |
