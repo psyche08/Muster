@@ -48,8 +48,9 @@ internal static class HistoryImageTests
             steps.Display(view);
             var lines = new List<string>();
             var images = new List<TranscriptImage>();
-            steps.AppendTo(lines, images);
-            history.Display((view.DeviceId, view.Session.Id), lines, images);
+            var blocks = new List<TranscriptBlock>();
+            steps.AppendTo(lines, images, blocks);
+            history.Display((view.DeviceId, view.Session.Id), lines, images, blocks, latest: true);
             return (lines, images);
         }
         var parts = Show(chat);
@@ -92,8 +93,8 @@ internal static class HistoryImageTests
         Check(history.TextLength == 0, "Previous images or text survived navigation");
         var many = new ChatView { DeviceId = "fixture", Session = new() { Id = "many" }, MessageCount = 120 };
         for (int i = 0; i < 119; i++)
-            many.Timeline.Add(new ChatBlock { Kind = "message", Message = new() { Text = $"Sample {i}", PreviewJpegs = { red } } });
-        many.Timeline.Add(new ChatBlock { Kind = "message", Message = new() { Text = "Last thumbnail", PreviewJpegs = { blue } } });
+            many.Timeline.Add(new ChatBlock { Id = $"item-{i}", Kind = "message", Message = new() { Text = $"Sample {i}", PreviewJpegs = { red } } });
+        many.Timeline.Add(new ChatBlock { Id = "last-image", Kind = "message", Message = new() { Text = "Last thumbnail", PreviewJpegs = { blue } } });
         Show(many);
         bool HasPixels(bool redPixel)
         {
@@ -120,6 +121,18 @@ internal static class HistoryImageTests
             throw new InvalidOperationException($"Scrolled thumbnail did not appear. Top character {history.GetCharIndexFromPosition(new Point(10,10))}, selected {history.SelectionStart}, last image Y {history.GetPositionFromCharIndex(history.TextLength-1).Y}");
         }
         WaitForPixels(true);
+        // Select the middle of a long transcript, then prepend identical-looking blocks.
+        history.Select(history.Text.IndexOf("Sample 60", StringComparison.Ordinal), 9);
+        history.ScrollToCaret();
+        Application.DoEvents();
+        int selectionY = history.GetPositionFromCharIndex(history.SelectionStart).Y;
+        for (int i = 0; i < 10; i++)
+            many.Timeline.Insert(0, new ChatBlock { Id = $"prepend-{i}", Kind = "message",
+                Message = new() { Text = "Sample 60", PreviewJpegs = { red } } });
+        Show(many);
+        Check(history.SelectedText == "Sample 60" && history.SelectionStart == history.Text.LastIndexOf("Sample 60", StringComparison.Ordinal) &&
+            Math.Abs(history.GetPositionFromCharIndex(history.SelectionStart).Y - selectionY) <= history.Font.Height,
+            "Prepending pictures lost the original selected block or its viewport");
         using var jump = new JumpToLatest();
         form.Controls.Add(jump);
         jump.BringToFront();

@@ -33,3 +33,21 @@ Exercise native text and image controls with a long transcript, a short
 transcript, an earlier page and a change of conversation before the reply.
 Check the generated intent, the displayed last line and the button visibility.
 Verify the portable GUI independently of these control checks.
+
+## Reading during updates
+
+The installed Windows reader opened a long conversation at its first line.
+While reading above the tail, an appended reply and loading an earlier page
+both reset the first visible line to the top. The macOS collection remembers
+a projected block and its offset while reading, and follows the tail when
+opening or already reading the latest page.
+
+Keep this presentation state local to each open device and session. Capture
+the visible block and selection before replacing the transcript. Restore them
+against the new rendered offsets. When an older page is prepended, keep the
+reader on the same block even if the previous viewport was at the end.
+Continue to honor an explicit jump. Absolute scrollbar positions alone change
+meaning when the shared history window grows or slides. Verify long plain
+and image histories, asynchronous image layout, paging, selection and session
+changes using native controls, then append synthetic records on an isolated
+node while reading in the installed GUI.

@@ -87,6 +87,7 @@ internal static class Program
         TranscriptStepsTests.Run();
         RelatedSessionTests.Run(captures);
         TraceTests.Run(captures);
+        TranscriptViewportTests.Run();
         HistoryImageTests.Run(captures);
         using var menu = new ContextMenuStrip();
         Intent? sent = null;

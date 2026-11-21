@@ -28,7 +28,7 @@ internal sealed partial class TranscriptSteps
     public bool HasStepsMenu => chat?.Timeline.Any(HasSteps) == true;
     bool IsOpen(ChatBlock b) => groups.GetValueOrDefault(b.Id, b.DefaultExpanded);
 
-    public void AppendTo(List<string> lines, List<TranscriptImage> images)
+    public void AppendTo(List<string> lines, List<TranscriptImage> images, List<TranscriptBlock>? blocks = null)
     {
         if (chat == null) return;
         if (chat.MessageCount == 0)
@@ -39,6 +39,7 @@ internal sealed partial class TranscriptSteps
         }
         foreach (var (block, work, expanded) in VisibleBlocks())
         {
+            if (block.Id.Length > 0) blocks?.Add(new(block.Id, lines.Count, images.Count));
             if (block.Title.Length > 0) lines.Add(block.Title);
             if (block.Message is {} message)
                 foreach (var bytes in message.PreviewJpegs)

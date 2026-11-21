@@ -23,6 +23,8 @@ internal sealed class Desktop : Form
     readonly Label chatWelcome = new() { Dock = DockStyle.Fill, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
         Text = "Select a conversation or start a new chat." };
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
+    List<BlockOffset> plainOffsets = [];
+    (string Device, string Session)? readingScope;
     readonly JumpToLatest jump = new();
     readonly TranscriptSteps transcript = new();
     readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
@@ -437,6 +439,10 @@ internal sealed class Desktop : Form
 
     void Render(ViewModel v)
     {
+        var previousScope = readingScope;
+        TextBoxBase previousReader = history.Visible ? history : output;
+        var previousViewport = previousScope != null && previousReader.Visible
+            ? new TranscriptViewport(previousReader, history.Visible ? history.BlockOffsets : plainOffsets) : null;
         current = v;
         var page = v.Screen;
         runHistory?.Display(page == Page.Chat ? v.Chat : null);
@@ -446,6 +452,7 @@ internal sealed class Desktop : Form
         var rows = new List<Row>();
         var lines = new List<string>();
         var images = new List<TranscriptImage>();
+        var blocks = new List<TranscriptBlock>();
         void Row(string name, Intent intent, string catalogKey = "") => rows.Add(new(name, intent, catalogKey));
         composerButtons.Clear();
         int actionIndex = 0;
@@ -749,7 +756,7 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                transcript.AppendTo(lines, images);
+                transcript.AppendTo(lines, images, blocks);
                 if (transcript.HasCode)
                 {
                     int copyIndex = actionIndex;
@@ -1034,7 +1041,9 @@ internal sealed class Desktop : Form
         bool showingTerminal = page == Page.Terminal && v.Terminal != null;
         conversationTerminal.Visible = inWorkspaceTerminal;
         conversationTerminal.Display(inWorkspaceTerminal ? v.Chat : null, inWorkspaceTerminal ? v.Terminal : null);
-        history.Display(chatKey, lines, images);
+        readingScope = selectedTab == SessionTab.Conversation ? chatKey : null;
+        bool latestPage = v.Chat?.HasNewer == false;
+        history.Display(readingScope, lines, images, blocks, latestPage);
         related.Visible = inRelated;
         related.Display(inRelated ? v.Chat : null, selectedTab);
         trace.Visible = inTrace;
@@ -1051,13 +1060,27 @@ internal sealed class Desktop : Form
         }
         terminal.Display(showingTerminal ? v.Terminal : null);
         var text = images.Count == 0 ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
-        if (output.Text != text)
+        bool textChanged = output.Text != text;
+        if (textChanged)
         {
             int pos = output.SelectionStart;
             output.Text = text;
             output.Select(Math.Min(pos, text.Length), 0);
         }
-        jump.Display(selectedTab == SessionTab.Conversation && chatKey != null ? v.Chat : null,
-            images.Count > 0 ? history : output);
+        TextBoxBase reader = images.Count > 0 ? history : output;
+        plainOffsets = readingScope != null && images.Count == 0 ? TranscriptViewport.PlainOffsets(blocks, lines) : [];
+        if (readingScope != null)
+        {
+            if (previousScope != readingScope)
+            {
+                reader.Select(0, 0);
+                if (latestPage) TranscriptViewport.End(reader);
+            }
+            else if (reader != previousReader || (reader == output && textChanged))
+            {
+                previousViewport?.Restore(reader, images.Count > 0 ? history.BlockOffsets : plainOffsets, latestPage);
+            }
+        }
+        jump.Display(readingScope != null ? v.Chat : null, reader);
     }
 }
