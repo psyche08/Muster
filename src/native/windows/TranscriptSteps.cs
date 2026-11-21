@@ -75,6 +75,11 @@ internal sealed partial class TranscriptSteps
             }
             yield break;
         }
+        if (b.Kind == "summary" && b.Message is {} summary)
+        {
+            foreach (var line in TurnFooter(summary)) yield return line;
+            yield break;
+        }
         if (b.Message is {} m)
         {
             if (b.Parts.Any(p => p.Kind == "code"))
@@ -99,6 +104,33 @@ internal sealed partial class TranscriptSteps
             if (row.Detail.Length > 0) yield return row.Detail;
             if (row.Output.Length > 0) yield return $"Output\r\n{row.Output}";
         }
+    }
+
+    static IEnumerable<string> TurnFooter(Muster.V1.AgentMessage message)
+    {
+        var usage = message.Usage;
+        string time = WorktreeNavigation.Time(message.TsUnix);
+        string ended = time.Length == 0 ? "End time unavailable" : $"Ended {time}";
+        yield return usage?.Model is { Length: > 0 } model ? $"{ended} · {model}" : ended;
+
+        if (usage?.TokensKnown == true)
+        {
+            string hit = usage.CacheHitKnown ? $"{usage.CacheHitPercent:F1}%" : "unavailable";
+            yield return $"Turn input {usage.InputTokens:N0} · Output {usage.OutputTokens:N0} · Cache hit {hit}";
+        }
+        else if (usage?.RequestCount > 0)
+            yield return $"Partial turn input {usage.InputTokens:N0} · Output {usage.OutputTokens:N0} · Cache hit unavailable";
+        else
+            yield return "Token usage unavailable";
+
+        if (usage?.CostKnown == true)
+        {
+            string source = usage.CostSource == "recorded" ? "Recorded" : "Estimated";
+            string snapshot = usage.PricingDate.Length > 0 ? $" · Pricing snapshot {usage.PricingDate}" : "";
+            yield return $"{source} API-equivalent cost USD {usage.CostUsd:F5}{snapshot}";
+        }
+        else
+            yield return "Cost unavailable";
     }
 
     static string CodeLabel(MessagePart part) => part.Language.Length > 0 ? $"Code · {part.Language}" : "Code";

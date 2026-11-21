@@ -79,9 +79,41 @@ internal static class TranscriptStepsTests
               "stale action after navigating away and back");
         using (var menu = Menu()) Group(menu, 1).DropDownItems[0].PerformClick();
         Check(!steps.Lines().Contains("Read sample · completed"), "collapse Rust-default-expanded steps");
+        TurnSummaries();
         CopyCodeBlocks();
         FileDiffs();
         Console.WriteLine("Passed native work disclosure, lazy loading, retry, context isolation and transcript notices.");
+    }
+
+    static void TurnSummaries()
+    {
+        var message = new Muster.V1.AgentMessage { TsUnix = 1800000000, Usage = new() {
+            Model = "example-model", TokensKnown = true, InputTokens = 2345, OutputTokens = 18,
+            CacheHitKnown = true, CacheHitPercent = 56.78, CostKnown = true, CostSource = "estimated",
+            CostUsd = 0.00123, PricingDate = "2026-01-01" } };
+        var view = new ChatView { MessageCount = 2 };
+        view.Timeline.Add(new ChatBlock { Kind = "summary", Message = message });
+        view.Timeline.Add(new ChatBlock { Kind = "message", Message = new() { Role = "user", Text = "Next prompt" } });
+        var steps = new TranscriptSteps();
+        steps.Display(view);
+        void Expect(string ended, string usage, string cost)
+        {
+            if (!steps.Lines().SequenceEqual(new[] { ended, usage, cost, "user  Next prompt" }))
+                throw new InvalidOperationException("Unexpected turn footer or transcript order");
+        }
+        Expect($"Ended {WorktreeNavigation.Time(message.TsUnix)} · example-model",
+            $"Turn input {2345:N0} · Output 18 · Cache hit {56.78:F1}%",
+            $"Estimated API-equivalent cost USD {0.00123:F5} · Pricing snapshot 2026-01-01");
+        message.TsUnix = 0;
+        message.Usage = new() { CostKnown = true, CostSource = "recorded", TokensKnown = true };
+        Expect("End time unavailable", "Turn input 0 · Output 0 · Cache hit unavailable",
+            $"Recorded API-equivalent cost USD {0:F5}");
+        message.Usage = new() { RequestCount = 2, OutputTokens = 13, CostUsd = 12 };
+        Expect("End time unavailable", "Partial turn input 0 · Output 13 · Cache hit unavailable", "Cost unavailable");
+        message.Usage = null;
+        message.TsUnix = ulong.MaxValue;
+        Expect("End time unavailable", "Token usage unavailable", "Cost unavailable");
+        Console.WriteLine("Passed completed turn usage, cost, availability and ordering checks.");
     }
 
     static void CopyCodeBlocks()
