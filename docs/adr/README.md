@@ -390,3 +390,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0272](0272-windows-side-chat-end-confirmation.md) | Accepted | Confirm ending a side chat on Windows |
 | [0273](0273-desktop-chat-cached-host.md) | Accepted | Verify the host before enabling restored desktop chats |
 | [0274](0274-windows-keep-awake.md) | Accepted | Keep the Windows desktop awake while Muster is running |
+| [0275](0275-windows-workspace-layout.md) | Accepted | Separate the Windows directory and conversation panes |

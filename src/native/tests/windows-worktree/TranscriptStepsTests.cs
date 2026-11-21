@@ -98,7 +98,7 @@ internal static class TranscriptStepsTests
         steps.Display(view);
         void Expect(string ended, string usage, string cost)
         {
-            if (!steps.Lines().SequenceEqual(new[] { ended, usage, cost, "user  Next prompt" }))
+            if (!steps.Lines().SequenceEqual(new[] { ended, usage, cost, "You", "Next prompt" }))
                 throw new InvalidOperationException("Unexpected turn footer or transcript order");
         }
         Expect($"Ended {WorktreeNavigation.Time(message.TsUnix)} · example-model",
@@ -132,7 +132,7 @@ internal static class TranscriptStepsTests
                       new MessagePart { Kind = "code", Language = "sh", Text = source } } };
         view.Timeline.Add(block);
         steps.Display(view);
-        Check(steps.Lines().SequenceEqual(new[] { "assistant", "Example", "Code · sh", source.ReplaceLineEndings(Environment.NewLine) }), "ordered shared parts");
+        Check(steps.Lines().SequenceEqual(new[] { "Assistant", "Example", "Code · sh", source.ReplaceLineEndings(Environment.NewLine) }), "ordered shared parts");
         Check(steps.HasCode && steps.CopyCode(copied.Add) == null && copied.Single() == source, "exact single-block copy");
         var child = new ChatBlock { Id = "child", Kind = "message", Message = new() { Id = "nested", Role = "user" },
             Parts = { new MessagePart { Kind = "code", Language = "python", Text = "    value = 2\n" } } };
@@ -161,7 +161,7 @@ internal static class TranscriptStepsTests
         block.Parts.Clear();
         steps.Display(view);
         Check(!steps.HasCode && steps.CopyCode(copied.Add) == null &&
-            steps.Lines().Single().Contains("legacy transcript"), "older history fallback");
+            steps.Lines().SequenceEqual(new[] { "Assistant", "legacy transcript" }), "older history fallback");
         Console.WriteLine("Passed desktop code presentation, exact copy, disclosure and stale clipboard action checks.");
     }
 

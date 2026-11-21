@@ -6,7 +6,7 @@ namespace Muster.Windows;
 
 internal sealed class AgentSidebar : UserControl
 {
-    sealed record Entry(string Section, string Label, Intent Action, AgentCatalogRow? Row = null)
+    sealed record Entry(string Section, string Label, Intent Action, AgentCatalogRow? Row = null, AgentSession? Session = null)
     {
         public override string ToString() => Label;
         public bool Matches(Entry? other) => other != null && Section == other.Section && Action.Equals(other.Action);
@@ -20,7 +20,7 @@ internal sealed class AgentSidebar : UserControl
         ScrollBars = ScrollBars.Vertical, Visible = false };
     readonly ListBox list = new() { Name = "AgentSessions", AccessibleName = "Agent sessions",
         Dock = DockStyle.Fill, HorizontalScrollbar = true, IntegralHeight = false };
-    readonly Button cli, desktop, device, clear, more;
+    readonly Button create, device, clear, more;
     readonly ContextMenuStrip menu = new();
     AgentsView? view;
     IEnumerable<MemberView> devices = [];
@@ -31,22 +31,73 @@ internal sealed class AgentSidebar : UserControl
 
     public AgentSidebar()
     {
-        Padding = new Padding(0, 0, 8, 0);
+        BackColor = WorkspaceStyle.Sidebar;
+        Padding = new Padding(12, 12, 12, 10);
+        list.BackColor = BackColor;
+        list.BorderStyle = BorderStyle.None;
+        list.DrawMode = DrawMode.OwnerDrawFixed;
+        list.HorizontalScrollbar = false;
+        var strong = new Font(list.Font, FontStyle.Bold);
+        var secondary = new Font(list.Font.FontFamily, Math.Max(8, list.Font.SizeInPoints - 1));
+        void SizeRows() => list.ItemHeight = list.Font.Height * 2 + LogicalToDeviceUnits(8);
+        SizeRows();
+        DpiChangedAfterParent += (_, _) => SizeRows();
+        Disposed += (_, _) => { strong.Dispose(); secondary.Dispose(); };
+        list.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0 || e.Index >= list.Items.Count) return;
+            var entry = (Entry)list.Items[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) != 0;
+            Color ink = selected && SystemInformation.HighContrast ? SystemColors.HighlightText : WorkspaceStyle.Ink;
+            using var brush = new SolidBrush(selected ? (SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(230, 222, 214)) : BackColor);
+            e.Graphics.FillRectangle(brush, e.Bounds);
+            var area = Rectangle.Inflate(e.Bounds, -LogicalToDeviceUnits(8), 0);
+            const TextFormatFlags flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix |
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis;
+            var session = entry.Row?.Session ?? entry.Session;
+            if (session == null)
+                TextRenderer.DrawText(e.Graphics, entry.Label.Trim(), entry.Action.AgentCatalogAction?.Kind == Kind.ToggleSection ? strong : list.Font,
+                    area, ink, flags);
+            else
+            {
+                string meta = string.Join(" · ", new[] { session.DeviceName, entry.Row?.SourceLabel, entry.Row?.LaunchLabel }
+                    .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct());
+                var line = area;
+                if (meta.Length > 0) { line.Y += LogicalToDeviceUnits(3); line.Height = list.Font.Height + 1; }
+                TextRenderer.DrawText(e.Graphics, session.Title, selected ? strong : list.Font, line, ink, flags);
+                if (meta.Length > 0)
+                {
+                    line.Y += line.Height;
+                    TextRenderer.DrawText(e.Graphics, meta, secondary, line, selected ? ink : WorkspaceStyle.Muted, flags);
+                }
+            }
+            e.DrawFocusRectangle();
+        };
         AccessibleName = "Agents directory";
-        Controls.AddRange([list, status, buttons, query]);
+        Controls.AddRange([list, status, buttons, query, WorkspaceStyle.DirectoryHeading("Sessions")]);
         Button Add(string label, Action click)
         {
             var button = new Button { Text = label, AutoSize = true };
+            WorkspaceStyle.StyleButton(button);
             button.Click += (_, _) => click();
             buttons.Controls.Add(button);
             return button;
         }
-        Add("Search", () => Search(query.Text));
+        var searchRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2 };
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var submitSearch = Add("Search", () => Search(query.Text));
+        int searchIndex = Controls.GetChildIndex(query);
+        Controls.Add(searchRow);
+        Controls.SetChildIndex(searchRow, searchIndex);
+        query.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        query.Dock = DockStyle.None;
+        searchRow.Controls.Add(query, 0, 0);
+        searchRow.Controls.Add(submitSearch, 1, 0);
         clear = Add("Clear search", () => { query.Clear(); Search(""); });
         more = Add("More results", () => Intent?.Invoke(Catalog(Kind.SearchMore)));
         device = Add("Device", ChooseDevice);
-        cli = Add("New CLI session", () => CreateSession(false));
-        desktop = Add("New desktop session", () => CreateSession(true));
+        create = Add("New session ▾", ShowCreateMenu);
         query.KeyDown += (_, e) =>
         {
             if (e.KeyData != Keys.Enter) return;
@@ -80,6 +131,9 @@ internal sealed class AgentSidebar : UserControl
                 AgentRowMenu.Populate(menu, row, action => Intent?.Invoke(action));
             e.Cancel = menu.Items.Count == 0;
         };
+        status.BackColor = BackColor;
+        status.ForeColor = WorkspaceStyle.Muted;
+        status.BorderStyle = BorderStyle.None;
         status.TextChanged += (_, _) => SizeStatus();
         status.FontChanged += (_, _) => SizeStatus();
         Resize += (_, _) => SizeStatus();
@@ -105,6 +159,17 @@ internal sealed class AgentSidebar : UserControl
         if (view == null) return;
         DeviceMenu.Create(devices, view.DeviceId, id => Intent?.Invoke(new() { OpenAgents = new() { DeviceId = id } }))
             .ShowBelow(device);
+    }
+
+    void ShowCreateMenu()
+    {
+        if (view == null) return;
+        var choices = new ContextMenuStrip();
+        if (view.CreateHosts.Count > 0)
+            choices.Items.Add("New CLI session", null, (_, _) => CreateSession(false)).Enabled = !view.Creating;
+        if (view.NativeCreateHosts.Count > 0)
+            choices.Items.Add("New desktop session", null, (_, _) => CreateSession(true)).Enabled = !view.NativeCreating;
+        choices.ShowBelow(create);
     }
 
     void CreateSession(bool native)
@@ -135,7 +200,7 @@ internal sealed class AgentSidebar : UserControl
         }
         if (agents.Sections.Count == 0)
             foreach (var session in agents.Sessions)
-                yield return new("", $"{session.Title}    {session.DeviceName}", Open(session));
+                yield return new("", $"{session.Title}    {session.DeviceName}", Open(session), Session: session);
     }
 
     int Index(Predicate<Entry> matches)
@@ -162,12 +227,8 @@ internal sealed class AgentSidebar : UserControl
         more.Visible = next.SearchHasMore && !next.Searching;
         device.Visible = devices.Any();
         device.Text = "Device: " + DeviceMenu.Label(devices, next.DeviceId);
-        cli.Visible = next.CreateHosts.Count > 0;
-        cli.Enabled = !next.Creating;
-        cli.Text = next.Creating ? "Creating CLI session…" : "New CLI session";
-        desktop.Visible = next.NativeCreateHosts.Count > 0;
-        desktop.Enabled = !next.NativeCreating;
-        desktop.Text = next.NativeCreating ? "Creating desktop session…" : "New desktop session";
+        create.Visible = next.CreateHosts.Count > 0 || next.NativeCreateHosts.Count > 0;
+        create.Enabled = next.CreateHosts.Count > 0 && !next.Creating || next.NativeCreateHosts.Count > 0 && !next.NativeCreating;
         var notices = next.SearchNotices.Concat(next.Errors).ToList();
         if (next.Searching) notices.Add("Searching conversations…");
         else if (next.Loading) notices.Add("Loading sessions…");

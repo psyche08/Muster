@@ -16,6 +16,7 @@
     <Version>1.1.51</Version>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../apple/MusterApp/Apps/macOS/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" LogicalName="Muster.WorkspaceMark" />
     <InternalsVisibleTo Include="WindowsAgentCatalog" />
     <InternalsVisibleTo Include="WindowsWorktree" />
     <InternalsVisibleTo Include="WindowsTerminal" />

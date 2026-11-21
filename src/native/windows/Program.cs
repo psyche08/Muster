@@ -34,11 +34,7 @@ internal static class Program
                 {
                     var desktop = new Desktop(attach, fixture);
                     if (!attach && fixture == null)
-                    {
-                        var menu = new PowerMenu(PowerMenu.PreferenceKey);
-                        desktop.MainMenuStrip = menu;
-                        desktop.Controls.Add(menu);
-                    }
+                        desktop.InstallPowerMenu();
                     return desktop;
                 }, installed, activateExisting: fixture == null);
             return !opened && fixture != null ? 2 : 0;

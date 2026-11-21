@@ -1,5 +1,12 @@
 # Windows 开发调试指南（面向 Agent）
 
+## 检查工作区布局
+
+在顶部切换 **Agents**、**Chats** 和 **Terminals**。**Tools** 菜单提供 Network、Browser 和 Presence key。
+从 Agents 左栏的 **New session** 选择 CLI 或桌面会话。打开一条会话，确认左栏覆盖整个工作区高度，
+右侧的标题、消息、输入框及发送按钮对齐。运行下文的 WindowsAgentCatalog 截图命令可生成
+`workspace-agents.png`、`workspace-conversation.png` 和 `workspace-compact.png`，均使用合成内容。
+
 ## 普通用户联调 GUI、FFI 和 daemon
 
 在仓库根目录用 PowerShell 7.4 或更高版本运行。开发工具和 Cargo 产物可放在
@@ -437,7 +444,7 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 
 ## 核对网络设备详情
 
-从 **Network** 或 **Settings** 单击设备行，也可用方向键选择后按 Enter。打开本机和
+从 **Tools → Network** 或 **Settings** 单击设备行，也可用方向键选择后按 Enter。打开本机和
 一个已配对的远端成员，分别核对名称、虚拟地址、指纹及上报的版本。链路取自该成员的
 `link`，有值时原样显示。点 **Back** 返回设备列表。两个成员同名时，用指纹核对打开的
 对象。**Access to other devices** 显示 Shared Rust 返回的分组摘要；只读核对无需保存权限。
@@ -551,7 +558,7 @@ print(f"snapshots={snapshots} elapsed={time.monotonic()-start:.1f}s end={end}")
 
 ## 只读核对在场密钥
 
-在已安装的 GUI 中打开 **Presence key**，用同一发行包的
+在已安装的 GUI 中打开 **Tools → Presence key**，用同一发行包的
 `cli\muster.exe presence --summary` 核对两行结果。若使用隔离 daemon，给 CLI
 显式传入开发脚本打印的 `--socket`。记录候选公钥注册状态和网络管理员 enrollment
 状态。查询失败时记录错误。**Settings → Register presence candidate** 会访问 TPM
@@ -597,8 +604,8 @@ cargo test --locked --manifest-path src/muster/Cargo.toml -p muster-app-core --t
 
 从相同提供方的当前目录先打开另一条，
 再按之前记录的稳定 ID 打开原条目。两次都检查当前选中行和可见正文，并确认正文中
-没有另一条的测试文字。使用实际 WinForms 表单做控件断言时，没有链接或图片的正文显示在只读
-`TextBox` 中，含链接或内嵌图片的正文使用 `HistoryTranscript`。取图前先确认对应控件可见。
+没有另一条的测试文字。使用实际 WinForms 表单时，带发言人、链接或内嵌图片的正文由只读 `HistoryTranscript` 显示，
+纯状态文字可使用只读 `TextBox`。取图前先确认对应控件可见。
 
 用外部 UI Automation 客户端按当前 GUI 进程和可见控件查询。两种正文的名称都是
 **Conversation history**，控件类型分别是 Edit 和 Document。打开文件后的 Document

@@ -49,12 +49,13 @@ internal static class HistoryImageTests
             var lines = new List<string>();
             var images = new List<TranscriptImage>();
             var blocks = new List<TranscriptBlock>();
-            steps.AppendTo(lines, images, blocks);
-            history.Display((view.DeviceId, view.Session.Id), lines, images, blocks, latest: true);
+            var speakers = new HashSet<int>();
+            steps.AppendTo(lines, images, blocks, speakers: speakers);
+            history.Display((view.DeviceId, view.Session.Id), lines, images, blocks, latest: true, speakerLines: speakers);
             return (lines, images);
         }
         var parts = Show(chat);
-        Check(parts.Images.Count == 3 && parts.Images.All(i => i.Line == 1), "Nested work or image order");
+        Check(parts.Images.Count == 3 && parts.Images.All(i => i.Line == parts.Lines.IndexOf(literal) && parts.Lines[i.Line - 1] == "You"), "Nested work or image order");
         var until = Stopwatch.StartNew();
         while (!history.Text.Contains("Image preview unavailable") && until.ElapsedMilliseconds < 8000)
         {
