@@ -1310,15 +1310,11 @@ namespace nvhttp {
 
     apps.put("<xmlattr>.status_code", 200);
 
-    for (auto &proc : proc::proc.get_apps()) {
-      pt::ptree app;
-
-      app.put("IsHdrSupported"s, video::active_hevc_mode >= 3 ? 1 : 0);
-      app.put("AppTitle"s, proc.name);
-      app.put("ID", proc.id);
-
-      apps.push_back(std::make_pair("App", std::move(app)));
-    }
+    pt::ptree desktop;
+    desktop.put("IsHdrSupported", video::active_hevc_mode >= 3 ? 1 : 0);
+    desktop.put("AppTitle", "Desktop");
+    desktop.put("ID", 0);
+    apps.push_back(std::make_pair("App", std::move(desktop)));
   }
 
   /**
@@ -1363,7 +1359,11 @@ namespace nvhttp {
       return;
     }
 
-    auto appid = util::from_view(get_arg(args, "appid"));
+    if (get_arg(args, "appid") != "0") {
+      tree.put("root.<xmlattr>.status_code", 403);
+      tree.put("root.gamesession", 0);
+      return;
+    }
 
     auto current_appid = proc::proc.running();
     if (current_appid > 0) {
@@ -1408,17 +1408,6 @@ namespace nvhttp {
       tree.put("root.gamesession", 0);
 
       return;
-    }
-
-    if (appid > 0) {
-      auto err = proc::proc.execute((int) appid, launch_session);
-      if (err) {
-        tree.put("root.<xmlattr>.status_code", err);
-        tree.put("root.<xmlattr>.status_message", "Failed to start the specified application");
-        tree.put("root.gamesession", 0);
-
-        return;
-      }
     }
 
     tree.put("root.<xmlattr>.status_code", 200);
@@ -1690,11 +1679,7 @@ namespace nvhttp {
 
     https_server.default_resource["GET"] = not_found<SunshineHTTPS>;
     https_server.resource["^/serverinfo$"]["GET"] = serverinfo<SunshineHTTPS>;
-    https_server.resource["^/pair$"]["GET"] = [](auto resp, auto req) {
-      pair<SunshineHTTPS>(resp, req);
-    };
     https_server.resource["^/applist$"]["GET"] = applist;
-    https_server.resource["^/appasset$"]["GET"] = appasset;
     https_server.resource["^/launch$"]["GET"] = [&host_audio](auto resp, auto req) {
       launch(host_audio, resp, req);
     };
@@ -1709,9 +1694,6 @@ namespace nvhttp {
 
     http_server.default_resource["GET"] = not_found<SimpleWeb::HTTP>;
     http_server.resource["^/serverinfo$"]["GET"] = serverinfo<SimpleWeb::HTTP>;
-    http_server.resource["^/pair$"]["GET"] = [](auto resp, auto req) {
-      pair<SimpleWeb::HTTP>(resp, req);
-    };
 
     http_server.config.reuse_address = true;
     http_server.config.address = net::get_bind_address(address_family);

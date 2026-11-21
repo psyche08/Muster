@@ -28,6 +28,7 @@
  * @brief Contains all the functions and variables related to the nvhttp (GameStream) server.
  */
 namespace nvhttp {
+  std::string add_authorized_client(const std::string &name, std::string &&cert);
 
   /**
    * @brief The protocol version.

@@ -39,6 +39,15 @@
 #include "logging.h"
 #include "main.h"
 #include "nvhttp.h"
+#include "muster_session.h"
+#ifdef _WIN32
+  #include <fcntl.h>
+  #include <io.h>
+  #include <windows.h>
+#else
+  #include <sys/stat.h>
+  #include <unistd.h>
+#endif
 #include "process.h"
 #include "system_tray.h"
 #include "video.h"
@@ -248,10 +257,51 @@ int main(int argc, char *argv[]) {
 
   mail::man = std::make_shared<safe::mail_raw_t>();
 
+  // Only an inherited pipe can bootstrap this private media child.
+#ifdef _WIN32
+  if (GetFileType(GetStdHandle(STD_INPUT_HANDLE)) != FILE_TYPE_PIPE || _setmode(_fileno(stdin), _O_BINARY) < 0) {
+    return 1;
+  }
+#else
+  struct stat pipe_stat {};
+  if (fstat(STDIN_FILENO, &pipe_stat) != 0 || !S_ISFIFO(pipe_stat.st_mode)) {
+    return 1;
+  }
+#endif
+#ifdef __APPLE__
+  const auto session_dir = platf::appdata();
+  struct stat directory_stat {};
+  if (!session_dir.is_absolute() || lstat(session_dir.c_str(), &directory_stat) != 0 ||
+      !S_ISDIR(directory_stat.st_mode) || directory_stat.st_uid != geteuid() ||
+      (directory_stat.st_mode & 077) != 0) {
+    return 1;
+  }
+#endif
+  auto grant = muster_session::read(std::cin);
+  if (!grant || !crypto::x509(grant->certificate)) {
+    return 1;
+  }
+
   // parse config file
   if (config::parse(argc, argv)) {
     return 0;
   }
+
+  config::sunshine.flags[config::flag::FRESH_STATE] = true;
+  config::input.mouse = grant->mouse;
+  config::input.keyboard = false;
+  config::input.controller = false;
+  config::input.native_pen_touch = false;
+  if (nvhttp::add_authorized_client("Muster viewer", std::move(grant->certificate)).empty()) {
+    return 1;
+  }
+  muster_session::mouse_enabled.store(grant->mouse);
+  auto owner_shutdown = mail::man->event<bool>(mail::shutdown);
+  std::thread([owner_shutdown] {
+    std::cin.get();
+    muster_session::mouse_enabled.store(false);
+    owner_shutdown->raise(true);
+  }).detach();
 
   auto log_deinit_guard = logging::init(config::sunshine.min_log_level, config::sunshine.log_file);
   if (!log_deinit_guard) {

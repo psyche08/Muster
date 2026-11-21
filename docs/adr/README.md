@@ -393,3 +393,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0275](0275-windows-workspace-layout.md) | Accepted | Separate the Windows directory and conversation panes |
 | [0276](0276-windows-chat-markdown-and-composer.md) | Accepted | Render conversation Markdown and distinguish user input on Windows |
 | [0277](0277-paired-desktop-host-offer.md) | Accepted | Bind remote desktop sharing to the selected member and local owner |
+| [0278](0278-sunshine-session-input.md) | Accepted | Start Sunshine with one session certificate |
