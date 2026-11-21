@@ -93,6 +93,7 @@ fn access_for(req: &Req) -> Access {
         | Req::DeviceRequestAutomation(_)
         | Req::DeviceRequestScreenRecording(_)
         | Req::DeviceDebug(_)
+        | Req::DesktopSession(_)
         | Req::NetworkRetryVnet(_)
         | Req::NetworkRefresh(_)
         | Req::DesktopUpdateLease(_)
@@ -1272,6 +1273,10 @@ async fn dispatch(
             Resp::Ack(v1::Ack {})
         }
         // ------------------------------------------------------------ device
+        Req::DesktopSession(r) => {
+            crate::desktop_session::run(daemon, r, events).await?;
+            Resp::Ack(v1::Ack {})
+        }
         Req::DesktopUpdateLease(_) => daemon.locked_use.update_lease(events).await?,
         Req::LockedUsePrepare(r) => {
             let Principal::Remote(peer) = ctx.principal else {

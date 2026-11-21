@@ -272,6 +272,21 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             .await
     ));
 
+    for action in [
+        v1::desktop_session_request::Action::ShareView(v1::Ack {}),
+        v1::desktop_session_request::Action::ShareMouse(v1::Ack {}),
+        v1::desktop_session_request::Action::ViewInWindow(1),
+    ] {
+        assert!(unauthorized(
+            &remote
+                .call(Req::DesktopSession(v1::DesktopSessionRequest {
+                    device: String::new(),
+                    action: Some(action)
+                }))
+                .await
+        ));
+    }
+
     // A desktop provider grant does not authorize starting a CLI side fork.
     assert!(unauthorized(
         &remote

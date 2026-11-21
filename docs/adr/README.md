@@ -395,3 +395,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0277](0277-paired-desktop-host-offer.md) | Accepted | Bind remote desktop sharing to the selected member and local owner |
 | [0278](0278-sunshine-session-input.md) | Accepted | Start Sunshine with one session certificate |
 | [0279](0279-gamestream-session-bridge.md) | Accepted | Carry fixed GameStream engine channels within an admitted session |
+| [0280](0280-native-paired-desktop.md) | Proposed | Open a paired desktop from the native device view |

@@ -379,6 +379,17 @@ struct DeviceView: View {
                         }
                     }
                 }
+                if vm.deviceActions.canShareDesktop || vm.deviceActions.desktopSessionOpen {
+                    Section("Share this Mac’s desktop") {
+                        if vm.deviceActions.desktopSessionOpen {
+                            Text(vm.deviceActions.desktopSessionText)
+                            Button("Stop sharing") { core.stopSharingDesktop(with: member.deviceID) }
+                        } else {
+                            Button("Allow \(member.name) to view") { core.shareDesktop(with: member.deviceID, mouse: false) }
+                            Button("Allow \(member.name) to view and use the mouse") { core.shareDesktop(with: member.deviceID, mouse: true) }
+                        }
+                    }
+                }
                 if vm.hasDeviceAccess && vm.deviceActions.showAccess {
                     Section("Access to other devices") {
                         ForEach(vm.deviceAccess.sections, id: \.id) { section in

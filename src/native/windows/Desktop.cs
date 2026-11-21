@@ -29,6 +29,10 @@ internal sealed class Desktop : Form
     readonly AgentSidebar agentSidebar = new() { Dock = DockStyle.Left, Visible = false };
     List<BlockOffset> plainOffsets = [];
     (string Device, string Session)? readingScope;
+    Form? desktopViewer;
+    string? viewerDevice;
+    bool viewerLeaseSeen;
+    string? priorViewerToast;
     readonly JumpToLatest jump = new();
     readonly TranscriptSteps transcript = new();
     readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
@@ -421,6 +425,26 @@ internal sealed class Desktop : Form
             core.Send(request);
     }
 
+    void ViewDesktop(string device, string name)
+    {
+        if (desktopViewer != null) { desktopViewer.Activate(); return; }
+        var form = new Form { Text = $"Desktop · {name}", StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(960, 540), MinimumSize = new Size(480, 300) };
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black, AccessibleName = "Remote desktop" };
+        form.Controls.Add(panel);
+        desktopViewer = form;
+        viewerDevice = device;
+        viewerLeaseSeen = false;
+        priorViewerToast = current?.Toasts.LastOrDefault()?.Id;
+        form.FormClosed += (_, _) => {
+            desktopViewer = null;
+            viewerDevice = null;
+            if (!IsDisposed) Send(new() { EndDesktopSession = device });
+        };
+        form.Show(this);
+        Send(new() { DesktopSession = new() { Device = device, ViewInWindow = (ulong)panel.Handle.ToInt64() } });
+    }
+
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void CopySource(string text, string kind)
     {
@@ -551,6 +575,16 @@ internal sealed class Desktop : Form
         current = v;
         back.Visible = v.CanGoBack;
         var page = v.Screen;
+        if (desktopViewer is {} viewer)
+        {
+            bool selected = page == Page.Device && v.SelectedDevice == viewerDevice;
+            if (selected && v.DeviceActions?.DesktopSessionOpen == true)
+            {
+                viewerLeaseSeen = true;
+                viewer.Text = v.DeviceActions.DesktopSessionText;
+            }
+            else if (!selected || viewerLeaseSeen || (v.Toasts.LastOrDefault() is { Error: true } toast && toast.Id != priorViewerToast)) viewer.Close();
+        }
         foreach (var (button, route) in new[] { (agentsTab, Page.Agents), (chatsTab, Page.DesktopChats), (terminalsTab, Page.Terminals) })
         {
             bool selected = v.Workspace == route;
@@ -660,6 +694,13 @@ internal sealed class Desktop : Form
             }
             if (v.DeviceActions is {} deviceActions)
             {
+                if (deviceActions.CanViewDesktop)
+                    AddAction("View desktop", () => ViewDesktop(selected.DeviceId, selected.Name));
+                if (deviceActions.DesktopSessionOpen)
+                {
+                    lines.Add(deviceActions.DesktopSessionText);
+                    AddAction("Close desktop", () => desktopViewer?.Close());
+                }
                 if (deviceActions.ShowAccess && v.DeviceAccess is {} access)
                 {
                     lines.Add("Access to other devices");

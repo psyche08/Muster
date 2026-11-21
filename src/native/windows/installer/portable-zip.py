@@ -28,17 +28,27 @@ def build(stage, version, output):
     with TemporaryDirectory(dir=output) as work:
         work = Path(work)
         runtime, sources = stage_runtime(work)
+        viewer_dir = Path(os.environ["MUSTER_WINDOWS_VIEWER"])
+        viewer_payload = ("muster-moonlight.exe", "Viewer-Notices.txt")
         archive = work / name
         checksums = {}
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as package:
-            for item in (*PAYLOAD, *runtime):
-                data = ((stage if item in PAYLOAD else work) / item).read_bytes()
+            for item in (*PAYLOAD, *runtime, *viewer_payload):
+                directory = stage if item in PAYLOAD else work
+                if item in viewer_payload:
+                    directory = viewer_dir
+                data = (directory / item).read_bytes()
                 if item.endswith((".dll", ".exe")):
                     offset = int.from_bytes(data[60:64], "little")
                     if data[:2] != b"MZ" or data[offset:offset + 6] != bytes.fromhex("504500006486"):
                         raise ValueError(f"Expected x64 PE image in {item}")
                 checksums[item] = sha256(data).hexdigest()
                 package.writestr("payload/" + item, data)
+            viewer_source = viewer_dir / "Viewer-Sources.zip"
+            with ZipFile(viewer_source) as source_zip:
+                if source_zip.testzip() or "remote-desktop/viewer/windows.cpp" not in source_zip.namelist():
+                    raise ValueError("Incomplete Windows viewer source package")
+            package.write(viewer_source, viewer_source.name, compress_type=ZIP_STORED)
             for source_package in sources:
                 package.write(source_package, "Terminal-Sources/" + source_package.name, compress_type=ZIP_STORED)
             for script in ("Apply-Update.cmd", "Apply-Update.ps1"):

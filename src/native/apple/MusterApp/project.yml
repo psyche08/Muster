@@ -117,6 +117,10 @@ targets:
           [ -x "$BIN/muster-browser-host" ] || { echo "error: build muster-browser first"; exit 1; }
           install -m 0755 "$BIN/muster-browser-host" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
           codesign --force --options runtime --identifier dev.linsheng.muster.browser --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/muster-browser-host"
+          if [ -n "${MUSTER_SUNSHINE_APP:-}" ]; then
+            /usr/bin/codesign --verify --strict --deep "$MUSTER_SUNSHINE_APP"
+            /usr/bin/ditto "$MUSTER_SUNSHINE_APP" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/Sunshine.app"
+          fi
           # Addons ship as helpers too; musterd runs l4forwarder while
           # l4forwarder.json is in its state directory (ADR 0107).
           ADDON="$L4FORWARDER_CARGO_TARGET_DIR/release/l4forwarder"

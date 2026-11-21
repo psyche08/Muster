@@ -16,9 +16,20 @@ $work = [IO.Directory]::CreateTempSubdirectory('muster-portable-').FullName
 $stage = [IO.Directory]::CreateDirectory("$work\payload").FullName
 $manifest = "$root\src\muster\Cargo.toml"
 $previousVersion = $env:MUSTER_WINDOWS_VERSION
+$previousViewer = $env:MUSTER_WINDOWS_VIEWER
 Push-Location $root
 try {
     $env:MUSTER_WINDOWS_VERSION = $Version.ToString()
+    if (!$env:MUSTER_WINDOWS_VIEWER) {
+        $vcpkg = $env:VCPKG_ROOT
+        if (!$vcpkg) {
+            $tool = Get-Command vcpkg -ErrorAction SilentlyContinue
+            if ($tool) { $vcpkg = Split-Path $tool.Source }
+        }
+        if (!$vcpkg) { throw 'Set VCPKG_ROOT to the pinned checkout or MUSTER_WINDOWS_VIEWER to the prepared viewer directory; see addons/remote-desktop/README.md' }
+        $env:MUSTER_WINDOWS_VIEWER = "$work\viewer"
+        python -X utf8 "$root\addons\remote-desktop\build-viewer.py" $vcpkg "$work\media-build" $env:MUSTER_WINDOWS_VIEWER
+    }
     $daemon = @(cargo build --manifest-path $manifest --release --locked --message-format=json-render-diagnostics -p musterd -p muster-cli -p muster-ffi -p muster-browser -p muster-vnet |
         ForEach-Object { ConvertFrom-Json $_ } |
         Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'musterd' -and $_.executable })
@@ -53,6 +64,7 @@ try {
 } finally {
     Pop-Location
     $env:MUSTER_WINDOWS_VERSION = $previousVersion
+    $env:MUSTER_WINDOWS_VIEWER = $previousViewer
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
     if ([IO.Path]::GetDirectoryName($work) -eq $tempRoot -and [IO.Path]::GetFileName($work).StartsWith('muster-portable-')) {
         Remove-Item -LiteralPath $work -Recurse -Force

@@ -118,13 +118,17 @@ Starting a real Wintun adapter requires Windows administrator approval.
 ## Build
 
 On Windows x64, use PowerShell 7.4 or later, x64 MSVC Rust, Visual C++ build
-tools, the .NET 10 SDK, protoc and Python 3. Build from the repository root:
+tools, the .NET 10 SDK, protoc and Python 3. Set VCPKG_ROOT to the pinned
+checkout in the [viewer build instructions](../../../addons/remote-desktop/README.md),
+or set MUSTER_WINDOWS_VIEWER to its prepared binary, notices and source directory.
+Build from the repository root:
 
     ./src/native/windows/installer/build-portable.ps1 -Version 1.1.55 -OutputDirectory .\artifacts
 
 On a Unix cross-build host, use the .NET 10 SDK, protoc, Rust's
 x86_64-pc-windows-gnu target, mingw-w64, bash, curl, unzip, shasum and Python
-3. Set CARGO_TARGET_DIR to the Cargo build directory, then run:
+3. Set MUSTER_WINDOWS_VIEWER to the same prepared viewer directory and
+CARGO_TARGET_DIR to the Cargo build directory, then run:
 
     src/native/windows/installer/build-portable.sh 1.1.55 /absolute/output/directory
 
