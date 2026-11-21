@@ -3,7 +3,9 @@
 #
 include_guard(GLOBAL)
 
-find_package(nlohmann_json 3.11 QUIET GLOBAL)
+if(NOT FETCHCONTENT_SOURCE_DIR_JSON)
+    find_package(nlohmann_json 3.11 QUIET GLOBAL)
+endif()
 if(NOT nlohmann_json_FOUND)
     message(STATUS "nlohmann_json v3.11.x package not found in the system. Falling back to FetchContent.")
     include(FetchContent)

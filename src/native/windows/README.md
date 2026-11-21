@@ -119,8 +119,7 @@ Starting a real Wintun adapter requires Windows administrator approval.
 
 On Windows x64, use PowerShell 7.4 or later, x64 MSVC Rust, Visual C++ build
 tools, the .NET 10 SDK, protoc and Python 3. Set VCPKG_ROOT to the pinned
-checkout in the [viewer build instructions](../../../addons/remote-desktop/README.md),
-or set MUSTER_WINDOWS_VIEWER to its prepared binary, notices and source directory.
+checkout in the [viewer build instructions](../../../addons/remote-desktop/README.md). The packager compiles the viewer and includes its notices and corresponding sources.
 Build from the repository root:
 
     ./src/native/windows/installer/build-portable.ps1 -Version 1.1.55 -OutputDirectory .\artifacts

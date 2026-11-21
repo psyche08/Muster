@@ -138,8 +138,6 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/nanors/deps/obl/oblas_common.c"
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/nanors/deps/obl/oblas_lite.c"
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/nanors/rs.c"
-        "${CMAKE_SOURCE_DIR}/src/upnp.cpp"
-        "${CMAKE_SOURCE_DIR}/src/upnp.h"
         "${CMAKE_SOURCE_DIR}/src/cbs.cpp"
         "${CMAKE_SOURCE_DIR}/src/utility.h"
         "${CMAKE_SOURCE_DIR}/src/uuid.h"
@@ -221,6 +219,11 @@ include_directories(
 
 if(NOT APPLE)
     include_directories(BEFORE SYSTEM "${NV_CODEC_HEADERS_13_1_INCLUDE_DIR}")
+endif()
+
+# Muster never starts UPnP. The Mac host has no UPnP implementation or dependency.
+if(NOT APPLE)
+    list(APPEND SUNSHINE_TARGET_FILES "${CMAKE_SOURCE_DIR}/src/upnp.cpp" "${CMAKE_SOURCE_DIR}/src/upnp.h")
 endif()
 
 list(APPEND SUNSHINE_EXTERNAL_LIBRARIES

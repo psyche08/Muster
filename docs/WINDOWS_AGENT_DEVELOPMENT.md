@@ -637,9 +637,9 @@ ID 读回的两条合成消息。实机 ChatGPT 的归档状态和历史仍按�
 
 ## 配对桌面验收
 
-构建独立的 Moonlight 查看器后，将它放在测试 daemon 的可执行文件旁；macOS
-测试 daemon 旁放本仓库构建的 Sunshine.app。Windows 完整便携包包含查看器、
-许可证和对应源码。两端分别用 `local-dev --paired-interface <本机私网 IPv4>`
+Windows 本机构建便携包时，从仓库源码编译 Moonlight 查看器并打包许可证与对应源码。
+Mac 应用构建时从同一仓库编译并签入 Sunshine 宿主。独立 fixture 使用这两个构建产物，
+分别放到相应测试 daemon 旁。两端分别用 `local-dev --paired-interface <本机私网 IPv4>`
 可在临时软件身份上测试。关闭父进程的标准输入会结束 fixture。按正常流程建立
 测试网络、生成邀请和批准新成员，再从 Mac 设备页选择只读或鼠标授权，从
 Windows 设备页打开该 Mac 的桌面。

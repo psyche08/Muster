@@ -1,9 +1,11 @@
 # Muster remote desktop engines
 
 This directory holds the downstream Sunshine host and Moonlight PC source.
-Nothing here is built into a Muster release, installed, or started by Muster yet.
-See [ADR 0242](../../docs/adr/0242-muster-remote-desktop-engines.md) for the
-authorization boundary and device acceptance plan.
+Muster builds the Mac capture host from its patched Sunshine source and builds
+the Windows viewer against the vendored Moonlight C core. Both run as private
+children of the session owner. Windows paints the decoded frames in the Muster
+device view. [ADR 0282](../../docs/adr/0282-source-built-desktop-engines.md)
+describes how the two native packages obtain their engines.
 
 ## Downstream changes
 
@@ -17,9 +19,8 @@ authorization boundary and device acceptance plan.
   refuses upstream pairing and exits when the owner closes the pipe. The host
   accepts only desktop capture. On macOS the parent supplies a private session
   directory and its pinned TLS key pair. See [ADR 0278](../../docs/adr/0278-sunshine-session-input.md).
-- Before enabling desktop sharing, Muster still needs engine lifecycle integration,
-  the peer-scoped TCP/UDP broker, and native control and viewer integration. Do not publish the engine ports
-  through a generic forwarder as a substitute.
+- Shared Rust carries the selected session's fixed media channels over PeerLink.
+  The host checks the local console and the owner grant for the selected viewer.
 
 ## Source pins
 
@@ -66,9 +67,9 @@ Use x64 MSVC, CMake, Python and a bootstrapped vcpkg checkout at
 `python build-viewer.py <vcpkg> <build-directory> <viewer-output>`.
 The script builds the separate Moonlight process, checks a decoded 720p frame
 and mouse coordinates, and collects license texts and corresponding sources.
-Set `MUSTER_WINDOWS_VIEWER` to that output directory for the portable package
-build on either build host. The native Windows packager can also build the viewer
-from the pinned checkout in `VCPKG_ROOT`. The synthetic fixture is one blue frame from
+The native Windows packager always compiles this code using the pinned
+vcpkg checkout. A Windows cross-package build can consume the corresponding
+output directory via `MUSTER_WINDOWS_VIEWER`. The synthetic fixture is one blue frame from
 FFmpeg's color filter encoded with libx264, with SEI metadata removed.
 
 On a Mac with the downstream Sunshine helper in the daemon's helpers directory,
@@ -77,8 +78,16 @@ Leave this device page open. On Windows open the Mac in Devices and choose
 **View desktop**. Closing either session ends the grant. macOS Screen Recording
 permission applies to the capture process. Accessibility applies to mouse input.
 
-For a Mac build with host support, point `MUSTER_SUNSHINE_APP` at the downstream
-Sunshine.app built from this repository. The Xcode target copies the verified
-bundle into Contents/Helpers. Supply a self-contained, signed bundle with its
-dependency notices and corresponding sources for distribution. The isolated
-MusterDev build accepts the same path for local tests.
+## macOS capture host
+
+Build the normal macOS application or run `scripts/dev-terminal.sh --build-only`.
+The package step invokes `build-host.py` with the Cargo build cache, the private
+helper destination and a source archive destination. The build machine needs
+Apple command line tools, Python 3, CMake 3.24 or newer, Git, curl, Perl, make
+and pkg-config. The first build downloads pinned dependencies. The native
+engine uses static codec, Opus and OpenSSL libraries and the macOS SDK's curl.
+The build checks every runtime library reference and signs the bundled host.
+Its matching source archive lives in `Contents/Resources/ThirdParty`.
+macOS Screen Recording and Accessibility still apply to the bundled capture
+process. Source builds and private handshakes can be tested on a locked Mac.
+Real screen and input acceptance require an unlocked active graphical session.
