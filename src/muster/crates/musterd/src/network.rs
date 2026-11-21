@@ -240,6 +240,7 @@ impl Daemon {
             },
             vip,
             vnet_up: self.vnet().is_some(),
+            can_retry_vnet: self.can_retry_vnet(),
             relay: format!("{:?}", self.node().relay_state()).to_ascii_lowercase(),
             uptime_secs: self.uptime_secs(),
         }

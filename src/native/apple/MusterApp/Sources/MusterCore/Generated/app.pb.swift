@@ -972,6 +972,7 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
     case install // = 2
     case check // = 4
     case restart // = 5
+    case retryVnet // = 6
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -985,6 +986,7 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       case 2: self = .install
       case 4: self = .check
       case 5: self = .restart
+      case 6: self = .retryVnet
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -996,6 +998,7 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       case .install: return 2
       case .check: return 4
       case .restart: return 5
+      case .retryVnet: return 6
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -1007,6 +1010,7 @@ public nonisolated struct Muster_App_DesktopSetupAction: Sendable {
       .install,
       .check,
       .restart,
+      .retryVnet,
     ]
 
   }
@@ -5548,7 +5552,7 @@ nonisolated extension Muster_App_DesktopSetupAction: SwiftProtobuf.Message, Swif
 }
 
 nonisolated extension Muster_App_DesktopSetupAction.Action: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHOW\0\u{1}DISMISS\0\u{1}INSTALL\0\u{2}\u{2}CHECK\0\u{1}RESTART\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHOW\0\u{1}DISMISS\0\u{1}INSTALL\0\u{2}\u{2}CHECK\0\u{1}RESTART\0\u{1}RETRY_VNET\0")
 }
 
 nonisolated extension Muster_App_SetDeviceLockedUse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

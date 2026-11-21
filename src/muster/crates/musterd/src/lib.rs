@@ -43,7 +43,7 @@ use muster_net::magicsock::MagicOptions;
 use muster_net::node::{Node, NodeConfig, RelayConfig, ServiceHandler};
 use muster_net::pair::{Candidate, Verdict};
 use muster_net::stream::Hello;
-use muster_net::vnet::{Vnet, VnetConfig};
+use muster_net::vnet::{Vnet, VnetConfig, VnetPlan};
 use muster_net::{Build, SharedPolicy, SharedRoster};
 use muster_rpc::Principal;
 use muster_store::Store;
@@ -204,9 +204,17 @@ type PendingVnetOpen = JoinHandle<
     >,
 >;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VnetAttempt {
+    Pending,
+    Skipped,
+    Up,
+    OpenFailed(VnetPlan),
+}
+
 struct VnetStartup {
     task: JoinHandle<()>,
-    done: tokio::sync::watch::Receiver<bool>,
+    done: tokio::sync::watch::Receiver<VnetAttempt>,
 }
 
 pub struct Daemon {
@@ -230,6 +238,9 @@ pub struct Daemon {
     network_config: tokio::sync::Mutex<()>,
     vnet_start: tokio::sync::Mutex<()>,
     vnet_startup: Mutex<Option<VnetStartup>>,
+    #[cfg(all(test, windows))]
+    injected_vnet_failure:
+        Mutex<Option<tokio::sync::mpsc::UnboundedSender<oneshot::Sender<muster_net::Error>>>>,
     #[cfg(all(test, target_os = "macos"))]
     injected_vnet_open: Mutex<Option<PendingVnetOpen>>,
     closing: std::sync::atomic::AtomicBool,
@@ -428,6 +439,8 @@ impl Daemon {
             network_config: tokio::sync::Mutex::new(()),
             vnet_start: tokio::sync::Mutex::new(()),
             vnet_startup: Mutex::new(None),
+            #[cfg(all(test, windows))]
+            injected_vnet_failure: Mutex::new(None),
             #[cfg(all(test, target_os = "macos"))]
             injected_vnet_open: Mutex::new(None),
             closing: std::sync::atomic::AtomicBool::new(false),
@@ -695,51 +708,104 @@ impl Daemon {
     /// Brings up the TUN when this device holds a vip (needs the OS side:
     /// root on Linux, the NetHelper's fd on macOS).
     pub async fn maybe_start_vnet(self: &Arc<Self>) {
+        let _ = self.observe_vnet_start(false).await;
+    }
+
+    fn vnet_plan(&self) -> Option<VnetPlan> {
+        let roster = self.roster.read().unwrap();
+        let state = roster.state();
+        Some((
+            state.active(&self.device_id())?.record.vip?,
+            state.vnet_cidr?,
+        ))
+    }
+
+    fn failed_vnet_plan(&self, startup: Option<&VnetStartup>) -> Option<VnetPlan> {
+        if !cfg!(windows)
+            || !self.config.vnet
+            || self.closing.load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return None;
+        }
+        let VnetAttempt::OpenFailed(plan) = *startup?.done.borrow() else {
+            return None;
+        };
+        self.vnet_plan().filter(|current| *current == plan)
+    }
+
+    fn can_retry_vnet(&self) -> bool {
+        self.failed_vnet_plan(self.vnet_startup.lock().unwrap().as_ref())
+            .is_some()
+    }
+
+    async fn observe_vnet_start(self: &Arc<Self>, retry: bool) -> Result<(), Error> {
         let mut done = {
             let mut startup = self.vnet_startup.lock().unwrap();
             if self.closing.load(std::sync::atomic::Ordering::Relaxed) {
-                return;
+                return Err(Error::Unavailable("Node is shutting down".into()));
             }
-            if startup.as_ref().is_none_or(|job| job.task.is_finished()) {
-                let (completed, done) = tokio::sync::watch::channel(false);
+            let expected = if retry {
+                Some(self.failed_vnet_plan(startup.as_ref()).ok_or_else(|| {
+                    Error::Unavailable(
+                        "No failed virtual adapter startup for the current local address".into(),
+                    )
+                })?)
+            } else {
+                None
+            };
+            if startup.as_ref().is_none_or(|job| {
+                *job.done.borrow() != VnetAttempt::Pending || job.task.is_finished()
+            }) {
+                let (completed, done) = tokio::sync::watch::channel(VnetAttempt::Pending);
                 let daemon = self.clone();
                 let task = tokio::spawn(async move {
-                    daemon.start_vnet().await;
-                    let _ = completed.send(true);
+                    let result = daemon.start_vnet(expected).await;
+                    completed.send_replace(result);
+                    let _ = daemon.changed.send(());
                 });
                 *startup = Some(VnetStartup { task, done });
+                let _ = self.changed.send(());
             }
             startup.as_ref().unwrap().done.clone()
         };
-        if tokio::time::timeout(
+        match tokio::time::timeout(
             std::time::Duration::from_secs(3),
-            done.wait_for(|done| *done),
+            done.wait_for(|state| *state != VnetAttempt::Pending),
         )
         .await
-        .is_err()
         {
-            log::warn!(
-                "vnet helper open pending after 3s; single background task will complete startup"
-            );
+            Ok(Ok(outcome)) if retry && matches!(*outcome, VnetAttempt::OpenFailed(_)) => {
+                Err(Error::Unavailable(
+                    "The virtual adapter did not start. Check Windows authorization and retry."
+                        .into(),
+                ))
+            }
+            Ok(Ok(outcome)) if retry && *outcome == VnetAttempt::Skipped => Err(
+                Error::Unavailable("Local vnet could not start for the requested address".into()),
+            ),
+            Ok(Err(_)) => Err(Error::Unavailable("Virtual adapter startup stopped".into())),
+            Err(_) => {
+                log::warn!(
+                    "vnet helper open pending after 3s; single background task will complete startup"
+                );
+                Ok(())
+            }
+            Ok(Ok(_)) => Ok(()),
         }
     }
 
-    async fn start_vnet(&self) {
+    async fn start_vnet(&self, expected: Option<VnetPlan>) -> VnetAttempt {
         let _start = self.vnet_start.lock().await;
         if self.closing.load(std::sync::atomic::Ordering::Relaxed)
             || self.vnet.lock().unwrap().is_some()
         {
-            return;
+            return VnetAttempt::Skipped;
         }
-        let has_vip = self
-            .roster
-            .read()
-            .unwrap()
-            .state()
-            .active(&self.device_id())
-            .is_some_and(|m| m.record.vip.is_some());
-        if !has_vip {
-            return;
+        let Some(plan) = self.vnet_plan() else {
+            return VnetAttempt::Skipped;
+        };
+        if expected.is_some_and(|old| old != plan) {
+            return VnetAttempt::Skipped;
         }
         #[allow(unused_mut)]
         let mut config = VnetConfig::default();
@@ -751,7 +817,7 @@ impl Daemon {
         #[cfg(target_os = "macos")]
         let (helper, helper_address) = {
             use std::os::fd::{FromRawFd, IntoRawFd, OwnedFd};
-            let address = self.device_state().vip;
+            let address = plan.0.to_string();
             let mtu = config.mtu;
             // The worker owns this one open beyond the caller's observation
             // deadline. Detached blocking results own their fd even on shutdown.
@@ -781,7 +847,7 @@ impl Daemon {
                         since.elapsed()
                     );
                     if self.closing.load(std::sync::atomic::Ordering::Relaxed) {
-                        return;
+                        return VnetAttempt::Skipped;
                     }
                     config.existing_fd = Some(fd.into_raw_fd());
                     (helper, address)
@@ -796,11 +862,25 @@ impl Daemon {
                             _ => unreachable!(),
                         }
                     );
-                    return;
+                    return VnetAttempt::Skipped;
                 }
             }
         };
-        match Vnet::start(self.node(), config).await {
+        #[cfg(all(test, windows))]
+        let result = {
+            let injected = self.injected_vnet_failure.lock().unwrap().clone();
+            match injected {
+                Some(opens) => {
+                    let (complete, failure) = oneshot::channel();
+                    opens.send(complete).unwrap();
+                    Err(failure.await.expect("fixture supplies an open failure"))
+                }
+                None => Vnet::start_for_plan(self.node(), config, Some(plan)).await,
+            }
+        };
+        #[cfg(not(all(test, windows)))]
+        let result = Vnet::start_for_plan(self.node(), config, Some(plan)).await;
+        match result {
             Ok(vnet) => {
                 let roster = self.roster.read().unwrap();
                 let mut current = self.vnet.lock().unwrap();
@@ -818,7 +898,7 @@ impl Daemon {
                     || roster.state().vnet_cidr != Some(vnet.cidr())
                 {
                     vnet.shutdown();
-                    return;
+                    return VnetAttempt::Skipped;
                 }
                 #[cfg(target_os = "macos")]
                 {
@@ -826,10 +906,16 @@ impl Daemon {
                 }
                 log::info!("vnet up at {}", vnet.address());
                 *current = Some(vnet);
-                let _ = self.changed.send(());
+                return VnetAttempt::Up;
             }
-            Err(error) => log::warn!("vnet: {error}"),
+            Err(error) => {
+                log::warn!("vnet: {error}");
+                if cfg!(windows) && matches!(error, muster_net::Error::Io(_)) {
+                    return VnetAttempt::OpenFailed(plan);
+                }
+            }
         }
+        VnetAttempt::Skipped
     }
 
     fn stop_vnet(&self) {
@@ -1170,6 +1256,127 @@ pub fn kind_str(kind: DeviceKind) -> &'static str {
 mod relay_text_tests {
     use super::*;
 
+    #[cfg(windows)]
+    async fn windows_retry_fixture(vnet: bool) -> (tempfile::TempDir, Arc<Daemon>) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = DaemonConfig::new(dir.path());
+        config.agent = None;
+        config.cloud = false;
+        config.listen = false;
+        config.bind = "127.0.0.1:0".parse().unwrap();
+        config.vnet = vnet;
+        let signer = Arc::new(muster_core::SoftSigner::generate());
+        let daemon = Daemon::start_with(config, Arc::new(DefaultPlatform), Some(signer))
+            .await
+            .unwrap();
+        (dir, daemon)
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_vnet_retry_disabled_for_an_isolated_node() {
+        let (_dir, daemon) = windows_retry_fixture(false).await;
+        let (opens, mut requests) = tokio::sync::mpsc::unbounded_channel();
+        *daemon.injected_vnet_failure.lock().unwrap() = Some(opens);
+        daemon
+            .create_network("isolated fixture", "10.92.0.0/24")
+            .await
+            .unwrap();
+        assert!(!daemon.device_state().can_retry_vnet);
+        assert!(daemon.observe_vnet_start(true).await.is_err());
+        assert!(requests.try_recv().is_err());
+        daemon.shutdown().await;
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_vnet_retry_requires_the_failed_current_plan() {
+        let (_dir, daemon) = windows_retry_fixture(true).await;
+        let (opens, mut requests) = tokio::sync::mpsc::unbounded_channel();
+        *daemon.injected_vnet_failure.lock().unwrap() = Some(opens);
+        assert!(!daemon.device_state().can_retry_vnet);
+        assert!(daemon.observe_vnet_start(true).await.is_err());
+
+        let fixture = daemon.clone();
+        let create = tokio::spawn(async move {
+            fixture
+                .create_network("retry fixture", "10.92.0.0/24")
+                .await
+        });
+        let cancelled = || muster_net::Error::Io("fixture declined adapter open".into());
+        tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+            .await
+            .unwrap()
+            .unwrap()
+            .send(cancelled())
+            .unwrap();
+        create.await.unwrap().unwrap();
+        let identity = daemon.device_id();
+        assert!(daemon.device_state().can_retry_vnet);
+        assert!(!daemon.device_state().vnet_up);
+
+        use muster_proto::v1::{self, error::Code, request::Req, response::Resp};
+        use muster_rpc::{Client, Principal};
+        let client = |principal| {
+            let (caller, endpoint) = tokio::io::duplex(65536);
+            let handler = Arc::new(MusterHandler::new(Arc::downgrade(&daemon)));
+            tokio::spawn(muster_rpc::serve(endpoint, principal, handler));
+            Client::new(caller)
+        };
+        let request = || Req::NetworkRetryVnet(v1::NetworkRetryVnetRequest {});
+        let remote = client(Principal::Remote(identity));
+        assert!(matches!(
+            remote.call(request()).await,
+            Err(muster_rpc::Error::Remote {
+                code: Code::Unauthorized,
+                ..
+            })
+        ));
+        let local = client(Principal::Local);
+        assert!(matches!(
+            local
+                .call(Req::NetworkRefresh(v1::NetworkRefreshRequest {}))
+                .await,
+            Ok(Resp::NetworkStatus(_))
+        ));
+        assert!(requests.try_recv().is_err());
+        let caller = local.clone();
+        let retry = tokio::spawn(async move { caller.call(request()).await });
+        let pending = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!daemon.device_state().can_retry_vnet);
+        assert!(matches!(
+            local.call(request()).await,
+            Err(muster_rpc::Error::Remote {
+                code: Code::Unavailable,
+                ..
+            })
+        ));
+        assert!(requests.try_recv().is_err());
+        // The observer can finish while Windows still owns the open.
+        assert!(matches!(retry.await.unwrap(), Ok(Resp::Ack(_))));
+        assert!(!daemon.device_state().can_retry_vnet);
+        let mut changes = daemon.subscribe_changes();
+        pending.send(cancelled()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while !daemon.device_state().can_retry_vnet {
+                changes.recv().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(daemon.device_id(), identity);
+
+        let mapping = [(identity.to_hex(), "10.93.0.1".into())].into();
+        daemon.readdress_network("10.93.0.0/24", &mapping).unwrap();
+        assert!(!daemon.device_state().can_retry_vnet);
+        assert!(daemon.observe_vnet_start(true).await.is_err());
+        assert!(requests.try_recv().is_err());
+        daemon.shutdown().await;
+    }
+
     #[cfg(target_os = "macos")]
     async fn delayed_helper_daemon() -> (tempfile::TempDir, Arc<Daemon>) {
         let dir = tempfile::tempdir().unwrap();
@@ -1221,14 +1428,14 @@ mod relay_text_tests {
             let startup = daemon.vnet_startup.lock().unwrap();
             let startup = startup.as_ref().unwrap();
             assert_eq!(startup.task.id(), original);
-            assert!(!*startup.done.borrow());
+            assert_eq!(*startup.done.borrow(), VnetAttempt::Pending);
             startup.done.clone()
         };
         release.send(()).unwrap();
         // No more maybe_start_vnet call: the existing worker must consume it.
         tokio::time::timeout(
             std::time::Duration::from_secs(1),
-            done.wait_for(|done| *done),
+            done.wait_for(|state| *state != VnetAttempt::Pending),
         )
         .await
         .unwrap()
@@ -1269,7 +1476,7 @@ mod relay_text_tests {
         release.send(()).unwrap();
         tokio::time::timeout(
             std::time::Duration::from_secs(1),
-            done.wait_for(|done| *done),
+            done.wait_for(|state| *state != VnetAttempt::Pending),
         )
         .await
         .unwrap()

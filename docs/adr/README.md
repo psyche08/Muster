@@ -386,3 +386,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0268](0268-windows-turn-summary.md) | Accepted | Render per-turn usage and cost in Windows conversations |
 | [0269](0269-windows-transcript-links.md) | Accepted | Open Markdown links from Windows conversations |
 | [0270](0270-windows-reader-accessibility.md) | Accepted | Name Windows conversation, file and page readers for accessibility |
+| [0271](0271-windows-vnet-retry.md) | Accepted | Retry a failed local Windows vnet open on the running node |

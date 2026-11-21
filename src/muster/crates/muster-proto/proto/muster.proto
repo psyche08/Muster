@@ -168,6 +168,7 @@ message Request {
     // Local owner only: a named local service's standing dispatch grant
     // (ADR 0199).
     AgentDispatchRequest agent_dispatch = 81;
+    NetworkRetryVnetRequest network_retry_vnet = 152; // local only
   }
 }
 
@@ -261,6 +262,7 @@ message DesktopUpdateLeaseRequest {}
 // more round of bounded connection attempts (muster_net::presence). Local
 // only; answers NetworkStatus.
 message NetworkRefreshRequest {}
+message NetworkRetryVnetRequest {}
 
 message NetworkReaddressRequest {
   string vnet_cidr = 1;
@@ -340,6 +342,7 @@ message DeviceState {
   // (Screen Recording: what lets the daemon read an app's window pixels when
   // a native send fails, ADR 0116).
   string screen_recording = 17;
+  bool can_retry_vnet = 19; // a failed local adapter open for the current signed address
   DisplayBlackout blackout = 18; // present when this desktop offers the mode
 }
 

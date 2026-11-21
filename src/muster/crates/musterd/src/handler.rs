@@ -93,6 +93,7 @@ fn access_for(req: &Req) -> Access {
         | Req::DeviceRequestAutomation(_)
         | Req::DeviceRequestScreenRecording(_)
         | Req::DeviceDebug(_)
+        | Req::NetworkRetryVnet(_)
         | Req::NetworkRefresh(_)
         | Req::DesktopUpdateLease(_)
         // A forward makes this machine reach into a member's loopback, so it
@@ -1389,6 +1390,10 @@ async fn dispatch(
 
         // ----------------------------------------------------------- network
         Req::NetworkStatus(_) => Resp::NetworkStatus(daemon.network_status()),
+        Req::NetworkRetryVnet(_) => {
+            daemon.observe_vnet_start(true).await?;
+            Resp::Ack(v1::Ack {})
+        }
         Req::NetworkRefresh(_) => {
             daemon.refresh_presence();
             Resp::NetworkStatus(daemon.network_status())
@@ -3539,6 +3544,14 @@ mod setup_permission_tests {
         );
         assert!(terminal_for(&daemon, "ghostty:").is_err());
         daemon.shutdown().await;
+    }
+
+    #[test]
+    fn windows_vnet_retry_is_local_only() {
+        assert!(matches!(
+            access_for(&Req::NetworkRetryVnet(v1::NetworkRetryVnetRequest {})),
+            Access::LocalOnly
+        ));
     }
 
     #[test]

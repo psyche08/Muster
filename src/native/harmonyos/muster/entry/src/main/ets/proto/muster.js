@@ -952,6 +952,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.ILockedUseExtendRequest|null} [lockedUseExtend] Request lockedUseExtend
              * @property {muster.v1.INetworkRefreshRequest|null} [networkRefresh] Request networkRefresh
              * @property {muster.v1.IOrcaCreateRequest|null} [orcaCreate] Request orcaCreate
+             * @property {muster.v1.IAgentSideQuestionRequest|null} [agentSideQuestion] Request agentSideQuestion
              * @property {muster.v1.IAgentCompleteRequest|null} [agentComplete] Request agentComplete
              * @property {muster.v1.IDevicePresenceRequest|null} [devicePresence] Request devicePresence
              * @property {muster.v1.INetworkPresenceRequest|null} [networkPresence] Request networkPresence
@@ -970,6 +971,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IMulticaMutation|null} [multicaMutation] Request multicaMutation
              * @property {muster.v1.IDeviceSetCoverRequest|null} [deviceSetBlackout] Request deviceSetBlackout
              * @property {muster.v1.IAgentDispatchRequest|null} [agentDispatch] Request agentDispatch
+             * @property {muster.v1.INetworkRetryVnetRequest|null} [networkRetryVnet] Request networkRetryVnet
              */
 
             /**
@@ -1420,6 +1422,14 @@ export const muster = $root.muster = (() => {
             Request.prototype.orcaCreate = null;
 
             /**
+             * Request agentSideQuestion.
+             * @member {muster.v1.IAgentSideQuestionRequest|null|undefined} agentSideQuestion
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.agentSideQuestion = null;
+
+            /**
              * Request agentComplete.
              * @member {muster.v1.IAgentCompleteRequest|null|undefined} agentComplete
              * @memberof muster.v1.Request
@@ -1563,17 +1573,25 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.agentDispatch = null;
 
+            /**
+             * Request networkRetryVnet.
+             * @member {muster.v1.INetworkRetryVnetRequest|null|undefined} networkRetryVnet
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.networkRetryVnet = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"networkRetryVnet"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "networkRename", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "networkRename", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentSideQuestion", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch", "networkRetryVnet"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1749,6 +1767,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentDispatchRequest.encode(message.agentDispatch, writer.uint32(/* id 81, wireType 2 =*/650).fork(), q + 1).ldelim();
                 if (message.networkRename != null && Object.hasOwnProperty.call(message, "networkRename"))
                     $root.muster.v1.NetworkRenameRequest.encode(message.networkRename, writer.uint32(/* id 150, wireType 2 =*/1202).fork(), q + 1).ldelim();
+                if (message.agentSideQuestion != null && Object.hasOwnProperty.call(message, "agentSideQuestion"))
+                    $root.muster.v1.AgentSideQuestionRequest.encode(message.agentSideQuestion, writer.uint32(/* id 151, wireType 2 =*/1210).fork(), q + 1).ldelim();
+                if (message.networkRetryVnet != null && Object.hasOwnProperty.call(message, "networkRetryVnet"))
+                    $root.muster.v1.NetworkRetryVnetRequest.encode(message.networkRetryVnet, writer.uint32(/* id 152, wireType 2 =*/1218).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2002,6 +2024,10 @@ export const muster = $root.muster = (() => {
                             message.orcaCreate = $root.muster.v1.OrcaCreateRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 151: {
+                            message.agentSideQuestion = $root.muster.v1.AgentSideQuestionRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 64: {
                             message.agentComplete = $root.muster.v1.AgentCompleteRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
@@ -2072,6 +2098,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 81: {
                             message.agentDispatch = $root.muster.v1.AgentDispatchRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 152: {
+                            message.networkRetryVnet = $root.muster.v1.NetworkRetryVnetRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -2343,6 +2373,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAgentChatCatalog|null} [agentChats] Response agentChats
              * @property {muster.v1.IAgentChatOptions|null} [agentChatOptions] Response agentChatOptions
              * @property {muster.v1.IDiagnosticsSaved|null} [diagnosticsSaved] Response diagnosticsSaved
+             * @property {muster.v1.IAgentSideAnswer|null} [agentSideAnswer] Response agentSideAnswer
              * @property {muster.v1.IAgentCompletion|null} [agentCompletion] Response agentCompletion
              * @property {muster.v1.IPresenceInfo|null} [presenceInfo] Response presenceInfo
              * @property {muster.v1.IMulticaStatus|null} [multica] Response multica
@@ -2561,6 +2592,14 @@ export const muster = $root.muster = (() => {
             Response.prototype.diagnosticsSaved = null;
 
             /**
+             * Response agentSideAnswer.
+             * @member {muster.v1.IAgentSideAnswer|null|undefined} agentSideAnswer
+             * @memberof muster.v1.Response
+             * @instance
+             */
+            Response.prototype.agentSideAnswer = null;
+
+            /**
              * Response agentCompletion.
              * @member {muster.v1.IAgentCompletion|null|undefined} agentCompletion
              * @memberof muster.v1.Response
@@ -2629,12 +2668,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Response resp.
-             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler"|"agentDispatch"|undefined} resp
+             * @member {"error"|"ack"|"opResult"|"deviceInfo"|"debugText"|"lockedUseChallenge"|"networkStatus"|"inviteText"|"pendingJoins"|"policy"|"terminalSessions"|"terminalSession"|"terminalLines"|"terminalRuns"|"agentSessions"|"agentMessages"|"agentSession"|"fileList"|"fileContent"|"gitLog"|"browserStatus"|"agentChats"|"agentChatOptions"|"diagnosticsSaved"|"agentSideAnswer"|"agentCompletion"|"presenceInfo"|"multica"|"multicaPage"|"multicaService"|"vision"|"agentScheduler"|"agentDispatch"|undefined} resp
              * @memberof muster.v1.Response
              * @instance
              */
             Object.defineProperty(Response.prototype, "resp", {
-                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentCompletion", "presenceInfo", "multica", "multicaPage", "multicaService", "vision", "agentScheduler", "agentDispatch"]),
+                get: $util.oneOfGetter($oneOfFields = ["error", "ack", "opResult", "deviceInfo", "debugText", "lockedUseChallenge", "networkStatus", "inviteText", "pendingJoins", "policy", "terminalSessions", "terminalSession", "terminalLines", "terminalRuns", "agentSessions", "agentMessages", "agentSession", "fileList", "fileContent", "gitLog", "browserStatus", "agentChats", "agentChatOptions", "diagnosticsSaved", "agentSideAnswer", "agentCompletion", "presenceInfo", "multica", "multicaPage", "multicaService", "vision", "agentScheduler", "agentDispatch"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -2730,6 +2769,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.MulticaService.encode(message.multicaService, writer.uint32(/* id 78, wireType 2 =*/626).fork(), q + 1).ldelim();
                 if (message.agentDispatch != null && Object.hasOwnProperty.call(message, "agentDispatch"))
                     $root.muster.v1.AgentDispatchStatus.encode(message.agentDispatch, writer.uint32(/* id 81, wireType 2 =*/650).fork(), q + 1).ldelim();
+                if (message.agentSideAnswer != null && Object.hasOwnProperty.call(message, "agentSideAnswer"))
+                    $root.muster.v1.AgentSideAnswer.encode(message.agentSideAnswer, writer.uint32(/* id 151, wireType 2 =*/1210).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2861,6 +2902,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 55: {
                             message.diagnosticsSaved = $root.muster.v1.DiagnosticsSaved.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 151: {
+                            message.agentSideAnswer = $root.muster.v1.AgentSideAnswer.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 56: {
@@ -3765,6 +3810,125 @@ export const muster = $root.muster = (() => {
             };
 
             return NetworkRefreshRequest;
+        })();
+
+        v1.NetworkRetryVnetRequest = (function() {
+
+            /**
+             * Properties of a NetworkRetryVnetRequest.
+             * @memberof muster.v1
+             * @interface INetworkRetryVnetRequest
+             */
+
+            /**
+             * Constructs a new NetworkRetryVnetRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a NetworkRetryVnetRequest.
+             * @implements INetworkRetryVnetRequest
+             * @constructor
+             * @param {muster.v1.INetworkRetryVnetRequest=} [properties] Properties to set
+             */
+            function NetworkRetryVnetRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * Creates a new NetworkRetryVnetRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.NetworkRetryVnetRequest
+             * @static
+             * @param {muster.v1.INetworkRetryVnetRequest=} [properties] Properties to set
+             * @returns {muster.v1.NetworkRetryVnetRequest} NetworkRetryVnetRequest instance
+             */
+            NetworkRetryVnetRequest.create = function create(properties) {
+                return new NetworkRetryVnetRequest(properties);
+            };
+
+            /**
+             * Encodes the specified NetworkRetryVnetRequest message. Does not implicitly {@link muster.v1.NetworkRetryVnetRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.NetworkRetryVnetRequest
+             * @static
+             * @param {muster.v1.INetworkRetryVnetRequest} message NetworkRetryVnetRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NetworkRetryVnetRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                return writer;
+            };
+
+            /**
+             * Decodes a NetworkRetryVnetRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.NetworkRetryVnetRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.NetworkRetryVnetRequest} NetworkRetryVnetRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NetworkRetryVnetRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.NetworkRetryVnetRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for NetworkRetryVnetRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.NetworkRetryVnetRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            NetworkRetryVnetRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.NetworkRetryVnetRequest";
+            };
+
+            return NetworkRetryVnetRequest;
         })();
 
         v1.NetworkReaddressRequest = (function() {
@@ -5164,6 +5328,7 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [manualLockedUseActive] DeviceState manualLockedUseActive
              * @property {string|null} [ghosttyAutomation] DeviceState ghosttyAutomation
              * @property {string|null} [screenRecording] DeviceState screenRecording
+             * @property {boolean|null} [canRetryVnet] DeviceState canRetryVnet
              * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceState blackout
              */
 
@@ -5319,6 +5484,14 @@ export const muster = $root.muster = (() => {
             DeviceState.prototype.screenRecording = "";
 
             /**
+             * DeviceState canRetryVnet.
+             * @member {boolean} canRetryVnet
+             * @memberof muster.v1.DeviceState
+             * @instance
+             */
+            DeviceState.prototype.canRetryVnet = false;
+
+            /**
              * DeviceState blackout.
              * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
              * @memberof muster.v1.DeviceState
@@ -5390,6 +5563,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 17, wireType 2 =*/138).string(message.screenRecording);
                 if (message.blackout != null && Object.hasOwnProperty.call(message, "blackout"))
                     $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
+                if (message.canRetryVnet != null && Object.hasOwnProperty.call(message, "canRetryVnet"))
+                    writer.uint32(/* id 19, wireType 0 =*/152).bool(message.canRetryVnet);
                 return writer;
             };
 
@@ -5493,6 +5668,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 17: {
                             message.screenRecording = reader.string();
+                            break;
+                        }
+                    case 19: {
+                            message.canRetryVnet = reader.bool();
                             break;
                         }
                     case 18: {
@@ -6318,6 +6497,335 @@ export const muster = $root.muster = (() => {
             };
 
             return AgentInspectRequest;
+        })();
+
+        v1.AgentSideQuestionRequest = (function() {
+
+            /**
+             * Properties of an AgentSideQuestionRequest.
+             * @memberof muster.v1
+             * @interface IAgentSideQuestionRequest
+             * @property {string|null} [session] AgentSideQuestionRequest session
+             * @property {string|null} [question] AgentSideQuestionRequest question
+             * @property {muster.v1.AgentSideQuestionRequest.Action|null} [action] AgentSideQuestionRequest action
+             * @property {string|null} [opId] AgentSideQuestionRequest opId
+             */
+
+            /**
+             * Constructs a new AgentSideQuestionRequest.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSideQuestionRequest.
+             * @implements IAgentSideQuestionRequest
+             * @constructor
+             * @param {muster.v1.IAgentSideQuestionRequest=} [properties] Properties to set
+             */
+            function AgentSideQuestionRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSideQuestionRequest session.
+             * @member {string} session
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @instance
+             */
+            AgentSideQuestionRequest.prototype.session = "";
+
+            /**
+             * AgentSideQuestionRequest question.
+             * @member {string} question
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @instance
+             */
+            AgentSideQuestionRequest.prototype.question = "";
+
+            /**
+             * AgentSideQuestionRequest action.
+             * @member {muster.v1.AgentSideQuestionRequest.Action} action
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @instance
+             */
+            AgentSideQuestionRequest.prototype.action = 0;
+
+            /**
+             * AgentSideQuestionRequest opId.
+             * @member {string} opId
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @instance
+             */
+            AgentSideQuestionRequest.prototype.opId = "";
+
+            /**
+             * Creates a new AgentSideQuestionRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @static
+             * @param {muster.v1.IAgentSideQuestionRequest=} [properties] Properties to set
+             * @returns {muster.v1.AgentSideQuestionRequest} AgentSideQuestionRequest instance
+             */
+            AgentSideQuestionRequest.create = function create(properties) {
+                return new AgentSideQuestionRequest(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSideQuestionRequest message. Does not implicitly {@link muster.v1.AgentSideQuestionRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @static
+             * @param {muster.v1.IAgentSideQuestionRequest} message AgentSideQuestionRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSideQuestionRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.session);
+                if (message.question != null && Object.hasOwnProperty.call(message, "question"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.question);
+                if (message.action != null && Object.hasOwnProperty.call(message, "action"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).int32(message.action);
+                if (message.opId != null && Object.hasOwnProperty.call(message, "opId"))
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.opId);
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSideQuestionRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSideQuestionRequest} AgentSideQuestionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSideQuestionRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSideQuestionRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.session = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.question = reader.string();
+                            break;
+                        }
+                    case 3: {
+                            message.action = reader.int32();
+                            break;
+                        }
+                    case 4: {
+                            message.opId = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSideQuestionRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSideQuestionRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSideQuestionRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSideQuestionRequest";
+            };
+
+            /**
+             * Action enum.
+             * @name muster.v1.AgentSideQuestionRequest.Action
+             * @enum {number}
+             * @property {number} CREATE=0 CREATE value
+             * @property {number} ASK=1 ASK value
+             * @property {number} END=2 END value
+             */
+            AgentSideQuestionRequest.Action = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "CREATE"] = 0;
+                values[valuesById[1] = "ASK"] = 1;
+                values[valuesById[2] = "END"] = 2;
+                return values;
+            })();
+
+            return AgentSideQuestionRequest;
+        })();
+
+        v1.AgentSideAnswer = (function() {
+
+            /**
+             * Properties of an AgentSideAnswer.
+             * @memberof muster.v1
+             * @interface IAgentSideAnswer
+             * @property {muster.v1.IAgentSession|null} [session] AgentSideAnswer session
+             */
+
+            /**
+             * Constructs a new AgentSideAnswer.
+             * @memberof muster.v1
+             * @classdesc Represents an AgentSideAnswer.
+             * @implements IAgentSideAnswer
+             * @constructor
+             * @param {muster.v1.IAgentSideAnswer=} [properties] Properties to set
+             */
+            function AgentSideAnswer(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * AgentSideAnswer session.
+             * @member {muster.v1.IAgentSession|null|undefined} session
+             * @memberof muster.v1.AgentSideAnswer
+             * @instance
+             */
+            AgentSideAnswer.prototype.session = null;
+
+            /**
+             * Creates a new AgentSideAnswer instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.AgentSideAnswer
+             * @static
+             * @param {muster.v1.IAgentSideAnswer=} [properties] Properties to set
+             * @returns {muster.v1.AgentSideAnswer} AgentSideAnswer instance
+             */
+            AgentSideAnswer.create = function create(properties) {
+                return new AgentSideAnswer(properties);
+            };
+
+            /**
+             * Encodes the specified AgentSideAnswer message. Does not implicitly {@link muster.v1.AgentSideAnswer.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.AgentSideAnswer
+             * @static
+             * @param {muster.v1.IAgentSideAnswer} message AgentSideAnswer message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            AgentSideAnswer.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.session != null && Object.hasOwnProperty.call(message, "session"))
+                    $root.muster.v1.AgentSession.encode(message.session, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes an AgentSideAnswer message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.AgentSideAnswer
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.AgentSideAnswer} AgentSideAnswer
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            AgentSideAnswer.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.AgentSideAnswer();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.session = $root.muster.v1.AgentSession.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for AgentSideAnswer
+             * @function getTypeUrl
+             * @memberof muster.v1.AgentSideAnswer
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            AgentSideAnswer.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.AgentSideAnswer";
+            };
+
+            return AgentSideAnswer;
         })();
 
         v1.AgentCompleteRequest = (function() {
@@ -32057,6 +32565,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IChatSetOptions|null} [chatSetOptions] Intent chatSetOptions
              * @property {muster.app.IComposerAction|null} [composerAction] Intent composerAction
              * @property {muster.app.IUploadDiagnostics|null} [uploadDiagnostics] Intent uploadDiagnostics
+             * @property {muster.app.ISideChatAction|null} [sideChatAction] Intent sideChatAction
              * @property {muster.app.IComposerComplete|null} [composerComplete] Intent composerComplete
              * @property {muster.app.IOpenTerminals|null} [openTerminals] Intent openTerminals
              * @property {muster.app.IOpenTerminal|null} [openTerminal] Intent openTerminal
@@ -32481,6 +32990,14 @@ export const muster = $root.muster = (() => {
             Intent.prototype.uploadDiagnostics = null;
 
             /**
+             * Intent sideChatAction.
+             * @member {muster.app.ISideChatAction|null|undefined} sideChatAction
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.sideChatAction = null;
+
+            /**
              * Intent composerComplete.
              * @member {muster.app.IComposerComplete|null|undefined} composerComplete
              * @memberof muster.app.Intent
@@ -32661,12 +33178,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "sideChatAction", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -32838,6 +33355,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 141, wireType 0 =*/1128).bool(message.setRequireLockedUseAuth);
                 if (message.renameDevice != null && Object.hasOwnProperty.call(message, "renameDevice"))
                     $root.muster.v1.NetworkRenameRequest.encode(message.renameDevice, writer.uint32(/* id 142, wireType 2 =*/1138).fork(), q + 1).ldelim();
+                if (message.sideChatAction != null && Object.hasOwnProperty.call(message, "sideChatAction"))
+                    $root.muster.app.SideChatAction.encode(message.sideChatAction, writer.uint32(/* id 151, wireType 2 =*/1210).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -33065,6 +33584,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 85: {
                             message.uploadDiagnostics = $root.muster.app.UploadDiagnostics.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 151: {
+                            message.sideChatAction = $root.muster.app.SideChatAction.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 88: {
@@ -34077,6 +34600,7 @@ export const muster = $root.muster = (() => {
              * @property {number} INSTALL=2 INSTALL value
              * @property {number} CHECK=4 CHECK value
              * @property {number} RESTART=5 RESTART value
+             * @property {number} RETRY_VNET=6 RETRY_VNET value
              */
             DesktopSetupAction.Action = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -34085,6 +34609,7 @@ export const muster = $root.muster = (() => {
                 values[valuesById[2] = "INSTALL"] = 2;
                 values[valuesById[4] = "CHECK"] = 4;
                 values[valuesById[5] = "RESTART"] = 5;
+                values[valuesById[6] = "RETRY_VNET"] = 6;
                 return values;
             })();
 
@@ -40296,6 +40821,140 @@ export const muster = $root.muster = (() => {
             };
 
             return ChatOptionsLoad;
+        })();
+
+        app.SideChatAction = (function() {
+
+            /**
+             * Properties of a SideChatAction.
+             * @memberof muster.app
+             * @interface ISideChatAction
+             * @property {boolean|null} [end] SideChatAction end
+             */
+
+            /**
+             * Constructs a new SideChatAction.
+             * @memberof muster.app
+             * @classdesc Represents a SideChatAction.
+             * @implements ISideChatAction
+             * @constructor
+             * @param {muster.app.ISideChatAction=} [properties] Properties to set
+             */
+            function SideChatAction(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * SideChatAction end.
+             * @member {boolean} end
+             * @memberof muster.app.SideChatAction
+             * @instance
+             */
+            SideChatAction.prototype.end = false;
+
+            /**
+             * Creates a new SideChatAction instance using the specified properties.
+             * @function create
+             * @memberof muster.app.SideChatAction
+             * @static
+             * @param {muster.app.ISideChatAction=} [properties] Properties to set
+             * @returns {muster.app.SideChatAction} SideChatAction instance
+             */
+            SideChatAction.create = function create(properties) {
+                return new SideChatAction(properties);
+            };
+
+            /**
+             * Encodes the specified SideChatAction message. Does not implicitly {@link muster.app.SideChatAction.verify|verify} messages.
+             * @function encode
+             * @memberof muster.app.SideChatAction
+             * @static
+             * @param {muster.app.ISideChatAction} message SideChatAction message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            SideChatAction.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.end != null && Object.hasOwnProperty.call(message, "end"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.end);
+                return writer;
+            };
+
+            /**
+             * Decodes a SideChatAction message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.app.SideChatAction
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.app.SideChatAction} SideChatAction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            SideChatAction.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.app.SideChatAction();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.end = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for SideChatAction
+             * @function getTypeUrl
+             * @memberof muster.app.SideChatAction
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            SideChatAction.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.app.SideChatAction";
+            };
+
+            return SideChatAction;
         })();
 
         app.ComposerComplete = (function() {
@@ -48899,6 +49558,9 @@ export const muster = $root.muster = (() => {
              * @property {number|Long|null} [contentRevision] ChatView contentRevision
              * @property {string|null} [composerPlaceholder] ChatView composerPlaceholder
              * @property {string|null} [composerSuggestion] ChatView composerSuggestion
+             * @property {boolean|null} [canCreateSideChat] ChatView canCreateSideChat
+             * @property {boolean|null} [canEndSideChat] ChatView canEndSideChat
+             * @property {string|null} [composerDisabledReason] ChatView composerDisabledReason
              * @property {boolean|null} [canComplete] ChatView canComplete
              * @property {boolean|null} [completing] ChatView completing
              * @property {string|null} [completionError] ChatView completionError
@@ -49172,6 +49834,30 @@ export const muster = $root.muster = (() => {
             ChatView.prototype.composerSuggestion = "";
 
             /**
+             * ChatView canCreateSideChat.
+             * @member {boolean} canCreateSideChat
+             * @memberof muster.app.ChatView
+             * @instance
+             */
+            ChatView.prototype.canCreateSideChat = false;
+
+            /**
+             * ChatView canEndSideChat.
+             * @member {boolean} canEndSideChat
+             * @memberof muster.app.ChatView
+             * @instance
+             */
+            ChatView.prototype.canEndSideChat = false;
+
+            /**
+             * ChatView composerDisabledReason.
+             * @member {string} composerDisabledReason
+             * @memberof muster.app.ChatView
+             * @instance
+             */
+            ChatView.prototype.composerDisabledReason = "";
+
+            /**
              * ChatView canComplete.
              * @member {boolean} canComplete
              * @memberof muster.app.ChatView
@@ -49364,6 +50050,12 @@ export const muster = $root.muster = (() => {
                 if (message.compactWrapUpIds != null && message.compactWrapUpIds.length)
                     for (let i = 0; i < message.compactWrapUpIds.length; ++i)
                         writer.uint32(/* id 41, wireType 2 =*/330).string(message.compactWrapUpIds[i]);
+                if (message.canCreateSideChat != null && Object.hasOwnProperty.call(message, "canCreateSideChat"))
+                    writer.uint32(/* id 42, wireType 0 =*/336).bool(message.canCreateSideChat);
+                if (message.canEndSideChat != null && Object.hasOwnProperty.call(message, "canEndSideChat"))
+                    writer.uint32(/* id 43, wireType 0 =*/344).bool(message.canEndSideChat);
+                if (message.composerDisabledReason != null && Object.hasOwnProperty.call(message, "composerDisabledReason"))
+                    writer.uint32(/* id 44, wireType 2 =*/354).string(message.composerDisabledReason);
                 return writer;
             };
 
@@ -49523,6 +50215,18 @@ export const muster = $root.muster = (() => {
                         }
                     case 31: {
                             message.composerSuggestion = reader.string();
+                            break;
+                        }
+                    case 42: {
+                            message.canCreateSideChat = reader.bool();
+                            break;
+                        }
+                    case 43: {
+                            message.canEndSideChat = reader.bool();
+                            break;
+                        }
+                    case 44: {
+                            message.composerDisabledReason = reader.string();
                             break;
                         }
                     case 32: {
