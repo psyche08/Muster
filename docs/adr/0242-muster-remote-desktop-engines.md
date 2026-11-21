@@ -98,3 +98,29 @@ PeerLink. A repeat open was refused. The Macs kept their installed releases and
 roster; SSH carried only the test executable, public keys and signed test
 entries. No engine, screen capture, input injection, native UI, direct media
 path, signing, or installation was tested.
+
+#### Windows x64 and macOS arm64 verification, 2026-11-20
+
+Both devices built the `muster-net` test binary for their native platform from
+commit `384db1a`, which includes PR #260.
+
+**Local loopback.** On each device,
+`signed_peers_exchange_and_revoke_a_transport_session` passed with both test
+peers and a UDP relay on loopback.
+
+**Two-device synthetic transport.** `transport_between_hosts` passed twice
+through the same TLS-verified Muster relay, first with macOS as host and
+Windows as viewer, then with Windows as host and macOS as viewer. SSH carried
+the fixture setup, including ephemeral public keys and signed test roster
+entries. The control and media traffic used the relay-only PeerLink.
+
+In each direction, the viewer received `confirmed` in reply to `control` and
+received the 1100-byte synthetic media payload back byte for byte. Its vnet
+receive queue was empty after the media round trip. When the host revoked
+access, the pending media receive ended with an error within two seconds.
+PeerLink stayed connected, and opening a new session returned `Unauthorized`.
+Both peers exited successfully in each run.
+
+**Product end-to-end acceptance remains pending.** The fixture exercised the
+Rust transport with temporary identities. Sunshine capture, Moonlight playback,
+native UI, and keyboard or mouse input still require a product acceptance run.
