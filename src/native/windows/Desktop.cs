@@ -665,6 +665,22 @@ internal sealed class Desktop : Form
             {
                 lines.Add("Agent access: " + (policy.OfferAgent ? "On" : "Off") +
                           "\r\nTerminal access: " + (policy.OfferTerminal ? "On" : "Off"));
+                lines.Add("Open ports    " + (policy.OpenPorts.Count == 0 ? "None" : string.Join(", ", policy.OpenPorts)));
+                AddAction("Edit open ports", () =>
+                {
+                    using var dialog = new OpenPortsDialog(policy.OpenPorts);
+                    if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
+                        current.Policy is not {} latest) return;
+                    if (!policy.OpenPorts.SequenceEqual(latest.OpenPorts))
+                    {
+                        MessageBox.Show(this, "Open ports changed. Reopen the editor to review the current rules.", "Open ports");
+                        return;
+                    }
+                    var updated = latest.Clone();
+                    updated.OpenPorts.Clear();
+                    updated.OpenPorts.Add(dialog.Rules);
+                    Send(new() { SetPolicy = new() { Policy = updated } });
+                });
                 Act((policy.OfferAgent ? "Disable" : "Enable") + " agent sharing",
                     () =>
                     {

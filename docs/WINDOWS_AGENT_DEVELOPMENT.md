@@ -381,6 +381,13 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 桌面和服务器的设备详情可进入对应宿主的 Chrome、Agents 和 Terminals。核对没有服务的
 成员时，这三个设备专属入口应隐藏。
 
+## 复核本机开放端口
+
+在 **Settings → Edit open ports** 中，每行填写一条 Muster 规则。先在隔离节点上读回
+`{"policy_get":{}}` 的 `policy.open_ports`，用 **Cancel** 验证原值，再用 **Save**
+验证一次修改和清空。提交含错误规则的一组输入后，读回的整份策略应保持原值。
+先查看另一成员再进入 Settings 时，保存的仍应是本机策略。在线节点可只打开对话框并取消。
+
 ## 复核 Chrome 扩展设置
 
 从本机设备详情打开 **Chrome on device**。在普通用户终端读回同一节点的状态：

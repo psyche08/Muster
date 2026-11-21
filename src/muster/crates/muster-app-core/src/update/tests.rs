@@ -1009,6 +1009,55 @@ async fn phone() -> (tempfile::TempDir, Ctx, State) {
     (dir, ctx, state)
 }
 
+#[tokio::test]
+async fn settings_saves_the_locally_displayed_policy_after_selecting_a_peer() {
+    let (_dir, mut ctx, mut state) = phone().await;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    ctx.tx = tx;
+    state.selected = "previous-member".into();
+    state.go(Screen::Settings);
+    let daemon = ctx.backend.daemon().unwrap();
+    let mut expected = daemon.policy_view();
+    expected.open_ports = vec!["tcp/40222".into()];
+    for valid in [true, false] {
+        let mut draft = expected.clone();
+        if !valid {
+            draft.open_ports = vec!["udp/40223".into(), "not-a-rule".into()];
+        }
+        intent(
+            &mut state,
+            &ctx,
+            app::Intent {
+                it: Some(It::SetPolicy(app::SetPolicy {
+                    policy: Some(draft),
+                })),
+            },
+        );
+        let Some(Loop::Msg(reply)) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .unwrap()
+        else {
+            panic!("expected a policy response");
+        };
+        let Msg::Done {
+            what: "policy",
+            result,
+        } = *reply
+        else {
+            panic!("expected a local policy reply");
+        };
+        if valid {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().to_string().contains("port rule"));
+        }
+        assert_eq!(daemon.policy_view(), expected);
+        assert_eq!(state.selected, "previous-member");
+    }
+    ctx.backend.shutdown().await;
+}
+
 fn remote_terminal() -> Terminal {
     Terminal {
         device: "mac".into(),

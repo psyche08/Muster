@@ -506,7 +506,12 @@ pub(super) fn intent_set_scopes(state: &mut State, ctx: &Ctx, s: app::SetScopes)
 }
 
 pub(super) fn intent_set_policy(state: &mut State, ctx: &Ctx, p: app::SetPolicy) {
-    let device = state.target();
+    // Settings loads its policy from the local daemon even after viewing another member.
+    let device = if state.screen == Screen::Settings {
+        state.self_id.clone()
+    } else {
+        state.target()
+    };
     admin_request(
         state,
         ctx,
