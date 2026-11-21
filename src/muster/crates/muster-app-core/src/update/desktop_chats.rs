@@ -20,21 +20,29 @@ pub(super) fn open_desktop_chats(state: &mut State, ctx: &Ctx, provider: String)
         return;
     };
     let provider = app.provider().as_str().to_string();
+    let mut preferred = None;
     if state.desktop_chats.provider != provider || state.desktop_chats.catalog.is_none() {
         state.desktop_chats_view += 1;
         state.desktop_chat_retry = None;
-        state.desktop_chats = ctx
-            .cache
-            .get::<app::DesktopChatsView>(&cache_key(state, "chat-list-v2", "", &provider))
-            .unwrap_or_else(|| app::DesktopChatsView {
-                provider,
-                ..Default::default()
-            });
-        state.desktop_chats.opening.clear();
+        let cached = ctx.cache.get::<app::DesktopChatsView>(&cache_key(
+            state,
+            "chat-list-v2",
+            "",
+            &provider,
+        ));
+        let mut view = app::DesktopChatsView {
+            provider,
+            ..Default::default()
+        };
+        if let Some(saved) = cached {
+            preferred = Some(saved.device_id);
+            view.catalog = saved.catalog;
+        }
+        state.desktop_chats = view;
     }
     state.desktop_chats.error.clear();
     state.go(Screen::DesktopChats);
-    load_desktop_chats(state, ctx);
+    load_desktop_chats_preferring(state, ctx, preferred);
 }
 
 pub(super) fn chat_route(state: &State, device: &str) -> String {
@@ -169,6 +177,10 @@ pub(super) async fn pick_chat_host(
 }
 
 pub(super) fn load_desktop_chats(state: &mut State, ctx: &Ctx) {
+    load_desktop_chats_preferring(state, ctx, None);
+}
+
+fn load_desktop_chats_preferring(state: &mut State, ctx: &Ctx, preferred: Option<String>) {
     use muster_agent::desktop_chat::ChatApp;
     let Some(app) = ChatApp::from_provider(&state.desktop_chats.provider) else {
         return;
@@ -187,7 +199,11 @@ pub(super) fn load_desktop_chats(state: &mut State, ctx: &Ctx) {
         .collect();
     let view = &mut state.desktop_chats;
     view.loading = true;
-    let sticky = (!view.device_id.is_empty()).then(|| view.device_id.clone());
+    if !hosts.iter().any(|host| host.device == view.device_id) {
+        view.device_id.clear();
+        view.device_name.clear();
+    }
+    let sticky = preferred.or_else(|| (!view.device_id.is_empty()).then(|| view.device_id.clone()));
     state.desktop_chats_load += 1;
     let load = state.desktop_chats_load;
     let backend = ctx.backend.clone();
