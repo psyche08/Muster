@@ -250,6 +250,11 @@ async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx, dir: PathBuf) {
                 Loop::Lifecycle(event) => update::lifecycle(&mut state, &ctx, event),
                 Loop::Shutdown => break 'running,
             }
+            if state.desktop_session.as_ref().is_some_and(|s| {
+                state.screen != muster_proto::app::Screen::Device || state.target() != s.device
+            }) {
+                state.desktop_session = None;
+            }
             if tokio::time::Instant::now() >= deadline {
                 break;
             }

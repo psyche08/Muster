@@ -9,6 +9,13 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 /// A running watch (device, agent, terminal) that ends when its token does.
+pub struct DesktopSession {
+    pub device: String,
+    pub id: u64,
+    pub status: String,
+    pub _watch: Watch,
+}
+
 pub struct Watch {
     pub token: CancellationToken,
 }
@@ -474,6 +481,7 @@ pub struct State {
     pub next_effect: u64,
     pub next_op: u64,
     pub device_watch: Option<Watch>,
+    pub desktop_session: Option<DesktopSession>,
     pub foreground: bool,
     pub send_recoveries: HashMap<String, Watch>,
     /// Sends this client dispatched, per conversation, kept until that
@@ -609,6 +617,7 @@ impl State {
             next_effect: 1,
             next_op: 1,
             device_watch: None,
+            desktop_session: None,
             foreground: true,
         }
     }
@@ -916,6 +925,7 @@ impl State {
     }
 
     pub fn cancel_all(&mut self) {
+        self.desktop_session = None;
         self.detach_session_terminal();
         self.manual_watches.clear();
         self.catalog_watches.clear();

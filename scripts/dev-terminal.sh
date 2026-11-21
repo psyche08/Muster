@@ -21,6 +21,10 @@ for resource in "$bin"/*.bundle; do
   [ -d "$resource" ] || continue
   cp -R "$resource" "$bundle/Contents/Resources/"
 done
+if [[ -n "${MUSTER_SUNSHINE_APP:-}" ]]; then
+  mkdir -p "$bundle/Contents/Helpers"
+  ditto "$MUSTER_SUNSHINE_APP" "$bundle/Contents/Helpers/Sunshine.app"
+fi
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

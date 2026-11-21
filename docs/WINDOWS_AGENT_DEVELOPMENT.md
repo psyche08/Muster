@@ -622,3 +622,16 @@ cargo test --locked --manifest-path src/muster/Cargo.toml -p musterd --test desk
 
 该用例在隔离节点上检查临时回执、尚未观察到的稳定 ID、新建空会话，以及观察后用稳定
 ID 读回的两条合成消息。实机 ChatGPT 的归档状态和历史仍按上面的只读步骤验收。
+
+
+## 配对桌面验收
+
+构建独立的 Moonlight 查看器后，将它放在测试 daemon 的可执行文件旁；macOS
+测试 daemon 旁放本仓库构建的 Sunshine.app。Windows 完整便携包包含查看器、
+许可证和对应源码。两端分别用 `local-dev --paired-interface <本机私网 IPv4>`
+可在临时软件身份上测试。关闭父进程的标准输入会结束 fixture。按正常流程建立
+测试网络、生成邀请和批准新成员，再从 Mac 设备页选择只读或鼠标授权，从
+Windows 设备页打开该 Mac 的桌面。
+
+分别记录授权拒绝、看到首帧、鼠标移动和撤销后停止。合成视频可验证解码器；
+实机验收还需 macOS 屏幕录制权限、活动显示器和鼠标控制所需的辅助功能权限。

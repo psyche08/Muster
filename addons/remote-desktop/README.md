@@ -58,3 +58,27 @@ ctest --test-dir /tmp/muster-remote-desktop-check --output-on-failure
 If CMake cannot locate OpenSSL, pass `-DOPENSSL_ROOT_DIR` for your installation.
 The Sunshine regression in `tests/unit/test_config.cpp` requires the full host
 build dependencies; this check does not build or run Sunshine or Moonlight Qt.
+
+## Windows viewer
+
+Use x64 MSVC, CMake, Python and a bootstrapped vcpkg checkout at
+`b94b6bdc326c0faea9070b4862e0e0d4e4ac5396`. From this directory run
+`python build-viewer.py <vcpkg> <build-directory> <viewer-output>`.
+The script builds the separate Moonlight process, checks a decoded 720p frame
+and mouse coordinates, and collects license texts and corresponding sources.
+Set `MUSTER_WINDOWS_VIEWER` to that output directory for the portable package
+build on either build host. The native Windows packager can also build the viewer
+from the pinned checkout in `VCPKG_ROOT`. The synthetic fixture is one blue frame from
+FFmpeg's color filter encoded with libx264, with SEI metadata removed.
+
+On a Mac with the downstream Sunshine helper in the daemon's helpers directory,
+open the paired Windows member in Devices and choose view or view with mouse.
+Leave this device page open. On Windows open the Mac in Devices and choose
+**View desktop**. Closing either session ends the grant. macOS Screen Recording
+permission applies to the capture process. Accessibility applies to mouse input.
+
+For a Mac build with host support, point `MUSTER_SUNSHINE_APP` at the downstream
+Sunshine.app built from this repository. The Xcode target copies the verified
+bundle into Contents/Helpers. Supply a self-contained, signed bundle with its
+dependency notices and corresponding sources for distribution. The isolated
+MusterDev build accepts the same path for local tests.

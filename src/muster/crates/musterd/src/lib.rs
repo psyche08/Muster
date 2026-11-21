@@ -24,6 +24,7 @@ mod presence;
 pub mod vision;
 pub mod web;
 
+mod desktop_session;
 mod diagnostics;
 mod idle_compact;
 mod inspection;
@@ -218,6 +219,7 @@ struct VnetStartup {
 }
 
 pub struct Daemon {
+    desktop_slot: tokio::sync::Semaphore,
     blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
@@ -423,6 +425,7 @@ impl Daemon {
         #[cfg(not(target_os = "macos"))]
         let blackout = None;
         let daemon = Arc::new(Self {
+            desktop_slot: tokio::sync::Semaphore::new(1),
             blackout,
             #[cfg(windows)]
             _identity_owner,

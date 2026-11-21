@@ -33,6 +33,7 @@ mod catalog;
 mod cli;
 pub(crate) mod code_runs;
 mod desktop_chats;
+mod desktop_session;
 pub(crate) mod device_blackout;
 mod files;
 pub(crate) mod manual_locked_use;
@@ -60,6 +61,8 @@ use terminals::*;
 
 /// What tasks report back.
 pub enum Msg {
+    DesktopProgress(u64, v1::desktop_session_progress::Phase),
+    DesktopFinished(u64, Result<(), Error>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     UpdateChecked(Result<Option<crate::desktop_update::Candidate>, String>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -539,6 +542,16 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)
         }
+        It::DesktopSession(request) => desktop_session::start(state, ctx, request),
+        It::EndDesktopSession(device) => {
+            if state
+                .desktop_session
+                .as_ref()
+                .is_some_and(|s| s.device == device)
+            {
+                state.desktop_session = None;
+            }
+        }
         It::DesktopSetupAction(action) => network::intent_desktop_setup_action(state, ctx, action),
         It::RequestAccessibility(_) => network::intent_request_accessibility(state, ctx),
         It::RequestScreenRecording(_) => network::intent_request_screen_recording(state, ctx),
@@ -676,6 +689,8 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
                 state.toast(format!("Locked Use: {error}"), true);
             }
         }
+        Msg::DesktopProgress(id, phase) => desktop_session::progress(state, id, phase),
+        Msg::DesktopFinished(id, result) => desktop_session::finish(state, id, result),
         Msg::Done { what, result } => network::msg_done(state, ctx, what, result),
         Msg::SendRecovered {
             device,

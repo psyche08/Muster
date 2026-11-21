@@ -167,6 +167,17 @@ public final class MusterCore: MusterShell {
         send(.setCover(Muster_App_SetCover.with { $0.on = on; $0.deviceID = device }))
     }
 
+    public func shareDesktop(with device: String, mouse: Bool) {
+        send(.desktopSession(Muster_V1_DesktopSessionRequest.with {
+            $0.device = device
+            $0.action = mouse ? .shareMouse(Muster_V1_Ack()) : .shareView(Muster_V1_Ack())
+        }))
+    }
+
+    public func stopSharingDesktop(with device: String) {
+        send(.endDesktopSession(device))
+    }
+
     public func setRelay(_ relay: String) {
         send(.setRelay(Muster_App_SetRelay.with { $0.relay = relay }))
     }

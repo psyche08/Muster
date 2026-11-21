@@ -2,6 +2,7 @@
 # Cross-build an x64 Windows portable package with the .NET SDK and mingw-w64.
 set -euo pipefail
 : "${CARGO_TARGET_DIR:?use the shell Cargo build directory}"
+: "${MUSTER_WINDOWS_VIEWER:?set the prepared Windows viewer and source directory; see addons/remote-desktop/README.md}"
 version=${1:?usage: build-portable.sh VERSION OUTPUT-DIRECTORY}
 mkdir -p "${2:?output directory required}"
 out=$(cd "$2" && pwd)

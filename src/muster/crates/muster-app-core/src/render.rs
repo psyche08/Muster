@@ -1020,6 +1020,42 @@ mod tests {
     }
 
     #[test]
+    fn desktop_actions_follow_the_local_platform_and_selected_peer() {
+        let mut state = State::new(false, None);
+        state.network = Some(v1::NetworkStatus {
+            members: vec![v1::MemberView {
+                device_id: "peer".into(),
+                kind: "desktop".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        state.selected = "peer".into();
+        for (platform, show_share, show_view) in [
+            ("macos", true, false),
+            ("windows", false, true),
+            ("ios", false, false),
+        ] {
+            state.self_info = Some(v1::DeviceInfo {
+                platform: platform.into(),
+                state: Some(v1::DeviceState {
+                    desktop_host_available: show_share,
+                    desktop_viewer_available: show_view,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+            let actions = device_actions(&state);
+            assert_eq!(
+                (actions.can_share_desktop, actions.can_view_desktop),
+                (show_share, show_view)
+            );
+        }
+        state.network.as_mut().unwrap().members[0].is_self = true;
+        assert!(!device_actions(&state).can_view_desktop);
+    }
+
+    #[test]
     fn mobile_members_stay_in_network_settings_but_are_not_service_targets() {
         let mut state = State::new(true, Some("phone".into()));
         state.network = Some(v1::NetworkStatus {
@@ -1361,7 +1397,18 @@ pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
         .iter()
         .any(|m| m.is_self && m.role == "admin");
     let other = !member.is_self;
+    let session = state
+        .desktop_session
+        .as_ref()
+        .filter(|s| s.device == target);
+    let desktop_pair =
+        other && member.kind == "desktop" && !state.embedded && state.desktop_session.is_none();
+    let capabilities = state.self_info.as_ref().and_then(|i| i.state.as_ref());
     app::DeviceActions {
+        can_share_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_host_available),
+        can_view_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_viewer_available),
+        desktop_session_open: session.is_some(),
+        desktop_session_text: session.map(|s| s.status.clone()).unwrap_or_default(),
         blackout: state
             .manual_devices
             .get(&target)

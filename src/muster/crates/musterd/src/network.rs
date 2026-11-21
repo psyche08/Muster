@@ -163,7 +163,11 @@ impl Daemon {
             .unwrap_or_default();
         let (manual_locked_use_owner, manual_locked_use_nonce, manual_locked_use_active) =
             self.locked_use.manual_status();
+        let (desktop_host_available, desktop_viewer_available) =
+            crate::desktop_session::available();
         v1::DeviceState {
+            desktop_host_available,
+            desktop_viewer_available,
             manual_locked_use_owner,
             manual_locked_use_nonce,
             manual_locked_use_active,

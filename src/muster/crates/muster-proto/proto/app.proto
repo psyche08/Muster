@@ -46,6 +46,8 @@ message Intent {
     CancelLockedUse cancel_locked_use = 22;
     SetDeviceLockedUse set_device_locked_use = 86;
     DesktopSetupAction desktop_setup_action = 23;
+    muster.v1.DesktopSessionRequest desktop_session = 153;
+    string end_desktop_session = 154; // device of the local session being closed
     DesktopUpdateAction desktop_update_action = 24;
     muster.v1.MulticaRequest multica = 89;
     muster.v1.MulticaBrowseRequest multica_browse = 90;
@@ -595,6 +597,10 @@ message DeviceActions {
   bool can_edit_access = 4;  // this device is an admin and the member is another
   bool can_remove = 5;
   bool can_rename = 7;
+  bool can_share_desktop = 8;
+  bool can_view_desktop = 9;
+  bool desktop_session_open = 10;
+  string desktop_session_text = 11;
   muster.v1.DisplayBlackout blackout = 6; // present for a connected, supported Mac on mobile
 }
 
