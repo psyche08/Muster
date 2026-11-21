@@ -52,3 +52,12 @@ The first screenshot exposed a clipped heading. A second screenshot and a
 font-height assertion verified the correction. A live provider read independently
 confirmed that the original acceptance conversation was archived and its two
 messages survived. No provider message was sent during this check.
+
+On Windows x64, the 1.1.99 WinForms assembly and packaged Rust FFI reopened
+a synthetic ChatGPT catalog across a GUI and RPC host restart. The second
+GUI used the same client data directory and a fresh host connection. It
+opened the other identically titled row first, then reopened the original
+by its listed ID. Each displayed the expected text and excluded the other
+row's text. The separate daemon RPC regression also passed for temporary
+receipts and stable IDs before and after observation. The GUI fixture exercised
+catalog navigation and transcript rendering. It used no provider account.
