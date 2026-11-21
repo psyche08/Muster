@@ -3,7 +3,7 @@
 use std::collections::{HashMap, hash_map::Entry};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use bytes::{BufMut, Bytes, BytesMut};
@@ -23,10 +23,77 @@ const MAX_MEDIA: usize = 1150 - HEADER_LEN;
 const QUEUE_DEPTH: usize = 32;
 const AUTH_CHECK: Duration = Duration::from_millis(100);
 
-type Guard = Arc<dyn Fn() -> bool + Send + Sync>;
+pub(crate) type Guard = Arc<dyn Fn() -> bool + Send + Sync>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    View,
+    ViewAndMouse,
+}
+
+/// A host offer stays alive only while its owner holds this handle.
+/// Sessions retain weak references so a disconnect or a stalled reader
+/// cannot prolong the owner's grant.
+#[must_use]
+pub struct Sharing {
+    pub(crate) offer: Arc<Offer>,
+}
+
+pub(crate) struct Offer {
+    pub viewer: DeviceId,
+    pub handler: Arc<dyn Handler>,
+    access: Mutex<Option<Access>>,
+}
+
+impl Sharing {
+    pub(crate) fn new(viewer: DeviceId, access: Access, handler: Arc<dyn Handler>) -> Self {
+        Self {
+            offer: Arc::new(Offer {
+                viewer,
+                handler,
+                access: Mutex::new(Some(access)),
+            }),
+        }
+    }
+}
+
+impl Drop for Sharing {
+    fn drop(&mut self) {
+        self.offer.revoke();
+    }
+}
+
+impl Offer {
+    pub(crate) fn revoke(&self) {
+        *self.access.lock().unwrap() = None;
+    }
+
+    pub(crate) fn allows(&self, viewer: DeviceId) -> bool {
+        if viewer != self.viewer {
+            return false;
+        }
+        let mut access = self.access.lock().unwrap();
+        if access.is_some() && !self.handler.console_ready() {
+            *access = None;
+        }
+        access.is_some()
+    }
+
+    fn mouse<T>(&self, action: impl FnOnce() -> T) -> Result<T, Error> {
+        let mut access = self.access.lock().unwrap();
+        if !self.handler.console_ready() {
+            *access = None;
+        }
+        if *access != Some(Access::ViewAndMouse) {
+            return Err(Error::Unauthorized("mouse control was not granted".into()));
+        }
+        Ok(action())
+    }
+}
 
 pub trait Handler: Send + Sync {
-    fn allows(&self, peer: DeviceId) -> bool;
+    /// Report whether the host console is unlocked, active and available.
+    fn console_ready(&self) -> bool;
 
     fn serve<'session>(
         &'session self,
@@ -49,7 +116,8 @@ impl Routes {
         connection: &Connection,
         send: SendStream,
         recv: RecvStream,
-        guard: Option<Guard>,
+        guard: Guard,
+        host_offer: Option<Weak<Offer>>,
     ) -> Result<Session, Error> {
         let stream = u64::from(send.id());
         let (tx, media) = mpsc::channel(QUEUE_DEPTH);
@@ -64,6 +132,7 @@ impl Routes {
             recv,
             media,
             guard,
+            host_offer,
         })
     }
 
@@ -90,7 +159,8 @@ pub struct Session {
     send: SendStream,
     recv: RecvStream,
     media: mpsc::Receiver<Bytes>,
-    guard: Option<Guard>,
+    guard: Guard,
+    host_offer: Option<Weak<Offer>>,
 }
 
 impl Session {
@@ -147,8 +217,19 @@ impl Session {
         Ok(packet)
     }
 
+    /// Execute one synchronous OS mouse operation under the live host grant.
+    /// A view-only session or the viewer end of any session always refuses it.
+    pub fn with_mouse<T>(&self, action: impl FnOnce() -> T) -> Result<T, Error> {
+        self.authorize()?;
+        self.host_offer
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| Error::Unauthorized("no host input grant".into()))?
+            .mouse(action)
+    }
+
     fn authorize(&self) -> Result<(), Error> {
-        if self.guard.as_ref().is_none_or(|check| check()) {
+        if (self.guard)() {
             Ok(())
         } else {
             Err(Error::Unauthorized("remote desktop grant ended".into()))
@@ -158,7 +239,7 @@ impl Session {
     pub(crate) async fn serve(&mut self, peer: DeviceId, handler: Arc<dyn Handler>) {
         let connection = self.connection.clone();
         let stopped = self.send.stopped();
-        let guard = self.guard.clone().expect("host must have a guard");
+        let guard = self.guard.clone();
         tokio::select! {
             biased;
             _ = connection.closed() => {}
@@ -175,6 +256,9 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
+        if let Some(offer) = self.host_offer.as_ref().and_then(Weak::upgrade) {
+            offer.revoke();
+        }
         self.routes
             .0
             .lock()

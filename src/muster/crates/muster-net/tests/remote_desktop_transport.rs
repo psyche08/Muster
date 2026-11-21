@@ -10,17 +10,17 @@ use muster_core::identity::{PublicKey, SharedSigner};
 use muster_core::roster::{Author, DeviceKind, DeviceRecord, Entry, Roster};
 use muster_core::{DeviceId, HwSigner, LocalPolicy, SoftSigner};
 use muster_net::magicsock::{MagicOptions, RelayState};
-use muster_net::remote_desktop::{Handler, Session};
+use muster_net::remote_desktop::{Access, Handler, Session};
 use muster_net::{Error, Node, NodeConfig, RelayConfig};
 
 struct Fixture {
-    viewer: DeviceId,
+    mouse: bool,
     allowed: AtomicBool,
 }
 
 impl Handler for Fixture {
-    fn allows(&self, peer: DeviceId) -> bool {
-        peer == self.viewer && self.allowed.load(Ordering::Acquire)
+    fn console_ready(&self) -> bool {
+        self.allowed.load(Ordering::Acquire)
     }
 
     fn serve<'session>(
@@ -29,6 +29,9 @@ impl Handler for Fixture {
         session: &'session mut Session,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'session>> {
         Box::pin(async move {
+            let mut applied = false;
+            assert_eq!(session.with_mouse(|| applied = true).is_ok(), self.mouse);
+            assert_eq!(applied, self.mouse);
             assert_eq!(session.recv_control().await.unwrap().unwrap(), b"control");
             session.send_control(b"confirmed").await.unwrap();
             let media = session.recv_media().await.unwrap();
@@ -99,8 +102,11 @@ async fn node(
     node
 }
 
-async fn viewer_run(viewer: &Arc<Node>, host: DeviceId) {
-    let mut vnet = viewer.take_datagrams().unwrap();
+async fn viewer_run(
+    viewer: &Arc<Node>,
+    host: DeviceId,
+    vnet: &mut tokio::sync::mpsc::Receiver<(DeviceId, bytes::Bytes)>,
+) {
     let mut session = viewer.open_remote_desktop(host).await.unwrap();
     session.send_control(b"control").await.unwrap();
     assert_eq!(session.recv_control().await.unwrap().unwrap(), b"confirmed");
@@ -147,19 +153,120 @@ async fn signed_peers_exchange_and_revoke_a_transport_session() {
         viewer.open_remote_desktop(host.device_id()).await,
         Err(Error::Unauthorized(_))
     ));
-    host.set_remote_desktop_handler(Some(Arc::new(Fixture {
-        viewer: viewer.device_id(),
-        allowed: AtomicBool::new(true),
-    })));
+    let mut vnet = viewer.take_datagrams().unwrap();
+    let view_offer = host
+        .share_remote_desktop(
+            viewer.device_id(),
+            Access::View,
+            Arc::new(Fixture {
+                mouse: false,
+                allowed: AtomicBool::new(true),
+            }),
+        )
+        .unwrap();
     tokio::time::timeout(
         Duration::from_secs(10),
-        viewer_run(&viewer, host.device_id()),
+        viewer_run(&viewer, host.device_id(), &mut vnet),
     )
     .await
     .unwrap();
+    let replacement = host
+        .share_remote_desktop(
+            viewer.device_id(),
+            Access::ViewAndMouse,
+            Arc::new(Fixture {
+                mouse: true,
+                allowed: AtomicBool::new(true),
+            }),
+        )
+        .unwrap();
+    drop(view_offer);
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        viewer_run(&viewer, host.device_id(), &mut vnet),
+    )
+    .await
+    .unwrap();
+    drop(replacement);
     viewer.shutdown().await;
     host.shutdown().await;
     relay.abort();
+}
+
+struct WaitingHost;
+impl Handler for WaitingHost {
+    fn console_ready(&self) -> bool {
+        true
+    }
+    fn serve<'s>(
+        &'s self,
+        _: DeviceId,
+        session: &'s mut Session,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 's>> {
+        Box::pin(async move {
+            session.send_control(b"ready").await.unwrap();
+            pending().await
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replacing_a_live_offer_ends_its_stream_and_stale_handles_cannot_stop_the_new_offer() {
+    let bind = "127.0.0.1".parse().unwrap();
+    let server = relay(bind).await;
+    let relay_address = server.udp_addr().unwrap();
+    let relay_task = tokio::spawn(server.serve());
+    let host_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let viewer_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let entries = signed_roster(host_key.as_ref(), viewer_key.public_key());
+    let host = node(host_key, &entries, bind, RelayConfig::Udp(relay_address)).await;
+    let viewer = node(viewer_key, &entries, bind, RelayConfig::Udp(relay_address)).await;
+    let backend = Arc::new(WaitingHost);
+    assert!(
+        host.share_remote_desktop(
+            SoftSigner::generate().public_key().device_id(),
+            Access::View,
+            backend.clone()
+        )
+        .is_err()
+    );
+    let first = host
+        .share_remote_desktop(viewer.device_id(), Access::ViewAndMouse, backend.clone())
+        .unwrap();
+    let mut old = viewer.open_remote_desktop(host.device_id()).await.unwrap();
+    assert_eq!(old.recv_control().await.unwrap().unwrap(), b"ready");
+    assert!(
+        old.with_mouse(|| panic!("viewer cannot apply input"))
+            .is_err()
+    );
+    let second = host
+        .share_remote_desktop(viewer.device_id(), Access::View, backend)
+        .unwrap();
+    drop(first);
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), old.recv_media())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    drop(old);
+    let mut current = viewer.open_remote_desktop(host.device_id()).await.unwrap();
+    assert_eq!(current.recv_control().await.unwrap().unwrap(), b"ready");
+    drop(second);
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), current.recv_media())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    drop(current);
+    assert!(matches!(
+        viewer.open_remote_desktop(host.device_id()).await,
+        Err(Error::Unauthorized(_))
+    ));
+    viewer.shutdown().await;
+    host.shutdown().await;
+    relay_task.abort();
 }
 
 fn emit(label: &str, bytes: &[u8]) {
@@ -199,10 +306,16 @@ async fn transport_between_hosts() {
         let viewer = PublicKey::from_raw(&decode(&input())).unwrap();
         let entries = signed_roster(signer.as_ref(), viewer.clone());
         let host = node(signer, &entries, bind, relay).await;
-        host.set_remote_desktop_handler(Some(Arc::new(Fixture {
-            viewer: viewer.device_id(),
-            allowed: AtomicBool::new(true),
-        })));
+        let _offer = host
+            .share_remote_desktop(
+                viewer.device_id(),
+                Access::View,
+                Arc::new(Fixture {
+                    mouse: false,
+                    allowed: AtomicBool::new(true),
+                }),
+            )
+            .unwrap();
         println!("HOST {}", host.device_id());
         for entry in entries {
             emit("ENTRY", &entry.encode());
@@ -217,9 +330,12 @@ async fn transport_between_hosts() {
         ];
         let host = DeviceId::from_hex(&input()).unwrap();
         let viewer = node(signer, &entries, bind, relay).await;
-        tokio::time::timeout(Duration::from_secs(10), viewer_run(&viewer, host))
-            .await
-            .unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            viewer_run(&viewer, host, &mut viewer.take_datagrams().unwrap()),
+        )
+        .await
+        .unwrap();
         viewer.shutdown().await;
     }
 }

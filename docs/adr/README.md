@@ -391,4 +391,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0273](0273-desktop-chat-cached-host.md) | Accepted | Verify the host before enabling restored desktop chats |
 | [0274](0274-windows-keep-awake.md) | Accepted | Keep the Windows desktop awake while Muster is running |
 | [0275](0275-windows-workspace-layout.md) | Accepted | Separate the Windows directory and conversation panes |
-| [0276](0276-windows-chat-markdown-and-composer.md) | Proposed | Render conversation Markdown and distinguish user input on Windows |
+| [0276](0276-windows-chat-markdown-and-composer.md) | Accepted | Render conversation Markdown and distinguish user input on Windows |
+| [0277](0277-paired-desktop-host-offer.md) | Accepted | Bind remote desktop sharing to the selected member and local owner |

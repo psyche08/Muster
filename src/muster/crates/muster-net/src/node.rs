@@ -204,7 +204,7 @@ pub struct Node {
     adopted: Mutex<HashMap<DeviceId, Instant>>,
     builds: Mutex<HashMap<DeviceId, Build>>,
     handler: Mutex<Option<Arc<dyn ServiceHandler>>>,
-    remote_desktop_handler: Mutex<Option<Arc<dyn remote_desktop::Handler>>>,
+    remote_desktop_handler: Mutex<Option<std::sync::Weak<remote_desktop::Offer>>>,
     media_routes: Arc<remote_desktop::Routes>,
     close_observer: Mutex<Option<CloseObserver>>,
     /// Entries newly accepted, for persistence and UI.
@@ -329,8 +329,29 @@ impl Node {
         *self.handler.lock().unwrap() = Some(handler);
     }
 
-    pub fn set_remote_desktop_handler(&self, handler: Option<Arc<dyn remote_desktop::Handler>>) {
-        *self.remote_desktop_handler.lock().unwrap() = handler;
+    /// Offer this host's screen to one selected active member. Replacing an
+    /// offer revokes the old grant even if both name the same peer.
+    pub fn share_remote_desktop(
+        &self,
+        viewer: DeviceId,
+        access: remote_desktop::Access,
+        handler: Arc<dyn remote_desktop::Handler>,
+    ) -> Result<remote_desktop::Sharing, Error> {
+        if self.vnet_only
+            || viewer == self.device_id()
+            || !self.is_service_host(&self.device_id())
+            || !self.trust.is_member(&viewer)
+            || !handler.console_ready()
+        {
+            return Err(Error::Unauthorized("desktop sharing is unavailable".into()));
+        }
+        let sharing = remote_desktop::Sharing::new(viewer, access, handler);
+        let mut installed = self.remote_desktop_handler.lock().unwrap();
+        if let Some(previous) = installed.as_ref().and_then(std::sync::Weak::upgrade) {
+            previous.revoke();
+        }
+        *installed = Some(Arc::downgrade(&sharing.offer));
+        Ok(sharing)
     }
 
     pub async fn open_remote_desktop(
@@ -345,7 +366,14 @@ impl Node {
                 remote_desktop::VERSION,
             )
             .await?;
-        self.media_routes.register(&connection, send, recv, None)
+        let node = Arc::downgrade(self);
+        let link = connection.clone();
+        let guard = Arc::new(move || {
+            node.upgrade()
+                .is_some_and(|node| node.is_current(&peer, &link) && node.trust.is_member(&peer))
+        });
+        self.media_routes
+            .register(&connection, send, recv, guard, None)
     }
 
     pub fn device_id(&self) -> DeviceId {
@@ -1365,32 +1393,41 @@ impl Node {
                 }
                 let member = node.trust.is_member(&peer);
                 if hello.service == remote_desktop::SERVICE {
-                    let remote_handler = node.remote_desktop_handler.lock().unwrap().clone();
-                    if let Some(remote_handler) = remote_handler
+                    let offer = node
+                        .remote_desktop_handler
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .and_then(std::sync::Weak::upgrade);
+                    if let Some(offer) = offer
                         && member
                         && !node.vnet_only
                         && node.is_service_host(&node.device_id())
                         && hello.version == remote_desktop::VERSION
-                        && remote_handler.allows(peer)
+                        && offer.allows(peer)
                     {
                         let policy_node = Arc::downgrade(&node);
-                        let policy_handler = remote_handler.clone();
+                        let policy_offer = Arc::downgrade(&offer);
+                        let link = connection.clone();
                         let guard = Arc::new(move || {
                             policy_node.upgrade().is_some_and(|node| {
-                                let installed = node.remote_desktop_handler.lock().unwrap().clone();
-                                installed
-                                    .is_some_and(|handler| Arc::ptr_eq(&handler, &policy_handler))
+                                node.is_current(&peer, &link)
                                     && node.trust.is_member(&peer)
                                     && node.is_service_host(&node.device_id())
-                                    && policy_handler.allows(peer)
+                                    && policy_offer
+                                        .upgrade()
+                                        .is_some_and(|offer| offer.allows(peer))
                             })
                         });
-                        if let Ok(mut session) =
-                            node.media_routes
-                                .register(&connection, send, recv, Some(guard))
-                            && session.send_ack(ACK_OK).await.is_ok()
+                        if let Ok(mut session) = node.media_routes.register(
+                            &connection,
+                            send,
+                            recv,
+                            guard,
+                            Some(Arc::downgrade(&offer)),
+                        ) && session.send_ack(ACK_OK).await.is_ok()
                         {
-                            session.serve(peer, remote_handler).await;
+                            session.serve(peer, offer.handler.clone()).await;
                         }
                     } else {
                         let mut send = send;
