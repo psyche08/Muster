@@ -14,6 +14,7 @@ internal sealed class HistoryTranscript : NamedRichTextBox
     readonly Dictionary<ByteString, Picture?> cache = new();
     List<string> lines = [];
     List<TranscriptBlock> blocks = [];
+    List<TranscriptStyle> styles = [];
     HashSet<int> speakers = [];
     public List<BlockOffset> BlockOffsets { get; private set; } = [];
     bool latestPage;
@@ -65,23 +66,26 @@ internal sealed class HistoryTranscript : NamedRichTextBox
     }
 
     public void Display((string Device, string Session)? origin, List<string> text, List<TranscriptImage> pictures,
-        List<TranscriptBlock>? projected = null, bool latest = false, List<TranscriptLink>? projectedLinks = null, HashSet<int>? speakerLines = null)
+        List<TranscriptBlock>? projected = null, bool latest = false, List<TranscriptLink>? projectedLinks = null, HashSet<int>? speakerLines = null,
+        List<TranscriptStyle>? projectedStyles = null)
     {
         latestPage = latest;
         projected ??= [];
         projectedLinks ??= [];
         speakerLines ??= [];
+        projectedStyles ??= [];
         if (pictures.Count == 0 && images.Count == 0 && links.Count == 0 && projectedLinks.Count == 0
-            && speakers.Count == 0 && speakerLines.Count == 0) return;
+            && speakers.Count == 0 && speakerLines.Count == 0 && styles.Count == 0 && projectedStyles.Count == 0) return;
         bool same = origin == scope;
         if (same && images.SequenceEqual(pictures) && lines.SequenceEqual(text) && blocks.SequenceEqual(projected)
-            && links.SequenceEqual(projectedLinks) && speakers.SetEquals(speakerLines)) return;
+            && links.SequenceEqual(projectedLinks) && speakers.SetEquals(speakerLines) && styles.SequenceEqual(projectedStyles)) return;
         scope = origin;
         blocks = projected;
         images = pictures;
         links = projectedLinks;
         speakers = speakerLines;
-        lines = pictures.Count == 0 && links.Count == 0 && speakers.Count == 0 ? [] : text;
+        styles = projectedStyles;
+        lines = pictures.Count == 0 && links.Count == 0 && speakers.Count == 0 && styles.Count == 0 ? [] : text;
         if (!same || pictures.Count == 0) { sizes.Clear(); cache.Clear(); }
         else if (sizes.Count != 0)
         {
@@ -201,10 +205,15 @@ internal sealed class HistoryTranscript : NamedRichTextBox
         offsets.Clear();
         BlockOffsets = [];
         nativeLinks.Clear();
-        if (images.Count == 0 && links.Count == 0 && speakers.Count == 0) { Clear(); return; }
+        if (images.Count == 0 && links.Count == 0 && speakers.Count == 0 && styles.Count == 0) { Clear(); return; }
         layoutWidth = AvailableWidth;
-        var rtf = new StringBuilder(@"{\rtf1\ansi\deff0{\fonttbl{\f0\fnil Segoe UI;}}\f0\fs")
-            .Append((int)Math.Round(Font.SizeInPoints * 2)).Append(' ');
+        var rtf = new StringBuilder(@"{\rtf1\ansi\deff0{\fonttbl{\f0\fnil Segoe UI;}{\f1\fmodern Consolas;}}")
+            .Append(@"{\colortbl ;");
+        foreach (var color in new[] { WorkspaceStyle.Sidebar, WorkspaceStyle.Muted })
+            rtf.Append($@"\red{color.R}\green{color.G}\blue{color.B};");
+        int fontSize = (int)Math.Round(Font.SizeInPoints * 2);
+        rtf.Append(@"}\f0\fs").Append(fontSize).Append(' ');
+        var runs = styles.ToLookup(span => span.Line);
         bool first = true;
         int offset = 0;
         void Paragraph()
@@ -241,11 +250,40 @@ internal sealed class HistoryTranscript : NamedRichTextBox
             }
             textOffsets[line] = first ? 0 : offset + 1;
             if (line == lines.Count || lines[line].Length == 0) continue;
+            int lineOffset = 0;
+            var spans = runs[line].ToArray();
+            int nextSpan = 0;
             foreach (var part in lines[line].AsSpan().EnumerateLines())
             {
                 Paragraph();
                 rtf.Append(speakers.Contains(line) ? @"\pard\li120\ri140\sb200\sa60\b " : @"\pard\li120\ri140\sa40\b0 ");
-                RichText.AppendLiteral(rtf, part);
+                if (speakers.Contains(line) && runs[line + 1].Any(run => run.Style.HasFlag(TextStyle.Prompt)))
+                    rtf.Append(@"\qr\ri180 ");
+                if (spans.Length > 0 && spans[0].Style.HasFlag(TextStyle.Prompt))
+                    rtf.Append(@"\qr\li300\ri180\sb60\sa120 ");
+                int cursor = 0;
+                while (nextSpan < spans.Length && spans[nextSpan].Start < lineOffset + part.Length)
+                {
+                    var span = spans[nextSpan];
+                    int end = span.Start + span.Length;
+                    if (end <= lineOffset) { nextSpan++; continue; }
+                    int start = Math.Max(0, span.Start - lineOffset);
+                    RichText.AppendLiteral(rtf, part[cursor..start]);
+                    rtf.Append('{');
+                    if (span.Style.HasFlag(TextStyle.Bold)) rtf.Append(@"\b ");
+                    if (span.Style.HasFlag(TextStyle.Italic)) rtf.Append(@"\i ");
+                    if (span.Style.HasFlag(TextStyle.Heading)) rtf.Append(@"\fs").Append(fontSize + 6).Append(' ');
+                    if (span.Style.HasFlag(TextStyle.Code)) rtf.Append(@"\f1\highlight1 ");
+                    if (span.Style.HasFlag(TextStyle.Quote)) rtf.Append(@"\cf2 ");
+                    if (span.Style.HasFlag(TextStyle.Prompt)) rtf.Append(@"\highlight1 ");
+                    cursor = Math.Min(end - lineOffset, part.Length);
+                    RichText.AppendLiteral(rtf, part[start..cursor]);
+                    rtf.Append('}');
+                    if (end > lineOffset + part.Length) break;
+                    nextSpan++;
+                }
+                RichText.AppendLiteral(rtf, part[cursor..]);
+                lineOffset += part.Length + 1;
                 offset += part.Length;
             }
         }

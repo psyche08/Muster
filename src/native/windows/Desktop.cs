@@ -46,8 +46,10 @@ internal sealed class Desktop : Form
     readonly SourcePreview preview = new() { Dock = DockStyle.Fill, Visible = false };
     readonly QueuedMessages queue = new();
     readonly LockedUseStatus lockedUse = new();
+    readonly ComposerSurface composerSurface = new();
+    readonly Button sendDraft = new() { Text = "Send", AccessibleName = "Send message", Dock = DockStyle.Right, Width = 78 };
     readonly ChatInput input =
-        new() { Dock = DockStyle.Bottom, Height = 58, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
+        new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 120 };
     readonly ConcurrentQueue<(ulong, Effect)> effects = new();
     readonly Core core;
@@ -147,7 +149,14 @@ internal sealed class Desktop : Form
         detail.Controls.Add(body);
         detail.Controls.Add(lockedUse);
         detail.Controls.Add(queue);
-        detail.Controls.Add(input);
+        WorkspaceStyle.StyleButton(sendDraft);
+        void SizeSendButton() => sendDraft.Width = sendDraft.GetPreferredSize(Size.Empty).Width + sendDraft.LogicalToDeviceUnits(10);
+        sendDraft.HandleCreated += (_, _) => SizeSendButton();
+        sendDraft.DpiChangedAfterParent += (_, _) => SizeSendButton();
+        sendDraft.Click += (_, _) => Submit();
+        composerSurface.Controls.Add(input);
+        composerSurface.Controls.Add(sendDraft);
+        detail.Controls.Add(composerSurface);
         detail.Controls.Add(actions);
         detail.Controls.Add(status);
         detail.Controls.Add(sessionTabs);
@@ -561,6 +570,7 @@ internal sealed class Desktop : Form
         var blocks = new List<TranscriptBlock>();
         var links = new List<TranscriptLink>();
         var speakers = new HashSet<int>();
+        var styles = new List<TranscriptStyle>();
         void Row(string name, Intent intent) => rows.Add(new(name, intent));
         composerButtons.Clear();
         int actionIndex = 0;
@@ -619,7 +629,8 @@ internal sealed class Desktop : Form
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
         sessionTabs.Visible = chatKey != null;
         if (chatKey != null) sessionTabs.Display(v.Chat!, selectedTab);
-        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat);
+        sendDraft.Visible = false;
+        composerSurface.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -833,7 +844,7 @@ internal sealed class Desktop : Form
                     });
                 if (chatView.Session is { ParentSessionId.Length: > 0 } child)
                     Act("Open parent conversation", () => new() { OpenAgent = new() { Session = child.ParentSessionId, DeviceId = chatView.DeviceId } });
-                transcript.AppendTo(lines, images, blocks, links, speakers);
+                transcript.AppendTo(lines, images, blocks, links, speakers, styles);
                 if (transcript.HasCode)
                 {
                     int copyIndex = actionIndex;
@@ -903,7 +914,10 @@ internal sealed class Desktop : Form
                         });
                 }
                 if (canSubmit)
-                    ComposerButton("Send", true, () => Submit());
+                {
+                    sendDraft.Visible = true;
+                    composerButtons.Add((sendDraft, true));
+                }
                 if (chatView.Unconfirmed is {} refusal)
                 {
                     lines.Add("Delivery of the previous message is unconfirmed.");
@@ -1131,7 +1145,7 @@ internal sealed class Desktop : Form
             FocusNetworkList();
         }
         terminal.Display(showingTerminal ? v.Terminal : null);
-        history.Display(readingScope, lines, images, blocks, latestPage, links, speakers);
+        history.Display(readingScope, lines, images, blocks, latestPage, links, speakers, styles);
         var text = !rich ? string.Join("\r\n", lines.Where(x => !string.IsNullOrEmpty(x))) : "";
         bool textChanged = output.Text != text;
         if (textChanged)

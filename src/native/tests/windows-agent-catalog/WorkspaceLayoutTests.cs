@@ -38,7 +38,7 @@ internal static class WorkspaceLayoutTests
         var workspace = form.Controls.Find("Workspace", true).Single();
         var detail = form.Controls.Find("WorkspaceDetail", true).Single();
         var sidebar = workspace.Controls.OfType<AgentSidebar>().Single();
-        var composer = detail.Controls.OfType<ChatInput>().Single();
+        var composer = detail.Controls.OfType<ComposerSurface>().Single().Controls.OfType<ChatInput>().Single();
         void Capture(string name)
         {
             if (captures == null) return;
@@ -68,13 +68,19 @@ internal static class WorkspaceLayoutTests
                     new ChatBlock { Id = "q", Kind = "message", Message = new AgentMessage
                         { Id = "q", Role = "user", Kind = "text", Text = "Which part of onboarding should we review first?" } },
                     new ChatBlock { Id = "a", Kind = "message", Message = new AgentMessage
-                        { Id = "a", Role = "assistant", Kind = "text", Text = "Start with the first-run window. Check that the next action is visible and that returning to the conversation preserves the draft." } }
+                        { Id = "a", Role = "assistant", Kind = "text", Text = "## First run\n\nStart with the **first-run window**. Check the `Continue` button.\n\n- Open the next screen\n- Return to the conversation." } }
                 } };
             form.Render(vm);
             Application.DoEvents();
             var transcript = detail.Controls.OfType<Panel>().SelectMany(panel => panel.Controls.OfType<HistoryTranscript>()).Single();
             if (!transcript.Visible || !transcript.Text.Contains("Start with the first-run window."))
                 throw new Exception("Conversation body missing from the reader");
+            int emphasis = transcript.Text.IndexOf("first-run window", StringComparison.Ordinal);
+            transcript.Select(emphasis, "first-run window".Length);
+            if (transcript.SelectionFont?.Bold != true) throw new Exception("Markdown emphasis lost");
+            transcript.Select(transcript.Text.IndexOf("Continue", StringComparison.Ordinal), 8);
+            if (transcript.SelectionFont?.Name != "Consolas") throw new Exception("Inline code font lost");
+            transcript.Select(0, 0);
             var first = transcript.GetPositionFromCharIndex(0);
             var last = transcript.GetPositionFromCharIndex(transcript.TextLength - 1);
             if (first.Y < 0 || last.Y >= transcript.ClientSize.Height)
@@ -82,6 +88,9 @@ internal static class WorkspaceLayoutTests
             if (!composer.Visible || sidebar.RectangleToScreen(sidebar.ClientRectangle).IntersectsWith(
                     composer.RectangleToScreen(composer.ClientRectangle)) || detail.Height != sidebar.Height)
                 throw new Exception("Composer displaced or overlapped the directory");
+            var submit = composer.Parent!.Controls.OfType<Button>().Single();
+            if (!submit.Visible || !submit.Enabled || submit.Width < submit.PreferredSize.Width)
+                throw new Exception("Send action unavailable or clipped");
             Capture(width == 1160 ? "workspace-conversation.png" : "workspace-compact.png");
         }
         Console.WriteLine($"Passed full workspace split, welcome and composer at two widths, {form.DeviceDpi} DPI.");

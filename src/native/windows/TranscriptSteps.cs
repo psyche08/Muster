@@ -29,7 +29,7 @@ internal sealed partial class TranscriptSteps
     bool IsOpen(ChatBlock b) => groups.GetValueOrDefault(b.Id, b.DefaultExpanded);
 
     public void AppendTo(List<string> lines, List<TranscriptImage> images, List<TranscriptBlock>? blocks = null,
-        List<TranscriptLink>? links = null, HashSet<int>? speakers = null)
+        List<TranscriptLink>? links = null, HashSet<int>? speakers = null, List<TranscriptStyle>? styles = null)
     {
         if (chat == null) return;
         if (chat.MessageCount == 0)
@@ -50,7 +50,7 @@ internal sealed partial class TranscriptSteps
             if (block.Message is {} message)
                 foreach (var bytes in message.PreviewJpegs)
                     images.Add(new TranscriptImage(lines.Count, bytes));
-            foreach (var text in Block(block, work, expanded, lines, links)) lines.Add(text);
+            foreach (var text in Block(block, work, expanded, lines, links, styles)) lines.Add(text);
         }
     }
 
@@ -69,7 +69,7 @@ internal sealed partial class TranscriptSteps
         }
     }
 
-    IEnumerable<string> Block(ChatBlock b, string work, bool expanded, List<string> lines, List<TranscriptLink>? links)
+    IEnumerable<string> Block(ChatBlock b, string work, bool expanded, List<string> lines, List<TranscriptLink>? links, List<TranscriptStyle>? styles)
     {
         if (b.Kind == "diff" && b.Diffs.Count != 0)
         {
@@ -89,13 +89,16 @@ internal sealed partial class TranscriptSteps
         if (b.Message is {} m)
         {
             string Prose(string text, string prefix) => links == null ? prefix + text
-                : MarkdownLinks.Display(text, prefix, lines.Count, links);
+                : MarkdownLinks.Display(text, prefix, lines.Count, links, styles);
+            if (m.Role == "user" && !b.Parts.Any(p => p.Kind == "code"))
+                styles?.Add(new(lines.Count, 0, m.Text.ReplaceLineEndings("\n").Length, TextStyle.Prompt));
             if (b.Parts.Any(p => p.Kind == "code"))
             {
                 foreach (var part in b.Parts)
                 {
                     if (part.Kind == "code") yield return CodeLabel(part);
-                    yield return part.Kind == "markdown" ? Prose(part.Text, "")
+                    if (part.Kind == "code") styles?.Add(new(lines.Count, 0, part.Text.ReplaceLineEndings("\n").Length, TextStyle.Code));
+                    yield return part.Kind == "markdown" && m.Role != "user" ? Prose(part.Text, "")
                         : part.Text.ReplaceLineEndings(Environment.NewLine);
                 }
             }
