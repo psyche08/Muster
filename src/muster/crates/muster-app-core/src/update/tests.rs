@@ -214,6 +214,25 @@ fn native_completion_is_optional_and_cannot_follow_a_new_turn_or_another_chat() 
     );
 }
 
+#[test]
+fn side_chat_end_confirmation_is_scoped_to_the_open_composer() {
+    let mut state = running_chat();
+    let chat = state.chat.as_mut().unwrap();
+    chat.session.id = "btw:11111111-1111-4111-8111-111111111111:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into();
+    chat.draft.key = "fixture-host-a-child".into();
+    let captured = state.chat.as_ref().unwrap().draft.clone();
+    assert!(side_chat::confirmed_child_is_open(&state, Some(&captured)));
+    assert!(!side_chat::confirmed_child_is_open(&state, None));
+    state.screen = Screen::Agents;
+    assert!(!side_chat::confirmed_child_is_open(&state, Some(&captured)));
+    state.screen = Screen::Chat;
+    state.chat.as_mut().unwrap().draft.key = "fixture-host-b-child".into();
+    assert!(!side_chat::confirmed_child_is_open(&state, Some(&captured)));
+    assert!(crate::render::view_model(&state).chat.unwrap().can_end_side_chat);
+    state.chat.as_mut().unwrap().session.read_only = true;
+    assert!(!crate::render::view_model(&state).chat.unwrap().can_end_side_chat);
+}
+
 #[tokio::test]
 async fn side_chat_command_never_enters_the_parent_send_queue_and_ended_hides_input() {
     let dir = tempfile::tempdir().unwrap();
