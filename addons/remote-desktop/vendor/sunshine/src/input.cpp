@@ -31,6 +31,7 @@ extern "C" {
 #include "config.h"
 #include "globals.h"
 #include "input.h"
+#include "muster_session.h"
 #include "logging.h"
 #include "platform/common.h"
 #include "platform/virtualhid_input.h"
@@ -2064,6 +2065,10 @@ namespace input {
       }
     }
 
+    if (!muster_session::mouse_enabled.load()) {
+      return;
+    }
+
     // Print the final input packet
     input::print((void *) payload);
 
@@ -2134,6 +2139,21 @@ namespace input {
         BOOST_LOG(warning) << "Dropping malformed input packet with actual size ["sv << input_data.size() << ']';
       }
       return;
+    }
+
+    if (!muster_session::mouse_enabled.load()) {
+      return;
+    }
+    switch (util::endian::little(header.magic)) {
+      case MOUSE_MOVE_REL_MAGIC_GEN5:
+      case MOUSE_MOVE_ABS_MAGIC:
+      case MOUSE_BUTTON_DOWN_EVENT_MAGIC_GEN5:
+      case MOUSE_BUTTON_UP_EVENT_MAGIC_GEN5:
+      case SCROLL_MAGIC_GEN5:
+      case SS_HSCROLL_MAGIC:
+        break;
+      default:
+        return;
     }
 
     {

@@ -13,9 +13,12 @@ authorization boundary and device acceptance plan.
 - The Moonlight C core only accepts literal `127.0.0.1` as a streaming host.
   The upstream Qt shell is included for source development, not as the Muster
   UI or an authorized network client.
-- Neither loopback restriction authenticates a peer. Before enabling either
-  app, Muster still needs the Shared Rust service, peer-scoped TCP/UDP broker,
-  and native control and viewer integration. Do not publish the engine ports
+- The Sunshine child reads one session certificate and view/mouse mode from an inherited pipe,
+  refuses upstream pairing and exits when the owner closes the pipe. The host
+  accepts only desktop capture. On macOS the parent supplies a private session
+  directory and its pinned TLS key pair. See [ADR 0278](../../docs/adr/0278-sunshine-session-input.md).
+- Before enabling desktop sharing, Muster still needs engine lifecycle integration,
+  the peer-scoped TCP/UDP broker, and native control and viewer integration. Do not publish the engine ports
   through a generic forwarder as a substitute.
 
 ## Source pins

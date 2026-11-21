@@ -103,12 +103,10 @@ namespace platf {
   }
 
   fs::path appdata() {
-    const char *homedir;
-    if ((homedir = getenv("HOME")) == nullptr) {
-      homedir = getpwuid(geteuid())->pw_dir;
-    }
-
-    return fs::path {homedir} / ".config/sunshine"sv;
+    // The parent creates a private directory for one stream. main checks
+    // its ownership and permissions before reading any configuration.
+    const char *directory = std::getenv("MUSTER_DESKTOP_SESSION_DIR");
+    return directory ? fs::path(directory) : fs::path();
   }
 
   using ifaddr_t = util::safe_ptr<ifaddrs, freeifaddrs>;

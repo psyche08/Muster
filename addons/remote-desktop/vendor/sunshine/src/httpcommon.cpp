@@ -53,22 +53,10 @@ namespace http {
    * @brief Load persisted HTTP credentials and initialize shared request state.
    */
   int init() {
-    bool clean_slate = config::sunshine.flags[config::flag::FRESH_STATE];
-    origin_web_ui_allowed = net::from_enum_string(config::nvhttp.origin_web_ui_allowed);
-
-    if (clean_slate) {
-      unique_id = uuid_util::uuid_t::generate().string();
-      auto dir = std::filesystem::temp_directory_path() / "Sunshine"sv;
-      config::nvhttp.cert = (dir / ("cert-"s + unique_id)).string();
-      config::nvhttp.pkey = (dir / ("pkey-"s + unique_id)).string();
-    }
-
-    if ((!fs::exists(config::nvhttp.pkey) || !fs::exists(config::nvhttp.cert)) && create_creds(config::nvhttp.pkey, config::nvhttp.cert)) {
-      return -1;
-    }
-    if (!user_creds_exist(config::sunshine.credentials_file)) {
-      BOOST_LOG(info) << "Open the Web UI to set your new username and password and getting started";
-    } else if (reload_user_creds(config::sunshine.credentials_file)) {
+    // The parent supplies a session certificate and sends its pin to the
+    // paired viewer before starting the engine.
+    unique_id = uuid_util::uuid_t::generate().string();
+    if (!fs::is_regular_file(config::nvhttp.pkey) || !fs::is_regular_file(config::nvhttp.cert)) {
       return -1;
     }
     return 0;
