@@ -30,3 +30,30 @@ internal static class WorkspaceStyle
         button.Margin = new Padding(2);
     }
 }
+
+internal sealed class ComposerSurface : Panel
+{
+    public ComposerSurface()
+    {
+        Dock = DockStyle.Bottom;
+        Height = 68;
+        Padding = new Padding(16, 12, 12, 12);
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+        BackColor = WorkspaceStyle.Canvas;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        int inset = LogicalToDeviceUnits(2);
+        var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
+        if (bounds.Width < 2 || bounds.Height < 2) return;
+        using var path = new System.Drawing.Drawing2D.GraphicsPath();
+        int radius = Math.Min(LogicalToDeviceUnits(14), Math.Min(bounds.Width, bounds.Height) / 2);
+        path.AddRoundedRectangle(bounds, new Size(radius, radius));
+        using var pen = new Pen(WorkspaceStyle.Edge, Math.Max(1, inset / 2f));
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        e.Graphics.DrawPath(pen, path);
+    }
+}
