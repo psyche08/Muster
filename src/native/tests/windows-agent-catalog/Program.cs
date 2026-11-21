@@ -39,7 +39,7 @@ internal static class Program
         }
         LockedUseStatusTests.Run(captures);
         QueuedMessagesTests.Run(captures);
-        AgentSidebarTests.Run();
+        AgentSidebarTests.Run(captures);
         BrowserPanelTests.Run();
         ChatOptionsTests.Run();
         Console.WriteLine("Passed conversation options, refresh and scope changes.");

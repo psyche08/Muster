@@ -5,7 +5,7 @@ using Muster.Windows;
 
 internal static class AgentSidebarTests
 {
-    public static void Run()
+    public static void Run(string? captures)
     {
         static void Check(bool ok, string name)
         {
@@ -55,6 +55,29 @@ internal static class AgentSidebarTests
         Raise(list, "OnKeyDown", new KeyEventArgs(Keys.Enter));
         Check(list.SelectedIndex == 0 && intents.Last().OpenAgent.DeviceId == a.DeviceId,
             "keyboard opens legacy ungrouped session");
+        host.ClientSize = new Size(440, 680);
+        var partial = view.Clone();
+        partial.Errors.Add("Example workstation: access denied (agents (view): refused by local policy)");
+        partial.SearchNotices.Add("Example laptop: unavailable: catalog snapshot timed out");
+        partial.Searching = true;
+        sidebar.Display(partial, [], ("host-a", "session"));
+        var status = (TextBox)sidebar.Controls.Find("AgentCatalogStatus", true).Single();
+        var expected = string.Join(Environment.NewLine, partial.SearchNotices[0], partial.Errors[0], "Searching conversations…");
+        status.SelectAll();
+        Check(status.Visible && status.ReadOnly && status.WordWrap && status.SelectedText == expected,
+            "each host notice is fully readable and selectable");
+        Check(status.Height > status.Font.Height * 2 && status.Bottom <= list.Top && list.Height > list.ItemHeight,
+            "bounded multiline status leaves catalog accessible");
+        sidebar.Display(partial.Clone(), [], ("host-a", "session"));
+        Check(status.SelectedText == expected, "unchanged projection retains text selection");
+        if (captures != null)
+        {
+            using var image = new Bitmap(sidebar.Width, sidebar.Height);
+            sidebar.DrawToBitmap(image, sidebar.ClientRectangle);
+            image.Save(Path.Combine(captures, "agent-catalog-status.png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+        sidebar.Display(view, [], ("host-a", "session"));
+        Check(!status.Visible && status.TextLength == 0, "recovered catalog clears the notice");
         sidebar.Display(null, [], null);
         Check(list.Items.Count == 0, "leaving Agents clears the sidebar");
         Console.WriteLine($"Passed Agents directory search, row identity, gesture refresh and flat catalog at {host.DeviceDpi} DPI.");

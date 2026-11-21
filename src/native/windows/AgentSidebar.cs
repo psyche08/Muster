@@ -15,8 +15,9 @@ internal sealed class AgentSidebar : UserControl
     readonly TextBox query = new() { Name = "AgentSearch", AccessibleName = "Search sessions",
         PlaceholderText = "Search sessions", Dock = DockStyle.Top };
     readonly FlowLayoutPanel buttons = new() { AutoSize = true, Dock = DockStyle.Top };
-    readonly Label status = new() { Dock = DockStyle.Top, AutoEllipsis = true, Visible = false };
-    readonly ToolTip tips = new();
+    readonly TextBox status = new() { Name = "AgentCatalogStatus", AccessibleName = "Catalog status",
+        Dock = DockStyle.Top, Multiline = true, ReadOnly = true, WordWrap = true,
+        ScrollBars = ScrollBars.Vertical, Visible = false };
     readonly ListBox list = new() { Name = "AgentSessions", AccessibleName = "Agent sessions",
         Dock = DockStyle.Fill, HorizontalScrollbar = true, IntegralHeight = false };
     readonly Button cli, desktop, device, clear, more;
@@ -79,7 +80,19 @@ internal sealed class AgentSidebar : UserControl
                 AgentRowMenu.Populate(menu, row, action => Intent?.Invoke(action));
             e.Cancel = menu.Items.Count == 0;
         };
-        Disposed += (_, _) => { tips.Dispose(); menu.Dispose(); };
+        status.TextChanged += (_, _) => SizeStatus();
+        status.FontChanged += (_, _) => SizeStatus();
+        Resize += (_, _) => SizeStatus();
+        Disposed += (_, _) => menu.Dispose();
+    }
+
+    void SizeStatus()
+    {
+        if (status.TextLength == 0) return;
+        int width = Math.Max(1, ClientSize.Width - Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - LogicalToDeviceUnits(8));
+        var size = TextRenderer.MeasureText(status.Text, status.Font, new Size(width, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
+        status.Height = Math.Clamp(size.Height, status.Font.Height, status.Font.Height * 4) + LogicalToDeviceUnits(8);
     }
 
     static Intent Catalog(Kind kind, string value = "") =>
@@ -139,7 +152,7 @@ internal sealed class AgentSidebar : UserControl
         devices = hosts;
         if (next == null)
         {
-            if (old != null) { list.Items.Clear(); query.Clear(); }
+            if (old != null) { list.Items.Clear(); query.Clear(); status.Clear(); status.Visible = false; }
             pressed = null;
             shown = null;
             return;
@@ -156,11 +169,11 @@ internal sealed class AgentSidebar : UserControl
         desktop.Enabled = !next.NativeCreating;
         desktop.Text = next.NativeCreating ? "Creating desktop session…" : "New desktop session";
         var notices = next.SearchNotices.Concat(next.Errors).ToList();
-        if (next.Searching || next.Loading) notices.Add("Loading sessions…");
-        status.Visible = notices.Count > 0;
-        status.Height = status.Font.Height + LogicalToDeviceUnits(4);
-        var message = string.Join("  ", notices);
-        if (status.Text != message) { status.Text = message; tips.SetToolTip(status, message); }
+        if (next.Searching) notices.Add("Searching conversations…");
+        else if (next.Loading) notices.Add("Loading sessions…");
+        var message = string.Join(Environment.NewLine, notices);
+        if (status.Text != message) status.Text = message;
+        status.Visible = message.Length > 0;
 
         int ActiveIndex() => active is {} key ? Index(e => e.Action.OpenAgent is {} open &&
             open.DeviceId == key.Device && open.Session == key.Session) : -1;

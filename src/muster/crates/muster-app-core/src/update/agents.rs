@@ -389,7 +389,7 @@ pub(super) fn load_catalog(state: &mut State, ctx: &Ctx) {
                     let _ = tx.send(loop_message(Msg::Agents {
                         epoch,
                         device: device.clone(),
-                        result: Err(Error::Unavailable(format!("{name}: {error}"))),
+                        result: Err(error),
                     }));
                 }
                 tokio::select! {
@@ -1560,7 +1560,8 @@ pub(super) fn msg_agents(
             });
         }
         Err(error) => {
-            state.agents_errors.insert(device, error.to_string());
+            let notice = super::catalog::failure_notice(state, &device, &error);
+            state.agents_errors.insert(device, notice);
         }
     }
     if state.agents_pending.is_empty() {

@@ -313,6 +313,33 @@ fn start_search(state: &mut State, ctx: &Ctx, more: bool) {
         });
     }
 }
+pub(super) fn failure_notice(state: &State, device: &str, error: &Error) -> String {
+    let name = state
+        .network
+        .as_ref()
+        .and_then(|network| {
+            network
+                .members
+                .iter()
+                .find(|member| member.device_id == device)
+        })
+        .map(|member| member.name.as_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(device);
+    match error {
+        Error::Unauthorized(message) => {
+            // Some peers include the category in the wire message as well as the code.
+            let reason = message.strip_prefix("unauthorized: ").unwrap_or(message);
+            if reason.is_empty() {
+                format!("{name}: access denied")
+            } else {
+                format!("{name}: access denied ({reason})")
+            }
+        }
+        _ => format!("{name}: {error}"),
+    }
+}
+
 pub(super) fn result(
     state: &mut State,
     epoch: u64,
@@ -353,10 +380,10 @@ pub(super) fn result(
             }
         }
         Ok(_) => {}
-        Err(error) => state
-            .agents
-            .search_notices
-            .push(format!("{device}: {error}")),
+        Err(error) => {
+            let notice = failure_notice(state, &device, &error);
+            state.agents.search_notices.push(notice);
+        }
     }
 }
 
