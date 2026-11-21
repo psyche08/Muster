@@ -165,13 +165,23 @@ internal static class HistoryImageTests
         int LastY() => plain.GetPositionFromCharIndex(plain.TextLength - 1).Y;
         Check(requests == 2 && !jump.Visible && LastY() >= 0 && LastY() < plain.ClientSize.Height,
             "Latest plain-text page did not land at its last line");
+        plain.Select(0, 4);
+        plain.ScrollToCaret();
+        jump.UpdateAvailability();
+        jump.PerformClick();
+        plain.Lines = plain.Lines.Skip(180).ToArray();
+        plain.Select(0, 0);
+        plain.ScrollToCaret();
+        jump.Display(many, plain);
+        Check(requests == 3 && !jump.Visible && LastY() >= 0 && LastY() < plain.ClientSize.Height,
+            "A shorter latest projection lost the viewport after a local jump");
         many.HasNewer = true;
         jump.Display(many, plain);
         jump.PerformClick();
         plain.Select(0, 4);
         plain.ScrollToCaret();
         jump.Display(next, plain);
-        Check(requests == 3 && jump.Visible && plain.SelectionStart == 0 && LastY() >= plain.ClientSize.Height,
+        Check(requests == 4 && jump.Visible && plain.SelectionStart == 0 && LastY() >= plain.ClientSize.Height,
             "A pending jump scrolled the new device's transcript");
         jump.Display(null, null);
         Check(!jump.Visible, "Jump visible outside conversation");

@@ -66,7 +66,9 @@ internal sealed class JumpToLatest : Button
     {
         base.OnClick(e);
         if (reader == null || !Enabled) return;
-        waitingForLatest = hasNewer;
+        // Even a projection containing the last message can include extra earlier turns.
+        // Rust can replace it with the shorter latest window after this click.
+        waitingForLatest = true;
         reader.Focus();
         ScrollToEnd();
         Intent?.Invoke(new Intent { AgentLoadEarlier = new() { Latest = true } });
