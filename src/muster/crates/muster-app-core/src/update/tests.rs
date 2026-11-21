@@ -1271,7 +1271,7 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
     assert!(!state.agents.loading);
     assert_eq!(
         state.agents.errors,
-        vec!["unavailable: mac offline".to_string()]
+        vec!["mac: unavailable: mac offline".to_string()]
     );
 
     // A first load shows loading until every device answered.
@@ -1300,11 +1300,17 @@ async fn a_list_refresh_keeps_the_view_steady_until_it_completes() {
 #[tokio::test]
 async fn live_catalog_outcomes_belong_to_the_reporting_device() {
     let (_dir, ctx, mut state) = phone().await;
-    state.network = Some(network_of(vec![mac("a", "online"), mac("b", "online")]));
+    let mut first = mac("a", "online");
+    first.name = "Example workstation".into();
+    state.network = Some(network_of(vec![first, mac("b", "online")]));
     agents::open_agents(&mut state, &ctx);
     let epoch = state.agents_epoch;
     let page = || Ok(v1::AgentSessionPage::default());
-    let denied = || Err(crate::Error::Unauthorized("sharing is off".into()));
+    let denied = || {
+        Err(crate::Error::Unauthorized(
+            "unauthorized: sharing is off".into(),
+        ))
+    };
     let lost = || Err(crate::Error::Unavailable("link lost".into()));
 
     for _ in 0..2 {
@@ -1313,10 +1319,19 @@ async fn live_catalog_outcomes_belong_to_the_reporting_device() {
     }
     agents::msg_agents(&mut state, &ctx, epoch, "b".into(), lost());
     assert!(!state.agents.loading);
-    assert_eq!(state.agents.errors.len(), 2);
+    assert_eq!(
+        state.agents.errors,
+        [
+            "Example workstation: access denied (sharing is off)",
+            "b: unavailable: link lost"
+        ]
+    );
     agents::msg_agents(&mut state, &ctx, epoch, "b".into(), page());
     agents::msg_agents(&mut state, &ctx, epoch, "b".into(), page());
-    assert_eq!(state.agents.errors, [denied().unwrap_err().to_string()]);
+    assert_eq!(
+        state.agents.errors,
+        ["Example workstation: access denied (sharing is off)"]
+    );
     agents::msg_agents(&mut state, &ctx, epoch - 1, "a".into(), page());
     assert_eq!(state.agents.errors.len(), 1);
     agents::msg_agents(&mut state, &ctx, epoch, "a".into(), page());

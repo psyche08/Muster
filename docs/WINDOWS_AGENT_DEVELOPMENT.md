@@ -510,9 +510,13 @@ print(f"snapshots={snapshots} elapsed={time.monotonic()-start:.1f}s end={end}")
 
 用 UI Automation 核对此流程时，在 GUI 进程的可见顶层窗口中，按标题 `Muster` 和
 `ControlType.Window` 找主窗，再按 `ControlType.MenuItem` 找设备选项。菜单已展开时，
-`MainWindowHandle` 可能指向弹出菜单。Agents 错误正文在只读输出框的
-`ValuePattern.Current.Value` 中。选中允许访问的单台设备后，应出现该设备的目录行；
-回到 **All devices** 后，核对被拒成员的错误仍然可见。
+`MainWindowHandle` 可能指向弹出菜单。在 **Agents** 侧栏按 AutomationId
+`AgentCatalogStatus` 定位 **Catalog status**，用 `ValuePattern.Current.Value`
+读取完整提示。每条提示独占一行，长原因自动换行，多条可滚动查看。以对端明确拒绝
+`agents (view)` 为例，提示应包含成员名称、`access denied` 和对端给出的原因。
+选中允许访问的单台设备后，应出现该设备的目录行，并清除已移出筛选的错误；
+回到 **All devices** 后，核对被拒成员的提示再次出现。控件测试生成
+`agent-catalog-status.png`，覆盖搜索提示与多个成员错误同时出现时的选择和布局。
 
 ## 只读核对在场密钥
 
