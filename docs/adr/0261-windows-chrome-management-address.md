@@ -33,3 +33,12 @@ Check the copied value, clipboard failure and retry, and visibility on local
 and remote targets in the Windows form test. Check actual navigation in a
 temporary Chrome profile by reading the resulting page title and address.
 Record the portable upgrade and the extension ping separately.
+
+On 2026-11-21, Chrome 158 and Chrome for Testing each loaded the unpacked
+extension from the retained 1.1.55 directory using a fresh Windows test
+profile. Each profile connected to the registered 1.1.94 native host and
+returned `agenthalo.browser` version `0.4.0` to a ping. After closing the
+browser, the isolated node reported disconnection. Starting the same profile
+again without extension-loading or debugging switches returned the same ping.
+Chrome retained the original unpacked directory. Acceptance with changed
+extension content requires checking the loaded files as well as the native host.

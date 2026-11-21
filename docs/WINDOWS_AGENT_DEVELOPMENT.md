@@ -388,6 +388,11 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 验证一次修改和清空。提交含错误规则的一组输入后，读回的整份策略应保持原值。
 先查看另一成员再进入 Settings 时，保存的仍应是本机策略。在线节点可只打开对话框并取消。
 
+跨版本验收时，用已安装的 GUI 在旧隔离节点上保存一条 TCP 和一条 UDP 规则，读回
+整份 `policy`。关闭 GUI 和旧节点，用新节点打开同一测试数据库，再从固定快捷方式打开
+**Settings**。核对指纹、新节点版本和提交，还要打开编辑器核对两条规则。取消后用
+`policy_get` 比较整份策略。1.1.70 到 1.1.94 的演练通过了这些检查。
+
 ## 复核 Chrome 扩展设置
 
 从本机设备详情打开 **Chrome on device**。在普通用户终端读回同一节点的状态：
@@ -413,6 +418,17 @@ dotnet run --project src/native/tests/windows-agent-catalog/WindowsAgentCatalog.
 验收只需 ping。切换到远端设备时，核对本机目录和复制地址按钮已隐藏，执行按钮提示需要认证。
 用临时软件节点和独立 Chrome 测试配置验收时，将浏览器子进程的 `MUSTER_DIR` 指向该节点
 的数据目录，以便 Chrome 启动的原生宿主连接同一测试环境。
+
+**复核冷启动。** 在独立 Chrome 配置中用 **Load unpacked** 选择保留的旧版扩展。
+若 Windows 控件树只显示地址栏，可通过该测试配置的浏览器无障碍树定位
+**Load unpacked**，将焦点移到按钮并按空格，再在该窗口的系统文件夹选择器中选择目录。
+记录一次 ping 的能力、版本及运行中的原生宿主路径。关闭该测试浏览器，等隔离节点的
+`connected` 变为 `false`；保持同一 `MUSTER_DIR`，用原配置正常启动 Chrome，省略扩展
+加载和调试参数，再跑一次 ping。
+
+正式版 Chrome 158 和 Chrome for Testing 均在重启后重新连接了 1.1.94 宿主。两次使用的
+都是原先选中的 1.1.55 扩展目录；该目录与 1.1.94 包中的三个扩展文件逐一哈希相同。
+后续发行若修改了扩展，验收时核对 Chrome 实际加载目录中的文件，再判断扩展是否已更新。
 
 ## 复核多设备 Agents 目录
 
