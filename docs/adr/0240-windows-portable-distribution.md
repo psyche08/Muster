@@ -128,3 +128,20 @@ candidate source checkouts. The generated identity, network membership,
 permissions, VIP, name and relay survived the process handoff. The installed
 GUI and staged daemon bytes matched the portable archive; only the GUI and
 CLI were switched on the real node.
+
+The upgrade rehearsal also registers a generated software Presence public
+candidate after creating the synthetic network. Check its exact SEC1 bytes
+and the daemon's unenrolled result on both sides of the restart. Registering
+after network creation exercises an existing member's pending candidate.
+Comparing only device identity or a nonempty candidate could miss replacement
+of the candidate. Hardware signing and administrator enrollment have separate
+acceptance paths.
+
+Both release CLIs read the 1.1.70 and 1.1.89 fixture nodes. The original
+candidate bytes and unenrolled state survived, along with identity and roster.
+Replacing the synthetic candidate with another valid key in a negative
+control failed the new check. The installed 1.1.89 GUI was also opened from
+its fixed shortcut against both isolated generations. A window kept open
+across the handoff still showed the previous version after Refresh. Closing
+and reopening the shortcut displayed the new commit and the same fixture
+fingerprint. The production GUI returned to its original daemon.

@@ -61,6 +61,11 @@ function Read-Generation($expectedVersion) {
         $olderReader.device_id -cne $info.device_id -or $olderReader.commit -cne $info.commit) {
         throw "Unexpected device, version or vnet state while reading $expectedVersion"
     }
+    $presence = (Invoke-FixtureRpc $NextCli @{device_presence=@{}}).presence_info
+    if ([Convert]::ToBase64String([byte[]]$presence.public_key) -cne $expectedCandidate -or
+        $presence.enrolled -ne $false) {
+        throw "Expected the original, unenrolled Presence candidate in $expectedVersion"
+    }
     $net = (Invoke-FixtureRpc $NextCli @{network_status=@{}}).network_status
     $members = @($net.members)
     if (!$net.has_network -or !$net.network_id -or $net.name -cne 'Upgrade test network' -or
@@ -88,12 +93,19 @@ $state = [IO.Directory]::CreateTempSubdirectory('muster-state-upgrade-').FullNam
 try {
     $socket = Join-Path $state 'node\musterd.sock'
     [IO.File]::WriteAllBytes((Join-Path $state 'fixture.key'), [Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    $key = [Security.Cryptography.ECDsa]::Create([Security.Cryptography.ECCurve+NamedCurves]::nistP256)
+    try {
+        $point = $key.ExportParameters($false).Q
+        $expectedCandidate = [Convert]::ToBase64String([byte[]](@(4) + $point.X + $point.Y))
+    } finally { $key.Dispose() }
     $old = Use-Fixture $PreviousFixture {
         $device = (Invoke-FixtureRpc $PreviousCli @{device_info=@{}}).device_info
         if ($device.version -cne $previousVersion -or !$device.device_id) { throw 'Wrong initial fixture' }
         $null = Invoke-FixtureRpc $PreviousCli @{device_set_relay=@{relay='127.0.0.1:49837'}}
         $null = Invoke-FixtureRpc $PreviousCli @{network_create=@{name='Upgrade test network'}}
         $null = Invoke-FixtureRpc $PreviousCli @{network_rename=@{device_id=$device.device_id; name='Upgrade fixture'}}
+        # Seed an existing member's pending candidate without granting enrollment.
+        $null = & $PreviousCli --socket $socket presence --register $expectedCandidate
         Read-Generation $previousVersion
     }
     $new = Use-Fixture $NextFixture { Read-Generation $nextVersion }
@@ -106,7 +118,7 @@ try {
     if ((($old.Member.scopes | Sort-Object) -join ',') -cne (($new.Member.scopes | Sort-Object) -join ',')) {
         throw 'Member scopes changed across restart'
     }
-    "Passed $previousVersion ($($old.Info.commit)) -> $nextVersion ($($new.Info.commit)): both CLIs, identity and roster"
+    "Passed $previousVersion ($($old.Info.commit)) -> $nextVersion ($($new.Info.commit)): both CLIs, identity, roster and pending Presence candidate"
 } finally {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
     if ([IO.Path]::GetDirectoryName($state) -eq $tempRoot -and [IO.Path]::GetFileName($state).StartsWith('muster-state-upgrade-')) {

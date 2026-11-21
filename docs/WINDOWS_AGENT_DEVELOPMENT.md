@@ -68,9 +68,17 @@ $newNode = Build-NodeFixture $nextTree $nextCli 'next'
 ```
 
 脚本用旧版创建合成网络，保存设备名称和回环 relay，等旧进程正常退出，再用新版打开同一数据库。
+建网后，脚本向旧节点注册一个临时软件 P-256 在场候选公钥。新旧节点返回的 SEC1 字节都应
+与生成的公钥完全一致，且都报告未 enrollment。
 两版 CLI 都会从两代节点读取设备信息。脚本比较身份、指纹、网络 ID、虚拟地址、角色和权限，
 退出时删除临时数据库和软件密钥。记录测试输出的版本和提交，和两棵源码树的 HEAD 分别核对。
 构建的两个测试程序保留在 `$fixtures`。生产切换后的节点版本、TPM 验签和实际隧道流量仍需分别验收。
+
+正式切换前在 **Settings** 记下本机指纹、虚拟地址和 `Local node commit`。正常关闭 GUI，
+待新 daemon 就绪后从固定快捷方式重新打开。核对同一指纹、新的 `Local node version` 和
+`Local node commit`，再用发行包 CLI 的 `presence --summary` 查看候选注册和 enrollment
+两行结果。1.1.89 的隔离演练中，保持旧窗口并点 **Refresh** 仍显示旧节点版本；重新打开
+快捷方式后才读到新版提交。最后分别核对 Wintun 运行状态和对端的实际隧道流量。
 
 ## 在独立进程中操作窗口并截图
 
