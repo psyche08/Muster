@@ -9,7 +9,7 @@ namespace Muster.Windows;
 
 internal sealed class Desktop : Form
 {
-    sealed record Row(string Label, Intent Action, string CatalogKey = "")
+    sealed record Row(string Label, Intent Action)
     {
         public override string ToString() => Label;
     }
@@ -24,6 +24,7 @@ internal sealed class Desktop : Form
     readonly Label chatWelcome = new() { Dock = DockStyle.Fill, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
         Text = "Select a conversation or start a new chat." };
     readonly DesktopChatSidebar chatSidebar = new() { Dock = DockStyle.Left, Visible = false };
+    readonly AgentSidebar agentSidebar = new() { Dock = DockStyle.Left, Visible = false };
     List<BlockOffset> plainOffsets = [];
     (string Device, string Session)? readingScope;
     readonly JumpToLatest jump = new();
@@ -98,7 +99,13 @@ internal sealed class Desktop : Form
         body.Controls.Add(chatWelcome);
         body.Controls.Add(list);
         body.Controls.Add(chatSidebar);
-        body.Resize += (_, _) => chatSidebar.Width = Math.Min(LogicalToDeviceUnits(340), body.ClientSize.Width / 3);
+        body.Controls.Add(agentSidebar);
+        body.Resize += (_, _) =>
+        {
+            int third = body.ClientSize.Width / 3;
+            agentSidebar.Width = chatSidebar.Width = Math.Min(LogicalToDeviceUnits(340), third);
+            list.Width = Math.Min(LogicalToDeviceUnits(310), third);
+        };
         body.Controls.Add(jump);
         jump.BringToFront();
         void PlaceJump() => jump.Location = new Point(body.ClientSize.Width - jump.Width - LogicalToDeviceUnits(24),
@@ -117,6 +124,7 @@ internal sealed class Desktop : Form
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
         browserPanel.Intent += Send;
         chatSidebar.Intent += Send;
+        agentSidebar.Intent += Send;
         terminal.Intent += core.Send;
         conversationTerminal.Intent += core.Send;
         sessionTabs.Chosen += SelectTab;
@@ -183,25 +191,6 @@ internal sealed class Desktop : Form
                 });
         };
         input.TextChanged += (_, _) => UpdateComposerButtons();
-        var rowMenu = new ContextMenuStrip();
-        list.ContextMenuStrip = rowMenu;
-        FormClosed += (_, _) => rowMenu.Dispose();
-        list.MouseDown += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Right)
-                list.SelectedIndex = list.IndexFromPoint(e.Location);
-        };
-        rowMenu.Opening += (_, e) =>
-        {
-            while (rowMenu.Items.Count > 0) rowMenu.Items[0].Dispose();
-            if (current?.Screen == Page.Agents && list.SelectedItem is Row { CatalogKey.Length: > 0 } selected)
-            {
-                var row = current.Agents.Sections.SelectMany(section => section.Rows)
-                    .FirstOrDefault(r => r.Key == selected.CatalogKey);
-                if (row != null) AgentRowMenu.Populate(rowMenu, row, Send);
-            }
-            e.Cancel = rowMenu.Items.Count == 0;
-        };
         list.MouseClick += (_, e) =>
         {
             int index = list.IndexFromPoint(e.Location);
@@ -486,7 +475,7 @@ internal sealed class Desktop : Form
         var lines = new List<string>();
         var images = new List<TranscriptImage>();
         var blocks = new List<TranscriptBlock>();
-        void Row(string name, Intent intent, string catalogKey = "") => rows.Add(new(name, intent, catalogKey));
+        void Row(string name, Intent intent) => rows.Add(new(name, intent));
         composerButtons.Clear();
         int actionIndex = 0;
         void AddAction(string label, Action invoke)
@@ -540,7 +529,7 @@ internal sealed class Desktop : Form
         bool inWorkspaceTerminal = selectedTab == SessionTab.Terminal;
         sessionTabs.Visible = chatKey != null;
         if (chatKey != null) sessionTabs.Display(v.Chat!, selectedTab);
-        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat or Page.Agents);
+        input.Visible = selectedTab == SessionTab.Conversation && (page is Page.Onboarding or Page.Home or Page.Chat);
         input.PlaceholderText = "";
         switch (page)
         {
@@ -725,59 +714,6 @@ internal sealed class Desktop : Form
                         p.OfferTerminal = !p.OfferTerminal;
                         return new() { SetPolicy = new() { Policy = p } };
                     });
-            }
-            break;
-        case Page.Agents:
-            if (v.Agents is {} agents)
-            {
-                Intent Catalog(AgentCatalogAction.Types.Kind kind, string value = "") =>
-                    new() { AgentCatalogAction = new() { Kind = kind, Value = value } };
-                void CreateSession(bool desktop)
-                {
-                    using var dialog = new AgentSessionDialog(agents, desktop);
-                    if (dialog.ShowDialog(this) == DialogResult.OK) Send(dialog.Request());
-                }
-                if (agents.CreateHosts.Count > 0)
-                {
-                    AddAction(agents.Creating ? "Creating CLI session…" : "New CLI session", () => CreateSession(false));
-                    actions.Controls[actionIndex - 1].Enabled = !agents.Creating;
-                }
-                if (agents.NativeCreateHosts.Count > 0)
-                {
-                    AddAction(agents.NativeCreating ? "Creating desktop session…" : "New desktop session", () => CreateSession(true));
-                    actions.Controls[actionIndex - 1].Enabled = !agents.NativeCreating;
-                }
-                DeviceFilter(agents.DeviceId, id => Send(new() { OpenAgents = new() { DeviceId = id } }));
-                input.PlaceholderText = "Search sessions";
-                Act("Search", () => Catalog(AgentCatalogAction.Types.Kind.Search, input.Text));
-                if (agents.Query.Length > 0)
-                    AddAction("Clear search", () => { input.Clear(); Send(Catalog(AgentCatalogAction.Types.Kind.Search)); });
-                foreach (var section in agents.Sections)
-                {
-                    Row($"{(section.Expanded ? "−" : "+")} {section.Title} ({section.Count})",
-                        Catalog(AgentCatalogAction.Types.Kind.ToggleSection, section.Key));
-                    foreach (var row in section.Rows)
-                    {
-                        var session = row.Session;
-                        if (session == null) continue;
-                        Row($"    {session.Title}    {row.SourceLabel}    {row.LaunchLabel}",
-                            new() { OpenAgent = new() { Session = session.Id, DeviceId = session.DeviceId } }, row.Key);
-                        if (row.Expandable)
-                            Row(row.Expanded ? "      Collapse replies" : "      Expand replies",
-                                Catalog(AgentCatalogAction.Types.Kind.ToggleFamily, row.Key));
-                    }
-                    if (section.Expanded && section.HasMore && !section.LoadingMore)
-                        Row("    Load more", Catalog(AgentCatalogAction.Types.Kind.LoadMore, section.Key));
-                }
-                if (agents.Sections.Count == 0)
-                    foreach (var session in agents.Sessions)
-                        Row($"{session.Title}    {session.DeviceName}",
-                            new() { OpenAgent = new() { Session = session.Id, DeviceId = session.DeviceId } });
-                if (agents.SearchHasMore && !agents.Searching)
-                    Act("More results", () => Catalog(AgentCatalogAction.Types.Kind.SearchMore));
-                lines.AddRange(agents.SearchNotices);
-                lines.AddRange(agents.Errors);
-                if (agents.Loading || agents.Searching) lines.Add("Loading sessions…");
             }
             break;
         case Page.DesktopChats:
@@ -1071,7 +1007,12 @@ internal sealed class Desktop : Form
             list.EndUpdate();
         }
         bool showChatSidebar = page == Page.DesktopChats || (page == Page.Chat && v.Workspace == Page.DesktopChats);
-        chatWelcome.Visible = page == Page.DesktopChats && v.DesktopChats is { DeviceId.Length: > 0 };
+        bool showAgents = page == Page.Agents || (v.Workspace == Page.Agents &&
+            page is Page.Chat or Page.Files or Page.File or Page.Git);
+        agentSidebar.Visible = showAgents;
+        agentSidebar.Display(showAgents ? v.Agents : null, v.ServiceDevices, chatKey);
+        chatWelcome.Visible = page == Page.Agents || page == Page.DesktopChats && v.DesktopChats is { DeviceId.Length: > 0 };
+        chatWelcome.Text = page == Page.Agents ? "Select a session or start a new one." : "Select a conversation or start a new chat.";
         chatSidebar.Visible = showChatSidebar;
         chatSidebar.Display(showChatSidebar ? v.DesktopChats : null, chatKey?.Device ?? "", chatKey?.Session ?? "");
         bool showingSource = page == Page.File && v.File != null || page == Page.Git && v.Git is { DiffCommit.Length: > 0 };
@@ -1089,7 +1030,7 @@ internal sealed class Desktop : Form
         history.Visible = !inTrace && images.Count > 0;
         browserPanel.Display(page == Page.Browser ? v.Browser : null);
         invitePanel.Display(page == Page.Invite && v.CanInvite ? v.Invite : null, page == Page.Invite && v.CanInvite);
-        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && images.Count == 0 && page != Page.DesktopChats && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && images.Count == 0 && page is not (Page.DesktopChats or Page.Agents) && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         if (focusNetworkList && page == Page.Settings)

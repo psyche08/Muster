@@ -37,6 +37,7 @@ internal static class Program
             ports.Shown += (_, _) => ports.BeginInvoke(() => ports.CancelButton!.PerformClick());
             Check(ports.ShowDialog() == DialogResult.Cancel, "Cancel accepted a port edit");
         }
+        AgentSidebarTests.Run();
         BrowserPanelTests.Run();
         ChatOptionsTests.Run();
         Console.WriteLine("Passed conversation options, refresh and scope changes.");
