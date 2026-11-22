@@ -32,12 +32,7 @@ pub(super) fn program(name: &str) -> Result<PathBuf, Error> {
     let parent = daemon
         .parent()
         .ok_or_else(|| unavailable("missing desktop package directory"))?;
-    let base = if parent.ends_with("Contents/MacOS") {
-        parent.parent().unwrap().join("Helpers")
-    } else {
-        parent.to_owned()
-    };
-    let executable = base.join(name);
+    let executable = parent.join(name);
     if !executable.is_file() {
         return Err(unavailable(
             "this package does not contain the remote desktop engine",
@@ -122,7 +117,7 @@ impl Launch {
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         if bytes == CAPTURE_UNAVAILABLE {
             return Err(unavailable(
-                "host could not start capture; check its display, Screen Recording permission and encoder",
+                "host could not start capture; check the Mac display, encoder and desktop sharing permissions for Muster",
             ));
         }
         let [b'M', b'D', b'S', b'1', mode @ 0..=1, key @ ..] = bytes else {

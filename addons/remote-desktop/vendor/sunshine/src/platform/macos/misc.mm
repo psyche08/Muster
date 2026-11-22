@@ -34,6 +34,7 @@
 #include "misc.h"
 #include "src/entry_handler.h"
 #include "src/logging.h"
+#include "src/muster_session.h"
 #include "src/platform/common.h"
 
 using namespace std::literals;
@@ -42,24 +43,10 @@ namespace bp = boost::process::v1;
 
 namespace platf {
 
-// Even though the following two functions are available starting in macOS 10.15, they weren't
-// actually in the Mac SDK until Xcode 12.2, the first to include the SDK for macOS 11
-#if __MAC_OS_X_VERSION_MAX_ALLOWED < 110000  // __MAC_11_0
-  // If they're not in the SDK then we can use our own function definitions.
-  // Need to use weak import so that this will link in macOS 10.14 and earlier
-  /**
-   * @brief Query macOS screen-capture permission without prompting the user.
-   *
-   * @return True when screen-capture permission is granted.
-   */
-  extern "C" bool CGPreflightScreenCaptureAccess(void) __attribute__((weak_import));
-  /**
-   * @brief Request macOS screen-capture permission from the user.
-   *
-   * @return True when screen-capture permission is granted.
-   */
-  extern "C" bool CGRequestScreenCaptureAccess(void) __attribute__((weak_import));
-#endif
+  std::string capture_bundle_identifier() {
+    const char *identifier = [[[NSBundle mainBundle] bundleIdentifier] UTF8String];
+    return identifier ? identifier : "";
+  }
 
   namespace {
     auto screen_capture_allowed = std::atomic<bool> {false};
@@ -74,29 +61,16 @@ namespace platf {
   }
 
   std::unique_ptr<deinit_t> init() {
-    // This will generate a warning about CGPreflightScreenCaptureAccess and
-    // CGRequestScreenCaptureAccess being unavailable before macOS 10.15, but
-    // we have a guard to prevent it from being called on those earlier systems.
-    // Unfortunately the supported way to silence this warning, using @available,
-    // produces linker errors for __isPlatformVersionAtLeast, so we have to use
-    // a different method.
-    // We also ignore "tautological-pointer-compare" because when compiling with
-    // Xcode 12.2 and later, these functions are not weakly linked and will never
-    // be null, and therefore generate this warning. Since we are weakly linking
-    // when compiling with earlier Xcode versions, the check for null is
-    // necessary, and so we ignore the warning.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-#pragma clang diagnostic ignored "-Wtautological-pointer-compare"
-    if ([[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:((NSOperatingSystemVersion) {10, 15, 0})] &&
-        // Double check that these weakly-linked symbols have been loaded:
-        CGPreflightScreenCaptureAccess != nullptr && CGRequestScreenCaptureAccess != nullptr && !CGPreflightScreenCaptureAccess()) {
-      BOOST_LOG(error) << "No screen capture permission!"sv;
-      BOOST_LOG(error) << "Please activate it in 'System Preferences' -> 'Privacy' -> 'Screen Recording'"sv;
-      CGRequestScreenCaptureAccess();
+    // Only the foreground Muster app requests consent. Recheck the effective
+    // permissions here because this process performs capture and posts events.
+    if (!CGPreflightScreenCaptureAccess()) {
+      BOOST_LOG(error) << "No screen capture permission! Enable Screen Recording for Muster."sv;
       return nullptr;
     }
-#pragma clang diagnostic pop
+    if (muster_session::mouse_enabled.load() && !CGPreflightPostEventAccess()) {
+      BOOST_LOG(error) << "Enable Accessibility for Muster before allowing mouse input."sv;
+      return nullptr;
+    }
     // Record that we determined that we have the screen capture permission.
     screen_capture_allowed = true;
     return std::make_unique<deinit_t>();

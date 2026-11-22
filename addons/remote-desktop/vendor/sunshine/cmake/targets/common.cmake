@@ -1,7 +1,7 @@
 # common target definitions
 # this file will also load platform specific macros
 
-if(APPLE AND NOT SUNSHINE_BUILD_HOMEBREW)
+if(APPLE AND NOT SUNSHINE_BUILD_HOMEBREW AND NOT MUSTER_MAC_CAPTURE)
     add_executable(sunshine MACOSX_BUNDLE ${SUNSHINE_TARGET_FILES})
 else()
     add_executable(sunshine ${SUNSHINE_TARGET_FILES})

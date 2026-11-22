@@ -72,11 +72,10 @@ vcpkg checkout. A Windows cross-package build can consume the corresponding
 output directory via `MUSTER_WINDOWS_VIEWER`. The synthetic fixture is one blue frame from
 FFmpeg's color filter encoded with libx264, with SEI metadata removed.
 
-On a Mac with the downstream Sunshine helper in the daemon's helpers directory,
+On a Mac running the packaged Muster app,
 open the paired Windows member in Devices and choose view or view with mouse.
 Leave this device page open. On Windows open the Mac in Devices and choose
-**View desktop**. Closing either session ends the grant. macOS Screen Recording
-permission applies to the capture process. Accessibility applies to mouse input.
+**View desktop**. Closing either session ends the grant. Give Muster Screen Recording for viewing and Accessibility for mouse control.
 
 ## macOS capture host
 
@@ -88,6 +87,6 @@ and pkg-config. The first build downloads pinned dependencies. The native
 engine uses static codec, Opus and OpenSSL libraries and the macOS SDK's curl.
 The build checks every runtime library reference and signs the bundled host.
 Its matching source archive lives in `Contents/Resources/ThirdParty`.
-macOS Screen Recording and Accessibility still apply to the bundled capture
-process. Source builds and private handshakes can be tested on a locked Mac.
+The private capture executable sits beside musterd in Contents/MacOS. The foreground
+Muster app requests the OS permissions; the capture tool only preflights them. Source builds and private handshakes can be tested on a locked Mac.
 Real screen and input acceptance require an unlocked active graphical session.

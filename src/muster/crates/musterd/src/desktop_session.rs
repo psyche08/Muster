@@ -42,7 +42,7 @@ pub(super) async fn run(
 
 pub(super) fn available() -> (bool, bool) {
     #[cfg(target_os = "macos")]
-    return (engine::program(host::SUNSHINE).is_ok(), false);
+    return (engine::program(host::CAPTURE_HOST).is_ok(), false);
     #[cfg(windows)]
     return (false, engine::program(viewer::MOONLIGHT).is_ok());
     #[cfg(not(any(windows, target_os = "macos")))]

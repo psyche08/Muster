@@ -2,7 +2,9 @@
 
 add_compile_definitions(SUNSHINE_PLATFORM="macos")
 
-if (SUNSHINE_BUILD_HOMEBREW)
+if(MUSTER_MAC_CAPTURE)
+    set(SUNSHINE_ASSETS_DIR_DEF "../Resources/MusterDesktop/assets")
+elseif (SUNSHINE_BUILD_HOMEBREW)
     set(SUNSHINE_ASSETS_DIR "${CMAKE_INSTALL_PREFIX}/${SUNSHINE_ASSETS_DIR}")
 else()
     # Bundle layout for macOS app builds

@@ -23,7 +23,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-pub(super) const SUNSHINE: &str = "Sunshine.app/Contents/MacOS/Sunshine";
+pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
 
 struct Host {
     daemon: Weak<Daemon>,
@@ -106,7 +106,7 @@ pub(super) async fn offer(
     let (finished, mut result) = watch::channel(None);
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
-        program: program(SUNSHINE)?,
+        program: program(CAPTURE_HOST)?,
         events: events.clone(),
         finished,
     });
@@ -247,9 +247,12 @@ async fn start(
         .map_err(|_| unavailable("private desktop launch connection failed"))?;
     let xml = bounded_xml(response).await?;
     if xml.contains("status_code=\"503\"") {
-        return Err(unavailable(
-            "host capture/encoder unavailable (503); check Screen Recording permission and the Mac display",
-        ));
+        let message = if launch.mouse {
+            "host capture/encoder unavailable (503); check the Mac display and Muster's Screen Recording and Accessibility permissions"
+        } else {
+            "host capture/encoder unavailable (503); check the Mac display and Muster's Screen Recording permission"
+        };
+        return Err(unavailable(message));
     }
     if !xml.contains("status_code=\"200\"")
         || !xml.contains("<gamesession>1</gamesession>")
@@ -283,7 +286,7 @@ async fn bounded_xml(mut response: reqwest::Response) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    /// Run on an opted-in test host with the separately built Sunshine app.
+    /// Run on an opted-in test host with the packaged Muster capture tool.
     #[tokio::test]
     #[ignore = "requires an interactive Mac and a locally selected Sunshine test binary"]
     async fn private_host_launch() {

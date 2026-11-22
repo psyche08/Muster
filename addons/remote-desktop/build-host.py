@@ -122,7 +122,7 @@ def extract(archive, destination, top):
     return destination / top
 
 
-def build(cache, app, sources, identity):
+def build(cache, executable, sources, identity):
     arch = platform.machine()
     if platform.system() != "Darwin" or arch not in FFMPEG_SHA:
         raise ValueError("Build the native macOS capture engine on an Intel or Apple Silicon Mac")
@@ -167,7 +167,7 @@ def build(cache, app, sources, identity):
     run("cmake", "--build", config / "opus", "--target", "install", "--parallel", jobs)
     obj = config / src.name
     run("cmake", "-S", src, "-B", obj, "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTS=OFF",
-        "-DBUILD_DOCS=OFF", "-DSUNSHINE_ENABLE_TRAY=OFF", "-DBOOST_USE_STATIC=ON",
+        "-DMUSTER_MAC_CAPTURE=ON", "-DBUILD_DOCS=OFF", "-DSUNSHINE_ENABLE_TRAY=OFF", "-DBOOST_USE_STATIC=ON",
         "-DOPENSSL_USE_STATIC_LIBS=TRUE", "-DOPENSSL_ROOT_DIR=" + str(prefix),
         "-DOPENSSL_SSL_LIBRARY=" + str(prefix / "lib/libssl.a"),
         "-DOPENSSL_CRYPTO_LIBRARY=" + str(prefix / "lib/libcrypto.a"),
@@ -176,8 +176,7 @@ def build(cache, app, sources, identity):
         "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(extract(boost, cache, "boost-1.89.0")),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + str(extract(json, cache, "json")))
     run("cmake", "--build", obj, "--target", "sunshine", "--parallel", jobs)
-    built = obj / "Sunshine.app"
-    exe = built / "Contents/MacOS/Sunshine"
+    exe = obj / "muster-desktop-host"
     for line in output("otool", "-L", exe).splitlines()[1:]:
         library = line.strip().split(" (compatibility", 1)[0]
         if not library.startswith(("/usr/lib/", "/System/Library/")):
@@ -206,37 +205,37 @@ def build(cache, app, sources, identity):
                 for path in (openssl, opus, boost, json, ffmpeg):
                     tar.add(path, "downloads/" + path.name)
             archive.replace(offer)
-    if app.name != "Sunshine.app" or app.parent.name != "Helpers" or app.parent.parent.name != "Contents":
-        raise ValueError("Expected the embedded helper path inside the Muster application")
-    app.parent.mkdir(parents=True, exist_ok=True)
+    contents = executable.parent.parent
+    if executable != contents / "MacOS/muster-desktop-host" or contents.name != "Contents":
+        raise ValueError("Expected a capture tool in the enclosing app's Contents/MacOS")
+    executable.parent.mkdir(parents=True, exist_ok=True)
     sources.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=app.parent) as temp:
-        candidate = Path(temp) / app.name
-        run("ditto", built, candidate)
-        resources = candidate / "Contents/Resources"
-        shutil.copy2(src / "LICENSE", resources / "Sunshine-LICENSE.txt")
-        shutil.copy2(src / "NOTICE", resources / "Sunshine-NOTICE.txt")
-        run("codesign", "--force", "--options", "runtime", "--sign", identity, candidate)
-        run("codesign", "--verify", "--deep", "--strict", candidate)
+    resources = contents / "Resources/MusterDesktop"
+    resources.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=executable.parent) as temp:
+        candidate = Path(temp) / executable.name
+        shutil.copy2(exe, candidate)
+        run("codesign", "--force", "--options", "runtime", "--identifier",
+            "dev.linsheng.muster.desktop-host", "--sign", identity, candidate)
+        run("codesign", "--verify", "--strict", candidate)
+        run("ditto", obj / "assets", resources / "assets")
+        for name in ("LICENSE", "NOTICE"):
+            shutil.copy2(src / name, resources / ("Sunshine-" + name + ".txt"))
         with tempfile.TemporaryDirectory(dir=sources.parent) as work:
             staged = Path(work) / sources.name
             shutil.copy2(offer, staged)
             staged.replace(sources)
-        previous = Path(temp) / "previous.app"
-        if app.exists():
-            app.rename(previous)
-        try:
-            candidate.rename(app)
-        except OSError:
-            if previous.exists():
-                previous.rename(app)
-            raise
+        candidate.replace(executable)
+        # An incremental Xcode or developer build may still have the former bundle.
+        legacy = contents / "Helpers/Sunshine.app"
+        if legacy.is_dir():
+            legacy.rename(Path(temp) / "obsolete.app")
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("cache", type=Path)
-    p.add_argument("app", type=Path)
+    p.add_argument("executable", type=Path)
     p.add_argument("sources", type=Path)
     p.add_argument("--identity", default="-")
     args = p.parse_args()
@@ -244,4 +243,4 @@ if __name__ == "__main__":
     cache.mkdir(parents=True, exist_ok=True)
     with (cache / "build.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        build(cache, args.app.resolve(), args.sources.resolve(), args.identity)
+        build(cache, args.executable.resolve(), args.sources.resolve(), args.identity)

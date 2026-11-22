@@ -1,5 +1,10 @@
 # macos specific packaging
 
+if(MUSTER_MAC_CAPTURE)
+    # The enclosing Muster bundle owns installation, resources and signing.
+    return()
+endif()
+
 if (SUNSHINE_BUILD_HOMEBREW)
     install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/macos/assets/"
             DESTINATION "${SUNSHINE_ASSETS_DIR}")

@@ -14,6 +14,7 @@
 // platform includes
 #ifdef __APPLE__
   #include <mach-o/dyld.h>
+  #include "platform/macos/misc.h"
 #endif
 #ifdef __linux__
   #include "platform/linux/graphics.h"
@@ -199,6 +200,10 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef __APPLE__
+  if (argc == 2 && std::string_view(argv[1]) == "--muster-bundle-id") {
+    std::cout << platf::capture_bundle_identifier() << std::endl;
+    return 0;
+  }
   // Bundle assets are referenced relative to the executable
   // (e.g. ../Resources/assets), so anchor cwd to Contents/MacOS.
   {
@@ -289,6 +294,7 @@ int main(int argc, char *argv[]) {
 
   config::sunshine.flags[config::flag::FRESH_STATE] = true;
   config::input.mouse = grant->mouse;
+  config::audio.stream = false;  // The paired desktop profile carries video and pointer input.
   config::input.keyboard = false;
   config::input.controller = false;
   config::input.native_pen_touch = false;

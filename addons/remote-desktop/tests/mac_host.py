@@ -76,7 +76,7 @@ def run(executable, directory):
             assert child.wait(timeout=10) == 0
             logs = (directory / "host.log").read_bytes()
             if b"No screen capture permission!" in logs:
-                print("Capture permission required for this macOS host binary.")
+                print("Muster Screen Recording permission is required for live capture.")
             print("PASS: pinned host, selected viewer only, desktop only, pairing off, owner EOF")
         finally:
             if not child.stdin.closed:
@@ -92,7 +92,15 @@ def run(executable, directory):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sunshine", type=Path)
+    parser.add_argument("host", type=Path)
+    parser.add_argument("--expect-bundle-id", help="check the signed app layout and enclosing identity")
     args = parser.parse_args()
+    host = args.host.resolve(strict=True)
+    if args.expect_bundle_id:
+        app = host.parents[2]
+        assert host == app / "Contents/MacOS/muster-desktop-host"
+        assert not list(app.rglob("Sunshine.app"))
+        assert subprocess.check_output([host, "--muster-bundle-id"], text=True).strip() == args.expect_bundle_id
+        subprocess.run(["codesign", "--verify", "--strict", "--deep", app], check=True)
     with tempfile.TemporaryDirectory(prefix="muster-host-test-") as root:
-        run(args.sunshine.resolve(strict=True), Path(root))
+        run(host, Path(root))
