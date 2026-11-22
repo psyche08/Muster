@@ -359,12 +359,12 @@
 			inputPaths = ();
 			name = "Embed source-built desktop host";
 			outputPaths = (
-				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/Sunshine.app/Contents/MacOS/Sunshine",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/muster-desktop-host",
 				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/ThirdParty/Host-Sources.tar.gz",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\npython3 \"$SRCROOT/../../../../addons/remote-desktop/build-host.py\" \"$MUSTER_CARGO_TARGET_DIR/desktop-host\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/Sunshine.app\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Host-Sources.tar.gz\" --identity \"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n";
+			shellScript = "set -eu\npython3 \"$SRCROOT/../../../../addons/remote-desktop/build-host.py\" \"$MUSTER_CARGO_TARGET_DIR/desktop-host\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/muster-desktop-host\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/ThirdParty/Host-Sources.tar.gz\" --identity \"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

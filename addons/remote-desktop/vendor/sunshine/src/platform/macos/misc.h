@@ -5,6 +5,7 @@
 #pragma once
 
 // standard includes
+#include <string>
 #include <vector>
 
 // platform includes
@@ -17,6 +18,7 @@ namespace platf {
    * @return True when Sunshine can capture the screen.
    */
   bool is_screen_capture_allowed();
+  std::string capture_bundle_identifier();
 }  // namespace platf
 
 namespace dyn {

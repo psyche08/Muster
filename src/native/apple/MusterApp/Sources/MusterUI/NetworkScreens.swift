@@ -2,6 +2,9 @@
 #if canImport(SwiftUI)
 import MusterCore
 import SwiftUI
+#if os(macOS)
+import CoreGraphics
+#endif
 
 struct OnboardingView: View {
     let core: MusterCore
@@ -325,8 +328,23 @@ struct DeviceView: View {
     @State private var renameTarget: String?
     @State private var renameText = ""
     @State private var editingScopes = false
+    @State private var sharePermissionMessage: String?
     @State private var confirmRemove = false
     @State private var ssh = false
+
+    private func shareDesktop(with device: String, mouse: Bool) {
+        #if os(macOS)
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            sharePermissionMessage = "Enable Screen Recording for Muster in System Settings, then reopen Muster and try again."
+            return
+        }
+        if mouse && !CGPreflightPostEventAccess() && !CGRequestPostEventAccess() {
+            sharePermissionMessage = "Enable Accessibility for Muster in System Settings, then try sharing again."
+            return
+        }
+        core.shareDesktop(with: device, mouse: mouse)
+        #endif
+    }
 
     private var member: Muster_V1_MemberView? {
         vm.network.members.first { $0.deviceID == vm.selectedDevice }
@@ -385,8 +403,8 @@ struct DeviceView: View {
                             Text(vm.deviceActions.desktopSessionText)
                             Button("Stop sharing") { core.stopSharingDesktop(with: member.deviceID) }
                         } else {
-                            Button("Allow \(member.name) to view") { core.shareDesktop(with: member.deviceID, mouse: false) }
-                            Button("Allow \(member.name) to view and use the mouse") { core.shareDesktop(with: member.deviceID, mouse: true) }
+                            Button("Allow \(member.name) to view") { shareDesktop(with: member.deviceID, mouse: false) }
+                            Button("Allow \(member.name) to view and use the mouse") { shareDesktop(with: member.deviceID, mouse: true) }
                         }
                     }
                 }
@@ -407,6 +425,10 @@ struct DeviceView: View {
                 }
             }
             .navigationTitle(member.name)
+            .alert("Desktop sharing permission", isPresented: Binding(
+                get: { sharePermissionMessage != nil },
+                set: { if !$0 { sharePermissionMessage = nil } }
+            )) { Button("OK") {} } message: { Text(sharePermissionMessage ?? "") }
             .alert("Rename device", isPresented: Binding(
                 get: { renameTarget != nil },
                 set: { if !$0 { renameTarget = nil } }
@@ -630,7 +652,7 @@ struct SettingsView: View {
                         }
                     }
                     if vm.self_p.state.accessibility != "granted" {
-                        Text("Needed to operate Codex and Claude desktop sessions. Enable musterd under System Settings › Privacy & Security › Accessibility on this Mac. Locked Use requires this permission too.")
+                        Text("Needed to operate Codex and Claude desktop sessions. Enable Muster under System Settings › Privacy & Security › Accessibility on this Mac. Locked Use requires this permission too.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -645,7 +667,7 @@ struct SettingsView: View {
                         }
                     }
                     if vm.self_p.state.screenRecording != "granted" {
-                        Text("Needed to look at an app window when a native send fails. Enable musterd under System Settings › Privacy & Security › Screen Recording on this Mac.")
+                        Text("Needed to look at an app window when a native send fails. Enable Muster under System Settings › Privacy & Security › Screen Recording on this Mac.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
