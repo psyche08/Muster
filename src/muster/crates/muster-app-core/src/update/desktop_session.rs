@@ -5,10 +5,26 @@ use muster_proto::v1::{
 };
 
 pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionRequest) {
-    if state.screen != Screen::Device
-        || request.device != state.target()
-        || state.desktop_session.is_some()
-    {
+    if state.screen != Screen::Device || request.device != state.target() {
+        return;
+    }
+    if let Some(Action::ConfirmTakeover(token)) = request.action {
+        if let Some(s) = state.desktop_session.as_mut()
+            && s.device == request.device
+            && s.takeover.as_ref().is_some_and(|p| p.confirmation == token)
+        {
+            s.takeover = None;
+            super::network::admin_request(
+                state,
+                ctx,
+                "desktop takeover",
+                state.self_id.clone(),
+                Req::DesktopSession(request),
+            );
+        }
+        return;
+    }
+    if state.desktop_session.is_some() {
         return;
     }
     let actions = crate::render::device_actions(state);
@@ -38,6 +54,7 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
         device: request.device.clone(),
         id,
         status: "Opening desktop session…".into(),
+        takeover: None,
         _watch: watch,
     });
     let client = ctx.backend.local();
@@ -49,9 +66,9 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
                 let Ev::DesktopSession(event) = event else {
                     return Err(unexpected());
                 };
-                let phase = Phase::try_from(event.phase).map_err(|_| unexpected())?;
+                Phase::try_from(event.phase).map_err(|_| unexpected())?;
                 if tx
-                    .send(loop_message(Msg::DesktopProgress(id, phase)))
+                    .send(loop_message(Msg::DesktopProgress(id, event)))
                     .is_err()
                 {
                     return Ok(());
@@ -66,9 +83,18 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
         Msg::DesktopFinished(id, result)
     });
 }
-pub(super) fn progress(state: &mut State, id: u64, phase: Phase) {
+pub(super) fn progress(state: &mut State, id: u64, event: v1::DesktopSessionProgress) {
+    let Ok(phase) = Phase::try_from(event.phase) else {
+        return;
+    };
     if let Some(s) = state.desktop_session.as_mut().filter(|s| s.id == id) {
+        s.takeover = if phase == Phase::Occupied {
+            event.takeover
+        } else {
+            None
+        };
         s.status = match phase {
+            Phase::Occupied => "Desktop in use",
             Phase::Offered => "Shared with this device · waiting for viewer",
             Phase::Starting => "Connecting desktop…",
             Phase::Visible => "Viewing desktop",
@@ -84,5 +110,45 @@ pub(super) fn finish(state: &mut State, id: u64, result: Result<(), Error>) {
     match result {
         Ok(()) => state.toast("Desktop session ended", false),
         Err(e) => state.toast(e.to_string(), true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn desktop_session_prompt_tracks_the_live_request_and_clears_when_connecting() {
+        let mut state = State::new(false, None);
+        let (watch, _) = state.new_watch();
+        state.desktop_session = Some(DesktopSession {
+            device: "host".into(),
+            id: 3,
+            status: String::new(),
+            takeover: None,
+            _watch: watch,
+        });
+        let occupied = v1::DesktopSessionProgress {
+            phase: Phase::Occupied as i32,
+            takeover: Some(v1::DesktopTakeoverPrompt {
+                confirmation: 9,
+                controller: "Test viewer".into(),
+            }),
+        };
+        progress(&mut state, 2, occupied.clone());
+        assert!(state.desktop_session.as_ref().unwrap().takeover.is_none());
+        progress(&mut state, 3, occupied.clone());
+        assert_eq!(
+            state.desktop_session.as_ref().unwrap().takeover,
+            occupied.takeover
+        );
+        progress(
+            &mut state,
+            3,
+            v1::DesktopSessionProgress {
+                phase: Phase::Starting as i32,
+                takeover: None,
+            },
+        );
+        assert!(state.desktop_session.as_ref().unwrap().takeover.is_none());
     }
 }

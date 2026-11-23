@@ -78,13 +78,16 @@ struct Host {
     daemon: Weak<Daemon>,
     program: std::path::PathBuf,
     lease: super::permissions::Lease,
-    _slot: tokio::sync::OwnedSemaphorePermit,
+    peer: DeviceId,
+    stop: tokio_util::sync::CancellationToken,
 }
 impl Handler for Host {
     fn console_ready(&self) -> bool {
-        self.daemon
-            .upgrade()
-            .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
+        !self.stop.is_cancelled()
+            && self
+                .daemon
+                .upgrade()
+                .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
     }
     fn serve<'a>(
         &'a self,
@@ -106,15 +109,48 @@ impl Host {
         if hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
+        let daemon = self
+            .daemon
+            .upgrade()
+            .ok_or_else(|| unavailable("daemon stopped"))?;
+        let reserve = |expected: Option<&super::occupancy::Occupant>| {
+            daemon
+                .desktop_occupancy
+                .reserve(self.peer, &self.stop, expected)
+        };
+        let _reservation = match reserve(None) {
+            Ok(lease) => lease,
+            Err(Some(current)) => {
+                let mut busy = Vec::from(*BUSY);
+                busy.extend_from_slice(&current.peer.0);
+                session.send_control(&busy).await?;
+                let choice = timeout(Duration::from_secs(90), session.recv_control())
+                    .await
+                    .map_err(|_| unavailable("desktop confirmation expired"))??;
+                if choice.as_deref() != Some(REPLACE) || !self.console_ready() {
+                    return Err(unavailable("desktop takeover cancelled"));
+                }
+                match reserve(Some(&current)) {
+                    Ok(lease) => lease,
+                    Err(_) => {
+                        session.send_control(CHANGED).await?;
+                        let _ = timeout(Duration::from_secs(1), session.recv_control()).await;
+                        return Err(unavailable("desktop viewer changed"));
+                    }
+                }
+            }
+            Err(None) => return Err(unavailable("desktop viewer changed")),
+        };
+        // The previous broker must drop its sockets before the next engine binds.
+        let _slot = timeout(Duration::from_secs(10), daemon.desktop_slot.acquire())
+            .await
+            .map_err(|_| unavailable("previous desktop viewer is still closing"))?
+            .map_err(|_| unavailable("desktop service stopped"))?;
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };
-        let daemon = self
-            .daemon
-            .upgrade()
-            .ok_or_else(|| unavailable("daemon stopped"))?;
         let parked = daemon.desktop_idle.take().await;
         if !self.console_ready() {
             return Err(unavailable("desktop permission ended"));
@@ -144,14 +180,14 @@ pub(crate) fn admit(
     daemon: &Arc<Daemon>,
     peer: DeviceId,
 ) -> Option<muster_net::remote_desktop::Sharing> {
-    let slot = daemon.desktop_slot.clone().try_acquire_owned().ok()?;
     let program = program(CAPTURE_HOST).ok()?;
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
         program,
         lease,
-        _slot: slot,
+        peer,
+        stop: Default::default(),
     });
     let access = if mode == muster_proto::v1::DesktopAccess::Mouse {
         Access::ViewAndMouse

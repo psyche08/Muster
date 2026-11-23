@@ -29,7 +29,7 @@ internal sealed class Desktop : Form
     readonly AgentSidebar agentSidebar = new() { Dock = DockStyle.Left, Visible = false };
     List<BlockOffset> plainOffsets = [];
     (string Device, string Session)? readingScope;
-    Form? desktopViewer;
+    DesktopViewerForm? desktopViewer;
     string? viewerDevice;
     bool viewerLeaseSeen;
     string? priorViewerToast;
@@ -429,10 +429,11 @@ internal sealed class Desktop : Form
     void ViewDesktop(string device, string name)
     {
         if (desktopViewer != null) { desktopViewer.Activate(); return; }
-        var form = new Form { Text = $"Desktop · {name}", StartPosition = FormStartPosition.CenterScreen,
-            ClientSize = new Size(960, 540), MinimumSize = new Size(480, 300) };
-        var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black, AccessibleName = "Remote desktop" };
-        form.Controls.Add(panel);
+        var form = new DesktopViewerForm(name);
+        form.TakeoverRequested += token => {
+            if (current?.SelectedDevice == device)
+                Send(new() { DesktopSession = new() { Device = device, ConfirmTakeover = token } });
+        };
         desktopViewer = form;
         viewerDevice = device;
         viewerLeaseSeen = false;
@@ -443,7 +444,7 @@ internal sealed class Desktop : Form
             if (!IsDisposed) Send(new() { EndDesktopSession = device });
         };
         form.Show();
-        Send(new() { DesktopSession = new() { Device = device, ViewInWindow = (ulong)panel.Handle.ToInt64() } });
+        Send(new() { DesktopSession = new() { Device = device, ViewInWindow = (ulong)form.Surface.Handle.ToInt64() } });
     }
 
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
@@ -583,6 +584,7 @@ internal sealed class Desktop : Form
             {
                 viewerLeaseSeen = true;
                 viewer.Text = v.DeviceActions.DesktopSessionText;
+                viewer.Display(v.DeviceActions.DesktopTakeover);
             }
             else if (!selected || viewerLeaseSeen || (v.Toasts.LastOrDefault() is { Error: true } toast && toast.Id != priorViewerToast)) viewer.Close();
         }

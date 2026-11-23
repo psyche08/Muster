@@ -224,6 +224,10 @@ pub struct Daemon {
     #[cfg(target_os = "macos")]
     desktop_idle: desktop_session::host::IdleHost,
     desktop_permissions: desktop_session::permissions::Permissions,
+    #[cfg(target_os = "macos")]
+    desktop_occupancy: Arc<desktop_session::occupancy::Occupancy>,
+    #[cfg(windows)]
+    desktop_confirmation: desktop_session::confirmation::Confirmation,
     blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
@@ -440,6 +444,10 @@ impl Daemon {
             #[cfg(target_os = "macos")]
             desktop_idle: Default::default(),
             desktop_permissions: Default::default(),
+            #[cfg(target_os = "macos")]
+            desktop_occupancy: Default::default(),
+            #[cfg(windows)]
+            desktop_confirmation: Default::default(),
             blackout,
             #[cfg(windows)]
             _identity_owner,

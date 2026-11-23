@@ -61,7 +61,7 @@ use terminals::*;
 
 /// What tasks report back.
 pub enum Msg {
-    DesktopProgress(u64, v1::desktop_session_progress::Phase),
+    DesktopProgress(u64, v1::DesktopSessionProgress),
     DesktopFinished(u64, Result<(), Error>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     UpdateChecked(Result<Option<crate::desktop_update::Candidate>, String>),

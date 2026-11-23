@@ -1,4 +1,8 @@
 //! A local streaming RPC is the lifetime of the local user's explicit choice.
+#[cfg(any(windows, test))]
+pub(super) mod confirmation;
+#[cfg(any(target_os = "macos", test))]
+pub(super) mod occupancy;
 pub(super) mod permissions;
 use crate::{Daemon, Error};
 use muster_core::DeviceId;
@@ -31,6 +35,10 @@ pub(super) async fn run(
         return Err(Error::Invalid(
             "Manage incoming desktop access in Settings".into(),
         ));
+    }
+    #[cfg(windows)]
+    if let Action::ConfirmTakeover(id) = action {
+        return daemon.desktop_confirmation.confirm(peer, id);
     }
     let _slot = daemon
         .desktop_slot

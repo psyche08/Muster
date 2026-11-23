@@ -1412,6 +1412,7 @@ pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
         can_share_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_host_available),
         can_view_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_viewer_available),
         desktop_session_open: session.is_some(),
+        desktop_takeover: session.and_then(|s| s.takeover.clone()),
         desktop_session_text: session.map(|s| s.status.clone()).unwrap_or_default(),
         blackout: state
             .manual_devices

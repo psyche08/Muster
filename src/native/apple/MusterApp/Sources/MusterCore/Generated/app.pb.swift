@@ -2769,6 +2769,15 @@ public nonisolated struct Muster_App_DeviceActions: Sendable {
 
   public var desktopSessionText: String = String()
 
+  public var desktopTakeover: Muster_V1_DesktopTakeoverPrompt {
+    get {_desktopTakeover ?? Muster_V1_DesktopTakeoverPrompt()}
+    set {_desktopTakeover = newValue}
+  }
+  /// Returns true if `desktopTakeover` has been explicitly set.
+  public var hasDesktopTakeover: Bool {self._desktopTakeover != nil}
+  /// Clears the value of `desktopTakeover`. Subsequent reads from it will return its default value.
+  public mutating func clearDesktopTakeover() {self._desktopTakeover = nil}
+
   /// present for a connected, supported Mac on mobile
   public var blackout: Muster_V1_DisplayBlackout {
     get {_blackout ?? Muster_V1_DisplayBlackout()}
@@ -2783,6 +2792,7 @@ public nonisolated struct Muster_App_DeviceActions: Sendable {
 
   public init() {}
 
+  fileprivate var _desktopTakeover: Muster_V1_DesktopTakeoverPrompt? = nil
   fileprivate var _blackout: Muster_V1_DisplayBlackout? = nil
 }
 
@@ -8895,7 +8905,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceActions"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_cover\0\u{3}can_ssh\0\u{3}show_access\0\u{3}can_edit_access\0\u{3}can_remove\0\u{1}blackout\0\u{3}can_rename\0\u{3}can_share_desktop\0\u{3}can_view_desktop\0\u{3}desktop_session_open\0\u{3}desktop_session_text\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_cover\0\u{3}can_ssh\0\u{3}show_access\0\u{3}can_edit_access\0\u{3}can_remove\0\u{1}blackout\0\u{3}can_rename\0\u{3}can_share_desktop\0\u{3}can_view_desktop\0\u{3}desktop_session_open\0\u{3}desktop_session_text\0\u{3}desktop_takeover\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8914,6 +8924,7 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
       case 9: try { try decoder.decodeSingularBoolField(value: &self.canViewDesktop) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.desktopSessionOpen) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.desktopSessionText) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._desktopTakeover) }()
       default: break
       }
     }
@@ -8957,6 +8968,9 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
     if !self.desktopSessionText.isEmpty {
       try visitor.visitSingularStringField(value: self.desktopSessionText, fieldNumber: 11)
     }
+    try { if let v = self._desktopTakeover {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8971,6 +8985,7 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
     if lhs.canViewDesktop != rhs.canViewDesktop {return false}
     if lhs.desktopSessionOpen != rhs.desktopSessionOpen {return false}
     if lhs.desktopSessionText != rhs.desktopSessionText {return false}
+    if lhs._desktopTakeover != rhs._desktopTakeover {return false}
     if lhs._blackout != rhs._blackout {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

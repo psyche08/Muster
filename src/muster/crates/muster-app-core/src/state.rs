@@ -13,6 +13,7 @@ pub struct DesktopSession {
     pub device: String,
     pub id: u64,
     pub status: String,
+    pub takeover: Option<v1::DesktopTakeoverPrompt>,
     pub _watch: Watch,
 }
 

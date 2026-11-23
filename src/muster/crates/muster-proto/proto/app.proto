@@ -602,6 +602,7 @@ message DeviceActions {
   bool can_view_desktop = 9;
   bool desktop_session_open = 10;
   string desktop_session_text = 11;
+  muster.v1.DesktopTakeoverPrompt desktop_takeover = 12;
   muster.v1.DisplayBlackout blackout = 6; // present for a connected, supported Mac on mobile
 }
 
