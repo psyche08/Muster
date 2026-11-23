@@ -19,3 +19,5 @@ A desktop-only session can remain connected while it produces frames. The host s
 ## Verification
 
 Build and verify the signed macOS bundle. Connect from the packaged Windows viewer, verify a real frame, click a recognizable test target, and check the host-side receipt. Repeat after disconnect using the saved service grant.
+
+The signed Mac acceptance bundle passed strict signature verification and contained the capture host under the Muster application identity. After installation and restart, a Windows viewer painted a real Mac desktop and the host recorded two distinct clicks sent from Windows. The initial viewer could retain a stale picture. See [ADR 0290](0290-desktop-media-bursts.md) for the subsequent receive-path change and live refresh result.

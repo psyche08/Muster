@@ -23,3 +23,7 @@ The receiver can absorb a burst while checking socket ownership. Sustained overl
 ## Verification
 
 Exercise a multi-batch burst with a paused consumer and check that overflow remains bounded. Run the existing paired transport tests. Repeat live color changes and pointer input within one session and check reconnection using the persistent grant.
+
+The Windows unit test delivered 257 fragments to a paused consumer, retained the first 256 in order and recorded one overflow. Four paired transport integration tests passed, including revocation and reconnection. The standalone manual two-host harness was skipped.
+
+The complete x64 portable package was installed and both the GUI and daemon reported the new version. With the same signed Mac host, the open Windows viewer showed a new blue test window and its change to green after a Windows click. The host independently recorded the click. After closing the viewer and reconnecting through the paired device details, the viewer displayed the green window and the host recorded a second click at different coordinates. The saved view-and-mouse grant remained active. The Windows virtual adapter was up and both test pings to the peer succeeded. This was a device acceptance installation.
