@@ -407,3 +407,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0289](0289-desktop-host-session-lifetime.md) | Accepted | Keep the capture engine active for the paired desktop session |
 | [0290](0290-desktop-media-bursts.md) | Accepted | Buffer video packet bursts in the paired desktop broker |
 | [0291](0291-watch-recovery-and-terminal-setup.md) | Accepted | Preserve watch failure reasons and distinguish terminal setup from creation |
+| [0292](0292-working-composer-queue-receipt.md) | Accepted | Confirm queue acceptance when a working composer returns to Stop |

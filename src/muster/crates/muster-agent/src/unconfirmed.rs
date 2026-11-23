@@ -1,6 +1,6 @@
 //! A native write whose delivery is unconfirmed blocks every later write to
 //! the same session. Provider evidence can clear it: a newly appended
-//! user record with the same text, or a newly persisted queue item. Elapsed
+//! user record with the same text, a newly persisted queue item, or a scoped working composer transition. Elapsed
 //! time, a new request, a lost AX surface or a locked screen never do, and
 //! reading the evidence needs neither: it is a read of provider files.
 //!
@@ -64,6 +64,8 @@ pub enum Evidence {
     Receipt,
     /// A new provider queue item with the submitted text.
     Admission,
+    /// A working composer accepted its verified draft and returned to Stop.
+    ComposerQueue,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -130,6 +132,19 @@ impl WriteGuard {
             confirmation: crate::control_guard::current_delivery().and_then(|d| d.confirmation()),
         });
         Ok(())
+    }
+
+    /// Record the observed UI receipt only for the press that produced it.
+    /// Reuse normal ledger settlement, retaining the evidence if persistence fails.
+    pub fn confirm_working_queue(&self, origin: &Origin) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if let Some(pending) = &mut state.pending
+            && pending.origin == *origin
+        {
+            pending.evidence.get_or_insert(Evidence::ComposerQueue);
+            reconcile(&mut state);
+        }
+        state.confirmed.as_deref() == Some(origin.token().as_str())
     }
 
     /// Record an operator attestation before clearing only the named latch.
@@ -297,6 +312,41 @@ mod tests {
         let receipt = Receipt::new(file.path(), Provider::Codex, text).unwrap();
         guard.arm(origin(), Some(receipt), None).unwrap();
         guard
+    }
+
+    #[tokio::test]
+    async fn working_queue_receipt_only_settles_its_press_and_survives_a_store_error() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let calls = Arc::new(AtomicUsize::new(0));
+        let attempts = calls.clone();
+        let delivery = crate::control_guard::Delivery::default();
+        delivery.set_confirmation(Arc::new(move || {
+            if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                Err(Error::Io("fixture store busy".into()))
+            } else {
+                Ok(())
+            }
+        }));
+        let guard = WriteGuard::default();
+        let submitted = origin();
+        delivery
+            .scope(async { guard.arm(submitted.clone(), None, None).unwrap() })
+            .await;
+        let other = Origin {
+            operation: Some("another-operation".into()),
+            ..submitted.clone()
+        };
+        assert!(!guard.confirm_working_queue(&other));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(!guard.confirm_working_queue(&submitted));
+        assert!(guard.is_unconfirmed());
+        assert_eq!(
+            guard.reconcile(),
+            Reconciled::Confirmed(submitted.clone(), Evidence::ComposerQueue)
+        );
+        assert!(guard.confirmed_operation(&submitted.token()));
+        assert!(!guard.confirm_working_queue(&other));
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
     #[test]

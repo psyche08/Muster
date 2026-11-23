@@ -17,6 +17,7 @@ use muster_agent::Error;
 use muster_agent::controller::{Controller, ControllerEvent, ControllerEvents};
 use muster_agent::controller::{ProcessIdentity, ProcessState};
 use muster_agent::model::{ControllerKind, PendingInteraction, SessionState};
+use muster_agent::native_send::{ComposerButton, WorkingQueuePress};
 use muster_agent::native_step::Step;
 
 use super::ax::{self, Element};
@@ -1049,6 +1050,7 @@ struct Surface {
     web_area: Element,
     composer: Option<Element>,
     sends: Vec<Element>,
+    composer_button: ComposerButton,
     // Content-free metadata from this scan; diagnostics must not walk again.
     control_diagnostics: Vec<String>,
 }
@@ -1276,6 +1278,7 @@ fn scan_surface(
         composer,
         send,
         diagnostics,
+        composer_button,
         stop,
     } = find_controls(profile, &web_area);
     if let Some(trace) = trace {
@@ -1296,6 +1299,7 @@ fn scan_surface(
         web_area,
         composer: composer.into_iter().next(),
         sends: send,
+        composer_button,
         control_diagnostics: diagnostics,
     })
 }
@@ -1335,6 +1339,7 @@ fn control_metadata(
 }
 
 struct Controls {
+    composer_button: ComposerButton,
     composer: Vec<Element>,
     send: Vec<Element>,
     diagnostics: Vec<String>,
@@ -1343,10 +1348,20 @@ struct Controls {
 }
 
 fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
+    find_controls_with_budget(profile, web_area, ax::WALK_BUDGET)
+}
+
+fn find_controls_with_budget(
+    profile: &AppProfile,
+    web_area: &Element,
+    budget: Duration,
+) -> Controls {
     use muster_agent::native_scan::choose_composer;
     use muster_agent::native_send::{ControlNode, composer_submits_for};
     let (mut composer, mut send) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
+    let mut stop_indices = std::collections::BTreeSet::new();
+    let mut scoped_stops = Vec::new();
     let mut subroles = Vec::new();
     // Per node: inside a region that holds a conversation of its own.
     let mut auxiliary = Vec::new();
@@ -1362,7 +1377,7 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
             stop = Some(ScanStop::NodeLimit);
             break;
         }
-        if started.elapsed() > ax::WALK_BUDGET {
+        if started.elapsed() >= budget {
             stop = Some(ScanStop::TimeLimit);
             break;
         }
@@ -1394,6 +1409,13 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         let is_composer = !aside && profile.controls().composer.matches(&field);
         let is_send = !aside && !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
+        let is_stop = !aside
+            && is_button
+            && profile.controls().queue.is_some()
+            && profile.controls().stop.matches(&field);
+        if is_stop {
+            stop_indices.insert(index);
+        }
         let queued_delete = !aside
             && is_button
             && profile
@@ -1406,7 +1428,7 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         nodes.push(ControlNode {
             parent,
             composer: is_composer,
-            submit: is_send,
+            submit: is_send || is_stop,
             queued_delete,
         });
         if is_composer {
@@ -1466,12 +1488,15 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         // Queued rows carry their own submit controls: only those in the
         // composer's branch send.
         if profile.controls().queue.is_some() {
-            send = selected
-                .map(|index| composer_submits_for(&nodes, index))
-                .unwrap_or_default()
-                .into_iter()
-                .map(|i| elements[i].clone())
-                .collect();
+            if let Some(index) = selected {
+                for i in composer_submits_for(&nodes, index) {
+                    if stop_indices.contains(&i) {
+                        scoped_stops.push(elements[i].bool("AXEnabled"));
+                    } else {
+                        send.push(elements[i].clone());
+                    }
+                }
+            }
         } else {
             send = nodes
                 .iter()
@@ -1495,11 +1520,17 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
         .into_iter()
         .map(|index| send[index].clone())
         .collect();
+    let composer_button = if complete {
+        ComposerButton::from_scoped(&enabled, &scoped_stops)
+    } else {
+        ComposerButton::Other
+    };
     diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
     Controls {
         composer,
         send,
         diagnostics,
+        composer_button,
         stop,
     }
 }
@@ -2203,30 +2234,34 @@ impl NativeAppController {
         // Preparation is read-only. A brief input change here may settle;
         // every retry resolves this exact session and reads its draft afresh.
         trace.stage("prepare_draft");
-        let ((mut action, composer), generation) = muster_agent::control_guard::prepare_stable(
-            || self.input_generation(),
-            || {
-                self.check_identity()?;
-                self.composer_question_guard(expected)?;
-                // A cached composer may still belong to the web area after
-                // Electron replaces its active editor. Always resolve afresh.
-                let fresh = self.fresh_surface()?;
-                let composer = fresh
-                    .composer
-                    .clone()
-                    .ok_or_else(|| Error::Unavailable("The native prompt is not visible".into()))?;
-                let action = draft_action(
-                    self.profile,
-                    composer.string("AXValue").as_deref(),
-                    text,
-                    on_draft,
-                )?;
-                self.check_write_surface(&fresh.web_area, &composer)?;
-                *self.surface.lock().unwrap() = fresh;
-                Ok((action, composer))
-            },
-        )
-        .await?;
+        let ((mut action, composer, working_view), generation) =
+            muster_agent::control_guard::prepare_stable(
+                || self.input_generation(),
+                || {
+                    self.check_identity()?;
+                    self.composer_question_guard(expected)?;
+                    // A cached composer may still belong to the web area after
+                    // Electron replaces its active editor. Always resolve afresh.
+                    let fresh = self.fresh_surface()?;
+                    let composer = fresh.composer.clone().ok_or_else(|| {
+                        Error::Unavailable("The native prompt is not visible".into())
+                    })?;
+                    let action = draft_action(
+                        self.profile,
+                        composer.string("AXValue").as_deref(),
+                        text,
+                        on_draft,
+                    )?;
+                    self.check_write_surface(&fresh.web_area, &composer)?;
+                    let working_view = (on_draft == Draft::Replace
+                        && expected.is_none()
+                        && fresh.composer_button == ComposerButton::Stop)
+                        .then(|| fresh.web_area.clone());
+                    *self.surface.lock().unwrap() = fresh;
+                    Ok((action, composer, working_view))
+                },
+            )
+            .await?;
         muster_agent::control_guard::check()?;
         if self.input_generation() != generation {
             return Err(Error::Conflict(
@@ -2423,7 +2458,8 @@ impl NativeAppController {
                 );
                 Error::Conflict("session view changed; draft preserved, not sent".into())
             })?;
-        let current_buttons = find_controls(self.profile, &web_area).send;
+        let before_press = find_controls(self.profile, &web_area);
+        let current_buttons = &before_press.send;
         if current_buttons.as_slice() != std::slice::from_ref(send)
             || send.bool("AXEnabled") != Some(true)
             || !web_area.contains(send)
@@ -2460,32 +2496,52 @@ impl NativeAppController {
         } else {
             None
         };
-        // From here an interrupted send can no longer be reported as not started.
-        muster_agent::control_guard::delivery_attempt();
+        self.composer_question_guard(expected)?;
+        // An Electron button can keep its AX identity while changing action
+        // during the provider store reads. Never invoke a control now showing Stop.
+        let button = names(send, send.role());
+        let controls = self.profile.controls();
+        if !controls.send.matches(&button)
+            || controls.stop.matches(&button)
+            || send.bool("AXEnabled") != Some(true)
+        {
+            return Err(Error::Conflict(
+                "The send control changed before submit; not sent".into(),
+            ));
+        }
         muster_agent::control_guard::check()?;
         if self.input_generation() != generation {
             return Err(Error::Conflict(
                 "Local input changed before submit; not sent".into(),
             ));
         }
-        self.composer_question_guard(expected)?;
-        self.unconfirmed.arm(
-            muster_agent::unconfirmed::Origin::now("send"),
-            Some(receipt),
-            admission,
-        )?;
-        // AX can report an error after delivering the press. Only the newly
-        // appended provider user message can confirm delivery in either case.
+        let origin = muster_agent::unconfirmed::Origin::now("send");
+        let token = origin.token();
+        self.unconfirmed
+            .arm(origin.clone(), Some(receipt), admission)?;
         trace.stage("send_press");
-        let _press = send.press();
-        trace.record(format_args!("press_result={_press:?}"));
+        muster_agent::control_guard::delivery_attempt();
+        let press = send.press();
+        trace.record(format_args!("press_result={press:?}"));
+        let working_press = if press.is_ok()
+            && working_view.as_ref() == Some(&web_area)
+            && before_press.composer.as_slice() == std::slice::from_ref(&composer)
+        {
+            WorkingQueuePress::observed(
+                self.profile,
+                ComposerButton::Stop,
+                before_press.composer_button,
+            )
+        } else {
+            None
+        };
         trace.stage("await_provider_receipt");
         let receipt_budget = muster_agent::control_guard::receipt_budget();
         let step = Step::new("provider send receipt", receipt_budget);
         loop {
             // The background poll may have read the evidence first: either
-            // way the write is confirmed only once the guard is clear.
-            if self.unconfirmed.reconcile().cleared() {
+            // way only confirmation of this operation completes the send.
+            if self.unconfirmed.confirmed_operation(&token) {
                 break;
             }
             if step.expired() {
@@ -2495,6 +2551,29 @@ impl NativeAppController {
                     receipt_budget.as_millis()
                 );
                 return Err(Error::UnknownOutcome("Waiting for the provider's send receipt; delivery is unconfirmed, do not resend".into()));
+            }
+            if let Some(working) = &working_press
+                && step.check().is_ok()
+                && self.input_generation() == generation
+            {
+                let observed = find_controls_with_budget(
+                    self.profile,
+                    &web_area,
+                    step.remaining().min(ax::WALK_BUDGET),
+                );
+                if let [editor] = observed.composer.as_slice()
+                    && observed.composer_button == ComposerButton::Stop
+                    && self.check_write_surface(&web_area, editor).is_ok()
+                    && working.accepted(
+                        observed.composer_button,
+                        editor.string("AXValue").as_deref(),
+                    )
+                    && self.input_generation() == generation
+                    && step.check().is_ok()
+                    && self.unconfirmed.confirm_working_queue(&origin)
+                {
+                    break;
+                }
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
