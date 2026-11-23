@@ -19,3 +19,7 @@ Session startup and post-paint termination can be distinguished at the normal Wi
 ## Verification
 
 Check native build, bounded status parsing and actual paired device behavior. Successful media acceptance requires observing a Mac test window and its receipt of a click through the Windows viewer.
+
+A loopback RTSP fixture returned 503 to the packaged native viewer. The viewer reported the failure immediately, but its process stayed alive while the parent retained the input pipe. Closing the pipe released the pending CRT stream read and allowed process exit. Read the private control pipe through Win32 and test process exit while the parent still holds its writer. This exercises the failure path independently of Mac capture.
+
+On Windows x64 the same packaged-viewer test timed out after 15 seconds on the CRT version. The Win32 pipe version returned the expected RTSP 503 status and exited with the writer open. The loopback, bootstrap, decode and paint checks also passed. A real paired display and pointer receipt remain pending.
