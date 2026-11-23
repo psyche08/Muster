@@ -22,6 +22,34 @@ pub(crate) fn is(d: &Discovered) -> bool {
             .file_name()
             .is_some_and(|n| n == "thread_history_1.sqlite")
 }
+/// The catalog path is a shared projection. Bind a send to the thread's
+/// individual JSONL writer using the registry and the rollout's own header.
+pub(crate) fn receipt_rollout(session: &Discovered) -> Option<PathBuf> {
+    let home = session.path.parent()?;
+    let db = open(&home.join("state_5.sqlite")).ok()?;
+    let path: String = db
+        .query_row(
+            "SELECT rollout_path FROM threads WHERE id=?1",
+            [&session.id],
+            |row| row.get(0),
+        )
+        .ok()?;
+    let path = PathBuf::from(path);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        home.join(path)
+    };
+    if path.extension()?.to_str()? != "jsonl" || !path.is_file() {
+        return None;
+    }
+    let header = crate::viewer::head_records(&path, 1).into_iter().next()?;
+    let id = header["payload"]["id"]
+        .as_str()
+        .or_else(|| header["payload"]["session_id"].as_str())?;
+    (header["type"] == "session_meta" && id.eq_ignore_ascii_case(&session.id)).then_some(path)
+}
+
 pub(crate) fn merge(home: &Path, found: &mut Vec<Discovered>) {
     if let Ok(rows) = RecencyCache::default().scan(home) {
         for d in rows {
@@ -255,18 +283,23 @@ pub(crate) fn project(
                 let mut parts = Vec::new();
                 for part in v["content"].as_array()? {
                     match part["type"].as_str() {
-                        Some("text") => {
-                            parts.extend(part["text"].as_str().filter(|s| !is_wrapper(s)))
-                        }
+                        Some("text") => parts.extend(
+                            part["text"]
+                                .as_str()
+                                .filter(|s| !is_wrapper(s))
+                                .map(crate::codex::display_prompt),
+                        ),
                         Some("image" | "localImage") => {
                             let preview = preview_root
                                 .filter(|_| previews.len() < crate::inline_image::MAX_PREVIEWS)
                                 .and_then(|root| crate::inline_image::codex(part, Some(root)));
-                            parts.push(if preview.is_some() || preview_root.is_none() {
-                                "Image"
-                            } else {
-                                crate::inline_image::UNAVAILABLE
-                            });
+                            parts.push(std::borrow::Cow::Borrowed(
+                                if preview.is_some() || preview_root.is_none() {
+                                    "Image"
+                                } else {
+                                    crate::inline_image::UNAVAILABLE
+                                },
+                            ));
                             previews.extend(preview);
                         }
                         _ => {}
