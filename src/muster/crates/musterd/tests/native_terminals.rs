@@ -189,6 +189,64 @@ async fn native_inventory_routes_existing_sessions_and_creation_is_deduplicated(
 }
 
 #[tokio::test]
+async fn iterm_handshake_failure_is_rejected_before_window_creation() {
+    // Scope the synthetic API credentials to a child so this never calls
+    // Apple Events or changes the environment of another test.
+    const CHILD: &str = "MUSTER_TEST_ITERM_CREATE_SETUP";
+    if std::env::var_os(CHILD).is_none() {
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "iterm_handshake_failure_is_rejected_before_window_creation",
+            ])
+            .env(CHILD, "1")
+            .env("ITERM2_COOKIE", "synthetic")
+            .env("ITERM2_KEY", "synthetic")
+            .status()
+            .unwrap();
+        assert!(result.success());
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("unavailable.sock");
+    // The path passes the availability check, but no API server accepts connections.
+    std::fs::File::create(&socket).unwrap();
+    let mut config = DaemonConfig::new(dir.path());
+    config.agent = None;
+    config.cloud = false;
+    config.bind = "127.0.0.1:0".parse().unwrap();
+    config.terminal = Some(TerminalKind::Iterm2(TerminalConfig {
+        socket,
+        ..Default::default()
+    }));
+    let daemon = Daemon::start_with(config, Arc::new(DefaultPlatform), None)
+        .await
+        .unwrap();
+    let client = Client::new(
+        tokio::net::UnixStream::connect(daemon.socket_path())
+            .await
+            .unwrap(),
+    );
+    let create = Req::TerminalCreate(v1::TerminalCreateRequest {
+        source: "iterm2".into(),
+        op_id: "fixture-setup".into(),
+        ..Default::default()
+    });
+    for _ in 0..2 {
+        let Resp::OpResult(result) = client.call(create.clone()).await.unwrap() else {
+            panic!()
+        };
+        assert_eq!(result.status, v1::op_result::Status::Rejected as i32);
+        assert!(
+            result.message.contains("iTerm2 socket"),
+            "{}",
+            result.message
+        );
+    }
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
 async fn a_finished_inventory_watch_delivers_its_final_source_error() {
     let dir = tempfile::tempdir().unwrap();
     let mut config = DaemonConfig::new(dir.path());

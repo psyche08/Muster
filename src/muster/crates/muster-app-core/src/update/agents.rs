@@ -618,6 +618,22 @@ impl ChatCatchUp {
 const WATCH_START: Duration =
     Duration::from_secs(muster_net::reconnect::CONNECT_TIMEOUT.as_secs() + 3);
 
+async fn ended_watch(call: &mut Option<muster_rpc::Call>, fallback: &str) -> Error {
+    let ended = call.take().expect("started watch");
+    match tokio::time::timeout(Duration::from_secs(1), ended.finish()).await {
+        Ok(Err(error)) => error.into(),
+        _ => Error::Unavailable(fallback.into()),
+    }
+}
+
+fn watch_retry_seconds(previous: u64, live: Duration) -> u64 {
+    if live >= Duration::from_secs(30) {
+        1
+    } else {
+        (previous * 2).clamp(1, 8)
+    }
+}
+
 /// A watch's first event. A stream that ends first reports its final
 /// response (a forwarding daemon's "offline" or "unreachable"), not a
 /// generic timeout. A silent link is forgotten so the retry reconnects.
@@ -631,15 +647,7 @@ pub(super) async fn first_watch_event(
     let events = &mut call.as_mut().expect("started watch").events;
     match tokio::time::timeout(WATCH_START, events.recv()).await {
         Ok(Some(event)) => Ok(event),
-        Ok(None) => {
-            let ended = call.take().expect("started watch");
-            match tokio::time::timeout(Duration::from_secs(1), ended.finish()).await {
-                Ok(Err(error)) => Err(error.into()),
-                _ => Err(Error::Unavailable(
-                    "session watch ended before initial state".into(),
-                )),
-            }
-        }
+        Ok(None) => Err(ended_watch(call, "session watch ended before initial state").await),
         Err(_) => {
             backend.discard(device, client);
             Err(Error::Unavailable(timed_out.into()))
@@ -680,7 +688,7 @@ fn watch_agent_traced(
     let shell = ctx.shell.clone();
     tokio::spawn(async move {
         let entry_trace_id = trace.id().to_string();
-        let mut retry = 1;
+        let mut retry = 0;
         let mut attempt_index = 0u64;
         loop {
             attempt_index += 1;
@@ -690,6 +698,7 @@ fn watch_agent_traced(
                 serde_json::json!({"attempt":attempt_index}),
             );
             let mut phase = "watch_acquire";
+            let mut live_since = None;
             let mut active_call = None;
             let attempt = async {
                 let client = tokio::time::timeout(
@@ -798,7 +807,8 @@ fn watch_agent_traced(
                         prepared = &mut prepare => break prepared?,
                         event = call.events.recv() => match event {
                             Some(event) if queued.len() < 2048 => dispatch(event, &mut queued),
-                            _ => return Err(Error::Unavailable("session watch needs resynchronization".into())),
+                            Some(_) => return Err(Error::Unavailable("session watch needs resynchronization".into())),
+                            None => return Err(ended_watch(&mut active_call, "session watch ended during history load").await),
                         }
                     }
                 };
@@ -837,7 +847,8 @@ fn watch_agent_traced(
                             result=&mut snapshot => break result.map_err(|_|Error::Unavailable("session history timed out".into()))??,
                             event=call.events.recv() => match event {
                                 Some(event) if queued.len()<2048 => dispatch(event, &mut queued),
-                                _ => return Err(Error::Unavailable("session watch needs resynchronization".into())),
+                                Some(_) => return Err(Error::Unavailable("session watch needs resynchronization".into())),
+                                None => return Err(ended_watch(&mut active_call, "session watch ended during history load").await),
                             }
                         }
                     };
@@ -884,7 +895,7 @@ fn watch_agent_traced(
                     result: Ok((messages, has_more)),
                 }));
                 phase = "live_watch";
-                retry = 1;
+                live_since = Some(tokio::time::Instant::now());
                 let mut next = queued.pop_front();
                 loop {
                     if let Some(v1::event::Ev::AgentEvent(v1::AgentEvent { ev: Some(event) })) =
@@ -905,12 +916,13 @@ fn watch_agent_traced(
                         break;
                     }
                 }
-                Err::<(), Error>(Error::Unavailable("session watch ended".into()))
+                Err::<(), Error>(ended_watch(&mut active_call, "session watch ended").await)
             };
             tokio::select! {
                 _ = token.cancelled() => { trace.record("cancelled",serde_json::json!({"attempt":attempt_index})); },
                 result = attempt => {
                     if let Err(error) = result {
+                        retry = watch_retry_seconds(retry, live_since.map(|start| start.elapsed()).unwrap_or_default());
                         trace.record("attempt_failed",serde_json::json!({"attempt":attempt_index,"phase":phase,"retry_delay_ms":retry*1000,"error_category":match &error { Error::Invalid(_)=>"invalid",Error::Unauthorized(_)=>"unauthorized",Error::Rpc(_)=>"remote",Error::Busy(_)=>"busy",Error::Unavailable(_)=>"unavailable" }}));
                         log::warn!("session live updates interrupted; retrying in {retry}s: {error}");
                         let _ = tx.send(loop_message(Msg::Chat {
@@ -947,7 +959,6 @@ fn watch_agent_traced(
                 _ = token.cancelled() => return,
                 _ = tokio::time::sleep(Duration::from_secs(retry)) => {}
             }
-            retry = (retry * 2).min(8);
         }
     });
 }
@@ -2108,5 +2119,20 @@ mod catalog_cache_regressions {
             !dir.path().join(&key).exists(),
             "the old pending write cannot resurrect content"
         );
+    }
+}
+
+#[cfg(test)]
+mod watch_retry_tests {
+    use super::*;
+
+    #[test]
+    fn short_subscriptions_back_off_until_a_stable_watch_ends() {
+        let mut delay = 0;
+        for expected in [1, 2, 4, 8, 8] {
+            delay = watch_retry_seconds(delay, Duration::from_secs(2));
+            assert_eq!(delay, expected);
+        }
+        assert_eq!(watch_retry_seconds(delay, Duration::from_secs(30)), 1);
     }
 }

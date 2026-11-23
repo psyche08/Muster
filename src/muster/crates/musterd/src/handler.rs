@@ -3426,11 +3426,20 @@ async fn create_native_terminal(
     let create = async {
         crate::native_terminals::prepare(terminal).await?;
         muster_agent::control_guard::check()?;
+        let iterm = match terminal.as_ref() {
+            muster_terminal::Terminal::Iterm2(service) => Some(service.connection().await?),
+            _ => None,
+        };
+        muster_agent::control_guard::check()?;
         muster_agent::control_guard::delivery_attempt();
-        let session = match &command {
-        Some(command) => terminal.create_command(profile, r.background, command).await,
-        None => terminal.create(profile, r.background).await,
-    }.map_err(|error| Error::UnknownOutcome(format!("Native creation may have reached the application; inspect its windows before creating again: {error}")))?;
+        let session = match (iterm, command.as_deref()) {
+            (Some(connection), command) => connection.create_window(profile, r.background, command).await,
+            (None, Some(command)) => terminal.create_command(profile, r.background, command).await,
+            (None, None) => terminal.create(profile, r.background).await,
+        }
+        .map_err(|error| Error::UnknownOutcome(format!(
+            "Native creation may have reached the application; inspect its windows before creating again: {error}"
+        )))?;
         if session.id.is_empty() {
             return Err(Error::UnknownOutcome("Native application returned no session ID; inspect its windows before creating again".into()));
         }

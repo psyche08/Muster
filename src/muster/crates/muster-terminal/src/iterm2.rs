@@ -56,9 +56,9 @@ impl Cookie {
                 cookie: cookie.to_string(),
                 key: key.to_string(),
             }),
-            _ => Err(Error::Unavailable(format!(
-                "expected \"COOKIE KEY\", got {raw:?}"
-            ))),
+            _ => Err(Error::Unavailable(
+                "iTerm2 returned an incomplete cookie/key pair".into(),
+            )),
         }
     }
 
@@ -74,15 +74,21 @@ impl Cookie {
     /// The in-process NSAppleScript shim replaces this once muster-platform
     /// carries it; `osascript` attributes to the same responsible process.
     pub async fn request(app: &str, name: &str) -> Result<Self, Error> {
+        let target = if app == "iTerm2" {
+            r#"application id "com.googlecode.iterm2""#.to_owned()
+        } else {
+            format!(
+                "application \"{}\"",
+                app.replace('\\', "\\\\").replace('"', "\\\"")
+            )
+        };
         let script = format!(
-            "tell application \"{}\" to request cookie and key for app named \"{}\"",
-            app.replace('"', ""),
-            name.replace('"', "")
+            "on run argv\ntell {target} to request cookie and key for app named (item 1 of argv)\nend run"
         );
         let output = tokio::time::timeout(
             REQUEST_TIMEOUT,
             tokio::process::Command::new("/usr/bin/osascript")
-                .args(["-e", &script])
+                .args(["-e", &script, "--", name])
                 .kill_on_drop(true)
                 .output(),
         )
