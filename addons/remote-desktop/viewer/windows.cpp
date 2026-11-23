@@ -7,8 +7,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <fcntl.h>
-#include <io.h>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -23,6 +21,16 @@ constexpr UINT stopMessage = WM_APP + 1, readyMessage = WM_APP + 2;
 HWND window, parent;
 std::atomic<bool> stopping;
 bool canControl, receivedFrame, connected;
+std::mutex statusLock;
+
+void reportFailure(int stage, int code)
+{
+    // Only the local, fixed stage name and numeric library error cross this pipe.
+    const char* name = stage > STAGE_NONE && stage < STAGE_MAX ? LiGetStageName(stage) : "connection";
+    std::lock_guard lock(statusLock);
+    std::fprintf(stdout, "ERROR %s (%d)\n", name, code);
+    std::fflush(stdout);
+}
 RECT viewport(HWND hwnd)
 {
     RECT client{};
@@ -39,6 +47,7 @@ void paint(HWND hwnd)
     if (video::draw(dc, client) && !receivedFrame)
     {
         receivedFrame = true;
+        std::lock_guard lock(statusLock);
         std::fputs("FRAME\n", stdout);
         std::fflush(stdout);
     }
@@ -146,11 +155,20 @@ LRESULT CALLBACK message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 {
-    if (GetFileType(GetStdHandle(STD_INPUT_HANDLE)) != FILE_TYPE_PIPE || _setmode(_fileno(stdin), _O_BINARY) < 0)
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    if (GetFileType(input) != FILE_TYPE_PIPE)
         return 1;
     std::array<unsigned char, 36> init{};
     // MVW1, mouse and encrypted RTSP flags, port (BE16), parent HWND (BE64), RI key, IV prefix.
-    if (std::fread(init.data(), 1, init.size(), stdin) != init.size() || std::memcmp(init.data(), "MVW1", 4) ||
+    DWORD received = 0;
+    while (received < init.size())
+    {
+        DWORD count = 0;
+        if (!ReadFile(input, init.data() + received, static_cast<DWORD>(init.size()) - received, &count, nullptr) || count == 0)
+            return 1;
+        received += count;
+    }
+    if (std::memcmp(init.data(), "MVW1", 4) ||
         init[4] > 1 || init[5] > 1)
         return 1;
     canControl = init[4] != 0;
@@ -178,8 +196,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     if (!window)
         return 1;
     SetTimer(window, 1, 150, nullptr);
-    std::thread([] {
-        std::fgetc(stdin);
+    std::thread([input] {
+        // A blocked CRT stream read holds stdin's lock during process exit.
+        char stop;
+        DWORD count;
+        ReadFile(input, &stop, 1, &count, nullptr);
         PostMessage(window, stopMessage, 0, 0);
     }).detach();
     int result = -1;
@@ -218,7 +239,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         video.capabilities = CAPABILITY_DIRECT_SUBMIT;
         CONNECTION_LISTENER_CALLBACKS callbacks{};
         LiInitializeConnectionCallbacks(&callbacks);
-        callbacks.connectionTerminated = [](int) { PostMessage(window, stopMessage, 0, 0); };
+        callbacks.stageFailed = reportFailure;
+        callbacks.connectionTerminated = [](int code) {
+            reportFailure(STAGE_NONE, code);
+            PostMessage(window, stopMessage, 0, 0);
+        };
         callbacks.connectionStarted = [] { PostMessage(window, readyMessage, 0, 0); };
         if (!stopping)
             result = LiStartConnection(&server, &config, &callbacks, &video, nullptr, nullptr, 0, nullptr, 0);

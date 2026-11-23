@@ -3,6 +3,7 @@ import argparse
 from hashlib import sha256
 from pathlib import Path
 import shutil
+import sys
 import subprocess
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
@@ -42,6 +43,7 @@ def build(vcpkg, build_dir, output):
         "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", "-DMUSTER_BUILD_WINDOWS_VIEWER=ON")
     run("cmake", "--build", build_dir, "--config", "Release", "--parallel", "6")
     run("ctest", "--test-dir", build_dir, "-C", "Release", "--output-on-failure")
+    run(sys.executable, str(source / "tests/windows_viewer_exit.py"), str(build_dir / "Release/muster-moonlight.exe"))
     output.mkdir(parents=True, exist_ok=True)
     share = vcpkg / "installed/x64-windows-static/share"
     with TemporaryDirectory(dir=output) as stage:

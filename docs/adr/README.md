@@ -403,3 +403,6 @@ superseding decisions get new numbers and bidirectional links.
 | [0285](0285-fallback-relay.md) | Proposed | Reach a peer through an independent fallback relay |
 | [0286](0286-remember-paired-desktop-access.md) | Accepted | Remember incoming desktop access for one pairing |
 | [0287](0287-desktop-service-authorization.md) | Accepted | Authorize remote desktop as a persistent service |
+| [0288](0288-desktop-viewer-media-status.md) | Accepted | Report native viewer failures to the desktop session |
+| [0289](0289-desktop-host-session-lifetime.md) | Accepted | Keep the capture engine active for the paired desktop session |
+| [0290](0290-desktop-media-bursts.md) | Accepted | Buffer video packet bursts in the paired desktop broker |
