@@ -74,7 +74,8 @@ impl TerminalService {
         self.config.socket.exists()
     }
 
-    async fn connection(&self) -> Result<Arc<iterm2::Iterm2>, Error> {
+    /// Authenticate before recording a native window creation attempt.
+    pub async fn connection(&self) -> Result<Arc<iterm2::Iterm2>, Error> {
         let mut slot = self.connection.lock().await;
         if let Some(existing) = slot.as_ref()
             && !existing.is_closed()
