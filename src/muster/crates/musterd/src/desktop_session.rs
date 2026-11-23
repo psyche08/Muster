@@ -9,6 +9,8 @@ use std::sync::Arc;
 mod engine;
 #[cfg(target_os = "macos")]
 pub(super) mod host;
+#[cfg(any(target_os = "macos", test))]
+mod idle;
 #[cfg(windows)]
 mod viewer;
 

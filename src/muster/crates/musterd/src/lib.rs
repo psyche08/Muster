@@ -221,6 +221,8 @@ struct VnetStartup {
 
 pub struct Daemon {
     desktop_slot: Arc<tokio::sync::Semaphore>,
+    #[cfg(target_os = "macos")]
+    desktop_idle: desktop_session::host::IdleHost,
     desktop_permissions: desktop_session::permissions::Permissions,
     blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
@@ -435,6 +437,8 @@ impl Daemon {
         let blackout = None;
         let daemon = Arc::new(Self {
             desktop_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            #[cfg(target_os = "macos")]
+            desktop_idle: Default::default(),
             desktop_permissions: Default::default(),
             blackout,
             #[cfg(windows)]

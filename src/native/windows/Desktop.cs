@@ -295,6 +295,7 @@ internal sealed class Desktop : Form
                 return;
             }
             timer.Stop();
+            desktopViewer?.Close();
             core.Dispose();
         };
     }
@@ -428,7 +429,7 @@ internal sealed class Desktop : Form
     void ViewDesktop(string device, string name)
     {
         if (desktopViewer != null) { desktopViewer.Activate(); return; }
-        var form = new Form { Text = $"Desktop · {name}", StartPosition = FormStartPosition.CenterParent,
+        var form = new Form { Text = $"Desktop · {name}", StartPosition = FormStartPosition.CenterScreen,
             ClientSize = new Size(960, 540), MinimumSize = new Size(480, 300) };
         var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black, AccessibleName = "Remote desktop" };
         form.Controls.Add(panel);
@@ -441,7 +442,7 @@ internal sealed class Desktop : Form
             viewerDevice = null;
             if (!IsDisposed) Send(new() { EndDesktopSession = device });
         };
-        form.Show(this);
+        form.Show();
         Send(new() { DesktopSession = new() { Device = device, ViewInWindow = (ulong)panel.Handle.ToInt64() } });
     }
 

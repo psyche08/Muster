@@ -406,3 +406,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0288](0288-desktop-viewer-media-status.md) | Accepted | Report native viewer failures to the desktop session |
 | [0289](0289-desktop-host-session-lifetime.md) | Accepted | Keep the capture engine active for the paired desktop session |
 | [0290](0290-desktop-media-bursts.md) | Accepted | Buffer video packet bursts in the paired desktop broker |
+| [0291](0291-desktop-host-idle-and-viewer-window.md) | Accepted | Retire idle desktop hosts and use an independent viewer window |

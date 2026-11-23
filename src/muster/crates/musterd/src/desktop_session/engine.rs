@@ -68,7 +68,7 @@ impl Engine {
         let output = child.stdout.take();
         Ok((Self(Mutex::new(child)), input, output))
     }
-    fn pid(&self) -> Option<u32> {
+    pub(super) fn pid(&self) -> Option<u32> {
         let mut child = self.0.lock().ok()?;
         if child.try_wait().ok()?.is_some() {
             return None;
