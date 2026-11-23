@@ -21,6 +21,7 @@ pub mod multica;
 mod navigation_restore;
 pub mod network;
 mod presence;
+mod service_access;
 pub mod vision;
 pub mod web;
 

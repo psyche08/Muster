@@ -170,6 +170,7 @@ export class MusterCore {
   setDeviceLockedUse(on: boolean, device: string): void { this.send({ setDeviceLockedUse: { on: on, deviceId: device } }); }
   setBlackout(on: boolean, device: string): void { this.send({ setBlackout: { on: on, deviceId: device } }); }
   setCover(on: boolean, device: string = ''): void { this.send({ setCover: { on: on, deviceId: device } }); }
+  setNetworkAccessMode(mode: string): void { this.send({ setNetworkAccessMode: { mode: mode } }); }
   setPolicy(policy: pb.v1.IPolicy): void { this.send({ setPolicy: { policy: policy } }); }
   selectDevice(device: string): void { this.send({ selectDevice: { deviceId: device } }); }
   /** device "*" for every device, "" for the current target. */

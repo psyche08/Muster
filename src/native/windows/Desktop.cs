@@ -826,24 +826,93 @@ internal sealed class Desktop : Form
             }
             if (page == Page.Settings && v.Policy is {} policy)
             {
+                if (v.Network is {} network && network.AccessMode.Length > 0)
+                {
+                    lines.Add("Network access mode: " + network.AccessMode);
+                    if (v.CanInvite)
+                    {
+                        var next = network.AccessMode == "basic" ? "advanced" : "basic";
+                        Act("Use " + next + " network access",
+                            () => new() { SetNetworkAccessMode = new() { Mode = next } });
+                    }
+                    void EditService(string name, string wholeScope, string placeholder,
+                                     Func<Muster.V1.ServiceGrants, Muster.V1.GrantSet?> read,
+                                     Action<Muster.V1.ServiceGrants, Muster.V1.GrantSet?> write)
+                    {
+                        var original = read(policy.ServiceGrants ?? new());
+                        string summary = "Existing policy";
+                        if (original?.AllDevices == true) summary = "All paired devices";
+                        else if (original != null)
+                        {
+                            var assignments = original.Rules
+                                .Where(rule => placeholder.Length > 0 || rule.Scope == wholeScope)
+                                .Select(rule => (
+                                    Selector: rule.Scope == wholeScope ? "All" : rule.Scope,
+                                    Devices: network.Members.Where(member => rule.DeviceIds.Contains(member.DeviceId))
+                                        .Select(member => member.Name).ToArray()))
+                                .Where(rule => rule.Devices.Length > 0)
+                                .Select(rule => rule.Selector + " → " + string.Join(", ", rule.Devices));
+                            summary = string.Join("; ", assignments);
+                            if (summary.Length == 0) summary = "No assigned devices";
+                        }
+                        lines.Add(name + " access rules: " + summary);
+                        AddAction(name + " access rules", () =>
+                        {
+                            using var dialog = new ServiceGrantsDialog(name, wholeScope, placeholder,
+                                network.Members.Where(member => !member.IsSelf), original);
+                            if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
+                                current.Policy is not {} latest) return;
+                            if (!Equals(original, read(latest.ServiceGrants ?? new())))
+                            {
+                                MessageBox.Show(this, "Rules changed. Reopen the editor to review the current rules.", name);
+                                return;
+                            }
+                            var updated = latest.Clone();
+                            updated.ServiceGrants ??= new();
+                            write(updated.ServiceGrants, dialog.Grants);
+                            Send(new() { SetPolicy = new() { Policy = updated } });
+                        });
+                    }
+                    EditService("Agents", "agents", "agents or agents:codex", rules => rules.Agents,
+                        (rules, value) => rules.Agents = value);
+                    EditService("Terminals", "terminals", "terminals, terminal.view or terminal.control",
+                        rules => rules.Terminals, (rules, value) => rules.Terminals = value);
+                    EditService("Network", "net:*", network.AccessMode == "advanced" ? "net:* or net:tcp/443" : "",
+                        rules => rules.Network, (rules, value) => rules.Network = value);
+                    lines.Add("Network offer: " + (policy.HasOfferNetwork
+                        ? (policy.OfferNetwork ? "On" : "Off") : "Existing port policy"));
+                    Intent NetworkOffer(bool enabled)
+                    {
+                        var updated = policy.Clone();
+                        updated.OfferNetwork = enabled;
+                        return new() { SetPolicy = new() { Policy = updated } };
+                    }
+                    if (!policy.HasOfferNetwork || !policy.OfferNetwork)
+                        Act("Enable network service", () => NetworkOffer(true));
+                    if (!policy.HasOfferNetwork || policy.OfferNetwork)
+                        Act("Disable network service", () => NetworkOffer(false));
+                }
                 lines.Add("Agent access: " + (policy.OfferAgent ? "On" : "Off") +
                           "\r\nTerminal access: " + (policy.OfferTerminal ? "On" : "Off"));
-                lines.Add("Open ports    " + (policy.OpenPorts.Count == 0 ? "None" : string.Join(", ", policy.OpenPorts)));
-                AddAction("Edit open ports", () =>
+                if (v.Network?.AccessMode != "basic")
                 {
-                    using var dialog = new OpenPortsDialog(policy.OpenPorts);
-                    if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
-                        current.Policy is not {} latest) return;
-                    if (!policy.OpenPorts.SequenceEqual(latest.OpenPorts))
+                    lines.Add("Open ports    " + (policy.OpenPorts.Count == 0 ? "None" : string.Join(", ", policy.OpenPorts)));
+                    AddAction("Edit open ports", () =>
                     {
-                        MessageBox.Show(this, "Open ports changed. Reopen the editor to review the current rules.", "Open ports");
-                        return;
-                    }
-                    var updated = latest.Clone();
-                    updated.OpenPorts.Clear();
-                    updated.OpenPorts.Add(dialog.Rules);
-                    Send(new() { SetPolicy = new() { Policy = updated } });
-                });
+                        using var dialog = new OpenPortsDialog(policy.OpenPorts);
+                        if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
+                            current.Policy is not {} latest) return;
+                        if (!policy.OpenPorts.SequenceEqual(latest.OpenPorts))
+                        {
+                            MessageBox.Show(this, "Open ports changed. Reopen the editor to review the current rules.", "Open ports");
+                            return;
+                        }
+                        var updated = latest.Clone();
+                        updated.OpenPorts.Clear();
+                        updated.OpenPorts.Add(dialog.Rules);
+                        Send(new() { SetPolicy = new() { Policy = updated } });
+                    });
+                }
                 Act((policy.OfferAgent ? "Disable" : "Enable") + " agent sharing",
                     () =>
                     {

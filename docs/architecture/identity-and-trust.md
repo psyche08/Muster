@@ -27,6 +27,7 @@ Entry {
       | Add{DeviceRecord}
       | Update{device_id, name?, role?, scopes?}
       | Remove{device_id}
+      | NetworkAccess{Basic | Advanced}
   signer: DeviceId, sig: ECDSA-P256(domain="MUSTER-ROSTER-V1", canonical(entry))
 }
 DeviceRecord { device_id, spki, presence_spki?, name, kind: desktop|phone|server,
@@ -78,7 +79,8 @@ and [Presence enrollment](../PRESENCE_ENROLLMENT.md).
 **Target-local policy** (local configuration, not part of the network):
 
 - Services offered locally;
-- Ports exposed to the network (e.g. only 22 and 5900), filtering both inbound vnet packets and forwarding streams;
+- An explicit Network service offer and, in Advanced, the open-port list. Earlier port-only configurations remain in force until the device adopts this setting.
+- Receiver-owned service grants for Agents, Terminals and Network. A receiver can allow all paired devices or assign devices to a whole service or supported selectors. The agent selectors are providers, and terminal selectors are view and control. Network selectors are protocol and port in Advanced. A member's active membership is required everywhere. Agents and Terminals fall back to the older roster grants until configured locally. Network also requires the signed member grant.
 - Whether locked control is permitted;
 - AX-controllable App allowlist: Codex, Claude, and Catdesk only after its independent profile and identity verification are complete.
 
@@ -86,10 +88,16 @@ One authorization function is used by service streams, forwarding streams, and v
 
 ```
 allowed = roster.active(subject)
-        && roster.scopes(subject) grant permission   // module providers require their switch
-        && local_policy.allows(permission, target_state)
+        && effective_grant(subject, permission)     // signed member grant or receiver-owned service rule
+        && local_policy.offers(permission, target_state)
         && (!permission.high_risk || presence_proof.verify(subject, op))
 ```
+
+Network Basic is the default and grants `net:*` as a single switch. Advanced
+can grant protocol and port selectors. An explicit mode is admin-signed and
+requires every active member to support the entry encoding. A legacy roster
+with only coarse effective grants projects Basic without a new-format entry.
+See [ADR 0284](../adr/0284-basic-network-and-device-service-access.md).
 
 `net:` authorization establishes only which device is connecting and whether it can reach that port. Application authentication, such as SSH keys and VNC passwords, still applies normally.
 

@@ -971,7 +971,9 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IMulticaMutation|null} [multicaMutation] Request multicaMutation
              * @property {muster.v1.IDeviceSetCoverRequest|null} [deviceSetBlackout] Request deviceSetBlackout
              * @property {muster.v1.IAgentDispatchRequest|null} [agentDispatch] Request agentDispatch
+             * @property {muster.v1.IDesktopSessionRequest|null} [desktopSession] Request desktopSession
              * @property {muster.v1.INetworkRetryVnetRequest|null} [networkRetryVnet] Request networkRetryVnet
+             * @property {muster.v1.INetworkSetAccessModeRequest|null} [networkSetAccessMode] Request networkSetAccessMode
              */
 
             /**
@@ -1574,6 +1576,14 @@ export const muster = $root.muster = (() => {
             Request.prototype.agentDispatch = null;
 
             /**
+             * Request desktopSession.
+             * @member {muster.v1.IDesktopSessionRequest|null|undefined} desktopSession
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.desktopSession = null;
+
+            /**
              * Request networkRetryVnet.
              * @member {muster.v1.INetworkRetryVnetRequest|null|undefined} networkRetryVnet
              * @memberof muster.v1.Request
@@ -1581,17 +1591,25 @@ export const muster = $root.muster = (() => {
              */
             Request.prototype.networkRetryVnet = null;
 
+            /**
+             * Request networkSetAccessMode.
+             * @member {muster.v1.INetworkSetAccessModeRequest|null|undefined} networkSetAccessMode
+             * @memberof muster.v1.Request
+             * @instance
+             */
+            Request.prototype.networkSetAccessMode = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * Request req.
-             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"networkRetryVnet"|undefined} req
+             * @member {"deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"desktopSession"|"networkRetryVnet"|"networkSetAccessMode"|undefined} req
              * @memberof muster.v1.Request
              * @instance
              */
             Object.defineProperty(Request.prototype, "req", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "networkRename", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentSideQuestion", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch", "networkRetryVnet"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceInfo", "deviceWatch", "deviceSetRelay", "deviceRequestAccessibility", "deviceDebug", "deviceSetCover", "lockedUsePrepare", "lockedUseExecute", "lockedUseCancel", "deviceRequestAutomation", "networkStatus", "networkCreate", "networkInvite", "networkJoin", "networkPending", "networkDecide", "networkRemove", "networkSetScopes", "policyGet", "policySet", "terminalSessions", "terminalAttach", "terminalInput", "terminalCreate", "terminalResize", "terminalClose", "terminalHistory", "agentTerminal", "terminalRun", "terminalRuns", "agentList", "agentWatch", "agentMessages", "agentSend", "agentRespond", "agentInterrupt", "agentFiles", "agentFile", "agentGit", "browserCall", "browserSetup", "agentChats", "agentChatOpen", "agentChatOptions", "agentChatSetOptions", "networkReaddress", "networkRename", "desktopUpdateLease", "agentInspect", "diagnosticsUpload", "lockedUseRenew", "lockedUseExtend", "networkRefresh", "orcaCreate", "agentSideQuestion", "agentComplete", "devicePresence", "networkPresence", "deviceInstallPresence", "agentSendStatus", "forwardOpen", "multica", "multicaBrowse", "agentNativeCreate", "agentConfirmDelivered", "vision", "agentOrganize", "agentScheduler", "deviceRequestScreenRecording", "multicaService", "multicaMutation", "deviceSetBlackout", "agentDispatch", "desktopSession", "networkRetryVnet", "networkSetAccessMode"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -1771,6 +1789,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.AgentSideQuestionRequest.encode(message.agentSideQuestion, writer.uint32(/* id 151, wireType 2 =*/1210).fork(), q + 1).ldelim();
                 if (message.networkRetryVnet != null && Object.hasOwnProperty.call(message, "networkRetryVnet"))
                     $root.muster.v1.NetworkRetryVnetRequest.encode(message.networkRetryVnet, writer.uint32(/* id 152, wireType 2 =*/1218).fork(), q + 1).ldelim();
+                if (message.desktopSession != null && Object.hasOwnProperty.call(message, "desktopSession"))
+                    $root.muster.v1.DesktopSessionRequest.encode(message.desktopSession, writer.uint32(/* id 153, wireType 2 =*/1226).fork(), q + 1).ldelim();
+                if (message.networkSetAccessMode != null && Object.hasOwnProperty.call(message, "networkSetAccessMode"))
+                    $root.muster.v1.NetworkSetAccessModeRequest.encode(message.networkSetAccessMode, writer.uint32(/* id 154, wireType 2 =*/1234).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -2100,8 +2122,16 @@ export const muster = $root.muster = (() => {
                             message.agentDispatch = $root.muster.v1.AgentDispatchRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 153: {
+                            message.desktopSession = $root.muster.v1.DesktopSessionRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 152: {
                             message.networkRetryVnet = $root.muster.v1.NetworkRetryVnetRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 154: {
+                            message.networkSetAccessMode = $root.muster.v1.NetworkSetAccessModeRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     default:
@@ -2984,6 +3014,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.ITerminalSessionList|null} [terminalSessions] Event terminalSessions
              * @property {muster.v1.ITerminalFrame|null} [terminalFrame] Event terminalFrame
              * @property {muster.v1.IAgentEvent|null} [agentEvent] Event agentEvent
+             * @property {muster.v1.IDesktopSessionProgress|null} [desktopSession] Event desktopSession
              * @property {muster.v1.IAck|null} [desktopUpdateReady] Event desktopUpdateReady
              * @property {muster.v1.IForwardOpened|null} [forwardOpened] Event forwardOpened
              * @property {muster.v1.IRpcTiming|null} [rpcTiming] Event rpcTiming
@@ -3061,6 +3092,14 @@ export const muster = $root.muster = (() => {
             Event.prototype.agentEvent = null;
 
             /**
+             * Event desktopSession.
+             * @member {muster.v1.IDesktopSessionProgress|null|undefined} desktopSession
+             * @memberof muster.v1.Event
+             * @instance
+             */
+            Event.prototype.desktopSession = null;
+
+            /**
              * Event desktopUpdateReady.
              * @member {muster.v1.IAck|null|undefined} desktopUpdateReady
              * @memberof muster.v1.Event
@@ -3089,12 +3128,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Event ev.
-             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming"|undefined} ev
+             * @member {"deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopSession"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming"|undefined} ev
              * @memberof muster.v1.Event
              * @instance
              */
             Object.defineProperty(Event.prototype, "ev", {
-                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopUpdateReady", "forwardOpened", "rpcTiming"]),
+                get: $util.oneOfGetter($oneOfFields = ["deviceState", "networkStatus", "policy", "joinProgress", "terminalSessions", "terminalFrame", "agentEvent", "desktopSession", "desktopUpdateReady", "forwardOpened", "rpcTiming"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -3146,6 +3185,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.ForwardOpened.encode(message.forwardOpened, writer.uint32(/* id 68, wireType 2 =*/546).fork(), q + 1).ldelim();
                 if (message.rpcTiming != null && Object.hasOwnProperty.call(message, "rpcTiming"))
                     $root.muster.v1.RpcTiming.encode(message.rpcTiming, writer.uint32(/* id 69, wireType 2 =*/554).fork(), q + 1).ldelim();
+                if (message.desktopSession != null && Object.hasOwnProperty.call(message, "desktopSession"))
+                    $root.muster.v1.DesktopSessionProgress.encode(message.desktopSession, writer.uint32(/* id 153, wireType 2 =*/1226).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -3209,6 +3250,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 41: {
                             message.agentEvent = $root.muster.v1.AgentEvent.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 153: {
+                            message.desktopSession = $root.muster.v1.DesktopSessionProgress.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 57: {
@@ -3810,6 +3855,349 @@ export const muster = $root.muster = (() => {
             };
 
             return NetworkRefreshRequest;
+        })();
+
+        v1.DesktopSessionRequest = (function() {
+
+            /**
+             * Properties of a DesktopSessionRequest.
+             * @memberof muster.v1
+             * @interface IDesktopSessionRequest
+             * @property {string|null} [device] DesktopSessionRequest device
+             * @property {muster.v1.IAck|null} [shareView] DesktopSessionRequest shareView
+             * @property {muster.v1.IAck|null} [shareMouse] DesktopSessionRequest shareMouse
+             * @property {number|Long|null} [viewInWindow] DesktopSessionRequest viewInWindow
+             */
+
+            /**
+             * Constructs a new DesktopSessionRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a DesktopSessionRequest.
+             * @implements IDesktopSessionRequest
+             * @constructor
+             * @param {muster.v1.IDesktopSessionRequest=} [properties] Properties to set
+             */
+            function DesktopSessionRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DesktopSessionRequest device.
+             * @member {string} device
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            DesktopSessionRequest.prototype.device = "";
+
+            /**
+             * DesktopSessionRequest shareView.
+             * @member {muster.v1.IAck|null|undefined} shareView
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            DesktopSessionRequest.prototype.shareView = null;
+
+            /**
+             * DesktopSessionRequest shareMouse.
+             * @member {muster.v1.IAck|null|undefined} shareMouse
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            DesktopSessionRequest.prototype.shareMouse = null;
+
+            /**
+             * DesktopSessionRequest viewInWindow.
+             * @member {number|Long|null|undefined} viewInWindow
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            DesktopSessionRequest.prototype.viewInWindow = null;
+
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            /**
+             * DesktopSessionRequest action.
+             * @member {"shareView"|"shareMouse"|"viewInWindow"|undefined} action
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            Object.defineProperty(DesktopSessionRequest.prototype, "action", {
+                get: $util.oneOfGetter($oneOfFields = ["shareView", "shareMouse", "viewInWindow"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
+            /**
+             * Creates a new DesktopSessionRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DesktopSessionRequest
+             * @static
+             * @param {muster.v1.IDesktopSessionRequest=} [properties] Properties to set
+             * @returns {muster.v1.DesktopSessionRequest} DesktopSessionRequest instance
+             */
+            DesktopSessionRequest.create = function create(properties) {
+                return new DesktopSessionRequest(properties);
+            };
+
+            /**
+             * Encodes the specified DesktopSessionRequest message. Does not implicitly {@link muster.v1.DesktopSessionRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DesktopSessionRequest
+             * @static
+             * @param {muster.v1.IDesktopSessionRequest} message DesktopSessionRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DesktopSessionRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.device != null && Object.hasOwnProperty.call(message, "device"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.device);
+                if (message.shareView != null && Object.hasOwnProperty.call(message, "shareView"))
+                    $root.muster.v1.Ack.encode(message.shareView, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.shareMouse != null && Object.hasOwnProperty.call(message, "shareMouse"))
+                    $root.muster.v1.Ack.encode(message.shareMouse, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.viewInWindow != null && Object.hasOwnProperty.call(message, "viewInWindow"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.viewInWindow);
+                return writer;
+            };
+
+            /**
+             * Decodes a DesktopSessionRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DesktopSessionRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DesktopSessionRequest} DesktopSessionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DesktopSessionRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DesktopSessionRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.device = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            message.shareView = $root.muster.v1.Ack.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.shareMouse = $root.muster.v1.Ack.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 4: {
+                            message.viewInWindow = reader.uint64();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DesktopSessionRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.DesktopSessionRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DesktopSessionRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DesktopSessionRequest";
+            };
+
+            return DesktopSessionRequest;
+        })();
+
+        v1.DesktopSessionProgress = (function() {
+
+            /**
+             * Properties of a DesktopSessionProgress.
+             * @memberof muster.v1
+             * @interface IDesktopSessionProgress
+             * @property {muster.v1.DesktopSessionProgress.Phase|null} [phase] DesktopSessionProgress phase
+             */
+
+            /**
+             * Constructs a new DesktopSessionProgress.
+             * @memberof muster.v1
+             * @classdesc Represents a DesktopSessionProgress.
+             * @implements IDesktopSessionProgress
+             * @constructor
+             * @param {muster.v1.IDesktopSessionProgress=} [properties] Properties to set
+             */
+            function DesktopSessionProgress(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DesktopSessionProgress phase.
+             * @member {muster.v1.DesktopSessionProgress.Phase} phase
+             * @memberof muster.v1.DesktopSessionProgress
+             * @instance
+             */
+            DesktopSessionProgress.prototype.phase = 0;
+
+            /**
+             * Creates a new DesktopSessionProgress instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DesktopSessionProgress
+             * @static
+             * @param {muster.v1.IDesktopSessionProgress=} [properties] Properties to set
+             * @returns {muster.v1.DesktopSessionProgress} DesktopSessionProgress instance
+             */
+            DesktopSessionProgress.create = function create(properties) {
+                return new DesktopSessionProgress(properties);
+            };
+
+            /**
+             * Encodes the specified DesktopSessionProgress message. Does not implicitly {@link muster.v1.DesktopSessionProgress.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DesktopSessionProgress
+             * @static
+             * @param {muster.v1.IDesktopSessionProgress} message DesktopSessionProgress message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DesktopSessionProgress.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.phase != null && Object.hasOwnProperty.call(message, "phase"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.phase);
+                return writer;
+            };
+
+            /**
+             * Decodes a DesktopSessionProgress message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DesktopSessionProgress
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DesktopSessionProgress} DesktopSessionProgress
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DesktopSessionProgress.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DesktopSessionProgress();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.phase = reader.int32();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DesktopSessionProgress
+             * @function getTypeUrl
+             * @memberof muster.v1.DesktopSessionProgress
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DesktopSessionProgress.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DesktopSessionProgress";
+            };
+
+            /**
+             * Phase enum.
+             * @name muster.v1.DesktopSessionProgress.Phase
+             * @enum {number}
+             * @property {number} OFFERED=0 OFFERED value
+             * @property {number} STARTING=1 STARTING value
+             * @property {number} VISIBLE=2 VISIBLE value
+             */
+            DesktopSessionProgress.Phase = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "OFFERED"] = 0;
+                values[valuesById[1] = "STARTING"] = 1;
+                values[valuesById[2] = "VISIBLE"] = 2;
+                return values;
+            })();
+
+            return DesktopSessionProgress;
         })();
 
         v1.NetworkRetryVnetRequest = (function() {
@@ -5329,6 +5717,8 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [ghosttyAutomation] DeviceState ghosttyAutomation
              * @property {string|null} [screenRecording] DeviceState screenRecording
              * @property {boolean|null} [canRetryVnet] DeviceState canRetryVnet
+             * @property {boolean|null} [desktopHostAvailable] DeviceState desktopHostAvailable
+             * @property {boolean|null} [desktopViewerAvailable] DeviceState desktopViewerAvailable
              * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceState blackout
              */
 
@@ -5492,6 +5882,22 @@ export const muster = $root.muster = (() => {
             DeviceState.prototype.canRetryVnet = false;
 
             /**
+             * DeviceState desktopHostAvailable.
+             * @member {boolean} desktopHostAvailable
+             * @memberof muster.v1.DeviceState
+             * @instance
+             */
+            DeviceState.prototype.desktopHostAvailable = false;
+
+            /**
+             * DeviceState desktopViewerAvailable.
+             * @member {boolean} desktopViewerAvailable
+             * @memberof muster.v1.DeviceState
+             * @instance
+             */
+            DeviceState.prototype.desktopViewerAvailable = false;
+
+            /**
              * DeviceState blackout.
              * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
              * @memberof muster.v1.DeviceState
@@ -5565,6 +5971,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
                 if (message.canRetryVnet != null && Object.hasOwnProperty.call(message, "canRetryVnet"))
                     writer.uint32(/* id 19, wireType 0 =*/152).bool(message.canRetryVnet);
+                if (message.desktopHostAvailable != null && Object.hasOwnProperty.call(message, "desktopHostAvailable"))
+                    writer.uint32(/* id 20, wireType 0 =*/160).bool(message.desktopHostAvailable);
+                if (message.desktopViewerAvailable != null && Object.hasOwnProperty.call(message, "desktopViewerAvailable"))
+                    writer.uint32(/* id 21, wireType 0 =*/168).bool(message.desktopViewerAvailable);
                 return writer;
             };
 
@@ -5672,6 +6082,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 19: {
                             message.canRetryVnet = reader.bool();
+                            break;
+                        }
+                    case 20: {
+                            message.desktopHostAvailable = reader.bool();
+                            break;
+                        }
+                    case 21: {
+                            message.desktopViewerAvailable = reader.bool();
                             break;
                         }
                     case 18: {
@@ -8675,6 +9093,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [relay] NetworkStatus relay
              * @property {string|null} [reflectedAddr] NetworkStatus reflectedAddr
              * @property {number|null} [pendingJoins] NetworkStatus pendingJoins
+             * @property {string|null} [accessMode] NetworkStatus accessMode
              */
 
             /**
@@ -8766,6 +9185,14 @@ export const muster = $root.muster = (() => {
             NetworkStatus.prototype.pendingJoins = 0;
 
             /**
+             * NetworkStatus accessMode.
+             * @member {string} accessMode
+             * @memberof muster.v1.NetworkStatus
+             * @instance
+             */
+            NetworkStatus.prototype.accessMode = "";
+
+            /**
              * Creates a new NetworkStatus instance using the specified properties.
              * @function create
              * @memberof muster.v1.NetworkStatus
@@ -8812,6 +9239,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.reflectedAddr);
                 if (message.pendingJoins != null && Object.hasOwnProperty.call(message, "pendingJoins"))
                     writer.uint32(/* id 9, wireType 0 =*/72).uint32(message.pendingJoins);
+                if (message.accessMode != null && Object.hasOwnProperty.call(message, "accessMode"))
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.accessMode);
                 return writer;
             };
 
@@ -8885,6 +9314,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 9: {
                             message.pendingJoins = reader.uint32();
+                            break;
+                        }
+                    case 10: {
+                            message.accessMode = reader.string();
                             break;
                         }
                     default:
@@ -11129,6 +11562,140 @@ export const muster = $root.muster = (() => {
             return NetworkSetScopesRequest;
         })();
 
+        v1.NetworkSetAccessModeRequest = (function() {
+
+            /**
+             * Properties of a NetworkSetAccessModeRequest.
+             * @memberof muster.v1
+             * @interface INetworkSetAccessModeRequest
+             * @property {string|null} [mode] NetworkSetAccessModeRequest mode
+             */
+
+            /**
+             * Constructs a new NetworkSetAccessModeRequest.
+             * @memberof muster.v1
+             * @classdesc Represents a NetworkSetAccessModeRequest.
+             * @implements INetworkSetAccessModeRequest
+             * @constructor
+             * @param {muster.v1.INetworkSetAccessModeRequest=} [properties] Properties to set
+             */
+            function NetworkSetAccessModeRequest(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NetworkSetAccessModeRequest mode.
+             * @member {string} mode
+             * @memberof muster.v1.NetworkSetAccessModeRequest
+             * @instance
+             */
+            NetworkSetAccessModeRequest.prototype.mode = "";
+
+            /**
+             * Creates a new NetworkSetAccessModeRequest instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.NetworkSetAccessModeRequest
+             * @static
+             * @param {muster.v1.INetworkSetAccessModeRequest=} [properties] Properties to set
+             * @returns {muster.v1.NetworkSetAccessModeRequest} NetworkSetAccessModeRequest instance
+             */
+            NetworkSetAccessModeRequest.create = function create(properties) {
+                return new NetworkSetAccessModeRequest(properties);
+            };
+
+            /**
+             * Encodes the specified NetworkSetAccessModeRequest message. Does not implicitly {@link muster.v1.NetworkSetAccessModeRequest.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.NetworkSetAccessModeRequest
+             * @static
+             * @param {muster.v1.INetworkSetAccessModeRequest} message NetworkSetAccessModeRequest message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NetworkSetAccessModeRequest.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.mode != null && Object.hasOwnProperty.call(message, "mode"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.mode);
+                return writer;
+            };
+
+            /**
+             * Decodes a NetworkSetAccessModeRequest message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.NetworkSetAccessModeRequest
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.NetworkSetAccessModeRequest} NetworkSetAccessModeRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NetworkSetAccessModeRequest.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.NetworkSetAccessModeRequest();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.mode = reader.string();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for NetworkSetAccessModeRequest
+             * @function getTypeUrl
+             * @memberof muster.v1.NetworkSetAccessModeRequest
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            NetworkSetAccessModeRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.NetworkSetAccessModeRequest";
+            };
+
+            return NetworkSetAccessModeRequest;
+        })();
+
         v1.PolicyGetRequest = (function() {
 
             /**
@@ -11261,6 +11828,8 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [offerTerminal] Policy offerTerminal
              * @property {boolean|null} [offerTasks] Policy offerTasks
              * @property {muster.v1.IWebWindow|null} [webWindow] Policy webWindow
+             * @property {boolean|null} [offerNetwork] Policy offerNetwork
+             * @property {muster.v1.IServiceGrants|null} [serviceGrants] Policy serviceGrants
              */
 
             /**
@@ -11337,6 +11906,31 @@ export const muster = $root.muster = (() => {
             Policy.prototype.webWindow = null;
 
             /**
+             * Policy offerNetwork.
+             * @member {boolean|null|undefined} offerNetwork
+             * @memberof muster.v1.Policy
+             * @instance
+             */
+            Policy.prototype.offerNetwork = null;
+
+            /**
+             * Policy serviceGrants.
+             * @member {muster.v1.IServiceGrants|null|undefined} serviceGrants
+             * @memberof muster.v1.Policy
+             * @instance
+             */
+            Policy.prototype.serviceGrants = null;
+
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            // Virtual OneOf for proto3 optional field
+            Object.defineProperty(Policy.prototype, "_offerNetwork", {
+                get: $util.oneOfGetter($oneOfFields = ["offerNetwork"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
+            /**
              * Creates a new Policy instance using the specified properties.
              * @function create
              * @memberof muster.v1.Policy
@@ -11380,6 +11974,10 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 6, wireType 0 =*/48).bool(message.offerTasks);
                 if (message.webWindow != null && Object.hasOwnProperty.call(message, "webWindow"))
                     $root.muster.v1.WebWindow.encode(message.webWindow, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
+                if (message.offerNetwork != null && Object.hasOwnProperty.call(message, "offerNetwork"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.offerNetwork);
+                if (message.serviceGrants != null && Object.hasOwnProperty.call(message, "serviceGrants"))
+                    $root.muster.v1.ServiceGrants.encode(message.serviceGrants, writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -11449,6 +12047,14 @@ export const muster = $root.muster = (() => {
                             message.webWindow = $root.muster.v1.WebWindow.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 8: {
+                            message.offerNetwork = reader.bool();
+                            break;
+                        }
+                    case 9: {
+                            message.serviceGrants = $root.muster.v1.ServiceGrants.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     default:
                         reader.skipType(tag & 7, long);
                         break;
@@ -11478,6 +12084,476 @@ export const muster = $root.muster = (() => {
             };
 
             return Policy;
+        })();
+
+        v1.ServiceGrants = (function() {
+
+            /**
+             * Properties of a ServiceGrants.
+             * @memberof muster.v1
+             * @interface IServiceGrants
+             * @property {muster.v1.IGrantSet|null} [agents] ServiceGrants agents
+             * @property {muster.v1.IGrantSet|null} [terminals] ServiceGrants terminals
+             * @property {muster.v1.IGrantSet|null} [network] ServiceGrants network
+             */
+
+            /**
+             * Constructs a new ServiceGrants.
+             * @memberof muster.v1
+             * @classdesc Represents a ServiceGrants.
+             * @implements IServiceGrants
+             * @constructor
+             * @param {muster.v1.IServiceGrants=} [properties] Properties to set
+             */
+            function ServiceGrants(properties) {
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ServiceGrants agents.
+             * @member {muster.v1.IGrantSet|null|undefined} agents
+             * @memberof muster.v1.ServiceGrants
+             * @instance
+             */
+            ServiceGrants.prototype.agents = null;
+
+            /**
+             * ServiceGrants terminals.
+             * @member {muster.v1.IGrantSet|null|undefined} terminals
+             * @memberof muster.v1.ServiceGrants
+             * @instance
+             */
+            ServiceGrants.prototype.terminals = null;
+
+            /**
+             * ServiceGrants network.
+             * @member {muster.v1.IGrantSet|null|undefined} network
+             * @memberof muster.v1.ServiceGrants
+             * @instance
+             */
+            ServiceGrants.prototype.network = null;
+
+            /**
+             * Creates a new ServiceGrants instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.ServiceGrants
+             * @static
+             * @param {muster.v1.IServiceGrants=} [properties] Properties to set
+             * @returns {muster.v1.ServiceGrants} ServiceGrants instance
+             */
+            ServiceGrants.create = function create(properties) {
+                return new ServiceGrants(properties);
+            };
+
+            /**
+             * Encodes the specified ServiceGrants message. Does not implicitly {@link muster.v1.ServiceGrants.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.ServiceGrants
+             * @static
+             * @param {muster.v1.IServiceGrants} message ServiceGrants message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ServiceGrants.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.agents != null && Object.hasOwnProperty.call(message, "agents"))
+                    $root.muster.v1.GrantSet.encode(message.agents, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.terminals != null && Object.hasOwnProperty.call(message, "terminals"))
+                    $root.muster.v1.GrantSet.encode(message.terminals, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                if (message.network != null && Object.hasOwnProperty.call(message, "network"))
+                    $root.muster.v1.GrantSet.encode(message.network, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes a ServiceGrants message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.ServiceGrants
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.ServiceGrants} ServiceGrants
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ServiceGrants.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.ServiceGrants();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.agents = $root.muster.v1.GrantSet.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 2: {
+                            message.terminals = $root.muster.v1.GrantSet.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 3: {
+                            message.network = $root.muster.v1.GrantSet.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for ServiceGrants
+             * @function getTypeUrl
+             * @memberof muster.v1.ServiceGrants
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            ServiceGrants.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.ServiceGrants";
+            };
+
+            return ServiceGrants;
+        })();
+
+        v1.GrantSet = (function() {
+
+            /**
+             * Properties of a GrantSet.
+             * @memberof muster.v1
+             * @interface IGrantSet
+             * @property {boolean|null} [allDevices] GrantSet allDevices
+             * @property {Array.<muster.v1.IDeviceGrant>|null} [rules] GrantSet rules
+             */
+
+            /**
+             * Constructs a new GrantSet.
+             * @memberof muster.v1
+             * @classdesc Represents a GrantSet.
+             * @implements IGrantSet
+             * @constructor
+             * @param {muster.v1.IGrantSet=} [properties] Properties to set
+             */
+            function GrantSet(properties) {
+                this.rules = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * GrantSet allDevices.
+             * @member {boolean} allDevices
+             * @memberof muster.v1.GrantSet
+             * @instance
+             */
+            GrantSet.prototype.allDevices = false;
+
+            /**
+             * GrantSet rules.
+             * @member {Array.<muster.v1.IDeviceGrant>} rules
+             * @memberof muster.v1.GrantSet
+             * @instance
+             */
+            GrantSet.prototype.rules = $util.emptyArray;
+
+            /**
+             * Creates a new GrantSet instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.GrantSet
+             * @static
+             * @param {muster.v1.IGrantSet=} [properties] Properties to set
+             * @returns {muster.v1.GrantSet} GrantSet instance
+             */
+            GrantSet.create = function create(properties) {
+                return new GrantSet(properties);
+            };
+
+            /**
+             * Encodes the specified GrantSet message. Does not implicitly {@link muster.v1.GrantSet.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.GrantSet
+             * @static
+             * @param {muster.v1.IGrantSet} message GrantSet message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            GrantSet.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.allDevices != null && Object.hasOwnProperty.call(message, "allDevices"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).bool(message.allDevices);
+                if (message.rules != null && message.rules.length)
+                    for (let i = 0; i < message.rules.length; ++i)
+                        $root.muster.v1.DeviceGrant.encode(message.rules[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                return writer;
+            };
+
+            /**
+             * Decodes a GrantSet message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.GrantSet
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.GrantSet} GrantSet
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            GrantSet.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.GrantSet();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.allDevices = reader.bool();
+                            break;
+                        }
+                    case 2: {
+                            if (!(message.rules && message.rules.length))
+                                message.rules = [];
+                            message.rules.push($root.muster.v1.DeviceGrant.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for GrantSet
+             * @function getTypeUrl
+             * @memberof muster.v1.GrantSet
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            GrantSet.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.GrantSet";
+            };
+
+            return GrantSet;
+        })();
+
+        v1.DeviceGrant = (function() {
+
+            /**
+             * Properties of a DeviceGrant.
+             * @memberof muster.v1
+             * @interface IDeviceGrant
+             * @property {string|null} [scope] DeviceGrant scope
+             * @property {Array.<string>|null} [deviceIds] DeviceGrant deviceIds
+             */
+
+            /**
+             * Constructs a new DeviceGrant.
+             * @memberof muster.v1
+             * @classdesc Represents a DeviceGrant.
+             * @implements IDeviceGrant
+             * @constructor
+             * @param {muster.v1.IDeviceGrant=} [properties] Properties to set
+             */
+            function DeviceGrant(properties) {
+                this.deviceIds = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * DeviceGrant scope.
+             * @member {string} scope
+             * @memberof muster.v1.DeviceGrant
+             * @instance
+             */
+            DeviceGrant.prototype.scope = "";
+
+            /**
+             * DeviceGrant deviceIds.
+             * @member {Array.<string>} deviceIds
+             * @memberof muster.v1.DeviceGrant
+             * @instance
+             */
+            DeviceGrant.prototype.deviceIds = $util.emptyArray;
+
+            /**
+             * Creates a new DeviceGrant instance using the specified properties.
+             * @function create
+             * @memberof muster.v1.DeviceGrant
+             * @static
+             * @param {muster.v1.IDeviceGrant=} [properties] Properties to set
+             * @returns {muster.v1.DeviceGrant} DeviceGrant instance
+             */
+            DeviceGrant.create = function create(properties) {
+                return new DeviceGrant(properties);
+            };
+
+            /**
+             * Encodes the specified DeviceGrant message. Does not implicitly {@link muster.v1.DeviceGrant.verify|verify} messages.
+             * @function encode
+             * @memberof muster.v1.DeviceGrant
+             * @static
+             * @param {muster.v1.IDeviceGrant} message DeviceGrant message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            DeviceGrant.encode = function encode(message, writer, q) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (q === undefined)
+                    q = 0;
+                if (q > $util.recursionLimit)
+                    throw Error("max depth exceeded");
+                if (message.scope != null && Object.hasOwnProperty.call(message, "scope"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.scope);
+                if (message.deviceIds != null && message.deviceIds.length)
+                    for (let i = 0; i < message.deviceIds.length; ++i)
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.deviceIds[i]);
+                return writer;
+            };
+
+            /**
+             * Decodes a DeviceGrant message from the specified reader or buffer.
+             * @function decode
+             * @memberof muster.v1.DeviceGrant
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {muster.v1.DeviceGrant} DeviceGrant
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            DeviceGrant.decode = function decode(reader, length, error, long) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (long === undefined)
+                    long = 0;
+                if (long > $Reader.recursionLimit)
+                    throw Error("maximum nesting depth exceeded");
+                let end, message;
+                if (length === undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = new $root.muster.v1.DeviceGrant();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            message.scope = reader.string();
+                            break;
+                        }
+                    case 2: {
+                            if (!(message.deviceIds && message.deviceIds.length))
+                                message.deviceIds = [];
+                            message.deviceIds.push(reader.string());
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7, long);
+                        break;
+                    }
+                }
+                if (length !== undefined) {
+                    if (reader.pos !== end)
+                        throw RangeError("index out of range");
+                    reader.len = length;
+                }
+                return message;
+            };
+
+            /**
+             * Gets the default type url for DeviceGrant
+             * @function getTypeUrl
+             * @memberof muster.v1.DeviceGrant
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            DeviceGrant.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/muster.v1.DeviceGrant";
+            };
+
+            return DeviceGrant;
         })();
 
         v1.WebWindow = (function() {
@@ -32527,6 +33603,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IRemoveDevice|null} [removeDevice] Intent removeDevice
              * @property {muster.app.ISetScopes|null} [setScopes] Intent setScopes
              * @property {muster.v1.INetworkRenameRequest|null} [renameDevice] Intent renameDevice
+             * @property {muster.v1.INetworkSetAccessModeRequest|null} [setNetworkAccessMode] Intent setNetworkAccessMode
              * @property {muster.app.ISetPolicy|null} [setPolicy] Intent setPolicy
              * @property {muster.app.ISelectDevice|null} [selectDevice] Intent selectDevice
              * @property {muster.app.ISetRelay|null} [setRelay] Intent setRelay
@@ -32541,6 +33618,8 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.ICancelLockedUse|null} [cancelLockedUse] Intent cancelLockedUse
              * @property {muster.app.ISetDeviceLockedUse|null} [setDeviceLockedUse] Intent setDeviceLockedUse
              * @property {muster.app.IDesktopSetupAction|null} [desktopSetupAction] Intent desktopSetupAction
+             * @property {muster.v1.IDesktopSessionRequest|null} [desktopSession] Intent desktopSession
+             * @property {string|null} [endDesktopSession] Intent endDesktopSession
              * @property {muster.app.IDesktopUpdateAction|null} [desktopUpdateAction] Intent desktopUpdateAction
              * @property {muster.v1.IMulticaRequest|null} [multica] Intent multica
              * @property {muster.v1.IMulticaBrowseRequest|null} [multicaBrowse] Intent multicaBrowse
@@ -32686,6 +33765,14 @@ export const muster = $root.muster = (() => {
             Intent.prototype.renameDevice = null;
 
             /**
+             * Intent setNetworkAccessMode.
+             * @member {muster.v1.INetworkSetAccessModeRequest|null|undefined} setNetworkAccessMode
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.setNetworkAccessMode = null;
+
+            /**
              * Intent setPolicy.
              * @member {muster.app.ISetPolicy|null|undefined} setPolicy
              * @memberof muster.app.Intent
@@ -32796,6 +33883,22 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.desktopSetupAction = null;
+
+            /**
+             * Intent desktopSession.
+             * @member {muster.v1.IDesktopSessionRequest|null|undefined} desktopSession
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.desktopSession = null;
+
+            /**
+             * Intent endDesktopSession.
+             * @member {string|null|undefined} endDesktopSession
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.endDesktopSession = null;
 
             /**
              * Intent desktopUpdateAction.
@@ -33178,12 +34281,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "sideChatAction", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setNetworkAccessMode", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopSession", "endDesktopSession", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "sideChatAction", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -33357,6 +34460,12 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.NetworkRenameRequest.encode(message.renameDevice, writer.uint32(/* id 142, wireType 2 =*/1138).fork(), q + 1).ldelim();
                 if (message.sideChatAction != null && Object.hasOwnProperty.call(message, "sideChatAction"))
                     $root.muster.app.SideChatAction.encode(message.sideChatAction, writer.uint32(/* id 151, wireType 2 =*/1210).fork(), q + 1).ldelim();
+                if (message.desktopSession != null && Object.hasOwnProperty.call(message, "desktopSession"))
+                    $root.muster.v1.DesktopSessionRequest.encode(message.desktopSession, writer.uint32(/* id 153, wireType 2 =*/1226).fork(), q + 1).ldelim();
+                if (message.endDesktopSession != null && Object.hasOwnProperty.call(message, "endDesktopSession"))
+                    writer.uint32(/* id 154, wireType 2 =*/1234).string(message.endDesktopSession);
+                if (message.setNetworkAccessMode != null && Object.hasOwnProperty.call(message, "setNetworkAccessMode"))
+                    $root.muster.v1.NetworkSetAccessModeRequest.encode(message.setNetworkAccessMode, writer.uint32(/* id 155, wireType 2 =*/1242).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -33434,6 +34543,10 @@ export const muster = $root.muster = (() => {
                             message.renameDevice = $root.muster.v1.NetworkRenameRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
+                    case 155: {
+                            message.setNetworkAccessMode = $root.muster.v1.NetworkSetAccessModeRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
                     case 16: {
                             message.setPolicy = $root.muster.app.SetPolicy.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
@@ -33488,6 +34601,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 23: {
                             message.desktopSetupAction = $root.muster.app.DesktopSetupAction.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 153: {
+                            message.desktopSession = $root.muster.v1.DesktopSessionRequest.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 154: {
+                            message.endDesktopSession = reader.string();
                             break;
                         }
                     case 24: {
@@ -47198,6 +48319,10 @@ export const muster = $root.muster = (() => {
              * @property {boolean|null} [canEditAccess] DeviceActions canEditAccess
              * @property {boolean|null} [canRemove] DeviceActions canRemove
              * @property {boolean|null} [canRename] DeviceActions canRename
+             * @property {boolean|null} [canShareDesktop] DeviceActions canShareDesktop
+             * @property {boolean|null} [canViewDesktop] DeviceActions canViewDesktop
+             * @property {boolean|null} [desktopSessionOpen] DeviceActions desktopSessionOpen
+             * @property {string|null} [desktopSessionText] DeviceActions desktopSessionText
              * @property {muster.v1.IDisplayBlackout|null} [blackout] DeviceActions blackout
              */
 
@@ -47265,6 +48390,38 @@ export const muster = $root.muster = (() => {
             DeviceActions.prototype.canRename = false;
 
             /**
+             * DeviceActions canShareDesktop.
+             * @member {boolean} canShareDesktop
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.canShareDesktop = false;
+
+            /**
+             * DeviceActions canViewDesktop.
+             * @member {boolean} canViewDesktop
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.canViewDesktop = false;
+
+            /**
+             * DeviceActions desktopSessionOpen.
+             * @member {boolean} desktopSessionOpen
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.desktopSessionOpen = false;
+
+            /**
+             * DeviceActions desktopSessionText.
+             * @member {string} desktopSessionText
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.desktopSessionText = "";
+
+            /**
              * DeviceActions blackout.
              * @member {muster.v1.IDisplayBlackout|null|undefined} blackout
              * @memberof muster.app.DeviceActions
@@ -47314,6 +48471,14 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.DisplayBlackout.encode(message.blackout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                 if (message.canRename != null && Object.hasOwnProperty.call(message, "canRename"))
                     writer.uint32(/* id 7, wireType 0 =*/56).bool(message.canRename);
+                if (message.canShareDesktop != null && Object.hasOwnProperty.call(message, "canShareDesktop"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).bool(message.canShareDesktop);
+                if (message.canViewDesktop != null && Object.hasOwnProperty.call(message, "canViewDesktop"))
+                    writer.uint32(/* id 9, wireType 0 =*/72).bool(message.canViewDesktop);
+                if (message.desktopSessionOpen != null && Object.hasOwnProperty.call(message, "desktopSessionOpen"))
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.desktopSessionOpen);
+                if (message.desktopSessionText != null && Object.hasOwnProperty.call(message, "desktopSessionText"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.desktopSessionText);
                 return writer;
             };
 
@@ -47373,6 +48538,22 @@ export const muster = $root.muster = (() => {
                         }
                     case 7: {
                             message.canRename = reader.bool();
+                            break;
+                        }
+                    case 8: {
+                            message.canShareDesktop = reader.bool();
+                            break;
+                        }
+                    case 9: {
+                            message.canViewDesktop = reader.bool();
+                            break;
+                        }
+                    case 10: {
+                            message.desktopSessionOpen = reader.bool();
+                            break;
+                        }
+                    case 11: {
+                            message.desktopSessionText = reader.string();
                             break;
                         }
                     case 6: {
@@ -47809,6 +48990,7 @@ export const muster = $root.muster = (() => {
              * @memberof muster.app
              * @interface IAccessView
              * @property {Array.<muster.app.IAccessSection>|null} [sections] AccessView sections
+             * @property {boolean|null} [networkAdvanced] AccessView networkAdvanced
              */
 
             /**
@@ -47834,6 +49016,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AccessView.prototype.sections = $util.emptyArray;
+
+            /**
+             * AccessView networkAdvanced.
+             * @member {boolean} networkAdvanced
+             * @memberof muster.app.AccessView
+             * @instance
+             */
+            AccessView.prototype.networkAdvanced = false;
 
             /**
              * Creates a new AccessView instance using the specified properties.
@@ -47866,6 +49056,8 @@ export const muster = $root.muster = (() => {
                 if (message.sections != null && message.sections.length)
                     for (let i = 0; i < message.sections.length; ++i)
                         $root.muster.app.AccessSection.encode(message.sections[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                if (message.networkAdvanced != null && Object.hasOwnProperty.call(message, "networkAdvanced"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).bool(message.networkAdvanced);
                 return writer;
             };
 
@@ -47907,6 +49099,10 @@ export const muster = $root.muster = (() => {
                             if (!(message.sections && message.sections.length))
                                 message.sections = [];
                             message.sections.push($root.muster.app.AccessSection.decode(reader, reader.uint32(), undefined, long + 1));
+                            break;
+                        }
+                    case 2: {
+                            message.networkAdvanced = reader.bool();
                             break;
                         }
                     default:

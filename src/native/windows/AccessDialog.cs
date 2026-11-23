@@ -36,6 +36,23 @@ internal sealed class AccessDialog : Form
                 var toggle = section.Toggle == null ? null : Add(section.Toggle, null);
                 foreach (var item in section.Items)
                     Add(item, item.RequiresToggle ? toggle : null);
+                if (section.Id == "network" && access.NetworkAdvanced)
+                {
+                    var input = new TextBox { PlaceholderText = "tcp/443", Width = 160 };
+                    var add = new Button { Text = "Add port", AutoSize = true };
+                    add.Click += (_, _) =>
+                    {
+                        var port = input.Text.Trim();
+                        if (port.Length == 0) return;
+                        var scope = "net:" + port;
+                        var existing = grants.FindIndex(row => row.Scope == scope);
+                        if (existing >= 0) grants[existing].Item.Checked = true;
+                        else Add(new AccessItem { Scope = scope, Label = scope, Granted = true }, null);
+                        input.Clear();
+                    };
+                    sections.Controls.Add(input);
+                    sections.Controls.Add(add);
+                }
             }
         }
         var buttons =

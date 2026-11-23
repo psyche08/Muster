@@ -224,6 +224,9 @@ class MusterCore(config: MusterConfig, val keys: MusterKeys) : AutoCloseable {
     /** Covers (or uncovers) a desktop's screen; device "" for this one. The core checks who may. */
     fun setBlackout(on: Boolean, device: String) = send(intent { setBlackout = setCover { this.on = on; deviceId = device } })
     fun setCover(on: Boolean, device: String = "") = send(intent { setCover = setCover { this.on = on; deviceId = device } })
+    fun setNetworkAccessMode(mode: String) = send(Intent.newBuilder()
+        .setSetNetworkAccessMode(muster.v1.NetworkSetAccessModeRequest.newBuilder().setMode(mode))
+        .build())
     fun setPolicy(policy: Policy) = send(intent { setPolicy = setPolicy { this.policy = policy } })
     fun selectDevice(device: String) = send(intent { selectDevice = selectDevice { deviceId = device } })
 

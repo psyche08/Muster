@@ -942,9 +942,15 @@ impl Node {
         self: &Arc<Self>,
         record: DeviceRecord,
         generation: u64,
+        pair_version: u32,
     ) -> Result<Vec<Entry>, Error> {
         let entry = self.with_generation(generation, || {
             let mut roster = self.trust.roster.write().unwrap();
+            if pair_version != pair::VERSION && roster.state().network_access.is_some() {
+                return Err(Error::Unauthorized(
+                    "the network now requires access mode support".into(),
+                ));
+            }
             pair::author_add(&mut roster, self.signer.as_ref(), record)
         })?;
         self.announce(vec![entry]);
@@ -961,10 +967,36 @@ impl Node {
     /// Inserts an entry this device authored and pushes it to peers.
     pub fn publish(self: &Arc<Self>, entry: Entry) -> Result<(), Error> {
         self.trust.roster.write().unwrap().insert(entry.clone())?;
+        self.publish_inserted(entry);
+        Ok(())
+    }
+
+    /// Publishes an entry after an authenticated compatibility check.
+    /// The checked roster state, durable append and in-memory change must agree.
+    pub fn publish_if_current(
+        self: &Arc<Self>,
+        entry: Entry,
+        expected: &muster_core::roster::State,
+        persist: impl FnOnce(&Entry) -> Result<(), Error>,
+    ) -> Result<bool, Error> {
+        {
+            let mut roster = self.trust.roster.write().unwrap();
+            if roster.state() != expected {
+                return Ok(false);
+            }
+            let mut prepared = roster.clone();
+            prepared.insert(entry.clone())?;
+            persist(&entry)?;
+            *roster = prepared;
+        }
+        self.publish_inserted(entry);
+        Ok(true)
+    }
+
+    fn publish_inserted(self: &Arc<Self>, entry: Entry) {
         self.sync_vnet_prefix();
         self.deposit(vec![entry.clone()]);
         self.announce(vec![entry]);
-        Ok(())
     }
 
     /// The relay mailbox key of this network: its id.
@@ -1438,11 +1470,14 @@ impl Node {
                 }
                 let handler = node.handler.lock().unwrap().clone();
                 let allowed = match (hello.service.as_str(), member) {
-                    (pair::SERVICE, _) => !node.vnet_only,
+                    (pair::SERVICE, _) => {
+                        !node.vnet_only
+                            && matches!(hello.version, pair::LEGACY_VERSION | pair::VERSION)
+                    }
                     (_, false) => false,
                     (gossip::SERVICE | heartbeat::SERVICE, true) => true,
                     (crate::scope_compat::SERVICE, true) => {
-                        hello.version == crate::scope_compat::VERSION
+                        crate::scope_compat::supports(hello.version)
                     }
                     (_, true) if node.vnet_only || !node.is_service_host(&node.device_id()) => {
                         false
@@ -1467,11 +1502,22 @@ impl Node {
                 }
                 match hello.service.as_str() {
                     pair::SERVICE => {
-                        pair::serve(&node, peer, &connection, send, recv, generation).await
+                        pair::serve(
+                            &node,
+                            peer,
+                            &connection,
+                            send,
+                            recv,
+                            generation,
+                            hello.version,
+                        )
+                        .await
                     }
                     gossip::SERVICE => gossip::serve(&node, send, recv).await,
                     heartbeat::SERVICE => heartbeat::serve(&node, peer, send, recv).await,
-                    crate::scope_compat::SERVICE => crate::scope_compat::serve(send, recv).await,
+                    crate::scope_compat::SERVICE => {
+                        crate::scope_compat::serve(hello.version, send, recv).await
+                    }
                     forward::SERVICE => forward::serve(&node, peer, send, recv).await,
                     _ => {
                         handler

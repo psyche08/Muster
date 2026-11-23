@@ -674,6 +674,56 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         a.policy().write().unwrap().allow_locked_control = true;
         assert!(matches!(remote.call(release).await.unwrap(), Resp::Ack(_)));
     }
+    // The host can grant a different provider and terminal access using a
+    // local device assignment, even though neither is in Bravo's roster.
+    a.set_scopes(&pending.device_id, &[], "admin").unwrap();
+    let Resp::Policy(mut owner_policy) = ca
+        .call(Req::PolicyGet(v1::PolicyGetRequest {}))
+        .await
+        .unwrap()
+    else {
+        panic!("local policy")
+    };
+    owner_policy.service_grants = Some(v1::ServiceGrants {
+        agents: Some(v1::GrantSet {
+            all_devices: false,
+            rules: vec![v1::DeviceGrant {
+                scope: "agents:claude".into(),
+                device_ids: vec![b.device_id().to_hex()],
+            }],
+        }),
+        terminals: Some(v1::GrantSet {
+            all_devices: true,
+            rules: vec![],
+        }),
+        network: None,
+    });
+    let owner_request = Req::PolicySet(v1::PolicySetRequest {
+        policy: Some(owner_policy),
+    });
+    assert!(unauthorized(&remote.call(owner_request.clone()).await));
+    assert!(matches!(
+        ca.call(owner_request).await.unwrap(),
+        Resp::Policy(_)
+    ));
+    assert_eq!(sessions(&remote, "claude").await.unwrap(), [CLAUDE]);
+    assert!(unauthorized(&sessions(&remote, "codex").await));
+    assert!(matches!(
+        remote
+            .call(Req::TerminalSessions(v1::TerminalSessionsRequest::default()))
+            .await
+            .unwrap(),
+        Resp::TerminalSessions(_)
+    ));
+
+    let mode = |mode: &str| {
+        Req::NetworkSetAccessMode(v1::NetworkSetAccessModeRequest { mode: mode.into() })
+    };
+    let Resp::NetworkStatus(advanced) = ca.call(mode("advanced")).await.unwrap() else {
+        panic!("network mode")
+    };
+    assert_eq!(advanced.access_mode, "advanced");
+    assert_eq!(advanced.members.len(), 2);
     b.shutdown().await;
     assert!(
         a.set_scopes_checked(&pending.device_id, &grants, "")
@@ -681,6 +731,11 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             .is_err(),
         "an offline active member blocks new-scope issuance"
     );
+    assert!(
+        ca.call(mode("basic")).await.is_err(),
+        "an offline peer blocks the mode entry"
+    );
+    assert_eq!(a.network_status().access_mode, "advanced");
 }
 
 fn reserve_multica(daemon: &Daemon, session: &str) {

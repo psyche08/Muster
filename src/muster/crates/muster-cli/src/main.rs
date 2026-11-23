@@ -44,6 +44,10 @@ enum Command {
     Info,
     /// Network, members, link state
     Status,
+    /// Select Basic or Advanced network access as the network admin.
+    NetworkAccess {
+        mode: String,
+    },
     /// Atomically change the signed virtual address plan; restart desktop daemons afterwards.
     Readdress {
         cidr: String,
@@ -129,6 +133,12 @@ enum Command {
         offer_agent: Option<bool>,
         #[arg(long)]
         offer_terminal: Option<bool>,
+        /// Offer TCP and UDP access to this device over Muster.
+        #[arg(long)]
+        offer_network: Option<bool>,
+        /// Receiver-owned Agents, Terminals and Network grant sets as a JSON file.
+        #[arg(long)]
+        service_grants: Option<PathBuf>,
         /// Offer this machine as an external task scheduler's runtime
         /// (`muster acp`). Off until set: it admits work this machine's owner
         /// did not start.
@@ -405,6 +415,9 @@ fn print_status(s: &v1::NetworkStatus) {
         &s.network_id[..16],
         s.vnet_cidr
     );
+    if !s.access_mode.is_empty() {
+        println!("network access: {}", s.access_mode);
+    }
     println!(
         "relay: {}  reflected: {}  pending joins: {}",
         s.relay, s.reflected_addr, s.pending_joins
@@ -950,6 +963,8 @@ async fn main() -> anyhow::Result<()> {
             allow_locked_control,
             offer_agent,
             offer_terminal,
+            offer_network,
+            service_grants,
             offer_tasks,
             ax_allow,
             ax_remove,
@@ -965,6 +980,8 @@ async fn main() -> anyhow::Result<()> {
                 || allow_locked_control.is_some()
                 || offer_agent.is_some()
                 || offer_terminal.is_some()
+                || offer_network.is_some()
+                || service_grants.is_some()
                 || offer_tasks.is_some()
                 || !ax_allow.is_empty()
                 || !ax_remove.is_empty()
@@ -989,6 +1006,12 @@ async fn main() -> anyhow::Result<()> {
                 if let Some(v) = offer_terminal {
                     policy.offer_terminal = v;
                 }
+                if let Some(offer) = offer_network {
+                    policy.offer_network = Some(offer);
+                }
+                if let Some(path) = service_grants {
+                    policy.service_grants = Some(serde_json::from_slice(&std::fs::read(path)?)?);
+                }
                 if let Some(v) = offer_tasks {
                     policy.offer_tasks = v;
                 }
@@ -1007,6 +1030,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             println!("open ports: {}", policy.open_ports.join(", "));
+            println!(
+                "offer network: {}",
+                policy
+                    .offer_network
+                    .map_or("existing port policy", |on| if on { "on" } else { "off" })
+            );
+            if let Some(grants) = policy.service_grants {
+                println!("service grants: {}", serde_json::to_string(&grants)?);
+            }
             println!("allow locked control: {}", policy.allow_locked_control);
             println!(
                 "offer agent: {}  offer terminal: {}  offer tasks: {}",
@@ -1377,6 +1409,17 @@ async fn main() -> anyhow::Result<()> {
                 }))
                 .await?,
         )?,
+        Command::NetworkAccess { mode } => {
+            let Resp::NetworkStatus(status) = client
+                .call(Req::NetworkSetAccessMode(v1::NetworkSetAccessModeRequest {
+                    mode,
+                }))
+                .await?
+            else {
+                anyhow::bail!("unexpected network access reply");
+            };
+            print_status(&status);
+        }
         Command::Readdress { cidr, addresses } => {
             let mut resolved = std::collections::HashMap::new();
             for assignment in addresses {

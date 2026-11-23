@@ -32,6 +32,12 @@ fn decode_request(bytes: &[u8]) -> Result<u16, Error> {
     Ok(port)
 }
 
+fn authorize(node: &Node, peer: &DeviceId, port: u16) -> Decision {
+    let roster = node.roster().read().unwrap();
+    let policy = node.policy().read().unwrap();
+    authorize_port(roster.state(), peer, &policy, Proto::Tcp, port)
+}
+
 /// Target side. Decides, dials loopback, then copies bytes both ways.
 pub async fn serve(
     node: &std::sync::Arc<Node>,
@@ -44,11 +50,7 @@ pub async fn serve(
             .await?
             .ok_or_else(|| Error::Protocol("no forward request".into()))?;
         let port = decode_request(&request)?;
-        let decision = {
-            let roster = node.roster().read().unwrap();
-            let policy = node.policy().read().unwrap();
-            authorize_port(roster.state(), &peer, &policy, Proto::Tcp, port)
-        };
+        let decision = authorize(node, &peer, port);
         if decision != Decision::Allow {
             let reason = match decision {
                 Decision::Deny(reason) => reason,
@@ -73,9 +75,26 @@ pub async fn serve(
                 return Ok(());
             }
         };
+        if !authorize(node, &peer, port).is_allow() {
+            write_message(&mut send, &[1u8]).await?;
+            let _ = send.finish();
+            return Ok(());
+        }
         write_message(&mut send, &[0u8]).await?;
         let mut stream = tokio::io::join(recv, send);
-        let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+        let copy = tokio::io::copy_bidirectional(&mut tcp, &mut stream);
+        tokio::pin!(copy);
+        let mut recheck = tokio::time::interval(std::time::Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                _ = &mut copy => break,
+                _ = recheck.tick() => {
+                    if !authorize(node, &peer, port).is_allow() {
+                        break;
+                    }
+                }
+            }
+        }
         Ok(())
     }
     .await;

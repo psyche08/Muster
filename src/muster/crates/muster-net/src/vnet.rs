@@ -208,15 +208,22 @@ pub struct Filter {
 
 impl Filter {
     pub fn note_outbound(&self, parsed: &Parsed) {
-        if parsed.proto == 6 || parsed.proto == 17 {
-            self.flows.lock().unwrap().outbound.insert(
-                FlowKey {
-                    proto: parsed.proto,
-                    local: (parsed.src, parsed.sport),
-                    remote: (parsed.dst, parsed.dport),
-                },
-                Instant::now(),
-            );
+        if parsed.proto != 6 && parsed.proto != 17 {
+            return;
+        }
+        let key = FlowKey {
+            proto: parsed.proto,
+            local: (parsed.src, parsed.sport),
+            remote: (parsed.dst, parsed.dport),
+        };
+        let mut flows = self.flows.lock().unwrap();
+        // A reply from a local service does not turn a remote-originated
+        // flow into a locally authorized outbound connection.
+        if parsed.tcp_syn_only {
+            flows.inbound.remove(&key);
+        }
+        if !flows.inbound.contains_key(&key) {
+            flows.outbound.insert(key, Instant::now());
         }
     }
 
@@ -251,12 +258,6 @@ impl Filter {
             remote: (parsed.src, parsed.sport),
         };
         if let Some(seen) = flows.outbound.get_mut(&reply_key) {
-            *seen = now;
-            return true;
-        }
-        if let Some(seen) = flows.inbound.get_mut(&reply_key)
-            && !parsed.tcp_syn_only
-        {
             *seen = now;
             return true;
         }
@@ -759,6 +760,9 @@ mod tests {
             ..LocalPolicy::default()
         };
         assert!(!Filter::default().admit(state, &closed, &peer_id, &syn(22)));
+        let service_reply = parse(&ipv4(6, a, b, 22, 40000, 0x12)).unwrap();
+        filter.note_outbound(&service_reply);
+        assert!(!filter.admit(state, &closed, &peer_id, &ack(22)));
         // Replies to our own outbound flow are admitted regardless of grants.
         let outbound = parse(&ipv4(6, a, b, 51000, 5900, 0x02)).unwrap();
         filter.note_outbound(&outbound);

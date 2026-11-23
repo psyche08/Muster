@@ -229,6 +229,8 @@ export struct AccessEditor {
   @Param @Require access: pb.app.IAccessView;
   @Param @Require onSave: (scopes: string[]) => void;
   @Local selected: string[] = [];
+  @Local addedPorts: string[] = [];
+  @Local newPort: string = "";
 
   aboutToAppear(): void {
     this.selected = offeredItems(this.access)
@@ -258,6 +260,26 @@ export struct AccessEditor {
               this.item(item, item.requiresToggle !== true || this.isOn(this.toggleOf(section).scope ?? ''),
                 item.requiresToggle === true, false)
             }, (item: pb.app.IAccessItem): string => item.scope ?? '')
+            if (section.id === 'network' && this.access.networkAdvanced === true) {
+              ForEach(this.addedPorts, (scope: string): void => {
+                this.item(pb.app.AccessItem.create({ scope: scope, label: scope }), true, false, false)
+              }, (scope: string): string => scope)
+              Row({ space: 8 }) {
+                MusterTextInput({ text: this.newPort, placeholder: 'tcp/443', monospace: true,
+                  onChange: (value: string): void => { this.newPort = value; } }).layoutWeight(1)
+                Button('Add port').onClick((): void => {
+                  const port = this.newPort.trim();
+                  if (port === '') return;
+                  const scope = 'net:' + port;
+                  if (this.addedPorts.indexOf(scope) < 0 &&
+                    !offeredItems(this.access).some((item): boolean => item.scope === scope)) {
+                    this.addedPorts = this.addedPorts.concat([scope]);
+                  }
+                  if (!this.isOn(scope)) this.selected = this.selected.concat([scope]);
+                  this.newPort = '';
+                })
+              }
+            }
             if (section.footer) {
               Text(section.footer).fontSize(12).opacity(0.7).padding({ top: 4 })
             }
@@ -267,7 +289,7 @@ export struct AccessEditor {
         Button('Save').width('100%').margin({ top: 12 })
           .onClick((): void => {
             this.onSave(offeredItems(this.access).map((item): string => item.scope ?? '')
-              .filter((scope): boolean => this.isOn(scope)));
+              .concat(this.addedPorts).filter((scope): boolean => this.isOn(scope)));
           })
       }
       .padding(16)
@@ -506,6 +528,21 @@ export struct SettingsView {
   build() {
     List() {
       ListItem() { SectionHeader('Network devices') }
+      if (this.vm.network?.accessMode) {
+        ListItem() {
+          Row() {
+            Text(this.vm.network?.accessMode === 'basic' ? 'Network access: Basic' : 'Network access: Advanced')
+            Blank()
+            if (this.vm.canInvite) {
+              Button(this.vm.network?.accessMode === 'basic' ? 'Use Advanced' : 'Use Basic')
+                .buttonStyle(ButtonStyleMode.TEXTUAL)
+                .onClick((): void => {
+                  this.core.setNetworkAccessMode(this.vm.network?.accessMode === 'basic' ? 'advanced' : 'basic');
+                })
+            }
+          }.width('100%').padding(16)
+        }
+      }
       ForEach(this.vm.pending ?? [], (join: pb.v1.IPendingJoin): void => {
         ListItem() { PendingJoinRow({ join: join, approve: (): void => { this.deciding = join; this.picking = true; },
           reject: (): void => { this.core.decideJoin(join.deviceId ?? '', false, [], 'rejected'); } }) }
@@ -698,7 +735,7 @@ struct DeviceControlTiles {
           title: 'Locked Use',
           status: lockedUseOf(this.vm, this.deviceId)?.status ?? '',
           on: lockedUseOf(this.vm, this.deviceId)?.on ?? false,
-          enabled: lockedUseOf(this.vm, this.deviceId)?.enabled ?? false,
+          canToggle: lockedUseOf(this.vm, this.deviceId)?.enabled ?? false,
           busy: false,
           onSet: (on: boolean): void => { this.core.setDeviceLockedUse(on, this.deviceId); }
         }).layoutWeight(1)
@@ -708,7 +745,7 @@ struct DeviceControlTiles {
           title: '强制遮罩',
           status: maskOf(this.vm, this.deviceId)?.status ?? '',
           on: maskOf(this.vm, this.deviceId)?.on ?? false,
-          enabled: maskOf(this.vm, this.deviceId)?.enabled ?? false,
+          canToggle: maskOf(this.vm, this.deviceId)?.enabled ?? false,
           busy: maskOf(this.vm, this.deviceId)?.busy ?? false,
           onSet: (on: boolean): void => { this.core.setBlackout(on, this.deviceId); }
         }).layoutWeight(1)
@@ -722,7 +759,7 @@ struct DeviceControlTile {
   @Param title: string = '';
   @Param status: string = '';
   @Param on: boolean = false;
-  @Param enabled: boolean = false;
+  @Param canToggle: boolean = false;
   @Param busy: boolean = false;
   @Event onSet: (on: boolean) => void = (): void => {};
   build() {
@@ -734,7 +771,7 @@ struct DeviceControlTile {
           LoadingProgress().width(16).height(16)
         }
         Toggle({ type: ToggleType.Switch, isOn: this.on })
-          .enabled(this.enabled)
+          .enabled(this.canToggle)
           .onChange((on: boolean): void => { this.onSet(on); })
       }.width('100%')
       Text(this.status).fontSize(12).fontColor($r('sys.color.font_secondary')).maxLines(3)

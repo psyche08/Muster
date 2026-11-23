@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use muster_core::roster::{Author, DeviceUpdate, Role};
+use muster_core::roster::{Author, DeviceUpdate, NetworkAccessMode, Role};
 use muster_core::{DeviceId, Invite, LocalPolicy, PortRule, Proto, Scope};
 use muster_net::pair::Verdict;
 use muster_proto::v1;
@@ -51,6 +51,61 @@ impl Daemon {
         self.stop_stale_vnet();
         Ok(())
     }
+    pub async fn set_network_access_mode(&self, mode: NetworkAccessMode) -> Result<(), Error> {
+        let snapshot = self.roster().read().unwrap().state().clone();
+        if !snapshot.is_admin(&self.device_id()) {
+            return Err(Error::Unauthorized(
+                "only a network admin can choose its access mode".into(),
+            ));
+        }
+        if snapshot.network_access == Some(mode) {
+            return Ok(());
+        }
+        let checks = async {
+            for member in snapshot.active_members() {
+                let peer = member.record.device_id;
+                if peer != self.device_id() {
+                    muster_net::scope_compat::probe_network_access(&self.node(), peer).await?;
+                }
+            }
+            Ok::<_, muster_net::Error>(())
+        };
+        if !matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(10), checks).await,
+            Ok(Ok(()))
+        ) {
+            return Err(Error::Unavailable(
+                "All paired devices must be online and support network access modes".into(),
+            ));
+        }
+        let entry = {
+            let roster = self.roster().read().unwrap();
+            if roster.state() != &snapshot {
+                return Err(Error::Conflict(
+                    "Membership changed during compatibility checks; retry".into(),
+                ));
+            }
+            Author {
+                roster: &roster,
+                signer: self.signer().as_ref(),
+            }
+            .set_network_access(mode)?
+        };
+        let published = self.node().publish_if_current(entry, &snapshot, |entry| {
+            self.store()
+                .append_entries(std::slice::from_ref(entry))
+                .map(|_| ())
+                .map_err(|error| muster_net::Error::Io(error.to_string()))
+        })?;
+        if !published {
+            return Err(Error::Conflict(
+                "Membership changed during compatibility checks; retry".into(),
+            ));
+        }
+        let _ = self.changed.send(());
+        Ok(())
+    }
+
     /// This device is an active member of a network.
     pub fn has_network(&self) -> bool {
         let roster = self.roster().read().unwrap();
@@ -137,6 +192,7 @@ impl Daemon {
             .collect();
         v1::NetworkStatus {
             has_network: !roster.is_empty() && state.active(&me).is_some(),
+            access_mode: state.network_access_mode().as_str().into(),
             network_id: roster.network_id().map(|n| n.to_hex()).unwrap_or_default(),
             name: state.name.clone(),
             vnet_cidr: state
@@ -711,6 +767,8 @@ impl Daemon {
             offer_agent: policy.offer_agent,
             offer_terminal: policy.offer_terminal,
             offer_tasks: policy.offer_tasks,
+            offer_network: policy.offer_network,
+            service_grants: Some(crate::service_access::view(&policy.service_grants)),
             web_window: policy.web_window.as_ref().map(|window| v1::WebWindow {
                 origin: window.origin.clone(),
             }),
@@ -730,6 +788,13 @@ impl Daemon {
             offer_agent: view.offer_agent,
             offer_terminal: view.offer_terminal,
             offer_tasks: view.offer_tasks,
+            offer_network: view.offer_network.or(current.offer_network),
+            service_grants: view
+                .service_grants
+                .as_ref()
+                .map(crate::service_access::parse)
+                .transpose()?
+                .unwrap_or_else(|| current.service_grants.clone()),
             web_window: view
                 .web_window
                 .as_ref()

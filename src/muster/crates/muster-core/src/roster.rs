@@ -218,6 +218,38 @@ impl DeviceUpdate {
     }
 }
 
+/// The network administrator chooses which signed network grants are effective.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkAccessMode {
+    #[default]
+    Basic,
+    Advanced,
+}
+
+impl NetworkAccessMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Basic => "basic",
+            Self::Advanced => "advanced",
+        }
+    }
+}
+
+impl std::str::FromStr for NetworkAccessMode {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self, Error> {
+        match value {
+            "basic" => Ok(Self::Basic),
+            "advanced" => Ok(Self::Advanced),
+            _ => Err(Error::Malformed(
+                "network access mode must be basic or advanced".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Body {
     Genesis {
@@ -238,6 +270,7 @@ pub enum Body {
         vnet_cidr: (Ipv4Addr, u8),
         addresses: BTreeMap<DeviceId, Ipv4Addr>,
     },
+    NetworkAccess(NetworkAccessMode),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,6 +350,12 @@ impl Entry {
                 for (id, address) in addresses {
                     w.fixed(&id.0).fixed(&address.octets());
                 }
+            }
+            Body::NetworkAccess(mode) => {
+                w.u8(5).u8(match mode {
+                    NetworkAccessMode::Basic => 0,
+                    NetworkAccessMode::Advanced => 1,
+                });
             }
         }
         w.fixed(&self.signer.0);
@@ -421,6 +460,11 @@ impl Entry {
                     addresses,
                 }
             }
+            5 => Body::NetworkAccess(match r.u8()? {
+                0 => NetworkAccessMode::Basic,
+                1 => NetworkAccessMode::Advanced,
+                other => return Err(Error::Malformed(format!("network access mode {other}"))),
+            }),
             other => return Err(Error::Malformed(format!("body kind {other}"))),
         };
         let signer = DeviceId(r.fixed()?);
@@ -446,7 +490,7 @@ impl Entry {
             Body::Genesis { creator, .. } => Some(creator.device_id),
             Body::Add(record) => Some(record.device_id),
             Body::Update { device_id, .. } | Body::Remove { device_id } => Some(*device_id),
-            Body::Readdress { .. } => None,
+            Body::Readdress { .. } | Body::NetworkAccess(_) => None,
         }
     }
 }
@@ -479,9 +523,29 @@ pub struct State {
     pub name: String,
     pub vnet_cidr: Option<(Ipv4Addr, u8)>,
     pub members: BTreeMap<DeviceId, Member>,
+    #[serde(default)]
+    pub network_access: Option<NetworkAccessMode>,
 }
 
 impl State {
+    /// Older rosters remain compatible: existing port-only grants stay
+    /// effective until an administrator chooses a mode or grants whole access.
+    pub fn network_access_mode(&self) -> NetworkAccessMode {
+        self.network_access.unwrap_or_else(|| {
+            if self.active_members().any(|member| {
+                let scopes = &member.record.scopes;
+                !scopes.contains(&Scope::ALL_NET)
+                    && scopes
+                        .iter()
+                        .any(|scope| matches!(scope, Scope::Net { .. }))
+            }) {
+                NetworkAccessMode::Advanced
+            } else {
+                NetworkAccessMode::Basic
+            }
+        })
+    }
+
     pub fn member(&self, id: &DeviceId) -> Option<&Member> {
         self.members.get(id)
     }
@@ -605,6 +669,7 @@ impl State {
                     }
                 }
             }
+            Body::NetworkAccess(mode) => self.network_access = Some(*mode),
         }
     }
 
@@ -882,6 +947,7 @@ impl Roster {
             } => {
                 validate_address_plan(&past, *vnet_cidr, addresses)?;
             }
+            Body::NetworkAccess(_) => {}
         }
         Ok(())
     }
@@ -943,12 +1009,12 @@ impl Roster {
                         readmissions.insert(record.device_id, hash);
                     }
                 }
-                Body::Update { device_id, .. } => {
+                Body::Update { device_id, .. }
                     if readmissions.get(device_id).is_some_and(|admission| {
                         !self.causal_past(&entry.parents).contains(admission)
-                    }) {
-                        continue;
-                    }
+                    }) =>
+                {
+                    continue;
                 }
                 _ => {}
             }
@@ -1165,6 +1231,10 @@ impl Author<'_> {
         self.on_head(Body::Remove { device_id })
     }
 
+    pub fn set_network_access(&self, mode: NetworkAccessMode) -> Result<Entry, Error> {
+        self.on_head(Body::NetworkAccess(mode))
+    }
+
     pub fn readdress(
         &self,
         vnet_cidr: (Ipv4Addr, u8),
@@ -1225,6 +1295,75 @@ mod tests {
 
     fn cidr() -> (Ipv4Addr, u8) {
         (Ipv4Addr::new(192, 168, 14, 0), 24)
+    }
+
+    #[test]
+    fn network_access_mode_preserves_signed_grants_and_replays() {
+        let admin = SoftSigner::generate();
+        let peer = SoftSigner::generate();
+        let mut roster = Roster::new();
+        let genesis = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .genesis(
+            "lab",
+            (Ipv4Addr::new(192, 168, 14, 0), 24),
+            record(&admin, "alpha", DeviceKind::Desktop),
+        )
+        .unwrap();
+        roster.insert(genesis.clone()).unwrap();
+        assert_eq!(
+            roster.state().network_access_mode(),
+            NetworkAccessMode::Basic
+        );
+
+        let mut member = record(&peer, "bravo", DeviceKind::Desktop);
+        member.scopes.insert("net:tcp/22".parse().unwrap());
+        let add = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .add(member.clone())
+        .unwrap();
+        roster.insert(add.clone()).unwrap();
+        assert_eq!(
+            roster.state().network_access_mode(),
+            NetworkAccessMode::Advanced
+        );
+        let basic = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .set_network_access(NetworkAccessMode::Basic)
+        .unwrap();
+        let basic = Entry::decode(&basic.encode()).unwrap();
+        roster.insert(basic.clone()).unwrap();
+        assert_eq!(
+            roster.state().network_access_mode(),
+            NetworkAccessMode::Basic
+        );
+        assert_eq!(
+            roster
+                .state()
+                .active(&member.device_id)
+                .unwrap()
+                .record
+                .scopes,
+            member.scopes
+        );
+        let advanced = Author {
+            roster: &roster,
+            signer: &admin,
+        }
+        .set_network_access(NetworkAccessMode::Advanced)
+        .unwrap();
+        let decoded = Roster::from_entries([advanced, basic, add, genesis]).unwrap();
+        assert_eq!(
+            decoded.state().network_access_mode(),
+            NetworkAccessMode::Advanced
+        );
+        assert_eq!(decoded.state().network_id, roster.state().network_id);
     }
 
     #[test]
