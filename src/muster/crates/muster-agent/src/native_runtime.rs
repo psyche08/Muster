@@ -341,19 +341,19 @@ fn selected_codex_project(json: &serde_json::Value) -> Option<&serde_json::Value
     }
 }
 
-/// Label for a project-specific sidebar action. The live selection is
-/// verified independently after navigation. Never pick among duplicate names.
+/// Exact registry label for the sidebar action or the new-chat project picker.
+/// The live selection is verified independently after navigation.
 pub fn codex_sidebar_project(bytes: &[u8], cwd: &Path) -> Option<String> {
     let state: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     let projects = state["local-projects"].as_object()?;
+    let cwd = cwd.to_str().filter(|_| cwd.is_absolute())?;
     let mut matches = projects.values().filter(|p| {
         p["rootPaths"]
             .as_array()
-            .is_some_and(|roots| roots.len() == 1 && roots[0].as_str() == cwd.to_str())
+            .is_some_and(|roots| roots.len() == 1 && roots[0].as_str() == Some(cwd))
     });
-    let label = matches.next()?["name"].as_str()?.trim();
-    if !cwd.is_absolute()
-        || label.is_empty()
+    let label = matches.next()?["name"].as_str()?;
+    if label.trim().is_empty()
         || matches.next().is_some()
         || projects
             .values()
@@ -789,6 +789,29 @@ mod tests {
         state["electron-owner-value:selected-project:another"] =
             state["electron-owner-value:selected-project:fixture"].clone();
         assert!(!matches(&state));
+    }
+
+    #[test]
+    fn navigation_requires_one_exact_root_and_unique_registry_label() {
+        let cwd = Path::new("/srv/work");
+        let first = serde_json::json!({"name":"Example","rootPaths":["/srv/work"]});
+        let resolve = |projects| {
+            let state = serde_json::json!({"local-projects": projects});
+            codex_sidebar_project(&serde_json::to_vec(&state).unwrap(), cwd)
+        };
+        assert_eq!(
+            resolve(serde_json::json!({"a":first})).as_deref(),
+            Some("Example")
+        );
+        for projects in [
+            serde_json::json!({}),
+            serde_json::json!({"a":{"name":"work","rootPaths":["/tmp/work"]}}),
+            serde_json::json!({"a":{"name":"Example","rootPaths":["/srv/work","/srv/extra"]}}),
+            serde_json::json!({"a":first,"b":{"name":"Other","rootPaths":["/srv/work"]}}),
+            serde_json::json!({"a":first,"b":{"name":"Example","rootPaths":["/tmp/work"]}}),
+        ] {
+            assert_eq!(resolve(projects), None);
+        }
     }
 
     #[test]

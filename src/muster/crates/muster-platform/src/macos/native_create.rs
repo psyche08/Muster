@@ -15,6 +15,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod codex_picker;
+
 /// How long a window may take to show its renderer before navigation. A new
 /// ChatGPT window renders only after its feature-flag bootstrap, which reached
 /// its 60 s deadline on every window of one Mac (ADR 0154). Nothing has been
@@ -42,12 +44,15 @@ fn nodes(root: &Element) -> Result<Vec<Element>, Error> {
     Ok(nodes)
 }
 fn unique(root: &Element, test: impl Fn(&Element) -> bool) -> Result<Option<Element>, Error> {
-    let matches: Vec<_> = nodes(root)?.into_iter().filter(test).collect();
-    match matches.len() {
-        0 => Ok(None),
-        1 => Ok(matches.into_iter().next()),
-        _ => Err(conflict("Ambiguous native control")),
+    single(nodes(root)?.into_iter().filter(test))
+}
+
+fn single<T>(mut matches: impl Iterator<Item = T>) -> Result<Option<T>, Error> {
+    let first = matches.next();
+    if matches.next().is_some() {
+        return Err(conflict("Ambiguous native control"));
     }
+    Ok(first)
 }
 /// Deeper than any recorded app tree; reached only by a cycle.
 const MAX_ANCESTRY: usize = 256;
@@ -787,9 +792,71 @@ fn require_focus(root: &Element, window: &Element) -> Result<(), Error> {
 }
 
 #[derive(PartialEq)]
-struct BackgroundTarget {
-    window: Element,
-    action: Option<Element>,
+enum BackgroundRoute<A> {
+    Ready,
+    Direct(A),
+    ProjectPicker(A, String),
+}
+
+impl<A> BackgroundRoute<A> {
+    fn priority(&self) -> u8 {
+        match self {
+            Self::Ready => 0,
+            Self::Direct(_) => 1,
+            Self::ProjectPicker(..) => 2,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+struct BackgroundTarget<W = Element, A = Element> {
+    window: W,
+    route: BackgroundRoute<A>,
+}
+
+fn preferred_target<W: PartialEq, A>(
+    targets: Vec<BackgroundTarget<W, A>>,
+    focused: Option<&W>,
+) -> Option<BackgroundTarget<W, A>> {
+    let best = targets.iter().map(|t| t.route.priority()).min()?;
+    let mut candidates = targets.into_iter().filter(|t| t.route.priority() == best);
+    let first = candidates.next()?;
+    if focused == Some(&first.window) {
+        return Some(first);
+    }
+    let Some(second) = candidates.next() else {
+        return Some(first);
+    };
+    std::iter::once(second)
+        .chain(candidates)
+        .find(|t| Some(&t.window) == focused)
+}
+
+fn has_dialog(tree: &[Element]) -> bool {
+    tree.iter().any(|n| {
+        n.role() == "AXSheet"
+            || matches!(
+                n.string("AXSubrole").as_deref(),
+                Some(
+                    "AXApplicationDialog"
+                        | "AXDialog"
+                        | "AXSystemDialog"
+                        | "AXApplicationAlertDialog"
+                )
+            )
+    })
+}
+
+fn safe_to_navigate(profile: &App, window: &Element, tree: &[Element]) -> bool {
+    if window.role() != "AXWindow" || window.bool("AXMinimized") == Some(true) || has_dialog(tree) {
+        return false;
+    }
+    let mut editors = tree.iter().filter(|n| session_composer(profile, n));
+    editors
+        .next()
+        .and_then(|e| e.string("AXValue"))
+        .is_some_and(|v| profile.is_empty(&v))
+        && editors.next().is_none()
 }
 
 /// Claude's sidebar New starts a Code session only while the window shows
@@ -806,9 +873,9 @@ fn claude_code_window(tree: &[Element]) -> bool {
 }
 
 /// A window whose empty form already shows the directory, or else the
-/// window's own in-app action that opens one: Codex's project-specific new
-/// chat, Claude's sidebar New. Either may navigate away from the session the
-/// window shows, never from a draft, a sheet or an in-app dialog (ADR 0220).
+/// window's own in-app action that opens one: a project button, the Codex
+/// sidebar New chat with a project picker, or Claude's sidebar New. Navigation requires a
+/// draft-free window without a sheet or dialog (ADRs 0220 and 0297).
 fn ready_background_window(
     root: &Element,
     guard: &Guard,
@@ -829,13 +896,14 @@ fn ready_background_window(
         .as_ref()
         .and_then(|p| p.live(guard.pid, guard.start, &live))
         .cloned();
-    let project_action = (provider == "codex")
+    let project_name = (provider == "codex")
         .then(codex_project_state)
         .flatten()
-        .and_then(|b| muster_agent::native_runtime::codex_sidebar_project(&b, cwd))
+        .and_then(|b| muster_agent::native_runtime::codex_sidebar_project(&b, cwd));
+    let project_action = project_name
+        .as_ref()
         .map(|name| format!("Start new chat in {name}"));
-    let mut routes = Vec::new();
-    let mut candidates = Vec::new();
+    let mut targets = Vec::new();
     let focused = root.element("AXFocusedWindow");
     if explain {
         log::info!(
@@ -854,25 +922,11 @@ fn ready_background_window(
             skip(index, "tree unreadable");
             continue;
         };
-        if tree.iter().any(|n| {
-            n.role() == "AXSheet" || n.string("AXSubrole").as_deref() == Some("AXApplicationDialog")
-        }) {
-            skip(index, "sheet or dialog");
-            continue;
-        }
-        let editors: Vec<_> = tree
-            .iter()
-            .filter(|n| session_composer(guard.profile, n))
-            .collect();
-        let [editor] = editors.as_slice() else {
-            skip(index, &format!("composers={}", editors.len()));
-            continue;
-        };
-        if editor
-            .string("AXValue")
-            .is_none_or(|v| !guard.profile.is_empty(&v))
-        {
-            skip(index, "composer not empty");
+        if !safe_to_navigate(guard.profile, &window, &tree) {
+            skip(
+                index,
+                "window unavailable, dialog or nonempty/ambiguous composer",
+            );
             continue;
         }
         let pages: Vec<_> = tree.iter().filter(|n| new_page(provider, n)).collect();
@@ -880,13 +934,14 @@ fn ready_background_window(
             && (provider != "claude" || empty_session_marker(page)?)
             && selection_matches(provider, page, cwd, true)?.is_some()
         {
-            if focused.as_ref() == Some(&window) {
-                return Ok(Some(BackgroundTarget {
-                    window,
-                    action: None,
-                }));
+            let target = BackgroundTarget {
+                window,
+                route: BackgroundRoute::Ready,
+            };
+            if focused.as_ref() == Some(&target.window) {
+                return Ok(Some(target));
             }
-            candidates.push(window);
+            targets.push(target);
             continue;
         }
         if explain {
@@ -918,7 +973,20 @@ fn ready_background_window(
                 .take(2)
                 .collect();
             if let [button] = found.as_slice() {
-                routes.push((window, (*button).clone()));
+                targets.push(BackgroundTarget {
+                    window,
+                    route: BackgroundRoute::Direct((*button).clone()),
+                });
+            } else if found.is_empty()
+                && provider == "codex"
+                && matches!(guard.mode, NativeConsole::Background(_))
+                && let Some(project) = &project_name
+                && let Some(button) = codex_picker::new_chat(&tree)?
+            {
+                targets.push(BackgroundTarget {
+                    window,
+                    route: BackgroundRoute::ProjectPicker(button, project.clone()),
+                });
             } else {
                 skip(index, &format!("route buttons={}", found.len()));
             }
@@ -926,27 +994,7 @@ fn ready_background_window(
             skip(index, "no route control");
         }
     }
-    if candidates.len() > 1 {
-        skip(candidates.len(), "forms shown in several unfocused windows");
-        return Ok(None);
-    }
-    if let Some(window) = candidates.pop() {
-        return Ok(Some(BackgroundTarget {
-            window,
-            action: None,
-        }));
-    }
-    let route = routes
-        .iter()
-        .position(|(window, _)| focused.as_ref() == Some(window))
-        .or_else(|| (routes.len() == 1).then_some(0));
-    Ok(route.map(|i| {
-        let (window, action) = routes.swap_remove(i);
-        BackgroundTarget {
-            window,
-            action: Some(action),
-        }
-    }))
+    Ok(preferred_target(targets, focused.as_ref()))
 }
 
 pub struct Admission {
@@ -1144,12 +1192,20 @@ fn in_app_route(
     stage: &dyn Fn(&str),
 ) -> Result<(Element, bool, bool), Error> {
     let window = target.window;
-    if let Some(action) = target.action {
+    if let BackgroundRoute::Direct(action) | BackgroundRoute::ProjectPicker(action, _) =
+        &target.route
+    {
         guard.check()?;
-        if !windows(root).contains(&window) || !window.contains(&action) {
+        if !windows(root).contains(&window) || !window.contains(action) {
             return Err(conflict("Background creation target was replaced"));
         }
-        guard.press(&action)?;
+        if !safe_to_navigate(guard.profile, &window, &nodes(&window)?) {
+            return Err(conflict("Background window is no longer safe to navigate"));
+        }
+        if matches!(target.route, BackgroundRoute::ProjectPicker(..)) {
+            stage("codex_background_new_chat");
+        }
+        guard.press(action)?;
     }
     if provider == "codex" {
         let mut pin = CODEX_WINDOW.lock().unwrap();
@@ -1202,6 +1258,12 @@ pub async fn submit(
         .to_str()
         .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?;
     let pid = guard.pid;
+    let picker_project = background_window
+        .as_ref()
+        .and_then(|target| match &target.route {
+            BackgroundRoute::ProjectPicker(_, name) => Some(name.clone()),
+            _ => None,
+        });
     let mut background = background_window.is_some();
     let (window, reused_codex, reuses_main) = 'route: {
         if let Some(target) = background_window {
@@ -1429,6 +1491,17 @@ pub async fn submit(
             let project = selection_matches(provider, &page, cwd, reused_codex)?;
             form_state.1 = project.is_some();
             if project.is_none()
+                && let Some(name) = picker_project.as_deref()
+                && !chose_directory
+                && verified_empty_form("codex", &page)
+                && let Some(selector) = picker(&page, "Change project: ")?
+            {
+                stage("codex_background_project_picker");
+                codex_picker::choose(&guard, &window, &page, &selector, cwd, name).await?;
+                chose_directory = true;
+                continue;
+            }
+            if project.is_none()
                 && background
                 && provider == "claude"
                 && !chose_directory
@@ -1472,6 +1545,9 @@ pub async fn submit(
         if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
         {
             return Err(conflict("Native form was closed or replaced"));
+        }
+        if picker_project.is_some() && has_dialog(&nodes(&window)?) {
+            return Err(conflict("Codex window opened a dialog"));
         }
         Ok(new_page(provider, &page)
             && (!reuses_main || empty_session_marker(&page)?)
@@ -1548,4 +1624,29 @@ pub async fn submit(
         window,
         page,
     })
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+    use BackgroundRoute::*;
+
+    #[test]
+    fn forms_precede_project_buttons_then_generic_new_chat() {
+        let pick = |routes: Vec<BackgroundRoute<()>>, focused: Option<usize>| {
+            let windows = routes
+                .into_iter()
+                .enumerate()
+                .map(|(window, route)| BackgroundTarget { window, route })
+                .collect();
+            preferred_target(windows, focused.as_ref()).map(|t| t.window)
+        };
+        let generic = || ProjectPicker((), "Project".into());
+        assert_eq!(pick(vec![generic(), Direct(()), Ready], Some(0)), Some(2));
+        assert_eq!(pick(vec![generic(), Direct(())], Some(0)), Some(1));
+        assert_eq!(pick(vec![generic()], None), Some(0));
+        assert_eq!(pick(vec![generic(), generic()], None), None);
+        assert_eq!(pick(vec![generic(), generic()], Some(1)), Some(1));
+        assert_eq!(pick(vec![generic(), Ready, Ready], Some(0)), None);
+    }
 }
