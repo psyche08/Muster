@@ -543,6 +543,25 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)
         }
+        It::OpenRemote(selection) => {
+            if state.desktop_session.is_none()
+                && !selection.device_id.is_empty()
+                && crate::render::remote_workspace(state)
+                    .devices
+                    .iter()
+                    .any(|d| d.device_id == selection.device_id)
+            {
+                state.remote_selected = selection.device_id;
+            }
+            intent_navigate(
+                state,
+                ctx,
+                app::Navigate {
+                    screen: Screen::Remote as i32,
+                    ..Default::default()
+                },
+            );
+        }
         It::DesktopSession(request) => desktop_session::start(state, ctx, request),
         It::EndDesktopSession(device) => {
             if state

@@ -48,6 +48,7 @@ message Intent {
     SetDeviceLockedUse set_device_locked_use = 86;
     DesktopSetupAction desktop_setup_action = 23;
     muster.v1.DesktopSessionRequest desktop_session = 153;
+    SelectDevice open_remote = 156; // optional paired desktop to preselect
     string end_desktop_session = 154; // device of the local session being closed
     DesktopUpdateAction desktop_update_action = 24;
     muster.v1.MulticaRequest multica = 89;
@@ -518,6 +519,17 @@ enum Screen {
   BROWSER = 13;
   DESKTOP_CHATS = 14;
   MULTICA = 15;
+  REMOTE = 16;
+}
+
+message RemoteDevice { string device_id = 1; string name = 2; bool connected = 3; }
+message RemoteWorkspaceView {
+  repeated RemoteDevice devices = 1;
+  string selected_device = 2;
+  bool can_connect = 3;
+  bool session_open = 4;
+  string status = 5;
+  muster.v1.DesktopTakeoverPrompt takeover = 6;
 }
 
 message MulticaSelect { string device_id = 1; }
@@ -577,6 +589,7 @@ message ViewModel {
   AccessView device_access = 30;
   AccessView join_access = 31;
   repeated DeviceLockedUseView device_locked_use = 33;
+  RemoteWorkspaceView remote_workspace = 42;
   DeviceActions device_actions = 32; // for selected_device on the DEVICE screen
   muster.v1.MulticaStatus multica = 35;
   muster.v1.MulticaPage multica_page = 36;

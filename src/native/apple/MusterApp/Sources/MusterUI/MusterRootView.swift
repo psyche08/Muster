@@ -224,6 +224,7 @@ public struct MusterRootView: View {
         case .files: FilesView(core: core, vm: vm)
         case .file: FileView(core: core, vm: vm)
         case .git: GitView(core: core, vm: vm)
+        case .remote: ContentUnavailableView("Remote desktop viewer is available on Windows", systemImage: "display")
         case .UNRECOGNIZED: ContentUnavailableView("Unknown screen", systemImage: "questionmark")
         }
     }

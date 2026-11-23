@@ -408,3 +408,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0290](0290-desktop-media-bursts.md) | Accepted | Buffer video packet bursts in the paired desktop broker |
 | [0291](0291-desktop-host-idle-and-viewer-window.md) | Accepted | Retire idle desktop hosts and use an independent viewer window |
 | [0292](0292-desktop-takeover-confirmation.md) | Accepted | Confirm replacement of the current desktop viewer |
+| [0293](0293-embedded-remote-workspace.md) | Accepted | Embed remote desktop in the Windows Remote workspace |

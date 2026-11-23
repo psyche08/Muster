@@ -5,7 +5,12 @@ use muster_proto::v1::{
 };
 
 pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionRequest) {
-    if state.screen != Screen::Device || request.device != state.target() {
+    let remote = (state.screen == Screen::Remote).then(|| crate::render::remote_workspace(state));
+    if !(remote
+        .as_ref()
+        .is_some_and(|v| !v.selected_device.is_empty() && v.selected_device == request.device)
+        || state.screen == Screen::Device && request.device == state.target())
+    {
         return;
     }
     if let Some(Action::ConfirmTakeover(token)) = request.action {
@@ -42,7 +47,12 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
     }
     let allowed = match request.action {
         Some(Action::ShareView(_) | Action::ShareMouse(_)) => actions.can_share_desktop,
-        Some(Action::ViewInWindow(hwnd)) => actions.can_view_desktop && hwnd != 0,
+        Some(Action::ViewInWindow(hwnd)) => {
+            remote
+                .as_ref()
+                .map_or(actions.can_view_desktop, |v| v.can_connect)
+                && hwnd != 0
+        }
         _ => false,
     };
     if !allowed {
@@ -116,6 +126,34 @@ pub(super) fn finish(state: &mut State, id: u64, result: Result<(), Error>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remote_workspace_lists_paired_desktops_without_connecting_on_selection() {
+        let mut state = State::new(false, None);
+        let member = |id: &str, kind: &str, local| v1::MemberView {
+            device_id: id.into(),
+            kind: kind.into(),
+            is_self: local,
+            connected: true,
+            ..Default::default()
+        };
+        state.network = Some(v1::NetworkStatus {
+            members: vec![
+                member("here", "desktop", true),
+                member("peer", "desktop", false),
+                member("phone", "phone", false),
+            ],
+            ..Default::default()
+        });
+        state.remote_selected = "peer".into();
+        state.go(Screen::Remote);
+        let view = crate::render::remote_workspace(&state);
+        assert_eq!(view.devices.len(), 1);
+        assert_eq!(view.selected_device, "peer");
+        assert!(!view.session_open);
+        assert_eq!(state.workspace(), Screen::Remote);
+        assert!(!state.can_go_back());
+    }
+
     #[test]
     fn desktop_session_prompt_tracks_the_live_request_and_clears_when_connecting() {
         let mut state = State::new(false, None);
