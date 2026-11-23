@@ -499,6 +499,9 @@ impl Entry {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Member {
+    /// Signed admission for this membership, stable across ordinary record edits.
+    #[serde(default)]
+    pub joined_at: Option<EntryHash>,
     pub record: DeviceRecord,
     pub removed: bool,
     /// Hash of the entry that last set this record's fields (for vip tie-breaks).
@@ -599,6 +602,7 @@ impl State {
                     Member {
                         record,
                         removed: false,
+                        joined_at: Some(hash),
                         defined_by: hash,
                         last_update: (entry.lamport, hash),
                         presence_epoch: None,
@@ -615,6 +619,7 @@ impl State {
                     Member {
                         record: record.clone(),
                         removed: false,
+                        joined_at: Some(hash),
                         defined_by: hash,
                         last_update: (entry.lamport, hash),
                         presence_epoch: None,

@@ -128,6 +128,12 @@ impl Daemon {
         Ok(())
     }
 
+    pub(crate) fn local_network_status(&self) -> v1::NetworkStatus {
+        let mut status = self.network_status();
+        self.desktop_permissions.project(self, &mut status);
+        status
+    }
+
     pub fn network_status(&self) -> v1::NetworkStatus {
         let node = self.node();
         let peers = node.peers();
@@ -184,6 +190,7 @@ impl Daemon {
                         .map(|b| b.version.clone())
                         .unwrap_or_default(),
                     commit: build.map(|b| b.commit).unwrap_or_default(),
+                    desktop_access: 0,
                     link: String::new(),
                 };
                 view.link = link_label(&view);

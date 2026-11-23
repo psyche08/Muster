@@ -374,7 +374,7 @@ struct DeviceView: View {
             sharePermissionMessage = "Enable Accessibility for Muster in System Settings, then try sharing again."
             return
         }
-        core.shareDesktop(with: device, mouse: mouse)
+        core.rememberDesktopAccess(for: device, access: mouse ? .mouse : .view)
         #endif
     }
 
@@ -430,13 +430,17 @@ struct DeviceView: View {
                     }
                 }
                 if vm.deviceActions.canShareDesktop || vm.deviceActions.desktopSessionOpen {
-                    Section("Share this Mac’s desktop") {
+                    Section("Access to this Mac’s desktop") {
                         if vm.deviceActions.desktopSessionOpen {
                             Text(vm.deviceActions.desktopSessionText)
                             Button("Stop sharing") { core.stopSharingDesktop(with: member.deviceID) }
                         } else {
-                            Button("Allow \(member.name) to view") { shareDesktop(with: member.deviceID, mouse: false) }
-                            Button("Allow \(member.name) to view and use the mouse") { shareDesktop(with: member.deviceID, mouse: true) }
+                            LabeledContent("Remembered access", value: member.desktopAccess == .mouse ? "View and mouse" : member.desktopAccess == .view ? "View only" : "Off")
+                            if member.desktopAccess != .none {
+                                Button("Revoke desktop access") { core.rememberDesktopAccess(for: member.deviceID, access: .none) }
+                            }
+                            Button("Always allow \(member.name) to view") { shareDesktop(with: member.deviceID, mouse: false) }
+                            Button("Always allow \(member.name) to view and use the mouse") { shareDesktop(with: member.deviceID, mouse: true) }
                         }
                     }
                 }

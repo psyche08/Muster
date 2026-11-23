@@ -220,7 +220,8 @@ struct VnetStartup {
 }
 
 pub struct Daemon {
-    desktop_slot: tokio::sync::Semaphore,
+    desktop_slot: Arc<tokio::sync::Semaphore>,
+    desktop_permissions: desktop_session::permissions::Permissions,
     blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
     /// Display-only root-helper installation observation: 0 unavailable, 1 checking, 2 verified, 3 pending.
@@ -426,7 +427,8 @@ impl Daemon {
         #[cfg(not(target_os = "macos"))]
         let blackout = None;
         let daemon = Arc::new(Self {
-            desktop_slot: tokio::sync::Semaphore::new(1),
+            desktop_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            desktop_permissions: Default::default(),
             blackout,
             #[cfg(windows)]
             _identity_owner,
@@ -1101,6 +1103,10 @@ struct RemoteService {
 }
 
 impl ServiceHandler for RemoteService {
+    #[cfg(target_os = "macos")]
+    fn remembered_desktop(&self, peer: DeviceId) -> Option<muster_net::remote_desktop::Sharing> {
+        desktop_session::host::admit(&self.daemon.upgrade()?, peer)
+    }
     fn handle(
         &self,
         _node: Arc<Node>,

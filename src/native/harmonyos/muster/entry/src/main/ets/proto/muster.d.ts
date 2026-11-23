@@ -1509,6 +1509,13 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** DesktopAccess enum. */
+        enum DesktopAccess {
+            DESKTOP_ACCESS_NONE = 0,
+            DESKTOP_ACCESS_VIEW = 1,
+            DESKTOP_ACCESS_MOUSE = 2
+        }
+
         /** Properties of a DesktopSessionRequest. */
         interface IDesktopSessionRequest {
 
@@ -1523,6 +1530,9 @@ export namespace muster {
 
             /** DesktopSessionRequest viewInWindow */
             viewInWindow?: (number|Long|null);
+
+            /** DesktopSessionRequest rememberAccess */
+            rememberAccess?: (muster.v1.DesktopAccess|null);
         }
 
         /** Represents a DesktopSessionRequest. */
@@ -1546,8 +1556,11 @@ export namespace muster {
             /** DesktopSessionRequest viewInWindow. */
             public viewInWindow?: (number|Long|null);
 
+            /** DesktopSessionRequest rememberAccess. */
+            public rememberAccess?: (muster.v1.DesktopAccess|null);
+
             /** DesktopSessionRequest action. */
-            public action?: ("shareView"|"shareMouse"|"viewInWindow");
+            public action?: ("shareView"|"shareMouse"|"viewInWindow"|"rememberAccess");
 
             /**
              * Creates a new DesktopSessionRequest instance using the specified properties.
@@ -3691,6 +3704,9 @@ export namespace muster {
 
             /** MemberView presence */
             presence?: (string|null);
+
+            /** MemberView desktopAccess */
+            desktopAccess?: (muster.v1.DesktopAccess|null);
         }
 
         /** Represents a MemberView. */
@@ -3749,6 +3765,9 @@ export namespace muster {
 
             /** MemberView presence. */
             public presence: string;
+
+            /** MemberView desktopAccess. */
+            public desktopAccess: muster.v1.DesktopAccess;
 
             /**
              * Creates a new MemberView instance using the specified properties.

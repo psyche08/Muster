@@ -48,7 +48,7 @@ pub(crate) struct Offer {
 }
 
 impl Sharing {
-    pub(crate) fn new(viewer: DeviceId, access: Access, handler: Arc<dyn Handler>) -> Self {
+    pub fn new(viewer: DeviceId, access: Access, handler: Arc<dyn Handler>) -> Self {
         Self {
             offer: Arc::new(Offer {
                 viewer,
