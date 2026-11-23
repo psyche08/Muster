@@ -121,6 +121,7 @@ impl Operation {
             let Some(d) = weak.upgrade() else { return };
             // Acquire in the same order as direct operations, never wait for
             // or borrow a subsequent Locked Use owner's console.
+            let _turn = d.desktop_tasks.enter().await;
             let Ok(_console) = d.locked_use.writes.clone().try_read_owned() else {
                 if d.navigation_returns
                     .take_if(app.provider(), &token)

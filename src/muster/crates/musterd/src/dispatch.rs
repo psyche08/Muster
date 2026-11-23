@@ -22,8 +22,6 @@ pub(crate) struct Dispatch {
     /// `Err`: the stored grants could not be read. Everything is refused and
     /// nothing is written, so no record or unknown operation is ever lost.
     registry: Mutex<Result<Registry, String>>,
-    /// One dispatch operation at a time; the next waits its turn.
-    running: tokio::sync::Mutex<()>,
 }
 
 fn now_ms() -> u64 {
@@ -66,7 +64,6 @@ impl Dispatch {
         }
         Self {
             registry: Mutex::new(registry),
-            running: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -308,35 +305,39 @@ fn op_result(status: Status, message: impl Into<String>, result_id: impl Into<St
 
 async fn operate(daemon: &Arc<Daemon>, op: Operation) -> Result<Resp, Error> {
     let dispatch = &daemon.dispatch;
-    // A repeat answers its record at once, even while another runs.
-    if let Some(state) = recorded(daemon, &op)? {
+    let admission = |locked| {
+        dispatch.read(|r| {
+            let mut g = r
+                .get(&op.grant)
+                .ok_or_else(|| refused(Refusal::NotFound))?
+                .clone();
+            g.reserve(&op.request(), Vec::new(), locked, now_ms())
+                .map_err(refused)
+        })
+    };
+    if let Admission::Recorded(state) = admission(daemon.platform().locked())? {
         return answer(daemon, &op, state).await;
     }
-    let _running = dispatch.running.lock().await;
-    let locked = daemon.platform().locked();
-    // Scope, liveness, limits and op_id are decided first, on a copy and
-    // whatever the desktop's state.
-    let dry_run = dispatch.read(|r| {
-        let mut g = r
-            .get(&op.grant)
-            .ok_or_else(|| refused(Refusal::NotFound))?
-            .clone();
-        g.reserve(&op.request(), Vec::new(), locked, now_ms())
-            .map_err(refused)
-    })?;
-    if let Admission::Recorded(state) = dry_run {
-        return answer(daemon, &op, state).await;
-    }
-    // The ledger is shared with the plain RPCs: an op_id already on it (a
-    // plain request refused on the locked Mac, say) would only answer its old
-    // row inside the lease. Refuse it before anything unlocks.
-    if daemon.store().ledger().status(&op.op_id)?.is_some() {
-        return Err(Error::Conflict(
+    let preflight = || {
+        // The ledger is shared with the plain RPCs: an op_id already on it (a
+        // plain request refused on the locked Mac, say) would only answer its old
+        // row inside the lease. Refuse it before anything unlocks.
+        if daemon.store().ledger().status(&op.op_id)?.is_some() {
+            return Err(Error::Conflict(
             "this op_id is already on the operation ledger; use a new op_id. Nothing was reserved"
                 .into(),
         ));
+        }
+        crate::scheduler::preflight(daemon, &op.provider)
+    };
+    preflight()?;
+    let turn = daemon.desktop_tasks.enter().await;
+    let locked = daemon.platform().locked();
+    if let Admission::Recorded(state) = admission(locked)? {
+        drop(turn);
+        return answer(daemon, &op, state).await;
     }
-    crate::scheduler::preflight(daemon, &op.provider)?;
+    preflight()?;
     let baseline = if op.kind == Kind::Create {
         crate::native_create::baseline(daemon, &op.provider, &op.directory)
     } else {
@@ -360,14 +361,18 @@ async fn operate(daemon: &Arc<Daemon>, op: Operation) -> Result<Resp, Error> {
         op.op_id,
         if locked { "locked" } else { "unlocked" }
     );
-    let result = if locked {
-        daemon
-            .locked_use
-            .scheduled(daemon.clone(), reservation, op.job.clone())
-            .await
-    } else {
-        crate::scheduler::unlocked(daemon, &op.job).await
-    };
+    let result = turn
+        .run(async {
+            if locked {
+                daemon
+                    .locked_use
+                    .scheduled(daemon.clone(), reservation, op.job.clone())
+                    .await
+            } else {
+                crate::scheduler::unlocked(daemon, &op.job).await
+            }
+        })
+        .await;
     let outcome = classify(daemon, &op, &result);
     let settled = dispatch.update(daemon.store(), |r| {
         r.get_mut(&op.grant)
@@ -400,6 +405,7 @@ async fn operate(daemon: &Arc<Daemon>, op: Operation) -> Result<Resp, Error> {
             Outcome::Unknown(_) => "unknown",
         }
     );
+    drop(turn);
     match outcome {
         Outcome::Applied(id) => Ok(op_result(Status::Applied, "", id)),
         Outcome::NotStarted(message) => Ok(op_result(
@@ -425,19 +431,6 @@ async fn operate(daemon: &Arc<Daemon>, op: Operation) -> Result<Resp, Error> {
             }
         }
     }
-}
-
-/// What an earlier request with this op_id recorded, when it was this same
-/// request; a different request under the same op_id is a conflict.
-fn recorded(daemon: &Daemon, op: &Operation) -> Result<Option<OpState>, Error> {
-    daemon.dispatch.read(|r| {
-        let g = r.get(&op.grant).ok_or_else(|| refused(Refusal::NotFound))?;
-        match g.lookup(&op.request()) {
-            Ok(recorded) => Ok(Some(recorded.state.clone())),
-            Err(Refusal::NotFound) => Ok(None),
-            Err(refusal) => Err(refused(refusal)),
-        }
-    })
 }
 
 /// A repeat's answer: its record, or read-only evidence for one that is

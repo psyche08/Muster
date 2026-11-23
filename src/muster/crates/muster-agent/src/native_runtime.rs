@@ -9,16 +9,35 @@ pub enum Destination {
     Unavailable,
 }
 
-/// Foreground belongs to the executor. An input pause in another app never
-/// grants permission to launch, raise a window or dispatch an activating URL.
-/// While the provider itself is in front it belongs to its user: an uncovered
-/// creation waits until another app owns the foreground (ADR 0220).
+/// The console owner observed before choosing a window. Foreground actions
+/// also require the quiet-window proof in ADR 0298.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NativeConsole {
     Covered,
     Provider,
     Background(u32),
     Waiting,
+}
+
+/// Poll one intentional foreground transition. Only the original process may
+/// remain in front while waiting, and the target has to prove its window next.
+pub fn handoff_arrived(
+    previous: u32,
+    target: u32,
+    foreground: crate::local_input::Owner,
+    input_changed: bool,
+) -> Result<bool, Error> {
+    use crate::local_input::Owner;
+    if input_changed {
+        return Err(Error::Conflict(
+            "User input during foreground handoff".into(),
+        ));
+    }
+    match foreground {
+        Owner::Process(pid) if pid == target => Ok(true),
+        Owner::Process(pid) if pid == previous => Ok(false),
+        _ => Err(Error::Conflict("Foreground changed during handoff".into())),
+    }
 }
 
 impl NativeConsole {
@@ -33,10 +52,9 @@ impl NativeConsole {
         Ok(())
     }
 
-    /// Whether native creation may act on the provider now. Only a covered
-    /// console or another application's foreground qualifies (ADR 0220).
+    /// A known foreground owner permits the adapter to check window admission.
     pub fn may_create(self) -> bool {
-        matches!(self, Self::Covered | Self::Background(_))
+        self != Self::Waiting
     }
 
     /// Whether a creation admitted in this console may go on in `now`. A
@@ -51,36 +69,25 @@ impl NativeConsole {
         }
     }
 
-    /// Called after looking for an eligible form. A provider permit protects UI
-    /// actions, not a wait for its owner to switch applications.
-    pub fn check_wait(self, provider_held: bool, provider: &str) -> Result<(), Error> {
-        if !provider_held {
-            return Ok(());
+    /// With no usable background route or known focus, fail before submission.
+    pub fn check_wait(self, provider: &str) -> Result<(), Error> {
+        match self {
+            Self::Covered | Self::Provider => Ok(()),
+            Self::Background(_) => Err(Error::Conflict(format!(
+                "{provider} has no safe background route; nothing was submitted"
+            ))),
+            Self::Waiting => Err(Error::Conflict(format!(
+                "Cannot identify the foreground window for {provider}; nothing was submitted"
+            ))),
         }
-        let why = match self {
-            Self::Covered => return Ok(()),
-            Self::Provider => format!(
-                "{provider} is the active app; the session starts after you switch to another app or lock the Mac"
-            ),
-            Self::Background(_) => {
-                format!("{provider} has no background route to a new session yet")
-            }
-            Self::Waiting => format!("No app owns the foreground, so {provider} was not touched"),
-        };
-        Err(Error::Conflict(format!("{why}; nothing was submitted")))
     }
 
     /// Creation can use a non-activating route inside a Locked Use lease.
     /// This chooses navigation only. The caller retains the lease and its
     /// system-wide input guard throughout the operation.
-    pub fn for_creation(
-        covered: bool,
-        provider: &str,
-        pid: Option<u32>,
-        focus: crate::local_input::Owner,
-    ) -> Self {
+    pub fn for_creation(covered: bool, pid: Option<u32>, focus: crate::local_input::Owner) -> Self {
         let actual = Self::observe(false, pid, focus);
-        if covered && (provider != "codex" || pid.is_none() || actual == Self::Provider) {
+        if covered && pid.is_none() {
             Self::Covered
         } else {
             actual
@@ -395,6 +402,19 @@ pub fn codex_sidebar_project(bytes: &[u8], cwd: &Path) -> Option<String> {
     Some(label.to_owned())
 }
 
+/// The picker can only choose a displayed name. Prove its identity before
+/// navigating, including when a form already shows that name.
+pub fn require_codex_project(state: &[u8], cwd: &Path) -> Result<String, Error> {
+    if codex_lists_directory(state, cwd) == Some(false) {
+        return Err(Error::Invalid(
+            "Directory is not a project in the ChatGPT app".into(),
+        ));
+    }
+    codex_sidebar_project(state, cwd).ok_or_else(|| {
+        Error::Conflict("Codex project is unreadable, ambiguous or has multiple roots".into())
+    })
+}
+
 /// Whether any of the app's local projects has `cwd` among its roots. A
 /// directory none lists cannot be reached without adding a project, which
 /// Muster never does (ADR 0220). Unreadable state proves nothing either way.
@@ -481,32 +501,64 @@ fn project_in_directory(
 mod tests {
     use super::*;
     #[test]
+    fn a_foreground_handoff_stops_on_input_or_an_unexpected_owner() {
+        use crate::local_input::Owner;
+        assert!(!handoff_arrived(1, 2, Owner::Process(1), false).unwrap());
+        assert!(handoff_arrived(1, 2, Owner::Process(2), false).unwrap());
+        for front in [
+            Owner::Process(1),
+            Owner::Process(2),
+            Owner::Process(3),
+            Owner::Unknown,
+        ] {
+            assert!(handoff_arrived(1, 2, front, true).is_err());
+        }
+        assert!(handoff_arrived(1, 2, Owner::Process(3), false).is_err());
+    }
+
+    #[test]
+    fn project_admission_distinguishes_an_unlisted_root_from_an_ambiguous_label() {
+        let state = br#"{"local-projects":{"1":{"name":"Work","rootPaths":["/first"]},"2":{"name":"Work","rootPaths":["/second"]},"3":{"name":"Other","rootPaths":["/other"]}}}"#;
+        assert_eq!(
+            require_codex_project(state, Path::new("/other")).unwrap(),
+            "Other"
+        );
+        assert!(matches!(
+            require_codex_project(state, Path::new("/first")),
+            Err(Error::Conflict(_))
+        ));
+        assert!(matches!(
+            require_codex_project(state, Path::new("/absent")),
+            Err(Error::Invalid(_))
+        ));
+    }
+    #[test]
     fn covered_codex_keeps_lease_input_scope_and_the_background_owner() {
         use crate::local_input::Owner;
         use NativeConsole::*;
-        let mode = NativeConsole::for_creation(true, "codex", Some(9), Owner::Process(7));
+        let mode = NativeConsole::for_creation(true, Some(9), Owner::Process(7));
         assert_eq!(mode, Background(7));
         assert!(!mode.target_scoped_input(true));
         assert!(mode.creation_focus_holds(true, Background(7)));
         for changed in [Background(8), Provider, Waiting] {
             assert!(!mode.creation_focus_holds(true, changed));
         }
-        assert!(mode.check_wait(true, "codex").is_err());
+        assert!(mode.check_wait("codex").is_err());
         assert_eq!(
-            NativeConsole::for_creation(true, "codex", Some(9), Owner::Unknown),
+            NativeConsole::for_creation(true, Some(9), Owner::Unknown),
             Waiting
         );
         assert_eq!(
-            NativeConsole::for_creation(true, "codex", Some(9), Owner::Process(9)),
+            NativeConsole::for_creation(true, Some(9), Owner::Process(9)),
+            Provider
+        );
+        assert_eq!(
+            NativeConsole::for_creation(true, None, Owner::Process(7)),
             Covered
         );
         assert_eq!(
-            NativeConsole::for_creation(true, "codex", None, Owner::Process(7)),
-            Covered
-        );
-        assert_eq!(
-            NativeConsole::for_creation(true, "claude", Some(9), Owner::Process(7)),
-            Covered
+            NativeConsole::for_creation(true, Some(9), Owner::Process(7)),
+            Background(7)
         );
         assert!(mode.target_scoped_input(false));
         assert!(mode.creation_focus_holds(false, Background(8)));
@@ -670,31 +722,14 @@ mod tests {
     }
 
     #[test]
-    fn only_pre_admission_can_wait_for_the_provider_to_leave_the_foreground() {
+    fn a_provider_in_front_can_prepare_after_the_window_quiet_check() {
         use NativeConsole::*;
-        for mode in [Waiting, Background(5), Provider] {
-            assert!(mode.check_wait(false, "test").is_ok());
-            assert!(matches!(
-                mode.check_wait(true, "test"),
-                Err(Error::Conflict(_))
-            ));
+        for mode in [Provider, Covered, Background(3)] {
+            assert!(mode.may_create());
         }
-        assert!(Covered.check_wait(true, "test").is_ok());
-        let Err(Error::Conflict(why)) = Provider.check_wait(true, "Codex") else {
-            panic!("the active provider must refuse");
-        };
-        assert!(
-            why.starts_with("Codex is the active app") && why.ends_with("nothing was submitted")
-        );
-    }
-
-    #[test]
-    fn the_active_provider_is_never_driven_for_creation() {
-        use NativeConsole::*;
-        assert!(Background(3).may_create());
-        assert!(Covered.may_create());
-        assert!(!Provider.may_create());
         assert!(!Waiting.may_create());
+        assert!(Provider.check_wait("codex").is_ok());
+        assert!(Background(3).check_wait("codex").is_err());
     }
 
     #[test]

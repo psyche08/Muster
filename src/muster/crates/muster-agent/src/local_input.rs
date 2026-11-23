@@ -48,6 +48,46 @@ pub const SAMPLE_EVERY: Duration = Duration::from_millis(50);
 /// How long after its last query a target stays watched.
 pub const WATCH: Duration = Duration::from_secs(20);
 
+/// Samples for one identified foreground window. A missing pointer hit is
+/// ambiguous. A key always reaches the focused window.
+#[derive(Clone, Copy)]
+pub struct WindowSample {
+    pub at: Instant,
+    pub keys: u64,
+    pub pointer: u64,
+    pub pointer_elsewhere: bool,
+}
+
+pub const FOREGROUND_QUIET: Duration = Duration::from_secs(3);
+
+pub struct WindowQuiet {
+    previous: WindowSample,
+    last_input: Instant,
+}
+
+impl WindowQuiet {
+    pub fn new(first: WindowSample, hid_idle: Duration) -> Self {
+        Self {
+            previous: first,
+            last_input: first.at - hid_idle.min(FOREGROUND_QUIET),
+        }
+    }
+
+    pub fn observe(&mut self, now: WindowSample) -> bool {
+        let prev = self.previous;
+        if now.keys != prev.keys
+            || (now.pointer != prev.pointer
+                && (!prev.pointer_elsewhere
+                    || !now.pointer_elsewhere
+                    || now.at.saturating_duration_since(prev.at) > MAX_GAP))
+        {
+            self.last_input = now.at;
+        }
+        self.previous = now;
+        now.at.saturating_duration_since(self.last_input) >= FOREGROUND_QUIET
+    }
+}
+
 fn reaches(owner: Owner, targets: &[u32]) -> bool {
     match owner {
         Owner::Process(pid) => targets.contains(&pid),
@@ -185,6 +225,31 @@ mod tests {
             focus,
             under_pointer: under,
         }
+    }
+
+    #[test]
+    fn a_key_at_2_9_seconds_restarts_the_foreground_window_clock() {
+        let mut sample = WindowSample {
+            at: Instant::now(),
+            keys: 0,
+            pointer: 0,
+            pointer_elsewhere: true,
+        };
+        let mut quiet = WindowQuiet::new(sample, Duration::ZERO);
+        sample.at += Duration::from_millis(2900);
+        sample.keys += 1;
+        assert!(!quiet.observe(sample));
+        for _ in 0..29 {
+            sample.at += Duration::from_millis(100);
+            sample.pointer += 1; // Another window, potentially in this same process.
+            assert!(!quiet.observe(sample));
+        }
+        sample.at += Duration::from_millis(100);
+        assert!(quiet.observe(sample));
+        sample.pointer_elsewhere = false;
+        sample.pointer += 1;
+        assert!(!quiet.observe(sample));
+        assert!(WindowQuiet::new(sample, FOREGROUND_QUIET).observe(sample));
     }
 
     #[test]

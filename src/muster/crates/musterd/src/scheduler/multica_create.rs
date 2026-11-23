@@ -141,6 +141,11 @@ pub(super) async fn start(
     let granted = || scheduler.read(|r| Ok(r.get(&o.task_id).is_some()));
     // Wait outside the provider/console locks and the once-only delivery
     // ledger. Each live Multica run owns its own cancellable wait.
+    let turn = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Err(Error::Conflict("Multica creation cancelled while queued".into())),
+        turn = daemon.desktop_tasks.enter() => turn,
+    };
     let project = if enrolled && !granted()? && !console_locked(daemon, cancel).await? {
         super::trusted_multica::verified_destination(daemon, &o, true).await?
     } else {
@@ -154,55 +159,6 @@ pub(super) async fn start(
                 route.directory.as_path()
             }),
     )?;
-    #[cfg(target_os = "macos")]
-    if !granted()? && !console_locked(daemon, cancel).await? {
-        let directory = project
-            .as_ref()
-            .map(|route| route.directory.as_path())
-            .unwrap_or_else(|| std::path::Path::new(&workspace));
-        let cwd = std::fs::canonicalize(directory)
-            .map_err(|_| Error::Invalid("Multica workspace folder is unavailable".into()))?;
-        let mut queued = false;
-        loop {
-            if cancel.is_cancelled() {
-                return Err(Error::Conflict(
-                    "Multica creation cancelled while queued".into(),
-                ));
-            }
-            preflight(daemon, &o.provider)?;
-            if granted()? || console_locked(daemon, cancel).await? {
-                break;
-            }
-            if project
-                .as_ref()
-                .is_some_and(|route| !route.still_enrolled())
-            {
-                return Err(Error::Conflict(
-                    "Multica project enrollment changed while queued".into(),
-                ));
-            }
-            let path = cwd.clone();
-            let provider = o.provider.clone();
-            if tokio::task::spawn_blocking(move || {
-                muster_platform::macos::native_create::multica_directory_admissible(
-                    &provider, &path,
-                )
-            })
-            .await
-            .map_err(|e| Error::Unavailable(e.to_string()))??
-            {
-                break;
-            }
-            if !queued {
-                log::info!("scheduler: Multica creation queued for native workspace");
-                queued = true;
-            }
-            tokio::select! {
-                _ = cancel.cancelled() => return Err(Error::Conflict("Multica creation cancelled while queued".into())),
-                _ = tokio::time::sleep(Duration::from_millis(500)) => {}
-            }
-        }
-    }
     if !granted()? && !console_locked(daemon, cancel).await? {
         let (directory, prompt) = if let Some(route) = &project {
             log::info!(
@@ -233,7 +189,7 @@ pub(super) async fn start(
                 !cancel.is_cancelled()
                     && project.as_ref().is_none_or(|route| route.still_enrolled())
             }),
-            crate::native_create::create_unlocked(daemon, request, true),
+            turn.run(crate::native_create::create(daemon, request)),
         )
         .await;
     }
@@ -272,14 +228,16 @@ pub(super) async fn start(
                     .map_err(refused)
             })?;
             log::info!("scheduler: host verified Multica dispatch and issued grant for {task_id}");
-            return run_once(
-                daemon,
-                o,
-                cancel,
-                "Multica dispatch cancelled before execution",
-            )
-            .await;
+            return turn
+                .run(run_once(
+                    daemon,
+                    o,
+                    cancel,
+                    "Multica dispatch cancelled before execution",
+                ))
+                .await;
         }
+        drop(turn);
         let _pending = {
             let mut slot = scheduler.pending_multica.lock().unwrap();
             if slot.is_some() {
@@ -312,6 +270,15 @@ pub(super) async fn start(
                 _ = tokio::time::sleep(Duration::from_millis(200)) => {}
             }
         }
+    } else {
+        return turn
+            .run(run_once(
+                daemon,
+                o,
+                cancel,
+                "Multica request cancelled before submission",
+            ))
+            .await;
     }
     run_once(
         daemon,

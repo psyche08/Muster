@@ -353,7 +353,9 @@ impl Snapshot {
             }
         }
         if owner != self.front && front() != Some(self.front) {
+            let outgoing = input::quiet_foreground(owner.pid).await?;
             guard(page, owner)?;
+            outgoing.check()?;
             if process(self.front.pid) != Some(self.front)
                 || !events::activate(self.front.pid as i32)
             {

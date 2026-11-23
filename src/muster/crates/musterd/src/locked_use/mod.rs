@@ -30,6 +30,7 @@ use actor::*;
 type Reply = oneshot::Sender<Result<Resp, Error>>;
 #[derive(Clone)]
 struct Current {
+    desktop_turn: bool,
     receipt: Option<ReceiptWait>,
     tx: mpsc::Sender<Command>,
     scope: Option<(DeviceId, String)>,
@@ -164,6 +165,23 @@ impl Owner {
     }
 
     pub async fn prepare(
+        self: &Arc<Self>,
+        daemon: Arc<Daemon>,
+        peer: DeviceId,
+        operation: v1::LockedUseOperation,
+    ) -> Result<Resp, Error> {
+        if muster_proto::locked_use::request(&operation)
+            .is_some_and(|r| !matches!(r, Req::TerminalCreate(_)))
+        {
+            return daemon
+                .desktop_tasks
+                .run(self.prepare_at_head(daemon.clone(), peer, operation))
+                .await;
+        }
+        self.prepare_at_head(daemon, peer, operation).await
+    }
+
+    async fn prepare_at_head(
         self: &Arc<Self>,
         daemon: Arc<Daemon>,
         peer: DeviceId,
@@ -305,6 +323,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            desktop_turn: crate::desktop_tasks::current().is_some(),
             receipt: ReceiptWait::new(&daemon, peer, &request),
             tx,
             scope: provider.clone().map(|p| (peer, p)),
@@ -370,6 +389,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            desktop_turn: crate::desktop_tasks::current().is_some(),
             receipt: None,
             tx,
             scope: manual.then(|| (peer, String::new())),
@@ -435,6 +455,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            desktop_turn: crate::desktop_tasks::current().is_some(),
             receipt: None,
             tx,
             scope: None,
@@ -509,6 +530,7 @@ impl Owner {
         let runtime = owner_runtime()?;
         let (tx, rx) = mpsc::channel(16);
         *self.current.lock().unwrap() = Some(Current {
+            desktop_turn: crate::desktop_tasks::current().is_some(),
             receipt: None,
             tx,
             scope: None,
@@ -557,7 +579,9 @@ impl Owner {
         let owner = self.clone();
         let weak = Arc::downgrade(daemon);
         let challenge = c.clone();
+        let turn = crate::desktop_tasks::current();
         tokio::task::spawn_blocking(move || {
+            let _turn = turn;
             runtime.block_on(async move {
                 run(
                     owner.clone(),
@@ -735,6 +759,24 @@ impl Owner {
     /// Route before ordinary console-write admission, even during temporary
     /// unlock. Only the same authenticated requester and signed provider enter.
     /// Enqueue and the owner's empty-queue close share `current` as a barrier.
+    pub(crate) fn wait_for_desktop_turn(
+        &self,
+        daemon: &Daemon,
+        peer: DeviceId,
+        request: &Req,
+    ) -> bool {
+        let active = self.current.lock().unwrap().clone();
+        let Some(active) = active.filter(|a| a.desktop_turn) else {
+            return false;
+        };
+        daemon.desktop_tasks.has_waiters()
+            || !active.accepting.load(std::sync::atomic::Ordering::SeqCst)
+            || !active.scope.is_some_and(|(owner, provider)| {
+                owner == peer
+                    && crate::handler::native_provider(daemon, request).is_ok_and(|p| provider == p)
+            })
+    }
+
     pub async fn enqueue(
         &self,
         daemon: &Arc<Daemon>,

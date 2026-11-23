@@ -6,6 +6,21 @@ tokio::task_local! { static CHECK: Arc<dyn Fn() -> bool + Send + Sync>; }
 tokio::task_local! { static WORK: WorkQueue; }
 tokio::task_local! { static DELIVERY: Delivery; }
 
+tokio::task_local! { static STARTED: std::time::Instant; }
+
+pub fn execution_started() -> std::time::Instant {
+    STARTED
+        .try_with(|at| *at)
+        .unwrap_or_else(|_| std::time::Instant::now())
+}
+
+pub fn execution<F: Future>(
+    at: std::time::Instant,
+    task: F,
+) -> TaskLocalFuture<std::time::Instant, F> {
+    STARTED.scope(at, task)
+}
+
 /// Persists provider evidence for exactly the operation captured by the caller.
 /// It must be idempotent: a receipt can race the synchronous completion path.
 pub type Confirmation = Arc<dyn Fn() -> Result<(), crate::Error> + Send + Sync>;
@@ -150,6 +165,7 @@ where
     F: FnOnce() -> T + Send + 'static,
     T: Send + 'static,
 {
+    let started = STARTED.try_with(|at| *at).ok();
     let queue = WORK.try_with(Clone::clone).ok();
     let permit = queue.as_ref().map(WorkQueue::enter);
     let check = CHECK.try_with(Clone::clone).ok();
@@ -171,6 +187,10 @@ where
         };
         let run = || match navigation {
             Some(n) => crate::native_navigation::restore::NAVIGATION.sync_scope(n, run),
+            None => run(),
+        };
+        let run = || match started {
+            Some(at) => STARTED.sync_scope(at, run),
             None => run(),
         };
         match queue {
