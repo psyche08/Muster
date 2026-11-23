@@ -1,8 +1,8 @@
 //! A native write whose delivery is unconfirmed blocks every later write to
-//! the same session. Provider evidence can clear it: a newly appended
-//! user record with the same text, a newly persisted queue item, or a scoped working composer transition. Elapsed
-//! time, a new request, a lost AX surface or a locked screen never do, and
-//! reading the evidence needs neither: it is a read of provider files.
+//! the same session. A newly appended matching user record or provider queue
+//! item can settle it even after the screen locks. A working composer can
+//! also acknowledge its own submission during the original UI operation.
+//! Loss of the surface or expiry of the receipt deadline leaves it pending.
 //!
 //! A turn ending without the prompt is not proof of loss: a provider may
 //! persist its receipt much later. Only evidence or an explicit user release
