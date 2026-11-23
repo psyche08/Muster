@@ -14,6 +14,9 @@
 // platform includes
 #ifdef __APPLE__
   #include <mach-o/dyld.h>
+  #include <crt_externs.h>
+  #include <spawn.h>
+  #include <unistd.h>
   #include "platform/macos/misc.h"
 #endif
 #ifdef __linux__
@@ -190,7 +193,9 @@ void mainThreadLoop(const std::shared_ptr<safe::event_t<bool>> &shutdown_event) 
  * @param argv The arguments.
  * @return Process or platform callback exit code.
  */
-int main(int argc, char *argv[]) {
+static std::atomic<bool> park_requested {false};
+
+static int run_host(int argc, char *argv[]) {
 #ifdef __linux__
   const bool privileged_execution = getauxval(AT_SECURE) != 0 || platf::has_elevated_privileges(true);
   if (privileged_execution && !platf::sanitize_process_environment()) {
@@ -304,7 +309,7 @@ int main(int argc, char *argv[]) {
   muster_session::mouse_enabled.store(grant->mouse);
   auto owner_shutdown = mail::man->event<bool>(mail::shutdown);
   std::thread([owner_shutdown] {
-    std::cin.get();
+    park_requested.store(std::cin.get() == 'P');
     muster_session::mouse_enabled.store(false);
     owner_shutdown->raise(true);
   }).detach();
@@ -576,4 +581,43 @@ int main(int argc, char *argv[]) {
 #endif
 
   return lifetime::desired_exit_code;
+}
+
+int main(int argc, char *argv[]) {
+#ifdef __APPLE__
+  if (argc == 3 && (std::string_view(argv[1]) == "--muster-managed" || std::string_view(argv[1]) == "--muster-idle")) {
+    // Reserve stdout for the supervisor. Native diagnostics must never fill its pipe.
+    const int status = dup(STDOUT_FILENO);
+    if (status < 0 || dup2(STDERR_FILENO, STDOUT_FILENO) < 0) {
+      return 1;
+    }
+    if (std::string_view(argv[1]) == "--muster-idle") {
+      char resume;
+      if (write(status, "I", 1) != 1 || read(STDIN_FILENO, &resume, 1) != 1 || resume != 'R') {
+        return 0;
+      }
+    }
+    char *args[] = {argv[0], argv[2], nullptr};
+    int result = run_host(2, args);
+    if (result != 0 || !park_requested.load()) {
+      return result;
+    }
+
+    // Begin idle in a fresh image. Only the owner pipes and diagnostic stream survive.
+    posix_spawnattr_t attr;
+    posix_spawn_file_actions_t actions;
+    char idle[] = "--muster-idle";
+    char *next[] = {argv[0], idle, argv[2], nullptr};
+    if (posix_spawnattr_init(&attr) || posix_spawn_file_actions_init(&actions) ||
+        posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETEXEC | POSIX_SPAWN_CLOEXEC_DEFAULT) ||
+        posix_spawn_file_actions_addinherit_np(&actions, STDIN_FILENO) ||
+        posix_spawn_file_actions_adddup2(&actions, status, STDOUT_FILENO) ||
+        posix_spawn_file_actions_addinherit_np(&actions, STDERR_FILENO)) {
+      return 1;
+    }
+    posix_spawn(nullptr, argv[0], &actions, &attr, next, *_NSGetEnviron());
+    return 1;  // SETEXEC only returns here on failure.
+  }
+#endif
+  return run_host(argc, argv);
 }

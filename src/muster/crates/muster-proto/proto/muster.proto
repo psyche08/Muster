@@ -272,12 +272,18 @@ message DesktopSessionRequest {
     Ack share_view = 2;
     Ack share_mouse = 3;
     uint64 view_in_window = 4; // local owner window, never forwarded
+    uint64 confirm_takeover = 6; // pending local viewer decision, never forwarded
     DesktopAccess remember_access = 5; // local owner only; NONE revokes
   }
 }
 message DesktopSessionProgress {
-  enum Phase { OFFERED = 0; STARTING = 1; VISIBLE = 2; }
+  enum Phase { OFFERED = 0; STARTING = 1; VISIBLE = 2; OCCUPIED = 3; }
   Phase phase = 1;
+  DesktopTakeoverPrompt takeover = 2;
+}
+message DesktopTakeoverPrompt {
+  uint64 confirmation = 1;
+  string controller = 2;
 }
 
 message NetworkRetryVnetRequest {}

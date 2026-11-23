@@ -1649,6 +1649,15 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     set {action = .viewInWindow(newValue)}
   }
 
+  /// pending local viewer decision, never forwarded
+  public var confirmTakeover: UInt64 {
+    get {
+      if case .confirmTakeover(let v)? = action {return v}
+      return 0
+    }
+    set {action = .confirmTakeover(newValue)}
+  }
+
   /// local owner only; NONE revokes
   public var rememberAccess: Muster_V1_DesktopAccess {
     get {
@@ -1665,6 +1674,8 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case shareMouse(Muster_V1_Ack)
     /// local owner window, never forwarded
     case viewInWindow(UInt64)
+    /// pending local viewer decision, never forwarded
+    case confirmTakeover(UInt64)
     /// local owner only; NONE revokes
     case rememberAccess(Muster_V1_DesktopAccess)
 
@@ -1680,6 +1691,15 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
 
   public var phase: Muster_V1_DesktopSessionProgress.Phase = .offered
 
+  public var takeover: Muster_V1_DesktopTakeoverPrompt {
+    get {_takeover ?? Muster_V1_DesktopTakeoverPrompt()}
+    set {_takeover = newValue}
+  }
+  /// Returns true if `takeover` has been explicitly set.
+  public var hasTakeover: Bool {self._takeover != nil}
+  /// Clears the value of `takeover`. Subsequent reads from it will return its default value.
+  public mutating func clearTakeover() {self._takeover = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum Phase: SwiftProtobuf.Enum, Swift.CaseIterable {
@@ -1687,6 +1707,7 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
     case offered // = 0
     case starting // = 1
     case visible // = 2
+    case occupied // = 3
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -1698,6 +1719,7 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
       case 0: self = .offered
       case 1: self = .starting
       case 2: self = .visible
+      case 3: self = .occupied
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -1707,6 +1729,7 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
       case .offered: return 0
       case .starting: return 1
       case .visible: return 2
+      case .occupied: return 3
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -1716,9 +1739,26 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
       .offered,
       .starting,
       .visible,
+      .occupied,
     ]
 
   }
+
+  public init() {}
+
+  fileprivate var _takeover: Muster_V1_DesktopTakeoverPrompt? = nil
+}
+
+public nonisolated struct Muster_V1_DesktopTakeoverPrompt: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var confirmation: UInt64 = 0
+
+  public var controller: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
@@ -8826,7 +8866,7 @@ nonisolated extension Muster_V1_NetworkRefreshRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8877,6 +8917,14 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .rememberAccess(v)
         }
       }()
+      case 6: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.action != nil {try decoder.handleConflictingOneOf()}
+          self.action = .confirmTakeover(v)
+        }
+      }()
       default: break
       }
     }
@@ -8907,6 +8955,10 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
       guard case .rememberAccess(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularEnumField(value: v, fieldNumber: 5)
     }()
+    case .confirmTakeover?: try {
+      guard case .confirmTakeover(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -8922,7 +8974,7 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{1}takeover\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8931,27 +8983,71 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._takeover) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.phase != .offered {
       try visitor.visitSingularEnumField(value: self.phase, fieldNumber: 1)
     }
+    try { if let v = self._takeover {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_DesktopSessionProgress, rhs: Muster_V1_DesktopSessionProgress) -> Bool {
     if lhs.phase != rhs.phase {return false}
+    if lhs._takeover != rhs._takeover {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
 nonisolated extension Muster_V1_DesktopSessionProgress.Phase: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0OFFERED\0\u{1}STARTING\0\u{1}VISIBLE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0OFFERED\0\u{1}STARTING\0\u{1}VISIBLE\0\u{1}OCCUPIED\0")
+}
+
+nonisolated extension Muster_V1_DesktopTakeoverPrompt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DesktopTakeoverPrompt"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}confirmation\0\u{1}controller\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.confirmation) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.controller) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.confirmation != 0 {
+      try visitor.visitSingularUInt64Field(value: self.confirmation, fieldNumber: 1)
+    }
+    if !self.controller.isEmpty {
+      try visitor.visitSingularStringField(value: self.controller, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_DesktopTakeoverPrompt, rhs: Muster_V1_DesktopTakeoverPrompt) -> Bool {
+    if lhs.confirmation != rhs.confirmation {return false}
+    if lhs.controller != rhs.controller {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
 }
 
 nonisolated extension Muster_V1_NetworkRetryVnetRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

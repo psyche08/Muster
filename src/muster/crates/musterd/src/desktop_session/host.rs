@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
     time::{sleep, timeout},
 };
@@ -28,17 +28,66 @@ pub(super) fn console_ready(daemon: &Daemon) -> bool {
             .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked)
 }
 
+pub(crate) type IdleHost = super::idle::IdleSlot<HostProcess>;
+
+pub(crate) struct HostProcess {
+    directory: tempfile::TempDir,
+    engine: Arc<Engine>,
+    owner: tokio::process::ChildStdin,
+    status: tokio::process::ChildStdout,
+}
+
+impl HostProcess {
+    async fn reset(mut self) -> Option<Self> {
+        self.owner.write_all(b"P").await.ok()?;
+        if timeout(Duration::from_secs(10), self.status.read_u8())
+            .await
+            .ok()?
+            .ok()?
+            != b'I'
+        {
+            return None;
+        }
+        // The dormant image has no credentials. Remove the old TLS files too.
+        for name in ["host.key", "host.pem"] {
+            std::fs::remove_file(self.directory.path().join(name)).ok()?;
+        }
+        Some(self)
+    }
+}
+
+// Dropping the broker future also runs this path on a transport disconnect.
+struct ActiveHost<'a> {
+    host: &'a Host,
+    process: Option<HostProcess>,
+}
+
+impl Drop for ActiveHost<'_> {
+    fn drop(&mut self) {
+        if let Some(process) = self.process.take()
+            && let Some(daemon) = self.host.daemon.upgrade()
+            && console_ready(&daemon)
+            && self.host.lease.current(&daemon)
+        {
+            daemon.desktop_idle.park(process.reset());
+        }
+    }
+}
+
 struct Host {
     daemon: Weak<Daemon>,
     program: std::path::PathBuf,
     lease: super::permissions::Lease,
-    _slot: tokio::sync::OwnedSemaphorePermit,
+    peer: DeviceId,
+    stop: tokio_util::sync::CancellationToken,
 }
 impl Handler for Host {
     fn console_ready(&self) -> bool {
-        self.daemon
-            .upgrade()
-            .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
+        !self.stop.is_cancelled()
+            && self
+                .daemon
+                .upgrade()
+                .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
     }
     fn serve<'a>(
         &'a self,
@@ -60,23 +109,64 @@ impl Host {
         if hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
+        let daemon = self
+            .daemon
+            .upgrade()
+            .ok_or_else(|| unavailable("daemon stopped"))?;
+        let reserve = |expected: Option<&super::occupancy::Occupant>| {
+            daemon
+                .desktop_occupancy
+                .reserve(self.peer, &self.stop, expected)
+        };
+        let _reservation = match reserve(None) {
+            Ok(lease) => lease,
+            Err(Some(current)) => {
+                let mut busy = Vec::from(*BUSY);
+                busy.extend_from_slice(&current.peer.0);
+                session.send_control(&busy).await?;
+                let choice = timeout(Duration::from_secs(90), session.recv_control())
+                    .await
+                    .map_err(|_| unavailable("desktop confirmation expired"))??;
+                if choice.as_deref() != Some(REPLACE) || !self.console_ready() {
+                    return Err(unavailable("desktop takeover cancelled"));
+                }
+                match reserve(Some(&current)) {
+                    Ok(lease) => lease,
+                    Err(_) => {
+                        session.send_control(CHANGED).await?;
+                        let _ = timeout(Duration::from_secs(1), session.recv_control()).await;
+                        return Err(unavailable("desktop viewer changed"));
+                    }
+                }
+            }
+            Err(None) => return Err(unavailable("desktop viewer changed")),
+        };
+        // The previous broker must drop its sockets before the next engine binds.
+        let _slot = timeout(Duration::from_secs(10), daemon.desktop_slot.acquire())
+            .await
+            .map_err(|_| unavailable("previous desktop viewer is still closing"))?
+            .map_err(|_| unavailable("desktop service stopped"))?;
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };
-        let directory = tempfile::Builder::new()
-            .prefix("muster-desktop-")
-            .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir()
-            .map_err(|_| unavailable("cannot create a private engine directory"))?;
-        let (engine, _owner) = match start(&self.program, directory.path(), ports, &launch).await {
+        let parked = daemon.desktop_idle.take().await;
+        if !self.console_ready() {
+            return Err(unavailable("desktop permission ended"));
+        }
+        let process = match start(&self.program, parked, ports, &launch).await {
             Ok(started) => started,
             Err(error) => {
                 session.send_control(CAPTURE_UNAVAILABLE).await?;
                 let _ = timeout(Duration::from_secs(1), session.recv_control()).await;
                 return Err(error);
             }
+        };
+        let engine = process.engine.clone();
+        let _active = ActiveHost {
+            host: self,
+            process: Some(process),
         };
         session.send_control(&launch.encode()).await?;
         tokio::select! {
@@ -90,14 +180,14 @@ pub(crate) fn admit(
     daemon: &Arc<Daemon>,
     peer: DeviceId,
 ) -> Option<muster_net::remote_desktop::Sharing> {
-    let slot = daemon.desktop_slot.clone().try_acquire_owned().ok()?;
     let program = program(CAPTURE_HOST).ok()?;
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
         program,
         lease,
-        _slot: slot,
+        peer,
+        stop: Default::default(),
     });
     let access = if mode == muster_proto::v1::DesktopAccess::Mouse {
         Access::ViewAndMouse
@@ -109,10 +199,23 @@ pub(crate) fn admit(
 
 async fn start(
     executable: &Path,
-    dir: &Path,
+    parked: Option<HostProcess>,
     ports: EnginePorts,
     launch: &Launch,
-) -> Result<(Arc<Engine>, tokio::process::ChildStdin), Error> {
+) -> Result<HostProcess, Error> {
+    let (directory, warm) = if let Some(host) = parked.filter(|host| host.engine.pid().is_some()) {
+        (host.directory, Some((host.engine, host.owner, host.status)))
+    } else {
+        (
+            tempfile::Builder::new()
+                .prefix("muster-desktop-")
+                .permissions(std::fs::Permissions::from_mode(0o700))
+                .tempdir()
+                .map_err(|_| unavailable("cannot create a private engine directory"))?,
+            None,
+        )
+    };
+    let dir = directory.path();
     let tls_error = || unavailable("cannot set up private desktop engine TLS");
     let server =
         rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).map_err(|_| tls_error())?;
@@ -146,9 +249,9 @@ async fn start(
         .build()
         .map_err(|_| tls_error())?;
     let base = ports.base();
-    let directory = dir.display();
+    let config_directory = dir.display();
     let config = format!(
-        "port = {base}\npkey = {directory}/host.key\ncert = {directory}/host.pem\nfile_apps = {directory}/apps.json\n"
+        "port = {base}\npkey = {config_directory}/host.key\ncert = {config_directory}/host.pem\nfile_apps = {config_directory}/apps.json\n"
     );
     for (name, bytes) in [
         ("sunshine.conf", config.as_bytes()),
@@ -159,13 +262,26 @@ async fn start(
         std::fs::write(dir.join(name), bytes)
             .map_err(|_| unavailable("cannot prepare private host configuration"))?;
     }
-    let mut cmd = Command::new(executable);
-    cmd.current_dir(dir)
-        .arg(dir.join("sunshine.conf"))
-        .env("MUSTER_DESKTOP_SESSION_DIR", dir)
-        .stdout(Stdio::null());
-    let (child, mut owner, _) = Engine::launch(&mut cmd)?;
-    let engine = Arc::new(child);
+    let (engine, mut owner, status) = if let Some((engine, mut owner, status)) = warm {
+        owner
+            .write_all(b"R")
+            .await
+            .map_err(|_| unavailable("cannot resume idle host"))?;
+        (engine, owner, status)
+    } else {
+        let mut cmd = Command::new(executable);
+        cmd.current_dir(dir)
+            .arg("--muster-managed")
+            .arg(dir.join("sunshine.conf"))
+            .env("MUSTER_DESKTOP_SESSION_DIR", dir)
+            .stdout(Stdio::piped());
+        let (child, owner, status) = Engine::launch(&mut cmd)?;
+        (
+            Arc::new(child),
+            owner,
+            status.ok_or_else(|| unavailable("missing host status pipe"))?,
+        )
+    };
     let mut bootstrap = Vec::from(*b"MST1");
     bootstrap.push(launch.mouse as u8);
     bootstrap.extend(
@@ -238,7 +354,12 @@ async fn start(
             "host did not return an encrypted desktop session",
         ));
     }
-    Ok((engine, owner))
+    Ok(HostProcess {
+        directory,
+        engine,
+        owner,
+        status,
+    })
 }
 
 async fn bounded_xml(mut response: reqwest::Response) -> Result<String, Error> {
@@ -264,23 +385,13 @@ mod tests {
     #[ignore = "requires an interactive Mac and a locally selected Sunshine test binary"]
     async fn private_host_launch() {
         let executable = std::env::var_os("MUSTER_TEST_SUNSHINE").expect("test host executable");
-        let dir = tempfile::Builder::new()
-            .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir()
-            .unwrap();
         let launch = Launch {
             mouse: false,
             key: rand::random(),
         };
-        let result = start(
-            Path::new(&executable),
-            dir.path(),
-            EnginePorts::MUSTER,
-            &launch,
-        )
-        .await;
+        let result = start(Path::new(&executable), None, EnginePorts::MUSTER, &launch).await;
         match result {
-            Ok((_engine, _owner)) => eprintln!("Private host accepted encrypted view-only launch"),
+            Ok(_process) => eprintln!("Private host accepted encrypted view-only launch"),
             Err(error) => panic!("{error}"),
         }
     }

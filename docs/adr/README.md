@@ -409,3 +409,6 @@ superseding decisions get new numbers and bidirectional links.
 | [0291](0291-watch-recovery-and-terminal-setup.md) | Accepted | Preserve watch failure reasons and distinguish terminal setup from creation |
 | [0292](0292-working-composer-queue-receipt.md) | Accepted | Confirm queue acceptance when a working composer returns to Stop |
 | [0293](0293-multiline-prompt-display-and-paginated-receipts.md) | Accepted | Display Codex hard breaks and bind paginated receipts to the thread rollout |
+| [0294](0294-desktop-host-idle-and-viewer-window.md) | Accepted | Retire idle desktop hosts and use an independent viewer window |
+| [0295](0295-desktop-takeover-confirmation.md) | Accepted | Confirm replacement of the current desktop viewer |
+| [0296](0296-embedded-remote-workspace.md) | Accepted | Embed remote desktop in the Windows Remote workspace |

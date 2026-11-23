@@ -55,9 +55,9 @@ notify.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 async-trait = "0.1"
+rand.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-rand.workspace = true
 rcgen = { workspace = true, features = ["pem"] }
 tempfile = "3"
 rustls-platform-verifier = "0.7.1"

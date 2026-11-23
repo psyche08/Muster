@@ -24,6 +24,7 @@ internal static class Program
             ["--screenshots", var directory] => Directory.CreateDirectory(directory).FullName,
             _ => throw new ArgumentException("Usage: WindowsAgentCatalog [--screenshots DIRECTORY]")
         };
+        DesktopViewerTests.Run();
         using (var ports = new OpenPortsDialog(["tcp/22", "udp/5353"]))
         {
             var field = Field<TextBox>(ports, "PortRules");

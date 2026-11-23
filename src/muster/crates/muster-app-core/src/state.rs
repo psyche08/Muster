@@ -10,9 +10,11 @@ use tokio_util::sync::CancellationToken;
 
 /// A running watch (device, agent, terminal) that ends when its token does.
 pub struct DesktopSession {
+    pub opened_from: Screen,
     pub device: String,
     pub id: u64,
     pub status: String,
+    pub takeover: Option<v1::DesktopTakeoverPrompt>,
     pub _watch: Watch,
 }
 
@@ -481,6 +483,7 @@ pub struct State {
     pub next_effect: u64,
     pub next_op: u64,
     pub device_watch: Option<Watch>,
+    pub remote_selected: String,
     pub desktop_session: Option<DesktopSession>,
     pub foreground: bool,
     pub send_recoveries: HashMap<String, Watch>,
@@ -617,6 +620,7 @@ impl State {
             next_effect: 1,
             next_op: 1,
             device_watch: None,
+            remote_selected: String::new(),
             desktop_session: None,
             foreground: true,
         }
@@ -811,6 +815,7 @@ impl State {
                 | Screen::Home
                 | Screen::Agents
                 | Screen::Terminals
+                | Screen::Remote
                 | Screen::DesktopChats
                 | Screen::Multica
         )
@@ -835,6 +840,7 @@ impl State {
                 Screen::Onboarding
                     | Screen::Agents
                     | Screen::Terminals
+                    | Screen::Remote
                     | Screen::DesktopChats
                     | Screen::Multica
             ) {
@@ -859,6 +865,7 @@ impl State {
                 matches!(
                     s,
                     Screen::Multica
+                        | Screen::Remote
                         | Screen::DesktopChats
                         | Screen::Agents
                         | Screen::Terminals

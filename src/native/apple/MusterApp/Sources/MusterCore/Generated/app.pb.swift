@@ -90,6 +90,7 @@ public nonisolated enum Muster_App_Screen: SwiftProtobuf.Enum, Swift.CaseIterabl
   case browser // = 13
   case desktopChats // = 14
   case multica // = 15
+  case remote // = 16
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -114,6 +115,7 @@ public nonisolated enum Muster_App_Screen: SwiftProtobuf.Enum, Swift.CaseIterabl
     case 13: self = .browser
     case 14: self = .desktopChats
     case 15: self = .multica
+    case 16: self = .remote
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -136,6 +138,7 @@ public nonisolated enum Muster_App_Screen: SwiftProtobuf.Enum, Swift.CaseIterabl
     case .browser: return 13
     case .desktopChats: return 14
     case .multica: return 15
+    case .remote: return 16
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -158,6 +161,7 @@ public nonisolated enum Muster_App_Screen: SwiftProtobuf.Enum, Swift.CaseIterabl
     .browser,
     .desktopChats,
     .multica,
+    .remote,
   ]
 
 }
@@ -380,6 +384,15 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
       return Muster_V1_DesktopSessionRequest()
     }
     set {_uniqueStorage()._it = .desktopSession(newValue)}
+  }
+
+  /// optional paired desktop to preselect
+  public var openRemote: Muster_App_SelectDevice {
+    get {
+      if case .openRemote(let v)? = _storage._it {return v}
+      return Muster_App_SelectDevice()
+    }
+    set {_uniqueStorage()._it = .openRemote(newValue)}
   }
 
   /// device of the local session being closed
@@ -801,6 +814,8 @@ public nonisolated struct Muster_App_Intent: @unchecked Sendable {
     case setDeviceLockedUse(Muster_App_SetDeviceLockedUse)
     case desktopSetupAction(Muster_App_DesktopSetupAction)
     case desktopSession(Muster_V1_DesktopSessionRequest)
+    /// optional paired desktop to preselect
+    case openRemote(Muster_App_SelectDevice)
     /// device of the local session being closed
     case endDesktopSession(String)
     case desktopUpdateAction(Muster_App_DesktopUpdateAction)
@@ -2341,6 +2356,53 @@ public nonisolated struct Muster_App_EffectResult: Sendable {
   public init() {}
 }
 
+public nonisolated struct Muster_App_RemoteDevice: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var deviceID: String = String()
+
+  public var name: String = String()
+
+  public var connected: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_App_RemoteWorkspaceView: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var devices: [Muster_App_RemoteDevice] = []
+
+  public var selectedDevice: String = String()
+
+  public var canConnect: Bool = false
+
+  public var sessionOpen: Bool = false
+
+  public var status: String = String()
+
+  public var takeover: Muster_V1_DesktopTakeoverPrompt {
+    get {_takeover ?? Muster_V1_DesktopTakeoverPrompt()}
+    set {_takeover = newValue}
+  }
+  /// Returns true if `takeover` has been explicitly set.
+  public var hasTakeover: Bool {self._takeover != nil}
+  /// Clears the value of `takeover`. Subsequent reads from it will return its default value.
+  public mutating func clearTakeover() {self._takeover = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _takeover: Muster_V1_DesktopTakeoverPrompt? = nil
+}
+
 public nonisolated struct Muster_App_MulticaSelect: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2657,6 +2719,15 @@ public nonisolated struct Muster_App_ViewModel: @unchecked Sendable {
     set {_uniqueStorage()._deviceLockedUse = newValue}
   }
 
+  public var remoteWorkspace: Muster_App_RemoteWorkspaceView {
+    get {_storage._remoteWorkspace ?? Muster_App_RemoteWorkspaceView()}
+    set {_uniqueStorage()._remoteWorkspace = newValue}
+  }
+  /// Returns true if `remoteWorkspace` has been explicitly set.
+  public var hasRemoteWorkspace: Bool {_storage._remoteWorkspace != nil}
+  /// Clears the value of `remoteWorkspace`. Subsequent reads from it will return its default value.
+  public mutating func clearRemoteWorkspace() {_uniqueStorage()._remoteWorkspace = nil}
+
   /// for selected_device on the DEVICE screen
   public var deviceActions: Muster_App_DeviceActions {
     get {_storage._deviceActions ?? Muster_App_DeviceActions()}
@@ -2769,6 +2840,15 @@ public nonisolated struct Muster_App_DeviceActions: Sendable {
 
   public var desktopSessionText: String = String()
 
+  public var desktopTakeover: Muster_V1_DesktopTakeoverPrompt {
+    get {_desktopTakeover ?? Muster_V1_DesktopTakeoverPrompt()}
+    set {_desktopTakeover = newValue}
+  }
+  /// Returns true if `desktopTakeover` has been explicitly set.
+  public var hasDesktopTakeover: Bool {self._desktopTakeover != nil}
+  /// Clears the value of `desktopTakeover`. Subsequent reads from it will return its default value.
+  public mutating func clearDesktopTakeover() {self._desktopTakeover = nil}
+
   /// present for a connected, supported Mac on mobile
   public var blackout: Muster_V1_DisplayBlackout {
     get {_blackout ?? Muster_V1_DisplayBlackout()}
@@ -2783,6 +2863,7 @@ public nonisolated struct Muster_App_DeviceActions: Sendable {
 
   public init() {}
 
+  fileprivate var _desktopTakeover: Muster_V1_DesktopTakeoverPrompt? = nil
   fileprivate var _blackout: Muster_V1_DisplayBlackout? = nil
 }
 
@@ -4101,12 +4182,12 @@ nonisolated extension Muster_App_Lifecycle: SwiftProtobuf._ProtoNameProviding {
 }
 
 nonisolated extension Muster_App_Screen: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ONBOARDING\0\u{1}HOME\0\u{1}INVITE\0\u{1}JOIN\0\u{1}DEVICE\0\u{1}AGENTS\0\u{1}CHAT\0\u{1}TERMINALS\0\u{1}TERMINAL\0\u{1}SETTINGS\0\u{1}FILES\0\u{1}FILE\0\u{1}GIT\0\u{1}BROWSER\0\u{1}DESKTOP_CHATS\0\u{1}MULTICA\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ONBOARDING\0\u{1}HOME\0\u{1}INVITE\0\u{1}JOIN\0\u{1}DEVICE\0\u{1}AGENTS\0\u{1}CHAT\0\u{1}TERMINALS\0\u{1}TERMINAL\0\u{1}SETTINGS\0\u{1}FILES\0\u{1}FILE\0\u{1}GIT\0\u{1}BROWSER\0\u{1}DESKTOP_CHATS\0\u{1}MULTICA\0\u{1}REMOTE\0")
 }
 
 nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Intent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}agent_load_work\0\u{3}multica_mutation_acknowledge\0\u{3}multica_mutation\0\u{3}set_blackout\0\u{3}set_require_locked_use_auth\0\u{3}rename_device\0\u{4}\u{9}side_chat_action\0\u{4}\u{2}desktop_session\0\u{3}end_desktop_session\0\u{3}set_network_access_mode\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}refresh\0\u{1}navigate\0\u{1}dismiss\0\u{4}\u{6}create_network\0\u{3}show_invite\0\u{3}join_network\0\u{3}decide_join\0\u{3}remove_device\0\u{3}set_scopes\0\u{3}set_policy\0\u{3}select_device\0\u{4}\u{2}set_relay\0\u{3}request_accessibility\0\u{3}set_cover\0\u{3}cancel_locked_use\0\u{3}desktop_setup_action\0\u{3}desktop_update_action\0\u{4}\u{5}chat_set_options\0\u{3}open_agents\0\u{3}open_agent\0\u{3}agent_send\0\u{3}agent_respond\0\u{3}agent_interrupt\0\u{4}\u{2}agent_load_earlier\0\u{3}open_desktop_chats\0\u{3}desktop_chat_open\0\u{3}chat_options_load\0\u{3}open_terminals\0\u{3}open_terminal\0\u{3}terminal_key\0\u{3}terminal_text\0\u{3}terminal_create\0\u{3}terminal_resize\0\u{3}open_ssh\0\u{3}close_terminal\0\u{3}terminal_paste\0\u{3}session_terminal_action\0\u{3}open_files\0\u{3}open_file\0\u{3}open_git\0\u{3}open_change\0\u{3}open_file_link\0\u{4}\u{6}set_push_token\0\u{4}\u{14}open_browser\0\u{3}browser_setup\0\u{3}browser_run\0\u{4}\u{2}composer_action\0\u{3}upload_diagnostics\0\u{3}set_device_locked_use\0\u{3}orca_create\0\u{3}composer_complete\0\u{1}multica\0\u{3}multica_browse\0\u{3}resolve_agent_send\0\u{3}agent_catalog_action\0\u{1}vision\0\u{3}agent_organize\0\u{4}\u{2}multica_select\0\u{3}multica_service\0\u{4}#code_action\0\u{3}request_screen_recording\0\u{3}request_terminal_authorization\0\u{3}session_view_applied\0\u{3}native_create\0\u{3}agent_load_work\0\u{3}multica_mutation_acknowledge\0\u{3}multica_mutation\0\u{3}set_blackout\0\u{3}set_require_locked_use_auth\0\u{3}rename_device\0\u{4}\u{9}side_chat_action\0\u{4}\u{2}desktop_session\0\u{3}end_desktop_session\0\u{3}set_network_access_mode\0\u{3}open_remote\0\u{b}agent_create\0\u{b}init\0\u{b}presence_granted\0\u{b}chat_draft\0\u{c}#\u{1}\u{c}\u{1}\u{1}\u{c}\u{12}\u{1}\u{c}S\u{1}\u{1}")
 
   fileprivate class _StorageClass {
     var _it: Muster_App_Intent.OneOf_It?
@@ -5086,6 +5167,19 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._it = .setNetworkAccessMode(v)
           }
         }()
+        case 156: try {
+          var v: Muster_App_SelectDevice?
+          var hadOneofValue = false
+          if let current = _storage._it {
+            hadOneofValue = true
+            if case .openRemote(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._it = .openRemote(v)
+          }
+        }()
         default: break
         }
       }
@@ -5394,6 +5488,10 @@ nonisolated extension Muster_App_Intent: SwiftProtobuf.Message, SwiftProtobuf._M
       case .setNetworkAccessMode?: try {
         guard case .setNetworkAccessMode(let v)? = _storage._it else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 155)
+      }()
+      case .openRemote?: try {
+        guard case .openRemote(let v)? = _storage._it else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 156)
       }()
       case nil: break
       }
@@ -8392,6 +8490,105 @@ nonisolated extension Muster_App_EffectResult: SwiftProtobuf.Message, SwiftProto
   }
 }
 
+nonisolated extension Muster_App_RemoteDevice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoteDevice"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}name\0\u{1}connected\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.connected) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    if self.connected != false {
+      try visitor.visitSingularBoolField(value: self.connected, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_RemoteDevice, rhs: Muster_App_RemoteDevice) -> Bool {
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.connected != rhs.connected {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoteWorkspaceView"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}devices\0\u{3}selected_device\0\u{3}can_connect\0\u{3}session_open\0\u{1}status\0\u{1}takeover\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.devices) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.selectedDevice) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.canConnect) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.sessionOpen) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._takeover) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.devices.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.devices, fieldNumber: 1)
+    }
+    if !self.selectedDevice.isEmpty {
+      try visitor.visitSingularStringField(value: self.selectedDevice, fieldNumber: 2)
+    }
+    if self.canConnect != false {
+      try visitor.visitSingularBoolField(value: self.canConnect, fieldNumber: 3)
+    }
+    if self.sessionOpen != false {
+      try visitor.visitSingularBoolField(value: self.sessionOpen, fieldNumber: 4)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 5)
+    }
+    try { if let v = self._takeover {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_App_RemoteWorkspaceView, rhs: Muster_App_RemoteWorkspaceView) -> Bool {
+    if lhs.devices != rhs.devices {return false}
+    if lhs.selectedDevice != rhs.selectedDevice {return false}
+    if lhs.canConnect != rhs.canConnect {return false}
+    if lhs.sessionOpen != rhs.sessionOpen {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs._takeover != rhs._takeover {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_App_MulticaSelect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MulticaSelect"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
@@ -8552,7 +8749,7 @@ nonisolated extension Muster_App_MulticaWorkspaceView: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ViewModel"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{3}multica_page\0\u{1}vision\0\u{3}session_load\0\u{3}multica_workspace\0\u{3}require_locked_use_auth\0\u{3}device_blackout\0\u{b}presence\0\u{c}\u{e}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}screen\0\u{1}toasts\0\u{1}busy\0\u{1}self\0\u{1}network\0\u{1}pending\0\u{3}selected_device\0\u{1}invite\0\u{1}join\0\u{1}agents\0\u{1}chat\0\u{1}terminals\0\u{1}terminal\0\u{2}\u{2}policy\0\u{1}embedded\0\u{1}files\0\u{1}file\0\u{1}git\0\u{3}service_devices\0\u{3}selected_device_has_services\0\u{3}local_device_has_services\0\u{1}browser\0\u{3}can_go_back\0\u{3}desktop_setup\0\u{3}desktop_update\0\u{3}desktop_chats\0\u{1}workspace\0\u{3}can_invite\0\u{3}device_access\0\u{3}join_access\0\u{3}device_actions\0\u{3}device_locked_use\0\u{3}navigation_path\0\u{1}multica\0\u{3}multica_page\0\u{1}vision\0\u{3}session_load\0\u{3}multica_workspace\0\u{3}require_locked_use_auth\0\u{3}device_blackout\0\u{3}remote_workspace\0\u{b}presence\0\u{c}\u{e}\u{1}")
 
   fileprivate class _StorageClass {
     var _screen: Muster_App_Screen = .onboarding
@@ -8586,6 +8783,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
     var _deviceAccess: Muster_App_AccessView? = nil
     var _joinAccess: Muster_App_AccessView? = nil
     var _deviceLockedUse: [Muster_App_DeviceLockedUseView] = []
+    var _remoteWorkspace: Muster_App_RemoteWorkspaceView? = nil
     var _deviceActions: Muster_App_DeviceActions? = nil
     var _multica: Muster_V1_MulticaStatus? = nil
     var _multicaPage: Muster_V1_MulticaPage? = nil
@@ -8636,6 +8834,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       _deviceAccess = source._deviceAccess
       _joinAccess = source._joinAccess
       _deviceLockedUse = source._deviceLockedUse
+      _remoteWorkspace = source._remoteWorkspace
       _deviceActions = source._deviceActions
       _multica = source._multica
       _multicaPage = source._multicaPage
@@ -8703,6 +8902,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         case 39: try { try decoder.decodeSingularMessageField(value: &_storage._multicaWorkspace) }()
         case 40: try { try decoder.decodeSingularBoolField(value: &_storage._requireLockedUseAuth) }()
         case 41: try { try decoder.decodeRepeatedMessageField(value: &_storage._deviceBlackout) }()
+        case 42: try { try decoder.decodeSingularMessageField(value: &_storage._remoteWorkspace) }()
         default: break
         }
       }
@@ -8835,6 +9035,9 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
       if !_storage._deviceBlackout.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._deviceBlackout, fieldNumber: 41)
       }
+      try { if let v = _storage._remoteWorkspace {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 42)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -8875,6 +9078,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
         if _storage._deviceAccess != rhs_storage._deviceAccess {return false}
         if _storage._joinAccess != rhs_storage._joinAccess {return false}
         if _storage._deviceLockedUse != rhs_storage._deviceLockedUse {return false}
+        if _storage._remoteWorkspace != rhs_storage._remoteWorkspace {return false}
         if _storage._deviceActions != rhs_storage._deviceActions {return false}
         if _storage._multica != rhs_storage._multica {return false}
         if _storage._multicaPage != rhs_storage._multicaPage {return false}
@@ -8895,7 +9099,7 @@ nonisolated extension Muster_App_ViewModel: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceActions"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_cover\0\u{3}can_ssh\0\u{3}show_access\0\u{3}can_edit_access\0\u{3}can_remove\0\u{1}blackout\0\u{3}can_rename\0\u{3}can_share_desktop\0\u{3}can_view_desktop\0\u{3}desktop_session_open\0\u{3}desktop_session_text\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_cover\0\u{3}can_ssh\0\u{3}show_access\0\u{3}can_edit_access\0\u{3}can_remove\0\u{1}blackout\0\u{3}can_rename\0\u{3}can_share_desktop\0\u{3}can_view_desktop\0\u{3}desktop_session_open\0\u{3}desktop_session_text\0\u{3}desktop_takeover\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8914,6 +9118,7 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
       case 9: try { try decoder.decodeSingularBoolField(value: &self.canViewDesktop) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.desktopSessionOpen) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.desktopSessionText) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._desktopTakeover) }()
       default: break
       }
     }
@@ -8957,6 +9162,9 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
     if !self.desktopSessionText.isEmpty {
       try visitor.visitSingularStringField(value: self.desktopSessionText, fieldNumber: 11)
     }
+    try { if let v = self._desktopTakeover {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8971,6 +9179,7 @@ nonisolated extension Muster_App_DeviceActions: SwiftProtobuf.Message, SwiftProt
     if lhs.canViewDesktop != rhs.canViewDesktop {return false}
     if lhs.desktopSessionOpen != rhs.desktopSessionOpen {return false}
     if lhs.desktopSessionText != rhs.desktopSessionText {return false}
+    if lhs._desktopTakeover != rhs._desktopTakeover {return false}
     if lhs._blackout != rhs._blackout {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

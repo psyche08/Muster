@@ -15,7 +15,7 @@ internal sealed class Desktop : Form
     }
     readonly FlowLayoutPanel nav = Bar(), actions = Bar();
     readonly FlowLayoutPanel utilities = Bar();
-    readonly Button back, settings, agentsTab, chatsTab, terminalsTab;
+    readonly Button back, settings, agentsTab, chatsTab, terminalsTab, remoteTab;
     readonly TableLayoutPanel toolbar = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1,
         Padding = new Padding(8, 2, 8, 2) };
     readonly Label title = new() { Dock = DockStyle.Top, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft,
@@ -29,10 +29,7 @@ internal sealed class Desktop : Form
     readonly AgentSidebar agentSidebar = new() { Dock = DockStyle.Left, Visible = false };
     List<BlockOffset> plainOffsets = [];
     (string Device, string Session)? readingScope;
-    Form? desktopViewer;
-    string? viewerDevice;
-    bool viewerLeaseSeen;
-    string? priorViewerToast;
+    readonly RemoteWorkspace remote = new() { Dock = DockStyle.Fill, Visible = false };
     readonly JumpToLatest jump = new();
     readonly TranscriptSteps transcript = new();
     readonly HistoryTranscript history = new() { Dock = DockStyle.Fill, Visible = false };
@@ -105,6 +102,7 @@ internal sealed class Desktop : Form
         SizeTitle();
         var body = new Panel { Dock = DockStyle.Fill };
         invitePanel = new InvitePanel(Clipboard.SetText, () => Send(new() { ShowInvite = new() }));
+        body.Controls.Add(remote);
         body.Controls.Add(browserPanel);
         body.Controls.Add(invitePanel);
         body.Controls.Add(related);
@@ -176,6 +174,7 @@ internal sealed class Desktop : Form
         toolbar.BackColor = nav.BackColor = utilities.BackColor = WorkspaceStyle.Sidebar;
         Controls.Add(toolbar);
         core = new(v => Interlocked.Exchange(ref pending, v), (id, e) => effects.Enqueue((id, e)), attachOnly, fixtureSocket);
+        remote.Intent += Send;
         browserPanel.Intent += Send;
         chatSidebar.Intent += Send;
         agentSidebar.Intent += Send;
@@ -214,6 +213,7 @@ internal sealed class Desktop : Form
             };
             Send(new() { OpenTerminals = new() { DeviceId = device } });
         });
+        remoteTab = Button(nav, "Remote", () => Send(new() { OpenRemote = new() }));
         var tools = new Button { Text = "Tools ▾", AccessibleName = "Tools", AutoSize = true };
         WorkspaceStyle.StyleButton(tools);
         utilities.Controls.Add(tools);
@@ -425,26 +425,6 @@ internal sealed class Desktop : Form
             core.Send(request);
     }
 
-    void ViewDesktop(string device, string name)
-    {
-        if (desktopViewer != null) { desktopViewer.Activate(); return; }
-        var form = new Form { Text = $"Desktop · {name}", StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(960, 540), MinimumSize = new Size(480, 300) };
-        var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black, AccessibleName = "Remote desktop" };
-        form.Controls.Add(panel);
-        desktopViewer = form;
-        viewerDevice = device;
-        viewerLeaseSeen = false;
-        priorViewerToast = current?.Toasts.LastOrDefault()?.Id;
-        form.FormClosed += (_, _) => {
-            desktopViewer = null;
-            viewerDevice = null;
-            if (!IsDisposed) Send(new() { EndDesktopSession = device });
-        };
-        form.Show(this);
-        Send(new() { DesktopSession = new() { Device = device, ViewInWindow = (ulong)panel.Handle.ToInt64() } });
-    }
-
     void Go(Page page) => Send(new() { Navigate = new() { Screen = page } });
     void CopySource(string text, string kind)
     {
@@ -575,17 +555,9 @@ internal sealed class Desktop : Form
         current = v;
         back.Visible = v.CanGoBack;
         var page = v.Screen;
-        if (desktopViewer is {} viewer)
-        {
-            bool selected = page == Page.Device && v.SelectedDevice == viewerDevice;
-            if (selected && v.DeviceActions?.DesktopSessionOpen == true)
-            {
-                viewerLeaseSeen = true;
-                viewer.Text = v.DeviceActions.DesktopSessionText;
-            }
-            else if (!selected || viewerLeaseSeen || (v.Toasts.LastOrDefault() is { Error: true } toast && toast.Id != priorViewerToast)) viewer.Close();
-        }
-        foreach (var (button, route) in new[] { (agentsTab, Page.Agents), (chatsTab, Page.DesktopChats), (terminalsTab, Page.Terminals) })
+        remote.Visible = page == Page.Remote;
+        if (page == Page.Remote) remote.Display(v.RemoteWorkspace);
+        foreach (var (button, route) in new[] { (agentsTab, Page.Agents), (chatsTab, Page.DesktopChats), (terminalsTab, Page.Terminals), (remoteTab, Page.Remote) })
         {
             bool selected = v.Workspace == route;
             button.BackColor = selected ? WorkspaceStyle.Selected : WorkspaceStyle.Canvas;
@@ -668,6 +640,9 @@ internal sealed class Desktop : Form
         input.PlaceholderText = "";
         switch (page)
         {
+        case Page.Remote:
+            title.Text = "Remote";
+            break;
         case Page.Device:
         {
             var selected = v.Network?.Members.FirstOrDefault(member => member.DeviceId == v.SelectedDevice);
@@ -694,13 +669,8 @@ internal sealed class Desktop : Form
             }
             if (v.DeviceActions is {} deviceActions)
             {
-                if (deviceActions.CanViewDesktop)
-                    AddAction("View desktop", () => ViewDesktop(selected.DeviceId, selected.Name));
-                if (deviceActions.DesktopSessionOpen)
-                {
-                    lines.Add(deviceActions.DesktopSessionText);
-                    AddAction("Close desktop", () => desktopViewer?.Close());
-                }
+                if (deviceActions.CanViewDesktop || deviceActions.DesktopSessionOpen)
+                    Act("Open in Remote", () => new() { OpenRemote = new() { DeviceId = selected.DeviceId } });
                 if (deviceActions.ShowAccess && v.DeviceAccess is {} access)
                 {
                     lines.Add("Access to other devices");
@@ -1248,7 +1218,7 @@ internal sealed class Desktop : Form
         history.Visible = !inTrace && rich;
         browserPanel.Display(page == Page.Browser ? v.Browser : null);
         invitePanel.Display(page == Page.Invite && v.CanInvite ? v.Invite : null, page == Page.Invite && v.CanInvite);
-        output.Visible = page is not (Page.Invite or Page.Browser) && !inRelated && !inTrace && !rich && page is not (Page.DesktopChats or Page.Agents) && !showingSource && !showingTerminal && !inWorkspaceTerminal;
+        output.Visible = page is not (Page.Invite or Page.Browser or Page.Remote) && !inRelated && !inTrace && !rich && page is not (Page.DesktopChats or Page.Agents) && !showingSource && !showingTerminal && !inWorkspaceTerminal;
         terminal.Visible = showingTerminal;
         list.Visible = rows.Count > 0;
         if (focusNetworkList && page == Page.Settings)

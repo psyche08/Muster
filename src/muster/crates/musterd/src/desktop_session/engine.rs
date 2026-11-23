@@ -22,6 +22,7 @@ pub(super) async fn progress(events: &EventSink, phase: Phase) -> Result<(), Err
     events
         .send(Ev::DesktopSession(v1::DesktopSessionProgress {
             phase: phase as i32,
+            takeover: None,
         }))
         .await
         .map_err(|_| unavailable("desktop window closed"))
@@ -68,7 +69,7 @@ impl Engine {
         let output = child.stdout.take();
         Ok((Self(Mutex::new(child)), input, output))
     }
-    fn pid(&self) -> Option<u32> {
+    pub(super) fn pid(&self) -> Option<u32> {
         let mut child = self.0.lock().ok()?;
         if child.try_wait().ok()?.is_some() {
             return None;
@@ -96,6 +97,9 @@ impl LocalEngine for Engine {
     }
 }
 
+pub(super) const BUSY: &[u8; 4] = b"MDB1";
+pub(super) const REPLACE: &[u8] = b"confirm-replace";
+pub(super) const CHANGED: &[u8] = b"desktop-occupant-changed";
 pub(super) const HELLO: &[u8; 4] = b"MDV1";
 pub(super) const CAPTURE_UNAVAILABLE: &[u8] = b"capture-unavailable";
 // The host fixes the cipher, profile and ports. Only the one-time input key,

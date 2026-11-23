@@ -208,6 +208,7 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             .and_then(|n| n.members.iter().find(|m| m.device_id == state.target()))
             .map(|m| crate::access::view(&m.scopes, network_advanced)),
         join_access: Some(crate::access::join_defaults(network_advanced)),
+        remote_workspace: (state.screen == app::Screen::Remote).then(|| remote_workspace(state)),
         device_actions: Some(device_actions(state)),
         device_locked_use: crate::update::manual_locked_use::views(state),
         device_blackout: crate::update::device_blackout::views(state),
@@ -1388,6 +1389,44 @@ fn composer_placeholder(session: &muster_proto::v1::AgentSession, has_messages: 
 
 /// What the selected device's page offers (ARCHITECTURE §3.7: decided here,
 /// rendered by the shells; the target still authorizes every call).
+pub(crate) fn remote_workspace(state: &State) -> app::RemoteWorkspaceView {
+    let session = state.desktop_session.as_ref();
+    let devices: Vec<_> = state
+        .network
+        .iter()
+        .flat_map(|n| &n.members)
+        .filter(|m| m.kind == "desktop" && !m.is_self)
+        .map(|m| app::RemoteDevice {
+            device_id: m.device_id.clone(),
+            name: m.name.clone(),
+            connected: m.connected,
+        })
+        .collect();
+    let requested = session.map(|s| &s.device).unwrap_or(&state.remote_selected);
+    let selected = devices.iter().find(|d| d.device_id == *requested);
+    let can_connect = session.is_none()
+        && selected.is_some_and(|d| d.connected)
+        && !state.embedded
+        && state
+            .self_info
+            .as_ref()
+            .and_then(|i| i.state.as_ref())
+            .is_some_and(|s| s.desktop_viewer_available);
+    let selected_device = if session.is_some() || selected.is_some() {
+        requested.clone()
+    } else {
+        String::new()
+    };
+    app::RemoteWorkspaceView {
+        devices,
+        selected_device,
+        can_connect,
+        session_open: session.is_some(),
+        status: session.map(|s| s.status.clone()).unwrap_or_default(),
+        takeover: session.and_then(|s| s.takeover.clone()),
+    }
+}
+
 pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
     let Some(network) = &state.network else {
         return app::DeviceActions::default();
@@ -1412,6 +1451,7 @@ pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
         can_share_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_host_available),
         can_view_desktop: desktop_pair && capabilities.is_some_and(|s| s.desktop_viewer_available),
         desktop_session_open: session.is_some(),
+        desktop_takeover: session.and_then(|s| s.takeover.clone()),
         desktop_session_text: session.map(|s| s.status.clone()).unwrap_or_default(),
         blackout: state
             .manual_devices
