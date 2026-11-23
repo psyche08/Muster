@@ -23,6 +23,16 @@ constexpr UINT stopMessage = WM_APP + 1, readyMessage = WM_APP + 2;
 HWND window, parent;
 std::atomic<bool> stopping;
 bool canControl, receivedFrame, connected;
+std::mutex statusLock;
+
+void reportFailure(int stage, int code)
+{
+    // Only the local, fixed stage name and numeric library error cross this pipe.
+    const char* name = stage > STAGE_NONE && stage < STAGE_MAX ? LiGetStageName(stage) : "connection";
+    std::lock_guard lock(statusLock);
+    std::fprintf(stdout, "ERROR %s (%d)\n", name, code);
+    std::fflush(stdout);
+}
 RECT viewport(HWND hwnd)
 {
     RECT client{};
@@ -39,6 +49,7 @@ void paint(HWND hwnd)
     if (video::draw(dc, client) && !receivedFrame)
     {
         receivedFrame = true;
+        std::lock_guard lock(statusLock);
         std::fputs("FRAME\n", stdout);
         std::fflush(stdout);
     }
@@ -218,7 +229,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         video.capabilities = CAPABILITY_DIRECT_SUBMIT;
         CONNECTION_LISTENER_CALLBACKS callbacks{};
         LiInitializeConnectionCallbacks(&callbacks);
-        callbacks.connectionTerminated = [](int) { PostMessage(window, stopMessage, 0, 0); };
+        callbacks.stageFailed = reportFailure;
+        callbacks.connectionTerminated = [](int code) {
+            reportFailure(STAGE_NONE, code);
+            PostMessage(window, stopMessage, 0, 0);
+        };
         callbacks.connectionStarted = [] { PostMessage(window, readyMessage, 0, 0); };
         if (!stopping)
             result = LiStartConnection(&server, &config, &callbacks, &video, nullptr, nullptr, 0, nullptr, 0);
