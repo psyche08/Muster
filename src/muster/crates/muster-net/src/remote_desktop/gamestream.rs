@@ -168,6 +168,14 @@ enum Side {
     Host(EnginePorts, Arc<dyn LocalEngine>),
 }
 
+pub(super) fn udp_queue(channel: usize) -> (super::MediaQueue, mpsc::Receiver<Bytes>) {
+    match channel {
+        0 => super::MediaQueue::new("video", super::VIDEO_QUEUE_DEPTH),
+        1 => super::MediaQueue::new("control", QUEUE),
+        _ => super::MediaQueue::new("audio", QUEUE),
+    }
+}
+
 /// Run the viewer broker until the session or a mandatory engine channel ends.
 pub async fn viewer(
     session: &mut Session,
@@ -234,7 +242,7 @@ async fn run(session: &mut Session, side: Side) -> Result<(), Error> {
 
     let mut udp_inputs = Vec::new();
     for (channel, (socket, host_addr, owner)) in udp_sockets.into_iter().enumerate() {
-        let (to_engine, mut udp_rx) = mpsc::channel::<Bytes>(QUEUE);
+        let (to_engine, mut udp_rx) = udp_queue(channel);
         udp_inputs.push(to_engine);
         let connection = session.connection.clone();
         let stream = u64::from(session.send.id());
@@ -389,10 +397,10 @@ async fn run(session: &mut Session, side: Side) -> Result<(), Error> {
         while let Some(packet) = session.media.recv().await {
             check(&guard)?;
             if let Some((&tag, body)) = packet.split_first()
-                && let Some(input) = udp_inputs.get(tag as usize)
+                && let Some(input) = udp_inputs.get_mut(tag as usize)
                 && !body.is_empty()
             {
-                let _ = input.try_send(packet.slice(1..));
+                input.deliver(packet.slice(1..));
             }
         }
         Err::<(), Error>(Error::Io("desktop media ended".into()))

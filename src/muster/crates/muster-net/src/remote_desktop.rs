@@ -22,7 +22,9 @@ const MEDIA_TAG: u8 = 0x01;
 const HEADER_LEN: usize = 1 + size_of::<u64>();
 const MAX_CONTROL: usize = 16 * 1024;
 const MAX_MEDIA: usize = 1150 - HEADER_LEN;
-const QUEUE_DEPTH: usize = 32;
+// Four 64-packet engine batches can belong to one encoded picture.
+const VIDEO_QUEUE_DEPTH: usize = 4 * 64;
+const ROUTE_QUEUE_DEPTH: usize = 2 * VIDEO_QUEUE_DEPTH;
 const AUTH_CHECK: Duration = Duration::from_millis(100);
 
 pub(crate) type Guard = Arc<dyn Fn() -> bool + Send + Sync>;
@@ -109,7 +111,40 @@ pub(crate) struct Routes(Mutex<HashMap<usize, Route>>);
 
 struct Route {
     stream: u64,
+    queue: MediaQueue,
+}
+
+struct MediaQueue {
+    name: &'static str,
     tx: mpsc::Sender<Bytes>,
+    dropped: u64,
+}
+
+impl MediaQueue {
+    fn new(name: &'static str, depth: usize) -> (Self, mpsc::Receiver<Bytes>) {
+        let (tx, rx) = mpsc::channel(depth);
+        (
+            Self {
+                name,
+                tx,
+                dropped: 0,
+            },
+            rx,
+        )
+    }
+
+    fn deliver(&mut self, packet: Bytes) {
+        if let Err(mpsc::error::TrySendError::Full(_)) = self.tx.try_send(packet) {
+            self.dropped = self.dropped.saturating_add(1);
+            if self.dropped.is_power_of_two() {
+                log::info!(
+                    "Desktop {} queue dropped {} packets",
+                    self.name,
+                    self.dropped
+                );
+            }
+        }
+    }
 }
 
 impl Routes {
@@ -122,9 +157,9 @@ impl Routes {
         host_offer: Option<Weak<Offer>>,
     ) -> Result<Session, Error> {
         let stream = u64::from(send.id());
-        let (tx, media) = mpsc::channel(QUEUE_DEPTH);
+        let (queue, media) = MediaQueue::new("route", ROUTE_QUEUE_DEPTH);
         match self.0.lock().unwrap().entry(connection.stable_id()) {
-            Entry::Vacant(entry) => entry.insert(Route { stream, tx }),
+            Entry::Vacant(entry) => entry.insert(Route { stream, queue }),
             Entry::Occupied(_) => return Err(Error::Protocol("remote desktop link busy".into())),
         };
         Ok(Session {
@@ -146,10 +181,10 @@ impl Routes {
             return true;
         }
         let stream = u64::from_be_bytes(packet[1..HEADER_LEN].try_into().unwrap());
-        if let Some(route) = self.0.lock().unwrap().get(&connection)
+        if let Some(route) = self.0.lock().unwrap().get_mut(&connection)
             && route.stream == stream
         {
-            let _ = route.tx.try_send(packet.slice(HEADER_LEN..));
+            route.queue.deliver(packet.slice(HEADER_LEN..));
         }
         true
     }
@@ -284,10 +319,40 @@ mod tests {
     }
 
     #[test]
+    fn paused_video_consumer_retains_multiple_engine_batches_and_bounds_overflow() {
+        let routes = Routes::default();
+        let (queue, mut session_rx) = MediaQueue::new("route", ROUTE_QUEUE_DEPTH);
+        routes
+            .0
+            .lock()
+            .unwrap()
+            .insert(1, Route { stream: 8, queue });
+        let (mut video, mut engine_rx) = gamestream::udp_queue(0);
+        for sequence in 0u16..=256 {
+            assert!(routes.deliver(1, &packet(8, &sequence.to_be_bytes())));
+        }
+        while let Ok(fragment) = session_rx.try_recv() {
+            video.deliver(fragment);
+        }
+        for sequence in 0u16..256 {
+            assert_eq!(
+                engine_rx.try_recv().unwrap().as_ref(),
+                sequence.to_be_bytes()
+            );
+        }
+        assert!(engine_rx.try_recv().is_err());
+        assert_eq!(video.dropped, 1);
+    }
+
+    #[test]
     fn media_is_bound_to_its_connection_and_stream_and_never_falls_back_to_vnet() {
         let routes = Routes::default();
-        let (tx, mut rx) = mpsc::channel(1);
-        routes.0.lock().unwrap().insert(1, Route { stream: 8, tx });
+        let (queue, mut rx) = MediaQueue::new("route", 1);
+        routes
+            .0
+            .lock()
+            .unwrap()
+            .insert(1, Route { stream: 8, queue });
         assert!(!routes.deliver(1, &Bytes::from_static(&[0x45])));
         assert!(routes.deliver(1, &Bytes::from_static(&[MEDIA_TAG])));
         assert!(routes.deliver(2, &packet(8, b"wrong link")));
