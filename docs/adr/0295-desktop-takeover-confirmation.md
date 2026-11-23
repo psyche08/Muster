@@ -24,3 +24,5 @@ Only one viewer reaches the media engine. Cancelling, losing the requesting link
 ## Verification
 
 Exercise cancellation, stale and competing confirmations, unauthorized requests, normal view-only admission and release of the old media lease. Check prompt presentation independently from multi-device acceptance.
+
+Concurrent shared-core tests covered multiple logical viewers, including two simultaneous confirmations of the same occupant. The Windows form test exercised cancellation and explicit replacement. A second physical Windows viewer was unavailable for a two-viewer device test.

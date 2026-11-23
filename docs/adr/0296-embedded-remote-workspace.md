@@ -23,3 +23,5 @@ The workspace can return to a live stream without another host grant. Desktop ac
 ## Verification
 
 Check selection, explicit connect, occupied and cancel states, tab switching, stable parent handle, disconnect and host expiration. Verify native embedding in the installed Windows application independently of reducer checks.
+
+An event-loop regression test opens a real local RPC stream, switches to Terminals and back, and disconnects. On Windows, a paired Mac rendered in a native child of the main window. A click on a dedicated blue target produced a Mac-side receipt and the target turned green in the Windows view. Switching to Terminals hid the child and returning to Remote showed the same handle. No additional top-level viewer opened.

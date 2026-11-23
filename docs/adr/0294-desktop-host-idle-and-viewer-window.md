@@ -25,3 +25,5 @@ During the idle interval the worker has no capture, input or network endpoint. A
 ## Verification
 
 Check cold admission, passive viewing beyond 30 seconds, reconnect during grace, and termination after the final disconnect. Verify normal window styles, task switching, rendering and shutdown separately.
+
+On a signed Mac host, one Windows viewer stayed connected for more than three minutes, including passive viewing beyond the 30-second idle interval. Reconnecting four seconds after disconnect reused the same host process and painted in about 2.2 seconds. After the final disconnect, the same process closed its TCP listeners and disappeared 29.89 seconds later (sampled at approximately 200 ms intervals). The signed native reset test rejected the previous TLS credential after resume.
