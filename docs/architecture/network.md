@@ -53,6 +53,8 @@ Service streams, forwarding streams, and vnet datagrams share one link, one rost
 - With an independent outer QUIC socket, Relay REFLECT describes only that socket and cannot be published as the inner PeerLink's public hole-punching address. Keep LAN direct candidates; WAN NAT hole punching requires same-socket probing or verified correct binding and cannot currently be claimed from REFLECT alone.
 - After renewal, atomically update matching fullchain/key files and reload or restart both endpoints together; failures never fall back to plaintext. Only public 9443 is open, so issuance/renewal uses DNS-01 or existing centralized issuance/distribution without assuming 80 / 443 reachability. Record certificates, installation, public handshakes for both endpoints, switching, and real RPC separately; historical raw-UDP probes do not establish new-protocol acceptance.
 
+[ADR 0285](../adr/0285-fallback-relay.md) proposes a second independent relay for host or uplink outages. It covers desktop registration at both endpoints, per-peer path selection and cold-start discovery. The current dual-carrier implementation uses a single relay endpoint.
+
 **vnet (desktop/server only)**:
 
 | Aspect | Design |
