@@ -33,10 +33,107 @@ pub struct CodexHooks;
 
 pub static HOOKS: CodexHooks = CodexHooks;
 
+/// Markdown hard breaks written by the rich-text composer. Leave ambiguous
+/// code, escaped backslashes, and shell continuations verbatim. Only decode
+/// an encoded boundary space beside a break that we actually recognized.
+pub(crate) fn display_prompt(raw: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    if !raw.contains("\\\n") {
+        return Cow::Borrowed(raw);
+    }
+    let mut out = String::with_capacity(raw.len());
+    let mut after_break = false;
+    let mut fence: Option<(u8, usize)> = None;
+    let mut inline_ticks = 0;
+    for line in raw.split_inclusive('\n') {
+        let body = line.strip_suffix('\n').unwrap_or(line);
+        // A fence can start after up to three spaces. A closing fence has the
+        // same marker, at least the opening width and no trailing info string.
+        let trimmed = body.trim_start_matches(' ');
+        let indented = body.len() - trimmed.len() >= 4 || body.starts_with('\t');
+        let marker = trimmed.as_bytes().first().copied();
+        let width = trimmed
+            .bytes()
+            .take_while(|byte| Some(*byte) == marker)
+            .count();
+        if let Some(mark @ (b'`' | b'~')) = marker
+            && !indented
+            && width >= 3
+            && inline_ticks == 0
+        {
+            match fence {
+                None => fence = Some((mark, width)),
+                Some((start, size))
+                    if mark == start && width >= size && trimmed[width..].trim().is_empty() =>
+                {
+                    fence = None
+                }
+                _ => {}
+            }
+            out.push_str(line);
+            after_break = false;
+            continue;
+        }
+        if fence.is_some() || indented {
+            out.push_str(line);
+            after_break = false;
+            continue;
+        }
+        // Only a matching backtick run closes an inline span across a newline.
+        let mut bytes = body.bytes().peekable();
+        while let Some(byte) = bytes.next() {
+            if byte == b'\\' && inline_ticks == 0 {
+                bytes.next();
+            } else if byte == b'`' {
+                let mut ticks = 1;
+                while bytes.next_if_eq(&b'`').is_some() {
+                    ticks += 1;
+                }
+                if inline_ticks == 0 {
+                    inline_ticks = ticks;
+                } else if inline_ticks == ticks {
+                    inline_ticks = 0;
+                }
+            }
+        }
+        let hard_break = line.ends_with('\n')
+            && inline_ticks == 0
+            && body
+                .strip_suffix('\\')
+                .is_some_and(|prefix| !prefix.ends_with(['\\', ' ', '\t']));
+        let mut text = body;
+        if after_break {
+            while let Some(rest) = text.strip_prefix("&#x20;") {
+                out.push(' ');
+                text = rest;
+            }
+        }
+        if hard_break {
+            let mut content = &text[..text.len() - 1];
+            let mut spaces = 0;
+            while let Some(rest) = content.strip_suffix("&#x20;") {
+                content = rest;
+                spaces += 1;
+            }
+            out.push_str(content);
+            out.extend(std::iter::repeat_n(' ', spaces));
+        } else {
+            out.push_str(text);
+        }
+        if line.ends_with('\n') {
+            out.push('\n');
+        }
+        after_break = hard_break;
+    }
+    Cow::Owned(out)
+}
+
 impl Hooks for CodexHooks {
     fn text(&self, role: Role, raw: &str) -> String {
         let text = if role == Role::Assistant {
             strip_hidden_blocks(raw)
+        } else if role == Role::User {
+            display_prompt(raw).into_owned()
         } else {
             raw.to_string()
         };
@@ -401,6 +498,67 @@ mod tests {
     use super::*;
     use crate::viewer::Viewer as _;
     use std::io::Write;
+
+    #[test]
+    fn multiline_user_display_and_receipts_follow_each_provider() {
+        let plain = "第一行\nsecond line";
+        let rich = "第一行\\\nsecond line";
+        assert_eq!(HOOKS.text(Role::User, rich), plain);
+        assert_eq!(HOOKS.text(Role::Assistant, rich), rich);
+        let item =
+            serde_json::json!({"type":"userMessage","content":[{"type":"text","text":rich}]});
+        assert_eq!(
+            crate::codex_history::item("fixture", &item.to_string(), 1000)
+                .unwrap()
+                .text,
+            plain
+        );
+        let blocks = serde_json::json!({"type":"userMessage","content":[
+            {"type":"text","text":"path\\"},{"type":"text","text":"next"}
+        ]});
+        assert_eq!(
+            crate::codex_history::item("fixture", &blocks.to_string(), 1000)
+                .unwrap()
+                .text,
+            "path\\\nnext"
+        );
+        assert!(crate::receipt::text_matches(Provider::Codex, plain, rich));
+        assert!(!crate::receipt::text_matches(Provider::Claude, plain, rich));
+        assert!(crate::receipt::text_matches(Provider::Claude, plain, plain));
+        assert_eq!(crate::claude::HOOKS.text(Role::User, plain), plain);
+        let indented = display_prompt("a&#x20;\\\n&#x20;b");
+        assert_eq!(indented, "a \n b");
+        assert_eq!(display_prompt(&indented), indented);
+        for literal in [
+            "echo x \\\nnext",
+            "path\\\\\nend",
+            "```sh\necho x\\\nnext\n```",
+            "x\\nsecond",
+        ] {
+            assert_eq!(display_prompt(literal), literal);
+        }
+        let mixed = "See `example`\\\nagain\n~~~sh\necho x\\\nnext\n~~~\nend\\\nhere";
+        assert_eq!(
+            display_prompt(mixed),
+            "See `example`\nagain\n~~~sh\necho x\\\nnext\n~~~\nend\nhere"
+        );
+        assert_eq!(
+            display_prompt("See `inline\\\ncode` here\\\nnext"),
+            "See `inline\\\ncode` here\nnext"
+        );
+        let queued = crate::queue::QueuedMessage::test("synthetic", rich);
+        assert_eq!(queued.interaction("thread").prompt, plain);
+        assert!(crate::queue::display_matches(
+            Some(Provider::Codex),
+            plain,
+            rich
+        ));
+        assert!(!crate::receipt::text_matches(
+            Provider::Codex,
+            plain,
+            "第一行\\\nsecond…"
+        ));
+    }
 
     #[test]
     fn native_muster_rollouts_are_not_discovered_as_desktop_sessions() {

@@ -1,8 +1,8 @@
-# 0295. Embed remote desktop in the Windows Remote workspace
+# 0296. Embed remote desktop in the Windows Remote workspace
 
 - Status: Accepted
-- Supersedes the Windows window decision in [ADR 0293](0293-desktop-host-idle-and-viewer-window.md)
-- Related: [Desktop takeover](0294-desktop-takeover-confirmation.md)
+- Supersedes the Windows window decision in [ADR 0294](0294-desktop-host-idle-and-viewer-window.md)
+- Related: [Desktop takeover](0295-desktop-takeover-confirmation.md)
 
 ## Context
 

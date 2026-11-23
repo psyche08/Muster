@@ -187,6 +187,9 @@ async fn reconnect_gets_fresh_readiness_and_native_application_evidence() {
         })
         .await;
     let records = shell.diagnostics.lock().unwrap().clone();
+    assert!(records.iter().any(|r| r["event"] == "attempt_failed"
+        && r["phase"] == "live_watch"
+        && r["error_category"] == "remote"));
     assert!(!records.iter().any(|r| r["apply_us"] == 99));
     assert!(records.iter().any(|r| r["trace_id"] == pending.trace_id
         && r["event"] == "retry_of"

@@ -2,6 +2,48 @@
 //! submission; the adapter must still check its live guard and exact surface.
 use std::time::Duration;
 
+/// The selected composer's controls from one complete, session-bound scan.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComposerButton {
+    Submit,
+    Stop,
+    Other,
+}
+
+impl ComposerButton {
+    pub fn from_scoped(submits: &[Option<bool>], stops: &[Option<bool>]) -> Self {
+        match (submits, stops) {
+            ([Some(true)], []) => Self::Submit,
+            ([], [Some(true)]) => Self::Stop,
+            _ => Self::Other,
+        }
+    }
+}
+
+/// Evidence for the one working prompt whose exact draft was verified before
+/// pressing Submit. The adapter binds both observations to its input generation
+/// and session view. A Stop left over from before the press is insufficient.
+pub struct WorkingQueuePress {
+    profile: &'static crate::profile::App,
+}
+
+impl WorkingQueuePress {
+    pub fn observed(
+        profile: &'static crate::profile::App,
+        before_draft: ComposerButton,
+        before_press: ComposerButton,
+    ) -> Option<Self> {
+        (matches!(profile.provider(), "codex" | "claude")
+            && before_draft == ComposerButton::Stop
+            && before_press == ComposerButton::Submit)
+            .then_some(Self { profile })
+    }
+
+    pub fn accepted(&self, button: ComposerButton, draft: Option<&str>) -> bool {
+        button == ComposerButton::Stop && draft.is_some_and(|v| self.profile.is_empty(v))
+    }
+}
+
 /// Tab extraction must never replace an existing draft. A missing AX value is
 /// unknown, not empty; Claude may expose a newline and Codex its placeholder.
 /// A usable (or unreadable) submit control prevents treating literal placeholder
@@ -1142,6 +1184,31 @@ mod tests {
         assert_eq!(observed_state(false, true, true), Running);
         assert_eq!(observed_state(false, false, true), Unknown);
         assert_eq!(observed_state(false, false, false), Idle);
+    }
+
+    #[test]
+    fn only_a_working_composer_that_returns_to_stop_acknowledges_the_queue() {
+        use ComposerButton::{Other, Stop, Submit};
+        let enabled = [Some(true)];
+        assert_eq!(ComposerButton::from_scoped(&enabled, &[]), Submit);
+        assert_eq!(ComposerButton::from_scoped(&[], &enabled), Stop);
+        for stops in [&[None][..], &[Some(false)], &[Some(true), Some(true)]] {
+            assert_eq!(ComposerButton::from_scoped(&[], stops), Other);
+        }
+        assert_eq!(ComposerButton::from_scoped(&enabled, &enabled), Other);
+        for provider in ["codex", "claude"] {
+            let profile = crate::profile::app(provider).unwrap();
+            assert!(WorkingQueuePress::observed(profile, Other, Submit).is_none());
+            assert!(WorkingQueuePress::observed(profile, Stop, Stop).is_none());
+            let press = WorkingQueuePress::observed(profile, Stop, Submit).unwrap();
+            assert!(press.accepted(Stop, Some("\n")));
+            assert!(!press.accepted(Stop, None));
+            assert!(!press.accepted(Stop, Some("synthetic draft")));
+            assert!(!press.accepted(Other, Some("")));
+            assert!(!press.accepted(Submit, Some("")));
+        }
+        let other = crate::profile::app("catdesk").unwrap();
+        assert!(WorkingQueuePress::observed(other, Stop, Submit).is_none());
     }
 
     #[test]
