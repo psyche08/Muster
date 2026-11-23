@@ -10,6 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 /// A running watch (device, agent, terminal) that ends when its token does.
 pub struct DesktopSession {
+    pub opened_from: Screen,
     pub device: String,
     pub id: u64,
     pub status: String,

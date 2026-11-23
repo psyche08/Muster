@@ -10,7 +10,7 @@ Desktop viewing should share the application's main navigation. A separate top-l
 
 ## Decision
 
-Place Remote immediately after Terminals in the Windows tab group. Shared Rust projects eligible paired desktop devices, selection, connection availability and any pending takeover. The shell mounts the native media child in a stable panel in the main window. Selecting a device never connects by itself. Switching tabs hides the panel while keeping an established stream. Disconnect and application shutdown end its lease. The device details shortcut opens the same workspace with the peer selected.
+Place Remote immediately after Terminals in the Windows tab group. Shared Rust projects eligible paired desktop devices, selection, connection availability and any pending takeover. The shell mounts the native media child in a stable panel in the main window. Selecting a device never connects by itself. Switching tabs hides the panel while keeping an established stream. The event loop retains leases opened from Remote across navigation. Legacy device-detail leases end when the detail or its peer changes. Disconnect and application shutdown end the workspace lease. The device details shortcut opens the same workspace with the peer selected.
 
 ## Alternatives
 

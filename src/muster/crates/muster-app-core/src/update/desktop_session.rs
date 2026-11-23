@@ -61,6 +61,7 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
     let id = crate::state::next_content_revision();
     let (watch, token) = state.new_watch();
     state.desktop_session = Some(DesktopSession {
+        opened_from: state.screen,
         device: request.device.clone(),
         id,
         status: "Opening desktop session…".into(),
@@ -159,6 +160,7 @@ mod tests {
         let mut state = State::new(false, None);
         let (watch, _) = state.new_watch();
         state.desktop_session = Some(DesktopSession {
+            opened_from: Screen::Remote,
             device: "host".into(),
             id: 3,
             status: String::new(),

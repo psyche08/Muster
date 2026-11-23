@@ -251,7 +251,8 @@ async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx, dir: PathBuf) {
                 Loop::Shutdown => break 'running,
             }
             if state.desktop_session.as_ref().is_some_and(|s| {
-                state.screen != muster_proto::app::Screen::Device || state.target() != s.device
+                s.opened_from == app::Screen::Device
+                    && (state.screen != app::Screen::Device || state.target() != s.device)
             }) {
                 state.desktop_session = None;
             }
