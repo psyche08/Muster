@@ -948,12 +948,15 @@ impl Node {
         record: DeviceRecord,
         generation: u64,
         pair_version: u32,
+        checked: Option<&muster_core::roster::State>,
     ) -> Result<Vec<Entry>, Error> {
         let entry = self.with_generation(generation, || {
             let mut roster = self.trust.roster.write().unwrap();
-            if pair_version != pair::VERSION && roster.state().network_access.is_some() {
+            if !pair::can_read(&roster, pair_version)
+                || checked.is_some_and(|s| s != roster.state())
+            {
                 return Err(Error::Unauthorized(
-                    "the network now requires access mode support".into(),
+                    "network membership or required decoder support changed during approval".into(),
                 ));
             }
             pair::author_add(&mut roster, self.signer.as_ref(), record)
@@ -1489,7 +1492,10 @@ impl Node {
                 let allowed = match (hello.service.as_str(), member) {
                     (pair::SERVICE, _) => {
                         !node.vnet_only
-                            && matches!(hello.version, pair::LEGACY_VERSION | pair::VERSION)
+                            && matches!(
+                                hello.version,
+                                pair::LEGACY_VERSION | pair::MODE_VERSION | pair::VERSION
+                            )
                     }
                     (_, false) => false,
                     (gossip::SERVICE | heartbeat::SERVICE, true) => true,

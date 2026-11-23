@@ -4730,6 +4730,12 @@ export namespace muster {
 
             /** ServiceGrants network */
             network?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants desktop */
+            desktop?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants managesDesktop */
+            managesDesktop?: (boolean|null);
         }
 
         /** Represents a ServiceGrants. */
@@ -4749,6 +4755,12 @@ export namespace muster {
 
             /** ServiceGrants network. */
             public network?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants desktop. */
+            public desktop?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants managesDesktop. */
+            public managesDesktop: boolean;
 
             /**
              * Creates a new ServiceGrants instance using the specified properties.

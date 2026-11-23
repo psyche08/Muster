@@ -286,3 +286,12 @@ Read limit: 4 MiB. Runs once when adopting a member link (`adopt`). `push_entrie
 - Proof of presence: `presence` signs `"MUSTER-PRESENCE-V1" || id u64 || prost(Request)` (no NUL separator; not `sign_domain`), verified directly using the member's roster `presence_key`. Required only when `authorize` returns NeedsPresence, namely for high-risk scopes `locked.control` and `network.admin`.
 - `target`: only local principals may set it (otherwise `UNAUTHORIZED "only the device's own app may address other devices"`). musterd opens a `muster` v1 stream to `DeviceId::from_hex(target)` and forwards the envelope with `target` cleared but `id` and `presence` retained. Events and Responses return with the same ID; Cancel with target is forwarded similarly; stream-opening failure returns UNAVAILABLE.
 - Call semantics: Request opens call `id`, Events stream back, and Response ends it. Cancel gives the handler a 2-second grace period, then returns `TIMEOUT "cancelled"`; an empty Request returns `INVALID "empty request"`.
+
+### Desktop service authorization
+
+A signed `desktop.view` scope permits viewing an unlocked paired desktop. A signed
+`desktop.mouse` scope permits both viewing and mouse input. A receiving desktop
+may replace these member grants with local desktop service rules. Pair protocol
+version 3 and roster-scopes probe version 3 identify readers of these appended
+scope tags. Administrators check active members before issuing either tag.
+See [ADR 0287](adr/0287-desktop-service-authorization.md).

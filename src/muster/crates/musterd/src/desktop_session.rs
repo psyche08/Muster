@@ -22,19 +22,13 @@ pub(super) async fn run(
     let action = request
         .action
         .ok_or_else(|| Error::Invalid("missing desktop action".into()))?;
-    if let Action::RememberAccess(raw) = action {
-        let access = v1::DesktopAccess::try_from(raw)
-            .map_err(|_| Error::Invalid("unknown desktop permission".into()))?;
-        if access != v1::DesktopAccess::None && !available().0 {
-            return Err(Error::Unavailable("desktop host is unavailable".into()));
-        }
-        #[cfg(target_os = "macos")]
-        if access != v1::DesktopAccess::None && !host::console_ready(daemon) {
-            return Err(Error::Unauthorized(
-                "unlock and uncover the local desktop to grant access".into(),
-            ));
-        }
-        return daemon.desktop_permissions.set(daemon, peer, access);
+    if matches!(
+        action,
+        Action::RememberAccess(_) | Action::ShareView(_) | Action::ShareMouse(_)
+    ) {
+        return Err(Error::Invalid(
+            "Manage incoming desktop access in Settings".into(),
+        ));
     }
     let _slot = daemon
         .desktop_slot
@@ -45,8 +39,6 @@ pub(super) async fn run(
         _ = events.cancelled().cancelled() => Ok(()),
         result = async {
             match action {
-                #[cfg(target_os="macos")]
-                Action::ShareView(_) | Action::ShareMouse(_) => host::offer(daemon, peer, matches!(action, Action::ShareMouse(_)), &events).await,
                 #[cfg(windows)]
                 Action::ViewInWindow(hwnd) if hwnd != 0 => viewer::view(daemon, peer, hwnd, &events).await,
                 _ => Err(Error::Unavailable("this desktop action is unavailable on this platform".into())),

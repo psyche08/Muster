@@ -24,13 +24,31 @@ use crate::stream::{MAX_MESSAGE, read_message, write_message};
 pub const SERVICE: &str = "pair";
 // The join wire payload is unchanged. V2 indicates support for the signed
 // NetworkAccess entry; V1 is accepted by a roster using its implicit mode.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
+pub(crate) const MODE_VERSION: u32 = 2;
+
+pub(crate) fn can_read(roster: &Roster, version: u32) -> bool {
+    use muster_core::roster::Body;
+    if version < MODE_VERSION && roster.state().network_access.is_some() {
+        return false;
+    }
+    version >= VERSION
+        || !roster.entries().any(|entry| {
+            let scopes = match &entry.body {
+                Body::Genesis { creator, .. } | Body::Add(creator) => Some(&creator.scopes),
+                Body::Update { update, .. } => update.scopes.as_ref(),
+                _ => None,
+            };
+            scopes.is_some_and(|s| s.iter().any(muster_core::Scope::is_desktop))
+        })
+}
 pub(crate) const LEGACY_VERSION: u32 = 1;
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// A joiner waiting for the admin's answer.
 #[derive(Clone, Debug)]
 pub struct Candidate {
+    pub version: u32,
     pub invite_id: [u8; 32],
     pub record: DeviceRecord,
 }
@@ -148,9 +166,8 @@ pub async fn serve(
     version: u32,
 ) {
     let result: Result<(), Error> = async {
-        let needs_mode_support = node.roster().read().unwrap().state().network_access.is_some();
-        if version != VERSION && needs_mode_support {
-            let reason = "This network requires a device that supports Basic and Advanced access modes";
+        if !can_read(&node.roster().read().unwrap(), version) {
+            let reason = "Update Muster to read the access permissions in this network";
             write_message(&mut send, &encode_response(STATUS_REJECTED, &[], reason)).await?;
             return Err(Error::Unauthorized(reason.into()));
         }
@@ -215,14 +232,37 @@ pub async fn serve(
         let verdict = tokio::select! {
             biased;
             _ = connection.closed() => return Err(Error::Io("pairing connection closed".into())),
-            verdict = tokio::time::timeout(APPROVAL_TIMEOUT, approver(Candidate { invite_id, record })) => {
+            verdict = tokio::time::timeout(APPROVAL_TIMEOUT, approver(Candidate { invite_id, record, version })) => {
                 verdict.map_err(|_| Error::Timeout("pairing approval"))?
                     .map_err(|_| Error::Protocol("approver dropped".into()))?
             }
         };
         match verdict {
             Verdict::Approve(record) => {
-                let entries = node.author_add(record, generation, version)?;
+                let result = async {
+                    let mut checked = None;
+                    if record.scopes.iter().any(muster_core::Scope::is_desktop) {
+                        if version < VERSION { return Err(Error::Unauthorized("Update the joining device for desktop permissions".into())); }
+                        let snapshot = node.roster().read().unwrap().state().clone();
+                        tokio::time::timeout(Duration::from_secs(10), async {
+                            for member in snapshot.active_members() {
+                                if member.record.device_id != node.device_id() {
+                                    crate::scope_compat::probe_desktop(node, member.record.device_id).await?;
+                                }
+                            }
+                            Ok::<_,Error>(())
+                        }).await.map_err(|_| Error::Timeout("desktop compatibility"))??;
+                        checked = Some(snapshot);
+                    }
+                    node.author_add(record, generation, version, checked.as_ref())
+                }.await;
+                let entries = match result {
+                    Ok(entries) => entries,
+                    Err(error) => {
+                        write_message(&mut send, &encode_response(STATUS_REJECTED, &[], &error.to_string())).await?;
+                        return Err(error);
+                    }
+                };
                 node.pairing().invites.lock().unwrap().remove(&invite_id);
                 write_message(&mut send, &encode_response(STATUS_ACCEPTED, &entries, "")).await?;
                 log::info!("paired {} ({})", peer.short(), peer.fingerprint());
@@ -261,7 +301,12 @@ pub async fn join(
     let (connection, mut send, mut recv) =
         tokio::time::timeout(crate::reconnect::CONNECT_TIMEOUT, async {
             let connection = node.connect_pinned(invite.admin_id).await?;
-            let (send, recv) = node.open_on(&connection, SERVICE, VERSION).await?;
+            let (send, recv) = match node.open_on(&connection, SERVICE, VERSION).await {
+                Err(Error::Unauthorized(_)) => {
+                    node.open_on(&connection, SERVICE, MODE_VERSION).await?
+                }
+                result => result?,
+            };
             Ok::<_, Error>((connection, send, recv))
         })
         .await

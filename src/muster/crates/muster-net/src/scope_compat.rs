@@ -14,10 +14,11 @@ use std::sync::Arc;
 pub const SERVICE: &str = "roster-scopes";
 pub const VERSION: u32 = 1;
 pub const NETWORK_ACCESS_VERSION: u32 = 2;
+pub const DESKTOP_VERSION: u32 = 3;
 const NETWORK_ACCESS_PROBE: &[u8] = b"MUSTER-NETWORK-ACCESS-MODE-V1";
 
 pub fn supports(version: u32) -> bool {
-    matches!(version, VERSION | NETWORK_ACCESS_VERSION)
+    matches!(version, VERSION | NETWORK_ACCESS_VERSION | DESKTOP_VERSION)
 }
 const MAX: usize = 1024;
 
@@ -29,7 +30,7 @@ fn encode(scopes: &[Scope]) -> Vec<u8> {
     }
     writer.finish()
 }
-fn decode(bytes: &[u8]) -> Result<Vec<u8>, Error> {
+fn decode(bytes: &[u8], expected: &[Scope]) -> Result<Vec<u8>, Error> {
     let mut reader = Reader::new(bytes);
     if reader.str()? != "MUSTER-SCOPE-COMPAT-V1" {
         return Err(Error::Protocol("scope probe domain".into()));
@@ -41,7 +42,7 @@ fn decode(bytes: &[u8]) -> Result<Vec<u8>, Error> {
     reader.finish()?;
     let mut scopes = vec![first, second];
     scopes.sort();
-    if scopes != [Scope::MulticaView, Scope::MulticaControl] {
+    if scopes != expected {
         return Err(Error::Protocol("unsupported scope probe".into()));
     }
     Ok(encode(&scopes))
@@ -50,6 +51,16 @@ fn decode(bytes: &[u8]) -> Result<Vec<u8>, Error> {
 pub async fn probe(node: &Arc<Node>, peer: DeviceId) -> Result<(), Error> {
     let request = encode(&[Scope::MulticaView, Scope::MulticaControl]);
     probe_supported(node, peer, VERSION, &request).await
+}
+
+pub async fn probe_desktop(node: &Arc<Node>, peer: DeviceId) -> Result<(), Error> {
+    probe_supported(
+        node,
+        peer,
+        DESKTOP_VERSION,
+        &encode(&[Scope::DesktopView, Scope::DesktopMouse]),
+    )
+    .await
 }
 
 pub async fn probe_network_access(node: &Arc<Node>, peer: DeviceId) -> Result<(), Error> {
@@ -88,7 +99,20 @@ pub(crate) async fn serve(version: u32, mut send: SendStream, mut recv: RecvStre
             .await?
             .ok_or_else(|| Error::Protocol("empty scope probe".into()))?;
         match version {
-            VERSION => write_message(&mut send, &decode(&bytes)?).await,
+            VERSION => {
+                write_message(
+                    &mut send,
+                    &decode(&bytes, &[Scope::MulticaView, Scope::MulticaControl])?,
+                )
+                .await
+            }
+            DESKTOP_VERSION => {
+                write_message(
+                    &mut send,
+                    &decode(&bytes, &[Scope::DesktopView, Scope::DesktopMouse])?,
+                )
+                .await
+            }
             NETWORK_ACCESS_VERSION if bytes == NETWORK_ACCESS_PROBE => {
                 write_message(&mut send, NETWORK_ACCESS_PROBE).await
             }
@@ -106,6 +130,8 @@ mod tests {
     use super::*;
     #[test]
     fn probe_proves_canonical_order_and_rejects_other_or_trailing_data() {
+        let decode =
+            |bytes: &[u8]| super::decode(bytes, &[Scope::MulticaView, Scope::MulticaControl]);
         let expected = encode(&[Scope::MulticaView, Scope::MulticaControl]);
         assert_eq!(decode(&expected).unwrap(), expected);
         assert_eq!(

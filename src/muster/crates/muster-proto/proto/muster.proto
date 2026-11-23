@@ -604,6 +604,9 @@ message ServiceGrants {
   GrantSet agents = 1;
   GrantSet terminals = 2;
   GrantSet network = 3;
+  GrantSet desktop = 4;
+  // A desktop-aware editor can explicitly return to signed member grants.
+  bool manages_desktop = 5;
 }
 
 message GrantSet {

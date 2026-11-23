@@ -67,6 +67,8 @@ pub enum Scope {
     Terminals,
     MulticaView,
     MulticaControl,
+    DesktopView,
+    DesktopMouse,
 }
 
 impl Scope {
@@ -74,6 +76,10 @@ impl Scope {
         proto: Proto::Any,
         port: None,
     };
+
+    pub fn is_desktop(&self) -> bool {
+        matches!(self, Self::DesktopView | Self::DesktopMouse)
+    }
 
     /// High-risk scopes need a presence proof at use time (§3.4).
     pub fn high_risk(&self) -> bool {
@@ -137,6 +143,8 @@ impl fmt::Display for Scope {
             Scope::Terminals => f.write_str("terminals"),
             Scope::MulticaView => f.write_str("multica.view"),
             Scope::MulticaControl => f.write_str("multica.control"),
+            Scope::DesktopView => f.write_str("desktop.view"),
+            Scope::DesktopMouse => f.write_str("desktop.mouse"),
             Scope::Net {
                 proto: Proto::Any,
                 port: None,
@@ -174,6 +182,8 @@ impl FromStr for Scope {
             "terminals" => Scope::Terminals,
             "multica.view" => Scope::MulticaView,
             "multica.control" => Scope::MulticaControl,
+            "desktop.view" => Scope::DesktopView,
+            "desktop.mouse" => Scope::DesktopMouse,
             "net:*" => Scope::ALL_NET,
             other if other.starts_with("chats:") => Scope::ChatProvider(provider(other, "chats:")?),
             other if other.starts_with("agents:") => {

@@ -34,6 +34,9 @@ pub enum Permission {
     Terminal {
         control: bool,
     },
+    Desktop {
+        mouse: bool,
+    },
     Browser {
         control: bool,
     },
@@ -82,6 +85,9 @@ impl Permission {
                     } else {
                         Scope::TerminalView
                     })
+            }
+            Permission::Desktop { mouse } => {
+                has(Scope::DesktopMouse) || (!mouse && has(Scope::DesktopView))
             }
             Permission::Browser { control } => has(if *control {
                 Scope::BrowserControl
@@ -134,6 +140,11 @@ impl fmt::Display for Permission {
                 control,
             } => write!(f, "agents:{p} ({})", verb(*control)),
             Permission::Terminal { control } => write!(f, "terminals ({})", verb(*control)),
+            Permission::Desktop { mouse } => f.write_str(if *mouse {
+                "desktop.mouse"
+            } else {
+                "desktop.view"
+            }),
             Permission::Browser { control } => write!(f, "browser.{}", verb(*control)),
             Permission::Multica { control, .. } => write!(f, "multica.{}", verb(*control)),
             Permission::LockedControl => f.write_str("locked.control"),
@@ -156,6 +167,7 @@ pub struct ServiceGrants {
     pub agents: Option<GrantSet>,
     pub terminals: Option<GrantSet>,
     pub network: Option<GrantSet>,
+    pub desktop: Option<GrantSet>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,6 +188,7 @@ impl ServiceGrants {
             Permission::Agent { .. } => self.agents.as_ref(),
             Permission::Terminal { .. } => self.terminals.as_ref(),
             Permission::Net { .. } => self.network.as_ref(),
+            Permission::Desktop { .. } => self.desktop.as_ref(),
             _ => None,
         }
     }
@@ -189,7 +202,9 @@ impl GrantSet {
                     return false;
                 }
                 match (&rule.scope, wanted) {
-                    (Scope::Agents, Permission::Agent { .. })
+                    (Scope::DesktopMouse, Permission::Desktop { .. })
+                    | (Scope::DesktopView, Permission::Desktop { mouse: false })
+                    | (Scope::Agents, Permission::Agent { .. })
                     | (Scope::Terminals, Permission::Terminal { .. })
                     | (Scope::TerminalView, Permission::Terminal { control: false })
                     | (Scope::TerminalControl, Permission::Terminal { control: true }) => true,
@@ -228,6 +243,9 @@ pub struct LocalPolicy {
     pub offer_network: Option<bool>,
     #[serde(default)]
     pub service_grants: ServiceGrants,
+    /// Pair admissions attached to explicitly assigned desktop viewers.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub desktop_pairings: std::collections::BTreeMap<DeviceId, DesktopPairing>,
     pub allow_locked_control: bool,
     /// Bundle identifiers the AX controller may drive.
     pub ax_allowlist: Vec<String>,
@@ -271,6 +289,7 @@ impl Default for LocalPolicy {
             }],
             offer_network: None,
             service_grants: ServiceGrants::default(),
+            desktop_pairings: Default::default(),
             allow_locked_control: false,
             // CatDesk is allowed explicitly per target, not by default.
             ax_allowlist: vec![
@@ -311,6 +330,7 @@ impl LocalPolicy {
             Permission::Chat { .. } | Permission::Agent { .. } | Permission::Browser { .. } => {
                 self.offer_agent
             }
+            Permission::Desktop { .. } => !target.locked,
             Permission::Terminal { .. } => self.offer_terminal,
             Permission::Multica { workspace, .. } => {
                 self.offer_multica
@@ -332,6 +352,27 @@ impl LocalPolicy {
                 || wanted.high_risk()
                 || matches!(wanted, Permission::Net { .. })
                 || self.allow_locked_control)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DesktopPairing {
+    pub network: crate::roster::EntryHash,
+    pub host: crate::roster::EntryHash,
+    pub viewer: crate::roster::EntryHash,
+}
+
+impl DesktopPairing {
+    pub fn current(state: &State, host: DeviceId, peer: DeviceId) -> Option<Self> {
+        let viewer = state.active(&peer)?;
+        if peer == host || viewer.record.kind != crate::roster::DeviceKind::Desktop {
+            return None;
+        }
+        Some(Self {
+            network: state.network_id?,
+            host: state.active(&host)?.joined_at?,
+            viewer: viewer.joined_at?,
+        })
     }
 }
 
@@ -644,6 +685,7 @@ mod tests {
                 agents: Some(grant("agents:codex")),
                 terminals: Some(grant("terminal.view")),
                 network: Some(grant("net:*")),
+                ..Default::default()
             },
             ..LocalPolicy::default()
         };
