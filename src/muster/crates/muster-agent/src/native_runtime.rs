@@ -70,6 +70,35 @@ impl NativeConsole {
         Err(Error::Conflict(format!("{why}; nothing was submitted")))
     }
 
+    /// Creation can use a non-activating route inside a Locked Use lease.
+    /// This chooses navigation only. The caller retains the lease and its
+    /// system-wide input guard throughout the operation.
+    pub fn for_creation(
+        covered: bool,
+        provider: &str,
+        pid: Option<u32>,
+        focus: crate::local_input::Owner,
+    ) -> Self {
+        let actual = Self::observe(false, pid, focus);
+        if covered && (provider != "codex" || pid.is_none() || actual == Self::Provider) {
+            Self::Covered
+        } else {
+            actual
+        }
+    }
+
+    pub fn target_scoped_input(self, covered: bool) -> bool {
+        !covered && matches!(self, Self::Background(_))
+    }
+
+    pub fn creation_focus_holds(self, covered: bool, actual: Self) -> bool {
+        match (covered, self) {
+            (true, Self::Covered) => true,
+            (true, Self::Background(_)) => self == actual,
+            _ => self.creation_continues(actual),
+        }
+    }
+
     pub fn observe(covered: bool, provider: Option<u32>, focus: crate::local_input::Owner) -> Self {
         use crate::local_input::Owner;
         if covered {
@@ -451,6 +480,38 @@ fn project_in_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn covered_codex_keeps_lease_input_scope_and_the_background_owner() {
+        use crate::local_input::Owner;
+        use NativeConsole::*;
+        let mode = NativeConsole::for_creation(true, "codex", Some(9), Owner::Process(7));
+        assert_eq!(mode, Background(7));
+        assert!(!mode.target_scoped_input(true));
+        assert!(mode.creation_focus_holds(true, Background(7)));
+        for changed in [Background(8), Provider, Waiting] {
+            assert!(!mode.creation_focus_holds(true, changed));
+        }
+        assert!(mode.check_wait(true, "codex").is_err());
+        assert_eq!(
+            NativeConsole::for_creation(true, "codex", Some(9), Owner::Unknown),
+            Waiting
+        );
+        assert_eq!(
+            NativeConsole::for_creation(true, "codex", Some(9), Owner::Process(9)),
+            Covered
+        );
+        assert_eq!(
+            NativeConsole::for_creation(true, "codex", None, Owner::Process(7)),
+            Covered
+        );
+        assert_eq!(
+            NativeConsole::for_creation(true, "claude", Some(9), Owner::Process(7)),
+            Covered
+        );
+        assert!(mode.target_scoped_input(false));
+        assert!(mode.creation_focus_holds(false, Background(8)));
+    }
+
     #[test]
     fn a_claude_environment_names_its_main_folder() {
         let state = |presets: &str| {

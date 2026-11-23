@@ -111,6 +111,7 @@ struct Guard {
     start: u64,
     generation: u64,
     mode: NativeConsole,
+    covered: bool,
     shown: Option<Shown>,
 }
 
@@ -122,24 +123,38 @@ struct Shown {
     app: Element,
     pid: u32,
     hide: bool,
+    covered_owner: Option<NativeConsole>,
 }
 impl Shown {
-    fn reveal(app: &Element, pid: u32) -> Result<Option<Self>, Error> {
+    fn reveal(app: &Element, guard: &Guard) -> Result<Option<Self>, Error> {
         if app.bool("AXHidden") != Some(true) {
             return Ok(None);
         }
+        guard.check()?;
         app.set_bool("AXHidden", false)
             .map_err(|_| unavailable("The hidden app could not be shown without activating it"))?;
         Ok(Some(Self {
             app: app.clone(),
-            pid,
+            pid: guard.pid,
             hide: true,
+            covered_owner: guard.covered.then_some(guard.mode),
         }))
     }
 }
 impl Drop for Shown {
     fn drop(&mut self) {
         if self.hide
+            && self.covered_owner.is_none_or(|mode| {
+                console().is_ok()
+                    && mode.creation_focus_holds(
+                        true,
+                        NativeConsole::observe(
+                            false,
+                            Some(self.pid),
+                            super::events::foreground_owner(),
+                        ),
+                    )
+            })
             && super::events::foreground_owner()
                 != muster_agent::local_input::Owner::Process(self.pid)
             && self.app.bool("AXHidden") == Some(false)
@@ -160,17 +175,16 @@ impl Guard {
             ));
         }
         if self.mode != NativeConsole::Covered
-            && !self.mode.creation_continues(NativeConsole::observe(
-                false,
-                Some(self.pid),
-                super::events::foreground_owner(),
-            ))
+            && !self.mode.creation_focus_holds(
+                self.covered,
+                NativeConsole::observe(false, Some(self.pid), super::events::foreground_owner()),
+            )
         {
             return Err(conflict(
                 "Foreground application changed during native creation",
             ));
         }
-        let generation = if matches!(self.mode, NativeConsole::Background(_)) {
+        let generation = if self.mode.target_scoped_input(self.covered) {
             input::target_input_generation(self.pid)
         } else {
             input::user_input_generation()
@@ -1067,7 +1081,8 @@ async fn prepare(
             return Err(conflict("Ambiguous native app processes"));
         }
         let pid = pids.first().copied();
-        let mode = NativeConsole::observe(covered, pid, super::events::foreground_owner());
+        let mode =
+            NativeConsole::for_creation(covered, provider, pid, super::events::foreground_owner());
         if mode == NativeConsole::Provider
             && let Some(mut taken) = shown.take()
         {
@@ -1076,7 +1091,7 @@ async fn prepare(
         }
         if let Some(pid) = pid {
             let background = matches!(mode, NativeConsole::Background(_));
-            let quiet = if background {
+            let quiet = if mode.target_scoped_input(covered) {
                 input::target_input_idle(&[pid])
             } else {
                 input::user_input_idle()
@@ -1086,6 +1101,7 @@ async fn prepare(
                 NativeConsole::Background(_) if quiet < Duration::from_millis(500) => {
                     "provider_input"
                 }
+                NativeConsole::Background(_) if covered => "covered_other_app_foreground",
                 NativeConsole::Background(_) => "other_app_foreground",
                 NativeConsole::Waiting => "no_focus_owner",
                 NativeConsole::Covered if quiet < Duration::from_millis(500) => "covered_input",
@@ -1100,12 +1116,13 @@ async fn prepare(
                     profile,
                     pid,
                     start: codesign::process_start(pid).ok_or_else(|| unavailable("App exited"))?,
-                    generation: if background {
+                    generation: if mode.target_scoped_input(covered) {
                         input::target_input_generation(pid)
                     } else {
                         input::user_input_generation()
                     },
                     mode,
+                    covered,
                     shown: None,
                 };
                 if let Err(error) = guard.check() {
@@ -1123,7 +1140,7 @@ async fn prepare(
                 }
                 let mut settle = Duration::ZERO;
                 if shown.is_none()
-                    && let Some(revealed) = Shown::reveal(&root, pid)?
+                    && let Some(revealed) = Shown::reveal(&root, &guard)?
                 {
                     shown = Some(revealed);
                     stage("revealed_hidden_app");
@@ -1133,7 +1150,10 @@ async fn prepare(
                 // Observation only: a changed console or input is a requeue.
                 let until = Instant::now() + settle;
                 let found = loop {
-                    if guard.check().is_err() {
+                    if let Err(error) = guard.check() {
+                        if provider_held {
+                            return Err(error);
+                        }
                         break None;
                     }
                     if let Some(window) =
