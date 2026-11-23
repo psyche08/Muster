@@ -735,7 +735,7 @@ struct DeviceControlTiles {
           title: 'Locked Use',
           status: lockedUseOf(this.vm, this.deviceId)?.status ?? '',
           on: lockedUseOf(this.vm, this.deviceId)?.on ?? false,
-          enabled: lockedUseOf(this.vm, this.deviceId)?.enabled ?? false,
+          canToggle: lockedUseOf(this.vm, this.deviceId)?.enabled ?? false,
           busy: false,
           onSet: (on: boolean): void => { this.core.setDeviceLockedUse(on, this.deviceId); }
         }).layoutWeight(1)
@@ -745,7 +745,7 @@ struct DeviceControlTiles {
           title: '强制遮罩',
           status: maskOf(this.vm, this.deviceId)?.status ?? '',
           on: maskOf(this.vm, this.deviceId)?.on ?? false,
-          enabled: maskOf(this.vm, this.deviceId)?.enabled ?? false,
+          canToggle: maskOf(this.vm, this.deviceId)?.enabled ?? false,
           busy: maskOf(this.vm, this.deviceId)?.busy ?? false,
           onSet: (on: boolean): void => { this.core.setBlackout(on, this.deviceId); }
         }).layoutWeight(1)
@@ -759,7 +759,7 @@ struct DeviceControlTile {
   @Param title: string = '';
   @Param status: string = '';
   @Param on: boolean = false;
-  @Param enabled: boolean = false;
+  @Param canToggle: boolean = false;
   @Param busy: boolean = false;
   @Event onSet: (on: boolean) => void = (): void => {};
   build() {
@@ -771,7 +771,7 @@ struct DeviceControlTile {
           LoadingProgress().width(16).height(16)
         }
         Toggle({ type: ToggleType.Switch, isOn: this.on })
-          .enabled(this.enabled)
+          .enabled(this.canToggle)
           .onChange((on: boolean): void => { this.onSet(on); })
       }.width('100%')
       Text(this.status).fontSize(12).fontColor($r('sys.color.font_secondary')).maxLines(3)

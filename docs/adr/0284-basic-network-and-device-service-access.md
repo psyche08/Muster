@@ -88,3 +88,7 @@ and iOS Simulator settings, Android Kotlin and the Windows app compile.
 Production devices using the earlier binaries can synchronize the compatible
 coarse network grants. Signing, publication and installation of the new
 binaries remain pending.
+
+HarmonyOS ArkTS also compiles in an unsigned UI-only configuration. The
+existing shadowing of the ArkUI `enabled` method in the network settings
+component was corrected to complete this check.
