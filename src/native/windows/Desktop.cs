@@ -859,7 +859,7 @@ internal sealed class Desktop : Form
                         AddAction(name + " access rules", () =>
                         {
                             using var dialog = new ServiceGrantsDialog(name, wholeScope, placeholder,
-                                network.Members.Where(member => !member.IsSelf), original);
+                                network.Members.Where(member => !member.IsSelf && (wholeScope != "desktop.mouse" || member.Kind == "desktop")), original);
                             if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
                                 current.Policy is not {} latest) return;
                             if (!Equals(original, read(latest.ServiceGrants ?? new())))
@@ -877,6 +877,8 @@ internal sealed class Desktop : Form
                         (rules, value) => rules.Agents = value);
                     EditService("Terminals", "terminals", "terminals, terminal.view or terminal.control",
                         rules => rules.Terminals, (rules, value) => rules.Terminals = value);
+                    EditService("Desktop (all includes mouse control)", "desktop.mouse", "desktop.view or desktop.mouse",
+                        rules => rules.Desktop, (rules, value) => { rules.Desktop = value; rules.ManagesDesktop = true; });
                     EditService("Network", "net:*", network.AccessMode == "advanced" ? "net:* or net:tcp/443" : "",
                         rules => rules.Network, (rules, value) => rules.Network = value);
                     lines.Add("Network offer: " + (policy.HasOfferNetwork

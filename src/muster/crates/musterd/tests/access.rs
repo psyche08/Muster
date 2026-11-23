@@ -697,6 +697,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
             rules: vec![],
         }),
         network: None,
+        ..Default::default()
     });
     let owner_request = Req::PolicySet(v1::PolicySetRequest {
         policy: Some(owner_policy),

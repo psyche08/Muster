@@ -370,7 +370,14 @@ impl Daemon {
                 ..Default::default()
             })?;
         }
-        let policy: SharedPolicy = Arc::new(RwLock::new(store.policy()?));
+        let mut stored_policy = store.policy()?;
+        desktop_session::permissions::migrate(
+            &store,
+            roster.read().unwrap().state(),
+            signer.public_key().device_id(),
+            &mut stored_policy,
+        )?;
+        let policy: SharedPolicy = Arc::new(RwLock::new(stored_policy));
         let node = Node::start(
             node_config(&config, relay, stored_push_token(&store)),
             signer.clone(),

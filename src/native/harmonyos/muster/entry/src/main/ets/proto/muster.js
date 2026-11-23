@@ -12141,6 +12141,8 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IGrantSet|null} [agents] ServiceGrants agents
              * @property {muster.v1.IGrantSet|null} [terminals] ServiceGrants terminals
              * @property {muster.v1.IGrantSet|null} [network] ServiceGrants network
+             * @property {muster.v1.IGrantSet|null} [desktop] ServiceGrants desktop
+             * @property {boolean|null} [managesDesktop] ServiceGrants managesDesktop
              */
 
             /**
@@ -12183,6 +12185,22 @@ export const muster = $root.muster = (() => {
             ServiceGrants.prototype.network = null;
 
             /**
+             * ServiceGrants desktop.
+             * @member {muster.v1.IGrantSet|null|undefined} desktop
+             * @memberof muster.v1.ServiceGrants
+             * @instance
+             */
+            ServiceGrants.prototype.desktop = null;
+
+            /**
+             * ServiceGrants managesDesktop.
+             * @member {boolean} managesDesktop
+             * @memberof muster.v1.ServiceGrants
+             * @instance
+             */
+            ServiceGrants.prototype.managesDesktop = false;
+
+            /**
              * Creates a new ServiceGrants instance using the specified properties.
              * @function create
              * @memberof muster.v1.ServiceGrants
@@ -12216,6 +12234,10 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.GrantSet.encode(message.terminals, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                 if (message.network != null && Object.hasOwnProperty.call(message, "network"))
                     $root.muster.v1.GrantSet.encode(message.network, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                if (message.desktop != null && Object.hasOwnProperty.call(message, "desktop"))
+                    $root.muster.v1.GrantSet.encode(message.desktop, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                if (message.managesDesktop != null && Object.hasOwnProperty.call(message, "managesDesktop"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).bool(message.managesDesktop);
                 return writer;
             };
 
@@ -12263,6 +12285,14 @@ export const muster = $root.muster = (() => {
                         }
                     case 3: {
                             message.network = $root.muster.v1.GrantSet.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 4: {
+                            message.desktop = $root.muster.v1.GrantSet.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 5: {
+                            message.managesDesktop = reader.bool();
                             break;
                         }
                     default:

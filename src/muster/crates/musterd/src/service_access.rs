@@ -12,6 +12,8 @@ pub fn view(grants: &ServiceGrants) -> v1::ServiceGrants {
         agents: grants.agents.as_ref().map(grant_view),
         terminals: grants.terminals.as_ref().map(grant_view),
         network: grants.network.as_ref().map(grant_view),
+        desktop: grants.desktop.as_ref().map(grant_view),
+        manages_desktop: false,
     }
 }
 
@@ -39,6 +41,9 @@ pub fn parse(view: &v1::ServiceGrants) -> Result<ServiceGrants, Error> {
                 scope,
                 Scope::Terminals | Scope::TerminalView | Scope::TerminalControl
             )
+        })?,
+        desktop: parse_grants(view.desktop.as_ref(), |scope| {
+            matches!(scope, Scope::DesktopView | Scope::DesktopMouse)
         })?,
         network: parse_grants(view.network.as_ref(), |scope| {
             matches!(scope, Scope::Net { .. })

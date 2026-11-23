@@ -38,6 +38,7 @@ struct LocalServiceGrantsView: View {
     private func grants(for service: Service) -> Muster_V1_GrantSet? {
         let grants = policy.serviceGrants
         switch service {
+        case .desktop: return grants.hasDesktop ? grants.desktop : nil
         case .agents: return grants.hasAgents ? grants.agents : nil
         case .terminals: return grants.hasTerminals ? grants.terminals : nil
         case .network: return grants.hasNetwork ? grants.network : nil
@@ -47,6 +48,9 @@ struct LocalServiceGrantsView: View {
     private func setGrants(_ value: Muster_V1_GrantSet?, for service: Service) {
         var grants = policy.serviceGrants
         switch service {
+        case .desktop:
+            grants.managesDesktop = true
+            if let value { grants.desktop = value } else { grants.clearDesktop() }
         case .agents:
             if let value { grants.agents = value } else { grants.clearAgents() }
         case .terminals:
@@ -59,12 +63,12 @@ struct LocalServiceGrantsView: View {
 
     private func summary(_ grants: Muster_V1_GrantSet?, for service: Service) -> String {
         guard let grants else { return "Existing policy" }
-        if grants.allDevices { return "All paired devices" }
+        if grants.allDevices { return service == .desktop ? "All paired desktops, including mouse control" : "All paired devices" }
         let visible = grants.rules.filter { service != .network || advanced || $0.scope == service.wholeScope }
         let assignments = visible.compactMap { rule -> String? in
             let names = members.filter { rule.deviceIds.contains($0.deviceID) }.map(\.name)
             guard !names.isEmpty else { return nil }
-            let selector = rule.scope == service.wholeScope ? "All" : rule.scope
+            let selector = service == .desktop ? (rule.scope == "desktop.mouse" ? "View and mouse" : "View only") : (rule.scope == service.wholeScope ? "All" : rule.scope)
             return "\(selector) → \(names.joined(separator: ", "))"
         }
         return assignments.isEmpty ? "No assigned devices" : assignments.joined(separator: "\n")
@@ -72,11 +76,11 @@ struct LocalServiceGrantsView: View {
 }
 
 private enum Service: String, Identifiable, CaseIterable {
-    case agents, terminals, network
+    case agents, terminals, network, desktop
 
     var id: Self { self }
     var title: String { rawValue.capitalized }
-    var wholeScope: String { self == .network ? "net:*" : rawValue }
+    var wholeScope: String { self == .desktop ? "desktop.view" : self == .network ? "net:*" : rawValue }
 }
 
 private struct ServiceGrantEditor: View {
@@ -101,7 +105,7 @@ private struct ServiceGrantEditor: View {
         advanced: Bool, save: @escaping (Muster_V1_GrantSet?) -> Void
     ) {
         self.service = service
-        self.members = members
+        self.members = service == .desktop ? members.filter { $0.kind == "desktop" && !$0.isSelf } : members
         self.advanced = advanced
         self.save = save
         _audience = State(initialValue: existing.map { $0.allDevices ? .all : .assigned } ?? .existing)
@@ -117,7 +121,7 @@ private struct ServiceGrantEditor: View {
             Form {
                 Picker("Allow access for", selection: $audience) {
                     ForEach(Audience.allCases) { option in
-                        Text(option.rawValue).tag(option)
+                        Text(service == .desktop && option == .all ? "All paired desktops, including mouse control" : option.rawValue).tag(option)
                     }
                 }
                 if audience == .assigned {
@@ -157,6 +161,11 @@ private struct ServiceGrantEditor: View {
     @ViewBuilder
     private func selector(_ index: Int) -> some View {
         switch service {
+        case .desktop:
+            Picker("Permission", selection: $rules[index].scope) {
+                Text("View only").tag("desktop.view")
+                Text("View and use the mouse").tag("desktop.mouse")
+            }
         case .terminals:
             Picker("Permission", selection: $rules[index].scope) {
                 Text("All terminal access").tag("terminals")

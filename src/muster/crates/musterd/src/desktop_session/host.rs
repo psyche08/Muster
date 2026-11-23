@@ -5,8 +5,6 @@ use muster_net::remote_desktop::{
     Access, Handler, Session,
     gamestream::{self, EnginePorts},
 };
-use muster_proto::v1::desktop_session_progress::Phase;
-use muster_rpc::EventSink;
 use std::{
     future::Future,
     os::unix::fs::PermissionsExt,
@@ -19,7 +17,6 @@ use std::{
 use tokio::{
     io::AsyncWriteExt,
     process::Command,
-    sync::watch,
     time::{sleep, timeout},
 };
 
@@ -34,19 +31,14 @@ pub(super) fn console_ready(daemon: &Daemon) -> bool {
 struct Host {
     daemon: Weak<Daemon>,
     program: std::path::PathBuf,
-    events: Option<EventSink>,
-    remembered: Option<(super::permissions::Lease, tokio::sync::OwnedSemaphorePermit)>,
-    finished: watch::Sender<Option<Result<(), String>>>,
+    lease: super::permissions::Lease,
+    _slot: tokio::sync::OwnedSemaphorePermit,
 }
 impl Handler for Host {
     fn console_ready(&self) -> bool {
-        self.daemon.upgrade().is_some_and(|d| {
-            console_ready(&d)
-                && self
-                    .remembered
-                    .as_ref()
-                    .is_none_or(|(lease, _)| lease.current(&d))
-        })
+        self.daemon
+            .upgrade()
+            .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
     }
     fn serve<'a>(
         &'a self,
@@ -54,22 +46,9 @@ impl Handler for Host {
         session: &'a mut Session,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            struct Completion<'a>(&'a watch::Sender<Option<Result<(), String>>>);
-            impl Drop for Completion<'_> {
-                fn drop(&mut self) {
-                    self.0.send_if_modified(|r| {
-                        if r.is_some() {
-                            false
-                        } else {
-                            *r = Some(Ok(()));
-                            true
-                        }
-                    });
-                }
+            if let Err(error) = self.stream(session).await {
+                log::info!("Desktop session ended: {error}");
             }
-            let _completion = Completion(&self.finished);
-            let result = self.stream(session).await.map_err(|e| e.to_string());
-            self.finished.send_replace(Some(result));
         })
     }
 }
@@ -80,9 +59,6 @@ impl Host {
             .map_err(|_| unavailable("viewer handshake timed out"))??;
         if hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
-        }
-        if let Some(events) = &self.events {
-            progress(events, Phase::Starting).await?;
         }
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
@@ -117,13 +93,11 @@ pub(crate) fn admit(
     let slot = daemon.desktop_slot.clone().try_acquire_owned().ok()?;
     let program = program(CAPTURE_HOST).ok()?;
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
-    let (finished, _) = watch::channel(None);
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
         program,
-        events: None,
-        remembered: Some((lease, slot)),
-        finished,
+        lease,
+        _slot: slot,
     });
     let access = if mode == muster_proto::v1::DesktopAccess::Mouse {
         Access::ViewAndMouse
@@ -131,46 +105,6 @@ pub(crate) fn admit(
         Access::View
     };
     Some(muster_net::remote_desktop::Sharing::new(peer, access, host))
-}
-
-pub(super) async fn offer(
-    daemon: &Arc<Daemon>,
-    peer: DeviceId,
-    mouse: bool,
-    events: &EventSink,
-) -> Result<(), Error> {
-    let (finished, mut result) = watch::channel(None);
-    let host = Arc::new(Host {
-        daemon: Arc::downgrade(daemon),
-        program: program(CAPTURE_HOST)?,
-        events: Some(events.clone()),
-        remembered: None,
-        finished,
-    });
-    if !host.console_ready() {
-        return Err(unavailable(
-            "Unlock the Mac and uncover its active desktop before sharing",
-        ));
-    }
-    let _sharing = daemon.node().share_remote_desktop(
-        peer,
-        if mouse {
-            Access::ViewAndMouse
-        } else {
-            Access::View
-        },
-        host.clone(),
-    )?;
-    progress(events, Phase::Offered).await?;
-    loop {
-        tokio::select! {
-            change=result.changed()=>{
-                change.map_err(|_|unavailable("desktop sharing ended"))?;
-                if let Some(result)=result.borrow_and_update().clone(){return result.map_err(unavailable);}
-            },
-            _=sleep(Duration::from_millis(250))=>if !host.console_ready(){return Err(unavailable("desktop sharing ended because the console is unavailable"));},
-        }
-    }
 }
 
 async fn start(

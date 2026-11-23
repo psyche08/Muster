@@ -21,6 +21,11 @@ const JOIN_DEFAULTS: &[&str] = &[
 
 /// Offered in "Other" whether held or not, in this order.
 const OTHER: &[(&str, &str)] = &[
+    ("desktop.view", "View an unlocked desktop"),
+    (
+        "desktop.mouse",
+        "View an unlocked desktop and use the mouse",
+    ),
     ("browser.view", "Read browser tabs and pages"),
     ("browser.control", "Control browser pages"),
     ("network.admin", "Administer the network"),

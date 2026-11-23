@@ -557,6 +557,13 @@ impl Daemon {
             {
                 return Err(Error::Invalid("Join without Multica permissions, then grant them after all members pass compatibility checks".into()));
             }
+            if record.scopes.iter().any(Scope::is_desktop)
+                && join.candidate.version < muster_net::pair::VERSION
+            {
+                return Err(Error::Unavailable(
+                    "Update the joining device before granting desktop access".into(),
+                ));
+            }
             Some(record)
         } else {
             None
@@ -668,10 +675,11 @@ impl Daemon {
         role: &str,
     ) -> Result<(), Error> {
         let parsed = parse_scopes(scopes)?;
-        if !parsed
+        let multica = parsed
             .iter()
-            .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl))
-        {
+            .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl));
+        let desktop = parsed.iter().any(Scope::is_desktop);
+        if !multica && !desktop {
             return self.set_scopes(device_id, scopes, role);
         }
         let snapshot = self.roster().read().unwrap().state().clone();
@@ -679,6 +687,18 @@ impl Daemon {
             for member in snapshot.active_members() {
                 let peer = member.record.device_id;
                 if peer == self.device_id() {
+                    continue;
+                }
+                if desktop {
+                    muster_net::scope_compat::probe_desktop(&self.node(), peer)
+                        .await
+                        .map_err(|_| {
+                            Error::Unavailable(
+                                "All active members must support desktop permissions".into(),
+                            )
+                        })?;
+                }
+                if !multica {
                     continue;
                 }
                 muster_net::scope_compat::probe(&self.node(), peer).await
@@ -690,7 +710,8 @@ impl Daemon {
             .await
             .map_err(|_| {
                 Error::Unavailable(
-                    "All members must be online and upgraded before granting Multica".into(),
+                    "All members must be online and upgraded before granting these permissions"
+                        .into(),
                 )
             })??;
         self.set_scopes_inner(device_id, scopes, role, Some(&snapshot))
@@ -720,11 +741,11 @@ impl Daemon {
         }
         if parsed
             .iter()
-            .any(|s| matches!(s, Scope::MulticaView | Scope::MulticaControl))
+            .any(|s| s.is_desktop() || matches!(s, Scope::MulticaView | Scope::MulticaControl))
             && compatibility.is_none()
         {
             return Err(Error::Unavailable(
-                "Multica permission issuance requires a network compatibility check".into(),
+                "Permission issuance requires a network compatibility check".into(),
             ));
         }
         let id =
@@ -760,8 +781,22 @@ impl Daemon {
             }
             .update(id, update)?
         };
-        self.node().publish(entry.clone())?;
-        self.persist(&[entry]);
+        if let Some(expected) = compatibility {
+            if !self.node().publish_if_current(entry, expected, |e| {
+                self.store()
+                    .append_entries(std::slice::from_ref(e))
+                    .map(|_| ())
+                    .map_err(|error| muster_net::Error::Io(error.to_string()))
+            })? {
+                return Err(Error::Conflict(
+                    "Membership changed during compatibility checks".into(),
+                ));
+            }
+            let _ = self.changed.send(());
+        } else {
+            self.node().publish(entry.clone())?;
+            self.persist(&[entry]);
+        }
         Ok(())
     }
 
@@ -783,8 +818,47 @@ impl Daemon {
     }
 
     pub fn set_policy(&self, view: &v1::Policy) -> Result<(), Error> {
+        let roster = self.roster().read().unwrap();
         let mut current = self.policy().write().unwrap();
+        let mut service_grants = view
+            .service_grants
+            .as_ref()
+            .map(crate::service_access::parse)
+            .transpose()?
+            .unwrap_or_else(|| current.service_grants.clone());
+        if !view
+            .service_grants
+            .as_ref()
+            .is_some_and(|g| g.manages_desktop)
+        {
+            service_grants.desktop = current.service_grants.desktop.clone();
+        }
+        let desktop_changed = service_grants.desktop != current.service_grants.desktop;
+        let mut desktop_pairings = current.desktop_pairings.clone();
+        if desktop_changed {
+            let assigned: BTreeSet<_> = service_grants
+                .desktop
+                .iter()
+                .flat_map(|g| &g.rules)
+                .flat_map(|r| r.devices.iter().copied())
+                .collect();
+            desktop_pairings.retain(|id, _| assigned.contains(id));
+            for peer in assigned {
+                if let std::collections::btree_map::Entry::Vacant(entry) =
+                    desktop_pairings.entry(peer)
+                {
+                    let pairing = muster_core::policy::DesktopPairing::current(
+                        roster.state(),
+                        self.device_id(),
+                        peer,
+                    )
+                    .ok_or_else(|| Error::Invalid("Assign a current paired desktop".into()))?;
+                    entry.insert(pairing);
+                }
+            }
+        }
         let policy = LocalPolicy {
+            desktop_pairings,
             open_ports: view
                 .open_ports
                 .iter()
@@ -796,12 +870,7 @@ impl Daemon {
             offer_terminal: view.offer_terminal,
             offer_tasks: view.offer_tasks,
             offer_network: view.offer_network.or(current.offer_network),
-            service_grants: view
-                .service_grants
-                .as_ref()
-                .map(crate::service_access::parse)
-                .transpose()?
-                .unwrap_or_else(|| current.service_grants.clone()),
+            service_grants,
             web_window: view
                 .web_window
                 .as_ref()
@@ -821,6 +890,9 @@ impl Daemon {
             multica_workspaces: current.multica_workspaces.clone(),
         };
         self.store().set_policy(&policy)?;
+        if desktop_changed {
+            self.desktop_permissions.changed();
+        }
         *current = policy;
         let _ = self.changed.send(());
         Ok(())
