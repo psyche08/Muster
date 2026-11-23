@@ -1,4 +1,4 @@
-# 0291. Retire idle desktop hosts and use an independent viewer window
+# 0293. Retire idle desktop hosts and use an independent viewer window
 
 - Status: Accepted
 - Date: 2026-11-23

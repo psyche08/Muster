@@ -1,7 +1,7 @@
-# 0292. Confirm replacement of the current desktop viewer
+# 0294. Confirm replacement of the current desktop viewer
 
 - Status: Accepted
-- Related: [Desktop service authorization](0287-desktop-service-authorization.md), [idle host](0291-desktop-host-idle-and-viewer-window.md)
+- Related: [Desktop service authorization](0287-desktop-service-authorization.md), [idle host](0293-desktop-host-idle-and-viewer-window.md)
 
 ## Context
 

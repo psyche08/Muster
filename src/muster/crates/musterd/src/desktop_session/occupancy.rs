@@ -89,4 +89,30 @@ mod tests {
         ));
         assert!(slot.reserve(c, &third, None).is_ok());
     }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn competing_clients_cannot_both_displace_the_same_viewer() {
+        let slot = Arc::new(Occupancy::default());
+        let first = CancellationToken::new();
+        let initial = slot.reserve(DeviceId([1; 32]), &first, None).ok().unwrap();
+        let ready = Arc::new(tokio::sync::Barrier::new(2));
+        let client = |id: u8| {
+            let slot = slot.clone();
+            let ready = ready.clone();
+            tokio::spawn(async move {
+                let stop = CancellationToken::new();
+                let name = DeviceId([id; 32]);
+                let displayed = slot.reserve(name, &stop, None).err().flatten().unwrap();
+                assert_eq!(displayed.peer, DeviceId([1; 32]));
+                ready.wait().await;
+                slot.reserve(name, &stop, Some(&displayed)).ok()
+            })
+        };
+        let (second, third) = tokio::join!(client(2), client(3));
+        let winners = [second.unwrap(), third.unwrap()];
+        assert_eq!(winners.iter().flatten().count(), 1);
+        assert!(first.is_cancelled());
+        drop(initial);
+        assert!(slot.reserve(DeviceId([4; 32]), &CancellationToken::new(), None).is_err());
+    }
+
 }
