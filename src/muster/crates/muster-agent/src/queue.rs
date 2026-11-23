@@ -16,6 +16,7 @@ pub type Source = Arc<dyn Fn() -> Result<Vec<QueuedMessage>, Error> + Send + Syn
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueuedMessage {
+    provider: Provider,
     pub id: String,
     source_id: String,
     /// Retained when the app-server takes over a local deferred item. Physical
@@ -50,6 +51,7 @@ impl QueuedMessage {
     #[cfg(test)]
     pub(crate) fn test(source_id: &str, text: &str) -> Self {
         Self {
+            provider: Provider::Codex,
             id: format!("queued:000:{source_id}"),
             source_id: source_id.into(),
             client_source_id: None,
@@ -66,7 +68,11 @@ impl QueuedMessage {
             prompt: if self.text.is_empty() {
                 "Message with attachments".into()
             } else {
-                crate::text::clip(&self.text, 8192)
+                let preview = match self.provider {
+                    Provider::Codex => crate::codex::display_prompt(&self.text),
+                    _ => std::borrow::Cow::Borrowed(self.text.as_str()),
+                };
+                crate::text::clip(&preview, 8192)
             },
             optional: true,
             options: [(self.can_send, SEND_NOW), (self.can_delete, DELETE)]
@@ -248,6 +254,7 @@ pub(crate) fn read_claude(
             }
             let hash = hex::encode(Sha256::digest(format!("{session}:{offset}:{text}")));
             Some(QueuedMessage {
+                provider: Provider::Claude,
                 id: format!("queued:{index:03}:{hash}"),
                 source_id: format!("claude:{session}:{offset}"),
                 client_source_id: None,
@@ -318,6 +325,7 @@ pub fn read_session(
             let token = serde_json::to_vec(&(session, &id, &payload))
                 .map_err(|e| Error::Unavailable(e.to_string()))?;
             server.push(QueuedMessage {
+                provider: Provider::Codex,
                 source_id: format!("server:{id}"),
                 client_source_id: client.map(|id| format!("local:{id}")),
                 id: format!(
@@ -438,6 +446,7 @@ fn parse(bytes: &[u8]) -> Result<HashMap<String, Vec<QueuedMessage>>, Error> {
             // Editing text or attachments invalidates previously rendered actions.
             let token = serde_json::to_vec(&(session, id, text, context)).map_err(|_| invalid())?;
             messages.push(QueuedMessage {
+                provider: Provider::Codex,
                 source_id: format!("local:{id}"),
                 client_source_id: None,
                 id: format!(
@@ -544,9 +553,14 @@ pub fn display_matches(provider: Option<Provider>, submitted: &str, preview: &st
             _ => submitted == preview,
         }
     };
-    matches(preview)
-        || (provider == Some(Provider::Codex)
-            && matches(&crate::receipt::unwrap_url_links(preview)))
+    if matches(preview) {
+        return true;
+    }
+    if provider != Some(Provider::Codex) {
+        return false;
+    }
+    let links = crate::receipt::unwrap_url_links(preview);
+    matches(&links) || matches(&crate::codex::display_prompt(&links))
 }
 
 pub fn normalize(text: &str) -> String {
@@ -943,6 +957,7 @@ mod tests {
     #[test]
     fn queue_admission_requires_a_new_provider_item_not_an_edit_or_reorder() {
         let current = Arc::new(std::sync::Mutex::new(vec![QueuedMessage {
+            provider: Provider::Codex,
             id: "queued:000:old".into(),
             source_id: "local:1".into(),
             client_source_id: None,
@@ -960,6 +975,7 @@ mod tests {
         }
         assert!(!admission.confirmed());
         current.lock().unwrap().push(QueuedMessage {
+            provider: Provider::Codex,
             id: "queued:000:new".into(),
             source_id: "server:2".into(),
             client_source_id: None,

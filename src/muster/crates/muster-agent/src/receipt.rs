@@ -24,6 +24,8 @@ enum Inner {
         /// the press without the text before it.
         turn_ended: Option<u64>,
     },
+    /// A paginated thread without a verifiable rollout may still produce queue evidence.
+    NoRollout,
     /// CatDesk keeps no transcript file: its store is read instead.
     Catdesk(crate::catdesk::Receipt),
 }
@@ -51,6 +53,12 @@ impl Receipt {
                 "DeepSeek Harness sessions take no prompts",
             ));
         }
+        if crate::codex_history::is(session) {
+            return match crate::codex_history::receipt_rollout(session) {
+                Some(path) => Self::new(&path, Provider::Codex, text),
+                None => Ok(Self(Inner::NoRollout)),
+            };
+        }
         Self::new(&session.path, session.provider, text)
     }
     /// The transcript was rewritten after the press: its offsets, and so any
@@ -59,6 +67,7 @@ impl Receipt {
         match &self.0 {
             Inner::Transcript { invalidated, .. } => *invalidated,
             Inner::Catdesk(receipt) => receipt.invalidated(),
+            Inner::NoRollout => false,
         }
     }
     /// When a turn first ended after the press with the text still absent
@@ -84,6 +93,7 @@ impl Receipt {
                 turn_ended,
             } => (tail, *provider, text, invalidated, turn_ended),
             Inner::Catdesk(receipt) => return receipt.confirmed(),
+            Inner::NoRollout => return false,
         };
         let Ok(read) = tail.read() else {
             return false;
@@ -110,13 +120,22 @@ impl Receipt {
     }
 }
 
-/// Only Codex's equal-label URL wrapping is equivalent to the submitted text.
+/// Recognize Codex's observed URL wrapping and full multiline composer serialization.
 /// Normalize the observed side only: literal Markdown in a prompt stays literal.
 pub fn text_matches(provider: Provider, submitted: &str, observed: &str) -> bool {
     let submitted = submitted.trim_end();
     let observed = observed.trim_end();
-    submitted == observed
-        || (provider == Provider::Codex && unwrap_url_links(observed) == submitted)
+    if submitted == observed {
+        return true;
+    }
+    if provider != Provider::Codex {
+        return false;
+    }
+    let links = unwrap_url_links(observed);
+    links == submitted
+        || crate::codex::display_prompt(&links) == submitted
+        || (submitted.contains('\n')
+            && crate::native_runtime::first_prompt_matches("codex", observed, submitted))
 }
 
 pub(crate) fn unwrap_url_links(text: &str) -> String {
@@ -248,6 +267,66 @@ fn slash_command(text: &str) -> Option<String> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn paginated_receipt_follows_only_new_records_in_the_registered_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = "11111111-1111-4111-8111-111111111111";
+        let session = Discovered {
+            id: id.into(),
+            provider: Provider::Codex,
+            path: dir.path().join("thread_history_1.sqlite"),
+            modified: std::time::SystemTime::UNIX_EPOCH,
+            size: 0,
+            archived: false,
+            hidden: false,
+            parent_id: None,
+            relation: "",
+            meta: Default::default(),
+            custom_title: false,
+            entrypoint: Some("paginated".into()),
+            launch: "",
+            muster_archivable: false,
+        };
+        let state = rusqlite::Connection::open(dir.path().join("state_5.sqlite")).unwrap();
+        state
+            .execute_batch("CREATE TABLE threads(id TEXT PRIMARY KEY,rollout_path TEXT)")
+            .unwrap();
+        let make = |file: &str, session_id: &str| {
+            let mut f = std::fs::File::create(dir.path().join(file)).unwrap();
+            writeln!(
+                f,
+                "{}",
+                serde_json::json!({"type":"session_meta","payload":{"id":session_id}})
+            )
+            .unwrap();
+            f
+        };
+        let mut own = make("own.jsonl", id);
+        let mut other = make("other.jsonl", "22222222-2222-4222-8222-222222222222");
+        state
+            .execute("INSERT INTO threads VALUES(?1,'other.jsonl')", [id])
+            .unwrap();
+        let prompt = "First line\n第二行";
+        let record = serde_json::json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"First line\\\n第二行"}]}});
+        let mut wrong = Receipt::for_session(&session, prompt).unwrap();
+        writeln!(other, "{record}").unwrap();
+        assert!(!wrong.confirmed());
+        state
+            .execute(
+                "UPDATE threads SET rollout_path='own.jsonl' WHERE id=?1",
+                [id],
+            )
+            .unwrap();
+        writeln!(own, "{record}").unwrap();
+        let mut receipt = Receipt::for_session(&session, prompt).unwrap();
+        writeln!(other, "{record}").unwrap();
+        assert!(!receipt.confirmed());
+        write!(own, "{record}").unwrap();
+        assert!(!receipt.confirmed());
+        writeln!(own).unwrap();
+        assert!(receipt.confirmed());
+    }
 
     #[test]
     fn codex_equal_url_formatting_is_not_general_markdown_equivalence() {
