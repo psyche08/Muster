@@ -25,17 +25,28 @@ use tokio::{
 
 pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
 
+pub(super) fn console_ready(daemon: &Daemon) -> bool {
+    !daemon.covered()
+        && muster_platform::macos::lock::session_state()
+            .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked)
+}
+
 struct Host {
     daemon: Weak<Daemon>,
     program: std::path::PathBuf,
-    events: EventSink,
+    events: Option<EventSink>,
+    remembered: Option<(super::permissions::Lease, tokio::sync::OwnedSemaphorePermit)>,
     finished: watch::Sender<Option<Result<(), String>>>,
 }
 impl Handler for Host {
     fn console_ready(&self) -> bool {
-        self.daemon.upgrade().is_some_and(|d| !d.covered())
-            && muster_platform::macos::lock::session_state()
-                .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked)
+        self.daemon.upgrade().is_some_and(|d| {
+            console_ready(&d)
+                && self
+                    .remembered
+                    .as_ref()
+                    .is_none_or(|(lease, _)| lease.current(&d))
+        })
     }
     fn serve<'a>(
         &'a self,
@@ -70,7 +81,9 @@ impl Host {
         if hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
-        progress(&self.events, Phase::Starting).await?;
+        if let Some(events) = &self.events {
+            progress(events, Phase::Starting).await?;
+        }
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
@@ -97,6 +110,29 @@ impl Host {
         }
     }
 }
+pub(crate) fn admit(
+    daemon: &Arc<Daemon>,
+    peer: DeviceId,
+) -> Option<muster_net::remote_desktop::Sharing> {
+    let slot = daemon.desktop_slot.clone().try_acquire_owned().ok()?;
+    let program = program(CAPTURE_HOST).ok()?;
+    let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
+    let (finished, _) = watch::channel(None);
+    let host = Arc::new(Host {
+        daemon: Arc::downgrade(daemon),
+        program,
+        events: None,
+        remembered: Some((lease, slot)),
+        finished,
+    });
+    let access = if mode == muster_proto::v1::DesktopAccess::Mouse {
+        Access::ViewAndMouse
+    } else {
+        Access::View
+    };
+    Some(muster_net::remote_desktop::Sharing::new(peer, access, host))
+}
+
 pub(super) async fn offer(
     daemon: &Arc<Daemon>,
     peer: DeviceId,
@@ -107,11 +143,14 @@ pub(super) async fn offer(
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
         program: program(CAPTURE_HOST)?,
-        events: events.clone(),
+        events: Some(events.clone()),
+        remembered: None,
         finished,
     });
     if !host.console_ready() {
-        return Err(unavailable("Unlock the Mac and uncover its active desktop before sharing"));
+        return Err(unavailable(
+            "Unlock the Mac and uncover its active desktop before sharing",
+        ));
     }
     let _sharing = daemon.node().share_remote_desktop(
         peer,

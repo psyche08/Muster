@@ -1275,8 +1275,16 @@ async fn dispatch(
         }
         // ------------------------------------------------------------ device
         Req::DesktopSession(r) => {
+            let editing = matches!(
+                r.action,
+                Some(v1::desktop_session_request::Action::RememberAccess(_))
+            );
             crate::desktop_session::run(daemon, r, events).await?;
-            Resp::Ack(v1::Ack {})
+            if editing {
+                Resp::NetworkStatus(daemon.local_network_status())
+            } else {
+                Resp::Ack(v1::Ack {})
+            }
         }
         Req::DesktopUpdateLease(_) => daemon.locked_use.update_lease(events).await?,
         Req::LockedUsePrepare(r) => {
@@ -1395,7 +1403,10 @@ async fn dispatch(
         }
 
         // ----------------------------------------------------------- network
-        Req::NetworkStatus(_) => Resp::NetworkStatus(daemon.network_status()),
+        Req::NetworkStatus(_) => Resp::NetworkStatus(match ctx.principal {
+            Principal::Local => daemon.local_network_status(),
+            Principal::Remote(_) => daemon.network_status(),
+        }),
         Req::NetworkRetryVnet(_) => {
             daemon.observe_vnet_start(true).await?;
             Resp::Ack(v1::Ack {})

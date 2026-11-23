@@ -265,12 +265,14 @@ message DesktopUpdateLeaseRequest {}
 // more round of bounded connection attempts (muster_net::presence). Local
 // only; answers NetworkStatus.
 message NetworkRefreshRequest {}
+enum DesktopAccess { DESKTOP_ACCESS_NONE = 0; DESKTOP_ACCESS_VIEW = 1; DESKTOP_ACCESS_MOUSE = 2; }
 message DesktopSessionRequest {
   string device = 1;
   oneof action {
     Ack share_view = 2;
     Ack share_mouse = 3;
     uint64 view_in_window = 4; // local owner window, never forwarded
+    DesktopAccess remember_access = 5; // local owner only; NONE revokes
   }
 }
 message DesktopSessionProgress {
@@ -503,6 +505,7 @@ message MemberView {
   // Offline and unreachable members are not polled; their sessions are
   // hidden.
   string presence = 16;
+  DesktopAccess desktop_access = 17; // host-local display of the remembered choice
 }
 
 message NetworkCreateRequest {

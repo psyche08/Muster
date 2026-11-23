@@ -178,6 +178,13 @@ public final class MusterCore: MusterShell {
         }))
     }
 
+    public func rememberDesktopAccess(for device: String, access: Muster_V1_DesktopAccess) {
+        send(.desktopSession(Muster_V1_DesktopSessionRequest.with {
+            $0.device = device
+            $0.action = .rememberAccess(access)
+        }))
+    }
+
     public func stopSharingDesktop(with device: String) {
         send(.endDesktopSession(device))
     }

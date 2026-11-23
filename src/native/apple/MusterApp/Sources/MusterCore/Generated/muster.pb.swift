@@ -34,6 +34,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Muster_V1_DesktopAccess: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case none // = 0
+  case view // = 1
+  case mouse // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .none
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .none
+    case 1: self = .view
+    case 2: self = .mouse
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .none: return 0
+    case .view: return 1
+    case .mouse: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Muster_V1_DesktopAccess] = [
+    .none,
+    .view,
+    .mouse,
+  ]
+
+}
+
 public nonisolated struct Muster_V1_Envelope: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1628,6 +1666,15 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     set {action = .viewInWindow(newValue)}
   }
 
+  /// local owner only; NONE revokes
+  public var rememberAccess: Muster_V1_DesktopAccess {
+    get {
+      if case .rememberAccess(let v)? = action {return v}
+      return .none
+    }
+    set {action = .rememberAccess(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Action: Equatable, Sendable {
@@ -1635,6 +1682,8 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case shareMouse(Muster_V1_Ack)
     /// local owner window, never forwarded
     case viewInWindow(UInt64)
+    /// local owner only; NONE revokes
+    case rememberAccess(Muster_V1_DesktopAccess)
 
   }
 
@@ -2495,47 +2544,92 @@ public nonisolated struct Muster_V1_NetworkStatus: Sendable {
   public init() {}
 }
 
-public nonisolated struct Muster_V1_MemberView: Sendable {
+public nonisolated struct Muster_V1_MemberView: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var deviceID: String = String()
+  public var deviceID: String {
+    get {_storage._deviceID}
+    set {_uniqueStorage()._deviceID = newValue}
+  }
 
-  public var fingerprint: String = String()
+  public var fingerprint: String {
+    get {_storage._fingerprint}
+    set {_uniqueStorage()._fingerprint = newValue}
+  }
 
-  public var name: String = String()
+  public var name: String {
+    get {_storage._name}
+    set {_uniqueStorage()._name = newValue}
+  }
 
-  public var kind: String = String()
+  public var kind: String {
+    get {_storage._kind}
+    set {_uniqueStorage()._kind = newValue}
+  }
 
   /// admin | member
-  public var role: String = String()
+  public var role: String {
+    get {_storage._role}
+    set {_uniqueStorage()._role = newValue}
+  }
 
-  public var vip: String = String()
+  public var vip: String {
+    get {_storage._vip}
+    set {_uniqueStorage()._vip = newValue}
+  }
 
-  public var scopes: [String] = []
+  public var scopes: [String] {
+    get {_storage._scopes}
+    set {_uniqueStorage()._scopes = newValue}
+  }
 
-  public var isSelf: Bool = false
+  public var isSelf: Bool {
+    get {_storage._isSelf}
+    set {_uniqueStorage()._isSelf = newValue}
+  }
 
-  public var connected: Bool = false
+  public var connected: Bool {
+    get {_storage._connected}
+    set {_uniqueStorage()._connected = newValue}
+  }
 
   /// direct | relay | ""
-  public var path: String = String()
+  public var path: String {
+    get {_storage._path}
+    set {_uniqueStorage()._path = newValue}
+  }
 
-  public var rttMs: UInt32 = 0
+  public var rttMs: UInt32 {
+    get {_storage._rttMs}
+    set {_uniqueStorage()._rttMs = newValue}
+  }
 
   /// connecting | failed | connected | not connected
-  public var connectionStatus: String = String()
+  public var connectionStatus: String {
+    get {_storage._connectionStatus}
+    set {_uniqueStorage()._connectionStatus = newValue}
+  }
 
   /// What the member last reported in the link heartbeat (this device: its
   /// own build). "" until a heartbeat arrives; a peer's claim, display only.
-  public var version: String = String()
+  public var version: String {
+    get {_storage._version}
+    set {_uniqueStorage()._version = newValue}
+  }
 
-  public var commit: String = String()
+  public var commit: String {
+    get {_storage._commit}
+    set {_uniqueStorage()._commit = newValue}
+  }
 
   /// The link as shown: "direct · 12 ms", "relay", "connecting", "not
   /// connected"; "" for this device. Display only.
-  public var link: String = String()
+  public var link: String {
+    get {_storage._link}
+    set {_uniqueStorage()._link = newValue}
+  }
 
   /// Whether it is online, from evidence (muster_net::presence), which is
   /// what `connected` now follows: online | reconnecting (a lost link inside
@@ -2544,11 +2638,22 @@ public nonisolated struct Muster_V1_MemberView: Sendable {
   /// failed) | local_offline (this device has no relay) | "" (this device).
   /// Offline and unreachable members are not polled; their sessions are
   /// hidden.
-  public var presence: String = String()
+  public var presence: String {
+    get {_storage._presence}
+    set {_uniqueStorage()._presence = newValue}
+  }
+
+  /// host-local display of the remembered choice
+  public var desktopAccess: Muster_V1_DesktopAccess {
+    get {_storage._desktopAccess}
+    set {_uniqueStorage()._desktopAccess = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Muster_V1_NetworkCreateRequest: Sendable {
@@ -6166,6 +6271,10 @@ public nonisolated struct Muster_V1_AgentDispatchStatus: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "muster.v1"
 
+nonisolated extension Muster_V1_DesktopAccess: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DESKTOP_ACCESS_NONE\0\u{1}DESKTOP_ACCESS_VIEW\0\u{1}DESKTOP_ACCESS_MOUSE\0")
+}
+
 nonisolated extension Muster_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}request\0\u{1}response\0\u{1}event\0\u{1}cancel\0\u{1}presence\0\u{1}target\0\u{3}presence_enrollment\0")
@@ -8749,7 +8858,7 @@ nonisolated extension Muster_V1_NetworkRefreshRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8792,6 +8901,14 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .viewInWindow(v)
         }
       }()
+      case 5: try {
+        var v: Muster_V1_DesktopAccess?
+        try decoder.decodeSingularEnumField(value: &v)
+        if let v = v {
+          if self.action != nil {try decoder.handleConflictingOneOf()}
+          self.action = .rememberAccess(v)
+        }
+      }()
       default: break
       }
     }
@@ -8817,6 +8934,10 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
     case .viewInWindow?: try {
       guard case .viewInWindow(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
+    }()
+    case .rememberAccess?: try {
+      guard case .rememberAccess(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 5)
     }()
     case nil: break
     }
@@ -10346,104 +10467,177 @@ nonisolated extension Muster_V1_NetworkStatus: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MemberView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}fingerprint\0\u{1}name\0\u{1}kind\0\u{1}role\0\u{1}vip\0\u{1}scopes\0\u{3}is_self\0\u{1}connected\0\u{1}path\0\u{3}rtt_ms\0\u{3}connection_status\0\u{1}version\0\u{1}commit\0\u{1}link\0\u{1}presence\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}fingerprint\0\u{1}name\0\u{1}kind\0\u{1}role\0\u{1}vip\0\u{1}scopes\0\u{3}is_self\0\u{1}connected\0\u{1}path\0\u{3}rtt_ms\0\u{3}connection_status\0\u{1}version\0\u{1}commit\0\u{1}link\0\u{1}presence\0\u{3}desktop_access\0")
+
+  fileprivate class _StorageClass {
+    var _deviceID: String = String()
+    var _fingerprint: String = String()
+    var _name: String = String()
+    var _kind: String = String()
+    var _role: String = String()
+    var _vip: String = String()
+    var _scopes: [String] = []
+    var _isSelf: Bool = false
+    var _connected: Bool = false
+    var _path: String = String()
+    var _rttMs: UInt32 = 0
+    var _connectionStatus: String = String()
+    var _version: String = String()
+    var _commit: String = String()
+    var _link: String = String()
+    var _presence: String = String()
+    var _desktopAccess: Muster_V1_DesktopAccess = .none
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _deviceID = source._deviceID
+      _fingerprint = source._fingerprint
+      _name = source._name
+      _kind = source._kind
+      _role = source._role
+      _vip = source._vip
+      _scopes = source._scopes
+      _isSelf = source._isSelf
+      _connected = source._connected
+      _path = source._path
+      _rttMs = source._rttMs
+      _connectionStatus = source._connectionStatus
+      _version = source._version
+      _commit = source._commit
+      _link = source._link
+      _presence = source._presence
+      _desktopAccess = source._desktopAccess
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.fingerprint) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.kind) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.role) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.vip) }()
-      case 7: try { try decoder.decodeRepeatedStringField(value: &self.scopes) }()
-      case 8: try { try decoder.decodeSingularBoolField(value: &self.isSelf) }()
-      case 9: try { try decoder.decodeSingularBoolField(value: &self.connected) }()
-      case 10: try { try decoder.decodeSingularStringField(value: &self.path) }()
-      case 11: try { try decoder.decodeSingularUInt32Field(value: &self.rttMs) }()
-      case 12: try { try decoder.decodeSingularStringField(value: &self.connectionStatus) }()
-      case 13: try { try decoder.decodeSingularStringField(value: &self.version) }()
-      case 14: try { try decoder.decodeSingularStringField(value: &self.commit) }()
-      case 15: try { try decoder.decodeSingularStringField(value: &self.link) }()
-      case 16: try { try decoder.decodeSingularStringField(value: &self.presence) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._deviceID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._fingerprint) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._name) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._kind) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._role) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._vip) }()
+        case 7: try { try decoder.decodeRepeatedStringField(value: &_storage._scopes) }()
+        case 8: try { try decoder.decodeSingularBoolField(value: &_storage._isSelf) }()
+        case 9: try { try decoder.decodeSingularBoolField(value: &_storage._connected) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._path) }()
+        case 11: try { try decoder.decodeSingularUInt32Field(value: &_storage._rttMs) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._connectionStatus) }()
+        case 13: try { try decoder.decodeSingularStringField(value: &_storage._version) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._commit) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._link) }()
+        case 16: try { try decoder.decodeSingularStringField(value: &_storage._presence) }()
+        case 17: try { try decoder.decodeSingularEnumField(value: &_storage._desktopAccess) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.deviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
-    }
-    if !self.fingerprint.isEmpty {
-      try visitor.visitSingularStringField(value: self.fingerprint, fieldNumber: 2)
-    }
-    if !self.name.isEmpty {
-      try visitor.visitSingularStringField(value: self.name, fieldNumber: 3)
-    }
-    if !self.kind.isEmpty {
-      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 4)
-    }
-    if !self.role.isEmpty {
-      try visitor.visitSingularStringField(value: self.role, fieldNumber: 5)
-    }
-    if !self.vip.isEmpty {
-      try visitor.visitSingularStringField(value: self.vip, fieldNumber: 6)
-    }
-    if !self.scopes.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.scopes, fieldNumber: 7)
-    }
-    if self.isSelf != false {
-      try visitor.visitSingularBoolField(value: self.isSelf, fieldNumber: 8)
-    }
-    if self.connected != false {
-      try visitor.visitSingularBoolField(value: self.connected, fieldNumber: 9)
-    }
-    if !self.path.isEmpty {
-      try visitor.visitSingularStringField(value: self.path, fieldNumber: 10)
-    }
-    if self.rttMs != 0 {
-      try visitor.visitSingularUInt32Field(value: self.rttMs, fieldNumber: 11)
-    }
-    if !self.connectionStatus.isEmpty {
-      try visitor.visitSingularStringField(value: self.connectionStatus, fieldNumber: 12)
-    }
-    if !self.version.isEmpty {
-      try visitor.visitSingularStringField(value: self.version, fieldNumber: 13)
-    }
-    if !self.commit.isEmpty {
-      try visitor.visitSingularStringField(value: self.commit, fieldNumber: 14)
-    }
-    if !self.link.isEmpty {
-      try visitor.visitSingularStringField(value: self.link, fieldNumber: 15)
-    }
-    if !self.presence.isEmpty {
-      try visitor.visitSingularStringField(value: self.presence, fieldNumber: 16)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      if !_storage._deviceID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 1)
+      }
+      if !_storage._fingerprint.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._fingerprint, fieldNumber: 2)
+      }
+      if !_storage._name.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._name, fieldNumber: 3)
+      }
+      if !_storage._kind.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._kind, fieldNumber: 4)
+      }
+      if !_storage._role.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._role, fieldNumber: 5)
+      }
+      if !_storage._vip.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._vip, fieldNumber: 6)
+      }
+      if !_storage._scopes.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._scopes, fieldNumber: 7)
+      }
+      if _storage._isSelf != false {
+        try visitor.visitSingularBoolField(value: _storage._isSelf, fieldNumber: 8)
+      }
+      if _storage._connected != false {
+        try visitor.visitSingularBoolField(value: _storage._connected, fieldNumber: 9)
+      }
+      if !_storage._path.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._path, fieldNumber: 10)
+      }
+      if _storage._rttMs != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._rttMs, fieldNumber: 11)
+      }
+      if !_storage._connectionStatus.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._connectionStatus, fieldNumber: 12)
+      }
+      if !_storage._version.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._version, fieldNumber: 13)
+      }
+      if !_storage._commit.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._commit, fieldNumber: 14)
+      }
+      if !_storage._link.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._link, fieldNumber: 15)
+      }
+      if !_storage._presence.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._presence, fieldNumber: 16)
+      }
+      if _storage._desktopAccess != .none {
+        try visitor.visitSingularEnumField(value: _storage._desktopAccess, fieldNumber: 17)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_MemberView, rhs: Muster_V1_MemberView) -> Bool {
-    if lhs.deviceID != rhs.deviceID {return false}
-    if lhs.fingerprint != rhs.fingerprint {return false}
-    if lhs.name != rhs.name {return false}
-    if lhs.kind != rhs.kind {return false}
-    if lhs.role != rhs.role {return false}
-    if lhs.vip != rhs.vip {return false}
-    if lhs.scopes != rhs.scopes {return false}
-    if lhs.isSelf != rhs.isSelf {return false}
-    if lhs.connected != rhs.connected {return false}
-    if lhs.path != rhs.path {return false}
-    if lhs.rttMs != rhs.rttMs {return false}
-    if lhs.connectionStatus != rhs.connectionStatus {return false}
-    if lhs.version != rhs.version {return false}
-    if lhs.commit != rhs.commit {return false}
-    if lhs.link != rhs.link {return false}
-    if lhs.presence != rhs.presence {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._deviceID != rhs_storage._deviceID {return false}
+        if _storage._fingerprint != rhs_storage._fingerprint {return false}
+        if _storage._name != rhs_storage._name {return false}
+        if _storage._kind != rhs_storage._kind {return false}
+        if _storage._role != rhs_storage._role {return false}
+        if _storage._vip != rhs_storage._vip {return false}
+        if _storage._scopes != rhs_storage._scopes {return false}
+        if _storage._isSelf != rhs_storage._isSelf {return false}
+        if _storage._connected != rhs_storage._connected {return false}
+        if _storage._path != rhs_storage._path {return false}
+        if _storage._rttMs != rhs_storage._rttMs {return false}
+        if _storage._connectionStatus != rhs_storage._connectionStatus {return false}
+        if _storage._version != rhs_storage._version {return false}
+        if _storage._commit != rhs_storage._commit {return false}
+        if _storage._link != rhs_storage._link {return false}
+        if _storage._presence != rhs_storage._presence {return false}
+        if _storage._desktopAccess != rhs_storage._desktopAccess {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

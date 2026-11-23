@@ -193,6 +193,74 @@ async fn signed_peers_exchange_and_revoke_a_transport_session() {
     relay.abort();
 }
 
+struct RememberedViewer(DeviceId);
+impl muster_net::ServiceHandler for RememberedViewer {
+    fn remembered_desktop(&self, peer: DeviceId) -> Option<muster_net::remote_desktop::Sharing> {
+        (peer == self.0).then(|| {
+            muster_net::remote_desktop::Sharing::new(
+                peer,
+                Access::ViewAndMouse,
+                Arc::new(OneConnection),
+            )
+        })
+    }
+
+    fn handle(
+        &self,
+        _: Arc<Node>,
+        _: DeviceId,
+        _: muster_net::stream::Hello,
+        _: quinn::SendStream,
+        _: quinn::RecvStream,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async {})
+    }
+}
+
+struct OneConnection;
+impl Handler for OneConnection {
+    fn console_ready(&self) -> bool {
+        true
+    }
+    fn serve<'s>(
+        &'s self,
+        _: DeviceId,
+        session: &'s mut Session,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 's>> {
+        Box::pin(async move {
+            session.with_mouse(|| ()).unwrap();
+            session.send_control(b"ready").await.unwrap();
+            assert_eq!(session.recv_control().await.unwrap().unwrap(), b"done");
+        })
+    }
+}
+
+#[tokio::test]
+async fn one_remembered_permission_admits_separate_connections() {
+    let bind = "127.0.0.1".parse().unwrap();
+    let relay = relay(bind).await;
+    let relay_addr = relay.udp_addr().unwrap();
+    let relay_task = tokio::spawn(relay.serve());
+    let host_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let viewer_key: SharedSigner = Arc::new(SoftSigner::generate());
+    let entries = signed_roster(host_key.as_ref(), viewer_key.public_key());
+    let host = node(host_key, &entries, bind, RelayConfig::Udp(relay_addr)).await;
+    let viewer = node(viewer_key, &entries, bind, RelayConfig::Udp(relay_addr)).await;
+    host.set_handler(Arc::new(RememberedViewer(viewer.device_id())));
+    for _ in 0..2 {
+        let mut session = viewer.open_remote_desktop(host.device_id()).await.unwrap();
+        assert_eq!(session.recv_control().await.unwrap().unwrap(), b"ready");
+        session.send_control(b"done").await.unwrap();
+        assert!(!matches!(
+            tokio::time::timeout(Duration::from_secs(3), session.recv_control())
+                .await
+                .unwrap(),
+            Ok(Some(_))
+        ));
+    }
+    relay_task.abort();
+}
+
 struct WaitingHost;
 impl Handler for WaitingHost {
     fn console_ready(&self) -> bool {

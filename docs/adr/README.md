@@ -401,3 +401,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0283](0283-muster-mac-capture-identity.md) | Accepted | Authorize Muster for paired desktop capture |
 | [0284](0284-basic-network-and-device-service-access.md) | Accepted; deployment pending | Basic network grants and device-owned service access |
 | [0285](0285-fallback-relay.md) | Proposed | Reach a peer through an independent fallback relay |
+| [0286](0286-remember-paired-desktop-access.md) | Accepted | Remember incoming desktop access for one pairing |

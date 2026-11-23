@@ -73,6 +73,11 @@ impl Default for NodeConfig {
 
 /// A service the application registers by name (muster-rpc lives here).
 pub trait ServiceHandler: Send + Sync {
+    /// Mint a session lease from current local owner policy for the authenticated peer.
+    fn remembered_desktop(&self, _peer: DeviceId) -> Option<remote_desktop::Sharing> {
+        None
+    }
+
     fn handle(
         &self,
         node: Arc<Node>,
@@ -1431,6 +1436,18 @@ impl Node {
                         .unwrap()
                         .as_ref()
                         .and_then(std::sync::Weak::upgrade);
+                    let remembered = if offer.is_none()
+                        && member
+                        && !node.vnet_only
+                        && node.is_service_host(&node.device_id())
+                        && hello.version == remote_desktop::VERSION
+                    {
+                        let handler = node.handler.lock().unwrap().clone();
+                        handler.and_then(|h| h.remembered_desktop(peer))
+                    } else {
+                        None
+                    };
+                    let offer = offer.or_else(|| remembered.as_ref().map(|s| s.offer.clone()));
                     if let Some(offer) = offer
                         && member
                         && !node.vnet_only

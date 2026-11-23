@@ -3857,6 +3857,22 @@ export const muster = $root.muster = (() => {
             return NetworkRefreshRequest;
         })();
 
+        /**
+         * DesktopAccess enum.
+         * @name muster.v1.DesktopAccess
+         * @enum {number}
+         * @property {number} DESKTOP_ACCESS_NONE=0 DESKTOP_ACCESS_NONE value
+         * @property {number} DESKTOP_ACCESS_VIEW=1 DESKTOP_ACCESS_VIEW value
+         * @property {number} DESKTOP_ACCESS_MOUSE=2 DESKTOP_ACCESS_MOUSE value
+         */
+        v1.DesktopAccess = (function() {
+            const valuesById = {}, values = Object.create(valuesById);
+            values[valuesById[0] = "DESKTOP_ACCESS_NONE"] = 0;
+            values[valuesById[1] = "DESKTOP_ACCESS_VIEW"] = 1;
+            values[valuesById[2] = "DESKTOP_ACCESS_MOUSE"] = 2;
+            return values;
+        })();
+
         v1.DesktopSessionRequest = (function() {
 
             /**
@@ -3867,6 +3883,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.v1.IAck|null} [shareView] DesktopSessionRequest shareView
              * @property {muster.v1.IAck|null} [shareMouse] DesktopSessionRequest shareMouse
              * @property {number|Long|null} [viewInWindow] DesktopSessionRequest viewInWindow
+             * @property {muster.v1.DesktopAccess|null} [rememberAccess] DesktopSessionRequest rememberAccess
              */
 
             /**
@@ -3916,17 +3933,25 @@ export const muster = $root.muster = (() => {
              */
             DesktopSessionRequest.prototype.viewInWindow = null;
 
+            /**
+             * DesktopSessionRequest rememberAccess.
+             * @member {muster.v1.DesktopAccess|null|undefined} rememberAccess
+             * @memberof muster.v1.DesktopSessionRequest
+             * @instance
+             */
+            DesktopSessionRequest.prototype.rememberAccess = null;
+
             // OneOf field names bound to virtual getters and setters
             let $oneOfFields;
 
             /**
              * DesktopSessionRequest action.
-             * @member {"shareView"|"shareMouse"|"viewInWindow"|undefined} action
+             * @member {"shareView"|"shareMouse"|"viewInWindow"|"rememberAccess"|undefined} action
              * @memberof muster.v1.DesktopSessionRequest
              * @instance
              */
             Object.defineProperty(DesktopSessionRequest.prototype, "action", {
-                get: $util.oneOfGetter($oneOfFields = ["shareView", "shareMouse", "viewInWindow"]),
+                get: $util.oneOfGetter($oneOfFields = ["shareView", "shareMouse", "viewInWindow", "rememberAccess"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -3966,6 +3991,8 @@ export const muster = $root.muster = (() => {
                     $root.muster.v1.Ack.encode(message.shareMouse, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                 if (message.viewInWindow != null && Object.hasOwnProperty.call(message, "viewInWindow"))
                     writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.viewInWindow);
+                if (message.rememberAccess != null && Object.hasOwnProperty.call(message, "rememberAccess"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).int32(message.rememberAccess);
                 return writer;
             };
 
@@ -4017,6 +4044,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 4: {
                             message.viewInWindow = reader.uint64();
+                            break;
+                        }
+                    case 5: {
+                            message.rememberAccess = reader.int32();
                             break;
                         }
                     default:
@@ -9373,6 +9404,7 @@ export const muster = $root.muster = (() => {
              * @property {string|null} [commit] MemberView commit
              * @property {string|null} [link] MemberView link
              * @property {string|null} [presence] MemberView presence
+             * @property {muster.v1.DesktopAccess|null} [desktopAccess] MemberView desktopAccess
              */
 
             /**
@@ -9520,6 +9552,14 @@ export const muster = $root.muster = (() => {
             MemberView.prototype.presence = "";
 
             /**
+             * MemberView desktopAccess.
+             * @member {muster.v1.DesktopAccess} desktopAccess
+             * @memberof muster.v1.MemberView
+             * @instance
+             */
+            MemberView.prototype.desktopAccess = 0;
+
+            /**
              * Creates a new MemberView instance using the specified properties.
              * @function create
              * @memberof muster.v1.MemberView
@@ -9580,6 +9620,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 15, wireType 2 =*/122).string(message.link);
                 if (message.presence != null && Object.hasOwnProperty.call(message, "presence"))
                     writer.uint32(/* id 16, wireType 2 =*/130).string(message.presence);
+                if (message.desktopAccess != null && Object.hasOwnProperty.call(message, "desktopAccess"))
+                    writer.uint32(/* id 17, wireType 0 =*/136).int32(message.desktopAccess);
                 return writer;
             };
 
@@ -9681,6 +9723,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 16: {
                             message.presence = reader.string();
+                            break;
+                        }
+                    case 17: {
+                            message.desktopAccess = reader.int32();
                             break;
                         }
                     default:

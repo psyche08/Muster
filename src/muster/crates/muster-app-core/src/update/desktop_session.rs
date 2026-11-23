@@ -12,10 +12,22 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, request: v1::DesktopSessionReq
         return;
     }
     let actions = crate::render::device_actions(state);
+    if matches!(request.action, Some(Action::RememberAccess(_))) {
+        if actions.can_share_desktop {
+            super::network::admin_request(
+                state,
+                ctx,
+                "desktop permission",
+                state.self_id.clone(),
+                Req::DesktopSession(request),
+            );
+        }
+        return;
+    }
     let allowed = match request.action {
         Some(Action::ShareView(_) | Action::ShareMouse(_)) => actions.can_share_desktop,
         Some(Action::ViewInWindow(hwnd)) => actions.can_view_desktop && hwnd != 0,
-        None => false,
+        _ => false,
     };
     if !allowed {
         return;
