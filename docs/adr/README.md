@@ -399,3 +399,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0281](0281-windows-codex-desktop-send.md) | Proposed | Verify the Windows Codex thread before sending |
 | [0282](0282-source-built-desktop-engines.md) | Implemented | Build the paired desktop engines from Muster source |
 | [0283](0283-muster-mac-capture-identity.md) | Accepted | Authorize Muster for paired desktop capture |
+| [0284](0284-basic-network-and-device-service-access.md) | Accepted; deployment pending | Basic network grants and device-owned service access |

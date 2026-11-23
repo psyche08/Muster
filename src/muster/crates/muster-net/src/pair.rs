@@ -22,7 +22,10 @@ use crate::node::Node;
 use crate::stream::{MAX_MESSAGE, read_message, write_message};
 
 pub const SERVICE: &str = "pair";
-pub const VERSION: u32 = 1;
+// The join wire payload is unchanged. V2 indicates support for the signed
+// NetworkAccess entry; V1 is accepted by a roster using its implicit mode.
+pub const VERSION: u32 = 2;
+pub(crate) const LEGACY_VERSION: u32 = 1;
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// A joiner waiting for the admin's answer.
@@ -142,8 +145,15 @@ pub async fn serve(
     mut send: SendStream,
     mut recv: RecvStream,
     generation: u64,
+    version: u32,
 ) {
     let result: Result<(), Error> = async {
+        let needs_mode_support = node.roster().read().unwrap().state().network_access.is_some();
+        if version != VERSION && needs_mode_support {
+            let reason = "This network requires a device that supports Basic and Advanced access modes";
+            write_message(&mut send, &encode_response(STATUS_REJECTED, &[], reason)).await?;
+            return Err(Error::Unauthorized(reason.into()));
+        }
         let request = read_message(&mut recv, 8192)
             .await?
             .ok_or_else(|| Error::Protocol("no pair request".into()))?;
@@ -212,7 +222,7 @@ pub async fn serve(
         };
         match verdict {
             Verdict::Approve(record) => {
-                let entries = node.author_add(record, generation)?;
+                let entries = node.author_add(record, generation, version)?;
                 node.pairing().invites.lock().unwrap().remove(&invite_id);
                 write_message(&mut send, &encode_response(STATUS_ACCEPTED, &entries, "")).await?;
                 log::info!("paired {} ({})", peer.short(), peer.fingerprint());

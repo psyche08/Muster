@@ -95,6 +95,7 @@ fn access_for(req: &Req) -> Access {
         | Req::DeviceDebug(_)
         | Req::DesktopSession(_)
         | Req::NetworkRetryVnet(_)
+        | Req::PolicySet(_)
         | Req::NetworkRefresh(_)
         | Req::DesktopUpdateLease(_)
         // A forward makes this machine reach into a member's loopback, so it
@@ -113,8 +114,8 @@ fn access_for(req: &Req) -> Access {
         | Req::NetworkRename(_)
         | Req::NetworkSetScopes(_)
         | Req::NetworkReaddress(_)
-        | Req::PolicyGet(_)
-        | Req::PolicySet(_) => Access::Need(Permission::NetworkAdmin),
+        | Req::NetworkSetAccessMode(_)
+        | Req::PolicyGet(_) => Access::Need(Permission::NetworkAdmin),
         Req::TerminalSessions(_)
         | Req::TerminalAttach(_)
         | Req::TerminalHistory(_)
@@ -1749,6 +1750,10 @@ async fn dispatch(
                 }
             }
             Resp::Ack(v1::Ack {})
+        }
+        Req::NetworkSetAccessMode(r) => {
+            daemon.set_network_access_mode(r.mode.parse()?).await?;
+            Resp::NetworkStatus(daemon.network_status())
         }
         Req::PolicyGet(_) => Resp::Policy(daemon.policy_view()),
         Req::PolicySet(r) => {

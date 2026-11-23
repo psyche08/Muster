@@ -131,6 +131,10 @@ public final class MusterCore: MusterShell {
         send(.renameDevice(Muster_V1_NetworkRenameRequest.with { $0.deviceID = device; $0.name = name }))
     }
 
+    public func setNetworkAccessMode(_ mode: String) {
+        send(.setNetworkAccessMode(Muster_V1_NetworkSetAccessModeRequest.with { $0.mode = mode }))
+    }
+
     public func setScopes(device: String, scopes: [String], role: String) {
         send(.setScopes(Muster_App_SetScopes.with { $0.deviceID = device; $0.scopes = scopes; $0.role = role }))
     }

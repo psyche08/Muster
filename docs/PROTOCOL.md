@@ -66,6 +66,8 @@ The hashed and signed `signed_bytes`:
 | 1 Add | `[DeviceRecord]` |
 | 2 Update | `[device_id 32][name opt_bytes][role: 0 ∣ 1,u8][scopes: 0 ∣ 1,u32 count,str*][vip: 0 unchanged ∣ 1 clear ∣ 2,ip 4]` |
 | 3 Remove | `[device_id 32]` |
+| 4 Readdress | `[cidr_ip 4][prefix u8][u32 count][device_id 32,ip 4]*` |
+| 5 NetworkAccess | `[mode u8: 0 Basic ∣ 1 Advanced]` |
 
 - Wire form `Entry::encode()`: `[u32 len][signed_bytes][u32 len][signature DER]`.
 - `EntryHash = SHA-256(signed_bytes)`; `NetworkId` = the Genesis `EntryHash` (computed with an all-zero network_id field).

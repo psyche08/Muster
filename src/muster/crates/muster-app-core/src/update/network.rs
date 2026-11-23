@@ -491,7 +491,21 @@ pub(super) fn intent_remove_device(state: &mut State, ctx: &Ctx, r: app::RemoveD
     )
 }
 
-pub(super) fn intent_set_scopes(state: &mut State, ctx: &Ctx, s: app::SetScopes) {
+pub(super) fn intent_set_scopes(state: &mut State, ctx: &Ctx, mut s: app::SetScopes) {
+    // While a Basic grant remains selected, keep its hidden Advanced rules.
+    if s.scopes.iter().any(|scope| scope == "net:*")
+        && let Some(network) = &state.network
+        && network.access_mode != "advanced"
+        && let Some(member) = network.members.iter().find(|m| m.device_id == s.device_id)
+    {
+        s.scopes.extend(
+            member
+                .scopes
+                .iter()
+                .filter(|scope| scope.starts_with("net:") && *scope != "net:*")
+                .cloned(),
+        );
+    }
     admin_request(
         state,
         ctx,
@@ -505,18 +519,27 @@ pub(super) fn intent_set_scopes(state: &mut State, ctx: &Ctx, s: app::SetScopes)
     )
 }
 
+pub(super) fn intent_set_network_access_mode(
+    state: &mut State,
+    ctx: &Ctx,
+    request: v1::NetworkSetAccessModeRequest,
+) {
+    admin_request(
+        state,
+        ctx,
+        "network access mode",
+        String::new(),
+        Req::NetworkSetAccessMode(request),
+    );
+}
+
 pub(super) fn intent_set_policy(state: &mut State, ctx: &Ctx, p: app::SetPolicy) {
     // Settings loads its policy from the local daemon even after viewing another member.
-    let device = if state.screen == Screen::Settings {
-        state.self_id.clone()
-    } else {
-        state.target()
-    };
     admin_request(
         state,
         ctx,
         "policy",
-        device,
+        state.self_id.clone(),
         Req::PolicySet(v1::PolicySetRequest { policy: p.policy }),
     );
 }

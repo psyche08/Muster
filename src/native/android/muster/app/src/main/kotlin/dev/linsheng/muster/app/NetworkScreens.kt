@@ -232,6 +232,8 @@ fun MemberRow(member: MemberView, onClick: () -> Unit) {
 @Composable
 fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSave: (List<String>) -> Unit) {
     val offered: List<AccessItem> = access.sectionsList.flatMap { (if (it.hasToggle()) listOf(it.toggle) else emptyList()) + it.itemsList }
+    var addedPorts by remember { mutableStateOf(emptyList<String>()) }
+    var newPort by remember { mutableStateOf("") }
     val selected = remember { mutableStateOf(offered.filter { it.granted }.map { it.scope }.toSet()) }
     @Composable
     fun row(item: AccessItem, enabled: Boolean, indent: Boolean) {
@@ -256,12 +258,31 @@ fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSav
                         section.itemsList.forEach { item ->
                             row(item, enabled = !item.requiresToggle || section.toggle.scope in selected.value, indent = item.requiresToggle)
                         }
+                        if (section.id == "network" && access.networkAdvanced) {
+                            addedPorts.forEach { scope ->
+                                row(AccessItem.newBuilder().setScope(scope).setLabel(scope).build(), true, false)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f)) {
+                                    MusterTextField(newPort, { newPort = it }, label = "tcp/443", singleLine = true, monospace = true)
+                                }
+                                TextButton(onClick = {
+                                    val port = newPort.trim()
+                                    if (port.isNotEmpty()) {
+                                        val scope = "net:$port"
+                                        if (scope !in addedPorts && offered.none { it.scope == scope }) addedPorts += scope
+                                        selected.value += scope
+                                        newPort = ""
+                                    }
+                                }) { Text("Add port") }
+                            }
+                        }
                         if (section.footer.isNotEmpty()) Text(section.footer, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(offered.map { it.scope }.filter { it in selected.value }) }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { onSave((offered.map { it.scope } + addedPorts).filter { it in selected.value }) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
@@ -403,6 +424,20 @@ fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel) {
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     LazyColumn(Modifier.fillMaxSize()) {
         item { SectionHeader("Network devices") }
+        if (vm.network.accessMode.isNotEmpty()) {
+            item {
+                ListItem(
+                    headlineContent = { Text("Network access mode") },
+                    supportingContent = { Text(if (vm.network.accessMode == "basic") "Basic" else "Advanced") },
+                    trailingContent = {
+                        if (vm.canInvite) {
+                            val next = if (vm.network.accessMode == "basic") "advanced" else "basic"
+                            TextButton(onClick = { core.setNetworkAccessMode(next) }) { Text("Use $next") }
+                        }
+                    },
+                )
+            }
+        }
         items(vm.pendingList, key = { "pending-${it.deviceId}" }) { join ->
             PendingJoinRow(join, approve = { deciding = join }, reject = { core.decideJoin(join.deviceId, false, reason = "rejected") })
         }

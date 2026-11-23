@@ -573,8 +573,14 @@ export namespace muster {
             /** Request agentDispatch */
             agentDispatch?: (muster.v1.IAgentDispatchRequest|null);
 
+            /** Request desktopSession */
+            desktopSession?: (muster.v1.IDesktopSessionRequest|null);
+
             /** Request networkRetryVnet */
             networkRetryVnet?: (muster.v1.INetworkRetryVnetRequest|null);
+
+            /** Request networkSetAccessMode */
+            networkSetAccessMode?: (muster.v1.INetworkSetAccessModeRequest|null);
         }
 
         /** Represents a Request. */
@@ -805,11 +811,17 @@ export namespace muster {
             /** Request agentDispatch. */
             public agentDispatch?: (muster.v1.IAgentDispatchRequest|null);
 
+            /** Request desktopSession. */
+            public desktopSession?: (muster.v1.IDesktopSessionRequest|null);
+
             /** Request networkRetryVnet. */
             public networkRetryVnet?: (muster.v1.INetworkRetryVnetRequest|null);
 
+            /** Request networkSetAccessMode. */
+            public networkSetAccessMode?: (muster.v1.INetworkSetAccessModeRequest|null);
+
             /** Request req. */
-            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"networkRetryVnet");
+            public req?: ("deviceInfo"|"deviceWatch"|"deviceSetRelay"|"deviceRequestAccessibility"|"deviceDebug"|"deviceSetCover"|"lockedUsePrepare"|"lockedUseExecute"|"lockedUseCancel"|"deviceRequestAutomation"|"networkStatus"|"networkCreate"|"networkInvite"|"networkJoin"|"networkPending"|"networkDecide"|"networkRemove"|"networkSetScopes"|"policyGet"|"policySet"|"terminalSessions"|"terminalAttach"|"terminalInput"|"terminalCreate"|"terminalResize"|"terminalClose"|"terminalHistory"|"agentTerminal"|"terminalRun"|"terminalRuns"|"agentList"|"agentWatch"|"agentMessages"|"agentSend"|"agentRespond"|"agentInterrupt"|"agentFiles"|"agentFile"|"agentGit"|"browserCall"|"browserSetup"|"agentChats"|"agentChatOpen"|"agentChatOptions"|"agentChatSetOptions"|"networkReaddress"|"networkRename"|"desktopUpdateLease"|"agentInspect"|"diagnosticsUpload"|"lockedUseRenew"|"lockedUseExtend"|"networkRefresh"|"orcaCreate"|"agentSideQuestion"|"agentComplete"|"devicePresence"|"networkPresence"|"deviceInstallPresence"|"agentSendStatus"|"forwardOpen"|"multica"|"multicaBrowse"|"agentNativeCreate"|"agentConfirmDelivered"|"vision"|"agentOrganize"|"agentScheduler"|"deviceRequestScreenRecording"|"multicaService"|"multicaMutation"|"deviceSetBlackout"|"agentDispatch"|"desktopSession"|"networkRetryVnet"|"networkSetAccessMode");
 
             /**
              * Creates a new Request instance using the specified properties.
@@ -1185,6 +1197,9 @@ export namespace muster {
             /** Event agentEvent */
             agentEvent?: (muster.v1.IAgentEvent|null);
 
+            /** Event desktopSession */
+            desktopSession?: (muster.v1.IDesktopSessionProgress|null);
+
             /** Event desktopUpdateReady */
             desktopUpdateReady?: (muster.v1.IAck|null);
 
@@ -1225,6 +1240,9 @@ export namespace muster {
             /** Event agentEvent. */
             public agentEvent?: (muster.v1.IAgentEvent|null);
 
+            /** Event desktopSession. */
+            public desktopSession?: (muster.v1.IDesktopSessionProgress|null);
+
             /** Event desktopUpdateReady. */
             public desktopUpdateReady?: (muster.v1.IAck|null);
 
@@ -1235,7 +1253,7 @@ export namespace muster {
             public rpcTiming?: (muster.v1.IRpcTiming|null);
 
             /** Event ev. */
-            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming");
+            public ev?: ("deviceState"|"networkStatus"|"policy"|"joinProgress"|"terminalSessions"|"terminalFrame"|"agentEvent"|"desktopSession"|"desktopUpdateReady"|"forwardOpened"|"rpcTiming");
 
             /**
              * Creates a new Event instance using the specified properties.
@@ -1489,6 +1507,141 @@ export namespace muster {
              * @returns The default type url
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a DesktopSessionRequest. */
+        interface IDesktopSessionRequest {
+
+            /** DesktopSessionRequest device */
+            device?: (string|null);
+
+            /** DesktopSessionRequest shareView */
+            shareView?: (muster.v1.IAck|null);
+
+            /** DesktopSessionRequest shareMouse */
+            shareMouse?: (muster.v1.IAck|null);
+
+            /** DesktopSessionRequest viewInWindow */
+            viewInWindow?: (number|Long|null);
+        }
+
+        /** Represents a DesktopSessionRequest. */
+        class DesktopSessionRequest implements IDesktopSessionRequest {
+
+            /**
+             * Constructs a new DesktopSessionRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDesktopSessionRequest);
+
+            /** DesktopSessionRequest device. */
+            public device: string;
+
+            /** DesktopSessionRequest shareView. */
+            public shareView?: (muster.v1.IAck|null);
+
+            /** DesktopSessionRequest shareMouse. */
+            public shareMouse?: (muster.v1.IAck|null);
+
+            /** DesktopSessionRequest viewInWindow. */
+            public viewInWindow?: (number|Long|null);
+
+            /** DesktopSessionRequest action. */
+            public action?: ("shareView"|"shareMouse"|"viewInWindow");
+
+            /**
+             * Creates a new DesktopSessionRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DesktopSessionRequest instance
+             */
+            public static create(properties?: muster.v1.IDesktopSessionRequest): muster.v1.DesktopSessionRequest;
+
+            /**
+             * Encodes the specified DesktopSessionRequest message. Does not implicitly {@link muster.v1.DesktopSessionRequest.verify|verify} messages.
+             * @param message DesktopSessionRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDesktopSessionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DesktopSessionRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DesktopSessionRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DesktopSessionRequest;
+
+            /**
+             * Gets the default type url for DesktopSessionRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a DesktopSessionProgress. */
+        interface IDesktopSessionProgress {
+
+            /** DesktopSessionProgress phase */
+            phase?: (muster.v1.DesktopSessionProgress.Phase|null);
+        }
+
+        /** Represents a DesktopSessionProgress. */
+        class DesktopSessionProgress implements IDesktopSessionProgress {
+
+            /**
+             * Constructs a new DesktopSessionProgress.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDesktopSessionProgress);
+
+            /** DesktopSessionProgress phase. */
+            public phase: muster.v1.DesktopSessionProgress.Phase;
+
+            /**
+             * Creates a new DesktopSessionProgress instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DesktopSessionProgress instance
+             */
+            public static create(properties?: muster.v1.IDesktopSessionProgress): muster.v1.DesktopSessionProgress;
+
+            /**
+             * Encodes the specified DesktopSessionProgress message. Does not implicitly {@link muster.v1.DesktopSessionProgress.verify|verify} messages.
+             * @param message DesktopSessionProgress message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDesktopSessionProgress, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DesktopSessionProgress message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DesktopSessionProgress
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DesktopSessionProgress;
+
+            /**
+             * Gets the default type url for DesktopSessionProgress
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace DesktopSessionProgress {
+
+            /** Phase enum. */
+            enum Phase {
+                OFFERED = 0,
+                STARTING = 1,
+                VISIBLE = 2
+            }
         }
 
         /** Properties of a NetworkRetryVnetRequest. */
@@ -2116,6 +2269,12 @@ export namespace muster {
             /** DeviceState canRetryVnet */
             canRetryVnet?: (boolean|null);
 
+            /** DeviceState desktopHostAvailable */
+            desktopHostAvailable?: (boolean|null);
+
+            /** DeviceState desktopViewerAvailable */
+            desktopViewerAvailable?: (boolean|null);
+
             /** DeviceState blackout */
             blackout?: (muster.v1.IDisplayBlackout|null);
         }
@@ -2182,6 +2341,12 @@ export namespace muster {
 
             /** DeviceState canRetryVnet. */
             public canRetryVnet: boolean;
+
+            /** DeviceState desktopHostAvailable. */
+            public desktopHostAvailable: boolean;
+
+            /** DeviceState desktopViewerAvailable. */
+            public desktopViewerAvailable: boolean;
 
             /** DeviceState blackout. */
             public blackout?: (muster.v1.IDisplayBlackout|null);
@@ -3399,6 +3564,9 @@ export namespace muster {
 
             /** NetworkStatus pendingJoins */
             pendingJoins?: (number|null);
+
+            /** NetworkStatus accessMode */
+            accessMode?: (string|null);
         }
 
         /** Represents a NetworkStatus. */
@@ -3436,6 +3604,9 @@ export namespace muster {
 
             /** NetworkStatus pendingJoins. */
             public pendingJoins: number;
+
+            /** NetworkStatus accessMode. */
+            public accessMode: string;
 
             /**
              * Creates a new NetworkStatus instance using the specified properties.
@@ -4331,6 +4502,58 @@ export namespace muster {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
+        /** Properties of a NetworkSetAccessModeRequest. */
+        interface INetworkSetAccessModeRequest {
+
+            /** NetworkSetAccessModeRequest mode */
+            mode?: (string|null);
+        }
+
+        /** Represents a NetworkSetAccessModeRequest. */
+        class NetworkSetAccessModeRequest implements INetworkSetAccessModeRequest {
+
+            /**
+             * Constructs a new NetworkSetAccessModeRequest.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.INetworkSetAccessModeRequest);
+
+            /** NetworkSetAccessModeRequest mode. */
+            public mode: string;
+
+            /**
+             * Creates a new NetworkSetAccessModeRequest instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NetworkSetAccessModeRequest instance
+             */
+            public static create(properties?: muster.v1.INetworkSetAccessModeRequest): muster.v1.NetworkSetAccessModeRequest;
+
+            /**
+             * Encodes the specified NetworkSetAccessModeRequest message. Does not implicitly {@link muster.v1.NetworkSetAccessModeRequest.verify|verify} messages.
+             * @param message NetworkSetAccessModeRequest message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.INetworkSetAccessModeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NetworkSetAccessModeRequest message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NetworkSetAccessModeRequest
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.NetworkSetAccessModeRequest;
+
+            /**
+             * Gets the default type url for NetworkSetAccessModeRequest
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
         /** Properties of a PolicyGetRequest. */
         interface IPolicyGetRequest {
         }
@@ -4400,6 +4623,12 @@ export namespace muster {
 
             /** Policy webWindow */
             webWindow?: (muster.v1.IWebWindow|null);
+
+            /** Policy offerNetwork */
+            offerNetwork?: (boolean|null);
+
+            /** Policy serviceGrants */
+            serviceGrants?: (muster.v1.IServiceGrants|null);
         }
 
         /** Represents a Policy. */
@@ -4432,6 +4661,12 @@ export namespace muster {
             /** Policy webWindow. */
             public webWindow?: (muster.v1.IWebWindow|null);
 
+            /** Policy offerNetwork. */
+            public offerNetwork?: (boolean|null);
+
+            /** Policy serviceGrants. */
+            public serviceGrants?: (muster.v1.IServiceGrants|null);
+
             /**
              * Creates a new Policy instance using the specified properties.
              * @param [properties] Properties to set
@@ -4459,6 +4694,186 @@ export namespace muster {
 
             /**
              * Gets the default type url for Policy
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a ServiceGrants. */
+        interface IServiceGrants {
+
+            /** ServiceGrants agents */
+            agents?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants terminals */
+            terminals?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants network */
+            network?: (muster.v1.IGrantSet|null);
+        }
+
+        /** Represents a ServiceGrants. */
+        class ServiceGrants implements IServiceGrants {
+
+            /**
+             * Constructs a new ServiceGrants.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IServiceGrants);
+
+            /** ServiceGrants agents. */
+            public agents?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants terminals. */
+            public terminals?: (muster.v1.IGrantSet|null);
+
+            /** ServiceGrants network. */
+            public network?: (muster.v1.IGrantSet|null);
+
+            /**
+             * Creates a new ServiceGrants instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ServiceGrants instance
+             */
+            public static create(properties?: muster.v1.IServiceGrants): muster.v1.ServiceGrants;
+
+            /**
+             * Encodes the specified ServiceGrants message. Does not implicitly {@link muster.v1.ServiceGrants.verify|verify} messages.
+             * @param message ServiceGrants message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IServiceGrants, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ServiceGrants message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ServiceGrants
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.ServiceGrants;
+
+            /**
+             * Gets the default type url for ServiceGrants
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a GrantSet. */
+        interface IGrantSet {
+
+            /** GrantSet allDevices */
+            allDevices?: (boolean|null);
+
+            /** GrantSet rules */
+            rules?: (muster.v1.IDeviceGrant[]|null);
+        }
+
+        /** Represents a GrantSet. */
+        class GrantSet implements IGrantSet {
+
+            /**
+             * Constructs a new GrantSet.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IGrantSet);
+
+            /** GrantSet allDevices. */
+            public allDevices: boolean;
+
+            /** GrantSet rules. */
+            public rules: muster.v1.IDeviceGrant[];
+
+            /**
+             * Creates a new GrantSet instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns GrantSet instance
+             */
+            public static create(properties?: muster.v1.IGrantSet): muster.v1.GrantSet;
+
+            /**
+             * Encodes the specified GrantSet message. Does not implicitly {@link muster.v1.GrantSet.verify|verify} messages.
+             * @param message GrantSet message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IGrantSet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a GrantSet message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns GrantSet
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.GrantSet;
+
+            /**
+             * Gets the default type url for GrantSet
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a DeviceGrant. */
+        interface IDeviceGrant {
+
+            /** DeviceGrant scope */
+            scope?: (string|null);
+
+            /** DeviceGrant deviceIds */
+            deviceIds?: (string[]|null);
+        }
+
+        /** Represents a DeviceGrant. */
+        class DeviceGrant implements IDeviceGrant {
+
+            /**
+             * Constructs a new DeviceGrant.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: muster.v1.IDeviceGrant);
+
+            /** DeviceGrant scope. */
+            public scope: string;
+
+            /** DeviceGrant deviceIds. */
+            public deviceIds: string[];
+
+            /**
+             * Creates a new DeviceGrant instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns DeviceGrant instance
+             */
+            public static create(properties?: muster.v1.IDeviceGrant): muster.v1.DeviceGrant;
+
+            /**
+             * Encodes the specified DeviceGrant message. Does not implicitly {@link muster.v1.DeviceGrant.verify|verify} messages.
+             * @param message DeviceGrant message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: muster.v1.IDeviceGrant, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a DeviceGrant message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns DeviceGrant
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): muster.v1.DeviceGrant;
+
+            /**
+             * Gets the default type url for DeviceGrant
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -12686,6 +13101,9 @@ export namespace muster {
             /** Intent renameDevice */
             renameDevice?: (muster.v1.INetworkRenameRequest|null);
 
+            /** Intent setNetworkAccessMode */
+            setNetworkAccessMode?: (muster.v1.INetworkSetAccessModeRequest|null);
+
             /** Intent setPolicy */
             setPolicy?: (muster.app.ISetPolicy|null);
 
@@ -12727,6 +13145,12 @@ export namespace muster {
 
             /** Intent desktopSetupAction */
             desktopSetupAction?: (muster.app.IDesktopSetupAction|null);
+
+            /** Intent desktopSession */
+            desktopSession?: (muster.v1.IDesktopSessionRequest|null);
+
+            /** Intent endDesktopSession */
+            endDesktopSession?: (string|null);
 
             /** Intent desktopUpdateAction */
             desktopUpdateAction?: (muster.app.IDesktopUpdateAction|null);
@@ -12909,6 +13333,9 @@ export namespace muster {
             /** Intent renameDevice. */
             public renameDevice?: (muster.v1.INetworkRenameRequest|null);
 
+            /** Intent setNetworkAccessMode. */
+            public setNetworkAccessMode?: (muster.v1.INetworkSetAccessModeRequest|null);
+
             /** Intent setPolicy. */
             public setPolicy?: (muster.app.ISetPolicy|null);
 
@@ -12950,6 +13377,12 @@ export namespace muster {
 
             /** Intent desktopSetupAction. */
             public desktopSetupAction?: (muster.app.IDesktopSetupAction|null);
+
+            /** Intent desktopSession. */
+            public desktopSession?: (muster.v1.IDesktopSessionRequest|null);
+
+            /** Intent endDesktopSession. */
+            public endDesktopSession?: (string|null);
 
             /** Intent desktopUpdateAction. */
             public desktopUpdateAction?: (muster.app.IDesktopUpdateAction|null);
@@ -13093,7 +13526,7 @@ export namespace muster {
             public agentLoadWork?: (muster.app.IAgentLoadWork|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -18387,6 +18820,18 @@ export namespace muster {
             /** DeviceActions canRename */
             canRename?: (boolean|null);
 
+            /** DeviceActions canShareDesktop */
+            canShareDesktop?: (boolean|null);
+
+            /** DeviceActions canViewDesktop */
+            canViewDesktop?: (boolean|null);
+
+            /** DeviceActions desktopSessionOpen */
+            desktopSessionOpen?: (boolean|null);
+
+            /** DeviceActions desktopSessionText */
+            desktopSessionText?: (string|null);
+
             /** DeviceActions blackout */
             blackout?: (muster.v1.IDisplayBlackout|null);
         }
@@ -18417,6 +18862,18 @@ export namespace muster {
 
             /** DeviceActions canRename. */
             public canRename: boolean;
+
+            /** DeviceActions canShareDesktop. */
+            public canShareDesktop: boolean;
+
+            /** DeviceActions canViewDesktop. */
+            public canViewDesktop: boolean;
+
+            /** DeviceActions desktopSessionOpen. */
+            public desktopSessionOpen: boolean;
+
+            /** DeviceActions desktopSessionText. */
+            public desktopSessionText: string;
 
             /** DeviceActions blackout. */
             public blackout?: (muster.v1.IDisplayBlackout|null);
@@ -18611,6 +19068,9 @@ export namespace muster {
 
             /** AccessView sections */
             sections?: (muster.app.IAccessSection[]|null);
+
+            /** AccessView networkAdvanced */
+            networkAdvanced?: (boolean|null);
         }
 
         /** Represents an AccessView. */
@@ -18624,6 +19084,9 @@ export namespace muster {
 
             /** AccessView sections. */
             public sections: muster.app.IAccessSection[];
+
+            /** AccessView networkAdvanced. */
+            public networkAdvanced: boolean;
 
             /**
              * Creates a new AccessView instance using the specified properties.

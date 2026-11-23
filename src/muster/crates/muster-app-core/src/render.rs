@@ -89,6 +89,10 @@ fn session_timeline(
 
 fn project(state: &State, content: bool) -> app::ViewModel {
     let service_devices = state.service_devices();
+    let network_advanced = state
+        .network
+        .as_ref()
+        .is_some_and(|n| n.access_mode == "advanced");
     let mut vm = app::ViewModel {
         session_load: state.chat.as_ref().and_then(|chat| {
             chat.load_trace
@@ -202,8 +206,8 @@ fn project(state: &State, content: bool) -> app::ViewModel {
             .network
             .as_ref()
             .and_then(|n| n.members.iter().find(|m| m.device_id == state.target()))
-            .map(|m| crate::access::view(&m.scopes)),
-        join_access: Some(crate::access::join_defaults()),
+            .map(|m| crate::access::view(&m.scopes, network_advanced)),
+        join_access: Some(crate::access::join_defaults(network_advanced)),
         device_actions: Some(device_actions(state)),
         device_locked_use: crate::update::manual_locked_use::views(state),
         device_blackout: crate::update::device_blackout::views(state),

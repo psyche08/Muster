@@ -205,6 +205,8 @@ struct AccessEditorSheet: View {
     let done: ([String]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<String> = []
+    @State private var addedPorts: [String] = []
+    @State private var newPort = ""
 
     private var offered: [Muster_App_AccessItem] {
         access.sections.flatMap { ($0.hasToggle ? [$0.toggle] : []) + $0.items }
@@ -223,6 +225,22 @@ struct AccessEditorSheet: View {
                                 .disabled(item.requiresToggle && !selected.contains(section.toggle.scope))
                                 .padding(.leading, item.requiresToggle ? 16 : 0)
                         }
+                        if section.id == "network" && access.networkAdvanced {
+                            ForEach(addedPorts, id: \.self) { scope in
+                                toggle(Muster_App_AccessItem.with {
+                                    $0.scope = scope
+                                    $0.label = scope
+                                })
+                            }
+                            HStack {
+                                #if os(iOS)
+                                MusterTextField("tcp/443", text: $newPort, monospace: true)
+                                #else
+                                TextField("tcp/443", text: $newPort).autocorrectionDisabled()
+                                #endif
+                                Button("Add port") { addPort() }
+                            }
+                        }
                     } header: {
                         if !section.hasToggle { Text(section.title) }
                     } footer: {
@@ -235,7 +253,10 @@ struct AccessEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { done(offered.map(\.scope).filter { selected.contains($0) }); dismiss() }
+                    Button("Save") {
+                        done((offered.map(\.scope) + addedPorts).filter { selected.contains($0) })
+                        dismiss()
+                    }
                 }
             }
             .onAppear { selected = Set(offered.filter(\.granted).map(\.scope)) }
@@ -243,6 +264,17 @@ struct AccessEditorSheet: View {
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
+    }
+
+    private func addPort() {
+        let value = newPort.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        let scope = "net:" + value
+        if !offered.contains(where: { $0.scope == scope }) && !addedPorts.contains(scope) {
+            addedPorts.append(scope)
+        }
+        selected.insert(scope)
+        newPort = ""
     }
 
     private func toggle(_ item: Muster_App_AccessItem) -> some View {
@@ -575,6 +607,19 @@ struct SettingsView: View {
                 VisionSettings(core: core, status: vm.vision)
             }
             Section("Network devices") {
+                if !vm.network.accessMode.isEmpty {
+                    if vm.canInvite {
+                        Picker("Network access mode", selection: Binding(
+                            get: { vm.network.accessMode },
+                            set: { core.setNetworkAccessMode($0) }
+                        )) {
+                            Text("Basic").tag("basic")
+                            Text("Advanced").tag("advanced")
+                        }
+                    } else {
+                        LabeledContent("Network access mode", value: vm.network.accessMode.capitalized)
+                    }
+                }
                 ForEach(vm.pending, id: \.deviceID) { join in
                     VStack(alignment: .leading, spacing: 6) {
                         Label("\(join.name) wants to join", systemImage: "person.badge.plus").font(.headline)
@@ -614,21 +659,30 @@ struct SettingsView: View {
                     Toggle("Control while the screen is locked", isOn: $policy.allowLockedControl)
                 }
             }
-            Section("Open ports") {
-                ForEach(policy.openPorts, id: \.self) { port in
-                    Text(port).font(.system(.body, design: .monospaced))
-                }
-                .onDelete { policy.openPorts.remove(atOffsets: $0) }
-                HStack {
+            if vm.localDeviceHasServices {
+                LocalServiceGrantsView(
+                    policy: $policy,
+                    members: vm.network.members.filter { !$0.isSelf },
+                    advanced: vm.network.accessMode == "advanced"
+                )
+            }
+            if vm.network.accessMode != "basic" {
+                Section("Open ports") {
+                    ForEach(policy.openPorts, id: \.self) { port in
+                        Text(port).font(.system(.body, design: .monospaced))
+                    }
+                    .onDelete { policy.openPorts.remove(atOffsets: $0) }
+                    HStack {
                     #if os(iOS)
-                    MusterTextField("tcp/22", text: $newPort, monospace: true)
+                        MusterTextField("tcp/22", text: $newPort, monospace: true)
                     #else
-                    TextField("tcp/22", text: $newPort).autocorrectionDisabled()
+                        TextField("tcp/22", text: $newPort).autocorrectionDisabled()
                     #endif
-                    Button("Add") {
-                        let trimmed = newPort.trimmingCharacters(in: .whitespaces)
-                        if !trimmed.isEmpty && !policy.openPorts.contains(trimmed) { policy.openPorts.append(trimmed) }
-                        newPort = ""
+                        Button("Add") {
+                            let trimmed = newPort.trimmingCharacters(in: .whitespaces)
+                            if !trimmed.isEmpty && !policy.openPorts.contains(trimmed) { policy.openPorts.append(trimmed) }
+                            newPort = ""
+                        }
                     }
                 }
             }

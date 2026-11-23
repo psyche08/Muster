@@ -476,6 +476,7 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
             network::admin_request(state, ctx, "rename", String::new(), Req::NetworkRename(r))
         }
         It::SetScopes(s) => network::intent_set_scopes(state, ctx, s),
+        It::SetNetworkAccessMode(r) => network::intent_set_network_access_mode(state, ctx, r),
         It::SetPolicy(p) => network::intent_set_policy(state, ctx, p),
         It::SelectDevice(s) => network::intent_select_device(state, s),
         It::SetDeviceLockedUse(r) => manual_locked_use::set(state, ctx, r),

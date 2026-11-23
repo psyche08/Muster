@@ -32,6 +32,7 @@ message Intent {
     RemoveDevice remove_device = 14;
     SetScopes set_scopes = 15;
     muster.v1.NetworkRenameRequest rename_device = 142;
+    muster.v1.NetworkSetAccessModeRequest set_network_access_mode = 155;
     SetPolicy set_policy = 16;
     SelectDevice select_device = 17;
     SetRelay set_relay = 19;
@@ -626,10 +627,10 @@ message ChatProvider {
 // behind a device-level switch, then everything else. The shell starts from
 // the items marked granted, greys an item whose `requires_toggle` section
 // switch is off, and sends every scope still on back with SetScopes or
-// DecideJoin. Every scope the member holds appears exactly once, so saving
-// never drops one silently.
+// DecideJoin. In Basic, older detailed network rules stay hidden.
 message AccessView {
   repeated AccessSection sections = 1;
+  bool network_advanced = 2;
 }
 
 message AccessSection {

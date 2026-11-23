@@ -23,7 +23,6 @@ const JOIN_DEFAULTS: &[&str] = &[
 const OTHER: &[(&str, &str)] = &[
     ("browser.view", "Read browser tabs and pages"),
     ("browser.control", "Control browser pages"),
-    ("net:tcp/22", "SSH (tcp/22)"),
     ("network.admin", "Administer the network"),
 ];
 
@@ -38,15 +37,15 @@ const EARLIER: &[(&str, &str)] = &[
     ("terminal.control", "Type into terminals"),
 ];
 
-pub fn join_defaults() -> AccessView {
+pub fn join_defaults(advanced: bool) -> AccessView {
     let held: Vec<String> = JOIN_DEFAULTS.iter().map(|s| s.to_string()).collect();
-    let mut result = view(&held);
+    let mut result = view(&held, advanced);
     result.sections.retain(|section| section.id != "multica");
     result
 }
 
 /// The editor for a member holding `scopes` (as the roster reports them).
-pub fn view(scopes: &[String]) -> AccessView {
+pub fn view(scopes: &[String], advanced: bool) -> AccessView {
     // Canonical text, so a scope is found however it was spelled.
     let mut rest: Vec<String> = scopes
         .iter()
@@ -128,6 +127,20 @@ pub fn view(scopes: &[String]) -> AccessView {
         true,
     ));
 
+    let network_label = if advanced {
+        "All protocols and ports"
+    } else {
+        "Network access"
+    };
+    let mut network_items = vec![item("net:*", network_label, take("net:*"), false)];
+    if advanced {
+        network_items.push(item(
+            "net:tcp/22",
+            "SSH (tcp/22)",
+            take("net:tcp/22"),
+            false,
+        ));
+    }
     let mut earlier_items = Vec::new();
     for (scope, label) in EARLIER {
         if take(scope) {
@@ -138,18 +151,32 @@ pub fn view(scopes: &[String]) -> AccessView {
         .iter()
         .map(|(scope, label)| item(scope, label, take(scope), false))
         .collect();
-    // Anything else held (another port, a scope this build cannot read) is
-    // kept under its own name.
-    other_items.extend(rest.iter().map(|scope| item(scope, scope, true, false)));
+    for scope in rest {
+        if scope.starts_with("net:") {
+            if advanced {
+                network_items.push(item(&scope, &scope, true, false));
+            }
+        } else {
+            other_items.push(item(&scope, &scope, true, false));
+        }
+    }
     let mut sections = vec![
         chats,
         agents,
         terminals,
+        AccessSection {
+            id: "network".into(),
+            title: "Network".into(),
+            footer: "The receiving device chooses which network services it offers.".into(),
+            summary: granted_labels(&network_items, "Off"),
+            toggle: None,
+            items: network_items,
+        },
         multica,
         AccessSection {
             id: "other".into(),
             title: "Other".into(),
-            footer: "SSH also needs the target to open the port.".into(),
+            footer: String::new(),
             summary: granted_labels(&other_items, "None"),
             toggle: None,
             items: other_items,
@@ -167,7 +194,10 @@ pub fn view(scopes: &[String]) -> AccessView {
             items: earlier_items,
         });
     }
-    AccessView { sections }
+    AccessView {
+        sections,
+        network_advanced: advanced,
+    }
 }
 
 /// Known providers in their order, then any other the member holds.
@@ -288,7 +318,7 @@ mod tests {
             "agent.view",
             "browser.view",
         ]);
-        let view = view(&held);
+        let view = view(&held, true);
         let offered = all(&view);
         let mut on: Vec<&str> = offered
             .iter()
@@ -322,7 +352,7 @@ mod tests {
         assert_eq!(section(&view, "terminals").summary, "Off");
         assert_eq!(
             section(&view, "other").summary,
-            "Read browser tabs and pages, net:tcp/5900"
+            "Read browser tabs and pages"
         );
         assert_eq!(
             section(&view, "earlier").summary,
@@ -331,8 +361,23 @@ mod tests {
     }
 
     #[test]
+    fn basic_network_editor_displays_only_the_whole_service_grant() {
+        let held = scopes(&["net:*", "net:tcp/22", "net:udp/2049"]);
+        let basic = view(&held, false);
+        assert!(!basic.network_advanced);
+        let items = &section(&basic, "network").items;
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].scope, "net:*");
+        assert!(items[0].granted);
+
+        let advanced = view(&held, true);
+        assert!(advanced.network_advanced);
+        assert_eq!(section(&advanced, "network").items.len(), held.len());
+    }
+
+    #[test]
     fn join_defaults_turn_the_three_modules_on_and_nothing_risky() {
-        let view = join_defaults();
+        let view = join_defaults(false);
         assert_eq!(section(&view, "chats").summary, "ChatGPT, Claude");
         assert_eq!(
             section(&view, "agents").summary,
@@ -348,7 +393,7 @@ mod tests {
 
     #[test]
     fn a_switch_with_no_provider_says_so() {
-        let view = view(&scopes(&["agents", "chats"]));
+        let view = view(&scopes(&["agents", "chats"]), false);
         assert_eq!(section(&view, "agents").summary, "No provider");
         assert_eq!(section(&view, "chats").summary, "No provider");
     }

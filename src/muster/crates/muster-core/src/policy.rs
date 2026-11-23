@@ -1,7 +1,7 @@
 //! The one authorization function (ARCHITECTURE §3.4):
 //!
 //!   allowed = roster.active(subject)
-//!           && roster.scopes(subject) grant permission
+//!           && the applicable member scope or target-owned grant allows it
 //!           && local_policy.allows(permission, target_state)
 //!           && (!permission.high_risk || presence_proof)
 //!
@@ -13,7 +13,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::identity::DeviceId;
-use crate::roster::{Role, State};
+use crate::roster::{NetworkAccessMode, Role, State};
 use crate::scope::{Proto, Scope};
 
 /// What one request asks of its caller. The roster holds `Scope`s; this is
@@ -150,12 +150,84 @@ impl fmt::Display for Permission {
     }
 }
 
+/// Receiver-owned rules. Absence of a category preserves its legacy grants.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServiceGrants {
+    pub agents: Option<GrantSet>,
+    pub terminals: Option<GrantSet>,
+    pub network: Option<GrantSet>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrantSet {
+    pub all_devices: bool,
+    pub rules: Vec<DeviceGrant>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceGrant {
+    pub scope: Scope,
+    pub devices: BTreeSet<DeviceId>,
+}
+
+impl ServiceGrants {
+    fn for_permission(&self, wanted: &Permission) -> Option<&GrantSet> {
+        match wanted {
+            Permission::Agent { .. } => self.agents.as_ref(),
+            Permission::Terminal { .. } => self.terminals.as_ref(),
+            Permission::Net { .. } => self.network.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+impl GrantSet {
+    fn allows(&self, subject: &DeviceId, wanted: &Permission, mode: NetworkAccessMode) -> bool {
+        self.all_devices
+            || self.rules.iter().any(|rule| {
+                if !rule.devices.contains(subject) {
+                    return false;
+                }
+                match (&rule.scope, wanted) {
+                    (Scope::Agents, Permission::Agent { .. })
+                    | (Scope::Terminals, Permission::Terminal { .. })
+                    | (Scope::TerminalView, Permission::Terminal { control: false })
+                    | (Scope::TerminalControl, Permission::Terminal { control: true }) => true,
+                    (Scope::AgentProvider(granted), Permission::Agent { provider, .. }) => {
+                        provider.as_ref().is_none_or(|wanted| wanted == granted)
+                    }
+                    (
+                        Scope::Net {
+                            proto: Proto::Any,
+                            port: None,
+                        },
+                        Permission::Net { .. },
+                    ) => true,
+                    (scope @ Scope::Net { .. }, Permission::Net { proto, port })
+                        if mode == NetworkAccessMode::Advanced =>
+                    {
+                        scope.covers(&Scope::Net {
+                            proto: *proto,
+                            port: Some(*port),
+                        })
+                    }
+                    _ => false,
+                }
+            })
+    }
+}
+
 /// This machine's own say over what it offers. Local configuration, never
 /// part of the roster.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalPolicy {
     /// Ports reachable over vnet and forward; empty means none.
     pub open_ports: Vec<PortRule>,
+    /// None retains the stored port offer; Basic uses an explicit offer as a switch.
+    #[serde(default)]
+    pub offer_network: Option<bool>,
+    #[serde(default)]
+    pub service_grants: ServiceGrants,
     pub allow_locked_control: bool,
     /// Bundle identifiers the AX controller may drive.
     pub ax_allowlist: Vec<String>,
@@ -197,6 +269,8 @@ impl Default for LocalPolicy {
                 proto: Proto::Tcp,
                 port: Some(22),
             }],
+            offer_network: None,
+            service_grants: ServiceGrants::default(),
             allow_locked_control: false,
             // CatDesk is allowed explicitly per target, not by default.
             ax_allowlist: vec![
@@ -231,7 +305,7 @@ impl LocalPolicy {
         self.open_ports.iter().any(|rule| rule.matches(proto, port))
     }
 
-    fn allows(&self, wanted: &Permission, target: &TargetState) -> bool {
+    fn allows(&self, wanted: &Permission, target: &TargetState, mode: NetworkAccessMode) -> bool {
         // Chats are desktop apps' own conversations, offered with Agent Halo.
         let offered = match wanted {
             Permission::Chat { .. } | Permission::Agent { .. } | Permission::Browser { .. } => {
@@ -247,7 +321,11 @@ impl LocalPolicy {
             }
             Permission::LockedControl => self.allow_locked_control,
             Permission::NetworkAdmin => true,
-            Permission::Net { proto, port } => self.port_open(*proto, *port),
+            Permission::Net { proto, port } => match self.offer_network {
+                Some(false) => false,
+                Some(true) if mode == NetworkAccessMode::Basic => true,
+                _ => self.port_open(*proto, *port),
+            },
         };
         offered
             && (!target.locked
@@ -287,10 +365,27 @@ pub fn authorize(
     let Some(member) = state.active(subject) else {
         return Decision::Deny("not an active member");
     };
-    if !wanted.granted(&member.record.scopes, member.record.role) {
+    let is_network = matches!(wanted, Permission::Net { .. });
+    let mode = if is_network {
+        state.network_access_mode()
+    } else {
+        NetworkAccessMode::Basic
+    };
+    let grants = policy.service_grants.for_permission(wanted);
+    let member_granted = || {
+        if is_network && mode == NetworkAccessMode::Basic {
+            member.record.scopes.contains(&Scope::ALL_NET)
+        } else {
+            wanted.granted(&member.record.scopes, member.record.role)
+        }
+    };
+    if (is_network || grants.is_none()) && !member_granted() {
         return Decision::Deny("scope not granted");
     }
-    if !policy.allows(wanted, target) {
+    if grants.is_some_and(|grants| !grants.allows(subject, wanted, mode)) {
+        return Decision::Deny("device not assigned to this service");
+    }
+    if !policy.allows(wanted, target, mode) {
         return Decision::Deny("refused by local policy");
     }
     if wanted.high_risk() {
@@ -531,6 +626,64 @@ mod tests {
         Permission::Chat {
             provider: provider.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn owner_assignments_gate_service_and_selector() {
+        let (roster, peer) = roster_with(&["net:*"]);
+        let grant = |scope: &str| GrantSet {
+            all_devices: false,
+            rules: vec![DeviceGrant {
+                scope: scope.parse().unwrap(),
+                devices: BTreeSet::from([peer]),
+            }],
+        };
+        let mut policy = LocalPolicy {
+            offer_network: Some(true),
+            service_grants: ServiceGrants {
+                agents: Some(grant("agents:codex")),
+                terminals: Some(grant("terminal.view")),
+                network: Some(grant("net:*")),
+            },
+            ..LocalPolicy::default()
+        };
+        let decide = |wanted: Permission| {
+            authorize(
+                roster.state(),
+                &peer,
+                &wanted,
+                &policy,
+                &TargetState::default(),
+            )
+        };
+        assert!(decide(agent(Some("codex"), true)).is_allow());
+        assert!(!decide(agent(Some("claude"), false)).is_allow());
+        assert!(decide(Permission::Terminal { control: false }).is_allow());
+        assert!(!decide(Permission::Terminal { control: true }).is_allow());
+        assert!(
+            !authorize(
+                roster.state(),
+                &SoftSigner::generate().public_key().device_id(),
+                &agent(Some("codex"), false),
+                &policy,
+                &TargetState::default(),
+            )
+            .is_allow()
+        );
+        assert!(authorize_port(roster.state(), &peer, &policy, Proto::Udp, 2049).is_allow());
+        policy.service_grants.network = Some(grant("net:udp/2049"));
+        assert!(!authorize_port(roster.state(), &peer, &policy, Proto::Udp, 2049).is_allow());
+
+        let mut advanced = roster.state().clone();
+        advanced.network_access = Some(NetworkAccessMode::Advanced);
+        policy.open_ports.push(PortRule {
+            proto: Proto::Udp,
+            port: Some(2049),
+        });
+        assert!(authorize_port(&advanced, &peer, &policy, Proto::Udp, 2049).is_allow());
+        assert!(!authorize_port(&advanced, &peer, &policy, Proto::Tcp, 22).is_allow());
+        policy.offer_network = Some(false);
+        assert!(!authorize_port(&advanced, &peer, &policy, Proto::Udp, 2049).is_allow());
     }
 
     #[test]
