@@ -45,8 +45,13 @@ def build(cache, output, msys):
     # Keep the encoder source revisions corresponding to the pinned FFmpeg binary.
     host["checkout"](cache, host["output"]("git", "-C", deps["build-deps"], "remote", "get-url", "origin"),
                      deps["build-deps"].name, host["CODECS"])
+    for version in (11, 12, 13):
+        name = f"nv_codec_headers_{version}"
+        deps[name] = obj / "_deps" / (name + "-src")
+        if not (deps[name] / "include/ffnvcodec/nvEncodeAPI.h").is_file():
+            raise ValueError("Missing source used to build " + name)
     with ZipFile(output / "Host-Sources.zip", "w", compression=ZIP_DEFLATED, compresslevel=1) as archive:
-        for archive_path in (boost, json):
+        for archive_path in (boost, json, ffmpeg):
             archive.write(archive_path, "dependencies/" + archive_path.name)
         for path in sorted(src.rglob("*")):
             if path.is_file() and ".git" not in path.parts and "third-party" not in path.relative_to(src).parts[:1]:

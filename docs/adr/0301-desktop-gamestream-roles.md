@@ -33,3 +33,5 @@ The pinned Boost.Locale tree also lists its umbrella header above the declared C
 Disable system JSON discovery for the Windows build, including the display-device subproject. Mixing the 3.12 system headers with the pinned 3.11 ABI produced incompatible serializers in the two static libraries.
 
 Build the private Windows executable without configuring Sunshine's standalone WiX/NSIS distributions. Muster's portable packager supplies its own layout and corresponding source offer.
+
+Include the Windows FFmpeg input archive and the three additional NVENC header trees selected by CMake in the Windows source offer.
