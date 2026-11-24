@@ -530,6 +530,9 @@ message RemoteWorkspaceView {
   bool session_open = 4;
   string status = 5;
   muster.v1.DesktopTakeoverPrompt takeover = 6;
+  uint64 native_session = 7; // opaque presentation identifier
+  bool mouse = 8;
+  bytes jpeg = 9;
 }
 
 message MulticaSelect { string device_id = 1; }

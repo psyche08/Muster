@@ -61,6 +61,7 @@ use terminals::*;
 
 /// What tasks report back.
 pub enum Msg {
+    DesktopFrame(u64, std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>),
     DesktopProgress(u64, v1::DesktopSessionProgress),
     DesktopFinished(u64, Result<(), Error>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -707,6 +708,13 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             state.manual_busy.remove(&id);
             if let Err(error) = result {
                 state.toast(format!("Locked Use: {error}"), true);
+            }
+        }
+        Msg::DesktopFrame(id, frame) => {
+            if let Some(s) = state.desktop_session.as_mut().filter(|s| s.id == id) {
+                if let Some(bytes) = frame.lock().unwrap().take() {
+                    s.jpeg = bytes;
+                }
             }
         }
         Msg::DesktopProgress(id, phase) => desktop_session::progress(state, id, phase),

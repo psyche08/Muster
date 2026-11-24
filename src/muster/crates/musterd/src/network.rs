@@ -852,7 +852,9 @@ impl Daemon {
                         self.device_id(),
                         peer,
                     )
-                    .ok_or_else(|| Error::Invalid("Assign a current paired desktop".into()))?;
+                    .ok_or_else(|| {
+                        Error::Invalid("Assign a current paired viewing device".into())
+                    })?;
                     entry.insert(pairing);
                 }
             }

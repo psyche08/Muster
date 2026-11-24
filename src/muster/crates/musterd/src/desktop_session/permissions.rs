@@ -158,6 +158,13 @@ mod tests {
 
     #[tokio::test]
     async fn remembered_access_follows_the_pairing_and_revokes_its_live_lease() {
+        verify_pairing(DeviceKind::Desktop).await;
+    }
+    #[tokio::test]
+    async fn phone_requires_an_explicit_grant_and_loses_the_lease_on_revocation() {
+        verify_pairing(DeviceKind::Phone).await;
+    }
+    async fn verify_pairing(kind: DeviceKind) {
         let dir = tempfile::tempdir().unwrap();
         let mut config = crate::DaemonConfig::new(dir.path());
         config.listen = false;
@@ -172,7 +179,7 @@ mod tests {
         .await
         .unwrap();
         let viewer = SoftSigner::generate();
-        let record = DeviceRecord::new(viewer.public_key(), "Viewer", DeviceKind::Desktop);
+        let record = DeviceRecord::new(viewer.public_key(), "Viewer", kind);
         let peer = record.device_id;
         let other = SoftSigner::generate().public_key().device_id();
         {
@@ -259,6 +266,18 @@ mod tests {
             });
             daemon.set_policy(&policy).unwrap();
         };
+        let mut blanket = daemon.policy_view();
+        let grants = blanket.service_grants.as_mut().unwrap();
+        grants.manages_desktop = true;
+        grants.desktop = Some(muster_proto::v1::GrantSet {
+            all_devices: true,
+            rules: vec![],
+        });
+        daemon.set_policy(&blanket).unwrap();
+        assert_eq!(
+            permissions.admit(&daemon, peer).is_some(),
+            kind == DeviceKind::Desktop
+        );
         set("desktop.mouse");
         assert!(permissions.admit(&daemon, other).is_none());
         let (mode, mouse) = permissions.admit(&daemon, peer).unwrap();

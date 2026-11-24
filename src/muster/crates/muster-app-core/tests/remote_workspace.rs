@@ -35,8 +35,16 @@ impl Handler for Desktop {
                 }),
                 Req::DesktopSession(request) => {
                     assert_eq!(request.device, "host");
+                    let native = matches!(
+                        request.action,
+                        Some(v1::desktop_session_request::Action::ViewNative(_))
+                    );
+                    if native {
+                        events.send(Ev::DesktopFrame(vec![1, 2, 3])).await.unwrap();
+                    }
                     events
                         .send(Ev::DesktopSession(v1::DesktopSessionProgress {
+                            mouse: native,
                             phase: v1::desktop_session_progress::Phase::Visible as i32,
                             ..Default::default()
                         }))
@@ -53,6 +61,14 @@ impl Handler for Desktop {
 
 #[tokio::test]
 async fn embedded_lease_survives_navigation_until_disconnect() {
+    exercise(false).await;
+}
+#[cfg(target_vendor = "apple")]
+#[tokio::test]
+async fn native_workspace_retains_frame_until_disconnect() {
+    exercise(true).await;
+}
+async fn exercise(native: bool) {
     use app::intent::It;
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
@@ -100,12 +116,18 @@ async fn embedded_lease_survives_navigation_until_disconnect() {
         .await;
     send(It::DesktopSession(v1::DesktopSessionRequest {
         device: "host".into(),
-        action: Some(v1::desktop_session_request::Action::ViewInWindow(1)),
+        action: Some(if native {
+            v1::desktop_session_request::Action::ViewNative(1)
+        } else {
+            v1::desktop_session_request::Action::ViewInWindow(1)
+        }),
     }));
     let viewing = |v: &app::ViewModel| {
-        v.remote_workspace
-            .as_ref()
-            .is_some_and(|r| r.session_open && r.status == "Viewing desktop")
+        v.remote_workspace.as_ref().is_some_and(|r| {
+            r.session_open
+                && r.status == "Viewing desktop"
+                && (!native || r.mouse && r.native_session != 0 && r.jpeg == [1, 2, 3])
+        })
     };
     shell.wait(viewing).await;
     navigate(app::Screen::Terminals);

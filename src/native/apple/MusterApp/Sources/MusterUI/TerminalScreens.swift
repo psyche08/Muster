@@ -17,12 +17,13 @@ struct WorkspaceSwitcher: View {
 
     /// The tab the core says the screen belongs to (Home counts as Agents).
     private var selected: Muster_App_Screen {
-        [.multica, .terminals].contains(vm.workspace) ? vm.workspace : .agents
+        [.multica, .terminals, .remote].contains(vm.workspace) ? vm.workspace : .agents
     }
 
     var body: some View {
         Picker("Workspace", selection: Binding(get: { selected }, set: { tab in
             switch tab {
+            case .remote: core.send(.openRemote(.init()))
             case .multica: core.navigate(to: .multica)
             case .terminals: core.openTerminals(device: vm.agents.deviceID.isEmpty ? "*" : vm.agents.deviceID)
             default: core.openAgents(device: vm.terminals.deviceID.isEmpty ? "*" : vm.terminals.deviceID)
@@ -30,10 +31,11 @@ struct WorkspaceSwitcher: View {
         })) {
             Text("Agents").tag(Muster_App_Screen.agents)
             Text("Terminals").tag(Muster_App_Screen.terminals)
+            Text("Remote").tag(Muster_App_Screen.remote)
             if vm.multicaWorkspace.visible { Text("Multica").tag(Muster_App_Screen.multica) }
         }
         .pickerStyle(.segmented)
-        .frame(width: 270)
+        .frame(idealWidth: vm.multicaWorkspace.visible ? 320 : 250)
         .accessibilityIdentifier("workspace-switcher")
     }
 }

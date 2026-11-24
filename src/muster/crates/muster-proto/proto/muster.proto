@@ -238,6 +238,7 @@ message Event {
     TerminalFrame terminal_frame = 31;
     AgentEvent agent_event = 41;
     DesktopSessionProgress desktop_session = 153;
+    bytes desktop_frame = 154; // local RPC only
     Ack desktop_update_ready = 57; // local streaming lease; held until cancellation/disconnect
     ForwardOpened forward_opened = 68;
     RpcTiming rpc_timing = 69; // Optional read-only diagnostics; never a business event.
@@ -272,14 +273,25 @@ message DesktopSessionRequest {
     Ack share_view = 2;
     Ack share_mouse = 3;
     uint64 view_in_window = 4; // local owner window, never forwarded
+    uint64 view_native = 7; // local presentation lease
+    DesktopPointer pointer = 8; // local presentation input
     uint64 confirm_takeover = 6; // pending local viewer decision, never forwarded
     DesktopAccess remember_access = 5; // local owner only; NONE revokes
   }
+}
+message DesktopPointer {
+  enum Kind { MOVE = 0; PRIMARY = 1; SECONDARY = 2; SCROLL = 3; DRAG_START = 4; DRAG_MOVE = 5; DRAG_END = 6; }
+  uint64 session = 1;
+  Kind kind = 2;
+  uint32 x = 3; // normalized 0..65535
+  uint32 y = 4;
+  sint32 scroll = 5;
 }
 message DesktopSessionProgress {
   enum Phase { OFFERED = 0; STARTING = 1; VISIBLE = 2; OCCUPIED = 3; }
   Phase phase = 1;
   DesktopTakeoverPrompt takeover = 2;
+  bool mouse = 3; // native profile only
 }
 message DesktopTakeoverPrompt {
   uint64 confirmation = 1;

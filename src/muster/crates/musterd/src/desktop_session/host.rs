@@ -76,7 +76,6 @@ impl Drop for ActiveHost<'_> {
 
 struct Host {
     daemon: Weak<Daemon>,
-    program: std::path::PathBuf,
     lease: super::permissions::Lease,
     peer: DeviceId,
     stop: tokio_util::sync::CancellationToken,
@@ -106,7 +105,8 @@ impl Host {
         let hello = timeout(Duration::from_secs(5), session.recv_control())
             .await
             .map_err(|_| unavailable("viewer handshake timed out"))??;
-        if hello.as_deref() != Some(HELLO) {
+        let native = hello.as_deref() == Some(super::native::HELLO);
+        if !native && hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
         let daemon = self
@@ -146,6 +146,9 @@ impl Host {
             .await
             .map_err(|_| unavailable("previous desktop viewer is still closing"))?
             .map_err(|_| unavailable("desktop service stopped"))?;
+        if native {
+            return super::native::host(session).await;
+        }
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
@@ -155,7 +158,8 @@ impl Host {
         if !self.console_ready() {
             return Err(unavailable("desktop permission ended"));
         }
-        let process = match start(&self.program, parked, ports, &launch).await {
+        let executable = program(CAPTURE_HOST)?;
+        let process = match start(&executable, parked, ports, &launch).await {
             Ok(started) => started,
             Err(error) => {
                 session.send_control(CAPTURE_UNAVAILABLE).await?;
@@ -180,11 +184,9 @@ pub(crate) fn admit(
     daemon: &Arc<Daemon>,
     peer: DeviceId,
 ) -> Option<muster_net::remote_desktop::Sharing> {
-    let program = program(CAPTURE_HOST).ok()?;
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
     let host = Arc::new(Host {
         daemon: Arc::downgrade(daemon),
-        program,
         lease,
         peer,
         stop: Default::default(),

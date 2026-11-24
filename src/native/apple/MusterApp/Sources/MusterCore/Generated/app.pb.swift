@@ -2396,6 +2396,13 @@ public nonisolated struct Muster_App_RemoteWorkspaceView: Sendable {
   /// Clears the value of `takeover`. Subsequent reads from it will return its default value.
   public mutating func clearTakeover() {self._takeover = nil}
 
+  /// opaque presentation identifier
+  public var nativeSession: UInt64 = 0
+
+  public var mouse: Bool = false
+
+  public var jpeg: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -8532,7 +8539,7 @@ nonisolated extension Muster_App_RemoteDevice: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoteWorkspaceView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}devices\0\u{3}selected_device\0\u{3}can_connect\0\u{3}session_open\0\u{1}status\0\u{1}takeover\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}devices\0\u{3}selected_device\0\u{3}can_connect\0\u{3}session_open\0\u{1}status\0\u{1}takeover\0\u{3}native_session\0\u{1}mouse\0\u{1}jpeg\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8546,6 +8553,9 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
       case 4: try { try decoder.decodeSingularBoolField(value: &self.sessionOpen) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._takeover) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.nativeSession) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.mouse) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.jpeg) }()
       default: break
       }
     }
@@ -8574,6 +8584,15 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
     try { if let v = self._takeover {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
+    if self.nativeSession != 0 {
+      try visitor.visitSingularUInt64Field(value: self.nativeSession, fieldNumber: 7)
+    }
+    if self.mouse != false {
+      try visitor.visitSingularBoolField(value: self.mouse, fieldNumber: 8)
+    }
+    if !self.jpeg.isEmpty {
+      try visitor.visitSingularBytesField(value: self.jpeg, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8584,6 +8603,9 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
     if lhs.sessionOpen != rhs.sessionOpen {return false}
     if lhs.status != rhs.status {return false}
     if lhs._takeover != rhs._takeover {return false}
+    if lhs.nativeSession != rhs.nativeSession {return false}
+    if lhs.mouse != rhs.mouse {return false}
+    if lhs.jpeg != rhs.jpeg {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

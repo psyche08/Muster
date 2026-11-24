@@ -365,7 +365,12 @@ pub struct DesktopPairing {
 impl DesktopPairing {
     pub fn current(state: &State, host: DeviceId, peer: DeviceId) -> Option<Self> {
         let viewer = state.active(&peer)?;
-        if peer == host || viewer.record.kind != crate::roster::DeviceKind::Desktop {
+        if peer == host
+            || !matches!(
+                viewer.record.kind,
+                crate::roster::DeviceKind::Desktop | crate::roster::DeviceKind::Phone
+            )
+        {
             return None;
         }
         Some(Self {
@@ -422,6 +427,12 @@ pub fn authorize(
     };
     if (is_network || grants.is_none()) && !member_granted() {
         return Decision::Deny("scope not granted");
+    }
+    if matches!(wanted, Permission::Desktop { .. })
+        && grants.is_some_and(|g| g.all_devices)
+        && member.record.kind != crate::roster::DeviceKind::Desktop
+    {
+        return Decision::Deny("blanket desktop access covers desktops only");
     }
     if grants.is_some_and(|grants| !grants.allows(subject, wanted, mode)) {
         return Decision::Deny("device not assigned to this service");

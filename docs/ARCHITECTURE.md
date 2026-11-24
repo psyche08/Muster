@@ -75,7 +75,7 @@ Target metrics:
 |---|---|---|
 | R1 | **Hardware identity network**: Every device has one nonexportable hardware P-256 key (SEP / StrongBox / HUKS / TPM). Device traffic is end-to-end encrypted; Relay is untrusted. | Compromising Relay can cause at most DoS; device private keys cannot be exported; sessions disconnect within ≤ 2 seconds after revocation |
 | R2 | **Enrollment**: Pair using QR or short codes. The creator only approves enrollment; enrolled members access one another as peers. Any device, including the creator, going offline leaves other members unaffected. | Remaining members can still access one another after creator shutdown, including after their own restarts |
-| R3 | **vnet (desktop)**: Every desktop member has a stable virtual IP that **any third-party software**, including SSH and VNC (macOS Screen Sharing), can use directly. Authorize which device may access which ports on which device. **No phone VPN**: phones cover only in-App traffic; a built-in SSH client (Rust, hardware-key login) accesses the same ports through forwarding streams. No phone VNC. | Another Mac connects to a remote Mac's virtual IP using standard SSH / VNC clients; a phone opens the remote Mac's SSH session in-App; both direct and Relay paths work |
+| R3 | **vnet (desktop)**: Every desktop member has a stable virtual IP that **any third-party software**, including SSH and VNC (macOS Screen Sharing), can use directly. Authorize which device may access which ports on which device. **No phone VPN**: phones cover only in-App traffic; a built-in SSH client (Rust, hardware-key login) accesses the same ports through forwarding streams. Phone Remote uses the paired desktop service ([ADR 0299](adr/0299-apple-remote-workspace.md)). | Another Mac connects to a remote Mac's virtual IP using standard SSH / VNC clients; a phone opens the remote Mac's SSH session in-App; both direct and Relay paths work |
 | R4 | **Remote Agent viewing and control**: Agent Halo views and controls Codex / Claude / Catdesk Desktop sessions, sends prompts, handles approvals, and interrupts; each application uses an independent profile. NativeApp starts locked and uses short-lived authorization to temporarily unlock, cover, operate, then relock. | Each Desktop application separately completes view → send → approve → observe result on a phone; unimplemented capabilities are explicitly unavailable. Displays are covered during temporary operations and Mac relock is confirmed after each completion; see LOCKED_USE.md |
 | R5 | **Remote terminal work through independent adapters**: iTerm2 and Ghostty integrate separately with the same terminal service, offering discovery, creation, input, close, and output viewing according to their capabilities; prioritize a complete iTerm2 terminal experience. | iTerm2: LAN echo < 100 ms, pushed output, usable while locked. Ghostty: individually verify declared control capabilities; do not claim output reading without a source. Accept each independently |
 | R6 | **Rust business logic, native UI**: Platform code does not reconstruct business state. | No state machines, retries, merging, or authorization decisions in platform code |
@@ -83,13 +83,13 @@ Target metrics:
 Out of scope (may be added later, but must not shape the core architecture):
 
 - Phone VPN / Packet Tunnel (decided: third-party phone Apps do not use vnet);
-- Phone VNC / remote display (decided);
+- Phone VNC (the Apple Remote workspace uses PeerLink);
 - Exit nodes / subnet routing (vnet routes only the members' virtual address ranges and does not take over the default route);
 - Multiple networks;
 - Federation quorum;
 - Defense against same-UID local attackers (decided);
 - Browser access as a Muster web client (excluding Agent Halo's Chrome web accessibility adapter);
-- A custom pixel-level remote-desktop protocol (VNC provides this).
+- Additional pixel-level protocols beyond the paired desktop profiles in ADRs 0280 and 0299.
 
 ---
 
@@ -105,7 +105,7 @@ Out of scope (may be added later, but must not shape the core architecture):
 3. **One trust model**: Device keys + signed membership roster. Service access and which device may access which ports on which device depend only on the roster and target-local policy.
 4. **One link, three uses**: One QUIC connection between devices. AgentHalo services use QUIC streams; port forwarding (the phone's in-App SSH client) also uses QUIC streams; desktop vnet IP packets use QUIC DATAGRAM (RFC 9221, unreliable, without head-of-line blocking, suitable for tunnels).
 5. **Relay is dumb**: Rendezvous, forwarding, and mailbox only; no authorization semantics.
-6. **Accept locked control separately by channel**: Verify Provider API, iTerm2 API, and native-App AX independently; do not assume AX windows remain visible while locked. Native-App Locked Use follows the 2026-09-26 requirements for short-lived signed authorization, system authorization plugin, temporary unlock, cover, and relock; see [LOCKED_USE.md](LOCKED_USE.md). Rust authorization/lifecycle is wired to daemon, platform adapters, and phone signing. Codex's normal path passed two consecutive sends and message-display acceptance on 2026-09-28; failure scenarios and other applications still need separate verification. Desktop pixel-level remote access uses VNC over vnet; phones do not view the display.
+6. **Accept locked control separately by channel**: Verify Provider API, iTerm2 API, and native-App AX independently; do not assume AX windows remain visible while locked. Native-App Locked Use follows the 2026-09-26 requirements for short-lived signed authorization, system authorization plugin, temporary unlock, cover, and relock; see [LOCKED_USE.md](LOCKED_USE.md). Rust authorization/lifecycle is wired to daemon, platform adapters, and phone signing. Codex's normal path passed two consecutive sends and message-display acceptance on 2026-09-28; failure scenarios and other applications still need separate verification. Pixel-level Remote access follows ADRs 0280 and 0299.
 7. **No compatibility layer; clean cutover** (decided).
 8. **Every phase deletes replaced code**, with deletion volume an acceptance item.
 

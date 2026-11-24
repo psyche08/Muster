@@ -1461,6 +1461,15 @@ public nonisolated struct Muster_V1_Event: Sendable {
     set {ev = .desktopSession(newValue)}
   }
 
+  /// local RPC only
+  public var desktopFrame: Data {
+    get {
+      if case .desktopFrame(let v)? = ev {return v}
+      return Data()
+    }
+    set {ev = .desktopFrame(newValue)}
+  }
+
   /// local streaming lease; held until cancellation/disconnect
   public var desktopUpdateReady: Muster_V1_Ack {
     get {
@@ -1498,6 +1507,8 @@ public nonisolated struct Muster_V1_Event: Sendable {
     case terminalFrame(Muster_V1_TerminalFrame)
     case agentEvent(Muster_V1_AgentEvent)
     case desktopSession(Muster_V1_DesktopSessionProgress)
+    /// local RPC only
+    case desktopFrame(Data)
     /// local streaming lease; held until cancellation/disconnect
     case desktopUpdateReady(Muster_V1_Ack)
     case forwardOpened(Muster_V1_ForwardOpened)
@@ -1649,6 +1660,24 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     set {action = .viewInWindow(newValue)}
   }
 
+  /// local presentation lease
+  public var viewNative: UInt64 {
+    get {
+      if case .viewNative(let v)? = action {return v}
+      return 0
+    }
+    set {action = .viewNative(newValue)}
+  }
+
+  /// local presentation input
+  public var pointer: Muster_V1_DesktopPointer {
+    get {
+      if case .pointer(let v)? = action {return v}
+      return Muster_V1_DesktopPointer()
+    }
+    set {action = .pointer(newValue)}
+  }
+
   /// pending local viewer decision, never forwarded
   public var confirmTakeover: UInt64 {
     get {
@@ -1674,10 +1703,89 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case shareMouse(Muster_V1_Ack)
     /// local owner window, never forwarded
     case viewInWindow(UInt64)
+    /// local presentation lease
+    case viewNative(UInt64)
+    /// local presentation input
+    case pointer(Muster_V1_DesktopPointer)
     /// pending local viewer decision, never forwarded
     case confirmTakeover(UInt64)
     /// local owner only; NONE revokes
     case rememberAccess(Muster_V1_DesktopAccess)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_DesktopPointer: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var session: UInt64 = 0
+
+  public var kind: Muster_V1_DesktopPointer.Kind = .move
+
+  /// normalized 0..65535
+  public var x: UInt32 = 0
+
+  public var y: UInt32 = 0
+
+  public var scroll: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case move // = 0
+    case primary // = 1
+    case secondary // = 2
+    case scroll // = 3
+    case dragStart // = 4
+    case dragMove // = 5
+    case dragEnd // = 6
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .move
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .move
+      case 1: self = .primary
+      case 2: self = .secondary
+      case 3: self = .scroll
+      case 4: self = .dragStart
+      case 5: self = .dragMove
+      case 6: self = .dragEnd
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .move: return 0
+      case .primary: return 1
+      case .secondary: return 2
+      case .scroll: return 3
+      case .dragStart: return 4
+      case .dragMove: return 5
+      case .dragEnd: return 6
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_DesktopPointer.Kind] = [
+      .move,
+      .primary,
+      .secondary,
+      .scroll,
+      .dragStart,
+      .dragMove,
+      .dragEnd,
+    ]
 
   }
 
@@ -1699,6 +1807,9 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
   public var hasTakeover: Bool {self._takeover != nil}
   /// Clears the value of `takeover`. Subsequent reads from it will return its default value.
   public mutating func clearTakeover() {self._takeover = nil}
+
+  /// native profile only
+  public var mouse: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8540,7 +8651,7 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Event"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0\u{3}rpc_timing\0\u{4}T\u{1}desktop_session\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0\u{3}rpc_timing\0\u{4}T\u{1}desktop_session\0\u{3}desktop_frame\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8691,6 +8802,14 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.ev = .desktopSession(v)
         }
       }()
+      case 154: try {
+        var v: Data?
+        try decoder.decodeSingularBytesField(value: &v)
+        if let v = v {
+          if self.ev != nil {try decoder.handleConflictingOneOf()}
+          self.ev = .desktopFrame(v)
+        }
+      }()
       default: break
       }
     }
@@ -8745,6 +8864,10 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .desktopSession?: try {
       guard case .desktopSession(let v)? = self.ev else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 153)
+    }()
+    case .desktopFrame?: try {
+      guard case .desktopFrame(let v)? = self.ev else { preconditionFailure() }
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 154)
     }()
     case nil: break
     }
@@ -8866,7 +8989,7 @@ nonisolated extension Muster_V1_NetworkRefreshRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8925,6 +9048,27 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .confirmTakeover(v)
         }
       }()
+      case 7: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.action != nil {try decoder.handleConflictingOneOf()}
+          self.action = .viewNative(v)
+        }
+      }()
+      case 8: try {
+        var v: Muster_V1_DesktopPointer?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .pointer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .pointer(v)
+        }
+      }()
       default: break
       }
     }
@@ -8959,6 +9103,14 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
       guard case .confirmTakeover(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
     }()
+    case .viewNative?: try {
+      guard case .viewNative(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 7)
+    }()
+    case .pointer?: try {
+      guard case .pointer(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -8972,9 +9124,63 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
   }
 }
 
+nonisolated extension Muster_V1_DesktopPointer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DesktopPointer"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}kind\0\u{1}x\0\u{1}y\0\u{1}scroll\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.session) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.x) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.y) }()
+      case 5: try { try decoder.decodeSingularSInt32Field(value: &self.scroll) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.session != 0 {
+      try visitor.visitSingularUInt64Field(value: self.session, fieldNumber: 1)
+    }
+    if self.kind != .move {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
+    }
+    if self.x != 0 {
+      try visitor.visitSingularUInt32Field(value: self.x, fieldNumber: 3)
+    }
+    if self.y != 0 {
+      try visitor.visitSingularUInt32Field(value: self.y, fieldNumber: 4)
+    }
+    if self.scroll != 0 {
+      try visitor.visitSingularSInt32Field(value: self.scroll, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_DesktopPointer, rhs: Muster_V1_DesktopPointer) -> Bool {
+    if lhs.session != rhs.session {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.x != rhs.x {return false}
+    if lhs.y != rhs.y {return false}
+    if lhs.scroll != rhs.scroll {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_DesktopPointer.Kind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MOVE\0\u{1}PRIMARY\0\u{1}SECONDARY\0\u{1}SCROLL\0\u{1}DRAG_START\0\u{1}DRAG_MOVE\0\u{1}DRAG_END\0")
+}
+
 nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{1}takeover\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{1}takeover\0\u{1}mouse\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8984,6 +9190,7 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._takeover) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.mouse) }()
       default: break
       }
     }
@@ -9000,12 +9207,16 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
     try { if let v = self._takeover {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if self.mouse != false {
+      try visitor.visitSingularBoolField(value: self.mouse, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_DesktopSessionProgress, rhs: Muster_V1_DesktopSessionProgress) -> Bool {
     if lhs.phase != rhs.phase {return false}
     if lhs._takeover != rhs._takeover {return false}
+    if lhs.mouse != rhs.mouse {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
