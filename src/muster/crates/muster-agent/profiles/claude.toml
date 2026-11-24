@@ -98,6 +98,11 @@ auxiliary_regions = ["Side chat"]
 # desktop Code tab). The session sidebar, the composer, its Send and Stop all
 # sit outside it, so control and sidebar scans do not walk into it (ADR 0307).
 transcript_regions = ["Chat messages"]
+# The session sidebar on the left and the activity panel on the right
+# (Environment, Context, Connectors, Changes) are complementary landmarks
+# (recorded 2026-11-24). Neither holds the composer, Send or Stop, so the
+# control scan does not walk into them either (ADR 0307).
+skip_complementary = true
 
 [controls.composer]
 roles = ["AXTextArea"]
@@ -130,6 +135,11 @@ standalone_title = true
 # Each conversation is its own web area beside the app shell, so the
 # sidebar walk may skip a conversation view (ADR 0080).
 separate_conversation_views = true
+# The session sidebar is a complementary landmark beside the main landmark,
+# which holds the open conversation, its composer and its panels (recorded
+# 2026-11-24). The sidebar walk skips the main landmark, and walks it only
+# when it finds no session list outside it (ADR 0307).
+outside_main = true
 
 # Recents hide older sessions behind "Show <count> more in Recents".
 [controls.sessions.more]

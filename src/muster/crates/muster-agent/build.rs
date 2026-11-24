@@ -222,6 +222,8 @@ struct ControlsSection {
     auxiliary_regions: Vec<String>,
     #[serde(default)]
     transcript_regions: Vec<String>,
+    #[serde(default)]
+    skip_complementary: bool,
     sessions: SessionsSpec,
     queue: Option<QueueSpec>,
     questions: Option<QuestionsSpec>,
@@ -250,6 +252,7 @@ struct SessionsSpec {
     landmarks: Option<bool>,
     standalone_title: Option<bool>,
     separate_conversation_views: Option<bool>,
+    outside_main: Option<bool>,
     more: Option<MoreSpec>,
 }
 
@@ -698,7 +701,7 @@ pub static {name}_CLOUD: Cloud = Cloud {{
                     None => "None".into(),
                 };
                 format!(
-                    "SessionList::Sidebar {{ landmarks: {}, standalone_title: {}, separate_conversation_views: {}, more: {more} }}",
+                    "SessionList::Sidebar {{ landmarks: {}, standalone_title: {}, separate_conversation_views: {}, outside_main: {}, more: {more} }}",
                     spec.sessions
                         .landmarks
                         .unwrap_or_else(|| at.fail("sessions.landmarks is required for a sidebar")),
@@ -710,15 +713,17 @@ pub static {name}_CLOUD: Cloud = Cloud {{
                         .unwrap_or_else(|| at.fail(
                             "sessions.separate_conversation_views is required for a sidebar"
                         )),
+                    spec.sessions.outside_main.unwrap_or(false),
                 )
             }
             "page-rows" => {
                 if spec.sessions.landmarks.is_some()
                     || spec.sessions.standalone_title.is_some()
                     || spec.sessions.separate_conversation_views.is_some()
+                    || spec.sessions.outside_main.is_some()
                     || spec.sessions.more.is_some()
                 {
-                    at.fail("page-rows sessions take no landmarks, standalone_title, separate_conversation_views or more");
+                    at.fail("page-rows sessions take no landmarks, standalone_title, separate_conversation_views, outside_main or more");
                 }
                 "SessionList::PageRows".into()
             }
@@ -790,9 +795,10 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             Some("main-conversation") => "ApprovalScope::MainConversation",
             Some(other) => at.fail(format!("invalid approval_scope {other:?}")),
         };
+        let skip_complementary = spec.skip_complementary;
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    transcript_regions: {},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
+            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    transcript_regions: {},\n    skip_complementary: {skip_complementary},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
             list(&spec.auxiliary_regions),
             list(&spec.transcript_regions),
             list(&spec.placeholders),

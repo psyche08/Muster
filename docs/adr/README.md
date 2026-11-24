@@ -422,4 +422,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0304](0304-mobile-remote-native-pixels.md) | Accepted | Display mobile Remote video at native pixel size |
 | [0305](0305-ios-workspace-navigation-menu.md) | Accepted | Switch iOS workspaces from a navigation menu |
 | [0306](0306-physical-lock-screen-remote.md) | Accepted requirement; implementation pending | Control the physical lock screen from Remote |
-| [0307](0307-control-and-sidebar-scans-skip-the-transcript.md) | Accepted; source and tests verified, installation and runtime acceptance pending | Skip the conversation transcript in control and sidebar scans |
+| [0307](0307-claude-scans-read-only-their-own-region.md) | Accepted; source and tests verified, installation and runtime acceptance pending | Claude's control and sidebar scans read only their own region of the window |

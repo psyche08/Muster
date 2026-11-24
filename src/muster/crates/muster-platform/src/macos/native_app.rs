@@ -418,10 +418,55 @@ fn scan_sidebar(
     claude_sidebar: bool,
 ) -> SidebarScan {
     use muster_agent::profile::SessionList;
+    let outside_main = matches!(
+        profile.controls().sessions,
+        SessionList::Sidebar {
+            outside_main: true,
+            ..
+        }
+    );
+    let scan = |skip_main| {
+        scan_sidebar_in(
+            profile,
+            app,
+            session,
+            title,
+            title_is_unique,
+            resolver,
+            trace,
+            claude_sidebar,
+            skip_main,
+        )
+    };
+    match scan(outside_main) {
+        // No list beside the main landmark: the sidebar is hidden, an alert
+        // stands in for it, or the app moved it. Read the main landmark too,
+        // as before (ADR 0307).
+        found if outside_main && found.navigation == 0 => scan(false),
+        found => found,
+    }
+}
+
+/// One walk of [`scan_sidebar`]; with `skip_main`, not into the main
+/// landmark.
+#[allow(clippy::too_many_arguments)]
+fn scan_sidebar_in(
+    profile: &AppProfile,
+    app: &Element,
+    session: &str,
+    title: &str,
+    title_is_unique: bool,
+    resolver: &Resolver,
+    trace: &Trace,
+    claude_sidebar: bool,
+    skip_main: bool,
+) -> SidebarScan {
+    use muster_agent::profile::SessionList;
     let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
     let mut conversation_views = 0usize;
     let mut transcripts = 0usize;
+    let mut mains = 0usize;
     let mut provider_unavailable = false;
     let app_walk = app.walk_pruned_report(|node| {
         let attrs = node.attributes(&["AXRole", "AXSubrole", "AXIdentifier", "AXDOMIdentifier"]);
@@ -460,6 +505,12 @@ fn scan_sidebar(
         // budget before the walk can finish (ADR 0307).
         if profile.controls().is_transcript_region(&subrole, node) {
             transcripts += 1;
+            return false;
+        }
+        // The open conversation, with its transcript, composer and panels,
+        // is the main landmark; the session list is beside it (ADR 0307).
+        if skip_main && subrole == "AXLandmarkMain" {
+            mains += 1;
             return false;
         }
         // The session list is chrome, never a conversation's transcript, and
@@ -527,7 +578,7 @@ fn scan_sidebar(
     let mut complete = app_walk.1 == "complete";
     let navigation_count = navigation.len();
     trace.record(format_args!(
-        "navigation_areas={navigation_count} conversation_views={conversation_views} transcripts={transcripts} app_walk={app_walk:?} (nodes, stop, ms)"
+        "navigation_areas={navigation_count} conversation_views={conversation_views} transcripts={transcripts} main_skipped={mains} app_walk={app_walk:?} (nodes, stop, ms)"
     ));
     let mut candidates = Vec::new();
     let mut rows = 0usize;
@@ -1387,6 +1438,7 @@ fn find_controls_with_budget(
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
     let mut transcripts = 0usize;
+    let mut asides = 0usize;
     let mut diagnostics = Vec::new();
     let started = std::time::Instant::now();
     let mut stop = None;
@@ -1430,6 +1482,10 @@ fn find_controls_with_budget(
         // before the composer was reached (ADR 0307).
         let transcript = profile.controls().is_transcript_region(&subrole, &field);
         transcripts += usize::from(transcript);
+        // Where the profile says so, asides hold none either: the session
+        // sidebar and the panels beside the conversation (ADR 0307).
+        let complementary = profile.controls().skips_complementary(&subrole);
+        asides += usize::from(complementary);
         let is_composer = !aside && profile.controls().composer.matches(&field);
         let is_send = !aside && !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
@@ -1484,7 +1540,7 @@ fn find_controls_with_budget(
                     field.role, control_label(&field.title), control_label(&field.description), values[5].as_ref().and_then(ax::value_bool)));
             }
         }
-        if let Some(children) = values[4].as_ref().filter(|_| !transcript) {
+        if let Some(children) = values[4].as_ref().filter(|_| !transcript && !complementary) {
             todo.extend(
                 Element::elements_of(children)
                     .into_iter()
@@ -1549,7 +1605,7 @@ fn find_controls_with_budget(
     } else {
         ComposerButton::Other
     };
-    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} transcripts={transcripts} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
+    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} transcripts={transcripts} asides={asides} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
     Controls {
         composer,
         send,
