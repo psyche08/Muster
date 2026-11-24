@@ -56,6 +56,8 @@ pub(crate) struct PlainUdp {
     failure: tokio::sync::watch::Sender<Option<String>>,
     #[cfg(test)]
     fail_send: std::sync::atomic::AtomicI32,
+    #[cfg(all(test, target_vendor = "apple"))]
+    inject_recv_error: std::sync::atomic::AtomicI32,
     pollers: Mutex<Vec<Weak<PendingWrite>>>,
 }
 
@@ -78,6 +80,8 @@ impl PlainUdp {
             failure: tokio::sync::watch::channel(None).0,
             #[cfg(test)]
             fail_send: std::sync::atomic::AtomicI32::new(0),
+            #[cfg(all(test, target_vendor = "apple"))]
+            inject_recv_error: Default::default(),
         }))
     }
 
@@ -250,6 +254,13 @@ impl AsyncUdpSocket for PlainUdp {
         bufs: &mut [IoSliceMut<'_>],
         meta: &mut [RecvMeta],
     ) -> Poll<io::Result<usize>> {
+        #[cfg(all(test, target_vendor = "apple"))]
+        {
+            let error = self.inject_recv_error.swap(0, Ordering::Relaxed);
+            if error != 0 {
+                return Poll::Ready(Err(io::Error::from_raw_os_error(error)));
+            }
+        }
         let socket = self.io.lock().unwrap();
         let Some(socket) = socket.as_ref() else {
             return Poll::Ready(Err(io::ErrorKind::NotConnected.into()));
@@ -1193,6 +1204,8 @@ impl AsyncUdpSocket for MagicSock {
         if self.fail_receive.swap(false, Ordering::Relaxed) {
             return Poll::Ready(Err(io::Error::from_raw_os_error(libc::ENOTCONN)));
         }
+        #[cfg(target_vendor = "apple")]
+        let mut retried_route = false;
         for _ in 0..64 {
             let relay_frame = match &self.relay {
                 RelayLink::Secure(link) => Some(link.poll_recv(cx)),
@@ -1268,6 +1281,15 @@ impl AsyncUdpSocket for MagicSock {
                     }
                 }
                 Poll::Ready(Ok(_)) => continue,
+                // Darwin can report a route error for an earlier datagram on a
+                // shared UDP socket that still receives from other peers.
+                #[cfg(target_vendor = "apple")]
+                Poll::Ready(Err(error))
+                    if error.kind() == io::ErrorKind::AddrNotAvailable && !retried_route =>
+                {
+                    retried_route = true;
+                    continue;
+                }
                 Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
                 Poll::Pending => return Poll::Pending,
             }
@@ -1315,6 +1337,35 @@ mod tests {
         assert!(!in_prefix(&"10.0.0.1:1".parse().unwrap(), prefix));
         assert!(!in_prefix(&"[::1]:1".parse().unwrap(), prefix));
         assert!(!in_prefix(&"192.168.14.7:1".parse().unwrap(), None));
+    }
+
+    #[cfg(target_vendor = "apple")]
+    #[tokio::test]
+    async fn apple_receive_survives_isolated_route_error() {
+        let sock = MagicSock::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            RelayLink::None,
+            Arc::new(SoftSigner::generate()),
+            MagicOptions::default(),
+        )
+        .unwrap();
+        let mut data = [0; 128];
+        let mut meta = [RecvMeta::default()];
+        let mut cx = Context::from_waker(std::task::Waker::noop());
+        sock.inner
+            .inject_recv_error
+            .store(libc::EADDRNOTAVAIL, Ordering::Relaxed);
+        assert!(
+            sock.poll_recv(&mut cx, &mut [IoSliceMut::new(&mut data)], &mut meta)
+                .is_pending()
+        );
+        sock.inner
+            .inject_recv_error
+            .store(libc::ENOTCONN, Ordering::Relaxed);
+        assert!(matches!(
+            sock.poll_recv(&mut cx, &mut [IoSliceMut::new(&mut data)], &mut meta),
+            Poll::Ready(Err(error)) if error.raw_os_error() == Some(libc::ENOTCONN)
+        ));
     }
 
     #[tokio::test]
