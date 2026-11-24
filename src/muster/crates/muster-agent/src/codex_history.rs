@@ -274,6 +274,13 @@ pub(crate) fn project(
     ts: i64,
     preview_root: Option<&Path>,
 ) -> Option<Message> {
+    let questions = if v["type"] == "agentMessage" {
+        crate::questions::parse(v, id, "")
+            .map(|q| q.questions)
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let mut previews = Vec::new();
     let (role, kind, body, phase, tool) = match v["type"].as_str()? {
         "userMessage" => (
@@ -454,6 +461,7 @@ pub(crate) fn project(
         usage: None,
         tool_name: tool,
         tool_call_id: id.into(),
+        questions,
         preview_jpegs: previews,
         tool_status: String::new(),
     })
@@ -672,6 +680,26 @@ mod tests {
     }
 
     #[test]
+    fn stored_question_retains_fallback_and_provider_choices() {
+        let raw = serde_json::json!({"type":"agentMessage","text":"Choose a view.\n- Summary\n- Details",
+            "delivery":"async","phase":"final_answer","questions":[{"title":"Choose a view.","options":["Summary","Details"]}]});
+        let message = project("call-example", &raw, 1000, None)
+            .unwrap()
+            .to_proto();
+        assert_eq!(message.tool_call_id, "call-example");
+        assert_eq!(message.questions[0].prompt, "Choose a view.");
+        assert_eq!(message.questions[0].options[1].label, "Details");
+        assert!(message.text.contains("- Summary"));
+        let plain = serde_json::json!({"type":"agentMessage","text":"- Summary\n- Details"});
+        assert!(
+            project("ordinary", &plain, 1000, None)
+                .unwrap()
+                .questions
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn native_messages_are_typed_and_preserve_stable_ids() {
         let a = item(
             "turn:item",
@@ -718,6 +746,32 @@ mod store_tests {
             crate::questions::PendingReaders::default()
                 .read(&found[0], ID)
                 .is_none()
+        );
+        // Only the rollout bound to this particular SQLite thread may make a
+        // transcript card actionable. A sibling's fixture cannot supply it.
+        let rollout = dir.path().join("question.jsonl");
+        state
+            .execute_batch("ALTER TABLE threads ADD COLUMN rollout_path TEXT")
+            .unwrap();
+        state
+            .execute(
+                "UPDATE threads SET rollout_path=?1 WHERE id=?2",
+                (rollout.to_str().unwrap(), ID),
+            )
+            .unwrap();
+        let header = |id: &str| serde_json::json!({"type":"session_meta","payload":{"id":id}});
+        let args = serde_json::json!({"questions":[{"title":"Choose a view.","options":["Summary","Details"]}]});
+        let call = serde_json::json!({"type":"response_item","payload":{"type":"function_call","name":"request_user_input_async","call_id":"card","arguments":args.to_string()}});
+        let source = crate::questions::PendingReaders::default();
+        std::fs::write(&rollout, format!("{}\n{call}\n", header("different"))).unwrap();
+        assert!(source.read(&found[0], ID).is_none());
+        std::fs::write(&rollout, format!("{}\n{call}\n", header(ID))).unwrap();
+        assert!(
+            source
+                .read(&found[0], ID)
+                .unwrap()
+                .find("question:card")
+                .is_some()
         );
         assert_eq!(found[0].meta.title, "Same title");
         assert_eq!(

@@ -330,6 +330,7 @@ impl Reader {
             phase: at.phase.to_string(),
             tool_name: part.tool.0.to_string(),
             tool_call_id: part.tool.1.to_string(),
+            questions: Vec::new(),
             preview_jpegs: Vec::new(),
             tool_status: String::new(),
         }

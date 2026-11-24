@@ -41,7 +41,7 @@ pub(crate) struct PendingReaders {
 }
 impl PendingReaders {
     pub(crate) fn read(&self, source: &crate::viewer::Discovered, id: &str) -> Option<Snapshot> {
-        if !source.provider.file_transcripts() || crate::codex_history::is(source) {
+        if !source.provider.file_transcripts() {
             return None;
         }
         let reader = {
@@ -62,7 +62,13 @@ impl PendingReaders {
             reader.clone()
         };
         let mut reader = reader.lock().ok()?;
-        let path = &source.path;
+        let rollout;
+        let path = if crate::codex_history::is(source) {
+            rollout = crate::codex_history::receipt_rollout(source)?;
+            &rollout
+        } else {
+            &source.path
+        };
         if source.provider == Provider::Claude {
             return reader
                 .claude
