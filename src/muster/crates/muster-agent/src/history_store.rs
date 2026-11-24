@@ -88,7 +88,7 @@ pub(crate) fn write(
     // that start a turn marked for turn pages.
     db.execute_batch("CREATE TABLE IF NOT EXISTS metadata (version INTEGER, stamp TEXT); CREATE TABLE IF NOT EXISTS messages (position INTEGER PRIMARY KEY, id TEXT, body BLOB); CREATE INDEX IF NOT EXISTS message_ids ON messages(id,position); CREATE TABLE IF NOT EXISTS outline (position INTEGER PRIMARY KEY, id TEXT, body BLOB, turn INTEGER); CREATE INDEX IF NOT EXISTS outline_ids ON outline(id,position); CREATE INDEX IF NOT EXISTS outline_turns ON outline(turn,position);").ok()?;
     let existing: Option<String> = db
-        .query_row("SELECT stamp FROM metadata WHERE version=4", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=5", [], |row| {
             row.get(0)
         })
         .optional()
@@ -139,7 +139,7 @@ pub(crate) fn write(
     if stamp(source).as_deref() != Some(expected) {
         return None;
     }
-    tx.execute("INSERT INTO metadata VALUES (4,?1)", [expected])
+    tx.execute("INSERT INTO metadata VALUES (5,?1)", [expected])
         .ok()?;
     tx.commit().ok()?;
     drop(db);
@@ -198,7 +198,7 @@ pub(crate) fn read(
     .ok()?;
     let tx = db.transaction().ok()?;
     let saved: String = tx
-        .query_row("SELECT stamp FROM metadata WHERE version=4", [], |row| {
+        .query_row("SELECT stamp FROM metadata WHERE version=5", [], |row| {
             row.get(0)
         })
         .ok()?;

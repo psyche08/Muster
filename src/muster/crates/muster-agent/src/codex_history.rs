@@ -451,6 +451,13 @@ pub(crate) fn project(
     if body.trim().is_empty() || (kind == MessageKind::Text && is_wrapper(&body)) {
         return None;
     }
+    // Pagination qualifies row IDs by turn. Live question responses use the
+    // original provider call ID recorded in the structured item.
+    let call_id = if questions.is_empty() {
+        id
+    } else {
+        v["id"].as_str().unwrap_or(id)
+    };
     Some(Message {
         id: format!("sqlite:{id}"),
         role,
@@ -460,7 +467,7 @@ pub(crate) fn project(
         phase,
         usage: None,
         tool_name: tool,
-        tool_call_id: id.into(),
+        tool_call_id: call_id.into(),
         questions,
         preview_jpegs: previews,
         tool_status: String::new(),
@@ -681,11 +688,12 @@ mod tests {
 
     #[test]
     fn stored_question_retains_fallback_and_provider_choices() {
-        let raw = serde_json::json!({"type":"agentMessage","text":"Choose a view.\n- Summary\n- Details",
+        let raw = serde_json::json!({"type":"agentMessage","id":"call-example","text":"Choose a view.\n- Summary\n- Details",
             "delivery":"async","phase":"final_answer","questions":[{"title":"Choose a view.","options":["Summary","Details"]}]});
-        let message = project("call-example", &raw, 1000, None)
+        let message = project("turn-example:call-example", &raw, 1000, None)
             .unwrap()
             .to_proto();
+        assert_eq!(message.id, "sqlite:turn-example:call-example");
         assert_eq!(message.tool_call_id, "call-example");
         assert_eq!(message.questions[0].prompt, "Choose a view.");
         assert_eq!(message.questions[0].options[1].label, "Details");

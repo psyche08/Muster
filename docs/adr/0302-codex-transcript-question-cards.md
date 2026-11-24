@@ -23,3 +23,5 @@ Older clients can continue displaying the text fallback. A missing or mismatched
 ## Verification
 
 Rust tests cover structured SQLite options, plain bullet lists, matching and mismatched rollout identities, missing rollouts, reply retirement and cache refresh. A SwiftUI component test renders the expanded live form at 320 and 736 points. Installed application answer delivery requires a pending provider interaction on the target device.
+
+Device validation found that paginated records use a turn-qualified key while a live response uses the provider item ID. Keep that key for pagination. Match recorded questions to the pending interaction with the provider ID and invalidate cached projections that used the pagination key for both purposes.
