@@ -33,8 +33,11 @@ fn is_search(n: &Element) -> bool {
 fn exact_choice<T>(
     name: &str,
     rows: impl Iterator<Item = (String, T)>,
+    parent_text: impl Fn(&T) -> Option<String>,
 ) -> Result<Option<T>, Error> {
-    single(rows.filter_map(|(label, item)| (label == name).then_some(item)))
+    single(rows.filter_map(|(label, item)| {
+        (label == name && parent_text(&item).as_deref() != Some(name)).then_some(item)
+    }))
 }
 
 const SETTLE: Duration = Duration::from_secs(3);
@@ -140,6 +143,11 @@ impl Picker<'_> {
                         }
                         Some((n.string("AXValue")?, n))
                     }),
+                    |n| {
+                        n.element("AXParent")
+                            .filter(|p| p.role() == "AXStaticText")?
+                            .string("AXValue")
+                    },
                 );
             }
             parent = group.element("AXParent");
@@ -332,6 +340,7 @@ mod tests {
                 rows.iter()
                     .enumerate()
                     .map(|(id, label)| (label.to_string(), id)),
+                |_| None,
             )
         };
         assert_eq!(choose(&["Example two", "Example"]).unwrap(), Some(1));
@@ -341,6 +350,19 @@ mod tests {
             choose(&["Example", "Example"]),
             Err(Error::Conflict(_))
         ));
+    }
+
+    #[test]
+    fn nested_text_is_one_entry_but_two_project_rows_are_ambiguous() {
+        let choose = |count| {
+            exact_choice(
+                "Example",
+                (0..count).map(|id| ("Example".to_owned(), id)),
+                |id| (*id == 1).then(|| "Example".to_owned()),
+            )
+        };
+        assert_eq!(choose(2).unwrap(), Some(0));
+        assert!(matches!(choose(3), Err(Error::Conflict(_))));
     }
 
     struct Menu {

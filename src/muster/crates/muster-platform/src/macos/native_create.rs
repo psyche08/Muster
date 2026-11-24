@@ -1226,13 +1226,24 @@ fn in_app_route(
         if !windows(root).contains(&window) || !window.contains(action) {
             return Err(conflict("Background creation target was replaced"));
         }
-        if !safe_to_navigate(guard.profile, &window, &nodes(&window)?) {
+        let tree = nodes(&window)?;
+        if !safe_to_navigate(guard.profile, &window, &tree) {
             return Err(conflict("Background window is no longer safe to navigate"));
         }
-        if matches!(target.route, BackgroundRoute::ProjectPicker(..)) {
-            stage("codex_background_new_chat");
+        let use_picker = matches!(target.route, BackgroundRoute::ProjectPicker(..));
+        let home = if use_picker && let Some(page) = unique(&window, |n| new_page("codex", n))? {
+            verified_empty_form("codex", &page) && picker(&page, "Change project: ")?.is_some()
+        } else {
+            false
+        };
+        if home {
+            stage("codex_background_existing_home");
+        } else {
+            if use_picker {
+                stage("codex_background_new_chat");
+            }
+            guard.press(action)?;
         }
-        guard.press(action)?;
     }
     if provider == "codex" {
         let mut pin = CODEX_WINDOW.lock().unwrap();

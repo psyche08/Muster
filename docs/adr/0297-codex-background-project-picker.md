@@ -18,6 +18,8 @@ Keep the foreground and physical input guards throughout navigation and cleanup.
 
 The web project list can expose its own AXGroup with the AXApplicationDialog subrole. Before pressing the selector, require a dialog-free home window. After the press, pin the direct dialog parent of the unique Search projects field on that page. During selection and recovery, allow only that exact dialog. A pre-existing dialog, a replacement, any additional dialog, or a sheet still blocks the operation. Verify this boundary with a regression test and a device request that switches away from the default project.
 
+If the window already exposes the empty home form and project selector, use that selector directly. Reopening New chat can replace the selector during its first press. Electron can expose a project entry as an AXStaticText with an identical AXStaticText child. Count the enclosing entry once and continue to reject separate exact matches. Exercise both shapes in the selection tests and confirm the resulting directory on the device.
+
 ## Alternatives
 
 A directory basename can refer to a different project. Opening a folder sheet or using a URL would change the established background navigation contract.
