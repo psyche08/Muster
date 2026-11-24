@@ -421,3 +421,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0303](0303-apple-udp-receive-route-errors.md) | Proposed | Retry an isolated Apple UDP receive route error |
 | [0304](0304-mobile-remote-native-pixels.md) | Accepted | Display mobile Remote video at native pixel size |
 | [0305](0305-ios-workspace-navigation-menu.md) | Accepted | Switch iOS workspaces from a navigation menu |
+| [0306](0306-physical-lock-screen-remote.md) | Accepted requirement; implementation pending | Control the physical lock screen from Remote |
