@@ -417,3 +417,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0299](0299-apple-remote-workspace.md) | Accepted | View paired desktops in the Apple Remote workspace |
 | [0300](0300-apple-remote-stream-settings.md) | Accepted | Configure Apple Remote stream settings |
 | [0301](0301-desktop-gamestream-roles.md) | Proposed | Use Sunshine hosts and Moonlight controllers for Remote |
+| [0302](0302-codex-transcript-question-cards.md) | Accepted | Render Codex questions at their transcript position |

@@ -173,7 +173,13 @@ final class ConversationCollectionController: UIViewController, UICollectionView
         let changed = rows.filter { row in
             switch row {
             case .header: return restyle || previousChat?.loading != chat.loading || previousChat?.loadError != chat.loadError || previousChat?.hasEarlier_p != chat.hasEarlier_p || previousChat?.messageCount != chat.messageCount || previousChat?.session.transcriptNotice != chat.session.transcriptNotice
-            case .block(let id): return restyle || old[id] != blocks[id]
+            case .block(let id):
+                let formChanged = blocks[id]?.message.questions.isEmpty == false && (
+                    previousChat?.interactions != chat.interactions ||
+                    previousChat?.respondingInteraction != chat.respondingInteraction ||
+                    previousChat?.responseError != chat.responseError ||
+                    previousChat?.responseUnknown != chat.responseUnknown)
+                return restyle || old[id] != blocks[id] || formChanged
             case .interactions: return false
             }
         }

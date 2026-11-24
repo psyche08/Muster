@@ -1018,9 +1018,9 @@ impl AgentService {
         let claude: Mutex<Option<claude_cards::TrackedFile>> = Mutex::new(None);
         Arc::new(move || {
             let agent = agent.upgrade()?;
-            let d = agent.inner.lock().ok()?.catalog.get(&session)?.clone();
+            let mut d = agent.inner.lock().ok()?.catalog.get(&session)?.clone();
             if codex_history::is(&d) {
-                return None;
+                d.path = codex_history::receipt_rollout(&d)?;
             }
             if d.provider == Provider::Claude {
                 let mut reader = claude.lock().ok()?;

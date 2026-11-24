@@ -4047,6 +4047,12 @@ public nonisolated struct Muster_V1_AgentMessage: @unchecked Sendable {
     set {_uniqueStorage()._toolStatus = newValue}
   }
 
+  /// Recorded prompts. Only a matching pending interaction can receive an answer.
+  public var questions: [Muster_V1_InteractionQuestion] {
+    get {_storage._questions}
+    set {_uniqueStorage()._questions = newValue}
+  }
+
   /// bounded thumbnails in provider order
   public var previewJpegs: [Data] {
     get {_storage._previewJpegs}
@@ -13178,7 +13184,7 @@ nonisolated extension Muster_V1_AgentWatchRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}role\0\u{1}text\0\u{3}ts_unix\0\u{1}kind\0\u{1}usage\0\u{1}phase\0\u{3}tool_name\0\u{3}tool_call_id\0\u{3}tool_status\0\u{1}work\0\u{3}preview_jpegs\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}role\0\u{1}text\0\u{3}ts_unix\0\u{1}kind\0\u{1}usage\0\u{1}phase\0\u{3}tool_name\0\u{3}tool_call_id\0\u{3}tool_status\0\u{1}work\0\u{3}preview_jpegs\0\u{1}questions\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -13191,6 +13197,7 @@ nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtob
     var _toolName: String = String()
     var _toolCallID: String = String()
     var _toolStatus: String = String()
+    var _questions: [Muster_V1_InteractionQuestion] = []
     var _previewJpegs: [Data] = []
     var _work: Muster_V1_AgentWorkSpan? = nil
 
@@ -13213,6 +13220,7 @@ nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtob
       _toolName = source._toolName
       _toolCallID = source._toolCallID
       _toolStatus = source._toolStatus
+      _questions = source._questions
       _previewJpegs = source._previewJpegs
       _work = source._work
     }
@@ -13245,6 +13253,7 @@ nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtob
         case 10: try { try decoder.decodeSingularStringField(value: &_storage._toolStatus) }()
         case 11: try { try decoder.decodeSingularMessageField(value: &_storage._work) }()
         case 12: try { try decoder.decodeRepeatedBytesField(value: &_storage._previewJpegs) }()
+        case 13: try { try decoder.decodeRepeatedMessageField(value: &_storage._questions) }()
         default: break
         }
       }
@@ -13293,6 +13302,9 @@ nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtob
       if !_storage._previewJpegs.isEmpty {
         try visitor.visitRepeatedBytesField(value: _storage._previewJpegs, fieldNumber: 12)
       }
+      if !_storage._questions.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._questions, fieldNumber: 13)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -13312,6 +13324,7 @@ nonisolated extension Muster_V1_AgentMessage: SwiftProtobuf.Message, SwiftProtob
         if _storage._toolName != rhs_storage._toolName {return false}
         if _storage._toolCallID != rhs_storage._toolCallID {return false}
         if _storage._toolStatus != rhs_storage._toolStatus {return false}
+        if _storage._questions != rhs_storage._questions {return false}
         if _storage._previewJpegs != rhs_storage._previewJpegs {return false}
         if _storage._work != rhs_storage._work {return false}
         return true

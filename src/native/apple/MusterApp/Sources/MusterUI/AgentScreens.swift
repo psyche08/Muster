@@ -570,9 +570,14 @@ struct ChatView: View {
                 header: AnyView(conversationHeader(core: core)),
                 interactions: AnyView(VStack(alignment: .leading, spacing: 14) { interactionCards(core: core) }),
                 showsInteractions: !layout.flex,
-                blockContent: { block in AnyView(ConversationBlock(block: block) { message, path in
-                    core.openChange(summary: message, path: path)
-                }) }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest,
+                blockContent: { block in
+                    if !block.message.questions.isEmpty {
+                        return AnyView(transcriptQuestion(block.message, core: core))
+                    }
+                    return AnyView(ConversationBlock(block: block) { message, path in
+                        core.openChange(summary: message, path: path)
+                    })
+                }, jumpToLatest: latestRequest, holdPosition: earlierRequest, atLatest: $atLatest,
                 loadEarlier: { earlierRequest += 1; core.agentLoadEarlier() })
                 .overlay(alignment: .bottom) {
                     if !atLatest || chat.hasNewer_p {
@@ -667,10 +672,35 @@ struct ChatView: View {
         .accessibilityIdentifier("subagent-menu")
     }
 
+    @ViewBuilder
+    private func transcriptQuestion(_ message: Muster_V1_AgentMessage, core: MusterCore) -> some View {
+        let id = "question-" + message.toolCallID
+        if !layout.flex, let interaction = chat.interactions.first(where: { $0.id == "question:" + message.toolCallID }) {
+            InteractionCard(interaction: interaction, inlineQuestion: true,
+                            submitting: !chat.respondingInteraction.isEmpty,
+                            error: chat.responseError, outcomeUnknown: chat.responseUnknown) { option, answers in
+                core.agentRespond(interaction: interaction.id, option: option, answers: answers)
+            }.id(id)
+        } else {
+            VStack(alignment: .leading, spacing: 9) {
+                Label("Question", systemImage: "bubble.left.and.text.bubble.right").font(.headline)
+                ForEach(message.questions, id: \.id) { question in
+                    Text(question.prompt).textSelection(.enabled)
+                    ForEach(question.options, id: \.id) { option in
+                        Label(option.label, systemImage: "circle").foregroundStyle(.secondary)
+                    }
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     /// The provider's questions and approvals: under the transcript, or in the lower pane of a stacked workspace.
     @ViewBuilder
     private func interactionCards(core: MusterCore) -> some View {
-        ForEach(chat.interactions, id: \.id) { interaction in
+        let inline = layout.flex ? Set<String>() : Set(chat.timeline.compactMap { block in
+            block.message.questions.isEmpty ? nil : "question:" + block.message.toolCallID
+        })
+        ForEach(chat.interactions.filter { !inline.contains($0.id) }, id: \.id) { interaction in
             InteractionCard(interaction: interaction,
                             compactWrapUp: chat.compactWrapUpIds.contains(interaction.id),
                             submitting: !chat.respondingInteraction.isEmpty,
