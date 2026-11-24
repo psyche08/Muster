@@ -29,3 +29,5 @@ Build both Apple targets, verify isolated engine packaging and Windows host admi
 Use the same checksum-verified Boost and JSON release archives on both desktop build hosts. Supply their extracted paths to CMake and include them in the Windows source offer so a missing system package does not trigger an interactive dependency checkout.
 
 The pinned Boost.Locale tree also lists its umbrella header above the declared CMake IDE group. Widen that group to its common header directory when preparing the archive on both platforms.
+
+Disable system JSON discovery for the Windows build, including the display-device subproject. Mixing the 3.12 system headers with the pinned 3.11 ABI produced incompatible serializers in the two static libraries.
