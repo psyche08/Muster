@@ -6,6 +6,7 @@ import MusterCore
 struct InteractionCard: View {
     let interaction: Muster_V1_PendingInteraction
     var compactWrapUp = false
+    var inlineQuestion = false
     let submitting: Bool
     let error: String
     let outcomeUnknown: Bool
@@ -36,7 +37,7 @@ struct InteractionCard: View {
                         }
                     }
             }
-        } else if interaction.optional {
+        } else if interaction.optional && !inlineQuestion {
             DisclosureGroup(isExpanded: $expanded) {
                 card.padding(.top, 10)
             } label: {

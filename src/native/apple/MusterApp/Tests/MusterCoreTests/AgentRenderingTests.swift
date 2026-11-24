@@ -7,6 +7,35 @@ import MusterCore
 
 final class AgentRenderingTests: XCTestCase {
     @MainActor
+    func testInlineCodexQuestionStartsWithItsOptionsExposed() throws {
+        let q = Muster_V1_InteractionQuestion.with {
+            $0.id = "0"; $0.prompt = "Which desktop should host the test?"
+            $0.options = ["First desktop", "Second desktop"].enumerated().map { index, label in
+                Muster_V1_QuestionOption.with { $0.id = String(index); $0.label = label }
+            }
+            $0.allowText = true
+        }
+        let card = Muster_V1_PendingInteraction.with {
+            $0.kind = "question"; $0.id = "question:fixture"; $0.optional = true; $0.questions = [q]
+        }
+        for width: CGFloat in [320, 736] {
+            func render(inline: Bool) throws -> CGImage {
+                let view = InteractionCard(interaction: card, inlineQuestion: inline, submitting: false,
+                    error: "", outcomeUnknown: false, respond: { _, _ in })
+                    .frame(width: width).padding(12).environment(\.colorScheme, .dark)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                return try XCTUnwrap(renderer.cgImage)
+            }
+            let visible = try render(inline: true)
+            let folded = try render(inline: false)
+            XCTAssertGreaterThan(visible.height - folded.height, 100)
+            try XCTUnwrap(NSBitmapImageRep(cgImage: visible).representation(using: .png, properties: [:]))
+                .write(to: FileManager.default.temporaryDirectory.appendingPathComponent("muster-inline-question-\(Int(width)).png"))
+        }
+    }
+
+    @MainActor
     func testInlineThumbnailIsVisibleInPhoneAndDesktopBubbles() throws {
         let source = NSImage(size: NSSize(width: 80, height: 40), flipped: false) { rect in
             NSColor.red.setFill()

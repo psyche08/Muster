@@ -267,6 +267,7 @@ impl Tracker {
             phase: String::new(),
             tool_name: String::new(),
             tool_call_id: String::new(),
+            questions: Vec::new(),
             preview_jpegs: Vec::new(),
             tool_status: String::new(),
         })

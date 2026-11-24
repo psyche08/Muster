@@ -197,6 +197,7 @@ pub struct Message {
     /// `completed`, `failed`, `interrupted`, `running`, or empty when the
     /// record does not say.
     pub tool_status: String,
+    pub questions: Vec<muster_proto::v1::InteractionQuestion>,
     pub preview_jpegs: Vec<Vec<u8>>,
 }
 
@@ -213,6 +214,7 @@ impl Message {
             tool_name: self.tool_name.clone(),
             tool_call_id: self.tool_call_id.clone(),
             tool_status: self.tool_status.clone(),
+            questions: self.questions.clone(),
             preview_jpegs: self.preview_jpegs.clone(),
             work: None,
         }
