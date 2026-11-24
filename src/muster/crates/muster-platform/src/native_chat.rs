@@ -53,6 +53,8 @@ fn press(element: &Element, what: &str) -> Result<(), Error> {
 /// Navigation must not race the person at the Mac: the same app launch, an
 /// unlocked console and no input that could reach the app, start to finish.
 struct Guard {
+    #[cfg(target_os = "macos")]
+    foreground: Option<crate::macos::input::QuietWindow>,
     pid: u32,
     start: u64,
     generation: u64,
@@ -60,13 +62,23 @@ struct Guard {
 }
 
 impl Guard {
-    fn new(pid: u32, start: u64, window: &Element) -> Self {
-        Self {
+    async fn new(pid: u32, start: u64, window: &Element) -> Result<Self, Error> {
+        #[cfg(target_os = "macos")]
+        let foreground = if crate::macos::events::foreground_owner()
+            == muster_agent::local_input::Owner::Process(pid)
+        {
+            Some(crate::macos::input::quiet_foreground(pid).await?)
+        } else {
+            None
+        };
+        Ok(Self {
+            #[cfg(target_os = "macos")]
+            foreground,
             pid,
             start,
             generation: target_input_generation(pid),
             window: window.clone(),
-        }
+        })
     }
 
     fn check(&self) -> Result<(), Error> {
@@ -77,6 +89,13 @@ impl Guard {
         }
         if os::window(&Element::application(self.pid))? != self.window {
             return Err(Error::Conflict("Chat window changed".into()));
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(watch) = &self.foreground {
+            watch.check()?;
+            if watch.window() == &self.window {
+                return Ok(());
+            }
         }
         let current = target_input_generation(self.pid);
         if current != self.generation {
@@ -250,7 +269,7 @@ pub async fn set_mode(app: ChatApp, chat: bool) -> Result<(), Error> {
     console_ready()?;
     let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
-    let guard = Guard::new(pid, start, &root);
+    let guard = Guard::new(pid, start, &root).await?;
     guard.check()?;
     switch_mode(app, &guard, &root, chat).await
 }
@@ -297,12 +316,12 @@ pub async fn return_to_code(app: ChatApp) -> Result<bool, Error> {
         }
         other => other,
     })?;
-    let guard = Guard {
-        pid,
-        start,
-        generation,
-        window: root.clone(),
-    };
+    let guard = Guard::new(pid, start, &root).await?;
+    if target_input_generation(pid) != generation {
+        return Err(Error::Conflict(
+            "Desktop input changed during mode discovery".into(),
+        ));
+    }
     guard.check()?;
     let view = chat::mode(app, &tree);
     if view.chat != Some(true) && chat::navigation_clear(app, &tree) {
@@ -447,7 +466,7 @@ pub async fn open(
     console_ready()?;
     let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
-    let guard = Guard::new(pid, start, &root);
+    let guard = Guard::new(pid, start, &root).await?;
     guard.check()?;
     switch_to_chat(app, &guard, &root).await?;
     let session = match session.filter(|s| !chat::is_new_session(s)) {
@@ -498,7 +517,7 @@ pub async fn catalog(
     }
     console_ready()?;
     let root = chat_window(pid)?;
-    let guard = Guard::new(pid, start, &root);
+    let guard = Guard::new(pid, start, &root).await?;
     if full_history {
         switch_to_chat(app, &guard, &root).await?;
     }
@@ -612,7 +631,7 @@ pub async fn inspect_options(app: ChatApp) -> Result<String, Error> {
     console_ready()?;
     let (pid, start) = require_chat_process(app)?;
     let root = chat_window(pid)?;
-    let guard = Guard::new(pid, start, &root);
+    let guard = Guard::new(pid, start, &root).await?;
     let o = open_picker(app, &guard, &root).await?;
     let mut out = format!("{}: picker {:?}\n", app.name(), o.picker.label);
     for status in chat::panel_status(&o.tree, o.panel) {
@@ -1078,7 +1097,7 @@ pub async fn options(
         .try_lock()
         .map_err(|_| Error::Conflict("Another native operation is in progress".into()))?;
     let root = os::window(&driver.root)?;
-    let guard = Guard::new(driver.pid, driver.start, &root);
+    let guard = Guard::new(driver.pid, driver.start, &root).await?;
     guard.check()?;
     if let Some((model, effort)) = set {
         if !model.is_empty() {

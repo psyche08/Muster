@@ -874,10 +874,12 @@ pub(super) fn start_action(
                     ) == muster_core::Decision::Allow
                 })
     });
-    let job = tokio::spawn(async move {
-        // The delivery scope is inherited by the blocking worker, so presses
-        // there are visible to the owner and to the operation's ledger row.
-        scoped
+    let job = tokio::spawn(muster_agent::control_guard::execution(
+        Instant::now(),
+        async move {
+            // The delivery scope is inherited by the blocking worker, so presses
+            // there are visible to the owner and to the operation's ledger row.
+            scoped
             .scope(work.scope(async move {
                 // Aborting this async caller must also cancel readiness/receipt
                 // waits on the OS worker. A synchronous AX call still drains first,
@@ -902,7 +904,8 @@ pub(super) fn start_action(
                 })?
             }))
             .await
-    });
+        },
+    ));
     (job, delivery)
 }
 
@@ -944,8 +947,10 @@ pub(super) fn start_compact(
                 .is_ok_and(|p| p.allow_locked_control && p.offer_agent)
             && crate::idle_compact::enabled(&checked)
     });
-    let job = tokio::spawn(async move {
-        scoped
+    let job = tokio::spawn(muster_agent::control_guard::execution(
+        Instant::now(),
+        async move {
+            scoped
             .scope(work.scope(async move {
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
                 covered_worker(check, async move {
@@ -969,7 +974,8 @@ pub(super) fn start_compact(
                 })?
             }))
             .await
-    });
+        },
+    ));
     (job, delivery)
 }
 
@@ -1015,8 +1021,10 @@ pub(super) fn start_scheduled(
             })
             && holder.live(&checked)
     });
-    let job = tokio::spawn(async move {
-        scoped
+    let job = tokio::spawn(muster_agent::control_guard::execution(
+        Instant::now(),
+        async move {
+            scoped
             .scope(work.scope(async move {
                 let (_cancel_worker, cancelled) = oneshot::channel::<()>();
                 covered_worker(check, async move {
@@ -1033,7 +1041,8 @@ pub(super) fn start_scheduled(
                 })?
             }))
             .await
-    });
+        },
+    ));
     (job, delivery)
 }
 

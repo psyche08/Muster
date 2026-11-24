@@ -117,7 +117,11 @@ async fn once(daemon: &Arc<Daemon>, tracker: &mut muster_agent::idle_compact::Tr
     let Some(session) = due.into_iter().find(|s| tracker.untried(s)) else {
         return;
     };
-    // A Locked Use transaction owns the console: look again next tick.
+    let turn = daemon.desktop_tasks.enter().await;
+    if !enabled(daemon) {
+        return;
+    }
+    // A manual console lease has independent ownership.
     if daemon.locked_use.writes.try_read().is_err() {
         return;
     }
@@ -126,7 +130,7 @@ async fn once(daemon: &Arc<Daemon>, tracker: &mut muster_agent::idle_compact::Tr
         if !locked_allowed(daemon) {
             return;
         }
-        locked(daemon, &session).await
+        turn.run(locked(daemon, &session)).await
     } else {
         unlocked(daemon, &agent, &session).await
     };

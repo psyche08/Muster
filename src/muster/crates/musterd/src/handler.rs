@@ -346,6 +346,9 @@ impl Handler for MusterHandler {
                 && !matches!(request, Req::TerminalCreate(_))
                 && muster_proto::locked_use::operation(&request).is_some()
                 && !independent_session(&daemon, &request)
+                && !daemon
+                    .locked_use
+                    .wait_for_desktop_turn(&daemon, peer, &request)
                 && let Some(result) = daemon
                     .locked_use
                     .enqueue(&daemon, peer, request.clone(), events.cancelled().clone())
@@ -394,6 +397,28 @@ impl Handler for MusterHandler {
                     );
                 }
             }
+            let locked_prepare = matches!(request, Req::LockedUsePrepare(_));
+            let look = vision_target(&daemon, &request);
+            let cancelled = events.cancelled().clone();
+            let work = muster_agent::control_guard::WorkQueue::default();
+            let needs_turn = matches!(&request, Req::DeviceDebug(r) if matches!(r.what.as_str(), "ax-chat-options" | "ax-chat-mode" | "ax-select-session"))
+                || !matches!(request, Req::TerminalCreate(_))
+                    && muster_proto::locked_use::operation(&request).is_some()
+                    && !independent_session(&daemon, &request)
+                    && !plugin_session(&daemon, &request);
+            let turn = if needs_turn {
+                let turn = tokio::select! {
+                    biased;
+                    _ = cancelled.cancelled() => return err(Code::Conflict, "Operation cancelled while queued"),
+                    turn = work.scope(daemon.desktop_tasks.enter()) => turn,
+                };
+                if let Err(error) = authorize_request(&daemon, &ctx, &request, &access) {
+                    return fail(error);
+                }
+                Some(turn)
+            } else {
+                None
+            };
             // Serialize all writes against a temporary-unlock transaction.
             // A normal request cannot slip in while its console is unlocked.
             let _console_write = if (access.writes_console()
@@ -423,13 +448,8 @@ impl Handler for MusterHandler {
             // Unlocked RPCs need the same OS-work lifetime as Locked Use.
             // Cancellation can drop the handler while a blocking AX call runs;
             // provider permits remain held until that work has actually drained.
-            let locked_prepare = matches!(request, Req::LockedUsePrepare(_));
-            let look = vision_target(&daemon, &request);
-            let cancelled = events.cancelled().clone();
-            let work = muster_agent::control_guard::WorkQueue::default();
             let publication_request = request.clone();
-            let reply = work
-                .scope(async {
+            let execute = Box::pin(work.scope(async {
                     match dispatch(&daemon, &ctx, request, events).await {
                         Ok(resp) => resp,
                         Err(error) => {
@@ -440,8 +460,11 @@ impl Handler for MusterHandler {
                             fail(error)
                         }
                     }
-                })
-                .await;
+                }));
+            let reply = match turn.as_ref() {
+                Some(turn) => turn.run(execute).await,
+                None => execute.await,
+            };
             if let Err(error) = ordinary_agent_request(&daemon, &publication_request) {
                 return fail(error);
             }
@@ -451,6 +474,7 @@ impl Handler for MusterHandler {
             // Look only after the console reservation is released, so a
             // Locked Use transaction never waits for an LLM (ADR 0116).
             drop(_console_write);
+            drop(turn);
             match look {
                 Some(target) => crate::vision::after_send(&daemon, target, reply, cancelled).await,
                 None => reply,

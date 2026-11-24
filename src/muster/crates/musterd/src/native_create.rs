@@ -62,14 +62,6 @@ pub(crate) async fn create(
     daemon: &Arc<Daemon>,
     r: v1::AgentNativeCreateRequest,
 ) -> Result<Resp, Error> {
-    create_unlocked(daemon, r, false).await
-}
-
-pub(crate) async fn create_unlocked(
-    daemon: &Arc<Daemon>,
-    r: v1::AgentNativeCreateRequest,
-    managed: bool,
-) -> Result<Resp, Error> {
     let windows = !through_plugin_app(&r.provider);
     if windows {
         validate(&r)?;
@@ -85,7 +77,7 @@ pub(crate) async fn create_unlocked(
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (daemon, managed);
+        let _ = daemon;
         Err(Error::Unavailable(
             "Native desktop creation requires macOS".into(),
         ))
@@ -101,21 +93,13 @@ pub(crate) async fn create_unlocked(
                 "Native creation requires an unlocked desktop".into()
             }));
         }
-        let console = if managed {
-            None
-        } else {
-            Some(
-                daemon
-                    .locked_use
-                    .writes
-                    .clone()
-                    .try_read_owned()
-                    .map_err(|_| {
-                        Error::Conflict("A Locked Use transaction owns the console".into())
-                    })?,
-            )
-        };
-        owned(daemon, r, UNLOCKED_RECEIPT, console, false, managed).await
+        let console = daemon
+            .locked_use
+            .writes
+            .clone()
+            .try_read_owned()
+            .map_err(|_| Error::Conflict("A Locked Use transaction owns the console".into()))?;
+        owned(daemon, r, UNLOCKED_RECEIPT, Some(console), false).await
     }
 }
 
@@ -144,7 +128,7 @@ pub(crate) async fn scheduled(
                 "Native creation requires Accessibility".into(),
             ));
         }
-        owned(daemon, r, receipt, None, covered, false).await
+        owned(daemon, r, receipt, None, covered).await
     }
 }
 
@@ -155,7 +139,6 @@ async fn owned(
     receipt_budget: Duration,
     console: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
     covered: bool,
-    managed: bool,
 ) -> Result<Resp, Error> {
     use muster_agent::{control_guard, desktop_lock::LockKind};
     use muster_proto::Message;
@@ -184,66 +167,10 @@ async fn owned(
     if app.plugin.is_some() {
         return through_plugin(daemon, r, agent, path, receipt_budget, console).await;
     }
-    let (ownership, prepared) = loop {
-        control_guard::check()?;
-        let mut prepared = if managed {
-            let path = path.clone();
-            let provider = r.provider.clone();
-            Some(
-                control_guard::spawn_blocking_async(async move {
-                    muster_platform::macos::native_create::managed_admission(&provider, &path).await
-                })
-                .await
-                .map_err(|e| Error::Unavailable(e.to_string()))??,
-            )
-        } else {
-            None
-        };
-        let lock = crate::agent_bridge::hold(
-            daemon,
-            app,
-            LockKind::Agent,
-            "create native scheduler session",
-        )
-        .await;
-        if managed && matches!(lock, Err(Error::Timeout(_))) {
-            continue;
-        }
-        let provider_lock = lock?;
-        let console = if let Some(observation) = prepared.take() {
-            let Ok(console) = daemon.locked_use.writes.clone().try_read_owned() else {
-                drop(provider_lock);
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                continue;
-            };
-            let cwd = path.clone();
-            prepared = control_guard::spawn_blocking(move || {
-                observation.still_ready(&cwd).then_some(observation)
-            })
-            .await
-            .map_err(|e| Error::Unavailable(e.to_string()))?;
-            if prepared.is_none() {
-                continue;
-            }
-            if !daemon
-                .policy()
-                .read()
-                .unwrap()
-                .ax_allowlist
-                .iter()
-                .any(|b| b == app.app.bundle_id)
-                || daemon.platform().accessibility() != Some(true)
-            {
-                return Err(Error::Unauthorized(
-                    "Native app permission changed while queued".into(),
-                ));
-            }
-            Some(console)
-        } else {
-            console
-        };
-        break (Arc::new((provider_lock, console)), prepared);
-    };
+    control_guard::check()?;
+    let provider_lock =
+        crate::agent_bridge::hold(daemon, app, LockKind::Agent, "create native session").await?;
+    let ownership = Arc::new((provider_lock, console));
     let body = r.encode_to_vec();
     let operation = crate::handler::ledgered(
         daemon,
@@ -268,7 +195,7 @@ async fn owned(
                 muster_platform::macos::navigation_restore::track_form(slot, async move {
                     let _held = held;
                     muster_platform::macos::native_create::submit(
-                        &provider, &cwd, &prompt, &model, &effort, covered, prepared,
+                        &provider, &cwd, &prompt, &model, &effort, covered,
                     )
                     .await
                 }),

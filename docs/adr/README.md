@@ -412,3 +412,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0294](0294-desktop-host-idle-and-viewer-window.md) | Accepted | Retire idle desktop hosts and use an independent viewer window |
 | [0295](0295-desktop-takeover-confirmation.md) | Accepted | Confirm replacement of the current desktop viewer |
 | [0296](0296-embedded-remote-workspace.md) | Accepted | Embed remote desktop in the Windows Remote workspace |
+| [0297](0297-codex-background-project-picker.md) | Proposed | Select a Codex project from the background new-chat form |
+| [0298](0298-desktop-task-execution.md) | Proposed | Serialize desktop tasks and admit quiet foreground windows |

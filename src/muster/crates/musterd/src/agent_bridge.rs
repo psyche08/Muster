@@ -310,6 +310,23 @@ pub async fn hold(
     } else {
         None
     };
+    #[cfg(target_os = "macos")]
+    if let Some(profile) = muster_agent::profile::app(app.provider()).filter(|p| p.plugin.is_none())
+    {
+        muster_agent::control_guard::spawn_blocking_async(async move {
+            if let muster_agent::local_input::Owner::Process(front) =
+                muster_platform::macos::events::foreground_owner()
+                && muster_platform::macos::native_app::app_pids(profile).contains(&front)
+            {
+                muster_platform::macos::input::quiet_foreground(front)
+                    .await?
+                    .check()?;
+            }
+            Ok::<_, muster_agent::Error>(())
+        })
+        .await
+        .map_err(|e| crate::Error::Unavailable(e.to_string()))??;
+    }
     Ok(Some(ProviderGuard::new(queue, file)))
 }
 

@@ -52,7 +52,7 @@ fn sel(name: &CStr) -> Sel {
 
 /// Workspace activation remains observable when an app temporarily has no
 /// focused AX element, e.g. while replacing a blank window or closing a menu.
-pub(super) fn foreground_owner() -> muster_agent::local_input::Owner {
+pub fn foreground_owner() -> muster_agent::local_input::Owner {
     use muster_agent::local_input::Owner;
     // SAFETY: NSWorkspace's read-only accessors below take no arguments.
     // Retain autoreleased objects through the read on this worker thread.

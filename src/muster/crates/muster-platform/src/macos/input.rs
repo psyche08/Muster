@@ -106,17 +106,24 @@ fn focus() -> Owner {
     }
 }
 
-/// The owner of the frontmost visible window under the pointer. Window
-/// owners and bounds need no Screen Recording permission.
-fn under_pointer() -> Owner {
+fn pointer_position() -> Option<CGPoint> {
     // SAFETY: a NULL source is allowed; the +1 event is released below.
     let event = unsafe { CGEventCreate(std::ptr::null()) };
     if event.is_null() {
-        return Owner::Unknown;
+        return None;
     }
     // SAFETY: a valid event, released once after reading its location.
     let point = unsafe { CGEventGetLocation(event) };
     unsafe { CFRelease(event) };
+    Some(point)
+}
+
+/// The owner of the frontmost visible window under the pointer. Window
+/// owners and bounds need no Screen Recording permission.
+fn under_pointer() -> Owner {
+    let Some(point) = pointer_position() else {
+        return Owner::Unknown;
+    };
     // SAFETY: returns a +1 array (front to back) or NULL.
     let raw = unsafe { CGWindowListCopyWindowInfo(ON_SCREEN_WINDOWS, 0) };
     if raw.is_null() {
@@ -239,6 +246,92 @@ pub fn target_input_idle(pids: &[u32]) -> Duration {
         idle_of(&KEY_TYPES),
         idle_of(&POINTER_TYPES),
     )
+}
+
+fn focused_window() -> Option<Element> {
+    Element::system_wide()
+        .element("AXFocusedApplication")?
+        .element("AXFocusedWindow")
+}
+
+fn window_sample(window: &Element) -> local_input::WindowSample {
+    let hit = pointer_position().and_then(|p| Element::system_wide().element_at(p.x, p.y));
+    let hit_window = hit.and_then(|e| {
+        if e.role() == "AXWindow" {
+            Some(e)
+        } else {
+            e.element("AXWindow")
+        }
+    });
+    local_input::WindowSample {
+        at: Instant::now(),
+        keys: count(&KEY_TYPES),
+        pointer: count(&POINTER_TYPES),
+        pointer_elsewhere: hit_window.is_some_and(|w| &w != window),
+    }
+}
+
+/// Bound to the actual focus window across observations and AX writes.
+pub struct QuietWindow {
+    window: Element,
+    clock: Mutex<local_input::WindowQuiet>,
+}
+
+impl QuietWindow {
+    fn observe(&self) -> Result<bool, muster_agent::Error> {
+        if focused_window().as_ref() != Some(&self.window) {
+            return Err(muster_agent::Error::Conflict(
+                "The foreground window changed".into(),
+            ));
+        }
+        Ok(self
+            .clock
+            .lock()
+            .unwrap()
+            .observe(window_sample(&self.window)))
+    }
+
+    pub fn check(&self) -> Result<(), muster_agent::Error> {
+        if self.observe()? {
+            Ok(())
+        } else {
+            Err(muster_agent::Error::Conflict(
+                "Physical input reached the foreground window".into(),
+            ))
+        }
+    }
+
+    pub fn window(&self) -> &Element {
+        &self.window
+    }
+}
+
+pub async fn quiet_foreground(expected_pid: u32) -> Result<QuietWindow, muster_agent::Error> {
+    let window = focused_window()
+        .filter(|w| w.pid() == Some(expected_pid))
+        .ok_or_else(|| {
+            muster_agent::Error::Conflict("The foreground window is unavailable".into())
+        })?;
+    let first = window_sample(&window);
+    let idle = idle_of(&KEY_TYPES).min(idle_of(&POINTER_TYPES));
+    let watch = QuietWindow {
+        window,
+        clock: Mutex::new(local_input::WindowQuiet::new(first, idle)),
+    };
+    let deadline =
+        muster_agent::control_guard::execution_started() + muster_agent::idle_compact::QUIET_WAIT;
+    loop {
+        muster_agent::control_guard::check()?;
+        if watch.observe()? {
+            return Ok(watch);
+        }
+        if Instant::now() >= deadline {
+            return Err(muster_agent::Error::Conflict(
+                "Waiting for a quiet foreground window".into(),
+            ));
+        }
+        tokio::time::sleep(local_input::SAMPLE_EVERY).await;
+    }
 }
 
 /// Whether a modifier key is held now, by a person or by software. An

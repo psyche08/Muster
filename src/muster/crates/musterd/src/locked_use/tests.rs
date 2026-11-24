@@ -440,6 +440,7 @@ async fn start_fixture(
     });
     let (tx, rx) = mpsc::channel(16);
     *owner.current.lock().unwrap() = Some(Current {
+        desktop_turn: false,
         receipt: None,
         tx,
         scope: None,
@@ -533,7 +534,7 @@ async fn unlock_started(os: &Os) {
 /// A failure returns while the owner relocks; wait for it to finish.
 async fn ended(owner: &Owner) {
     let deadline = Instant::now() + Duration::from_secs(3);
-    while owner.current.lock().unwrap().is_some() {
+    while owner.current.lock().unwrap().is_some() || owner.writes.try_write().is_err() {
         assert!(Instant::now() < deadline, "owner did not finish");
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
@@ -2603,16 +2604,23 @@ async fn a_locked_inspection_is_prepared_only_without_a_provider_queue() {
     ));
     assert!(owner.current.lock().unwrap().is_none());
     operation.provider_queue.clear();
-    let Resp::LockedUseChallenge(prepared) = owner
-        .prepare(daemon.clone(), peer, operation)
-        .await
-        .unwrap()
-    else {
+    let active = daemon.desktop_tasks.enter().await;
+    let mut prepare = Box::pin(owner.prepare(daemon.clone(), peer, operation));
+    assert!(futures_util::poll!(&mut prepare).is_pending());
+    assert!(owner.current.lock().unwrap().is_none());
+    assert!(!os.unlock_started.load(Ordering::SeqCst));
+    drop(active);
+    let Resp::LockedUseChallenge(prepared) = prepare.await.unwrap() else {
         panic!()
     };
+    let mut following = Box::pin(daemon.desktop_tasks.enter());
+    assert!(futures_util::poll!(&mut following).is_pending());
     let c = Challenge::decode(&prepared.challenge).unwrap();
     assert_eq!(c.turn(), "inspect-1");
     owner.cancel(peer, c.nonce(), None).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), following)
+        .await
+        .unwrap();
     assert!(!os.unlock_started.load(Ordering::SeqCst));
     daemon.shutdown().await;
 }

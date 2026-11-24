@@ -15,6 +15,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod codex_picker;
+
 /// How long a window may take to show its renderer before navigation. A new
 /// ChatGPT window renders only after its feature-flag bootstrap, which reached
 /// its 60 s deadline on every window of one Mac (ADR 0154). Nothing has been
@@ -42,12 +44,15 @@ fn nodes(root: &Element) -> Result<Vec<Element>, Error> {
     Ok(nodes)
 }
 fn unique(root: &Element, test: impl Fn(&Element) -> bool) -> Result<Option<Element>, Error> {
-    let matches: Vec<_> = nodes(root)?.into_iter().filter(test).collect();
-    match matches.len() {
-        0 => Ok(None),
-        1 => Ok(matches.into_iter().next()),
-        _ => Err(conflict("Ambiguous native control")),
+    single(nodes(root)?.into_iter().filter(test))
+}
+
+fn single<T>(mut matches: impl Iterator<Item = T>) -> Result<Option<T>, Error> {
+    let first = matches.next();
+    if matches.next().is_some() {
+        return Err(conflict("Ambiguous native control"));
     }
+    Ok(first)
 }
 /// Deeper than any recorded app tree; reached only by a cycle.
 const MAX_ANCESTRY: usize = 256;
@@ -106,6 +111,8 @@ struct Guard {
     start: u64,
     generation: u64,
     mode: NativeConsole,
+    covered: bool,
+    foreground: Option<input::QuietWindow>,
     shown: Option<Shown>,
 }
 
@@ -117,24 +124,38 @@ struct Shown {
     app: Element,
     pid: u32,
     hide: bool,
+    covered_owner: Option<NativeConsole>,
 }
 impl Shown {
-    fn reveal(app: &Element, pid: u32) -> Result<Option<Self>, Error> {
+    fn reveal(app: &Element, guard: &Guard) -> Result<Option<Self>, Error> {
         if app.bool("AXHidden") != Some(true) {
             return Ok(None);
         }
+        guard.check()?;
         app.set_bool("AXHidden", false)
             .map_err(|_| unavailable("The hidden app could not be shown without activating it"))?;
         Ok(Some(Self {
             app: app.clone(),
-            pid,
+            pid: guard.pid,
             hide: true,
+            covered_owner: guard.covered.then_some(guard.mode),
         }))
     }
 }
 impl Drop for Shown {
     fn drop(&mut self) {
         if self.hide
+            && self.covered_owner.is_none_or(|mode| {
+                console().is_ok()
+                    && mode.creation_focus_holds(
+                        true,
+                        NativeConsole::observe(
+                            false,
+                            Some(self.pid),
+                            super::events::foreground_owner(),
+                        ),
+                    )
+            })
             && super::events::foreground_owner()
                 != muster_agent::local_input::Owner::Process(self.pid)
             && self.app.bool("AXHidden") == Some(false)
@@ -155,17 +176,22 @@ impl Guard {
             ));
         }
         if self.mode != NativeConsole::Covered
-            && !self.mode.creation_continues(NativeConsole::observe(
-                false,
-                Some(self.pid),
-                super::events::foreground_owner(),
-            ))
+            && !self.mode.creation_focus_holds(
+                self.covered,
+                NativeConsole::observe(false, Some(self.pid), super::events::foreground_owner()),
+            )
         {
             return Err(conflict(
                 "Foreground application changed during native creation",
             ));
         }
-        let generation = if matches!(self.mode, NativeConsole::Background(_)) {
+        if let Some(watch) = &self.foreground {
+            watch.check()?;
+            if !self.covered {
+                return Ok(());
+            }
+        }
+        let generation = if self.mode.target_scoped_input(self.covered) {
             input::target_input_generation(self.pid)
         } else {
             input::user_input_generation()
@@ -294,32 +320,6 @@ async fn settled_windows(
     }
 }
 
-// Electron can publish its native window/menu before its renderer subscribes
-// to navigation. Do not dispatch a directory route into that startup interval.
-async fn renderer_ready(guard: &Guard, root: &Element, window: &Element) -> Result<(), Error> {
-    let deadline = Instant::now() + WINDOW_STARTUP;
-    let mut ready_since = None;
-    loop {
-        guard.check()?;
-        if !windows(root).contains(window) {
-            return Err(conflict("Native startup window was replaced"));
-        }
-        let ready = unique(window, |n| session_composer(guard.profile, n))?.is_some();
-        if ready {
-            let since = ready_since.get_or_insert_with(Instant::now);
-            if since.elapsed() >= Duration::from_millis(700) {
-                return Ok(());
-            }
-        } else {
-            ready_since = None;
-        }
-        if Instant::now() >= deadline {
-            return Err(unavailable("Native renderer is not ready for navigation"));
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Selection {
     Claude,
@@ -346,33 +346,6 @@ fn claude_environment(cwd: &Path) -> Option<String> {
         .and_then(|state| muster_agent::native_runtime::claude_environment(&state, cwd))
 }
 
-/// Advisory only. The provider lock and complete live form proof still
-/// precede every write. Waits while the provider is in front; fails for a
-/// directory that is no Codex project (ADR 0220). Claude's folder is checked
-/// on its form, where its picker lists the folders.
-pub fn multica_directory_admissible(provider: &str, cwd: &Path) -> Result<bool, Error> {
-    let Some(app) =
-        muster_agent::profile::app(provider).filter(|_| matches!(provider, "codex" | "claude"))
-    else {
-        return Ok(false);
-    };
-    let pids = native_app::app_pids(app);
-    let [pid] = pids.as_slice() else {
-        return Ok(false);
-    };
-    match NativeConsole::observe(false, Some(*pid), super::events::foreground_owner()) {
-        NativeConsole::Background(_) if provider == "codex" => {
-            missing_directory("codex", cwd)?;
-            Ok(codex_project_state().is_some_and(|b| {
-                muster_agent::native_runtime::selected_codex_directory(&b, cwd)
-                    || muster_agent::native_runtime::codex_sidebar_project(&b, cwd).is_some()
-            }))
-        }
-        NativeConsole::Background(_) => Ok(true),
-        _ => Ok(false),
-    }
-}
-
 /// Fails before any action when the app's own state shows that `cwd` is no
 /// project of it. Readable without the console, so also while locked.
 pub fn require_listed_directory(provider: &str, cwd: &Path) -> Result<(), Error> {
@@ -385,15 +358,9 @@ fn missing_directory(provider: &str, cwd: &Path) -> Result<(), Error> {
     if provider != "codex" {
         return Ok(());
     }
-    let listed = codex_project_state()
-        .and_then(|state| muster_agent::native_runtime::codex_lists_directory(&state, cwd));
-    if listed != Some(false) {
-        return Ok(());
-    }
-    Err(Error::Invalid(format!(
-        "{} is not a project in the ChatGPT app; add it there first. Nothing was submitted",
-        cwd.display()
-    )))
+    let state = codex_project_state()
+        .ok_or_else(|| unavailable("Codex project registry is unavailable"))?;
+    muster_agent::native_runtime::require_codex_project(&state, cwd).map(|_| ())
 }
 
 fn selection_matches(
@@ -749,36 +716,6 @@ impl<F: Fn() -> Result<(), Error> + Sync> native_options::Scope for Form<'_, F> 
     }
 }
 
-async fn allocate_codex_window(
-    guard: &Guard,
-    root: &Element,
-    before: &[Element],
-) -> Result<Element, Error> {
-    let menu = root
-        .element("AXMenuBar")
-        .ok_or_else(|| unavailable("No native menu bar"))?;
-    let new = wait(guard, &menu, |n| {
-        n.role() == "AXMenuItem" && label(n, "New Window")
-    })
-    .await?;
-    guard.press(&new)?;
-    let deadline = Instant::now() + Duration::from_secs(8);
-    loop {
-        guard.check()?;
-        let fresh: Vec<_> = windows(root)
-            .into_iter()
-            .filter(|w| !before.contains(w))
-            .collect();
-        if fresh.len() == 1 {
-            return Ok(fresh[0].clone());
-        }
-        if fresh.len() > 1 || Instant::now() >= deadline {
-            return Err(conflict("New window identity is ambiguous"));
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
 fn require_focus(root: &Element, window: &Element) -> Result<(), Error> {
     if root.element("AXFocusedWindow").as_ref() != Some(window) {
         return Err(conflict("Native route target is not the focused window"));
@@ -787,9 +724,74 @@ fn require_focus(root: &Element, window: &Element) -> Result<(), Error> {
 }
 
 #[derive(PartialEq)]
-struct BackgroundTarget {
-    window: Element,
-    action: Option<Element>,
+enum BackgroundRoute<A> {
+    Ready,
+    Direct(A),
+    ProjectPicker(A, String),
+}
+
+impl<A> BackgroundRoute<A> {
+    fn priority(&self) -> u8 {
+        match self {
+            Self::Ready => 0,
+            Self::Direct(_) => 1,
+            Self::ProjectPicker(..) => 2,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+struct BackgroundTarget<W = Element, A = Element> {
+    window: W,
+    route: BackgroundRoute<A>,
+}
+
+fn preferred_target<W: PartialEq, A>(
+    targets: Vec<BackgroundTarget<W, A>>,
+    focused: Option<&W>,
+) -> Option<BackgroundTarget<W, A>> {
+    let best = targets.iter().map(|t| t.route.priority()).min()?;
+    let mut candidates = targets.into_iter().filter(|t| t.route.priority() == best);
+    let first = candidates.next()?;
+    if focused == Some(&first.window) {
+        return Some(first);
+    }
+    let Some(second) = candidates.next() else {
+        return Some(first);
+    };
+    std::iter::once(second)
+        .chain(candidates)
+        .find(|t| Some(&t.window) == focused)
+}
+
+fn is_dialog(n: &Element) -> bool {
+    n.role() == "AXSheet"
+        || matches!(
+            n.string("AXSubrole").as_deref(),
+            Some(
+                "AXApplicationDialog" | "AXDialog" | "AXSystemDialog" | "AXApplicationAlertDialog"
+            )
+        )
+}
+
+fn has_dialog(tree: &[Element]) -> bool {
+    tree.iter().any(is_dialog)
+}
+
+fn safe_to_navigate(profile: &App, window: &Element, tree: &[Element]) -> bool {
+    !has_dialog(tree) && draft_free_window(profile, window, tree)
+}
+
+fn draft_free_window(profile: &App, window: &Element, tree: &[Element]) -> bool {
+    if window.role() != "AXWindow" || window.bool("AXMinimized") == Some(true) {
+        return false;
+    }
+    let mut editors = tree.iter().filter(|n| session_composer(profile, n));
+    editors
+        .next()
+        .and_then(|e| e.string("AXValue"))
+        .is_some_and(|v| profile.is_empty(&v))
+        && editors.next().is_none()
 }
 
 /// Claude's sidebar New starts a Code session only while the window shows
@@ -806,9 +808,9 @@ fn claude_code_window(tree: &[Element]) -> bool {
 }
 
 /// A window whose empty form already shows the directory, or else the
-/// window's own in-app action that opens one: Codex's project-specific new
-/// chat, Claude's sidebar New. Either may navigate away from the session the
-/// window shows, never from a draft, a sheet or an in-app dialog (ADR 0220).
+/// window's own in-app action that opens one: a project button, the Codex
+/// sidebar New chat with a project picker, or Claude's sidebar New. Navigation requires a
+/// draft-free window without a sheet or dialog (ADRs 0220 and 0297).
 fn ready_background_window(
     root: &Element,
     guard: &Guard,
@@ -829,13 +831,14 @@ fn ready_background_window(
         .as_ref()
         .and_then(|p| p.live(guard.pid, guard.start, &live))
         .cloned();
-    let project_action = (provider == "codex")
+    let project_name = (provider == "codex")
         .then(codex_project_state)
         .flatten()
-        .and_then(|b| muster_agent::native_runtime::codex_sidebar_project(&b, cwd))
+        .and_then(|b| muster_agent::native_runtime::codex_sidebar_project(&b, cwd));
+    let project_action = project_name
+        .as_ref()
         .map(|name| format!("Start new chat in {name}"));
-    let mut routes = Vec::new();
-    let mut candidates = Vec::new();
+    let mut targets = Vec::new();
     let focused = root.element("AXFocusedWindow");
     if explain {
         log::info!(
@@ -846,6 +849,13 @@ fn ready_background_window(
         );
     }
     for (index, window) in live.into_iter().enumerate() {
+        if guard
+            .foreground
+            .as_ref()
+            .is_some_and(|w| w.window() != &window)
+        {
+            continue;
+        }
         if provider == "codex" && pin.as_ref().is_some_and(|p| p != &window) {
             skip(index, "not the pinned window");
             continue;
@@ -854,25 +864,11 @@ fn ready_background_window(
             skip(index, "tree unreadable");
             continue;
         };
-        if tree.iter().any(|n| {
-            n.role() == "AXSheet" || n.string("AXSubrole").as_deref() == Some("AXApplicationDialog")
-        }) {
-            skip(index, "sheet or dialog");
-            continue;
-        }
-        let editors: Vec<_> = tree
-            .iter()
-            .filter(|n| session_composer(guard.profile, n))
-            .collect();
-        let [editor] = editors.as_slice() else {
-            skip(index, &format!("composers={}", editors.len()));
-            continue;
-        };
-        if editor
-            .string("AXValue")
-            .is_none_or(|v| !guard.profile.is_empty(&v))
-        {
-            skip(index, "composer not empty");
+        if !safe_to_navigate(guard.profile, &window, &tree) {
+            skip(
+                index,
+                "window unavailable, dialog or nonempty/ambiguous composer",
+            );
             continue;
         }
         let pages: Vec<_> = tree.iter().filter(|n| new_page(provider, n)).collect();
@@ -880,13 +876,14 @@ fn ready_background_window(
             && (provider != "claude" || empty_session_marker(page)?)
             && selection_matches(provider, page, cwd, true)?.is_some()
         {
-            if focused.as_ref() == Some(&window) {
-                return Ok(Some(BackgroundTarget {
-                    window,
-                    action: None,
-                }));
+            let target = BackgroundTarget {
+                window,
+                route: BackgroundRoute::Ready,
+            };
+            if focused.as_ref() == Some(&target.window) {
+                return Ok(Some(target));
             }
-            candidates.push(window);
+            targets.push(target);
             continue;
         }
         if explain {
@@ -918,7 +915,19 @@ fn ready_background_window(
                 .take(2)
                 .collect();
             if let [button] = found.as_slice() {
-                routes.push((window, (*button).clone()));
+                targets.push(BackgroundTarget {
+                    window,
+                    route: BackgroundRoute::Direct((*button).clone()),
+                });
+            } else if found.is_empty()
+                && provider == "codex"
+                && let Some(project) = &project_name
+                && let Some(button) = codex_picker::new_chat(&tree)?
+            {
+                targets.push(BackgroundTarget {
+                    window,
+                    route: BackgroundRoute::ProjectPicker(button, project.clone()),
+                });
             } else {
                 skip(index, &format!("route buttons={}", found.len()));
             }
@@ -926,30 +935,10 @@ fn ready_background_window(
             skip(index, "no route control");
         }
     }
-    if candidates.len() > 1 {
-        skip(candidates.len(), "forms shown in several unfocused windows");
-        return Ok(None);
-    }
-    if let Some(window) = candidates.pop() {
-        return Ok(Some(BackgroundTarget {
-            window,
-            action: None,
-        }));
-    }
-    let route = routes
-        .iter()
-        .position(|(window, _)| focused.as_ref() == Some(window))
-        .or_else(|| (routes.len() == 1).then_some(0));
-    Ok(route.map(|i| {
-        let (window, action) = routes.swap_remove(i);
-        BackgroundTarget {
-            window,
-            action: Some(action),
-        }
-    }))
+    Ok(preferred_target(targets, focused.as_ref()))
 }
 
-pub struct Admission {
+struct Admission {
     guard: Guard,
     root: Element,
     bundle: PathBuf,
@@ -958,39 +947,35 @@ pub struct Admission {
     started: Instant,
 }
 
-impl Admission {
-    /// The provider permit may have been held by another job while this
-    /// read-only observation waited. Discard a changed plan before ledger.begin.
-    pub fn still_ready(&self, cwd: &Path) -> bool {
-        self.guard.check().is_ok()
-            && self.background_window.is_some()
-            && ready_background_window(
-                &self.root,
-                &self.guard,
-                self.guard.profile.app.provider,
-                cwd,
-                false,
-            )
-            .is_ok_and(|now| now == self.background_window)
+async fn await_activation(
+    pid: u32,
+    previous: u32,
+    window: &Element,
+    generation: u64,
+) -> Result<(), Error> {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        console()?;
+        if muster_agent::native_runtime::handoff_arrived(
+            previous,
+            pid,
+            super::events::foreground_owner(),
+            generation != input::user_input_generation(),
+        )? {
+            return require_focus(&Element::application(pid), window);
+        }
+        if Instant::now() >= deadline {
+            return Err(conflict("Native application did not take focus"));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 
-/// Managed tasks call this with the live caller's cancellation guard, before
-/// reserving the console, provider or submission ledger. No UI action is sent.
-pub async fn managed_admission(provider: &str, cwd: &Path) -> Result<Admission, Error> {
-    prepare(provider, cwd, false, false).await
-}
-
-async fn prepare(
-    provider: &str,
-    cwd: &Path,
-    covered: bool,
-    provider_held: bool,
-) -> Result<Admission, Error> {
+async fn prepare(provider: &str, cwd: &Path, covered: bool) -> Result<Admission, Error> {
     let profile = muster_agent::profile::app(provider)
         .filter(|_| matches!(provider, "codex" | "claude"))
         .ok_or_else(|| Error::Invalid("Unsupported native provider".into()))?;
-    let started = Instant::now();
+    let started = control_guard::execution_started();
     let stage = |name: &str| {
         log::info!(
             "Native creation stage: {name} elapsed_ms={}",
@@ -1006,8 +991,9 @@ async fn prepare(
     }
     let bundle = bundle_path(profile)?;
     stage("bundle_verified");
-    let deadline = provider_held.then(|| Instant::now() + WINDOW_STARTUP);
-    let mut launched = false;
+    missing_directory(provider, cwd)?;
+    let deadline = started + WINDOW_STARTUP;
+    let mut launch = None;
     let mut waiting = false;
     let mut last_reason = None;
     // Kept across observations, so a wait does not show and hide the app.
@@ -1019,7 +1005,15 @@ async fn prepare(
             return Err(conflict("Ambiguous native app processes"));
         }
         let pid = pids.first().copied();
-        let mode = NativeConsole::observe(covered, pid, super::events::foreground_owner());
+        if let Some((front, generation)) = launch {
+            let focus = super::events::foreground_owner();
+            if input::user_input_generation() != generation
+                || !matches!(focus, muster_agent::local_input::Owner::Process(p) if Some(p) == pid || p == front)
+            {
+                return Err(conflict("Desktop changed during native launch"));
+            }
+        }
+        let mode = NativeConsole::for_creation(covered, pid, super::events::foreground_owner());
         if mode == NativeConsole::Provider
             && let Some(mut taken) = shown.take()
         {
@@ -1027,8 +1021,8 @@ async fn prepare(
             taken.hide = false;
         }
         if let Some(pid) = pid {
-            let background = matches!(mode, NativeConsole::Background(_));
-            let quiet = if background {
+            let foreground = mode == NativeConsole::Provider;
+            let quiet = if mode.target_scoped_input(covered) {
                 input::target_input_idle(&[pid])
             } else {
                 input::user_input_idle()
@@ -1038,6 +1032,7 @@ async fn prepare(
                 NativeConsole::Background(_) if quiet < Duration::from_millis(500) => {
                     "provider_input"
                 }
+                NativeConsole::Background(_) if covered => "covered_other_app_foreground",
                 NativeConsole::Background(_) => "other_app_foreground",
                 NativeConsole::Waiting => "no_focus_owner",
                 NativeConsole::Covered if quiet < Duration::from_millis(500) => "covered_input",
@@ -1047,35 +1042,32 @@ async fn prepare(
                 stage(reason);
                 last_reason = Some(reason);
             }
-            if mode.may_create() && quiet >= Duration::from_millis(500) {
+            if mode.may_create() && (foreground || quiet >= Duration::from_millis(500)) {
+                let watch = if foreground {
+                    Some(input::quiet_foreground(pid).await?)
+                } else {
+                    None
+                };
                 let mut guard = Guard {
                     profile,
                     pid,
                     start: codesign::process_start(pid).ok_or_else(|| unavailable("App exited"))?,
-                    generation: if background {
+                    generation: if mode.target_scoped_input(covered) {
                         input::target_input_generation(pid)
                     } else {
                         input::user_input_generation()
                     },
                     mode,
+                    covered,
+                    foreground: watch,
                     shown: None,
                 };
-                if let Err(error) = guard.check() {
-                    console()?;
-                    if !provider_held && matches!(error, Error::Conflict(_)) {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        continue;
-                    }
-                    return Err(error);
-                }
+                guard.check()?;
                 let root = Element::application(pid);
                 root.enable_manual_accessibility();
-                if !background {
-                    break (guard, root, None);
-                }
                 let mut settle = Duration::ZERO;
                 if shown.is_none()
-                    && let Some(revealed) = Shown::reveal(&root, pid)?
+                    && let Some(revealed) = Shown::reveal(&root, &guard)?
                 {
                     shown = Some(revealed);
                     stage("revealed_hidden_app");
@@ -1085,9 +1077,7 @@ async fn prepare(
                 // Observation only: a changed console or input is a requeue.
                 let until = Instant::now() + settle;
                 let found = loop {
-                    if guard.check().is_err() {
-                        break None;
-                    }
+                    guard.check()?;
                     if let Some(window) =
                         ready_background_window(&root, &guard, provider, cwd, false)?
                     {
@@ -1100,18 +1090,103 @@ async fn prepare(
                 };
                 if let Some(window) = found {
                     guard.check()?;
-                    stage("background_form_ready");
+                    stage(if foreground {
+                        "foreground_form_ready"
+                    } else {
+                        "background_form_ready"
+                    });
                     guard.shown = shown.take();
                     break (guard, root, Some(window));
                 }
-                missing_directory(provider, cwd)?;
+                // A directory route can take focus. A complete, unambiguous
+                // window and registered project are required before a handoff.
+                let live = windows(&root);
+                let [window] = live.as_slice() else {
+                    return Err(conflict(
+                        "No unique native window for foreground navigation",
+                    ));
+                };
+                let tree = nodes(window)?;
+                if !safe_to_navigate(profile, window, &tree) {
+                    return Err(conflict(
+                        "Native window has a draft, dialog or ambiguous composer",
+                    ));
+                }
+                if provider == "codex" {
+                    let name = codex_project_state()
+                        .and_then(|state| {
+                            muster_agent::native_runtime::codex_sidebar_project(&state, cwd)
+                        })
+                        .ok_or_else(|| {
+                            conflict("No unique Codex project for foreground navigation")
+                        })?;
+                    let action = format!("Start new chat in {name}");
+                    if tree.iter().any(|n| {
+                        n.role() == "AXButton"
+                            && n.string("AXDescription").as_deref() == Some(&action)
+                    }) || tree
+                        .iter()
+                        .any(|n| n.role() == "AXButton" && label(n, "New chat"))
+                    {
+                        return Err(conflict(
+                            "Codex navigation controls are ambiguous or unavailable",
+                        ));
+                    }
+                }
+                if provider == "claude"
+                    && claude_code_window(&tree)
+                    && tree.iter().any(|n| {
+                        n.role() == "AXButton" && n.string("AXTitle").as_deref() == Some("New")
+                    })
+                {
+                    return Err(conflict(
+                        "Claude navigation controls are ambiguous or unavailable",
+                    ));
+                }
+                if foreground {
+                    guard.check()?;
+                    break (guard, root, None);
+                }
+                if let NativeConsole::Background(front) = mode {
+                    let outgoing = input::quiet_foreground(front).await?;
+                    guard.check()?;
+                    if !safe_to_navigate(profile, window, &nodes(window)?) {
+                        return Err(conflict(
+                            "Native window changed before foreground navigation",
+                        ));
+                    }
+                    let generation = input::user_input_generation();
+                    outgoing.check()?;
+                    open(&bundle, None)?;
+                    await_activation(pid, front, window, generation).await?;
+                    guard.mode = NativeConsole::Provider;
+                    guard.foreground = Some(input::quiet_foreground(pid).await?);
+                    guard.generation = generation;
+                    if input::user_input_generation() != generation {
+                        return Err(conflict("User input during foreground handoff"));
+                    }
+                    guard.check()?;
+                    require_focus(&root, window)?;
+                    break (guard, root, None);
+                }
             }
-        } else if covered && !launched && input::user_input_idle() >= Duration::from_millis(500) {
+        } else if launch.is_none() {
+            let muster_agent::local_input::Owner::Process(front) =
+                super::events::foreground_owner()
+            else {
+                return Err(conflict("No foreground window for native launch"));
+            };
+            let outgoing = input::quiet_foreground(front).await?;
+            console()?;
+            let generation = input::user_input_generation();
+            outgoing.check()?;
             open(&bundle, None)?;
-            launched = true;
+            launch = Some((front, generation));
         }
-        mode.check_wait(provider_held, provider)?;
-        if deadline.is_some_and(|d| Instant::now() >= d) {
+        if pid.is_some() && !matches!(mode, NativeConsole::Background(_)) {
+            mode.check_wait(provider)?;
+        }
+        if Instant::now() >= deadline {
             return Err(unavailable(
                 "Native creation readiness timed out; nothing submitted",
             ));
@@ -1127,7 +1202,7 @@ async fn prepare(
         root,
         bundle,
         background_window,
-        launched,
+        launched: launch.is_some(),
         started,
     })
 }
@@ -1144,12 +1219,31 @@ fn in_app_route(
     stage: &dyn Fn(&str),
 ) -> Result<(Element, bool, bool), Error> {
     let window = target.window;
-    if let Some(action) = target.action {
+    if let BackgroundRoute::Direct(action) | BackgroundRoute::ProjectPicker(action, _) =
+        &target.route
+    {
         guard.check()?;
-        if !windows(root).contains(&window) || !window.contains(&action) {
+        if !windows(root).contains(&window) || !window.contains(action) {
             return Err(conflict("Background creation target was replaced"));
         }
-        guard.press(&action)?;
+        let tree = nodes(&window)?;
+        if !safe_to_navigate(guard.profile, &window, &tree) {
+            return Err(conflict("Background window is no longer safe to navigate"));
+        }
+        let use_picker = matches!(target.route, BackgroundRoute::ProjectPicker(..));
+        let home = if use_picker && let Some(page) = unique(&window, |n| new_page("codex", n))? {
+            verified_empty_form("codex", &page) && picker(&page, "Change project: ")?.is_some()
+        } else {
+            false
+        };
+        if home {
+            stage("codex_background_existing_home");
+        } else {
+            if use_picker {
+                stage("codex_background_new_chat");
+            }
+            guard.press(action)?;
+        }
     }
     if provider == "codex" {
         let mut pin = CODEX_WINDOW.lock().unwrap();
@@ -1178,19 +1272,15 @@ pub async fn submit(
     model: &str,
     effort: &str,
     covered: bool,
-    admission: Option<Admission>,
 ) -> Result<Submitted, Error> {
     let Admission {
-        guard,
+        mut guard,
         root,
         bundle,
         background_window,
         launched,
         started,
-    } = match admission {
-        Some(prepared) => prepared,
-        None => prepare(provider, cwd, covered, true).await?,
-    };
+    } = prepare(provider, cwd, covered).await?;
     let profile = guard.profile;
     let stage = |name: &str| {
         log::info!(
@@ -1202,37 +1292,48 @@ pub async fn submit(
         .to_str()
         .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?;
     let pid = guard.pid;
-    let mut background = background_window.is_some();
+    let mut picker_project = background_window
+        .as_ref()
+        .and_then(|target| match &target.route {
+            BackgroundRoute::ProjectPicker(_, name) => Some(name.clone()),
+            _ => None,
+        });
+    let mut in_app = background_window.is_some();
     let (window, reused_codex, reuses_main) = 'route: {
         if let Some(target) = background_window {
             break 'route in_app_route(&guard, &root, provider, target, &stage)?;
         }
         let was_running = !launched;
-        // Only a covered console reaches the foreground route (ADR 0220).
+        // Foreground routes bind the quiet window checked during admission.
         let before_activation = if was_running {
             settled_windows(&guard, &root, false).await?
         } else {
             Vec::new()
         };
         guard.check()?;
-        if was_running {
-            open(&bundle, None)?;
-        }
+        require_focus(
+            &root,
+            guard
+                .foreground
+                .as_ref()
+                .ok_or_else(|| conflict("Foreground window unavailable"))?
+                .window(),
+        )?;
         stage("activated");
         let before = settled_windows(&guard, &root, true).await?;
         // Check every retained window independently: several complete forms must
         // not exhaust one form's node budget. Never navigate over a nonempty draft
         // if the provider ignores raise; missing/ambiguous editors fail closed.
         stage("windows_ready");
-        for window in &before {
-            let composer = unique(window, |n| session_composer(profile, n))?
-                .ok_or_else(|| unavailable("Existing native composer is unavailable"))?;
-            if composer
-                .string("AXValue")
-                .is_none_or(|v| !profile.is_empty(&v))
-            {
-                return Err(conflict("Existing native draft is preserved"));
-            }
+        let [current] = before.as_slice() else {
+            return Err(conflict(
+                "Foreground navigation requires a single identified window",
+            ));
+        };
+        if !safe_to_navigate(profile, current, &nodes(current)?) {
+            return Err(conflict(
+                "Foreground window has a draft, dialog or ambiguous composer",
+            ));
         }
         // Under cover, too, the in-app route is used when a window offers
         // it, and the directory route only when none does (ADR 0221). The
@@ -1240,8 +1341,11 @@ pub async fn submit(
         // form was verified and before the draft is written. The windows
         // are read here, once the app is active and they have settled.
         if let Some(target) = ready_background_window(&root, &guard, provider, cwd, true)? {
-            stage("covered_in_app_route");
-            background = true;
+            if let BackgroundRoute::ProjectPicker(_, name) = &target.route {
+                picker_project = Some(name.clone());
+            }
+            in_app = true;
+            stage("foreground_in_app_route");
             break 'route in_app_route(&guard, &root, provider, target, &stage)?;
         }
         // Claude's documented code/new route targets its main renderer. Identify
@@ -1280,96 +1384,24 @@ pub async fn submit(
         }
         // Codex routes to its focused window. Retain the one Muster allocated.
         // Claude's code/new entry may create a window or reuse its verified main shell.
-        let mut reused_codex = false;
-        let window = if provider == "codex" {
-            let pinned = CODEX_WINDOW
-                .lock()
-                .unwrap()
-                .as_ref()
-                .and_then(|pin| pin.live(pid, guard.start, &before))
-                .cloned();
-            // A cold launch can restore a conversation. Claim its only window
-            // directly only when the new-session home is positively identified.
-            let window = if let Some(window) = pinned {
-                stage("reuse_codex_window");
-                reused_codex = true;
-                window
-            } else {
-                // An existing focused, empty Codex home is a safe initial
-                // work window. Its project can differ before the directory
-                // route; the exact requested project is checked after it.
-                let startup = root
-                    .element("AXFocusedWindow")
-                    .filter(|w| before.contains(w));
-                let window = if let Some(startup) = startup
-                    && let Some(page) = unique(&startup, |n| new_page("codex", n))?
-                    && {
-                        let all = nodes(&page)?;
-                        codex_home_heading(&all)
-                            && all
-                                .iter()
-                                .any(|n| label(n, "Switch mode, current mode: Codex"))
-                            && all.iter().any(|n| {
-                                n.role() == "AXPopUpButton"
-                                    && n.string("AXDescription")
-                                        .is_some_and(|a| a.starts_with("Change project: "))
-                            })
-                    } {
-                    reused_codex = true;
-                    stage("reuse_startup_window");
-                    startup
-                } else {
-                    stage("new_window_request");
-                    allocate_codex_window(&guard, &root, &before).await?
-                };
-                *CODEX_WINDOW.lock().unwrap() =
-                    Some(CreationWindow::new(pid, guard.start, window.clone()));
-                window
-            };
-            guard.check()?;
-            if root.element("AXFocusedWindow").as_ref() != Some(&window) {
-                window
-                    .raise()
-                    .map_err(|_| unavailable("Cannot raise the target Codex window"))?;
-            }
-            stage("await_new_renderer");
-            if covered {
-                let limit = Instant::now() + Duration::from_secs(8);
-                loop {
-                    guard.check()?;
-                    if !windows(&root).contains(&window) {
-                        return Err(conflict("New native window was replaced"));
-                    }
-                    if window.role() == "AXWindow"
-                        && root.element("AXFocusedWindow").as_ref() == Some(&window)
-                        && unique(&window, |n| new_page("codex", n))?.is_some()
-                    {
-                        break;
-                    }
-                    if Instant::now() >= limit {
-                        return Err(unavailable("New focused Codex document did not appear"));
-                    }
-                    tokio::time::sleep(Duration::from_millis(75)).await;
-                }
-            } else {
-                renderer_ready(&guard, &root, &window).await?;
-            }
-            guard.check()?;
-            require_focus(&root, &window)?;
+        let reused_codex = provider == "codex";
+        let window = if reused_codex {
+            require_focus(&root, current)?;
             guard.check()?;
             stage("dispatch_directory_route");
             open(&bundle, Some(&route))?;
-            window
+            current.clone()
         } else {
             guard.check()?;
             if let Some(main) = &reusable_main {
-                if root.element("AXFocusedWindow").as_ref() != Some(main) {
-                    main.raise()
-                        .map_err(|_| unavailable("Cannot raise the Claude main window"))?;
-                }
                 require_focus(&root, main)?;
                 guard.check()?;
             }
+            // The OS may focus a newly created Claude window. Keep the PID,
+            // signature and global HID generation pinned across that one transition.
+            guard.generation = input::user_input_generation();
+            guard.check()?;
+            guard.foreground = None;
             open(&bundle, Some(&route))?;
             let deadline = Instant::now() + Duration::from_secs(8);
             loop {
@@ -1381,6 +1413,10 @@ pub async fn submit(
                     true,
                     reusable_main.as_ref(),
                 )? {
+                    require_focus(&root, &fresh)?;
+                    let watch = input::quiet_foreground(pid).await?;
+                    guard.check()?;
+                    guard.foreground = Some(watch);
                     break fresh;
                 }
                 if Instant::now() >= deadline {
@@ -1393,11 +1429,9 @@ pub async fn submit(
             reusable_main.as_ref() == Some(&window) && before_activation.contains(&window);
         (window, reused_codex, reuses_main)
     };
-    // Both providers can expose the window before a late trust dialog. Keep
-    // its object identity and wait for the complete form, pressing trust once.
+    // Keep the routed window identity while its form settles.
     stage("await_routed_form");
     let deadline = Instant::now() + Duration::from_secs(25);
-    let mut trusted = false;
     let mut chose_directory = false;
     let mut last_form_state = None;
     let (page, composer, project) = loop {
@@ -1405,31 +1439,29 @@ pub async fn submit(
         if !windows(&root).contains(&window) {
             return Err(conflict("New native window was replaced"));
         }
-        if !background
-            && !trusted
-            && let Some(trust) = unique(&window, |n| {
-                n.role() == "AXButton" && (label(n, "Trust folder") || label(n, "Trust workspace"))
-            })?
-        {
-            if !nodes(&window)?.iter().any(|n| {
-                n.role() == "AXStaticText" && n.string("AXValue").as_deref() == Some(cwd_text)
-            }) {
-                return Err(conflict(
-                    "Trust dialog does not name the requested directory",
-                ));
-            }
-            guard.press(&trust)?;
-            trusted = true;
+        if has_dialog(&nodes(&window)?) {
+            return Err(conflict("Native window opened a dialog"));
         }
         let page = unique(&window, |n| new_page(provider, n))?;
-        let mut form_state = (page.is_some(), false, false, trusted);
+        let mut form_state = (page.is_some(), false, false);
         if let Some(page) = page
             && (!reuses_main || empty_session_marker(&page)?)
         {
             let project = selection_matches(provider, &page, cwd, reused_codex)?;
             form_state.1 = project.is_some();
             if project.is_none()
-                && background
+                && let Some(name) = picker_project.as_deref()
+                && !chose_directory
+                && verified_empty_form("codex", &page)
+                && let Some(selector) = picker(&page, "Change project: ")?
+            {
+                stage("codex_background_project_picker");
+                codex_picker::choose(&guard, &window, &page, &selector, cwd, name).await?;
+                chose_directory = true;
+                continue;
+            }
+            if project.is_none()
+                && in_app
                 && provider == "claude"
                 && !chose_directory
                 && picker(&page, "Environment: ")?.is_some()
@@ -1450,11 +1482,10 @@ pub async fn submit(
         }
         if last_form_state != Some(form_state) {
             log::info!(
-                "Native creation form: page={} project={} composer={} trusted={} elapsed_ms={}",
+                "Native creation form: page={} project={} composer={} elapsed_ms={}",
                 form_state.0,
                 form_state.1,
                 form_state.2,
-                form_state.3,
                 started.elapsed().as_millis()
             );
             last_form_state = Some(form_state);
@@ -1472,6 +1503,9 @@ pub async fn submit(
         if !windows(&root).contains(&window) || !window.contains(&page) || !page.contains(&composer)
         {
             return Err(conflict("Native form was closed or replaced"));
+        }
+        if has_dialog(&nodes(&window)?) {
+            return Err(conflict("Native window opened a dialog"));
         }
         Ok(new_page(provider, &page)
             && (!reuses_main || empty_session_marker(&page)?)
@@ -1508,7 +1542,7 @@ pub async fn submit(
         return Err(conflict("Native composer is not empty"));
     }
     form()?;
-    if !background {
+    if guard.foreground.is_some() {
         require_focus(&root, &window)?;
     }
     composer
@@ -1534,7 +1568,7 @@ pub async fn submit(
     if composer.string("AXValue").as_deref() != Some(prompt) {
         return Err(conflict("Draft changed before submit"));
     }
-    if !background {
+    if guard.foreground.is_some() {
         require_focus(&root, &window)?;
     }
     stage("submit");
@@ -1548,4 +1582,29 @@ pub async fn submit(
         window,
         page,
     })
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+    use BackgroundRoute::*;
+
+    #[test]
+    fn forms_precede_project_buttons_then_generic_new_chat() {
+        let pick = |routes: Vec<BackgroundRoute<()>>, focused: Option<usize>| {
+            let windows = routes
+                .into_iter()
+                .enumerate()
+                .map(|(window, route)| BackgroundTarget { window, route })
+                .collect();
+            preferred_target(windows, focused.as_ref()).map(|t| t.window)
+        };
+        let generic = || ProjectPicker((), "Project".into());
+        assert_eq!(pick(vec![generic(), Direct(()), Ready], Some(0)), Some(2));
+        assert_eq!(pick(vec![generic(), Direct(())], Some(0)), Some(1));
+        assert_eq!(pick(vec![generic()], None), Some(0));
+        assert_eq!(pick(vec![generic(), generic()], None), None);
+        assert_eq!(pick(vec![generic(), generic()], Some(1)), Some(1));
+        assert_eq!(pick(vec![generic(), Ready, Ready], Some(0)), None);
+    }
 }

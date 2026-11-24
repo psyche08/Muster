@@ -692,6 +692,7 @@ struct NavigationHost<'a> {
     trace: &'a Trace,
     console: NativeConsole,
     root: Element,
+    foreground: Option<super::input::QuietWindow>,
     inspect_uncovered: bool,
 }
 
@@ -736,6 +737,9 @@ impl muster_agent::native_navigation::Host for NavigationHost<'_> {
             return Err(Error::Unavailable(
                 "Console session inactive during session selection".into(),
             ));
+        }
+        if let Some(watch) = &self.foreground {
+            watch.check()?;
         }
         self.check_window()?;
         if matches!(self.console, NativeConsole::Background(_)) {
@@ -905,6 +909,11 @@ pub async fn select_session(
             trace: &trace,
             console: NativeConsole::observe(covered, Some(pid), focus),
             root: super::session_window::for_provider(&app, profile.provider())?,
+            foreground: if focus == muster_agent::local_input::Owner::Process(pid) {
+                Some(super::input::quiet_foreground(pid).await?)
+            } else {
+                None
+            },
             inspect_uncovered: inspect && !covered,
         };
         let (surface, generation) =

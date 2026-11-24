@@ -285,6 +285,7 @@ pub struct Daemon {
     /// FIFO per provider on this host; different providers are independent.
     #[cfg(target_os = "macos")]
     navigation_returns: navigation_restore::Returns,
+    pub(crate) desktop_tasks: desktop_tasks::DesktopTasks,
     pub(crate) agent_operations: crate::agent_bridge::ProviderQueues,
 }
 
@@ -492,6 +493,7 @@ impl Daemon {
             desktop_locks,
             #[cfg(target_os = "macos")]
             navigation_returns: Default::default(),
+            desktop_tasks: Default::default(),
             agent_operations: crate::agent_bridge::ProviderQueues::default(),
         });
         if daemon.config.listen && cfg!(target_os = "macos") {
@@ -1574,6 +1576,7 @@ mod relay_text_tests {
     }
 }
 
+mod desktop_tasks;
 mod dispatch;
 mod native_create;
 mod scheduler;

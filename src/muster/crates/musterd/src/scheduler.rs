@@ -33,8 +33,6 @@ pub(crate) struct Scheduler {
     /// nothing is written, so no count or unknown operation is ever reset.
     registry: Mutex<Result<Registry, String>>,
     pending_multica: Mutex<Option<v1::AgentSchedulerStatus>>,
-    /// One scheduler operation at a time on this Mac.
-    running: tokio::sync::Mutex<()>,
 }
 
 fn now_ms() -> u64 {
@@ -78,7 +76,6 @@ impl Scheduler {
         Self {
             registry: Mutex::new(registry),
             pending_multica: Mutex::new(None),
-            running: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -594,34 +591,22 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
             .ok_or_else(|| refused(Refusal::NotFound))
     })?;
     let parsed = parse(&o, &scope)?;
-    let Ok(_running) = scheduler.running.try_lock() else {
-        // Answer a repeat of a recorded request; anything else waits.
-        return scheduler.read(|r| {
-            let g = r
+    let admission = || {
+        scheduler.read(|r| {
+            let mut g = r
                 .get(&o.task_id)
-                .ok_or_else(|| refused(Refusal::NotFound))?;
-            Ok(match g.lookup(&request(&o, &parsed)) {
-                Ok(op) => recorded(&op.state),
-                Err(Refusal::NotFound) => op_result(
-                    Status::Rejected,
-                    "another scheduler operation is running; nothing was reserved or sent",
-                    "",
-                ),
-                Err(refusal) => return Err(refused(refusal)),
-            })
-        });
+                .ok_or_else(|| refused(Refusal::NotFound))?
+                .clone();
+            g.reserve(&request(&o, &parsed), Vec::new(), now_ms())
+                .map_err(refused)
+        })
     };
-    // Scope, liveness, quota and op_id are decided before anything else and
-    // whatever the desktop's state; a repeat answers what was recorded.
-    let dry_run = scheduler.read(|r| {
-        let mut g = r
-            .get(&o.task_id)
-            .ok_or_else(|| refused(Refusal::NotFound))?
-            .clone();
-        g.reserve(&request(&o, &parsed), Vec::new(), now_ms())
-            .map_err(refused)
-    })?;
-    if let Admission::Recorded(state) = dry_run {
+    if let Admission::Recorded(state) = admission()? {
+        return Ok(recorded(&state));
+    }
+    preflight(daemon, &scope.provider)?;
+    let turn = daemon.desktop_tasks.enter().await;
+    if let Admission::Recorded(state) = admission()? {
         return Ok(recorded(&state));
     }
     preflight(daemon, &scope.provider)?;
@@ -655,14 +640,18 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
         parsed.role.as_str(),
         if locked { "locked" } else { "unlocked" }
     );
-    let result = if locked {
-        daemon
-            .locked_use
-            .scheduled(daemon.clone(), reservation, job.clone())
-            .await
-    } else {
-        unlocked(daemon, &job).await
-    };
+    let result = turn
+        .run(async {
+            if locked {
+                daemon
+                    .locked_use
+                    .scheduled(daemon.clone(), reservation, job.clone())
+                    .await
+            } else {
+                unlocked(daemon, &job).await
+            }
+        })
+        .await;
     let outcome = classify(daemon, &o.op_id, &parsed, &job, &result);
     log::info!(
         "scheduler: op={:?} settled {:?}",
@@ -679,6 +668,7 @@ async fn operate(daemon: &Arc<Daemon>, o: v1::AgentSchedulerOperate) -> Result<R
             .settle(&o.op_id, outcome.clone())
             .map_err(refused)
     })?;
+    drop(turn);
     match outcome {
         Outcome::Applied(id) => Ok(match result {
             Ok(resp @ Resp::AgentChatOptions(_)) => resp,
@@ -750,8 +740,6 @@ pub(crate) async fn unlocked(daemon: &Arc<Daemon>, job: &Job) -> Result<Resp, Er
     }
     #[cfg(target_os = "macos")]
     {
-        use muster_agent::idle_compact::{QUIET, QUIET_WAIT};
-        use muster_platform::macos::input::user_input_idle;
         let checked = daemon.clone();
         let holder = job.holder.clone();
         let check = Arc::new(move || {
@@ -760,7 +748,6 @@ pub(crate) async fn unlocked(daemon: &Arc<Daemon>, job: &Job) -> Result<Resp, Er
                 && holder.live(&checked)
         });
         muster_agent::control_guard::scope(check, async {
-            muster_agent::control_guard::wait_for_quiet(user_input_idle, QUIET, QUIET_WAIT).await?;
             let Ok(console) = daemon.locked_use.writes.clone().try_read_owned() else {
                 return Err(Error::Conflict(
                     "a Locked Use transaction owns the console".into(),
