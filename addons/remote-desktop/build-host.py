@@ -127,6 +127,16 @@ def extract(archive, destination, top):
     return destination / top
 
 
+def cmake_sources(cache):
+    boost = download(cache, "boost-1.89.0.tar.xz",
+                     "https://github.com/boostorg/boost/releases/download/boost-1.89.0/boost-1.89.0-cmake.tar.xz",
+                     "67acec02d0d118b5de9eb441f5fb707b3a1cdd884be00ca24b9a73c995511f74")
+    json = download(cache, "json-3.11.3.tar.xz",
+                    "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz",
+                    "d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d")
+    return boost, json
+
+
 def build(cache, executable, sources, identity):
     arch = platform.machine()
     if platform.system() != "Darwin" or arch not in FFMPEG_SHA:
@@ -144,12 +154,7 @@ def build(cache, executable, sources, identity):
                        "f3091b7ccb41a11d877b7406b7afc9dd9c5003d299c6bb33cff882127bc06c91")
     opus = download(cache, "opus-1.6.1.tar.gz", "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz",
                     "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1")
-    boost = download(cache, "boost-1.89.0.tar.xz",
-                     "https://github.com/boostorg/boost/releases/download/boost-1.89.0/boost-1.89.0-cmake.tar.xz",
-                     "67acec02d0d118b5de9eb441f5fb707b3a1cdd884be00ca24b9a73c995511f74")
-    json = download(cache, "json-3.11.3.tar.xz",
-                    "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz",
-                    "d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d")
+    boost, json = cmake_sources(cache)
     # Keep minimum deployment settings in the cache identity too.
     minimum = os.environ.get("MACOSX_DEPLOYMENT_TARGET") or "14.0"
     config = cache / (arch + "-" + minimum)

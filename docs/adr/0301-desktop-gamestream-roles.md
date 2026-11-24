@@ -25,3 +25,5 @@ The configured bitrate is an encoder target subject to the chosen ceiling. A zer
 ## Verification
 
 Build both Apple targets, verify isolated engine packaging and Windows host admission. On paired Macs measure displayed frames over elapsed time and click-to-present intervals on the viewer's monotonic clock. Record settings, sample size and missing physical coverage separately.
+
+Use the same checksum-verified Boost and JSON release archives on both desktop build hosts. Supply their extracted paths to CMake and include them in the Windows source offer so a missing system package does not trigger an interactive dependency checkout.

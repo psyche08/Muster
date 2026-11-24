@@ -22,12 +22,15 @@ def build(cache, output, msys):
         host["FFMPEG_TAG"] + "/Windows-AMD64-ffmpeg.tar.gz",
         "ee79a7a295e8fbd24305a3f4ec94a06f550e0b52f49cb1c4535f649e2dd8b234")
     prefix = host["extract"](ffmpeg, cache, "ffmpeg")
+    boost, json = host["cmake_sources"](cache)
     obj = cache / (src.name + "-ucrt64")
     env = dict(os.environ, PATH=os.pathsep.join([str(ucrt), str(msys / "usr/bin"), os.environ["PATH"]]))
     run = host["run"]
     run(ucrt / "cmake.exe", "-G", "Ninja", "-S", src, "-B", obj,
         "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTS=OFF", "-DBUILD_DOCS=OFF",
         "-DSUNSHINE_ENABLE_TRAY=OFF", "-DSUNSHINE_ASSETS_DIR=assets",
+        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + host["extract"](boost, cache, "boost-1.89.0").as_posix(),
+        "-DFETCHCONTENT_SOURCE_DIR_JSON=" + host["extract"](json, cache, "json").as_posix(),
         "-DFFMPEG_PREPARED_BINARIES=" + prefix.as_posix(), env=env)
     run(ucrt / "cmake.exe", "--build", obj, "--target", "sunshine", "--parallel", "6", env=env)
     payload = output / "Sunshine"
@@ -42,6 +45,8 @@ def build(cache, output, msys):
     host["checkout"](cache, host["output"]("git", "-C", deps["build-deps"], "remote", "get-url", "origin"),
                      deps["build-deps"].name, host["CODECS"])
     with ZipFile(output / "Host-Sources.zip", "w", compression=ZIP_DEFLATED, compresslevel=1) as archive:
+        for archive_path in (boost, json):
+            archive.write(archive_path, "dependencies/" + archive_path.name)
         for path in sorted(src.rglob("*")):
             if path.is_file() and ".git" not in path.parts and "third-party" not in path.relative_to(src).parts[:1]:
                 archive.write(path, "remote-desktop/vendor/sunshine/" + path.relative_to(src).as_posix())
