@@ -8,6 +8,7 @@ publish.workspace = true
 description = "The app shells' core (§3.7): intents in, effects and view models out; owns the link on phones and talks to musterd on desktops"
 
 [dependencies]
+tempfile = "3"
 muster-local = { path = "../muster-local" }
 muster-agent = { path = "../muster-agent" }
 muster-proto = { path = "../muster-proto" }
@@ -33,7 +34,6 @@ sha2.workspace = true
 
 [dev-dependencies]
 muster-relay = { path = "../muster-relay" }
-tempfile = "3"
 env_logger.workspace = true
 
 [lints]

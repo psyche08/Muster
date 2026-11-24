@@ -5,14 +5,13 @@ use crate::{Daemon, Error};
 use muster_core::DeviceId;
 use muster_net::remote_desktop::Session;
 use muster_proto::v1::{
-    DesktopPointer, DesktopSessionProgress, desktop_pointer::Kind, desktop_session_progress::Phase,
-    event::Ev,
+    DesktopPointer, DesktopSessionProgress, DesktopStreamSettings, desktop_pointer::Kind,
+    desktop_session_progress::Phase, event::Ev,
 };
 use muster_rpc::EventSink;
 use std::{sync::Mutex, time::Duration};
 use tokio::{sync::mpsc, time::timeout};
 
-pub(super) const HELLO: &[u8] = b"MDJ1";
 const MAX_FRAME: usize = 768 * 1024;
 const CHUNK: usize = 12 * 1024;
 const MAX_INPUT: usize = 24;
@@ -47,9 +46,11 @@ pub(super) async fn view(
     daemon: &Daemon,
     peer: DeviceId,
     id: u64,
+    settings: DesktopStreamSettings,
     events: &EventSink,
 ) -> Result<(), Error> {
-    let (mut session, ready) = super::handshake::open(daemon, peer, HELLO, events).await?;
+    let (mut session, ready) =
+        super::handshake::open(daemon, peer, &settings.hello(), events).await?;
     let mouse = match ready.as_slice() {
         b"JPG0" => false,
         b"JPG1" => true,
@@ -124,7 +125,11 @@ mod capture {
     use super::*;
     use std::sync::Arc;
     unsafe extern "C" {
-        fn muster_remote_display_open() -> *mut std::ffi::c_void;
+        fn muster_remote_display_open(
+            edge: u32,
+            quality: u32,
+            cursor: bool,
+        ) -> *mut std::ffi::c_void;
         fn muster_remote_frame(handle: *mut std::ffi::c_void, out: *mut u8, cap: usize) -> usize;
         fn muster_remote_close(handle: *mut std::ffi::c_void);
         fn muster_remote_pointer(
@@ -145,8 +150,14 @@ mod capture {
         }
     }
     impl Display {
-        fn open() -> Option<Arc<Self>> {
-            let ptr = unsafe { muster_remote_display_open() };
+        fn open(settings: DesktopStreamSettings) -> Option<Arc<Self>> {
+            let ptr = unsafe {
+                muster_remote_display_open(
+                    settings.long_edge,
+                    settings.jpeg_quality,
+                    settings.show_cursor,
+                )
+            };
             (!ptr.is_null()).then(|| Arc::new(Self(ptr)))
         }
         fn frame(&self) -> Result<Vec<u8>, Error> {
@@ -192,8 +203,11 @@ mod capture {
             Ok(())
         }
     }
-    pub(crate) async fn host(session: &mut Session) -> Result<(), Error> {
-        let Some(display) = tokio::task::spawn_blocking(Display::open)
+    pub(crate) async fn host(
+        session: &mut Session,
+        settings: DesktopStreamSettings,
+    ) -> Result<(), Error> {
+        let Some(display) = tokio::task::spawn_blocking(move || Display::open(settings))
             .await
             .ok()
             .flatten()
@@ -212,8 +226,7 @@ mod capture {
             display: display.clone(),
             held: None,
         };
-        let mut ticks = tokio::time::interval(Duration::from_millis(100));
-        ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut next_frame = tokio::time::Instant::now();
         while let Some(request) = session.recv_control().await? {
             let Some((&b'N', items)) = request.split_first() else {
                 return Err(unavailable("invalid frame request"));
@@ -224,11 +237,13 @@ mod capture {
             for packet in items.chunks_exact(6) {
                 session.with_mouse(|| pointer.apply(packet))??;
             }
-            ticks.tick().await;
+            tokio::time::sleep_until(next_frame).await;
+            let started = tokio::time::Instant::now();
             let capture = display.clone();
             let frame = tokio::task::spawn_blocking(move || capture.frame())
                 .await
                 .map_err(|_| unavailable("desktop capture stopped"))??;
+            next_frame = started + settings.frame_interval(frame.len());
             session
                 .send_control(&(frame.len() as u32).to_be_bytes())
                 .await?;

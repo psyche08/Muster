@@ -231,9 +231,28 @@ async fn paired_desktop_fixture(
 #[cfg(target_os = "macos")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt() {
+    exercise_native_stream(None).await;
+}
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn configured_native_viewer_confirms_and_receives_frame_and_pointer() {
+    exercise_native_stream(Some(v1::DesktopStreamSettings {
+        long_edge: 1920,
+        fps: 15,
+        bitrate_kbps: 5000,
+        jpeg_quality: 85,
+        show_cursor: false,
+    }))
+    .await;
+}
+#[cfg(target_os = "macos")]
+async fn exercise_native_stream(settings: Option<v1::DesktopStreamSettings>) {
     use muster_net::remote_desktop::{Access, Handler, Session};
     use v1::{desktop_session_request::Action, event::Ev};
-    struct Pattern(tokio::sync::Notify);
+    struct Pattern {
+        received: tokio::sync::Notify,
+        expected_hello: Vec<u8>,
+    }
     impl Handler for Pattern {
         fn console_ready(&self) -> bool {
             true
@@ -244,7 +263,10 @@ async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt
             s: &'a mut Session,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
             Box::pin(async move {
-                assert_eq!(s.recv_control().await.unwrap().unwrap(), b"MDJ1");
+                assert_eq!(
+                    s.recv_control().await.unwrap().unwrap(),
+                    self.expected_hello
+                );
                 let mut occupied = b"MDB1".to_vec();
                 occupied.extend_from_slice(&[7; 32]);
                 s.send_control(&occupied).await.unwrap();
@@ -253,7 +275,7 @@ async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt
                 let bytes = vec![0x42; 16 * 1024 + 5];
                 while let Ok(Some(batch)) = s.recv_control().await {
                     if batch == [b'N', 1, 0, 42, 0, 64, 0] {
-                        self.0.notify_one();
+                        self.received.notify_one();
                     }
                     if s.send_control(&(bytes.len() as u32).to_be_bytes())
                         .await
@@ -272,7 +294,12 @@ async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt
         }
     }
     let (_a, _b, host, phone) = paired_desktop_fixture(&[]).await;
-    let pattern = std::sync::Arc::new(Pattern(Default::default()));
+    let pattern = std::sync::Arc::new(Pattern {
+        received: Default::default(),
+        expected_hello: settings
+            .unwrap_or(v1::DesktopStreamSettings::ORIGINAL)
+            .hello(),
+    });
     let _offer = host
         .node()
         .share_remote_desktop(phone.device_id(), Access::ViewAndMouse, pattern.clone())
@@ -284,7 +311,14 @@ async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt
             action: Some(action),
         })
     };
-    let mut call = client.start(request(Action::ViewNative(87))).await.unwrap();
+    let action = match settings {
+        Some(profile) => Action::ViewConfigured(v1::ConfiguredDesktopViewer {
+            session: 87,
+            settings: Some(profile),
+        }),
+        None => Action::ViewNative(87),
+    };
+    let mut call = client.start(request(action)).await.unwrap();
     tokio::time::timeout(Duration::from_secs(45), async {
         let mut frame = false;
         while let Some(event) = call.events.recv().await {
@@ -313,7 +347,7 @@ async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt
                         })))
                         .await
                         .unwrap();
-                    pattern.0.notified().await;
+                    pattern.received.notified().await;
                     return;
                 }
                 _ => {}

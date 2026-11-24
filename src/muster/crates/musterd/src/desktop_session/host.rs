@@ -105,8 +105,10 @@ impl Host {
         let hello = timeout(Duration::from_secs(5), session.recv_control())
             .await
             .map_err(|_| unavailable("viewer handshake timed out"))??;
-        let native = hello.as_deref() == Some(super::native::HELLO);
-        if !native && hello.as_deref() != Some(HELLO) {
+        let native = hello
+            .as_deref()
+            .and_then(muster_proto::v1::DesktopStreamSettings::from_hello);
+        if native.is_none() && hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
         let daemon = self
@@ -146,8 +148,8 @@ impl Host {
             .await
             .map_err(|_| unavailable("previous desktop viewer is still closing"))?
             .map_err(|_| unavailable("desktop service stopped"))?;
-        if native {
-            return super::native::host(session).await;
+        if let Some(settings) = native {
+            return super::native::host(session, settings).await;
         }
         let ports = EnginePorts::MUSTER;
         let launch = Launch {

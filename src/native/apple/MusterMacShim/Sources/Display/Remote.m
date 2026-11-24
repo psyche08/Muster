@@ -6,13 +6,14 @@
 
 @interface MusterRemoteDisplay : NSObject
 @property(nonatomic, strong) SCContentFilter *filter;
+@property(nonatomic) double quality;
 @property(nonatomic) CGDirectDisplayID displayID;
 @property(nonatomic, strong) SCStreamConfiguration *configuration;
 @end
 @implementation MusterRemoteDisplay
 @end
 
-void *muster_remote_display_open(void) {
+void *muster_remote_display_open(uint32_t edge, uint32_t quality, bool cursor) {
   @autoreleasepool {
     if (!CGPreflightScreenCaptureAccess())
       return NULL;
@@ -39,11 +40,42 @@ void *muster_remote_display_open(void) {
     view.filter = [[SCContentFilter alloc] initWithDisplay:display
                                           excludingWindows:@[]];
     view.configuration = [SCStreamConfiguration new];
-    double scale = MIN(1.0, 1280.0 / MAX(display.width, display.height));
-    view.configuration.width = MAX(1, round(display.width * scale));
-    view.configuration.height = MAX(1, round(display.height * scale));
-    view.configuration.showsCursor = YES;
+    CGSize points = view.filter.contentRect.size;
+    double scale = MIN(view.filter.pointPixelScale, edge / MAX(points.width, points.height));
+    view.configuration.width = MAX(1, round(points.width * scale));
+    view.configuration.height = MAX(1, round(points.height * scale));
+    view.configuration.showsCursor = cursor;
+    view.quality = quality / 100.0;
     return (__bridge_retained void *)view;
+  }
+}
+
+// Bound each frame even for a high-detail desktop at the largest resolution.
+static NSData *encodeFrame(CGImageRef image, double quality, size_t cap) {
+  size_t edge = MAX(CGImageGetWidth(image), CGImageGetHeight(image));
+  for (;;) {
+    NSMutableData *data = [NSMutableData data];
+    CGImageDestinationRef dest = CGImageDestinationCreateWithData(
+        (__bridge CFMutableDataRef)data, CFSTR("public.jpeg"), 1, NULL);
+    if (!dest)
+      return nil;
+    CGImageDestinationAddImage(dest, image, (__bridge CFDictionaryRef) @{
+      (__bridge NSString *)kCGImageDestinationLossyCompressionQuality : @(quality),
+      (__bridge NSString *)kCGImageDestinationImageMaxPixelSize : @(edge)
+    });
+    bool encoded = CGImageDestinationFinalize(dest);
+    CFRelease(dest);
+    if (!encoded)
+      return nil;
+    if (data.length <= cap)
+      return data;
+    if (quality > 0) {
+      quality = MAX(0, quality - 0.20);
+    } else if (edge > 640) {
+      edge /= 2;
+    } else {
+      return nil;
+    }
   }
 }
 
@@ -56,22 +88,8 @@ size_t muster_remote_frame(void *handle, uint8_t *out, size_t cap) {
         captureImageWithFilter:view.filter
                  configuration:view.configuration
              completionHandler:^(CGImageRef image, NSError *error) {
-               if (image) {
-                 NSMutableData *data = [NSMutableData data];
-                 CGImageDestinationRef dest = CGImageDestinationCreateWithData(
-                     (__bridge CFMutableDataRef)data, CFSTR("public.jpeg"), 1,
-                     NULL);
-                 if (dest) {
-                   CGImageDestinationAddImage(
-                       dest, image, (__bridge CFDictionaryRef) @{
-                         (__bridge NSString *)
-                         kCGImageDestinationLossyCompressionQuality : @0.65
-                       });
-                   if (CGImageDestinationFinalize(dest))
-                     frame = data;
-                   CFRelease(dest);
-                 }
-               }
+               if (image)
+                 frame = encodeFrame(image, view.quality, cap);
                dispatch_semaphore_signal(done);
              }];
     if (dispatch_semaphore_wait(

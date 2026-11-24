@@ -80,7 +80,15 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
     let (watch, token) = state.new_watch();
     let native = matches!(request.action, Some(Action::ViewNative(_)));
     if native {
-        request.action = Some(Action::ViewNative(id));
+        let settings = state.desktop_preferences.settings;
+        request.action = Some(if settings == v1::DesktopStreamSettings::ORIGINAL {
+            Action::ViewNative(id)
+        } else {
+            Action::ViewConfigured(v1::ConfiguredDesktopViewer {
+                session: id,
+                settings: Some(settings),
+            })
+        });
     }
     let (pointer, mut input) = tokio::sync::mpsc::channel(32);
     let device = request.device.clone();

@@ -7,7 +7,7 @@ use muster_rpc::{Context, EventSink, Handler, HandlerFuture, Principal};
 mod common;
 use common::TestShell;
 
-struct Desktop;
+struct Desktop(Option<v1::DesktopStreamSettings>);
 
 impl Handler for Desktop {
     fn call(&self, _: Context, request: Req, events: EventSink) -> HandlerFuture<'_> {
@@ -35,10 +35,20 @@ impl Handler for Desktop {
                 }),
                 Req::DesktopSession(request) => {
                     assert_eq!(request.device, "host");
-                    let native = matches!(
-                        request.action,
-                        Some(v1::desktop_session_request::Action::ViewNative(_))
-                    );
+                    use v1::desktop_session_request::Action;
+                    let native = match request.action {
+                        Some(Action::ViewConfigured(view)) => {
+                            assert_ne!(view.session, 0);
+                            assert!(self.0.is_some());
+                            assert_eq!(view.settings, self.0);
+                            true
+                        }
+                        Some(Action::ViewNative(_)) => {
+                            assert!(self.0.is_none());
+                            true
+                        }
+                        _ => false,
+                    };
                     if native {
                         events.send(Ev::DesktopFrame(vec![1, 2, 3])).await.unwrap();
                     }
@@ -61,14 +71,27 @@ impl Handler for Desktop {
 
 #[tokio::test]
 async fn embedded_lease_survives_navigation_until_disconnect() {
-    exercise(false).await;
+    exercise(false, None).await;
 }
 #[cfg(target_vendor = "apple")]
 #[tokio::test]
 async fn native_workspace_retains_frame_until_disconnect() {
-    exercise(true).await;
+    exercise(true, None).await;
 }
-async fn exercise(native: bool) {
+#[cfg(target_vendor = "apple")]
+#[tokio::test]
+async fn native_workspace_connects_with_saved_profile() {
+    exercise(
+        true,
+        Some(v1::DesktopStreamSettings {
+            long_edge: 1920,
+            bitrate_kbps: 3000,
+            ..v1::DesktopStreamSettings::ORIGINAL
+        }),
+    )
+    .await;
+}
+async fn exercise(native: bool, settings: Option<v1::DesktopStreamSettings>) {
     use app::intent::It;
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("rpc.sock");
@@ -78,7 +101,7 @@ async fn exercise(native: bool) {
             tokio::spawn(muster_rpc::serve(
                 stream,
                 Principal::Local,
-                Arc::new(Desktop),
+                Arc::new(Desktop(settings)),
             ));
         }
     });
@@ -114,6 +137,12 @@ async fn exercise(native: bool) {
     shell
         .wait(|v| v.remote_workspace.as_ref().is_some_and(|r| r.can_connect))
         .await;
+    if let Some(profile) = settings {
+        send(It::SetDesktopStreamSettings(profile));
+        shell
+            .wait(|v| v.remote_workspace.as_ref().and_then(|r| r.settings) == settings)
+            .await;
+    }
     send(It::DesktopSession(v1::DesktopSessionRequest {
         device: "host".into(),
         action: Some(if native {

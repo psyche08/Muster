@@ -1626,6 +1626,50 @@ public nonisolated struct Muster_V1_NetworkRefreshRequest: Sendable {
   public init() {}
 }
 
+public nonisolated struct Muster_V1_DesktopStreamSettings: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var longEdge: UInt32 = 0
+
+  public var fps: UInt32 = 0
+
+  /// zero means unrestricted
+  public var bitrateKbps: UInt32 = 0
+
+  public var jpegQuality: UInt32 = 0
+
+  public var showCursor: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Muster_V1_ConfiguredDesktopViewer: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var session: UInt64 = 0
+
+  public var settings: Muster_V1_DesktopStreamSettings {
+    get {_settings ?? Muster_V1_DesktopStreamSettings()}
+    set {_settings = newValue}
+  }
+  /// Returns true if `settings` has been explicitly set.
+  public var hasSettings: Bool {self._settings != nil}
+  /// Clears the value of `settings`. Subsequent reads from it will return its default value.
+  public mutating func clearSettings() {self._settings = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _settings: Muster_V1_DesktopStreamSettings? = nil
+}
+
 public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1658,6 +1702,14 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
       return 0
     }
     set {action = .viewInWindow(newValue)}
+  }
+
+  public var viewConfigured: Muster_V1_ConfiguredDesktopViewer {
+    get {
+      if case .viewConfigured(let v)? = action {return v}
+      return Muster_V1_ConfiguredDesktopViewer()
+    }
+    set {action = .viewConfigured(newValue)}
   }
 
   /// local presentation lease
@@ -1703,6 +1755,7 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case shareMouse(Muster_V1_Ack)
     /// local owner window, never forwarded
     case viewInWindow(UInt64)
+    case viewConfigured(Muster_V1_ConfiguredDesktopViewer)
     /// local presentation lease
     case viewNative(UInt64)
     /// local presentation input
@@ -8987,9 +9040,98 @@ nonisolated extension Muster_V1_NetworkRefreshRequest: SwiftProtobuf.Message, Sw
   }
 }
 
+nonisolated extension Muster_V1_DesktopStreamSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DesktopStreamSettings"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}long_edge\0\u{1}fps\0\u{3}bitrate_kbps\0\u{3}jpeg_quality\0\u{3}show_cursor\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.longEdge) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.fps) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.bitrateKbps) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.jpegQuality) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.showCursor) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.longEdge != 0 {
+      try visitor.visitSingularUInt32Field(value: self.longEdge, fieldNumber: 1)
+    }
+    if self.fps != 0 {
+      try visitor.visitSingularUInt32Field(value: self.fps, fieldNumber: 2)
+    }
+    if self.bitrateKbps != 0 {
+      try visitor.visitSingularUInt32Field(value: self.bitrateKbps, fieldNumber: 3)
+    }
+    if self.jpegQuality != 0 {
+      try visitor.visitSingularUInt32Field(value: self.jpegQuality, fieldNumber: 4)
+    }
+    if self.showCursor != false {
+      try visitor.visitSingularBoolField(value: self.showCursor, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_DesktopStreamSettings, rhs: Muster_V1_DesktopStreamSettings) -> Bool {
+    if lhs.longEdge != rhs.longEdge {return false}
+    if lhs.fps != rhs.fps {return false}
+    if lhs.bitrateKbps != rhs.bitrateKbps {return false}
+    if lhs.jpegQuality != rhs.jpegQuality {return false}
+    if lhs.showCursor != rhs.showCursor {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_ConfiguredDesktopViewer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConfiguredDesktopViewer"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}settings\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.session) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._settings) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.session != 0 {
+      try visitor.visitSingularUInt64Field(value: self.session, fieldNumber: 1)
+    }
+    try { if let v = self._settings {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_ConfiguredDesktopViewer, rhs: Muster_V1_ConfiguredDesktopViewer) -> Bool {
+    if lhs.session != rhs.session {return false}
+    if lhs._settings != rhs._settings {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0\u{3}view_configured\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9069,6 +9211,19 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .pointer(v)
         }
       }()
+      case 9: try {
+        var v: Muster_V1_ConfiguredDesktopViewer?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .viewConfigured(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .viewConfigured(v)
+        }
+      }()
       default: break
       }
     }
@@ -9110,6 +9265,10 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
     case .pointer?: try {
       guard case .pointer(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    }()
+    case .viewConfigured?: try {
+      guard case .viewConfigured(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     }()
     case nil: break
     }

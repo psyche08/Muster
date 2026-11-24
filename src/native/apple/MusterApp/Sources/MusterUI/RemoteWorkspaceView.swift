@@ -7,6 +7,8 @@ struct RemoteWorkspaceView: View {
     let core: MusterCore
     let workspace: Muster_App_RemoteWorkspaceView
 
+    @State private var showingSettings = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Device", selection: Binding(get: { workspace.selectedDevice }, set: { device in
@@ -22,6 +24,7 @@ struct RemoteWorkspaceView: View {
                 if workspace.sessionOpen {
                     Button("Disconnect", action: disconnect)
                 } else {
+                    Button("Stream settings") { showingSettings = true }
                     Button("Connect") { send(.viewNative(1)) }.disabled(!workspace.canConnect)
                 }
                 Text(workspace.status).foregroundStyle(.secondary)
@@ -44,6 +47,9 @@ struct RemoteWorkspaceView: View {
             }
             Spacer(minLength: 0)
         }
+        .sheet(isPresented: $showingSettings) {
+            StreamSettings(draft: workspace.settings) { core.send(.setDesktopStreamSettings($0)) }
+        }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -51,6 +57,49 @@ struct RemoteWorkspaceView: View {
     private func disconnect() { core.send(.endDesktopSession(workspace.selectedDevice)) }
     private func send(_ action: Muster_V1_DesktopSessionRequest.OneOf_Action) {
         core.send(.desktopSession(.with { $0.device = workspace.selectedDevice; $0.action = action }))
+    }
+}
+
+private struct StreamSettings: View {
+    @State var draft: Muster_V1_DesktopStreamSettings
+    let save: (Muster_V1_DesktopStreamSettings) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    init(draft: Muster_V1_DesktopStreamSettings, save: @escaping (Muster_V1_DesktopStreamSettings) -> Void) {
+        _draft = State(initialValue: draft)
+        self.save = save
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                picker("Longest edge", $draft.longEdge, [640, 1280, 1920, 2560]) { "\($0) px" }
+                picker("Frame rate limit", $draft.fps, [5, 10, 15, 30]) { "\($0) fps" }
+                picker("Bitrate limit", $draft.bitrateKbps, [0, 1000, 3000, 5000, 10000, 20000, 50000]) {
+                    $0 == 0 ? "Unlimited" : "\($0 / 1000) Mbps"
+                }
+                picker("JPEG quality", $draft.jpegQuality, [45, 65, 85]) { "\($0)%" }
+                Toggle("Show host cursor", isOn: $draft.showCursor)
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Stream settings")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save(draft); dismiss() }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 320)
+        #endif
+    }
+
+    private func picker(_ title: String, _ selection: Binding<UInt32>, _ options: [UInt32],
+                        label: @escaping (UInt32) -> String) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(options, id: \.self) { value in Text(label(value)).tag(value) }
+        }
     }
 }
 
@@ -99,7 +148,7 @@ private struct RemoteSurface: View {
                   let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
                   let width = props[kCGImagePropertyPixelWidth as String] as? Int,
                   let height = props[kCGImagePropertyPixelHeight as String] as? Int,
-                  (1...1280).contains(width), (1...1280).contains(height) else { image = nil; return }
+                  (1...2560).contains(width), (1...2560).contains(height) else { image = nil; return }
             image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         }
     }

@@ -54,7 +54,13 @@ pub(super) async fn run(
         result = async {
             match action {
                 #[cfg(target_vendor="apple")]
-                Action::ViewNative(id) if id != 0 => native::view(daemon,peer,id,&events).await,
+                Action::ViewNative(id) if id != 0 => native::view(daemon, peer, id, v1::DesktopStreamSettings::ORIGINAL, &events).await,
+                #[cfg(target_vendor="apple")]
+                Action::ViewConfigured(view) if view.session != 0 => {
+                    let settings = view.settings.filter(|s| s.valid())
+                        .ok_or_else(|| Error::Invalid("unsupported desktop stream settings".into()))?;
+                    native::view(daemon, peer, view.session, settings, &events).await
+                }
                 #[cfg(windows)]
                 Action::ViewInWindow(hwnd) if hwnd != 0 => viewer::view(daemon, peer, hwnd, &events).await,
                 _ => Err(Error::Unavailable("this desktop action is unavailable on this platform".into())),

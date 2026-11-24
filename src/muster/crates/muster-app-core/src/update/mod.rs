@@ -544,6 +544,13 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)
         }
+        It::SetDesktopStreamSettings(settings) => {
+            if state.screen == Screen::Remote && state.desktop_session.is_none() {
+                if let Err(e) = state.desktop_preferences.save(settings) {
+                    state.toast(e.to_string(), true);
+                }
+            }
+        }
         It::OpenRemote(selection) => {
             if state.desktop_session.is_none()
                 && !selection.device_id.is_empty()

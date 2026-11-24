@@ -1417,6 +1417,7 @@ pub(crate) fn remote_workspace(state: &State) -> app::RemoteWorkspaceView {
         String::new()
     };
     app::RemoteWorkspaceView {
+        settings: Some(state.desktop_preferences.settings),
         devices,
         selected_device,
         can_connect,
