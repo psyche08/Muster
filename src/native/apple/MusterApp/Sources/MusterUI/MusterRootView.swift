@@ -9,6 +9,7 @@ public struct MusterRootView: View {
     @ObservedObject private var display = FoldDisplay.shared
     /// The half-fold split for the workspace on screen (iOS; a Mac keeps its own split).
     @State private var layout = WorkspaceLayout()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ConversationStyle.preferenceKey) private var conversationStyle = ConversationStyle.codex
 
@@ -102,7 +103,9 @@ public struct MusterRootView: View {
         .environment(\.workspaceLayout, layout)
         .toolbar {
             if Self.roots.contains(vm.screen) || split(vm) {
-                ToolbarItem(placement: .navigation) { WorkspaceSwitcher(core: core, vm: vm) }
+                ToolbarItem(placement: .navigation) {
+                    WorkspaceSwitcher(core: core, vm: vm, compactLabel: dynamicTypeSize.isAccessibilitySize)
+                }
                 #if os(iOS)
                 if vm.screen != .agents && !(split(vm) && vm.workspace == .agents) {
                     ToolbarItem(placement: .primaryAction) {

@@ -10,17 +10,61 @@ import AppKit
 import UIKit
 #endif
 
-/// One segmented control in the existing navigation row, no separate header.
+/// The shared workspace selection presented in the platform navigation bar.
 struct WorkspaceSwitcher: View {
     let core: MusterCore
     let vm: ViewModel
+    let compactLabel: Bool
 
     /// The tab the core says the screen belongs to (Home counts as Agents).
     private var selected: Muster_App_Screen {
         [.multica, .terminals, .remote].contains(vm.workspace) ? vm.workspace : .agents
     }
 
+    private var choices: [(screen: Muster_App_Screen, title: LocalizedStringKey)] {
+        var items: [(screen: Muster_App_Screen, title: LocalizedStringKey)] = [
+            (.agents, "Agents"), (.terminals, "Terminals"), (.remote, "Remote")
+        ]
+        if vm.multicaWorkspace.visible { items.append((.multica, "Multica")) }
+        return items
+    }
+
     var body: some View {
+        #if os(iOS)
+        let title = choices.first { $0.screen == selected }?.title ?? "Workspace"
+        Menu {
+            picker.pickerStyle(.inline)
+        } label: {
+            let icon = Image(systemName: "square.grid.2x2")
+            Group {
+                if compactLabel {
+                    icon
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 5) {
+                            Text(title).font(.headline)
+                            Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                        }
+                        .fixedSize()
+                        icon
+                    }
+                }
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Switch workspace")
+        .accessibilityValue(Text(title))
+        .accessibilityIdentifier("workspace-switcher")
+        #else
+        picker
+            .pickerStyle(.segmented)
+            .frame(idealWidth: vm.multicaWorkspace.visible ? 320 : 250)
+            .accessibilityIdentifier("workspace-switcher")
+        #endif
+    }
+
+    private var picker: some View {
         Picker("Workspace", selection: Binding(get: { selected }, set: { tab in
             switch tab {
             case .remote: core.send(.openRemote(.init()))
@@ -29,14 +73,10 @@ struct WorkspaceSwitcher: View {
             default: core.openAgents(device: vm.terminals.deviceID.isEmpty ? "*" : vm.terminals.deviceID)
             }
         })) {
-            Text("Agents").tag(Muster_App_Screen.agents)
-            Text("Terminals").tag(Muster_App_Screen.terminals)
-            Text("Remote").tag(Muster_App_Screen.remote)
-            if vm.multicaWorkspace.visible { Text("Multica").tag(Muster_App_Screen.multica) }
+            ForEach(choices, id: \.screen) { choice in
+                Text(choice.title).tag(choice.screen)
+            }
         }
-        .pickerStyle(.segmented)
-        .frame(idealWidth: vm.multicaWorkspace.visible ? 320 : 250)
-        .accessibilityIdentifier("workspace-switcher")
     }
 }
 
