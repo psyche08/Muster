@@ -220,6 +220,8 @@ struct ControlsSection {
     composer_scope: Option<String>,
     #[serde(default)]
     auxiliary_regions: Vec<String>,
+    #[serde(default)]
+    transcript_regions: Vec<String>,
     sessions: SessionsSpec,
     queue: Option<QueueSpec>,
     questions: Option<QuestionsSpec>,
@@ -771,6 +773,13 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         {
             at.fail("auxiliary_regions must not contain an empty name");
         }
+        if spec
+            .transcript_regions
+            .iter()
+            .any(|name| name.trim().is_empty())
+        {
+            at.fail("transcript_regions must not contain an empty name");
+        }
         let permission_card_prefix = match &spec.permission_card_prefix {
             Some(prefix) if !prefix.trim().is_empty() => format!("Some({prefix:?})"),
             Some(_) => at.fail("permission_card_prefix must not be empty"),
@@ -783,8 +792,9 @@ pub static {name}_CLOUD: Cloud = Cloud {{
         };
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
+            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    transcript_regions: {},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
             list(&spec.auxiliary_regions),
+            list(&spec.transcript_regions),
             list(&spec.placeholders),
         );
     }

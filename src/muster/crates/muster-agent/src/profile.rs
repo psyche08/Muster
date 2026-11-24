@@ -216,6 +216,12 @@ pub struct Controls {
     /// the session's view, such as Claude's side chat. A composer, submit or
     /// queued-message control inside one is not the session's (ADR 0221).
     pub auxiliary_regions: &'static [&'static str],
+    /// Names of application groups that hold the conversation's transcript:
+    /// one element per message, never the session list, the composer, or
+    /// its Send and Stop. Control and session-list scans do not walk into
+    /// one, so a long conversation cannot use up their node budget
+    /// (ADR 0307).
+    pub transcript_regions: &'static [&'static str],
     /// What the composer reports as its value while empty.
     pub placeholders: &'static [&'static str],
     pub draft: Draft,
@@ -763,6 +769,7 @@ impl Controls {
         composer: Selector::NONE,
         composer_scope: crate::native_scan::ComposerScope::WebArea,
         auxiliary_regions: &[],
+        transcript_regions: &[],
         placeholders: &[],
         draft: Draft::Value,
         send: Selector::NONE,
@@ -790,6 +797,17 @@ impl Controls {
                 .into_iter()
                 .flatten()
                 .any(|name| self.auxiliary_regions.contains(&name.as_str()))
+    }
+
+    /// Whether `node`, whose subrole is `subrole`, is one of the groups in
+    /// `transcript_regions`. A scan for controls or session rows keeps the
+    /// node itself and skips everything below it.
+    pub fn is_transcript_region(&self, subrole: &str, node: &impl AxQuery) -> bool {
+        subrole == "AXApplicationGroup"
+            && [node.title(), node.description()]
+                .into_iter()
+                .flatten()
+                .any(|name| self.transcript_regions.contains(&name.as_str()))
     }
 }
 
@@ -832,6 +850,8 @@ mod tests {
     const CHATGPT_NEW_DUMP: &str = include_str!("../tests/fixtures/ax/chatgpt-chat-new.dump");
     const CHATGPT_CHAT_DUMP: &str = include_str!("../tests/fixtures/ax/chatgpt-chat.dump");
     const CLAUDE_CHAT_DUMP: &str = include_str!("../tests/fixtures/ax/claude-chat-new.dump");
+    const CLAUDE_CODE_TRANSCRIPT: &str =
+        include_str!("../tests/fixtures/ax/claude-code-transcript.dump");
 
     fn found(tree: &AxTree, selector: &Selector) -> Vec<usize> {
         (0..tree.nodes.len())
@@ -1083,6 +1103,249 @@ AXWebArea title="Session - Claude Code"
         assert!(!CLAUDE.is_auxiliary_region("AXGroup", side));
         assert!(!CLAUDE.is_auxiliary_region("AXLandmarkRegion", &tree.nodes[2]));
         assert!(!CODEX.is_auxiliary_region("AXLandmarkRegion", side));
+    }
+
+    /// Only an application group named as a transcript is one, and only in
+    /// Claude's profile.
+    #[test]
+    fn claude_transcript_regions_are_named_application_groups() {
+        let tree = tree(
+            r#"
+AXWebArea title="Session - Claude Code"
+  AXGroup/AXApplicationGroup title="Chat messages" desc="Chat messages"
+  AXGroup/AXApplicationGroup desc="Chat messages"
+  AXGroup/AXLandmarkRegion title="Chat messages"
+  AXGroup/AXApplicationGroup title="Code" desc="Code"
+"#,
+        );
+        assert!(CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+        assert!(CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[2]));
+        assert!(!CLAUDE.is_transcript_region("AXLandmarkRegion", &tree.nodes[3]));
+        assert!(!CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[4]));
+        assert!(!CODEX.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+        assert!(!Controls::UNRECORDED.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+    }
+
+    /// `muster_platform::macos::ax::MAX_NODES`: what the platform's control
+    /// and sidebar walks read at most before reporting an incomplete scan.
+    const PLATFORM_NODE_LIMIT: usize = 4096;
+
+    /// `i`'s ancestors, nearest first.
+    fn ancestors(tree: &AxTree, i: usize) -> impl Iterator<Item = usize> + '_ {
+        std::iter::successors(tree.nodes[i].parent, |&p| tree.nodes[p].parent)
+    }
+
+    /// The application groups that hold a conversation's messages: the
+    /// nearest such group above each message article.
+    fn message_lists(tree: &AxTree) -> Vec<usize> {
+        let mut lists: Vec<usize> = (0..tree.nodes.len())
+            .filter(|&i| tree.nodes[i].subrole == "AXDocumentArticle")
+            .filter_map(|i| {
+                ancestors(tree, i).find(|&a| tree.nodes[a].subrole == "AXApplicationGroup")
+            })
+            .collect();
+        lists.sort_unstable();
+        lists.dedup();
+        lists
+    }
+
+    /// The Claude Code window of 2026-11-24 (Claude desktop Code tab, one
+    /// session open, idle, empty composer; the menu bar left out). Its
+    /// message list is the group the profile names as a transcript, and in
+    /// it and in every older Claude Code recording, idle, running, with a
+    /// draft or with a question card, that list holds no composer, Send or
+    /// Stop, nor the session sidebar where a recording still names it: a
+    /// scan that skips the list misses none of them.
+    #[test]
+    fn recorded_claude_transcripts_hold_no_session_controls() {
+        let recorded = tree(CLAUDE_CODE_TRANSCRIPT);
+        let named: Vec<_> = (0..recorded.nodes.len())
+            .filter(|&i| {
+                CLAUDE.is_transcript_region(&recorded.nodes[i].subrole, &recorded.nodes[i])
+            })
+            .collect();
+        assert_eq!(named.len(), 1);
+        assert_eq!(message_lists(&recorded), named);
+        for dump in [
+            CLAUDE_CODE_TRANSCRIPT,
+            CLAUDE_CODE,
+            CLAUDE_CODE_RUNNING,
+            CLAUDE_CODE_RUNNING_DRAFT,
+            CLAUDE_CODE_QUESTION,
+        ] {
+            let tree = tree(dump);
+            let lists = message_lists(&tree);
+            assert!(!lists.is_empty());
+            let controls: Vec<_> = (0..tree.nodes.len())
+                .filter(|&i| {
+                    let n = &tree.nodes[i];
+                    CLAUDE.composer.matches(n)
+                        || CLAUDE.send.matches(n)
+                        || (n.role == "AXButton" && CLAUDE.stop.matches(n))
+                        || crate::native_sidebar::claude_session_sidebar(
+                            &n.identifier,
+                            &n.subrole,
+                            n.label(),
+                        )
+                })
+                .collect();
+            assert!(!controls.is_empty());
+            for i in controls {
+                assert!(
+                    ancestors(&tree, i).all(|a| !lists.contains(&a)),
+                    "{:?} is inside a message list",
+                    tree.nodes[i]
+                );
+            }
+        }
+    }
+
+    /// The recording with its transcript grown by copies of its first
+    /// message until the transcript alone exceeds the platform's node
+    /// limit twice over: the shape of a long conversation, every other node
+    /// as recorded.
+    fn with_long_transcript(mut tree: AxTree) -> AxTree {
+        let transcript = (0..tree.nodes.len())
+            .find(|&i| CLAUDE.is_transcript_region(&tree.nodes[i].subrole, &tree.nodes[i]))
+            .unwrap();
+        let article = tree
+            .preorder(transcript)
+            .into_iter()
+            .find(|&i| tree.nodes[i].subrole == "AXDocumentArticle")
+            .unwrap();
+        let list = tree.nodes[article].parent.unwrap();
+        // Preorder: a parent is copied before its children.
+        let message = tree.preorder(article);
+        for _ in 0..(2 * PLATFORM_NODE_LIMIT / message.len() + 1) {
+            let mut copies = std::collections::HashMap::new();
+            for &i in &message {
+                let parent = if i == article {
+                    list
+                } else {
+                    copies[&tree.nodes[i].parent.unwrap()]
+                };
+                let mut node = tree.nodes[i].clone();
+                node.children.clear();
+                node.parent = Some(parent);
+                let copy = tree.nodes.len();
+                tree.nodes.push(node);
+                tree.nodes[parent].children.push(copy);
+                copies.insert(i, copy);
+            }
+        }
+        assert!(tree.preorder(transcript).len() > 2 * PLATFORM_NODE_LIMIT);
+        tree
+    }
+
+    /// What the platform's control scan (`find_controls`) reads: breadth
+    /// first from the conversation's web area, at most the node limit, and
+    /// nothing below a transcript when `prune`. `None` when the limit
+    /// stopped it; otherwise the tree index of each node read and the
+    /// composer it chose.
+    fn control_scan(tree: &AxTree, prune: bool) -> Option<(Vec<usize>, Option<usize>)> {
+        let queue = CLAUDE.queue.as_ref().unwrap();
+        let root = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].role == "AXWebArea"
+                    && tree.nodes[i].url.starts_with("https://claude.ai/")
+            })
+            .unwrap();
+        let (mut order, mut nodes, mut subroles, mut aside) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut todo = std::collections::VecDeque::from([(root, None)]);
+        while let Some((i, parent)) = todo.pop_front() {
+            if order.len() >= PLATFORM_NODE_LIMIT {
+                return None;
+            }
+            let n = &tree.nodes[i];
+            let index = order.len();
+            let inside = parent.is_some_and(|p: usize| aside[p])
+                || CLAUDE.is_auxiliary_region(&n.subrole, n);
+            let composer = !inside && CLAUDE.composer.matches(n);
+            let button = n.role == "AXButton";
+            nodes.push(crate::native_send::ControlNode {
+                parent,
+                composer,
+                submit: !inside
+                    && !composer
+                    && (CLAUDE.send.matches(n) || (button && CLAUDE.stop.matches(n))),
+                queued_delete: !inside && button && queue.row.matches(n),
+            });
+            aside.push(inside);
+            subroles.push(n.subrole.clone());
+            order.push(i);
+            if !(prune && CLAUDE.is_transcript_region(&n.subrole, n)) {
+                todo.extend(n.children.iter().map(|&child| (child, Some(index))));
+            }
+        }
+        let chosen = crate::native_scan::choose_composer(CLAUDE.composer_scope, &nodes, &subroles)
+            .map(|index| order[index]);
+        Some((order, chosen))
+    }
+
+    /// What the platform's sidebar scan (`scan_sidebar` for Claude) reads
+    /// to find the session sidebar: the whole app, stopping at the menu
+    /// bar, at each sidebar landmark, and at a transcript when `prune`.
+    fn sidebar_scan(tree: &AxTree, prune: bool) -> (&'static str, Vec<usize>) {
+        let mut navigation = Vec::new();
+        let (_, stop, _) = crate::native_tree::walk_pruned(
+            0usize,
+            PLATFORM_NODE_LIMIT,
+            std::time::Duration::from_secs(60),
+            |&i| Some(tree.nodes[i].children.clone()),
+            |&i| {
+                let n = &tree.nodes[i];
+                if n.role == "AXMenuBar" || (prune && CLAUDE.is_transcript_region(&n.subrole, n)) {
+                    return false;
+                }
+                if crate::native_sidebar::claude_session_sidebar(
+                    &n.identifier,
+                    &n.subrole,
+                    n.label(),
+                ) {
+                    navigation.push(i);
+                    return false;
+                }
+                true
+            },
+        );
+        (stop, navigation)
+    }
+
+    /// A long Claude conversation (2026-11-24: a session whose transcript
+    /// pushed the window past 4,096 elements) stopped the control scan
+    /// before the composer and the sidebar scan before it could prove one
+    /// match, so the session could neither be sent to nor be selected.
+    /// Skipping the transcript leaves both scans complete, with the
+    /// composer and the sidebar they found before; a short conversation
+    /// scans the same with or without it.
+    #[test]
+    fn a_long_claude_transcript_leaves_control_and_sidebar_scans_complete() {
+        let recorded = tree(CLAUDE_CODE_TRANSCRIPT);
+        let (full, composer) = control_scan(&recorded, false).unwrap();
+        let composer = composer.unwrap();
+        assert_eq!(recorded.nodes[composer].description, "Prompt");
+        let (pruned, pruned_composer) = control_scan(&recorded, true).unwrap();
+        assert_eq!(pruned_composer, Some(composer));
+        assert!(pruned.len() < full.len());
+        let (stop, sidebars) = sidebar_scan(&recorded, false);
+        assert_eq!((stop, sidebars.len()), ("complete", 1));
+        assert_eq!(sidebar_scan(&recorded, true), (stop, sidebars.clone()));
+
+        let long = with_long_transcript(recorded);
+        assert_eq!(
+            control_scan(&long, false),
+            None,
+            "the limit stops the old scan"
+        );
+        assert_eq!(sidebar_scan(&long, false).0, "node_limit");
+        let (read, chosen) = control_scan(&long, true).unwrap();
+        assert_eq!(
+            read, pruned,
+            "the scan reads what it read in a short conversation"
+        );
+        assert_eq!(chosen, Some(composer));
+        assert_eq!(sidebar_scan(&long, true), ("complete", sidebars));
     }
 
     /// Claude's queued rows carry their own Send now, so its sends are kept

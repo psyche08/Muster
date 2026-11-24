@@ -16,6 +16,11 @@ to prove that each app's profile finds its controls (ARCHITECTURE §3.6.4).
 | `chatgpt-chat-new.dump` | ChatGPT app in Chat mode, new-chat page | 2026-10-03, Mac-C, dev build of the dumper |
 | `chatgpt-chat.dump` | ChatGPT app in Chat mode, an existing conversation | 2026-10-03, Mac-C, dev build of the dumper |
 | `claude-chat-new.dump` | Claude app in Chat mode, new-chat page with its recents | 2026-10-03, Mac-C, dev build of the dumper |
+| `claude-code-transcript.dump` | Claude app in Code mode, one Claude Code session, idle; menu bar left out | 2026-11-24, Muster 1.1.47 |
+
+`claude-code-transcript.dump` leaves out the menu bar, whose recent-items
+menu names the user's recent apps and documents; the scans it tests do not
+read the menu bar (ADR 0307).
 
 Muster 1.0.31's `ax-dump` stopped at 1,500 nodes, before the ChatGPT app's
 composer in a long conversation. The rows marked "dev build of the dumper"
@@ -44,11 +49,12 @@ scripts/redact-ax-dump.py crates raw.dump crates/muster-agent/tests/fixtures/ax/
 ```
 
 The redactor keeps the tree, roles, subroles, DOM identifiers and every label
-string that Muster's product code names; it replaces all other text with
-stable placeholders (`text-N`, `value-N`). A label starting with vocabulary
-keeps it and loses only the rest, through the same table ("More options for
-text-17" beside the row titled "text-17", "Code, text-5" for a radio with a
-status). The apps' own page URLs keep their paths with fake ids of the same
+string that Muster's product code or an app profile (`profiles/*.toml`)
+names; it replaces all other text with stable placeholders (`text-N`,
+`value-N`). A label starting with vocabulary keeps it and loses only the
+rest, through the same table ("More options for text-17" beside the row
+titled "text-17", "Code, text-5" for a radio with a status). The apps' own
+page URLs keep their paths with fake ids of the same
 form; any other link becomes `https://link-N.invalid/`. Review the kept
 strings and URLs before committing:
 

@@ -421,6 +421,7 @@ fn scan_sidebar(
     let sessions = profile.controls().sessions;
     let mut navigation = Vec::new();
     let mut conversation_views = 0usize;
+    let mut transcripts = 0usize;
     let mut provider_unavailable = false;
     let app_walk = app.walk_pruned_report(|node| {
         let attrs = node.attributes(&["AXRole", "AXSubrole", "AXIdentifier", "AXDOMIdentifier"]);
@@ -453,6 +454,14 @@ fn scan_sidebar(
             }
             return true;
         };
+        // A transcript never holds the session list. Claude nests its sidebar
+        // in the conversation's web area, so the view itself cannot be pruned;
+        // its transcript can, and a long one would otherwise use up the node
+        // budget before the walk can finish (ADR 0307).
+        if profile.controls().is_transcript_region(&subrole, node) {
+            transcripts += 1;
+            return false;
+        }
         // The session list is chrome, never a conversation's transcript, and
         // the same rule already keeps the session scan out of those views
         // (ADR 0056). A transcript read can fail while the app rebuilds it,
@@ -518,7 +527,7 @@ fn scan_sidebar(
     let mut complete = app_walk.1 == "complete";
     let navigation_count = navigation.len();
     trace.record(format_args!(
-        "navigation_areas={navigation_count} conversation_views={conversation_views} app_walk={app_walk:?} (nodes, stop, ms)"
+        "navigation_areas={navigation_count} conversation_views={conversation_views} transcripts={transcripts} app_walk={app_walk:?} (nodes, stop, ms)"
     ));
     let mut candidates = Vec::new();
     let mut rows = 0usize;
@@ -1377,6 +1386,7 @@ fn find_controls_with_budget(
     let mut elements = Vec::new();
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
+    let mut transcripts = 0usize;
     let mut diagnostics = Vec::new();
     let started = std::time::Instant::now();
     let mut stop = None;
@@ -1415,6 +1425,11 @@ fn find_controls_with_budget(
         // A side chat's controls are not the session's (ADR 0221).
         let aside = parent.is_some_and(|p: usize| auxiliary[p])
             || profile.controls().is_auxiliary_region(&subrole, &field);
+        // A transcript holds one element per message and none of these
+        // controls; walking it let a long conversation exhaust MAX_NODES
+        // before the composer was reached (ADR 0307).
+        let transcript = profile.controls().is_transcript_region(&subrole, &field);
+        transcripts += usize::from(transcript);
         let is_composer = !aside && profile.controls().composer.matches(&field);
         let is_send = !aside && !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
@@ -1469,7 +1484,7 @@ fn find_controls_with_budget(
                     field.role, control_label(&field.title), control_label(&field.description), values[5].as_ref().and_then(ax::value_bool)));
             }
         }
-        if let Some(children) = &values[4] {
+        if let Some(children) = values[4].as_ref().filter(|_| !transcript) {
             todo.extend(
                 Element::elements_of(children)
                     .into_iter()
@@ -1534,7 +1549,7 @@ fn find_controls_with_budget(
     } else {
         ComposerButton::Other
     };
-    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
+    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} transcripts={transcripts} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
     Controls {
         composer,
         send,

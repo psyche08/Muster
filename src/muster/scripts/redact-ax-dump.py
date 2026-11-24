@@ -31,6 +31,15 @@ for crate in ["muster-agent/src", "muster-platform/src"]:
             if "{" in lit or len(lit) > 80:
                 continue
             vocab.add(lit.replace('\\"', '"'))
+# The app profiles' labels are selector vocabulary too (ADR 0307). Comment
+# lines are skipped; the other quoted strings are profile data.
+for f in (root / "muster-agent/profiles").glob("*.toml"):
+    for line in f.read_text().splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        for lit in re.findall(r'"((?:[^"\\]|\\.)*)"', line):
+            if lit and "{" not in lit and len(lit) <= 80:
+                vocab.add(lit.replace('\\"', '"'))
 
 PREFIXES = sorted((v for v in vocab if len(v) >= 8), key=len, reverse=True)
 

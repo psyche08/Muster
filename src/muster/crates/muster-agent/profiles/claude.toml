@@ -93,6 +93,11 @@ placeholders = []
 # named "Side chat", with its own Prompt composer and Send button (recorded
 # 2026-11-16, Claude desktop Code tab). Its controls are not the session's.
 auxiliary_regions = ["Side chat"]
+# The conversation's transcript is an application group named "Chat
+# messages" holding one article per message (recorded 2026-11-24, Claude
+# desktop Code tab). The session sidebar, the composer, its Send and Stop all
+# sit outside it, so control and sidebar scans do not walk into it (ADR 0307).
+transcript_regions = ["Chat messages"]
 
 [controls.composer]
 roles = ["AXTextArea"]
