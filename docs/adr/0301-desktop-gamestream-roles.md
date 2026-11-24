@@ -31,3 +31,5 @@ Use the same checksum-verified Boost and JSON release archives on both desktop b
 The pinned Boost.Locale tree also lists its umbrella header above the declared CMake IDE group. Widen that group to its common header directory when preparing the archive on both platforms.
 
 Disable system JSON discovery for the Windows build, including the display-device subproject. Mixing the 3.12 system headers with the pinned 3.11 ABI produced incompatible serializers in the two static libraries.
+
+Build the private Windows executable without configuring Sunshine's standalone WiX/NSIS distributions. Muster's portable packager supplies its own layout and corresponding source offer.

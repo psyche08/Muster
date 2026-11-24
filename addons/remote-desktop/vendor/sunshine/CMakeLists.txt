@@ -89,4 +89,7 @@ include(${CMAKE_MODULE_PATH}/compile_definitions/common.cmake)
 include(${CMAKE_MODULE_PATH}/targets/common.cmake)
 
 # packaging
-include(${CMAKE_MODULE_PATH}/packaging/common.cmake)
+option(MUSTER_ENGINE_ONLY "Build the private engine without standalone installer targets" OFF)
+if(NOT MUSTER_ENGINE_ONLY)
+    include(${CMAKE_MODULE_PATH}/packaging/common.cmake)
+endif()

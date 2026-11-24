@@ -27,7 +27,7 @@ def build(cache, output, msys):
     env = dict(os.environ, PATH=os.pathsep.join([str(ucrt), str(msys / "usr/bin"), os.environ["PATH"]]))
     run = host["run"]
     run(ucrt / "cmake.exe", "-G", "Ninja", "-S", src, "-B", obj,
-        "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTS=OFF", "-DBUILD_DOCS=OFF",
+        "-DMUSTER_ENGINE_ONLY=ON", "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTS=OFF", "-DBUILD_DOCS=OFF",
         "-DSUNSHINE_ENABLE_TRAY=OFF", "-DSUNSHINE_ASSETS_DIR=assets",
         "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + host["boost_source"](cache, boost).as_posix(),
         "-DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=ON",
