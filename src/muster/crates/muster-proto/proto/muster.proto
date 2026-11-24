@@ -238,6 +238,7 @@ message Event {
     TerminalFrame terminal_frame = 31;
     AgentEvent agent_event = 41;
     DesktopSessionProgress desktop_session = 153;
+    bytes desktop_video = 155; // local ordered Annex B H.264 access unit
     bytes desktop_frame = 154; // local RPC only
     Ack desktop_update_ready = 57; // local streaming lease; held until cancellation/disconnect
     ForwardOpened forward_opened = 68;
@@ -284,6 +285,7 @@ message DesktopSessionRequest {
     Ack share_view = 2;
     Ack share_mouse = 3;
     uint64 view_in_window = 4; // local owner window, never forwarded
+    ConfiguredDesktopViewer view_video = 10;
     ConfiguredDesktopViewer view_configured = 9;
     uint64 view_native = 7; // local presentation lease
     DesktopPointer pointer = 8; // local presentation input

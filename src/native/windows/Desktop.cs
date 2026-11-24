@@ -829,7 +829,7 @@ internal sealed class Desktop : Form
                         AddAction(name + " access rules", () =>
                         {
                             using var dialog = new ServiceGrantsDialog(name, wholeScope, placeholder,
-                                network.Members.Where(member => !member.IsSelf && (wholeScope != "desktop.mouse" || member.Kind == "desktop")), original);
+                                network.Members.Where(member => !member.IsSelf && (wholeScope != "desktop.mouse" || member.Kind is "desktop" or "phone")), original);
                             if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
                                 current.Policy is not {} latest) return;
                             if (!Equals(original, read(latest.ServiceGrants ?? new())))

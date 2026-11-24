@@ -13,7 +13,7 @@ impl DesktopStreamSettings {
 
     pub fn valid(&self) -> bool {
         matches!(self.long_edge, 640 | 1280 | 1920 | 2560)
-            && matches!(self.fps, 5 | 10 | 15 | 30)
+            && matches!(self.fps, 5 | 10 | 15 | 30 | 60)
             && matches!(
                 self.bitrate_kbps,
                 0 | 1000 | 3000 | 5000 | 10000 | 20000 | 50000
@@ -37,7 +37,7 @@ impl DesktopStreamSettings {
         if data.len() > 64 {
             return None;
         }
-        Self::decode(data).ok().filter(Self::valid)
+        Self::decode(data).ok().filter(|s| s.valid() && s.fps <= 30)
     }
     /// Minimum distance between frame starts, including the payload cost of the previous frame.
     pub fn frame_interval(&self, bytes: usize) -> Duration {
@@ -54,6 +54,24 @@ impl DesktopStreamSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn video_negotiates_even_pixel_extents_and_encoder_ceiling() {
+        let settings = DesktopStreamSettings {
+            long_edge: 1920,
+            bitrate_kbps: 5000,
+            fps: 30,
+            ..DesktopStreamSettings::ORIGINAL
+        };
+        assert_eq!(
+            DesktopStreamSettings::from_video_hello(&settings.video_hello()),
+            Some(settings)
+        );
+        assert_eq!(settings.video_size(3456, 2234), Some((1920, 1240)));
+        assert_eq!(settings.video_size(641, 481), Some((640, 480)));
+        assert_eq!(settings.video_size(0, 480), None);
+        assert_eq!(settings.video_kbps(1920, 1240), 5000);
+        assert!(DesktopStreamSettings::from_video_hello(b"MDV1").is_none());
+    }
     #[test]
     fn negotiates_valid_profiles_and_paces_actual_payload() {
         let original = DesktopStreamSettings::ORIGINAL;
@@ -73,5 +91,39 @@ mod tests {
         custom.fps = 0;
         assert!(DesktopStreamSettings::from_hello(&custom.hello()).is_none());
         assert!(DesktopStreamSettings::from_hello(b"MDJ2").is_none());
+    }
+}
+
+impl DesktopStreamSettings {
+    pub fn video_hello(&self) -> Vec<u8> {
+        let mut bytes = b"MDV2".to_vec();
+        bytes.extend(self.encode_to_vec());
+        bytes
+    }
+    pub fn from_video_hello(bytes: &[u8]) -> Option<Self> {
+        let data = bytes.strip_prefix(b"MDV2")?;
+        (data.len() <= 64)
+            .then(|| Self::decode(data).ok())
+            .flatten()
+            .filter(Self::valid)
+    }
+    pub fn video_size(&self, width: u32, height: u32) -> Option<(u16, u16)> {
+        if width < 2 || height < 2 || !self.valid() {
+            return None;
+        }
+        let longest = u64::from(width.max(height));
+        let scale = longest.min(u64::from(self.long_edge));
+        let even = |n| ((u64::from(n) * scale / longest).max(2) as u16) & !1;
+        Some((even(width), even(height)))
+    }
+    pub fn video_kbps(&self, width: u16, height: u16) -> u32 {
+        let pixels_per_second = u64::from(width) * u64::from(height) * u64::from(self.fps);
+        let automatic =
+            (pixels_per_second * u64::from(self.jpeg_quality) / 450000).clamp(500, 50000) as u32;
+        if self.bitrate_kbps == 0 {
+            automatic
+        } else {
+            automatic.min(self.bitrate_kbps)
+        }
     }
 }

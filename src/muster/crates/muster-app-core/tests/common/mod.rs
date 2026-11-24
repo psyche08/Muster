@@ -14,10 +14,15 @@ use tokio::sync::Notify;
 pub struct TestShell {
     pub latest: Mutex<app::ViewModel>,
     changed: Notify,
+    pub video: Mutex<Option<(u64, Vec<u8>)>>,
     pub diagnostics: Mutex<Vec<serde_json::Value>>,
 }
 
 impl Shell for TestShell {
+    fn on_desktop_video(&self, session: u64, bytes: &[u8]) {
+        *self.video.lock().unwrap() = Some((session, bytes.to_vec()));
+        self.changed.notify_one();
+    }
     fn on_view(&self, bytes: &[u8]) {
         *self.latest.lock().unwrap() = app::ViewModel::decode(bytes).unwrap();
         self.changed.notify_one();

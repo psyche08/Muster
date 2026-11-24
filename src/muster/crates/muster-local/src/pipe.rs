@@ -236,3 +236,35 @@ mod tests {
         assert_eq!(&data, b"hello");
     }
 }
+
+/// Create the credential directory with a protected, inheritable user-only DACL.
+pub fn create_private_directory(path: &Path) -> io::Result<()> {
+    let sid = current_sid()?;
+    let sddl: Vec<_> = format!("O:{sid}D:P(A;OICI;FA;;;{sid})")
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    let path: Vec<_> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    unsafe {
+        let mut descriptor = null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            1,
+            &mut descriptor,
+            null_mut(),
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let allocation = Local(descriptor);
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: size_of::<SECURITY_ATTRIBUTES>() as _,
+            lpSecurityDescriptor: allocation.0,
+            bInheritHandle: 0,
+        };
+        if windows_sys::Win32::Storage::FileSystem::CreateDirectoryW(path.as_ptr(), &sa) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}

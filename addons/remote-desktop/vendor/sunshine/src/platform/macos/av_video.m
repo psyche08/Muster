@@ -29,6 +29,8 @@
   CFRelease(mode);
 
   AVCaptureScreenInput *screenInput = [[AVCaptureScreenInput alloc] initWithDisplayID:self.displayID];
+  extern bool display_cursor;
+  screenInput.capturesCursor = display_cursor;
   [screenInput setMinFrameDuration:self.minFrameDuration];
 
   if ([self.session canAddInput:screenInput]) {

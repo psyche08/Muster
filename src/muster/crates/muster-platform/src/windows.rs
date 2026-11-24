@@ -50,3 +50,13 @@ impl crate::Platform for Windows {
         session().is_some_and(|s| s.SessionState == WTSActive)
     }
 }
+
+pub fn desktop_pixels() -> Option<(u32, u32)> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplaySettingsW,
+    };
+    let mut mode: DEVMODEW = unsafe { std::mem::zeroed() };
+    mode.dmSize = size_of::<DEVMODEW>() as u16;
+    (unsafe { EnumDisplaySettingsW(std::ptr::null(), ENUM_CURRENT_SETTINGS, &mut mode) } != 0)
+        .then_some((mode.dmPelsWidth, mode.dmPelsHeight))
+}

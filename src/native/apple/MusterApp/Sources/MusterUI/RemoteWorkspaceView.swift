@@ -1,6 +1,6 @@
 #if os(macOS) || os(iOS)
 import SwiftUI
-import ImageIO
+import AVFoundation
 import MusterCore
 
 struct RemoteWorkspaceView: View {
@@ -35,7 +35,7 @@ struct RemoteWorkspaceView: View {
                 Button("Disconnect and connect") { send(.confirmTakeover(workspace.takeover.confirmation)) }
             }
             if workspace.sessionOpen && !workspace.hasTakeover {
-                RemoteSurface(frame: workspace.jpeg, mouse: workspace.mouse) { kind, x, y, scroll in
+                RemoteSurface(video: core.remoteVideo, session: workspace.nativeSession, mouse: workspace.mouse) { kind, x, y, scroll in
                     send(.pointer(.with {
                         $0.session = workspace.nativeSession
                         $0.kind = kind
@@ -74,11 +74,11 @@ private struct StreamSettings: View {
         NavigationStack {
             Form {
                 picker("Longest edge", $draft.longEdge, [640, 1280, 1920, 2560]) { "\($0) px" }
-                picker("Frame rate limit", $draft.fps, [5, 10, 15, 30]) { "\($0) fps" }
+                picker("Frame rate limit", $draft.fps, [5, 10, 15, 30, 60]) { "\($0) fps" }
                 picker("Bitrate limit", $draft.bitrateKbps, [0, 1000, 3000, 5000, 10000, 20000, 50000]) {
                     $0 == 0 ? "Unlimited" : "\($0 / 1000) Mbps"
                 }
-                picker("JPEG quality", $draft.jpegQuality, [45, 65, 85]) { "\($0)%" }
+                picker("Stream quality", $draft.jpegQuality, [45, 65, 85]) { "\($0)%" }
                 Toggle("Show host cursor", isOn: $draft.showCursor)
             }
             .formStyle(.grouped)
@@ -107,10 +107,10 @@ private typealias PointerKind = Muster_V1_DesktopPointer.Kind
 private typealias RemoteInput = (PointerKind, UInt32, UInt32, Int32) -> Void
 
 private struct RemoteSurface: View {
-    let frame: Data
+    @ObservedObject var video: RemoteVideo
+    let session: UInt64
     let mouse: Bool
     let input: RemoteInput
-    @State private var image: CGImage?
     @State private var heldPoint: (UInt32, UInt32)?
     @State private var lastMove = Date.distantPast
 
@@ -118,11 +118,10 @@ private struct RemoteSurface: View {
         GeometryReader { geometry in
             ZStack {
                 Color.black
-                if let image {
-                    let scale = min(geometry.size.width / CGFloat(image.width), geometry.size.height / CGFloat(image.height))
-                    let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-                    Image(decorative: image, scale: 1)
-                        .resizable()
+                if let surface = video.surface, surface.session == session {
+                    let scale = min(geometry.size.width / surface.size.width, geometry.size.height / surface.size.height)
+                    let size = CGSize(width: surface.size.width * scale, height: surface.size.height * scale)
+                    VideoLayerView(layer: surface.layer)
                         .frame(width: size.width, height: size.height)
                         .overlay {
                             if mouse {
@@ -141,15 +140,6 @@ private struct RemoteSurface: View {
                 input(.dragEnd, point.0, point.1, 0)
                 heldPoint = nil
             }
-        }
-        .onChange(of: frame, initial: true) { _, data in
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  CGImageSourceGetType(source) as String? == "public.jpeg",
-                  let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
-                  let width = props[kCGImagePropertyPixelWidth as String] as? Int,
-                  let height = props[kCGImagePropertyPixelHeight as String] as? Int,
-                  (1...2560).contains(width), (1...2560).contains(height) else { image = nil; return }
-            image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         }
     }
 
@@ -170,6 +160,31 @@ private struct RemoteSurface: View {
         input(kind, x, y, lines)
     }
 }
+
+#if os(macOS)
+private struct VideoLayerView: NSViewRepresentable {
+    let layer: AVSampleBufferDisplayLayer
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        if view.layer !== layer { view.layer = layer; view.wantsLayer = true }
+    }
+}
+#else
+private struct VideoLayerView: UIViewRepresentable {
+    let layer: AVSampleBufferDisplayLayer
+    final class Canvas: UIView {
+        override func layoutSubviews() { super.layoutSubviews(); layer.sublayers?.first?.frame = bounds }
+    }
+    func makeUIView(context: Context) -> Canvas { Canvas() }
+    func updateUIView(_ view: Canvas, context: Context) {
+        if layer.superlayer !== view.layer {
+            view.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+            view.layer.addSublayer(layer)
+            layer.frame = view.bounds
+        }
+    }
+}
+#endif
 
 #if os(macOS)
 private struct MacPointer: NSViewRepresentable {

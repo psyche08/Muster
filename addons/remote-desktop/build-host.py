@@ -1,7 +1,6 @@
 """Compile the downstream macOS capture engine for the enclosing Muster bundle."""
 import argparse
 import configparser
-import fcntl
 import hashlib
 import os
 from pathlib import Path
@@ -77,7 +76,7 @@ def checkout(cache, url, revision, nested):
     return dest
 
 
-def host_sources(cache):
+def host_sources(cache, modules=MODULES):
     # Separate source revisions keep stale build objects and removed files out
     # of later builds. Include local edits so the normal dev build tests them.
     if (ROOT.parents[1] / ".git").exists():
@@ -92,12 +91,14 @@ def host_sources(cache):
         h.update(bytes.fromhex(digest(p)))
     pins = (ROOT / "sunshine-submodules.txt").read_bytes()
     h.update(pins)
+    if modules != MODULES:
+        h.update(" ".join(modules).encode())
     src = cache / ("sunshine-" + h.hexdigest()[:20])
     config = configparser.ConfigParser(interpolation=None)
     config.read(VENDOR / ".gitmodules")
     revisions = dict((path, sha) for sha, path in (line.split() for line in pins.decode().splitlines()))
     deps = {}
-    for name in MODULES:
+    for name in modules:
         path = "third-party/" + name
         deps[name] = checkout(cache, config['submodule "' + path + '"']["url"],
                               revisions[path], NESTED.get(name, []))
@@ -109,7 +110,11 @@ def host_sources(cache):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
             for name, dep in deps.items():
-                (tree / "third-party" / name).symlink_to(dep, target_is_directory=True)
+                target = tree / "third-party" / name
+                if os.name == "nt":
+                    shutil.copytree(dep, target, ignore=shutil.ignore_patterns(".git"))
+                else:
+                    target.symlink_to(dep, target_is_directory=True)
             tree.rename(src)
     return src, deps
 
@@ -117,9 +122,40 @@ def host_sources(cache):
 def extract(archive, destination, top):
     if not (destination / top).is_dir():
         with tempfile.TemporaryDirectory(dir=destination) as stage:
-            run("tar", "-xf", archive, "-C", stage)
+            if os.name == "nt" and top in ("boost-1.89.0", "json"):
+                # Windows bsdtar can reject UTF-8 filenames under legacy code pages.
+                with tarfile.open(archive, "r|xz") as source:
+                    for member in source:
+                        path = (Path(stage) / member.name).resolve()
+                        if not path.is_relative_to(stage) or not (member.isdir() or member.isfile()):
+                            raise ValueError("Unexpected source entry: " + member.name)
+                        source.extract(member, stage)
+            else:
+                run("tar", "-xf", archive, "-C", stage)
             (Path(stage) / top).rename(destination / top)
     return destination / top
+
+
+def boost_source(cache, archive):
+    tree = extract(archive, cache, "boost-1.89.0")
+    # The umbrella header is one directory above the Locale header group.
+    cmake = tree / "libs/locale/CMakeLists.txt"
+    source = cmake.read_text()
+    fixed = source.replace('source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/boost/locale"',
+                           'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/boost"')
+    if fixed != source:
+        cmake.write_text(fixed)
+    return tree
+
+
+def cmake_sources(cache):
+    boost = download(cache, "boost-1.89.0.tar.xz",
+                     "https://github.com/boostorg/boost/releases/download/boost-1.89.0/boost-1.89.0-cmake.tar.xz",
+                     "67acec02d0d118b5de9eb441f5fb707b3a1cdd884be00ca24b9a73c995511f74")
+    json = download(cache, "json-3.11.3.tar.xz",
+                    "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz",
+                    "d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d")
+    return boost, json
 
 
 def build(cache, executable, sources, identity):
@@ -139,12 +175,7 @@ def build(cache, executable, sources, identity):
                        "f3091b7ccb41a11d877b7406b7afc9dd9c5003d299c6bb33cff882127bc06c91")
     opus = download(cache, "opus-1.6.1.tar.gz", "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz",
                     "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1")
-    boost = download(cache, "boost-1.89.0.tar.xz",
-                     "https://github.com/boostorg/boost/releases/download/boost-1.89.0/boost-1.89.0-cmake.tar.xz",
-                     "67acec02d0d118b5de9eb441f5fb707b3a1cdd884be00ca24b9a73c995511f74")
-    json = download(cache, "json-3.11.3.tar.xz",
-                    "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz",
-                    "d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d")
+    boost, json = cmake_sources(cache)
     # Keep minimum deployment settings in the cache identity too.
     minimum = os.environ.get("MACOSX_DEPLOYMENT_TARGET") or "14.0"
     config = cache / (arch + "-" + minimum)
@@ -173,7 +204,7 @@ def build(cache, executable, sources, identity):
         "-DOPENSSL_CRYPTO_LIBRARY=" + str(prefix / "lib/libcrypto.a"),
         "-DCMAKE_PREFIX_PATH=" + str(prefix), "-DOpus_LIBRARY=" + str(prefix / "lib/libopus.a"),
         "-DFFMPEG_PREPARED_BINARIES=" + str(prepared), "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + minimum,
-        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(extract(boost, cache, "boost-1.89.0")),
+        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(boost_source(cache, boost)),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + str(extract(json, cache, "json")))
     run("cmake", "--build", obj, "--target", "sunshine", "--parallel", jobs)
     exe = obj / "muster-desktop-host"
@@ -182,7 +213,14 @@ def build(cache, executable, sources, identity):
         if not library.startswith(("/usr/lib/", "/System/Library/")):
             raise ValueError("Capture host requires an external runtime library: " + library)
     cache_key = src.name + "-" + digest(Path(__file__))[:20] + "-" + arch
-    offer = cache / (cache_key + "-sources.tar.gz")
+    viewer_sources = [ROOT / "build-apple-viewer.py", ROOT / "CMakeLists.txt", ROOT / "viewer/apple.c"]
+    viewer_core = ROOT / "vendor/moonlight-pc/moonlight-common-c/moonlight-common-c"
+    viewer_sources.extend(sorted(p for p in viewer_core.rglob("*") if p.is_file()))
+    viewer_digest = hashlib.sha256()
+    for path in viewer_sources:
+        viewer_digest.update(path.relative_to(ROOT).as_posix().encode())
+        viewer_digest.update(bytes.fromhex(digest(path)))
+    offer = cache / (cache_key + "-" + viewer_digest.hexdigest()[:20] + "-sources.tar.gz")
     if not offer.is_file():
         # The FFmpeg build recipes reference gitlinks. Include those exact
         # sources with the downstream code, compiler inputs and dependency pins.
@@ -198,6 +236,10 @@ def build(cache, executable, sources, identity):
                 def downstream(entry):
                     return None if entry.issym() else entry
                 tar.add(src, "remote-desktop/vendor/sunshine", filter=downstream)
+                for path in viewer_sources:
+                    tar.add(path, "remote-desktop/" + path.relative_to(ROOT).as_posix())
+                for name in ("moonlight_loopback.c", "sunshine_bootstrap.cpp"):
+                    tar.add(ROOT / "tests" / name, "remote-desktop/tests/" + name)
                 tar.add(ROOT / "build-host.py", "remote-desktop/build-host.py")
                 tar.add(ROOT / "sunshine-submodules.txt", "remote-desktop/sunshine-submodules.txt")
                 for name, tree in deps.items():
@@ -226,6 +268,14 @@ def build(cache, executable, sources, identity):
             shutil.copy2(offer, staged)
             staged.replace(sources)
         candidate.replace(executable)
+        # Keep the GPL controller in its own executable on macOS.
+        import runpy
+        viewer = runpy.run_path(str(Path(__file__).with_name("build-apple-viewer.py")))
+        viewer_dir = viewer["build"](cache, "macosx", arch)
+        shutil.copy2(viewer_core / "LICENSE.txt", resources / "Moonlight-LICENSE.txt")
+        controller = executable.with_name("muster-moonlight")
+        shutil.copy2(viewer_dir / "muster-moonlight", controller)
+        run("codesign", "--force", "--options", "runtime", "--sign", identity, controller)
         # An incremental Xcode or developer build may still have the former bundle.
         legacy = contents / "Helpers/Sunshine.app"
         if legacy.is_dir():
@@ -233,6 +283,7 @@ def build(cache, executable, sources, identity):
 
 
 if __name__ == "__main__":
+    import fcntl
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("cache", type=Path)
     p.add_argument("executable", type=Path)

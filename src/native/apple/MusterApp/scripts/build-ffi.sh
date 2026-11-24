@@ -27,6 +27,7 @@ else
   RUSTFLAGS="${RUSTFLAGS:-} -C force-frame-pointers=yes"
   export RUSTFLAGS
 fi
+export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-17.0}"
 for target in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
   rustup target add "$target" >/dev/null 2>&1 || true
   # shellcheck disable=SC2086

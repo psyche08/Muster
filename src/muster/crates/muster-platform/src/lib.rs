@@ -23,6 +23,32 @@ pub mod engine_socket;
 
 use std::sync::Arc;
 
+#[cfg(windows)]
+pub use windows::desktop_pixels;
+
+#[cfg(target_os = "macos")]
+pub fn desktop_pixels() -> Option<(u32, u32)> {
+    unsafe extern "C" {
+        fn CGMainDisplayID() -> u32;
+        fn CGDisplayCopyDisplayMode(display: u32) -> *const std::ffi::c_void;
+        fn CGDisplayModeGetPixelWidth(mode: *const std::ffi::c_void) -> usize;
+        fn CGDisplayModeGetPixelHeight(mode: *const std::ffi::c_void) -> usize;
+        fn CGDisplayModeRelease(mode: *const std::ffi::c_void);
+    }
+    unsafe {
+        let mode = CGDisplayCopyDisplayMode(CGMainDisplayID());
+        if mode.is_null() {
+            return None;
+        }
+        let size = (
+            CGDisplayModeGetPixelWidth(mode) as u32,
+            CGDisplayModeGetPixelHeight(mode) as u32,
+        );
+        CGDisplayModeRelease(mode);
+        Some(size)
+    }
+}
+
 /// What only the operating system knows about the console session.
 pub trait Platform: Send + Sync {
     fn locked_use(&self, _dir: &std::path::Path) -> Option<Arc<dyn locked_use::LockedUseOs>> {

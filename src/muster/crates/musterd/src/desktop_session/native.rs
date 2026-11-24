@@ -19,6 +19,11 @@ const MAX_INPUT: usize = 24;
 #[derive(Default)]
 pub(crate) struct PointerSlot(Mutex<Option<(DeviceId, u64, mpsc::Sender<[u8; 6]>)>>);
 impl PointerSlot {
+    pub(super) fn attach(&self, peer: DeviceId, id: u64) -> mpsc::Receiver<[u8; 6]> {
+        let (sender, receiver) = mpsc::channel(MAX_INPUT);
+        *self.0.lock().unwrap() = Some((peer, id, sender));
+        receiver
+    }
     pub(super) fn send(&self, peer: DeviceId, p: DesktopPointer) -> Result<(), Error> {
         let x = u16::try_from(p.x).map_err(|_| unavailable("invalid pointer x"))?;
         let y = u16::try_from(p.y).map_err(|_| unavailable("invalid pointer y"))?;

@@ -37,20 +37,21 @@ impl Handler for Desktop {
                     assert_eq!(request.device, "host");
                     use v1::desktop_session_request::Action;
                     let native = match request.action {
-                        Some(Action::ViewConfigured(view)) => {
+                        Some(Action::ViewVideo(view)) => {
                             assert_ne!(view.session, 0);
-                            assert!(self.0.is_some());
-                            assert_eq!(view.settings, self.0);
-                            true
-                        }
-                        Some(Action::ViewNative(_)) => {
-                            assert!(self.0.is_none());
+                            assert_eq!(
+                                view.settings,
+                                Some(self.0.unwrap_or(v1::DesktopStreamSettings::ORIGINAL))
+                            );
                             true
                         }
                         _ => false,
                     };
                     if native {
-                        events.send(Ev::DesktopFrame(vec![1, 2, 3])).await.unwrap();
+                        events
+                            .send(Ev::DesktopVideo(vec![0, 0, 1, 5]))
+                            .await
+                            .unwrap();
                     }
                     events
                         .send(Ev::DesktopSession(v1::DesktopSessionProgress {
@@ -155,7 +156,17 @@ async fn exercise(native: bool, settings: Option<v1::DesktopStreamSettings>) {
         v.remote_workspace.as_ref().is_some_and(|r| {
             r.session_open
                 && r.status == "Viewing desktop"
-                && (!native || r.mouse && r.native_session != 0 && r.jpeg == [1, 2, 3])
+                && (!native
+                    || r.mouse
+                        && r.native_session != 0
+                        && shell
+                            .video
+                            .lock()
+                            .unwrap()
+                            .as_ref()
+                            .is_some_and(|(id, data)| {
+                                *id == r.native_session && data == &[0, 0, 1, 5]
+                            }))
         })
     };
     shell.wait(viewing).await;

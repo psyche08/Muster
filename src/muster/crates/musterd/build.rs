@@ -17,6 +17,9 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
+        apple_video();
+    }
     let head = head();
     println!(
         "cargo:rustc-env=MUSTER_GIT_COMMIT={}",
@@ -77,4 +80,51 @@ fn git(args: &[&str]) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn apple_video() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../addons/remote-desktop");
+    let sdk = if env::var("TARGET").unwrap().ends_with("-sim")
+        || env::var("TARGET").unwrap().starts_with("x86_64")
+    {
+        "iphonesimulator"
+    } else {
+        "iphoneos"
+    };
+    let arch = if env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64" {
+        "arm64"
+    } else {
+        "x86_64"
+    };
+    let out = std::path::PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let cache = env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or(out)
+        .join("desktop-host");
+    for path in [
+        "build-apple-viewer.py",
+        "build-host.py",
+        "CMakeLists.txt",
+        "viewer/apple.c",
+        "vendor/moonlight-pc/moonlight-common-c",
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(path).display());
+    }
+    assert!(
+        Command::new("python3")
+            .arg(root.join("build-apple-viewer.py"))
+            .arg(&cache)
+            .args([sdk, arch])
+            .status()
+            .unwrap()
+            .success()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}",
+        cache
+            .join("moonlight")
+            .join(format!("{sdk}-{arch}"))
+            .display()
+    );
+    println!("cargo:rustc-link-lib=static=muster_apple_video");
 }

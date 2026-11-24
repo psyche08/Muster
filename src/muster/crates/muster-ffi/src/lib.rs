@@ -34,7 +34,9 @@ pub struct MusterPlatform {
 
 /// The platform's callbacks as a Shell. The platform promises its `ctx`
 /// may be used from any thread.
+type VideoCallback = unsafe extern "C" fn(*mut c_void, u64, *const u8, usize);
 struct CShell {
+    video: std::sync::Mutex<Option<VideoCallback>>,
     platform: MusterPlatform,
 }
 
@@ -59,6 +61,11 @@ impl CShell {
 }
 
 impl Shell for CShell {
+    fn on_desktop_video(&self, id: u64, data: &[u8]) {
+        if let Some(f) = *self.video.lock().unwrap() {
+            unsafe { f(self.platform.ctx, id, data.as_ptr(), data.len()) };
+        }
+    }
     fn on_view(&self, view_model: &[u8]) {
         if let Some(f) = self.platform.on_view {
             // SAFETY: the slice outlives the call.
@@ -194,7 +201,10 @@ pub unsafe extern "C" fn muster_core_new(
     };
     // SAFETY: platform is valid per the contract; we copy the struct.
     let platform = unsafe { std::ptr::read(platform) };
-    let shell = Arc::new(CShell { platform });
+    let shell = Arc::new(CShell {
+        platform,
+        video: Default::default(),
+    });
     let app_config = AppConfig {
         dir: config.dir,
         mode,
@@ -490,4 +500,16 @@ pub unsafe extern "C" fn muster_is_presence_challenge(bytes: *const u8, length: 
     }
     muster_app_core::is_presence_challenge(unsafe { std::slice::from_raw_parts(bytes, length) })
         as u8
+}
+
+/// # Safety
+/// The core and callback context must remain valid until core shutdown.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn muster_core_set_video_callback(
+    core: *mut MusterCore,
+    cb: Option<VideoCallback>,
+) {
+    if let Some(core) = unsafe { core.as_ref() } {
+        *core.shell.video.lock().unwrap() = cb;
+    }
 }

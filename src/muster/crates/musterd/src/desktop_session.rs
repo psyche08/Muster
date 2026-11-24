@@ -1,7 +1,7 @@
 //! A local streaming RPC is the lifetime of the local user's explicit choice.
 #[cfg(any(windows, target_vendor = "apple", test))]
 pub(super) mod confirmation;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(windows, target_os = "macos", test))]
 pub(super) mod occupancy;
 pub(super) mod permissions;
 use crate::{Daemon, Error};
@@ -11,7 +11,7 @@ use muster_rpc::EventSink;
 use std::sync::Arc;
 #[cfg(any(windows, target_vendor = "apple"))]
 mod engine;
-#[cfg(target_os = "macos")]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) mod host;
 #[cfg(any(target_os = "macos", test))]
 mod idle;
@@ -54,6 +54,12 @@ pub(super) async fn run(
         result = async {
             match action {
                 #[cfg(target_vendor="apple")]
+                Action::ViewVideo(view) if view.session != 0 => {
+                    let settings = view.settings.filter(|s| s.valid())
+                        .ok_or_else(|| Error::Invalid("invalid video settings".into()))?;
+                    apple_viewer::view(daemon, peer, view.session, settings, &events).await
+                }
+                #[cfg(target_vendor="apple")]
                 Action::ViewNative(id) if id != 0 => native::view(daemon, peer, id, v1::DesktopStreamSettings::ORIGINAL, &events).await,
                 #[cfg(target_vendor="apple")]
                 Action::ViewConfigured(view) if view.session != 0 => {
@@ -71,15 +77,23 @@ pub(super) async fn run(
 
 pub(super) fn available() -> (bool, bool) {
     #[cfg(target_os = "macos")]
-    return (engine::program(host::CAPTURE_HOST).is_ok(), true);
+    return (
+        engine::program(host::CAPTURE_HOST).is_ok(),
+        engine::program("muster-moonlight").is_ok(),
+    );
     #[cfg(windows)]
-    return (false, engine::program(viewer::MOONLIGHT).is_ok());
+    return (
+        engine::program(host::CAPTURE_HOST).is_ok(),
+        engine::program(viewer::MOONLIGHT).is_ok(),
+    );
     #[cfg(target_os = "ios")]
     return (false, true);
     #[cfg(not(any(windows, target_vendor = "apple")))]
     (false, false)
 }
 
+#[cfg(target_vendor = "apple")]
+mod apple_viewer;
 #[cfg(any(windows, target_vendor = "apple"))]
 mod handshake;
 #[cfg(target_vendor = "apple")]

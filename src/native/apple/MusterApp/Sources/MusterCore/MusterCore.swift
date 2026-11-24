@@ -11,6 +11,9 @@ public typealias Screen = Muster_App_Screen
 public typealias Lifecycle = Muster_App_Lifecycle
 
 public final class MusterCore: MusterShell {
+    #if os(macOS) || os(iOS)
+    public let remoteVideo = RemoteVideo()
+    #endif
     public let composerDraft = ComposerDraftSource()
     public let keys: MusterKeys
     private(set) var runtime: MusterRuntime!

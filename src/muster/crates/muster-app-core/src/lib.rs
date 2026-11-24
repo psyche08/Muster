@@ -9,12 +9,12 @@ pub mod backend;
 mod cache;
 mod catalog;
 mod chat_hosts;
+mod desktop_preferences;
 pub mod desktop_startup;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod desktop_update;
 mod drafts;
 mod locked_use_auth;
-mod desktop_preferences;
 mod render;
 mod send_diagnostics;
 mod session_diagnostics;
@@ -67,6 +67,8 @@ impl From<muster_rpc::Error> for Error {
 pub trait Shell: Send + Sync + 'static {
     /// A new ViewModel (encoded `app.ViewModel`).
     fn on_view(&self, view_model: &[u8]);
+    /// Ordered Annex B access unit for the current local Remote lease.
+    fn on_desktop_video(&self, _session: u64, _unit: &[u8]) {}
     /// Perform an Effect (encoded `app.Effect`) and answer with `effect_result`.
     fn on_effect(&self, id: u64, effect: &[u8]);
     /// The device key as a 65-byte X9.63 point; `None` uses a software key
