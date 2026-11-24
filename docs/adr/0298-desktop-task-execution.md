@@ -28,3 +28,9 @@ Exercise two providers and two hosts, FIFO order, cancellation, a lease queued b
 
 
 At `cef74bb6` the macOS agent, platform and daemon all-feature library suites passed with 449, 61 and 174 tests respectively. Eleven opt-in cases were skipped. The tests exercise FIFO cancellation and start time, outstanding blocking work, signed challenge admission, exact project resolution, input at 2.9 seconds and a focus change during handoff. The arm64 release daemon built with its Secure Enclave feature. Its signed test application passed strict nested signature verification. The two background device receipts in ADR 0297 came from an isolated instance of that daemon on an unlocked console. Automated tests provided the foreground handoff and Locked Use coverage.
+
+### Locked Use device acceptance, 2026-11-24
+
+The installed system `musterd` at `0818fceb` admitted a scheduled creation on a locked Mac. During OS authorization the watchdog detected a change in local input. The scheduler recorded `not started`, no prompt was submitted, and the temporary grant was revoked. The Mac remained locked.
+
+After the input generation stayed stable, a new Manager request obtained a fresh scoped lease. The plugin authorized the operation under the display cover, and Codex submitted the prompt in the background. Once the provider queue and AX work drained, the daemon relocked the Mac under cover and then released the cover. The scheduler initially recorded `unknown`. After relock it reconciled the original submission against provider evidence and returned an applied receipt. The test grant was revoked. [ADR 0297](0297-codex-background-project-picker.md#locked-use-device-acceptance-2026-11-24) records the picker route and directory check.
