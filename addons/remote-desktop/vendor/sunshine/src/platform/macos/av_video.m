@@ -33,7 +33,7 @@
   screenInput.capturesCursor = display_cursor;
   [screenInput setMinFrameDuration:self.minFrameDuration];
 
-  if ([self.session canAddInput:screenInput]) {
+  if (screenInput && [self.session canAddInput:screenInput]) {
     [self.session addInput:screenInput];
   } else {
     [screenInput release];
@@ -116,3 +116,45 @@
 }
 
 @end
+
+// Local operator diagnostic. Use the same display input and sample callback as
+// streaming, but do not map, encode or return pixel data.
+int muster_display_sample(void) {
+  @autoreleasepool {
+    CGDirectDisplayID display = CGMainDisplayID();
+    bool permitted = CGPreflightScreenCaptureAccess();
+    printf("online=%d active=%d asleep=%d screen_recording=%d\n",
+           CGDisplayIsOnline(display), CGDisplayIsActive(display),
+           CGDisplayIsAsleep(display), permitted);
+    fflush(stdout);
+    if (!permitted || !CGDisplayIsOnline(display)) {
+      puts("sample=unavailable");
+      return 0;
+    }
+    AVVideo *video = [[AVVideo alloc] initWithDisplay:display frameRate:10];
+    if (!video) {
+      puts("sample=no-input");
+      return 0;
+    }
+    dispatch_semaphore_t ready = dispatch_semaphore_create(0);
+    __block size_t width = 0, height = 0;
+    dispatch_semaphore_t capturing = [video capture:^bool(CMSampleBufferRef sample) {
+      CVImageBufferRef image = CMSampleBufferGetImageBuffer(sample);
+      if (width == 0 && image && CMSampleBufferDataIsReady(sample)) {
+        width = CVPixelBufferGetWidth(image);
+        height = CVPixelBufferGetHeight(image);
+        dispatch_semaphore_signal(ready);
+      }
+      return true;
+    }];
+    bool received = capturing && dispatch_semaphore_wait(ready, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
+    [video.session stopRunning];
+    if (received) {
+      printf("sample=fresh size=%zux%zu\n", width, height);
+    } else {
+      puts("sample=no-frame");
+    }
+    [video release];
+    return 0;
+  }
+}

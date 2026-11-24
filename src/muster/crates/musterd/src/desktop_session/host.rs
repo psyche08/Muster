@@ -253,6 +253,32 @@ pub(crate) fn admit(
     Some(muster_net::remote_desktop::Sharing::new(peer, access, host))
 }
 
+/// Local diagnostics exercise the installed capture helper without opening a peer session.
+#[cfg(target_os = "macos")]
+pub(crate) async fn display_sample(daemon: &Daemon) -> Result<String, Error> {
+    if daemon.covered() {
+        return Err(unavailable("display is covered"));
+    }
+    let _slot = daemon
+        .desktop_slot
+        .try_acquire()
+        .map_err(|_| unavailable("desktop in use"))?;
+    let mut command = Command::new(program(CAPTURE_HOST)?);
+    command
+        .arg("--muster-display-sample")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    let result = timeout(Duration::from_secs(12), command.output())
+        .await
+        .map_err(|_| unavailable("display sampler timed out"))?
+        .map_err(|_| unavailable("display sampler could not start"))?;
+    if !result.status.success() {
+        return Err(unavailable("display sampler failed"));
+    }
+    Ok(String::from_utf8_lossy(&result.stdout).trim().to_owned())
+}
+
 async fn start(
     executable: &Path,
     parked: Option<HostProcess>,

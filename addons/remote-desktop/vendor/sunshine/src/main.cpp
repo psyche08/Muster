@@ -568,7 +568,16 @@ static int run_host(int argc, char *argv[]) {
   return lifetime::desired_exit_code;
 }
 
+#ifdef __APPLE__
+extern "C" int muster_display_sample();
+#endif
+
 int main(int argc, char *argv[]) {
+#ifdef __APPLE__
+  if (argc == 2 && std::string_view(argv[1]) == "--muster-display-sample") {
+    return muster_display_sample();
+  }
+#endif
 #ifdef _WIN32
   if (argc != 3 || std::string_view(argv[1]) != "--muster-managed" || !platf::appdata().is_absolute()) {
     return 1;
