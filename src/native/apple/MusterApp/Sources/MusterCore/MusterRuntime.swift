@@ -154,6 +154,13 @@ public final class MusterRuntime {
             throw MusterRuntimeError.create(message)
         }
         core = created
+        #if os(macOS) || os(iOS)
+        muster_core_set_video_callback(created) { ctx, id, bytes, len in
+            guard let ctx, let bytes else { return }
+            let runtime = Unmanaged<MusterRuntime>.fromOpaque(ctx).takeUnretainedValue()
+            (runtime.shell as? MusterCore)?.remoteVideo.submit(session: id, bytes: Data(bytes: bytes, count: len))
+        }
+        #endif
     }
 
     deinit {

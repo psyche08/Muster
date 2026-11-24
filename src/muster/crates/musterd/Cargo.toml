@@ -57,9 +57,11 @@ rustls.workspace = true
 async-trait = "0.1"
 rand.workspace = true
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 rcgen = { workspace = true, features = ["pem"] }
 tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
 rustls-platform-verifier = "0.7.1"
 
 [target.'cfg(windows)'.dependencies]

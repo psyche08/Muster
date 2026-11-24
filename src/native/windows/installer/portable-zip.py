@@ -30,6 +30,10 @@ def build(stage, version, output):
         runtime, sources = stage_runtime(work)
         viewer_dir = Path(os.environ["MUSTER_WINDOWS_VIEWER"])
         viewer_payload = ("muster-moonlight.exe", "Viewer-Notices.txt")
+        host_root = viewer_dir / "Sunshine"
+        if not (host_root / "muster-desktop-host.exe").is_file() or not (host_root / "assets/shaders").is_dir():
+            raise ValueError("Missing private Sunshine host or its shader assets")
+        viewer_payload += tuple(p.relative_to(viewer_dir).as_posix() for p in sorted(host_root.rglob("*")) if p.is_file())
         archive = work / name
         checksums = {}
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as package:
@@ -44,6 +48,7 @@ def build(stage, version, output):
                         raise ValueError(f"Expected x64 PE image in {item}")
                 checksums[item] = sha256(data).hexdigest()
                 package.writestr("payload/" + item, data)
+            package.write(viewer_dir / "Host-Sources.zip", "Host-Sources.zip", compress_type=ZIP_STORED)
             viewer_source = viewer_dir / "Viewer-Sources.zip"
             with ZipFile(viewer_source) as source_zip:
                 if source_zip.testzip() or "remote-desktop/viewer/windows.cpp" not in source_zip.namelist():

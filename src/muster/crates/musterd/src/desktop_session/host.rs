@@ -7,7 +7,6 @@ use muster_net::remote_desktop::{
 };
 use std::{
     future::Future,
-    os::unix::fs::PermissionsExt,
     path::Path,
     pin::Pin,
     process::Stdio,
@@ -20,14 +19,24 @@ use tokio::{
     time::{sleep, timeout},
 };
 
+#[cfg(windows)]
+pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-desktop-host.exe";
+#[cfg(target_os = "macos")]
 pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
 
 pub(super) fn console_ready(daemon: &Daemon) -> bool {
-    !daemon.covered()
+    #[cfg(windows)]
+    return !daemon.covered() && {
+        let p = muster_platform::platform();
+        p.on_console() && !p.locked()
+    };
+    #[cfg(target_os = "macos")]
+    return !daemon.covered()
         && muster_platform::macos::lock::session_state()
-            .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked)
+            .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked);
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) type IdleHost = super::idle::IdleSlot<HostProcess>;
 
 pub(crate) struct HostProcess {
@@ -37,6 +46,7 @@ pub(crate) struct HostProcess {
     status: tokio::process::ChildStdout,
 }
 
+#[cfg(target_os = "macos")]
 impl HostProcess {
     async fn reset(mut self) -> Option<Self> {
         self.owner.write_all(b"P").await.ok()?;
@@ -57,11 +67,13 @@ impl HostProcess {
 }
 
 // Dropping the broker future also runs this path on a transport disconnect.
+#[cfg(target_os = "macos")]
 struct ActiveHost<'a> {
     host: &'a Host,
     process: Option<HostProcess>,
 }
 
+#[cfg(target_os = "macos")]
 impl Drop for ActiveHost<'_> {
     fn drop(&mut self) {
         if let Some(process) = self.process.take()
@@ -108,7 +120,14 @@ impl Host {
         let native = hello
             .as_deref()
             .and_then(muster_proto::v1::DesktopStreamSettings::from_hello);
-        if native.is_none() && hello.as_deref() != Some(HELLO) {
+        let video = hello
+            .as_deref()
+            .and_then(muster_proto::v1::DesktopStreamSettings::from_video_hello);
+        #[cfg(windows)]
+        if native.is_some() {
+            return Err(unavailable("this host requires Moonlight"));
+        }
+        if video.is_none() && native.is_none() && hello.as_deref() != Some(HELLO) {
             return Err(unavailable("unsupported desktop viewer"));
         }
         let daemon = self
@@ -148,6 +167,7 @@ impl Host {
             .await
             .map_err(|_| unavailable("previous desktop viewer is still closing"))?
             .map_err(|_| unavailable("desktop service stopped"))?;
+        #[cfg(target_os = "macos")]
         if let Some(settings) = native {
             return super::native::host(session, settings).await;
         }
@@ -156,12 +176,35 @@ impl Host {
             mouse: session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };
+        let (width, height) = if let Some(settings) = video {
+            let (w, h) = muster_platform::desktop_pixels()
+                .ok_or_else(|| unavailable("cannot read primary display dimensions"))?;
+            settings
+                .video_size(w, h)
+                .ok_or_else(|| unavailable("invalid host display size"))?
+        } else {
+            (1280, 720)
+        };
+        let fps = video.map_or(30, |p| p.fps);
+        let mode = format!("{width}x{height}x{fps}");
+        #[cfg(target_os = "macos")]
         let parked = daemon.desktop_idle.take().await;
+        #[cfg(windows)]
+        let parked = None;
         if !self.console_ready() {
             return Err(unavailable("desktop permission ended"));
         }
         let executable = program(CAPTURE_HOST)?;
-        let process = match start(&executable, parked, ports, &launch).await {
+        let process = match start(
+            &executable,
+            parked,
+            ports,
+            &launch,
+            &mode,
+            video.is_none_or(|s| s.show_cursor),
+        )
+        .await
+        {
             Ok(started) => started,
             Err(error) => {
                 session.send_control(CAPTURE_UNAVAILABLE).await?;
@@ -170,11 +213,20 @@ impl Host {
             }
         };
         let engine = process.engine.clone();
+        #[cfg(windows)]
+        let _active = process;
+        #[cfg(target_os = "macos")]
         let _active = ActiveHost {
             host: self,
             process: Some(process),
         };
-        session.send_control(&launch.encode()).await?;
+        let mut reply = launch.encode().to_vec();
+        if video.is_some() {
+            reply[3] = b'2';
+            reply.extend(width.to_be_bytes());
+            reply.extend(height.to_be_bytes());
+        }
+        session.send_control(&reply).await?;
         tokio::select! {
             biased;
             error=engine.exited()=>Err(error),
@@ -206,20 +258,36 @@ async fn start(
     parked: Option<HostProcess>,
     ports: EnginePorts,
     launch: &Launch,
+    mode: &str,
+    cursor: bool,
 ) -> Result<HostProcess, Error> {
     let (directory, warm) = if let Some(host) = parked.filter(|host| host.engine.pid().is_some()) {
         (host.directory, Some((host.engine, host.owner, host.status)))
     } else {
         (
-            tempfile::Builder::new()
-                .prefix("muster-desktop-")
-                .permissions(std::fs::Permissions::from_mode(0o700))
-                .tempdir()
-                .map_err(|_| unavailable("cannot create a private engine directory"))?,
+            {
+                let mut builder = tempfile::Builder::new();
+                builder.prefix("muster-desktop-");
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    builder.permissions(std::fs::Permissions::from_mode(0o700));
+                }
+                builder.tempdir()
+            }
+            .map_err(|_| unavailable("cannot create a private engine directory"))?,
             None,
         )
     };
     let dir = directory.path();
+    #[cfg(windows)]
+    let private = dir.join("session");
+    #[cfg(windows)]
+    let dir = {
+        muster_local::create_private_directory(&private)
+            .map_err(|_| unavailable("cannot protect host credentials"))?;
+        private.as_path()
+    };
     let tls_error = || unavailable("cannot set up private desktop engine TLS");
     let server =
         rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).map_err(|_| tls_error())?;
@@ -274,8 +342,15 @@ async fn start(
         (engine, owner, status)
     } else {
         let mut cmd = Command::new(executable);
-        cmd.current_dir(dir)
-            .arg("--muster-managed")
+        #[cfg(target_os = "macos")]
+        cmd.current_dir(dir);
+        #[cfg(windows)]
+        cmd.current_dir(
+            executable
+                .parent()
+                .ok_or_else(|| unavailable("missing host directory"))?,
+        );
+        cmd.arg("--muster-managed")
             .arg(dir.join("sunshine.conf"))
             .env("MUSTER_DESKTOP_SESSION_DIR", dir)
             .stdout(Stdio::piped());
@@ -287,6 +362,9 @@ async fn start(
         )
     };
     let mut bootstrap = Vec::from(*b"MST1");
+    if !cursor {
+        bootstrap[3] = b'2';
+    }
     bootstrap.push(launch.mouse as u8);
     bootstrap.extend(
         u16::try_from(client_cert.len())
@@ -326,7 +404,7 @@ async fn start(
         .get(format!("{origin}/launch"))
         .query(&[
             ("appid", "0"),
-            ("mode", "1280x720x30"),
+            ("mode", mode),
             ("sops", "0"),
             ("rikey", &key),
             ("rikeyid", &iv.to_string()),
@@ -340,12 +418,9 @@ async fn start(
         .map_err(|_| unavailable("private desktop launch connection failed"))?;
     let xml = bounded_xml(response).await?;
     if xml.contains("status_code=\"503\"") {
-        let message = if launch.mouse {
-            "host capture/encoder unavailable (503); check the Mac display and Muster's Screen Recording and Accessibility permissions"
-        } else {
-            "host capture/encoder unavailable (503); check the Mac display and Muster's Screen Recording permission"
-        };
-        return Err(unavailable(message));
+        return Err(unavailable(
+            "host capture/encoder unavailable (503); check the interactive display and screen capture permissions",
+        ));
     }
     if !xml.contains("status_code=\"200\"")
         || !xml.contains("<gamesession>1</gamesession>")
@@ -393,7 +468,15 @@ mod tests {
             mouse: false,
             key: rand::random(),
         };
-        let result = start(Path::new(&executable), None, EnginePorts::MUSTER, &launch).await;
+        let result = start(
+            Path::new(&executable),
+            None,
+            EnginePorts::MUSTER,
+            &launch,
+            "1280x720x30",
+            true,
+        )
+        .await;
         match result {
             Ok(_process) => eprintln!("Private host accepted encrypted view-only launch"),
             Err(error) => panic!("{error}"),

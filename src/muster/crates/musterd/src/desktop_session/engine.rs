@@ -111,14 +111,12 @@ pub(super) const HELLO: &[u8; 4] = b"MDV1";
 pub(super) const CAPTURE_UNAVAILABLE: &[u8] = b"capture-unavailable";
 // The host fixes the cipher, profile and ports. Only the one-time input key,
 // IV prefix, and the granted input mode need to cross PeerLink.
-#[cfg(not(target_os = "ios"))]
 pub(super) struct Launch {
     pub mouse: bool,
     pub key: [u8; 20],
 }
-#[cfg(not(target_os = "ios"))]
 impl Launch {
-    #[cfg(any(target_os = "macos", test))]
+    #[cfg(any(target_os = "macos", windows, test))]
     pub fn encode(&self) -> [u8; 25] {
         let mut bytes = [0; 25];
         bytes[..4].copy_from_slice(b"MDS1");
@@ -126,11 +124,10 @@ impl Launch {
         bytes[5..].copy_from_slice(&self.key);
         bytes
     }
-    #[cfg(any(windows, test))]
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         if bytes == CAPTURE_UNAVAILABLE {
             return Err(unavailable(
-                "host could not start capture; check the Mac display, encoder and desktop sharing permissions for Muster",
+                "host could not start capture; check the host display, encoder and desktop sharing permissions for Muster",
             ));
         }
         let [b'M', b'D', b'S', b'1', mode @ 0..=1, key @ ..] = bytes else {

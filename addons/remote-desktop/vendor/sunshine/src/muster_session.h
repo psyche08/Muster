@@ -11,6 +11,7 @@
 namespace muster_session {
   struct grant {
     bool mouse;
+    bool cursor;
     std::string certificate;
   };
 
@@ -20,7 +21,7 @@ namespace muster_session {
   inline std::optional<grant> read(std::istream &pipe) {
     std::array<unsigned char, 7> header {};
     if (!pipe.read(reinterpret_cast<char *>(header.data()), header.size()) ||
-        header[0] != 'M' || header[1] != 'S' || header[2] != 'T' || header[3] != '1' || header[4] > 1) {
+        header[0] != 'M' || header[1] != 'S' || header[2] != 'T' || (header[3] != '1' && header[3] != '2') || header[4] > 1) {
       return std::nullopt;
     }
     const size_t length = (size_t(header[5]) << 8) | header[6];
@@ -33,7 +34,7 @@ namespace muster_session {
         pem.find("-----BEGIN", 1) != std::string::npos || pem.find('\0') != std::string::npos) {
       return std::nullopt;
     }
-    return grant {header[4] == 1, std::move(pem)};
+    return grant {header[4] == 1, header[3] == '1', std::move(pem)};
   }
 
   inline std::atomic<bool> mouse_enabled {false};

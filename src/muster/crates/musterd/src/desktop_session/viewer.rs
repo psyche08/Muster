@@ -20,9 +20,9 @@ pub(super) async fn view(
 ) -> Result<(), Error> {
     let executable = program(MOONLIGHT)?;
     let ports = EnginePorts::MUSTER;
-    let listeners = ViewerPorts::bind(ports).await?;
     let (mut session, reply) = super::handshake::open(daemon, peer, HELLO, events).await?;
     let launch = Launch::parse(&reply)?;
+    let listeners = ViewerPorts::bind(ports).await?;
     let (child, mut input, output) =
         Engine::launch(Command::new(executable).stdout(Stdio::piped()))?;
     let engine = Arc::new(child);

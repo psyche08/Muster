@@ -28,6 +28,8 @@ try {
     if (!$vcpkg) { throw 'Set VCPKG_ROOT to the pinned checkout documented in addons/remote-desktop/README.md' }
     $env:MUSTER_WINDOWS_VIEWER = "$work\viewer"
     python -X utf8 "$root\addons\remote-desktop\build-viewer.py" $vcpkg "$work\media-build" $env:MUSTER_WINDOWS_VIEWER
+    $msys = if ($env:MSYS2_ROOT) { $env:MSYS2_ROOT } else { 'C:\msys64' }
+    python -X utf8 "$root\addons\remote-desktop\build-windows-host.py" "$work\host-build" $env:MUSTER_WINDOWS_VIEWER $msys
     $daemon = @(cargo build --manifest-path $manifest --release --locked --message-format=json-render-diagnostics -p musterd -p muster-cli -p muster-ffi -p muster-browser -p muster-vnet |
         ForEach-Object { ConvertFrom-Json $_ } |
         Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'musterd' -and $_.executable })

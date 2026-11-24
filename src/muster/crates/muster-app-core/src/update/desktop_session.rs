@@ -81,14 +81,10 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
     let native = matches!(request.action, Some(Action::ViewNative(_)));
     if native {
         let settings = state.desktop_preferences.settings;
-        request.action = Some(if settings == v1::DesktopStreamSettings::ORIGINAL {
-            Action::ViewNative(id)
-        } else {
-            Action::ViewConfigured(v1::ConfiguredDesktopViewer {
-                session: id,
-                settings: Some(settings),
-            })
-        });
+        request.action = Some(Action::ViewVideo(v1::ConfiguredDesktopViewer {
+            session: id,
+            settings: Some(settings),
+        }));
     }
     let (pointer, mut input) = tokio::sync::mpsc::channel(32);
     let device = request.device.clone();
@@ -105,6 +101,7 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
     });
     let client = ctx.backend.local();
     let tx = ctx.tx.clone();
+    let shell = ctx.shell.clone();
     spawn(ctx, async move {
         // A delayed reducer needs only the latest frame. Keep at most one
         // pending notification for this lease, including while another tab is open.
@@ -112,6 +109,13 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
         let session = async {
             let mut call = client.start(Req::DesktopSession(request)).await?;
             while let Some(event) = call.events.recv().await {
+                if let Ev::DesktopVideo(unit) = event {
+                    if !native || !(4..=4 * 1024 * 1024).contains(&unit.len()) {
+                        return Err(unexpected());
+                    }
+                    shell.on_desktop_video(id, &unit);
+                    continue;
+                }
                 if let Ev::DesktopFrame(frame) = event {
                     if !native || frame.len() > 768 * 1024 {
                         return Err(unexpected());
@@ -154,6 +158,9 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
             std::future::pending::<Result<(), Error>>().await
         };
         let result = tokio::select! {biased; _=token.cancelled()=>Ok(()), r=session=>r,r=pointer_calls,if native=>r};
+        if native {
+            shell.on_desktop_video(id, &[]);
+        }
         Msg::DesktopFinished(id, result)
     });
 }

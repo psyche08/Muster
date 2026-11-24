@@ -89,6 +89,7 @@ void muster_core_lifecycle(MusterCore *core, uint32_t event);
 char *muster_core_ssh_public_key(MusterCore *core);
 
 /* Stops the core and frees it. */
+void muster_core_set_video_callback(MusterCore *core, void (*callback)(void *, uint64_t, const uint8_t *, size_t));
 void muster_core_free(MusterCore *core);
 
 /* True for a canonical desktop presence or Locked Use challenge. */

@@ -145,9 +145,8 @@ namespace platf {
   decltype(WlanSetInterface) *fn_WlanSetInterface = nullptr;  ///< Fn wlan set interface.
 
   std::filesystem::path appdata() {
-    WCHAR sunshine_path[MAX_PATH];
-    GetModuleFileNameW(nullptr, sunshine_path, _countof(sunshine_path));
-    return std::filesystem::path {sunshine_path}.remove_filename() / L"config"sv;
+    const wchar_t *directory = _wgetenv(L"MUSTER_DESKTOP_SESSION_DIR");
+    return directory ? std::filesystem::path(directory) : std::filesystem::path();
   }
 
   std::string from_sockaddr(const sockaddr *const socket_address) {

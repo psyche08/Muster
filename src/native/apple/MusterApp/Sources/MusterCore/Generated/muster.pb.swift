@@ -1461,6 +1461,15 @@ public nonisolated struct Muster_V1_Event: Sendable {
     set {ev = .desktopSession(newValue)}
   }
 
+  /// local ordered Annex B H.264 access unit
+  public var desktopVideo: Data {
+    get {
+      if case .desktopVideo(let v)? = ev {return v}
+      return Data()
+    }
+    set {ev = .desktopVideo(newValue)}
+  }
+
   /// local RPC only
   public var desktopFrame: Data {
     get {
@@ -1507,6 +1516,8 @@ public nonisolated struct Muster_V1_Event: Sendable {
     case terminalFrame(Muster_V1_TerminalFrame)
     case agentEvent(Muster_V1_AgentEvent)
     case desktopSession(Muster_V1_DesktopSessionProgress)
+    /// local ordered Annex B H.264 access unit
+    case desktopVideo(Data)
     /// local RPC only
     case desktopFrame(Data)
     /// local streaming lease; held until cancellation/disconnect
@@ -1704,6 +1715,14 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     set {action = .viewInWindow(newValue)}
   }
 
+  public var viewVideo: Muster_V1_ConfiguredDesktopViewer {
+    get {
+      if case .viewVideo(let v)? = action {return v}
+      return Muster_V1_ConfiguredDesktopViewer()
+    }
+    set {action = .viewVideo(newValue)}
+  }
+
   public var viewConfigured: Muster_V1_ConfiguredDesktopViewer {
     get {
       if case .viewConfigured(let v)? = action {return v}
@@ -1755,6 +1774,7 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case shareMouse(Muster_V1_Ack)
     /// local owner window, never forwarded
     case viewInWindow(UInt64)
+    case viewVideo(Muster_V1_ConfiguredDesktopViewer)
     case viewConfigured(Muster_V1_ConfiguredDesktopViewer)
     /// local presentation lease
     case viewNative(UInt64)
@@ -8704,7 +8724,7 @@ nonisolated extension Muster_V1_Response: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Event"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0\u{3}rpc_timing\0\u{4}T\u{1}desktop_session\0\u{3}desktop_frame\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{a}device_state\0\u{4}\u{a}network_status\0\u{4}\u{3}join_progress\0\u{2}\u{5}policy\0\u{4}\u{2}terminal_sessions\0\u{3}terminal_frame\0\u{4}\u{a}agent_event\0\u{4}\u{10}desktop_update_ready\0\u{4}\u{b}forward_opened\0\u{3}rpc_timing\0\u{4}T\u{1}desktop_session\0\u{3}desktop_frame\0\u{3}desktop_video\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8863,6 +8883,14 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.ev = .desktopFrame(v)
         }
       }()
+      case 155: try {
+        var v: Data?
+        try decoder.decodeSingularBytesField(value: &v)
+        if let v = v {
+          if self.ev != nil {try decoder.handleConflictingOneOf()}
+          self.ev = .desktopVideo(v)
+        }
+      }()
       default: break
       }
     }
@@ -8921,6 +8949,10 @@ nonisolated extension Muster_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .desktopFrame?: try {
       guard case .desktopFrame(let v)? = self.ev else { preconditionFailure() }
       try visitor.visitSingularBytesField(value: v, fieldNumber: 154)
+    }()
+    case .desktopVideo?: try {
+      guard case .desktopVideo(let v)? = self.ev else { preconditionFailure() }
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 155)
     }()
     case nil: break
     }
@@ -9131,7 +9163,7 @@ nonisolated extension Muster_V1_ConfiguredDesktopViewer: SwiftProtobuf.Message, 
 
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0\u{3}view_configured\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0\u{3}view_configured\0\u{3}view_video\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9224,6 +9256,19 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .viewConfigured(v)
         }
       }()
+      case 10: try {
+        var v: Muster_V1_ConfiguredDesktopViewer?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .viewVideo(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .viewVideo(v)
+        }
+      }()
       default: break
       }
     }
@@ -9269,6 +9314,10 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
     case .viewConfigured?: try {
       guard case .viewConfigured(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    }()
+    case .viewVideo?: try {
+      guard case .viewVideo(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     }()
     case nil: break
     }

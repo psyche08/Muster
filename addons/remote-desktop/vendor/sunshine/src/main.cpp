@@ -298,6 +298,7 @@ static int run_host(int argc, char *argv[]) {
   }
 
   config::sunshine.flags[config::flag::FRESH_STATE] = true;
+  display_cursor = grant->cursor;
   config::input.mouse = grant->mouse;
   config::audio.stream = false;  // The paired desktop profile carries video and pointer input.
   config::input.keyboard = false;
@@ -360,18 +361,6 @@ static int run_host(int argc, char *argv[]) {
   }
 
 #ifdef _WIN32
-  // Modify relevant NVIDIA control panel settings if the system has corresponding gpu
-  if (nvprefs_instance.load()) {
-    // Restore global settings to the undo file left by improper termination of sunshine.exe
-    nvprefs_instance.restore_from_and_delete_undo_file_if_exists();
-    // Modify application settings for sunshine.exe
-    nvprefs_instance.modify_application_profile();
-    // Modify global settings, undo file is produced in the process to restore after improper termination
-    nvprefs_instance.modify_global_profile();
-    // Unload dynamic library to survive driver re-installation
-    nvprefs_instance.unload();
-  }
-
   // Wait as long as possible to terminate Sunshine.exe during logoff/shutdown
   SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY);
 
@@ -574,16 +563,22 @@ static int run_host(int argc, char *argv[]) {
 
 #ifdef _WIN32
   // Restore global NVIDIA control panel settings
-  if (nvprefs_instance.owning_undo_file() && nvprefs_instance.load()) {
-    nvprefs_instance.restore_global_profile();
-    nvprefs_instance.unload();
-  }
 #endif
 
   return lifetime::desired_exit_code;
 }
 
 int main(int argc, char *argv[]) {
+#ifdef _WIN32
+  if (argc != 3 || std::string_view(argv[1]) != "--muster-managed" || !platf::appdata().is_absolute()) {
+    return 1;
+  }
+  if (_dup2(_fileno(stderr), _fileno(stdout)) != 0) {
+    return 1;
+  }
+  char *managed[] = {argv[0], argv[2], nullptr};
+  return run_host(2, managed);
+#endif
 #ifdef __APPLE__
   if (argc == 3 && (std::string_view(argv[1]) == "--muster-managed" || std::string_view(argv[1]) == "--muster-idle")) {
     // Reserve stdout for the supervisor. Native diagnostics must never fill its pipe.

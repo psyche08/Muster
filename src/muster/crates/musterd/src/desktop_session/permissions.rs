@@ -124,7 +124,7 @@ impl Permissions {
         }
     }
 
-    #[cfg(any(target_os = "macos", test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     pub(super) fn admit(&self, daemon: &Daemon, peer: DeviceId) -> Option<(DesktopAccess, Lease)> {
         self.resolve(daemon, peer)
     }
@@ -139,7 +139,7 @@ pub(super) struct Lease {
     generation: u64,
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(windows, target_os = "macos", test))]
 impl Lease {
     pub(super) fn current(&self, daemon: &Daemon) -> bool {
         daemon

@@ -416,3 +416,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0298](0298-desktop-task-execution.md) | Proposed | Serialize desktop tasks and admit quiet foreground windows |
 | [0299](0299-apple-remote-workspace.md) | Accepted | View paired desktops in the Apple Remote workspace |
 | [0300](0300-apple-remote-stream-settings.md) | Accepted | Configure Apple Remote stream settings |
+| [0301](0301-desktop-gamestream-roles.md) | Proposed | Use Sunshine hosts and Moonlight controllers for Remote |

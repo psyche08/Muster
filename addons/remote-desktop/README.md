@@ -1,11 +1,19 @@
 # Muster remote desktop engines
 
 This directory holds the downstream Sunshine host and Moonlight PC source.
-Muster builds the Mac capture host from its patched Sunshine source and builds
-the Windows viewer against the vendored Moonlight C core. Both run as private
-children of the session owner. Windows paints the decoded frames in the Muster
-device view. [ADR 0282](../../docs/adr/0282-source-built-desktop-engines.md)
-describes how the two native packages obtain their engines.
+macOS and Windows each use a private Sunshine host for incoming sessions and a
+Moonlight controller for outgoing sessions. The iOS development build embeds
+the Moonlight C core and renders the incoming H.264 stream in Remote. Review
+the combined iOS binary's distribution license before publication.
+See [ADR 0301](../../docs/adr/0301-desktop-gamestream-roles.md).
+
+The Windows portable build uses the existing vcpkg viewer dependencies and
+the upstream Sunshine x64 UCRT64 toolchain. Set `MSYS2_ROOT` if MSYS2 is
+installed outside `C:\msys64`. Install the UCRT64 compiler, Ninja, CMake,
+Boost, cppwinrt, curl-winssl, MinHook, miniupnpc, nlohmann-json, oneVPL,
+OpenSSL and Opus per the vendored Windows build workflow. The build
+packages the private host, shaders, runtime DLL and corresponding source
+archive alongside the viewer.
 
 ## Downstream changes
 
@@ -72,10 +80,10 @@ vcpkg checkout. A Windows cross-package build can consume the corresponding
 output directory via `MUSTER_WINDOWS_VIEWER`. The synthetic fixture is one blue frame from
 FFmpeg's color filter encoded with libx264, with SEI metadata removed.
 
-On a Mac running the packaged Muster app,
-open the paired Windows member in Devices and choose view or view with mouse.
-Leave this device page open. On Windows open the Mac in Devices and choose
-**View desktop**. Closing either session ends the grant. Give Muster Screen Recording for viewing and Accessibility for mouse control.
+Use Settings to grant the paired controller desktop view or mouse access.
+On the controller, select the host in Remote and connect. The first viewer
+keeps its session until a second controller confirms takeover. macOS hosts
+require Screen Recording and Accessibility for capture and mouse control.
 
 ## macOS capture host
 

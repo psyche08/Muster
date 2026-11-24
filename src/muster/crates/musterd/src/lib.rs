@@ -224,7 +224,7 @@ pub struct Daemon {
     #[cfg(target_os = "macos")]
     desktop_idle: desktop_session::host::IdleHost,
     desktop_permissions: desktop_session::permissions::Permissions,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     desktop_occupancy: Arc<desktop_session::occupancy::Occupancy>,
     #[cfg(target_vendor = "apple")]
     desktop_pointer: desktop_session::native::PointerSlot,
@@ -447,7 +447,7 @@ impl Daemon {
             #[cfg(target_os = "macos")]
             desktop_idle: Default::default(),
             desktop_permissions: Default::default(),
-            #[cfg(target_os = "macos")]
+            #[cfg(any(windows, target_os = "macos"))]
             desktop_occupancy: Default::default(),
             #[cfg(target_vendor = "apple")]
             desktop_pointer: Default::default(),
@@ -1128,7 +1128,7 @@ struct RemoteService {
 }
 
 impl ServiceHandler for RemoteService {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     fn remembered_desktop(&self, peer: DeviceId) -> Option<muster_net::remote_desktop::Sharing> {
         desktop_session::host::admit(&self.daemon.upgrade()?, peer)
     }

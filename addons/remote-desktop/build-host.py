@@ -1,7 +1,6 @@
 """Compile the downstream macOS capture engine for the enclosing Muster bundle."""
 import argparse
 import configparser
-import fcntl
 import hashlib
 import os
 from pathlib import Path
@@ -77,7 +76,7 @@ def checkout(cache, url, revision, nested):
     return dest
 
 
-def host_sources(cache):
+def host_sources(cache, modules=MODULES):
     # Separate source revisions keep stale build objects and removed files out
     # of later builds. Include local edits so the normal dev build tests them.
     if (ROOT.parents[1] / ".git").exists():
@@ -92,12 +91,14 @@ def host_sources(cache):
         h.update(bytes.fromhex(digest(p)))
     pins = (ROOT / "sunshine-submodules.txt").read_bytes()
     h.update(pins)
+    if modules != MODULES:
+        h.update(" ".join(modules).encode())
     src = cache / ("sunshine-" + h.hexdigest()[:20])
     config = configparser.ConfigParser(interpolation=None)
     config.read(VENDOR / ".gitmodules")
     revisions = dict((path, sha) for sha, path in (line.split() for line in pins.decode().splitlines()))
     deps = {}
-    for name in MODULES:
+    for name in modules:
         path = "third-party/" + name
         deps[name] = checkout(cache, config['submodule "' + path + '"']["url"],
                               revisions[path], NESTED.get(name, []))
@@ -109,7 +110,11 @@ def host_sources(cache):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
             for name, dep in deps.items():
-                (tree / "third-party" / name).symlink_to(dep, target_is_directory=True)
+                target = tree / "third-party" / name
+                if os.name == "nt":
+                    shutil.copytree(dep, target, ignore=shutil.ignore_patterns(".git"))
+                else:
+                    target.symlink_to(dep, target_is_directory=True)
             tree.rename(src)
     return src, deps
 
@@ -182,7 +187,14 @@ def build(cache, executable, sources, identity):
         if not library.startswith(("/usr/lib/", "/System/Library/")):
             raise ValueError("Capture host requires an external runtime library: " + library)
     cache_key = src.name + "-" + digest(Path(__file__))[:20] + "-" + arch
-    offer = cache / (cache_key + "-sources.tar.gz")
+    viewer_sources = [ROOT / "build-apple-viewer.py", ROOT / "CMakeLists.txt", ROOT / "viewer/apple.c"]
+    viewer_core = ROOT / "vendor/moonlight-pc/moonlight-common-c/moonlight-common-c"
+    viewer_sources.extend(sorted(p for p in viewer_core.rglob("*") if p.is_file()))
+    viewer_digest = hashlib.sha256()
+    for path in viewer_sources:
+        viewer_digest.update(path.relative_to(ROOT).as_posix().encode())
+        viewer_digest.update(bytes.fromhex(digest(path)))
+    offer = cache / (cache_key + "-" + viewer_digest.hexdigest()[:20] + "-sources.tar.gz")
     if not offer.is_file():
         # The FFmpeg build recipes reference gitlinks. Include those exact
         # sources with the downstream code, compiler inputs and dependency pins.
@@ -198,6 +210,10 @@ def build(cache, executable, sources, identity):
                 def downstream(entry):
                     return None if entry.issym() else entry
                 tar.add(src, "remote-desktop/vendor/sunshine", filter=downstream)
+                for path in viewer_sources:
+                    tar.add(path, "remote-desktop/" + path.relative_to(ROOT).as_posix())
+                for name in ("moonlight_loopback.c", "sunshine_bootstrap.cpp"):
+                    tar.add(ROOT / "tests" / name, "remote-desktop/tests/" + name)
                 tar.add(ROOT / "build-host.py", "remote-desktop/build-host.py")
                 tar.add(ROOT / "sunshine-submodules.txt", "remote-desktop/sunshine-submodules.txt")
                 for name, tree in deps.items():
@@ -226,6 +242,14 @@ def build(cache, executable, sources, identity):
             shutil.copy2(offer, staged)
             staged.replace(sources)
         candidate.replace(executable)
+        # Keep the GPL controller in its own executable on macOS.
+        import runpy
+        viewer = runpy.run_path(str(Path(__file__).with_name("build-apple-viewer.py")))
+        viewer_dir = viewer["build"](cache, "macosx", arch)
+        shutil.copy2(viewer_core / "LICENSE.txt", resources / "Moonlight-LICENSE.txt")
+        controller = executable.with_name("muster-moonlight")
+        shutil.copy2(viewer_dir / "muster-moonlight", controller)
+        run("codesign", "--force", "--options", "runtime", "--sign", identity, controller)
         # An incremental Xcode or developer build may still have the former bundle.
         legacy = contents / "Helpers/Sunshine.app"
         if legacy.is_dir():
@@ -233,6 +257,7 @@ def build(cache, executable, sources, identity):
 
 
 if __name__ == "__main__":
+    import fcntl
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("cache", type=Path)
     p.add_argument("executable", type=Path)
