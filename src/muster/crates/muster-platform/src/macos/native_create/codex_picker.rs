@@ -62,6 +62,14 @@ struct Picker<'a> {
     window: &'a Element,
     page: &'a Element,
     selector: &'a Element,
+    dialog: Option<Element>,
+}
+
+fn has_other_dialog<'a, T: PartialEq + 'a>(
+    mut dialogs: impl Iterator<Item = &'a T>,
+    owned: Option<&T>,
+) -> bool {
+    dialogs.any(|dialog| Some(dialog) != owned)
 }
 
 impl Picker<'_> {
@@ -72,7 +80,8 @@ impl Picker<'_> {
             || !tree.contains(self.page)
             || !new_page("codex", self.page)
             || !codex_home_heading(&tree)
-            || !safe_to_navigate(self.guard.profile, self.window, &tree)
+            || has_other_dialog(tree.iter().filter(|n| is_dialog(n)), self.dialog.as_ref())
+            || !draft_free_window(self.guard.profile, self.window, &tree)
         {
             return Err(conflict("Codex project picker lost its empty home form"));
         }
@@ -214,11 +223,12 @@ pub(super) async fn choose(
     cwd: &Path,
     name: &str,
 ) -> Result<(), Error> {
-    let menu = Picker {
+    let mut menu = Picker {
         guard,
         window,
         page,
         selector,
+        dialog: None,
     };
     let listed = || {
         missing_directory("codex", cwd)?;
@@ -248,6 +258,13 @@ pub(super) async fn choose(
             "Codex project search did not open",
         )
         .await?;
+        // Some Codex versions render the list in a web dialog. Bind only
+        // the popup opened above, before writing the search or selecting.
+        menu.dialog = field.element("AXParent").filter(|parent| {
+            parent.role() == "AXGroup"
+                && parent.string("AXSubrole").as_deref() == Some("AXApplicationDialog")
+                && page.contains(parent)
+        });
         if field.string("AXValue").as_deref() != Some("") {
             return Err(conflict("Codex project search is not empty"));
         }
@@ -290,6 +307,22 @@ pub(super) async fn choose(
 mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn only_the_pinned_search_dialog_is_allowed() {
+        let picker = 1;
+        let sheet_or_other_dialog = 2;
+        assert!(has_other_dialog([&picker].into_iter(), None));
+        assert!(!has_other_dialog([&picker].into_iter(), Some(&picker)));
+        assert!(has_other_dialog(
+            [&picker, &sheet_or_other_dialog].into_iter(),
+            Some(&picker)
+        ));
+        assert!(has_other_dialog(
+            [&sheet_or_other_dialog].into_iter(),
+            Some(&picker)
+        ));
+    }
 
     #[test]
     fn only_a_single_exact_result_can_be_pressed() {

@@ -764,23 +764,26 @@ fn preferred_target<W: PartialEq, A>(
         .find(|t| Some(&t.window) == focused)
 }
 
-fn has_dialog(tree: &[Element]) -> bool {
-    tree.iter().any(|n| {
-        n.role() == "AXSheet"
-            || matches!(
-                n.string("AXSubrole").as_deref(),
-                Some(
-                    "AXApplicationDialog"
-                        | "AXDialog"
-                        | "AXSystemDialog"
-                        | "AXApplicationAlertDialog"
-                )
+fn is_dialog(n: &Element) -> bool {
+    n.role() == "AXSheet"
+        || matches!(
+            n.string("AXSubrole").as_deref(),
+            Some(
+                "AXApplicationDialog" | "AXDialog" | "AXSystemDialog" | "AXApplicationAlertDialog"
             )
-    })
+        )
+}
+
+fn has_dialog(tree: &[Element]) -> bool {
+    tree.iter().any(is_dialog)
 }
 
 fn safe_to_navigate(profile: &App, window: &Element, tree: &[Element]) -> bool {
-    if window.role() != "AXWindow" || window.bool("AXMinimized") == Some(true) || has_dialog(tree) {
+    !has_dialog(tree) && draft_free_window(profile, window, tree)
+}
+
+fn draft_free_window(profile: &App, window: &Element, tree: &[Element]) -> bool {
+    if window.role() != "AXWindow" || window.bool("AXMinimized") == Some(true) {
         return false;
     }
     let mut editors = tree.iter().filter(|n| session_composer(profile, n));
