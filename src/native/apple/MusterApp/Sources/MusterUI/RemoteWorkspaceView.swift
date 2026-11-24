@@ -103,7 +103,7 @@ private struct StreamSettings: View {
     }
 }
 
-private typealias PointerKind = Muster_V1_DesktopPointer.Kind
+typealias PointerKind = Muster_V1_DesktopPointer.Kind
 private typealias RemoteInput = (PointerKind, UInt32, UInt32, Int32) -> Void
 
 private struct RemoteSurface: View {
@@ -119,19 +119,21 @@ private struct RemoteSurface: View {
             ZStack {
                 Color.black
                 if let surface = video.surface, surface.session == session {
+                    #if os(iOS)
+                    MobileRemoteViewport(surface: surface, mouse: mouse) { kind, pixel, lines in
+                        forward(kind, pixel, surface.size, lines)
+                    }
+                    #else
                     let scale = min(geometry.size.width / surface.size.width, geometry.size.height / surface.size.height)
                     let size = CGSize(width: surface.size.width * scale, height: surface.size.height * scale)
                     VideoLayerView(layer: surface.layer)
                         .frame(width: size.width, height: size.height)
                         .overlay {
                             if mouse {
-                                #if os(macOS)
                                 MacPointer { kind, point, lines in forward(kind, point, size, lines) }
-                                #else
-                                TouchPointer { kind, point, lines in forward(kind, point, size, lines) }
-                                #endif
                             }
                         }
+                    #endif
                 }
             }
         }
@@ -169,24 +171,6 @@ private struct VideoLayerView: NSViewRepresentable {
         if view.layer !== layer { view.layer = layer; view.wantsLayer = true }
     }
 }
-#else
-private struct VideoLayerView: UIViewRepresentable {
-    let layer: AVSampleBufferDisplayLayer
-    final class Canvas: UIView {
-        override func layoutSubviews() { super.layoutSubviews(); layer.sublayers?.first?.frame = bounds }
-    }
-    func makeUIView(context: Context) -> Canvas { Canvas() }
-    func updateUIView(_ view: Canvas, context: Context) {
-        if layer.superlayer !== view.layer {
-            view.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-            view.layer.addSublayer(layer)
-            layer.frame = view.bounds
-        }
-    }
-}
-#endif
-
-#if os(macOS)
 private struct MacPointer: NSViewRepresentable {
     let action: (PointerKind, CGPoint, Int32) -> Void
     func makeNSView(context: Context) -> Surface { Surface() }
@@ -214,11 +198,75 @@ private struct MacPointer: NSViewRepresentable {
     }
 }
 #elseif os(iOS)
-private struct TouchPointer: UIViewRepresentable {
+struct MobileRemoteViewport: UIViewRepresentable {
+    let surface: RemoteVideo.Surface
+    let mouse: Bool
     let action: (PointerKind, CGPoint, Int32) -> Void
-    func makeUIView(context: Context) -> Surface { Surface() }
-    func updateUIView(_ view: Surface, context: Context) { view.action = action }
-    final class Surface: UIView {
+
+    func makeUIView(context: Context) -> Viewport { Viewport() }
+    func updateUIView(_ view: Viewport, context: Context) {
+        view.show(surface.layer, pixels: surface.size, mouse: mouse, action: action)
+    }
+
+    final class Viewport: UIScrollView {
+        private let canvas = TouchCanvas()
+        private var videoLayer: AVSampleBufferDisplayLayer?
+        private var pixels = CGSize.zero
+        private var pixelScale: CGFloat { window?.windowScene?.screen.nativeScale ?? traitCollection.displayScale }
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            clipsToBounds = true
+            backgroundColor = .black
+            contentInsetAdjustmentBehavior = .never
+            bounces = false
+            delaysContentTouches = false
+            showsHorizontalScrollIndicator = false
+            showsVerticalScrollIndicator = false
+            panGestureRecognizer.minimumNumberOfTouches = 3
+            panGestureRecognizer.maximumNumberOfTouches = 3
+            addSubview(canvas)
+        }
+        required init?(coder: NSCoder) { nil }
+
+        func show(_ layer: AVSampleBufferDisplayLayer, pixels newSize: CGSize, mouse: Bool,
+                  action: @escaping (PointerKind, CGPoint, Int32) -> Void) {
+            if videoLayer !== layer {
+                videoLayer?.removeFromSuperlayer()
+                canvas.layer.addSublayer(layer)
+                videoLayer = layer
+                setNeedsLayout()
+            }
+            if pixels != newSize {
+                pixels = newSize
+                setNeedsLayout()
+            }
+            canvas.isUserInteractionEnabled = mouse
+            canvas.action = { [weak self] kind, point, lines in
+                guard let self else { return }
+                let scale = self.pixelScale
+                action(kind, CGPoint(x: floor(point.x * scale), y: floor(point.y * scale)), lines)
+            }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let scale = pixelScale
+            guard scale > 0, pixels.width > 0, pixels.height > 0 else { return }
+            let size = CGSize(width: pixels.width / scale, height: pixels.height / scale)
+            let content = CGSize(width: max(bounds.width, size.width), height: max(bounds.height, size.height))
+            if contentSize != content { contentSize = content }
+            let origin = CGPoint(x: floor((content.width - size.width) * scale / 2) / scale,
+                                 y: floor((content.height - size.height) * scale / 2) / scale)
+            canvas.frame = CGRect(origin: origin, size: size)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            videoLayer?.frame = canvas.bounds
+            CATransaction.commit()
+        }
+    }
+
+    final class TouchCanvas: UIView {
         var action: ((PointerKind, CGPoint, Int32) -> Void)?
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -232,6 +280,7 @@ private struct TouchPointer: UIViewRepresentable {
             addGestureRecognizer(drag)
             let scroll = UIPanGestureRecognizer(target: self, action: #selector(scroll(_:)))
             scroll.minimumNumberOfTouches = 2
+            scroll.maximumNumberOfTouches = 2
             addGestureRecognizer(scroll)
         }
         required init?(coder: NSCoder) { nil }

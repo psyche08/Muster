@@ -419,3 +419,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0301](0301-desktop-gamestream-roles.md) | Proposed | Use Sunshine hosts and Moonlight controllers for Remote |
 | [0302](0302-codex-transcript-question-cards.md) | Accepted | Render Codex questions at their transcript position |
 | [0303](0303-apple-udp-receive-route-errors.md) | Proposed | Retry an isolated Apple UDP receive route error |
+| [0304](0304-mobile-remote-native-pixels.md) | Accepted | Display mobile Remote video at native pixel size |

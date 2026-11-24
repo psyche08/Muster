@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 import SwiftUI
 import MusterCore
 @testable import MusterUI
@@ -29,6 +30,38 @@ final class NativeNavigationTests: XCTestCase {
         navigation.popToRootViewController(animated: false)
         waitUntil { model.vm.screen == .onboarding && navigation.viewControllers.count == 1 }
         XCTAssertEqual(model.vm.navigationPath, [.onboarding])
+    }
+
+    @MainActor
+    func testRemoteViewportKeepsSourcePixelsAndMapsPannedInput() throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        let viewport = MobileRemoteViewport.Viewport(frame: CGRect(x: 0, y: 0, width: 220, height: 190))
+        window.addSubview(viewport)
+        let layer = AVSampleBufferDisplayLayer()
+        let pixels = CGSize(width: 1920, height: 1080)
+        var pointer: CGPoint?
+        viewport.show(layer, pixels: pixels, mouse: true) { _, point, _ in pointer = point }
+        viewport.layoutIfNeeded()
+        let canvas = try XCTUnwrap(layer.superlayer?.delegate as? MobileRemoteViewport.TouchCanvas)
+        let scale = scene.screen.nativeScale
+        XCTAssertEqual(layer.frame.width * scale, pixels.width, accuracy: 0.01)
+        XCTAssertEqual(layer.frame.height * scale, pixels.height, accuracy: 0.01)
+        XCTAssertEqual(viewport.panGestureRecognizer.minimumNumberOfTouches, 3)
+        XCTAssertEqual(viewport.panGestureRecognizer.maximumNumberOfTouches, 3)
+        XCTAssertEqual(canvas.gestureRecognizers?.compactMap { $0 as? UIPanGestureRecognizer }
+            .map(\.maximumNumberOfTouches).sorted(), [1, 2])
+        viewport.contentOffset = CGPoint(x: 37, y: 19)
+        let hit = CGPoint(x: viewport.bounds.minX + 13, y: viewport.bounds.minY + 17)
+        canvas.action?(.primary, viewport.convert(hit, to: canvas), 0)
+        XCTAssertEqual(pointer, CGPoint(x: floor(50 * scale), y: floor(36 * scale)))
+        viewport.show(layer, pixels: CGSize(width: 96, height: 48), mouse: false) { _, _, _ in }
+        viewport.layoutIfNeeded()
+        XCTAssertFalse(canvas.isUserInteractionEnabled)
+        XCTAssertTrue(viewport.isScrollEnabled)
+        XCTAssertEqual(viewport.contentOffset, .zero)
+        XCTAssertEqual(canvas.frame.midX, viewport.bounds.midX, accuracy: 1 / scale)
+        XCTAssertEqual(canvas.frame.midY, viewport.bounds.midY, accuracy: 1 / scale)
     }
 
     @MainActor
