@@ -223,6 +223,9 @@ pub fn lifecycle(state: &mut State, ctx: &Ctx, event: app::Lifecycle) {
         }
         app::Lifecycle::Background => {
             state.foreground = false;
+            if state.embedded {
+                state.desktop_session = None;
+            }
             multica::background(state);
             state.catalog_watches.clear();
             state.agents_search = None;

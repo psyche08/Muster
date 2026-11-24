@@ -48,6 +48,7 @@ message Intent {
     SetDeviceLockedUse set_device_locked_use = 86;
     DesktopSetupAction desktop_setup_action = 23;
     muster.v1.DesktopSessionRequest desktop_session = 153;
+    muster.v1.DesktopStreamSettings set_desktop_stream_settings = 180;
     SelectDevice open_remote = 156; // optional paired desktop to preselect
     string end_desktop_session = 154; // device of the local session being closed
     DesktopUpdateAction desktop_update_action = 24;
@@ -530,6 +531,10 @@ message RemoteWorkspaceView {
   bool session_open = 4;
   string status = 5;
   muster.v1.DesktopTakeoverPrompt takeover = 6;
+  uint64 native_session = 7; // opaque presentation identifier
+  bool mouse = 8;
+  muster.v1.DesktopStreamSettings settings = 10;
+  bytes jpeg = 9;
 }
 
 message MulticaSelect { string device_id = 1; }

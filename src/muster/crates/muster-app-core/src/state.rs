@@ -10,6 +10,9 @@ use tokio_util::sync::CancellationToken;
 
 /// A running watch (device, agent, terminal) that ends when its token does.
 pub struct DesktopSession {
+    pub pointer: Option<mpsc::Sender<v1::DesktopPointer>>,
+    pub mouse: bool,
+    pub jpeg: Vec<u8>,
     pub opened_from: Screen,
     pub device: String,
     pub id: u64,
@@ -483,6 +486,7 @@ pub struct State {
     pub next_effect: u64,
     pub next_op: u64,
     pub device_watch: Option<Watch>,
+    pub desktop_preferences: crate::desktop_preferences::Preferences,
     pub remote_selected: String,
     pub desktop_session: Option<DesktopSession>,
     pub foreground: bool,
@@ -620,6 +624,7 @@ impl State {
             next_effect: 1,
             next_op: 1,
             device_watch: None,
+            desktop_preferences: Default::default(),
             remote_selected: String::new(),
             desktop_session: None,
             foreground: true,

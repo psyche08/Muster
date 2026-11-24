@@ -14,6 +14,7 @@ pub mod desktop_startup;
 pub mod desktop_update;
 mod drafts;
 mod locked_use_auth;
+mod desktop_preferences;
 mod render;
 mod send_diagnostics;
 mod session_diagnostics;
@@ -223,6 +224,7 @@ async fn run(mut rx: mpsc::UnboundedReceiver<Loop>, ctx: Ctx, dir: PathBuf) {
     if cfg!(target_os = "macos") && !state.embedded {
         state.locked_use_auth = Some(locked_use_auth::Preference::load(&dir));
     }
+    state.desktop_preferences = desktop_preferences::Preferences::load(&dir);
     update::init(&mut state, &ctx);
     let tick_tx = ctx.tx.clone();
     let ticker = tokio::spawn(async move {

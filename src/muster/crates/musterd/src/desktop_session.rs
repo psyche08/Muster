@@ -1,5 +1,5 @@
 //! A local streaming RPC is the lifetime of the local user's explicit choice.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_vendor = "apple", test))]
 pub(super) mod confirmation;
 #[cfg(any(target_os = "macos", test))]
 pub(super) mod occupancy;
@@ -9,7 +9,7 @@ use muster_core::DeviceId;
 use muster_proto::v1::{self, desktop_session_request::Action};
 use muster_rpc::EventSink;
 use std::sync::Arc;
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_vendor = "apple"))]
 mod engine;
 #[cfg(target_os = "macos")]
 pub(super) mod host;
@@ -36,9 +36,13 @@ pub(super) async fn run(
             "Manage incoming desktop access in Settings".into(),
         ));
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_vendor = "apple"))]
     if let Action::ConfirmTakeover(id) = action {
         return daemon.desktop_confirmation.confirm(peer, id);
+    }
+    #[cfg(target_vendor = "apple")]
+    if let Action::Pointer(p) = action {
+        return daemon.desktop_pointer.send(peer, p);
     }
     let _slot = daemon
         .desktop_slot
@@ -49,6 +53,14 @@ pub(super) async fn run(
         _ = events.cancelled().cancelled() => Ok(()),
         result = async {
             match action {
+                #[cfg(target_vendor="apple")]
+                Action::ViewNative(id) if id != 0 => native::view(daemon, peer, id, v1::DesktopStreamSettings::ORIGINAL, &events).await,
+                #[cfg(target_vendor="apple")]
+                Action::ViewConfigured(view) if view.session != 0 => {
+                    let settings = view.settings.filter(|s| s.valid())
+                        .ok_or_else(|| Error::Invalid("unsupported desktop stream settings".into()))?;
+                    native::view(daemon, peer, view.session, settings, &events).await
+                }
                 #[cfg(windows)]
                 Action::ViewInWindow(hwnd) if hwnd != 0 => viewer::view(daemon, peer, hwnd, &events).await,
                 _ => Err(Error::Unavailable("this desktop action is unavailable on this platform".into())),
@@ -59,9 +71,16 @@ pub(super) async fn run(
 
 pub(super) fn available() -> (bool, bool) {
     #[cfg(target_os = "macos")]
-    return (engine::program(host::CAPTURE_HOST).is_ok(), false);
+    return (engine::program(host::CAPTURE_HOST).is_ok(), true);
     #[cfg(windows)]
     return (false, engine::program(viewer::MOONLIGHT).is_ok());
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "ios")]
+    return (false, true);
+    #[cfg(not(any(windows, target_vendor = "apple")))]
     (false, false)
 }
+
+#[cfg(any(windows, target_vendor = "apple"))]
+mod handshake;
+#[cfg(target_vendor = "apple")]
+pub(crate) mod native;

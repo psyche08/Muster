@@ -105,7 +105,7 @@ private struct ServiceGrantEditor: View {
         advanced: Bool, save: @escaping (Muster_V1_GrantSet?) -> Void
     ) {
         self.service = service
-        self.members = service == .desktop ? members.filter { $0.kind == "desktop" && !$0.isSelf } : members
+        self.members = service == .desktop ? members.filter { ["desktop", "phone"].contains($0.kind) && !$0.isSelf } : members
         self.advanced = advanced
         self.save = save
         _audience = State(initialValue: existing.map { $0.allDevices ? .all : .assigned } ?? .existing)

@@ -24,6 +24,7 @@ fn main() {
         ("LockedUse/Console.m", "console.o"),
         ("LockedUse/Gamma.m", "gamma.o"),
         ("Display/Blackout.m", "blackout.o"),
+        ("Display/Remote.m", "remote.o"),
         ("Notice/Notice.m", "notice.o"),
         ("Vision/Vision.m", "vision.o"),
         ("Process/AppHost.m", "apphost.o"),

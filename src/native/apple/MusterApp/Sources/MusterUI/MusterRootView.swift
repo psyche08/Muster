@@ -134,7 +134,7 @@ public struct MusterRootView: View {
 
     /// The workspace tabs, where the switcher replaces Back (the core never
     /// shows HOME: it routes it to AGENTS).
-    private static let roots: [Muster_App_Screen] = [.desktopChats, .agents, .terminals, .multica]
+    private static let roots: [Muster_App_Screen] = [.desktopChats, .agents, .terminals, .remote, .multica]
     /// What a Mac shows to the right of the Chat or Agents list.
     private static let details: [Muster_App_Screen] = [.chat, .files, .file, .git]
 
@@ -146,7 +146,7 @@ public struct MusterRootView: View {
             && (vm.screen == vm.workspace || Self.details.contains(vm.screen))
         #else
         // The workspace's list on the left, the conversation or terminal on the right.
-        return vm.workspace != .multica && layout.side && (Self.roots.contains(vm.screen) || Self.phoneDetails.contains(vm.screen))
+        return vm.workspace != .remote && vm.workspace != .multica && layout.side && (Self.roots.contains(vm.screen) || Self.phoneDetails.contains(vm.screen))
         #endif
     }
 
@@ -224,7 +224,7 @@ public struct MusterRootView: View {
         case .files: FilesView(core: core, vm: vm)
         case .file: FileView(core: core, vm: vm)
         case .git: GitView(core: core, vm: vm)
-        case .remote: ContentUnavailableView("Remote desktop viewer is available on Windows", systemImage: "display")
+        case .remote: RemoteWorkspaceView(core: core, workspace: vm.remoteWorkspace)
         case .UNRECOGNIZED: ContentUnavailableView("Unknown screen", systemImage: "questionmark")
         }
     }

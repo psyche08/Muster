@@ -1406,7 +1406,6 @@ pub(crate) fn remote_workspace(state: &State) -> app::RemoteWorkspaceView {
     let selected = devices.iter().find(|d| d.device_id == *requested);
     let can_connect = session.is_none()
         && selected.is_some_and(|d| d.connected)
-        && !state.embedded
         && state
             .self_info
             .as_ref()
@@ -1418,9 +1417,13 @@ pub(crate) fn remote_workspace(state: &State) -> app::RemoteWorkspaceView {
         String::new()
     };
     app::RemoteWorkspaceView {
+        settings: Some(state.desktop_preferences.settings),
         devices,
         selected_device,
         can_connect,
+        mouse: session.is_some_and(|s| s.mouse),
+        native_session: session.filter(|s| s.pointer.is_some()).map_or(0, |s| s.id),
+        jpeg: session.map_or_else(Vec::new, |s| s.jpeg.clone()),
         session_open: session.is_some(),
         status: session.map(|s| s.status.clone()).unwrap_or_default(),
         takeover: session.and_then(|s| s.takeover.clone()),

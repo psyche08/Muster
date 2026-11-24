@@ -61,6 +61,7 @@ use terminals::*;
 
 /// What tasks report back.
 pub enum Msg {
+    DesktopFrame(u64, std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>),
     DesktopProgress(u64, v1::DesktopSessionProgress),
     DesktopFinished(u64, Result<(), Error>),
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -543,6 +544,13 @@ pub fn intent(state: &mut State, ctx: &Ctx, intent: app::Intent) {
         It::DesktopUpdateAction(action) => {
             network::intent_desktop_update_action(state, ctx, action)
         }
+        It::SetDesktopStreamSettings(settings) => {
+            if state.screen == Screen::Remote && state.desktop_session.is_none() {
+                if let Err(e) = state.desktop_preferences.save(settings) {
+                    state.toast(e.to_string(), true);
+                }
+            }
+        }
         It::OpenRemote(selection) => {
             if state.desktop_session.is_none()
                 && !selection.device_id.is_empty()
@@ -707,6 +715,13 @@ pub fn msg(state: &mut State, ctx: &Ctx, msg: Msg) {
             state.manual_busy.remove(&id);
             if let Err(error) = result {
                 state.toast(format!("Locked Use: {error}"), true);
+            }
+        }
+        Msg::DesktopFrame(id, frame) => {
+            if let Some(s) = state.desktop_session.as_mut().filter(|s| s.id == id) {
+                if let Some(bytes) = frame.lock().unwrap().take() {
+                    s.jpeg = bytes;
+                }
             }
         }
         Msg::DesktopProgress(id, phase) => desktop_session::progress(state, id, phase),

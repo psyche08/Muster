@@ -226,7 +226,9 @@ pub struct Daemon {
     desktop_permissions: desktop_session::permissions::Permissions,
     #[cfg(target_os = "macos")]
     desktop_occupancy: Arc<desktop_session::occupancy::Occupancy>,
-    #[cfg(windows)]
+    #[cfg(target_vendor = "apple")]
+    desktop_pointer: desktop_session::native::PointerSlot,
+    #[cfg(any(windows, target_vendor = "apple"))]
     desktop_confirmation: desktop_session::confirmation::Confirmation,
     blackout: Option<blackout::Blackout>,
     multica: multica::Manager,
@@ -447,7 +449,9 @@ impl Daemon {
             desktop_permissions: Default::default(),
             #[cfg(target_os = "macos")]
             desktop_occupancy: Default::default(),
-            #[cfg(windows)]
+            #[cfg(target_vendor = "apple")]
+            desktop_pointer: Default::default(),
+            #[cfg(any(windows, target_vendor = "apple"))]
             desktop_confirmation: Default::default(),
             blackout,
             #[cfg(windows)]

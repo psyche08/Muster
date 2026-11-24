@@ -137,38 +137,7 @@ async fn watch_page(watch: &mut muster_rpc::Call, timeout: Duration) -> v1::Agen
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .is_test(true)
-        .try_init();
-    let relay = relay().await;
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
-    let codex_file = transcripts(dir_a.path());
-    let mut alpha = config(dir_a.path(), Some(relay.clone()), "alpha");
-    alpha.agent.as_mut().unwrap().cli_runtime = Some(
-        muster_agent::cli::runtime::NativeRuntime::with_programs(
-            &dir_a.path().join("orca"),
-            [("codex".into(), std::path::PathBuf::from("/bin/true"))]
-                .into_iter()
-                .collect(),
-        )
-        .unwrap(),
-    );
-    let a = Daemon::start_with(alpha, std::sync::Arc::new(musterd::DefaultPlatform), None)
-        .await
-        .unwrap();
-    let b = Daemon::start_with(
-        config(dir_b.path(), None, "bravo"),
-        std::sync::Arc::new(musterd::DefaultPlatform),
-        None,
-    )
-    .await
-    .unwrap();
-    let ca = client(&a).await;
-    let cb = client(&b).await;
-
+async fn pair_phone(ca: &Client, cb: Client, scopes: &[&str]) -> v1::PendingJoin {
     // A creates the network and invites; B joins as a phone.
     ca.call(Req::NetworkCreate(v1::NetworkCreateRequest {
         name: "home".into(),
@@ -211,15 +180,10 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         assert!(started.elapsed() < Duration::from_secs(20), "no join");
         tokio::time::sleep(Duration::from_millis(100)).await;
     };
-    // Agents on with Codex only; Chats' provider without its switch; no terminals.
     ca.call(Req::NetworkDecide(v1::NetworkDecideRequest {
         device_id: pending.device_id.clone(),
         approve: true,
-        scopes: vec![
-            "agents".into(),
-            "agents:codex".into(),
-            "chats:claude".into(),
-        ],
+        scopes: scopes.iter().map(|scope| scope.to_string()).collect(),
         reason: String::new(),
     }))
     .await
@@ -229,6 +193,249 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         .unwrap()
         .unwrap()
         .unwrap();
+
+    pending
+}
+
+#[cfg(target_os = "macos")]
+async fn paired_desktop_fixture(
+    scopes: &[&str],
+) -> (
+    tempfile::TempDir,
+    tempfile::TempDir,
+    std::sync::Arc<Daemon>,
+    std::sync::Arc<Daemon>,
+) {
+    let host_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let mut host_config = config(host_dir.path(), Some(relay().await), "Test display");
+    let mut phone_config = config(phone_dir.path(), None, "Test viewer");
+    phone_config.kind = DeviceKind::Phone;
+    for cfg in [&mut host_config, &mut phone_config] {
+        cfg.agent = None;
+        cfg.terminal = None;
+        cfg.cloud = false;
+    }
+    let platform = std::sync::Arc::new(musterd::DefaultPlatform);
+    let host = Daemon::start_with(host_config, platform.clone(), None)
+        .await
+        .unwrap();
+    let phone = Daemon::start_with(phone_config, platform, None)
+        .await
+        .unwrap();
+    let viewer = client(&phone).await;
+    pair_phone(&client(&host).await, viewer, scopes).await;
+    (host_dir, phone_dir, host, phone)
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn native_viewer_confirms_and_receives_synthetic_frame_and_pointer_receipt() {
+    exercise_native_stream(None).await;
+}
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn configured_native_viewer_confirms_and_receives_frame_and_pointer() {
+    exercise_native_stream(Some(v1::DesktopStreamSettings {
+        long_edge: 1920,
+        fps: 15,
+        bitrate_kbps: 5000,
+        jpeg_quality: 85,
+        show_cursor: false,
+    }))
+    .await;
+}
+#[cfg(target_os = "macos")]
+async fn exercise_native_stream(settings: Option<v1::DesktopStreamSettings>) {
+    use muster_net::remote_desktop::{Access, Handler, Session};
+    use v1::{desktop_session_request::Action, event::Ev};
+    struct Pattern {
+        received: tokio::sync::Notify,
+        expected_hello: Vec<u8>,
+    }
+    impl Handler for Pattern {
+        fn console_ready(&self) -> bool {
+            true
+        }
+        fn serve<'a>(
+            &'a self,
+            _: muster_core::DeviceId,
+            s: &'a mut Session,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+            Box::pin(async move {
+                assert_eq!(
+                    s.recv_control().await.unwrap().unwrap(),
+                    self.expected_hello
+                );
+                let mut occupied = b"MDB1".to_vec();
+                occupied.extend_from_slice(&[7; 32]);
+                s.send_control(&occupied).await.unwrap();
+                assert_eq!(s.recv_control().await.unwrap().unwrap(), b"confirm-replace");
+                s.send_control(b"JPG1").await.unwrap();
+                let bytes = vec![0x42; 16 * 1024 + 5];
+                while let Ok(Some(batch)) = s.recv_control().await {
+                    if batch == [b'N', 1, 0, 42, 0, 64, 0] {
+                        self.received.notify_one();
+                    }
+                    if s.send_control(&(bytes.len() as u32).to_be_bytes())
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    for chunk in bytes.chunks(12 * 1024) {
+                        if s.send_control(chunk).await.is_err() {
+                            return;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+        }
+    }
+    let (_a, _b, host, phone) = paired_desktop_fixture(&[]).await;
+    let pattern = std::sync::Arc::new(Pattern {
+        received: Default::default(),
+        expected_hello: settings
+            .unwrap_or(v1::DesktopStreamSettings::ORIGINAL)
+            .hello(),
+    });
+    let _offer = host
+        .node()
+        .share_remote_desktop(phone.device_id(), Access::ViewAndMouse, pattern.clone())
+        .unwrap();
+    let client = client(&phone).await;
+    let request = |action| {
+        Req::DesktopSession(v1::DesktopSessionRequest {
+            device: host.device_id().to_hex(),
+            action: Some(action),
+        })
+    };
+    let action = match settings {
+        Some(profile) => Action::ViewConfigured(v1::ConfiguredDesktopViewer {
+            session: 87,
+            settings: Some(profile),
+        }),
+        None => Action::ViewNative(87),
+    };
+    let mut call = client.start(request(action)).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(45), async {
+        let mut frame = false;
+        while let Some(event) = call.events.recv().await {
+            match event {
+                Ev::DesktopSession(p) if p.takeover.is_some() => {
+                    client
+                        .call(request(Action::ConfirmTakeover(
+                            p.takeover.unwrap().confirmation,
+                        )))
+                        .await
+                        .unwrap();
+                }
+                Ev::DesktopFrame(bytes) => {
+                    assert_eq!(bytes, vec![0x42; 16 * 1024 + 5]);
+                    frame = true;
+                }
+                Ev::DesktopSession(p) if p.mouse => {
+                    assert!(frame);
+                    client
+                        .call(request(Action::Pointer(v1::DesktopPointer {
+                            session: 87,
+                            kind: 1,
+                            x: 42,
+                            y: 64,
+                            scroll: 0,
+                        })))
+                        .await
+                        .unwrap();
+                    pattern.received.notified().await;
+                    return;
+                }
+                _ => {}
+            }
+        }
+        panic!(
+            "fixture ended before mouse receipt: {:?}",
+            call.finish().await
+        );
+    })
+    .await
+    .unwrap();
+}
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires an unlocked physical Mac with Screen Recording consent"]
+async fn native_paired_phone_receives_a_real_display_frame() {
+    let (_a, _b, host, phone) = paired_desktop_fixture(&["desktop.view"]).await;
+    // Request exactly one frame. The regular viewer automatically requests another.
+    tokio::time::timeout(Duration::from_secs(45), async {
+        let mut session = phone
+            .node()
+            .open_remote_desktop(host.device_id())
+            .await
+            .expect("paired Mac host admission");
+        session.send_control(b"MDJ1").await.unwrap();
+        let response = session
+            .recv_control()
+            .await
+            .unwrap()
+            .expect("host capture status");
+        if response == b"capture-unavailable" {
+            session.send_control(b"received").await.unwrap();
+            panic!(
+                "Mac capture unavailable under the current identity or Screen Recording permission"
+            );
+        }
+        assert_eq!(response, b"JPG0", "explicit view-only profile");
+        session.send_control(b"N").await.unwrap();
+        let header = session.recv_control().await.unwrap().expect("frame header");
+        let size = u32::from_be_bytes(header.try_into().unwrap()) as usize;
+        assert!((4..=768 * 1024).contains(&size));
+        let mut bytes = Vec::with_capacity(size);
+        while bytes.len() < size {
+            let part = session.recv_control().await.unwrap().expect("frame chunk");
+            assert_eq!(part.len(), (size - bytes.len()).min(12 * 1024));
+            bytes.extend(part);
+        }
+        assert!(bytes.starts_with(&[0xff, 0xd8]) && bytes.ends_with(&[0xff, 0xd9]));
+        eprintln!("Received one display JPEG ({size} bytes)");
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
+    let relay = relay().await;
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let codex_file = transcripts(dir_a.path());
+    let mut alpha = config(dir_a.path(), Some(relay.clone()), "alpha");
+    alpha.agent.as_mut().unwrap().cli_runtime = Some(
+        muster_agent::cli::runtime::NativeRuntime::with_programs(
+            &dir_a.path().join("orca"),
+            [("codex".into(), std::path::PathBuf::from("/bin/true"))]
+                .into_iter()
+                .collect(),
+        )
+        .unwrap(),
+    );
+    let a = Daemon::start_with(alpha, std::sync::Arc::new(musterd::DefaultPlatform), None)
+        .await
+        .unwrap();
+    let b = Daemon::start_with(
+        config(dir_b.path(), None, "bravo"),
+        std::sync::Arc::new(musterd::DefaultPlatform),
+        None,
+    )
+    .await
+    .unwrap();
+    let ca = client(&a).await;
+    let cb = client(&b).await;
+
+    let pending = pair_phone(&ca, cb, &["agents", "agents:codex", "chats:claude"]).await;
 
     let (send, recv) = tokio::time::timeout(
         Duration::from_secs(15),
