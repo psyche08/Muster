@@ -29,7 +29,7 @@ def build(cache, output, msys):
     run(ucrt / "cmake.exe", "-G", "Ninja", "-S", src, "-B", obj,
         "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTS=OFF", "-DBUILD_DOCS=OFF",
         "-DSUNSHINE_ENABLE_TRAY=OFF", "-DSUNSHINE_ASSETS_DIR=assets",
-        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + host["extract"](boost, cache, "boost-1.89.0").as_posix(),
+        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + host["boost_source"](cache, boost).as_posix(),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + host["extract"](json, cache, "json").as_posix(),
         "-DFFMPEG_PREPARED_BINARIES=" + prefix.as_posix(), env=env)
     run(ucrt / "cmake.exe", "--build", obj, "--target", "sunshine", "--parallel", "6", env=env)

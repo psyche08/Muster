@@ -122,9 +122,30 @@ def host_sources(cache, modules=MODULES):
 def extract(archive, destination, top):
     if not (destination / top).is_dir():
         with tempfile.TemporaryDirectory(dir=destination) as stage:
-            run("tar", "-xf", archive, "-C", stage)
+            if os.name == "nt" and top in ("boost-1.89.0", "json"):
+                # Windows bsdtar can reject UTF-8 filenames under legacy code pages.
+                with tarfile.open(archive, "r|xz") as source:
+                    for member in source:
+                        path = (Path(stage) / member.name).resolve()
+                        if not path.is_relative_to(stage) or not (member.isdir() or member.isfile()):
+                            raise ValueError("Unexpected source entry: " + member.name)
+                        source.extract(member, stage)
+            else:
+                run("tar", "-xf", archive, "-C", stage)
             (Path(stage) / top).rename(destination / top)
     return destination / top
+
+
+def boost_source(cache, archive):
+    tree = extract(archive, cache, "boost-1.89.0")
+    # The umbrella header is one directory above the Locale header group.
+    cmake = tree / "libs/locale/CMakeLists.txt"
+    source = cmake.read_text()
+    fixed = source.replace('source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/boost/locale"',
+                           'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/boost"')
+    if fixed != source:
+        cmake.write_text(fixed)
+    return tree
 
 
 def cmake_sources(cache):
@@ -183,7 +204,7 @@ def build(cache, executable, sources, identity):
         "-DOPENSSL_CRYPTO_LIBRARY=" + str(prefix / "lib/libcrypto.a"),
         "-DCMAKE_PREFIX_PATH=" + str(prefix), "-DOpus_LIBRARY=" + str(prefix / "lib/libopus.a"),
         "-DFFMPEG_PREPARED_BINARIES=" + str(prepared), "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + minimum,
-        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(extract(boost, cache, "boost-1.89.0")),
+        "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(boost_source(cache, boost)),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + str(extract(json, cache, "json")))
     run("cmake", "--build", obj, "--target", "sunshine", "--parallel", jobs)
     exe = obj / "muster-desktop-host"
