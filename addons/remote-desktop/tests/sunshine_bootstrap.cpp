@@ -28,5 +28,24 @@ int main() {
       return 1;
     }
   }
+#ifdef __APPLE__
+  setenv("MUSTER_DESKTOP_LOCK_SURFACE", "1", 1);
+  using muster_session::surface;
+  for (bool mouse : {false, true}) {
+    muster_session::mouse_enabled.store(mouse);
+    for (bool unlocked : {false, true}) {
+      muster_session::unlocked_by_owner.store(unlocked);
+      const auto requested = unlocked ? surface::desktop : surface::login;
+      for (auto frame : {surface::none, surface::login, surface::desktop}) {
+        muster_session::presented.store(frame);
+        const auto expected = mouse && frame == requested ? frame : surface::none;
+        if (muster_session::mouse_surface() != expected) return 1;
+      }
+    }
+  }
+  unsetenv("MUSTER_DESKTOP_LOCK_SURFACE");
+  muster_session::presented.store(surface::none);
+  if (muster_session::mouse_surface() != surface::desktop) return 1;
+#endif
   return 0;
 }

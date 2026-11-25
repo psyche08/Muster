@@ -424,4 +424,7 @@ superseding decisions get new numbers and bidirectional links.
 | [0306](0306-physical-lock-screen-remote.md) | Accepted requirement; implementation pending | Control the physical lock screen from Remote |
 | [0307](0307-claude-scans-read-only-their-own-region.md) | Accepted; source and tests verified; question and queue walks' panel rule pending installation and runtime acceptance | Claude's scans read only their own region of the window |
 | [0308](0308-a-watchdog-that-cannot-cover-leaves-no-quarantine.md) | Accepted; runtime acceptance pending | A watchdog that cannot raise its cover leaves no quarantine |
+| [0309](0309-macos-remote-screencapturekit.md) | Proposed | Try ScreenCaptureKit on the signed-in physical console |
 | [0310](0310-windows-elevated-release-updates.md) | Accepted; deployment acceptance pending | Install Windows release files with UAC |
+| [0311](0311-remote-continues-after-mac-unlock.md) | Proposed | Continue an active Remote connection after macOS unlock |
+| [0312](0312-sunshine-display-sample.md) | Proposed | Check physical display sampling in the macOS Sunshine host |

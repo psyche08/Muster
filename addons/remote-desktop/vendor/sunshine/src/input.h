@@ -19,6 +19,9 @@
 
 namespace input {
   struct input_t;
+#ifdef __APPLE__
+  void finish_login_input();
+#endif
 
   /**
    * @brief Write a debug log representation of the input packet.

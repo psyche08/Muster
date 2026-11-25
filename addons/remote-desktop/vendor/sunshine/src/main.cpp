@@ -39,6 +39,7 @@
 #include "display_device.h"
 #include "entry_handler.h"
 #include "globals.h"
+#include "input.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "main.h"
@@ -310,7 +311,14 @@ static int run_host(int argc, char *argv[]) {
   muster_session::mouse_enabled.store(grant->mouse);
   auto owner_shutdown = mail::man->event<bool>(mail::shutdown);
   std::thread([owner_shutdown] {
-    park_requested.store(std::cin.get() == 'P');
+    int command = std::cin.get();
+#ifdef __APPLE__
+    if (command == 'U' && muster_session::began_locked()) {
+      input::finish_login_input();
+      command = std::cin.get();
+    }
+#endif
+    park_requested.store(command == 'P');
     muster_session::mouse_enabled.store(false);
     owner_shutdown->raise(true);
   }).detach();
@@ -568,7 +576,16 @@ static int run_host(int argc, char *argv[]) {
   return lifetime::desired_exit_code;
 }
 
+#ifdef __APPLE__
+extern "C" int muster_screen_video_sample();
+#endif
+
 int main(int argc, char *argv[]) {
+#ifdef __APPLE__
+  if (argc == 2 && std::string_view(argv[1]) == "--muster-display-sample") {
+    return muster_screen_video_sample();
+  }
+#endif
 #ifdef _WIN32
   if (argc != 3 || std::string_view(argv[1]) != "--muster-managed" || !platf::appdata().is_absolute()) {
     return 1;

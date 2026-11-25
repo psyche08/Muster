@@ -96,7 +96,7 @@ impl Offer {
 }
 
 pub trait Handler: Send + Sync {
-    /// Report whether the host console is unlocked, active and available.
+    /// Report whether the admitted physical console and grant are still available.
     fn console_ready(&self) -> bool;
 
     fn serve<'session>(

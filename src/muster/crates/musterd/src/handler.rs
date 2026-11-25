@@ -1522,6 +1522,10 @@ async fn dispatch(
         }
         Req::DeviceDebug(r) => {
             let text = match r.what.as_str() {
+                #[cfg(target_os = "macos")]
+                "desktop-display-sample" => {
+                    crate::desktop_session::host::display_sample(daemon).await?
+                }
                 "unlock-probe" | "unlock-key-probe" => daemon.locked_use.probe_unlock().await?,
                 "locked-inspect" => {
                     return crate::inspection::inspect(daemon, &r.arg, events.cancelled()).await;

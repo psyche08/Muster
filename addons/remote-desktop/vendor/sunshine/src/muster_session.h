@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdlib>
 #include <istream>
 #include <optional>
 #include <string>
@@ -38,4 +39,26 @@ namespace muster_session {
   }
 
   inline std::atomic<bool> mouse_enabled {false};
+  enum class surface { none, login, desktop };
+#ifdef __APPLE__
+  inline std::atomic<bool> unlocked_by_owner {false};
+  inline std::atomic<surface> presented {surface::none};
+
+  inline bool began_locked() {
+    return std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") != nullptr;
+  }
+  inline bool capture_login() {
+    return began_locked() && !unlocked_by_owner.load();
+  }
+#endif
+  inline surface mouse_surface() {
+    if (!mouse_enabled.load()) return surface::none;
+#ifdef __APPLE__
+    if (began_locked()) {
+      const auto requested = capture_login() ? surface::login : surface::desktop;
+      return presented.load() == requested ? requested : surface::none;
+    }
+#endif
+    return surface::desktop;
+  }
 }
