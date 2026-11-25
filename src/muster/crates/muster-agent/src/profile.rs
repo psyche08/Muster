@@ -108,6 +108,12 @@ pub enum SessionList {
         /// app whose one web area holds both the session list and the open
         /// conversation (ADR 0091): skipping it would hide the sidebar too.
         separate_conversation_views: bool,
+        /// Whether the list sits outside the main landmark, which holds the
+        /// open conversation with its transcript, composer and panels. The
+        /// sidebar walk then reads only the window around the main landmark,
+        /// and reads the main landmark too only when it finds no list
+        /// outside it (ADR 0307).
+        outside_main: bool,
         /// The control that lists older sessions, pressed when the session
         /// is not among the rows shown.
         more: Option<More>,
@@ -216,6 +222,20 @@ pub struct Controls {
     /// the session's view, such as Claude's side chat. A composer, submit or
     /// queued-message control inside one is not the session's (ADR 0221).
     pub auxiliary_regions: &'static [&'static str],
+    /// Names of application groups that hold the conversation's transcript:
+    /// one element per message, never the session list, the composer, or
+    /// its Send and Stop. Control and session-list scans do not walk into
+    /// one, so a long conversation cannot use up their node budget
+    /// (ADR 0307).
+    pub transcript_regions: &'static [&'static str],
+    /// Whether the panels around the conversation hold none of the
+    /// composer, Send or Stop: complementary landmarks (asides), such as
+    /// Claude's session sidebar and its activity panel, and landmark regions
+    /// inside another landmark region, such as the side panel showing a
+    /// file inside Claude's primary pane. The control scan then does not
+    /// walk into one, so a long session list or a large panel cannot use up
+    /// its node budget (ADR 0307).
+    pub skip_panels: bool,
     /// What the composer reports as its value while empty.
     pub placeholders: &'static [&'static str],
     pub draft: Draft,
@@ -763,6 +783,8 @@ impl Controls {
         composer: Selector::NONE,
         composer_scope: crate::native_scan::ComposerScope::WebArea,
         auxiliary_regions: &[],
+        transcript_regions: &[],
+        skip_panels: false,
         placeholders: &[],
         draft: Draft::Value,
         send: Selector::NONE,
@@ -790,6 +812,28 @@ impl Controls {
                 .into_iter()
                 .flatten()
                 .any(|name| self.auxiliary_regions.contains(&name.as_str()))
+    }
+
+    /// Whether `node`, whose subrole is `subrole`, is one of the groups in
+    /// `transcript_regions`. A scan for controls or session rows keeps the
+    /// node itself and skips everything below it.
+    pub fn is_transcript_region(&self, subrole: &str, node: &impl AxQuery) -> bool {
+        subrole == "AXApplicationGroup"
+            && [node.title(), node.description()]
+                .into_iter()
+                .flatten()
+                .any(|name| self.transcript_regions.contains(&name.as_str()))
+    }
+
+    /// Whether the control scan keeps a node whose subrole is `subrole` but
+    /// skips everything below it: a complementary landmark, or a landmark
+    /// region whose ancestors include another landmark region
+    /// (`in_region`), where the profile says those hold no controls
+    /// (`skip_panels`).
+    pub fn skips_panel(&self, subrole: &str, in_region: bool) -> bool {
+        self.skip_panels
+            && (subrole == "AXLandmarkComplementary"
+                || (in_region && subrole == "AXLandmarkRegion"))
     }
 }
 
@@ -832,6 +876,11 @@ mod tests {
     const CHATGPT_NEW_DUMP: &str = include_str!("../tests/fixtures/ax/chatgpt-chat-new.dump");
     const CHATGPT_CHAT_DUMP: &str = include_str!("../tests/fixtures/ax/chatgpt-chat.dump");
     const CLAUDE_CHAT_DUMP: &str = include_str!("../tests/fixtures/ax/claude-chat-new.dump");
+    const CLAUDE_CODE_TRANSCRIPT: &str =
+        include_str!("../tests/fixtures/ax/claude-code-transcript.dump");
+    const CLAUDE_CODE_FILES_PANEL: &str =
+        include_str!("../tests/fixtures/ax/claude-code-files-panel.dump");
+    const CODEX_DESKTOP_LONG: &str = include_str!("../tests/fixtures/ax/codex-desktop-long.dump");
 
     fn found(tree: &AxTree, selector: &Selector) -> Vec<usize> {
         (0..tree.nodes.len())
@@ -1083,6 +1132,588 @@ AXWebArea title="Session - Claude Code"
         assert!(!CLAUDE.is_auxiliary_region("AXGroup", side));
         assert!(!CLAUDE.is_auxiliary_region("AXLandmarkRegion", &tree.nodes[2]));
         assert!(!CODEX.is_auxiliary_region("AXLandmarkRegion", side));
+    }
+
+    /// Only an application group named as a transcript is one, and only in
+    /// Claude's profile.
+    #[test]
+    fn claude_transcript_regions_are_named_application_groups() {
+        let tree = tree(
+            r#"
+AXWebArea title="Session - Claude Code"
+  AXGroup/AXApplicationGroup title="Chat messages" desc="Chat messages"
+  AXGroup/AXApplicationGroup desc="Chat messages"
+  AXGroup/AXLandmarkRegion title="Chat messages"
+  AXGroup/AXApplicationGroup title="Code" desc="Code"
+"#,
+        );
+        assert!(CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+        assert!(CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[2]));
+        assert!(!CLAUDE.is_transcript_region("AXLandmarkRegion", &tree.nodes[3]));
+        assert!(!CLAUDE.is_transcript_region("AXApplicationGroup", &tree.nodes[4]));
+        assert!(!CODEX.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+        assert!(!Controls::UNRECORDED.is_transcript_region("AXApplicationGroup", &tree.nodes[1]));
+    }
+
+    /// Claude's control scan skips complementary landmarks and landmark
+    /// regions inside another, and its sidebar scan the main landmark; no
+    /// other app's scans do.
+    #[test]
+    fn claude_scans_skip_panels_and_the_main_landmark() {
+        for in_region in [false, true] {
+            assert!(CLAUDE.skips_panel("AXLandmarkComplementary", in_region));
+            for subrole in [
+                "AXLandmarkMain",
+                "AXLandmarkNavigation",
+                "AXApplicationGroup",
+                "",
+            ] {
+                assert!(!CLAUDE.skips_panel(subrole, in_region), "{subrole}");
+            }
+            assert!(!CODEX.skips_panel("AXLandmarkComplementary", in_region));
+            assert!(!CODEX.skips_panel("AXLandmarkRegion", in_region));
+            assert!(!Controls::UNRECORDED.skips_panel("AXLandmarkComplementary", in_region));
+        }
+        // The primary pane is a region; the side panel is a region inside it.
+        assert!(!CLAUDE.skips_panel("AXLandmarkRegion", false));
+        assert!(CLAUDE.skips_panel("AXLandmarkRegion", true));
+        let outside_main = |controls: &Controls| {
+            matches!(
+                controls.sessions,
+                SessionList::Sidebar {
+                    outside_main: true,
+                    ..
+                }
+            )
+        };
+        assert!(outside_main(&CLAUDE));
+        assert!(!outside_main(&CODEX));
+    }
+
+    /// `muster_platform::macos::ax::MAX_NODES`: what the platform's control
+    /// and sidebar walks read at most before reporting an incomplete scan.
+    const PLATFORM_NODE_LIMIT: usize = 4096;
+
+    /// `i`'s ancestors, nearest first.
+    fn ancestors(tree: &AxTree, i: usize) -> impl Iterator<Item = usize> + '_ {
+        std::iter::successors(tree.nodes[i].parent, |&p| tree.nodes[p].parent)
+    }
+
+    /// The application groups that hold a conversation's messages: the
+    /// nearest such group above each message article.
+    fn message_lists(tree: &AxTree) -> Vec<usize> {
+        let mut lists: Vec<usize> = (0..tree.nodes.len())
+            .filter(|&i| tree.nodes[i].subrole == "AXDocumentArticle")
+            .filter_map(|i| {
+                ancestors(tree, i).find(|&a| tree.nodes[a].subrole == "AXApplicationGroup")
+            })
+            .collect();
+        lists.sort_unstable();
+        lists.dedup();
+        lists
+    }
+
+    /// The Claude Code window of 2026-11-24 (Claude desktop Code tab, one
+    /// session open, idle, empty composer; the menu bar left out). The
+    /// session sidebar is a complementary landmark beside the main landmark.
+    /// The main landmark holds the primary pane, a landmark region, which
+    /// holds the message list, which is the group the profile names as a
+    /// transcript, the activity panel, a second complementary landmark, and
+    /// the composer. The window of 2026-11-25 has a file open in the side
+    /// panel instead of the activity panel: a landmark region inside the
+    /// primary pane. In these and in every older Claude Code recording
+    /// (idle, running, with a draft, with a question card), no composer,
+    /// Send or Stop is inside a message list or a panel. Where a recording
+    /// still names the session sidebar, it is outside the main landmark. So
+    /// the scans that skip those regions miss none of them.
+    #[test]
+    fn recorded_claude_regions_keep_session_controls_apart() {
+        let recorded = tree(CLAUDE_CODE_TRANSCRIPT);
+        let named: Vec<_> = (0..recorded.nodes.len())
+            .filter(|&i| {
+                CLAUDE.is_transcript_region(&recorded.nodes[i].subrole, &recorded.nodes[i])
+            })
+            .collect();
+        assert_eq!(named.len(), 1);
+        assert_eq!(message_lists(&recorded), named);
+        let names = |tree: &AxTree| -> Vec<String> {
+            panels(tree)
+                .into_iter()
+                .map(|i| tree.nodes[i].subrole.clone())
+                .collect()
+        };
+        assert_eq!(
+            names(&recorded),
+            ["AXLandmarkComplementary"; 2],
+            "the session sidebar and the activity panel"
+        );
+        assert_eq!(
+            names(&tree(CLAUDE_CODE_FILES_PANEL)),
+            ["AXLandmarkComplementary", "AXLandmarkRegion"],
+            "the session sidebar and the side panel"
+        );
+        let mut sidebars = 0;
+        for dump in [
+            CLAUDE_CODE_TRANSCRIPT,
+            CLAUDE_CODE_FILES_PANEL,
+            CLAUDE_CODE,
+            CLAUDE_CODE_RUNNING,
+            CLAUDE_CODE_RUNNING_DRAFT,
+            CLAUDE_CODE_QUESTION,
+        ] {
+            let tree = tree(dump);
+            let lists = message_lists(&tree);
+            assert!(!lists.is_empty());
+            let controls: Vec<_> = (0..tree.nodes.len())
+                .filter(|&i| {
+                    let n = &tree.nodes[i];
+                    CLAUDE.composer.matches(n)
+                        || CLAUDE.send.matches(n)
+                        || (n.role == "AXButton" && CLAUDE.stop.matches(n))
+                })
+                .collect();
+            assert!(!controls.is_empty());
+            for i in controls {
+                assert!(
+                    ancestors(&tree, i).all(|a| !lists.contains(&a) && !is_panel(&tree, a)),
+                    "{:?} is inside a message list or a panel",
+                    tree.nodes[i]
+                );
+            }
+            for i in session_sidebars(&tree) {
+                sidebars += 1;
+                assert!(
+                    ancestors(&tree, i).all(|a| {
+                        !lists.contains(&a) && tree.nodes[a].subrole != "AXLandmarkMain"
+                    }),
+                    "the session sidebar is inside the main landmark"
+                );
+            }
+        }
+        assert_eq!(
+            sidebars, 2,
+            "older recordings have their sidebar's name redacted"
+        );
+    }
+
+    /// Whether the Claude control scan keeps `i` but skips everything below
+    /// it as a panel (`skips_panel`).
+    fn is_panel(tree: &AxTree, i: usize) -> bool {
+        let in_region = ancestors(tree, i).any(|a| tree.nodes[a].subrole == "AXLandmarkRegion");
+        CLAUDE.skips_panel(&tree.nodes[i].subrole, in_region)
+    }
+
+    /// The panels the Claude control scan skips, in tree order: those
+    /// inside no other panel.
+    fn panels(tree: &AxTree) -> Vec<usize> {
+        (0..tree.nodes.len())
+            .filter(|&i| is_panel(tree, i) && !ancestors(tree, i).any(|a| is_panel(tree, a)))
+            .collect()
+    }
+
+    /// The landmarks the Claude profile reads as its session sidebar.
+    fn session_sidebars(tree: &AxTree) -> Vec<usize> {
+        (0..tree.nodes.len())
+            .filter(|&i| {
+                let n = &tree.nodes[i];
+                crate::native_sidebar::claude_session_sidebar(&n.identifier, &n.subrole, n.label())
+            })
+            .collect()
+    }
+
+    /// The first message of the recording's transcript.
+    fn first_message(tree: &AxTree) -> usize {
+        let transcript = (0..tree.nodes.len())
+            .find(|&i| CLAUDE.is_transcript_region(&tree.nodes[i].subrole, &tree.nodes[i]))
+            .unwrap();
+        tree.preorder(transcript)
+            .into_iter()
+            .find(|&i| tree.nodes[i].subrole == "AXDocumentArticle")
+            .unwrap()
+    }
+
+    /// The first section of the recording's activity panel: the
+    /// complementary landmark inside the main landmark.
+    fn first_panel_section(tree: &AxTree) -> usize {
+        let panel = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].subrole == "AXLandmarkComplementary"
+                    && ancestors(tree, i).any(|a| tree.nodes[a].subrole == "AXLandmarkMain")
+            })
+            .unwrap();
+        tree.preorder(panel)
+            .into_iter()
+            .find(|&i| tree.nodes[i].subrole == "AXLandmarkRegion")
+            .unwrap()
+    }
+
+    /// `tree` with copies of `template` added beside it until their parent
+    /// holds more than twice the platform's node limit: the shape of a long
+    /// conversation or a large panel, every other node as recorded. Copies
+    /// are appended, so every recorded node keeps its index.
+    fn grown(mut tree: AxTree, template: usize) -> AxTree {
+        let parent = tree.nodes[template].parent.unwrap();
+        // Preorder: a parent is copied before its children.
+        let original = tree.preorder(template);
+        while tree.preorder(parent).len() <= 2 * PLATFORM_NODE_LIMIT {
+            let mut copies = std::collections::HashMap::new();
+            for &i in &original {
+                let at = if i == template {
+                    parent
+                } else {
+                    copies[&tree.nodes[i].parent.unwrap()]
+                };
+                let mut node = tree.nodes[i].clone();
+                node.children.clear();
+                node.parent = Some(at);
+                let copy = tree.nodes.len();
+                tree.nodes.push(node);
+                tree.nodes[at].children.push(copy);
+                copies.insert(i, copy);
+            }
+        }
+        tree
+    }
+
+    /// What a control scan walks past: it keeps such a node but reads
+    /// nothing below it.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Prune {
+        /// Nothing: the scan before ADR 0307.
+        Nothing,
+        /// Transcripts and complementary landmarks: the scan before it
+        /// skipped landmark regions inside another.
+        Asides,
+        /// Transcripts and panels (`skips_panel`).
+        Panels,
+    }
+
+    /// What the platform's control scan (`find_controls`) reads: breadth
+    /// first from the conversation's web area, at most the node limit, and
+    /// nothing below what `prune` names. `None` when the limit stopped it;
+    /// otherwise the tree index of each node read and the composer it chose.
+    fn control_scan(tree: &AxTree, prune: Prune) -> Option<(Vec<usize>, Option<usize>)> {
+        let queue = CLAUDE.queue.as_ref().unwrap();
+        let root = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].role == "AXWebArea"
+                    && tree.nodes[i].url.starts_with("https://claude.ai/")
+            })
+            .unwrap();
+        let (mut order, mut nodes, mut subroles, mut aside, mut regions) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut todo = std::collections::VecDeque::from([(root, None)]);
+        while let Some((i, parent)) = todo.pop_front() {
+            if order.len() >= PLATFORM_NODE_LIMIT {
+                return None;
+            }
+            let n = &tree.nodes[i];
+            let index = order.len();
+            let in_region = parent.is_some_and(|p: usize| regions[p]);
+            let inside = parent.is_some_and(|p: usize| aside[p])
+                || CLAUDE.is_auxiliary_region(&n.subrole, n);
+            let composer = !inside && CLAUDE.composer.matches(n);
+            let button = n.role == "AXButton";
+            nodes.push(crate::native_send::ControlNode {
+                parent,
+                composer,
+                submit: !inside
+                    && !composer
+                    && (CLAUDE.send.matches(n) || (button && CLAUDE.stop.matches(n))),
+                queued_delete: !inside && button && queue.row.matches(n),
+            });
+            aside.push(inside);
+            regions.push(in_region || n.subrole == "AXLandmarkRegion");
+            subroles.push(n.subrole.clone());
+            order.push(i);
+            let transcript = CLAUDE.is_transcript_region(&n.subrole, n);
+            let skipped = match prune {
+                Prune::Nothing => false,
+                Prune::Asides => transcript || n.subrole == "AXLandmarkComplementary",
+                Prune::Panels => transcript || CLAUDE.skips_panel(&n.subrole, in_region),
+            };
+            if !skipped {
+                todo.extend(n.children.iter().map(|&child| (child, Some(index))));
+            }
+        }
+        let chosen = crate::native_scan::choose_composer(CLAUDE.composer_scope, &nodes, &subroles)
+            .map(|index| order[index]);
+        Some((order, chosen))
+    }
+
+    /// What the platform's sidebar scan (`scan_sidebar` for Claude) reads
+    /// to find the session sidebar: the whole app, stopping at the menu bar
+    /// and at each sidebar landmark. With `prune` it also stops at a
+    /// transcript and at the main landmark, and reads the main landmark only
+    /// when it found no sidebar beside it. How the walk ended, the sidebars
+    /// found and the nodes read.
+    fn sidebar_scan(tree: &AxTree, prune: bool) -> (&'static str, Vec<usize>, usize) {
+        let walk = |skip_main: bool| {
+            let mut navigation = Vec::new();
+            let (read, stop, _) = crate::native_tree::walk_pruned(
+                0usize,
+                PLATFORM_NODE_LIMIT,
+                std::time::Duration::from_secs(60),
+                |&i| Some(tree.nodes[i].children.clone()),
+                |&i| {
+                    let n = &tree.nodes[i];
+                    if n.role == "AXMenuBar"
+                        || (prune && CLAUDE.is_transcript_region(&n.subrole, n))
+                        || (skip_main && n.subrole == "AXLandmarkMain")
+                    {
+                        return false;
+                    }
+                    if crate::native_sidebar::claude_session_sidebar(
+                        &n.identifier,
+                        &n.subrole,
+                        n.label(),
+                    ) {
+                        navigation.push(i);
+                        return false;
+                    }
+                    true
+                },
+            );
+            (stop, navigation, read)
+        };
+        let beside = walk(prune);
+        if prune && beside.1.is_empty() {
+            return walk(false);
+        }
+        beside
+    }
+
+    /// A long Claude conversation (2026-11-24: a session whose transcript
+    /// pushed the window past 4,096 elements) stopped the control scan
+    /// before the composer and the sidebar scan before it could prove one
+    /// match, so the session could neither be sent to nor be selected. A
+    /// large panel beside the conversation does the same. With the
+    /// transcript and the panels skipped (control scan) and the main
+    /// landmark skipped (sidebar scan), both scans complete and read exactly
+    /// what they read in the recording, with the same composer and the same
+    /// single sidebar.
+    #[test]
+    fn long_transcripts_and_large_panels_leave_claude_scans_complete() {
+        let recorded = tree(CLAUDE_CODE_TRANSCRIPT);
+        let (full, composer) = control_scan(&recorded, Prune::Nothing).unwrap();
+        let composer = composer.unwrap();
+        assert_eq!(recorded.nodes[composer].description, "Prompt");
+        let (read, chosen) = control_scan(&recorded, Prune::Panels).unwrap();
+        assert_eq!(chosen, Some(composer));
+        assert!(read.len() < full.len());
+        let (stop, sidebars, everything) = sidebar_scan(&recorded, false);
+        assert_eq!((stop, sidebars.len()), ("complete", 1));
+        let beside = sidebar_scan(&recorded, true);
+        assert_eq!((beside.0, &beside.1), (stop, &sidebars));
+        assert!(beside.2 < everything);
+
+        let (message, section) = (first_message(&recorded), first_panel_section(&recorded));
+        let long = grown(recorded.clone(), message);
+        let large = grown(recorded.clone(), section);
+        let both = grown(long.clone(), section);
+        for (name, tree) in [
+            ("long transcript", &long),
+            ("large panel", &large),
+            ("both", &both),
+        ] {
+            assert_eq!(
+                control_scan(tree, Prune::Nothing),
+                None,
+                "{name}: the limit stops the old scan"
+            );
+            assert_eq!(sidebar_scan(tree, false).0, "node_limit", "{name}");
+            assert_eq!(
+                control_scan(tree, Prune::Panels),
+                Some((read.clone(), Some(composer))),
+                "{name}: the scan reads what it read in the recording"
+            );
+            assert_eq!(sidebar_scan(tree, true), beside, "{name}");
+        }
+    }
+
+    /// Claude Code with a Markdown file open in the side panel (recorded
+    /// 2026-11-25, Claude desktop Code tab, one session open, idle; the
+    /// menu bar left out). The side panel is a landmark region inside the
+    /// primary pane, beside the conversation, and holds 4,025 elements for
+    /// that one file. So a control scan that skipped only the transcript and
+    /// the complementary landmarks still stopped at the node limit before
+    /// the composer, and the session could not be sent to, while the
+    /// sidebar scan read the whole app and stopped too. Skipping the panel
+    /// as well, the control scan completes with the window's one composer
+    /// and reads nothing inside the panel; the sidebar scan beside the main
+    /// landmark completes with one session sidebar.
+    #[test]
+    fn a_file_open_beside_a_claude_conversation_leaves_its_scans_complete() {
+        let recorded = tree(CLAUDE_CODE_FILES_PANEL);
+        assert_eq!(control_scan(&recorded, Prune::Nothing), None);
+        assert_eq!(control_scan(&recorded, Prune::Asides), None);
+        let (read, chosen) = control_scan(&recorded, Prune::Panels).unwrap();
+        assert_eq!(
+            chosen.map(|i| recorded.nodes[i].description.as_str()),
+            Some("Prompt")
+        );
+        assert_eq!(found(&recorded, &CLAUDE.composer), Vec::from_iter(chosen));
+        let [_, side] = panels(&recorded)[..] else {
+            unreachable!()
+        };
+        assert_eq!(recorded.nodes[side].subrole, "AXLandmarkRegion");
+        let inside = recorded.preorder(side);
+        assert!(inside.len() > PLATFORM_NODE_LIMIT - read.len());
+        assert!(read.contains(&side) && inside[1..].iter().all(|i| !read.contains(i)));
+
+        assert_eq!(sidebar_scan(&recorded, false).0, "node_limit");
+        let (stop, sidebars, _) = sidebar_scan(&recorded, true);
+        assert_eq!((stop, sidebars), ("complete", session_sidebars(&recorded)));
+    }
+
+    /// What the platform's question walk (`Tree::read`, which finds a
+    /// question card's form) and queued-message walk read: depth first from
+    /// the conversation's web area, at most the node limit, and with
+    /// `prune` nothing below a panel (`skips_panel`). Unlike the control
+    /// scan they read the transcript, where proposals, wrap-ups and queued
+    /// messages are. `None` when the limit stopped the walk; otherwise the
+    /// tree index of each node read.
+    fn form_walk(tree: &AxTree, prune: bool) -> Option<Vec<usize>> {
+        let root = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].role == "AXWebArea"
+                    && tree.nodes[i].url.starts_with("https://claude.ai/")
+            })
+            .unwrap();
+        let mut read = Vec::new();
+        let mut todo = vec![(root, false)];
+        while let Some((i, in_region)) = todo.pop() {
+            if read.len() >= PLATFORM_NODE_LIMIT {
+                return None;
+            }
+            read.push(i);
+            let n = &tree.nodes[i];
+            if !(prune && CLAUDE.skips_panel(&n.subrole, in_region)) {
+                let region = in_region || n.subrole == "AXLandmarkRegion";
+                todo.extend(n.children.iter().rev().map(|&child| (child, region)));
+            }
+        }
+        Some(read)
+    }
+
+    /// Answering a question card in the session with a file open beside it
+    /// still failed once its control scan completed: the question walk read
+    /// the whole web area and stopped at the node limit ("The question
+    /// accessibility tree is incomplete", 2026-11-25). Skipping the panels
+    /// as well, it reads a tenth of the limit there, with every node of the
+    /// transcript, the composer and nothing inside the side panel. On the
+    /// recording with a question card it still reads the whole card.
+    #[test]
+    fn a_file_open_beside_a_claude_conversation_leaves_its_form_walks_complete() {
+        let recorded = tree(CLAUDE_CODE_FILES_PANEL);
+        assert_eq!(form_walk(&recorded, false), None);
+        let read = form_walk(&recorded, true).unwrap();
+        assert!(read.len() < PLATFORM_NODE_LIMIT / 10);
+        let [transcript] = message_lists(&recorded)[..] else {
+            unreachable!()
+        };
+        assert!(
+            recorded
+                .preorder(transcript)
+                .iter()
+                .all(|i| read.contains(i))
+        );
+        let composers = found(&recorded, &CLAUDE.composer);
+        assert!(!composers.is_empty() && composers.iter().all(|i| read.contains(i)));
+        let [_, side] = panels(&recorded)[..] else {
+            unreachable!()
+        };
+        let inside = recorded.preorder(side);
+        assert!(read.contains(&side) && inside[1..].iter().all(|i| !read.contains(i)));
+
+        let card = tree(CLAUDE_CODE_QUESTION);
+        let read = form_walk(&card, true).unwrap();
+        let cards = CLAUDE.questions.as_ref().unwrap();
+        let [next] = (0..card.nodes.len())
+            .filter(|&i| {
+                card.nodes[i].role == "AXButton" && cards.next.contains(&card.nodes[i].label())
+            })
+            .collect::<Vec<_>>()[..]
+        else {
+            unreachable!()
+        };
+        let form = card.nodes[next].parent.unwrap();
+        assert!(card.preorder(form).iter().all(|i| read.contains(i)));
+        assert!(
+            found(&card, &CLAUDE.composer)
+                .iter()
+                .all(|i| read.contains(i))
+        );
+    }
+
+    /// A long Codex conversation in the current ChatGPT app (recorded
+    /// 2026-11-25, Codex mode, 38 user messages, idle, empty composer; the
+    /// menu bar left out). The app renders only the latest exchange: one
+    /// landmark region holds it and the composer, and a navigation landmark
+    /// beside it jumps to each user message. The whole web area stays under
+    /// a quarter of the node limit, so Codex's control scan, which skips
+    /// nothing (ADR 0307), completes, and the profile finds its one
+    /// composer in this layout.
+    #[test]
+    fn a_long_codex_conversation_renders_only_its_latest_exchange() {
+        let tree = tree(CODEX_DESKTOP_LONG);
+        let web = (0..tree.nodes.len())
+            .find(|&i| tree.nodes[i].role == "AXWebArea")
+            .unwrap();
+        assert!(tree.preorder(web).len() < PLATFORM_NODE_LIMIT / 4);
+        let jumps = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].subrole == "AXLandmarkNavigation"
+                    && ancestors(&tree, i).any(|a| tree.nodes[a].subrole == "AXLandmarkMain")
+            })
+            .unwrap();
+        let jumps = &tree.nodes[jumps].children;
+        assert_eq!(jumps.len(), 38, "one per user message");
+        assert!(jumps.iter().all(|&i| tree.nodes[i].role == "AXButton"));
+        let replies = tree
+            .nodes
+            .iter()
+            .filter(|n| n.role == "AXHeading" && n.title == "ChatGPT said:")
+            .count();
+        assert_eq!(replies, 1, "only the latest exchange is rendered");
+
+        let composers = found(&tree, &CODEX.composer);
+        assert_eq!(composers.len(), 1);
+        let nodes = control_nodes(&CODEX, &tree);
+        let subroles: Vec<_> = tree.nodes.iter().map(|n| n.subrole.clone()).collect();
+        let chosen = crate::native_scan::choose_composer(CODEX.composer_scope, &nodes, &subroles);
+        assert_eq!(chosen, Some(composers[0]));
+        assert!(!CODEX.is_draft(&tree.nodes[composers[0]].value.replace('⏎', "\n")));
+        assert!(codex_submits(&tree).is_empty());
+        idle(&tree, &CODEX);
+    }
+
+    /// With no session sidebar beside the main landmark, because it is
+    /// hidden or an app update moved it inside, the sidebar scan reads the
+    /// main landmark too, as it did before, and finds a moved sidebar there.
+    #[test]
+    fn claude_sidebar_scan_reads_the_main_landmark_when_nothing_is_beside_it() {
+        let recorded = tree(CLAUDE_CODE_TRANSCRIPT);
+        let (_, sidebars, beside) = sidebar_scan(&recorded, true);
+        let [sidebar] = sidebars[..] else {
+            unreachable!()
+        };
+        let main = (0..recorded.nodes.len())
+            .find(|&i| recorded.nodes[i].subrole == "AXLandmarkMain")
+            .unwrap();
+        let shell = recorded.nodes[sidebar].parent.unwrap();
+        let mut moved = recorded.clone();
+        moved.nodes[shell].children.retain(|&c| c != sidebar);
+        moved.nodes[main].children.push(sidebar);
+        moved.nodes[sidebar].parent = Some(main);
+        let (stop, found, read) = sidebar_scan(&moved, true);
+        assert_eq!((stop, found), ("complete", sidebars));
+        assert!(read > beside, "the second walk read the main landmark");
+
+        let mut hidden = recorded;
+        hidden.nodes[shell].children.retain(|&c| c != sidebar);
+        let (stop, found, _) = sidebar_scan(&hidden, true);
+        assert_eq!((stop, found), ("complete", vec![]));
     }
 
     /// Claude's queued rows carry their own Send now, so its sends are kept

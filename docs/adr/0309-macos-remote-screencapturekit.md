@@ -2,7 +2,7 @@
 
 - Date: 2026-11-25
 - Status: Proposed
-- Related: [Physical lock screen](0306-physical-lock-screen-remote.md), [Display sample](0308-sunshine-display-sample.md)
+- Related: [Physical lock screen](0306-physical-lock-screen-remote.md), [Display sample](0312-sunshine-display-sample.md)
 
 ## Context
 

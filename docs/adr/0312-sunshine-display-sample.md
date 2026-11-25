@@ -1,4 +1,4 @@
-# ADR 0308: Check physical display sampling in the macOS Sunshine host
+# ADR 0312: Check physical display sampling in the macOS Sunshine host
 
 - Date: 2026-11-24
 - Status: Proposed

@@ -218,6 +218,9 @@ viewed, or driven through its `[plugin]` (DeepSeek Harness).
 |---|---|---|
 | `draft` | `value`, `selection` | How the prompt is put into the composer: set its value (ProseMirror re-reads its DOM) or focus, select all and replace the selection (Lexical reverts edits it did not make). The engine then waits for the exact echo before any press |
 | `placeholders` | list | What an empty composer reports as its value (Codex: "Do anything"); never a draft |
+| `auxiliary_regions` | list, optional | Names of landmark regions that hold a conversation of their own, such as Claude's "Side chat"; a composer, submit or queued-message control inside one is not the session's |
+| `transcript_regions` | list, optional | Names of application groups that hold the conversation's transcript (Claude: "Chat messages"); control and sidebar scans do not walk into one, so a long conversation cannot exhaust their node limit (ADR 0307) |
+| `skip_panels` | bool, optional | The panels around the conversation hold no composer, Send, Stop, question form or queued prompt: complementary landmarks (asides), such as Claude's session sidebar and activity panel, and landmark regions inside another landmark region, such as Claude's side panel showing a file inside its primary pane; the control, question and queue walks do not walk into one (ADR 0307) |
 | `composer` | selector | The text area a prompt is drafted in |
 | `send` | selector | The control that submits it; looked up again when sending, since it may appear only with text and give way to Stop |
 | `stop` | selector | The control that stops the running turn; an enabled one means a turn is running, and an interrupt presses it |
@@ -237,7 +240,7 @@ else the description, which finds a Chromium button labelled only by
 
 | `kind` | Fields | Meaning |
 |---|---|---|
-| `sidebar` | `landmarks` (navigation and complementary landmarks list sessions too), `standalone_title` (one exact title with recognized status/delegation metadata; incomplete or ambiguous labels refuse selection), `separate_conversation_views` (each conversation is its own web area beside the app shell, so the sidebar walk may skip those views; false when one web area holds both the list and the conversation), `more` (`prefix`, `suffix`: the control that lists older sessions, named `<prefix><count><suffix>`) | Rows in the app shell's sidebar |
+| `sidebar` | `landmarks` (navigation and complementary landmarks list sessions too), `standalone_title` (one exact title with recognized status/delegation metadata; incomplete or ambiguous labels refuse selection), `separate_conversation_views` (each conversation is its own web area beside the app shell, so the sidebar walk may skip those views; false when one web area holds both the list and the conversation), `outside_main` (optional: the list sits beside the main landmark, so the sidebar walk skips the main landmark and reads it only when it finds no list beside it; ADR 0307), `more` (`prefix`, `suffix`: the control that lists older sessions, named `<prefix><count><suffix>`) | Rows in the app shell's sidebar |
 | `page-rows` | none | Pressable rows of the main window's page, found from the text reading the title |
 
 ### `[chat]`: the app's Chat mode (optional)
