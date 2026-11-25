@@ -212,7 +212,6 @@ struct MobileRemoteViewport: UIViewRepresentable {
         private let canvas = TouchCanvas()
         private var videoLayer: AVSampleBufferDisplayLayer?
         private var pixels = CGSize.zero
-        private var pixelScale: CGFloat { window?.windowScene?.screen.nativeScale ?? traitCollection.displayScale }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -242,23 +241,18 @@ struct MobileRemoteViewport: UIViewRepresentable {
                 setNeedsLayout()
             }
             canvas.isUserInteractionEnabled = mouse
-            canvas.action = { [weak self] kind, point, lines in
-                guard let self else { return }
-                let scale = self.pixelScale
-                action(kind, CGPoint(x: floor(point.x * scale), y: floor(point.y * scale)), lines)
+            canvas.action = { kind, point, lines in
+                action(kind, CGPoint(x: floor(point.x), y: floor(point.y)), lines)
             }
         }
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            let scale = pixelScale
-            guard scale > 0, pixels.width > 0, pixels.height > 0 else { return }
-            let size = CGSize(width: pixels.width / scale, height: pixels.height / scale)
-            let content = CGSize(width: max(bounds.width, size.width), height: max(bounds.height, size.height))
+            guard pixels.width > 0, pixels.height > 0 else { return }
+            let content = CGSize(width: max(bounds.width, pixels.width), height: max(bounds.height, pixels.height))
             if contentSize != content { contentSize = content }
-            let origin = CGPoint(x: floor((content.width - size.width) * scale / 2) / scale,
-                                 y: floor((content.height - size.height) * scale / 2) / scale)
-            canvas.frame = CGRect(origin: origin, size: size)
+            let origin = CGPoint(x: (content.width - pixels.width) / 2, y: (content.height - pixels.height) / 2)
+            canvas.frame = CGRect(origin: origin, size: pixels)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             videoLayer?.frame = canvas.bounds
