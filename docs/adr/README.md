@@ -423,3 +423,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0305](0305-ios-workspace-navigation-menu.md) | Accepted | Switch iOS workspaces from a navigation menu |
 | [0306](0306-physical-lock-screen-remote.md) | Accepted requirement; implementation pending | Control the physical lock screen from Remote |
 | [0308](0308-sunshine-display-sample.md) | Proposed | Check physical display sampling in the macOS Sunshine host |
+| [0309](0309-macos-remote-screencapturekit.md) | Proposed | Try ScreenCaptureKit on the signed-in physical console |

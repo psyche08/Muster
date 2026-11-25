@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdlib>
 #include <istream>
 #include <optional>
 #include <string>
@@ -38,4 +39,14 @@ namespace muster_session {
   }
 
   inline std::atomic<bool> mouse_enabled {false};
+#ifdef __APPLE__
+  // Set only by the live video loop after the first lock-surface frame.
+  inline std::atomic<bool> lock_frame_visible {false};
+#endif
+  inline bool may_forward_mouse() {
+#ifdef __APPLE__
+    if (std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") && !lock_frame_visible.load()) return false;
+#endif
+    return mouse_enabled.load();
+  }
 }

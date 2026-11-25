@@ -569,13 +569,13 @@ static int run_host(int argc, char *argv[]) {
 }
 
 #ifdef __APPLE__
-extern "C" int muster_display_sample();
+extern "C" int muster_screen_video_sample();
 #endif
 
 int main(int argc, char *argv[]) {
 #ifdef __APPLE__
   if (argc == 2 && std::string_view(argv[1]) == "--muster-display-sample") {
-    return muster_display_sample();
+    return muster_screen_video_sample();
   }
 #endif
 #ifdef _WIN32

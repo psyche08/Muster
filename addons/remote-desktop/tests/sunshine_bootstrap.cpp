@@ -28,5 +28,18 @@ int main() {
       return 1;
     }
   }
+#ifdef __APPLE__
+  setenv("MUSTER_DESKTOP_LOCK_SURFACE", "1", 1);
+  for (bool mouse : {false, true}) {
+    for (bool visible : {false, true}) {
+      muster_session::mouse_enabled.store(mouse);
+      muster_session::lock_frame_visible.store(visible);
+      if (muster_session::may_forward_mouse() != (mouse && visible)) return 1;
+    }
+  }
+  unsetenv("MUSTER_DESKTOP_LOCK_SURFACE");
+  muster_session::lock_frame_visible.store(false);
+  if (!muster_session::may_forward_mouse()) return 1;
+#endif
   return 0;
 }

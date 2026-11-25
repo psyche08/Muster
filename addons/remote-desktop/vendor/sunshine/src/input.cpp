@@ -45,6 +45,10 @@ constexpr int WHEEL_DELTA = 120;  ///< Standard Windows wheel delta used to norm
 
 using namespace std::literals;
 
+#ifdef __APPLE__
+extern "C" bool muster_login_pointer_target();
+#endif
+
 namespace input {
 
   constexpr auto MAX_GAMEPADS = std::min((std::size_t) platf::MAX_GAMEPADS, sizeof(std::int16_t) * 8);  ///< Maximum gamepads representable by the active gamepad mask.
@@ -2065,9 +2069,13 @@ namespace input {
       }
     }
 
-    if (!muster_session::mouse_enabled.load()) {
+    if (!muster_session::may_forward_mouse()) {
       return;
     }
+
+#ifdef __APPLE__
+    if (std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") && !muster_login_pointer_target()) return;
+#endif
 
     // Print the final input packet
     input::print((void *) payload);
@@ -2141,7 +2149,7 @@ namespace input {
       return;
     }
 
-    if (!muster_session::mouse_enabled.load()) {
+    if (!muster_session::may_forward_mouse()) {
       return;
     }
     switch (util::endian::little(header.magic)) {

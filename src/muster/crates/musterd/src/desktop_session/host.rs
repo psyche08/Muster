@@ -24,16 +24,22 @@ pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-desktop-host.exe";
 #[cfg(target_os = "macos")]
 pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
 
-pub(super) fn console_ready(daemon: &Daemon) -> bool {
+/// Lock state of the signed-in physical console, or None when it cannot serve.
+fn console_lock_state(daemon: &Daemon) -> Option<bool> {
+    if daemon.covered() {
+        return None;
+    }
     #[cfg(windows)]
-    return !daemon.covered() && {
+    {
         let p = muster_platform::platform();
-        p.on_console() && !p.locked()
-    };
+        (p.on_console() && !p.locked()).then_some(false)
+    }
     #[cfg(target_os = "macos")]
-    return !daemon.covered()
-        && muster_platform::macos::lock::session_state()
-            .is_some_and(|s| s.on_console && s.login_done && !s.screen_locked);
+    {
+        muster_platform::macos::lock::session_state()
+            .filter(|s| s.on_console && s.login_done)
+            .map(|s| s.screen_locked)
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -78,7 +84,8 @@ impl Drop for ActiveHost<'_> {
     fn drop(&mut self) {
         if let Some(process) = self.process.take()
             && let Some(daemon) = self.host.daemon.upgrade()
-            && console_ready(&daemon)
+            && !self.host.locked
+            && console_lock_state(&daemon) == Some(false)
             && self.host.lease.current(&daemon)
         {
             daemon.desktop_idle.park(process.reset());
@@ -87,6 +94,7 @@ impl Drop for ActiveHost<'_> {
 }
 
 struct Host {
+    locked: bool,
     daemon: Weak<Daemon>,
     lease: super::permissions::Lease,
     peer: DeviceId,
@@ -95,10 +103,9 @@ struct Host {
 impl Handler for Host {
     fn console_ready(&self) -> bool {
         !self.stop.is_cancelled()
-            && self
-                .daemon
-                .upgrade()
-                .is_some_and(|d| console_ready(&d) && self.lease.current(&d))
+            && self.daemon.upgrade().is_some_and(|d| {
+                console_lock_state(&d) == Some(self.locked) && self.lease.current(&d)
+            })
     }
     fn serve<'a>(
         &'a self,
@@ -169,6 +176,10 @@ impl Host {
             .map_err(|_| unavailable("desktop service stopped"))?;
         #[cfg(target_os = "macos")]
         if let Some(settings) = native {
+            if self.locked {
+                session.send_control(CAPTURE_UNAVAILABLE).await?;
+                return Err(unavailable("locked capture requires Moonlight"));
+            }
             return super::native::host(session, settings).await;
         }
         let ports = EnginePorts::MUSTER;
@@ -188,7 +199,7 @@ impl Host {
         let fps = video.map_or(30, |p| p.fps);
         let mode = format!("{width}x{height}x{fps}");
         #[cfg(target_os = "macos")]
-        let parked = daemon.desktop_idle.take().await;
+        let parked = daemon.desktop_idle.take().await.filter(|_| !self.locked);
         #[cfg(windows)]
         let parked = None;
         if !self.console_ready() {
@@ -201,6 +212,7 @@ impl Host {
             ports,
             &launch,
             &mode,
+            self.locked,
             video.is_none_or(|s| s.show_cursor),
         )
         .await
@@ -240,6 +252,7 @@ pub(crate) fn admit(
 ) -> Option<muster_net::remote_desktop::Sharing> {
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
     let host = Arc::new(Host {
+        locked: console_lock_state(daemon)?,
         daemon: Arc::downgrade(daemon),
         lease,
         peer,
@@ -285,6 +298,7 @@ async fn start(
     ports: EnginePorts,
     launch: &Launch,
     mode: &str,
+    _locked: bool,
     cursor: bool,
 ) -> Result<HostProcess, Error> {
     let (directory, warm) = if let Some(host) = parked.filter(|host| host.engine.pid().is_some()) {
@@ -369,7 +383,13 @@ async fn start(
     } else {
         let mut cmd = Command::new(executable);
         #[cfg(target_os = "macos")]
-        cmd.current_dir(dir);
+        {
+            cmd.current_dir(dir)
+                .env_remove("MUSTER_DESKTOP_LOCK_SURFACE");
+            if _locked {
+                cmd.env("MUSTER_DESKTOP_LOCK_SURFACE", "1");
+            }
+        }
         #[cfg(windows)]
         cmd.current_dir(
             executable
@@ -500,6 +520,7 @@ mod tests {
             EnginePorts::MUSTER,
             &launch,
             "1280x720x30",
+            false,
             true,
         )
         .await;

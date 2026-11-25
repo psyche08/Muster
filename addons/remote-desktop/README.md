@@ -97,4 +97,4 @@ The build checks every runtime library reference and signs the bundled host.
 Its matching source archive lives in `Contents/Resources/ThirdParty`.
 The private capture executable sits beside musterd in Contents/MacOS. The foreground
 Muster app requests the OS permissions; the capture tool only preflights them. Source builds and private handshakes can be tested on a locked Mac.
-Real screen and input acceptance require an unlocked active graphical session.
+Test ScreenCaptureKit on the signed-in physical console. Record the unlocked desktop and the locked login surface separately. See [ADR 0309](../../docs/adr/0309-macos-remote-screencapturekit.md).
