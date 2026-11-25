@@ -44,6 +44,10 @@ pub(super) async fn run(
     if let Action::Pointer(p) = action {
         return daemon.desktop_pointer.send(peer, p);
     }
+    #[cfg(target_vendor = "apple")]
+    if let Action::Keyboard(k) = action {
+        return daemon.desktop_pointer.keyboard(peer, k);
+    }
     let _slot = daemon
         .desktop_slot
         .try_acquire()

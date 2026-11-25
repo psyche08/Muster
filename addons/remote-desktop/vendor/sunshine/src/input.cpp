@@ -48,6 +48,11 @@ using namespace std::literals;
 #ifdef __APPLE__
 extern "C" bool muster_login_pointer_target();
 #endif
+#if defined(__APPLE__) || defined(_WIN32)
+extern "C" bool muster_keyboard_desktop();
+#else
+static bool muster_keyboard_desktop() { return false; }
+#endif
 
 namespace input {
 
@@ -2088,8 +2093,13 @@ namespace input {
     if (surface == muster_session::surface::login && !muster_login_pointer_target()) return;
 #endif
 
-    // Print the final input packet
-    input::print((void *) payload);
+    const auto magic = util::endian::little(payload->magic);
+    const bool key = magic == KEY_DOWN_EVENT_MAGIC || magic == KEY_UP_EVENT_MAGIC || magic == UTF8_TEXT_EVENT_MAGIC;
+    if (key) {
+      if (!config::input.keyboard || surface != muster_session::surface::desktop || !muster_keyboard_desktop()) return;
+    } else {
+      input::print((void *) payload);
+    }
 
     // Send the batched input to the OS
     switch (util::endian::little(payload->magic)) {
@@ -2109,9 +2119,17 @@ namespace input {
       case SS_HSCROLL_MAGIC:
         passthrough(input, (PSS_HSCROLL_PACKET) payload);
         break;
-      case KEY_DOWN_EVENT_MAGIC:
+      case KEY_DOWN_EVENT_MAGIC: {
+        const auto key = reinterpret_cast<PNV_KEYBOARD_PACKET>(payload)->keyCode & 0xff;
+        // The mobile editor exposes only complete Backspace and Return
+        // presses. Never leave a key held across disconnect or a console lock.
+        if (key == 0x08 || key == 0x0d) {
+          platf::keyboard_update(platf_input, key, false, 0);
+          platf::keyboard_update(platf_input, key, true, 0);
+        }
+        break;
+      }
       case KEY_UP_EVENT_MAGIC:
-        passthrough(input, (PNV_KEYBOARD_PACKET) payload);
         break;
       case UTF8_TEXT_EVENT_MAGIC:
         passthrough(static_cast<const NV_UNICODE_PACKET *>(static_cast<const void *>(payload)));
@@ -2165,6 +2183,11 @@ namespace input {
       return;
     }
     switch (util::endian::little(header.magic)) {
+      case KEY_DOWN_EVENT_MAGIC:
+      case KEY_UP_EVENT_MAGIC:
+      case UTF8_TEXT_EVENT_MAGIC:
+        if (!config::input.keyboard || surface != muster_session::surface::desktop || !muster_keyboard_desktop()) return;
+        break;
       case MOUSE_MOVE_REL_MAGIC_GEN5:
       case MOUSE_MOVE_ABS_MAGIC:
       case MOUSE_BUTTON_DOWN_EVENT_MAGIC_GEN5:

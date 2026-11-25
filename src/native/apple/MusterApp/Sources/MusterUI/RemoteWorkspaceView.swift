@@ -29,6 +29,13 @@ struct RemoteWorkspaceView: View {
                 }
                 Text(workspace.status).foregroundStyle(.secondary)
             }
+            #if os(iOS)
+            if workspace.keyboard {
+                RemoteKeyboard { input in
+                    send(.keyboard(.with { $0.session = workspace.nativeSession; $0.input = input }))
+                }.id(workspace.nativeSession)
+            }
+            #endif
             if workspace.hasTakeover {
                 Text("\(workspace.takeover.controller) is using this desktop.")
                 Button("Keep current session", action: disconnect)
@@ -59,6 +66,53 @@ struct RemoteWorkspaceView: View {
         core.send(.desktopSession(.with { $0.device = workspace.selectedDevice; $0.action = action }))
     }
 }
+
+#if os(iOS)
+private struct RemoteKeyboard: View {
+    let send: (Muster_V1_DesktopKeyboard.OneOf_Input) -> Void
+    @State private var editing = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var canSend: Bool {
+        !text.isEmpty && text.utf8.count <= 512 &&
+            text.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    var body: some View {
+        if editing {
+            VStack(alignment: .leading) {
+                HStack {
+                    TextField("Text to type", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focused)
+                        .submitLabel(.send)
+                        .onSubmit(sendText)
+                    Button("Send", action: sendText).disabled(!canSend)
+                }
+                HStack {
+                    Button("Backspace") { send(.key(.backspace)) }
+                    Button("Return") { send(.key(.return)) }
+                    Spacer()
+                    Button("Done") { text = ""; editing = false }
+                }
+            }
+            .onAppear { focused = true }
+        } else {
+            Button { editing = true } label: {
+                Label("Keyboard", systemImage: "keyboard")
+            }
+        }
+    }
+
+    private func sendText() {
+        guard canSend else { return }
+        send(.text(text))
+        text = ""
+        focused = true
+    }
+}
+#endif
 
 private struct StreamSettings: View {
     @State var draft: Muster_V1_DesktopStreamSettings
@@ -212,7 +266,6 @@ struct MobileRemoteViewport: UIViewRepresentable {
         private let canvas = TouchCanvas()
         private var videoLayer: AVSampleBufferDisplayLayer?
         private var pixels = CGSize.zero
-        private var pixelScale: CGFloat { window?.windowScene?.screen.nativeScale ?? traitCollection.displayScale }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -242,23 +295,18 @@ struct MobileRemoteViewport: UIViewRepresentable {
                 setNeedsLayout()
             }
             canvas.isUserInteractionEnabled = mouse
-            canvas.action = { [weak self] kind, point, lines in
-                guard let self else { return }
-                let scale = self.pixelScale
-                action(kind, CGPoint(x: floor(point.x * scale), y: floor(point.y * scale)), lines)
+            canvas.action = { kind, point, lines in
+                action(kind, CGPoint(x: floor(point.x), y: floor(point.y)), lines)
             }
         }
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            let scale = pixelScale
-            guard scale > 0, pixels.width > 0, pixels.height > 0 else { return }
-            let size = CGSize(width: pixels.width / scale, height: pixels.height / scale)
-            let content = CGSize(width: max(bounds.width, size.width), height: max(bounds.height, size.height))
+            guard pixels.width > 0, pixels.height > 0 else { return }
+            let content = CGSize(width: max(bounds.width, pixels.width), height: max(bounds.height, pixels.height))
             if contentSize != content { contentSize = content }
-            let origin = CGPoint(x: floor((content.width - size.width) * scale / 2) / scale,
-                                 y: floor((content.height - size.height) * scale / 2) / scale)
-            canvas.frame = CGRect(origin: origin, size: size)
+            let origin = CGPoint(x: (content.width - pixels.width) / 2, y: (content.height - pixels.height) / 2)
+            canvas.frame = CGRect(origin: origin, size: pixels)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             videoLayer?.frame = canvas.bounds

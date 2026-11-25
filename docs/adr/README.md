@@ -428,3 +428,5 @@ superseding decisions get new numbers and bidirectional links.
 | [0310](0310-windows-elevated-release-updates.md) | Accepted; deployment acceptance pending | Install Windows release files with UAC |
 | [0311](0311-remote-continues-after-mac-unlock.md) | Proposed | Continue an active Remote connection after macOS unlock |
 | [0312](0312-sunshine-display-sample.md) | Proposed | Check physical display sampling in the macOS Sunshine host |
+| [0313](0313-mobile-remote-display-points.md) | Accepted | Display one video pixel per mobile layout point |
+| [0314](0314-mobile-remote-keyboard.md) | Proposed | Type into an authorized Remote desktop from a mobile keyboard |

@@ -288,6 +288,7 @@ message DesktopSessionRequest {
     ConfiguredDesktopViewer view_video = 10;
     ConfiguredDesktopViewer view_configured = 9;
     uint64 view_native = 7; // local presentation lease
+    DesktopKeyboard keyboard = 11;
     DesktopPointer pointer = 8; // local presentation input
     uint64 confirm_takeover = 6; // pending local viewer decision, never forwarded
     DesktopAccess remember_access = 5; // local owner only; NONE revokes
@@ -301,11 +302,20 @@ message DesktopPointer {
   uint32 y = 4;
   sint32 scroll = 5;
 }
+message DesktopKeyboard {
+  enum Key { UNSPECIFIED = 0; BACKSPACE = 1; RETURN = 2; }
+  uint64 session = 1;
+  oneof input {
+    string text = 2;
+    Key key = 3;
+  }
+}
 message DesktopSessionProgress {
   enum Phase { OFFERED = 0; STARTING = 1; VISIBLE = 2; OCCUPIED = 3; }
   Phase phase = 1;
   DesktopTakeoverPrompt takeover = 2;
   bool mouse = 3; // native profile only
+  bool keyboard = 4;
 }
 message DesktopTakeoverPrompt {
   uint64 confirmation = 1;
@@ -647,6 +657,7 @@ message GrantSet {
 }
 
 message DeviceGrant {
+  bool keyboard = 3; // explicit receiver opt-in for a device-specific desktop.mouse rule
   string scope = 1; // e.g. agents, agents:codex, terminals, terminal.view, net:tcp/22
   repeated string device_ids = 2;
 }

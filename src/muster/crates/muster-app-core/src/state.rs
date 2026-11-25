@@ -10,7 +10,8 @@ use tokio_util::sync::CancellationToken;
 
 /// A running watch (device, agent, terminal) that ends when its token does.
 pub struct DesktopSession {
-    pub pointer: Option<mpsc::Sender<v1::DesktopPointer>>,
+    pub pointer: Option<mpsc::Sender<v1::desktop_session_request::Action>>,
+    pub keyboard: bool,
     pub mouse: bool,
     pub jpeg: Vec<u8>,
     pub opened_from: Screen,

@@ -2410,6 +2410,8 @@ public nonisolated struct Muster_App_RemoteWorkspaceView: Sendable {
 
   public var mouse: Bool = false
 
+  public var keyboard: Bool = false
+
   public var settings: Muster_V1_DesktopStreamSettings {
     get {_settings ?? Muster_V1_DesktopStreamSettings()}
     set {_settings = newValue}
@@ -8575,7 +8577,7 @@ nonisolated extension Muster_App_RemoteDevice: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoteWorkspaceView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}devices\0\u{3}selected_device\0\u{3}can_connect\0\u{3}session_open\0\u{1}status\0\u{1}takeover\0\u{3}native_session\0\u{1}mouse\0\u{1}jpeg\0\u{1}settings\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}devices\0\u{3}selected_device\0\u{3}can_connect\0\u{3}session_open\0\u{1}status\0\u{1}takeover\0\u{3}native_session\0\u{1}mouse\0\u{1}jpeg\0\u{1}settings\0\u{1}keyboard\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8593,6 +8595,7 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
       case 8: try { try decoder.decodeSingularBoolField(value: &self.mouse) }()
       case 9: try { try decoder.decodeSingularBytesField(value: &self.jpeg) }()
       case 10: try { try decoder.decodeSingularMessageField(value: &self._settings) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.keyboard) }()
       default: break
       }
     }
@@ -8633,6 +8636,9 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
     try { if let v = self._settings {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
+    if self.keyboard != false {
+      try visitor.visitSingularBoolField(value: self.keyboard, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8645,6 +8651,7 @@ nonisolated extension Muster_App_RemoteWorkspaceView: SwiftProtobuf.Message, Swi
     if lhs._takeover != rhs._takeover {return false}
     if lhs.nativeSession != rhs.nativeSession {return false}
     if lhs.mouse != rhs.mouse {return false}
+    if lhs.keyboard != rhs.keyboard {return false}
     if lhs._settings != rhs._settings {return false}
     if lhs.jpeg != rhs.jpeg {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

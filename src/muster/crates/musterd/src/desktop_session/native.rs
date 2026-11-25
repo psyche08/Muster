@@ -17,11 +17,27 @@ const CHUNK: usize = 12 * 1024;
 const MAX_INPUT: usize = 24;
 
 #[derive(Default)]
-pub(crate) struct PointerSlot(Mutex<Option<(DeviceId, u64, mpsc::Sender<[u8; 6]>)>>);
+pub(crate) struct PointerSlot(Mutex<Option<InputTarget>>);
+struct InputTarget {
+    peer: DeviceId,
+    id: u64,
+    keyboard: bool,
+    sender: mpsc::Sender<Vec<u8>>,
+}
 impl PointerSlot {
-    pub(super) fn attach(&self, peer: DeviceId, id: u64) -> mpsc::Receiver<[u8; 6]> {
+    pub(super) fn attach(
+        &self,
+        peer: DeviceId,
+        id: u64,
+        keyboard: bool,
+    ) -> mpsc::Receiver<Vec<u8>> {
         let (sender, receiver) = mpsc::channel(MAX_INPUT);
-        *self.0.lock().unwrap() = Some((peer, id, sender));
+        *self.0.lock().unwrap() = Some(InputTarget {
+            peer,
+            id,
+            sender,
+            keyboard,
+        });
         receiver
     }
     pub(super) fn send(&self, peer: DeviceId, p: DesktopPointer) -> Result<(), Error> {
@@ -30,20 +46,56 @@ impl PointerSlot {
         let kind = Kind::try_from(p.kind).map_err(|_| unavailable("invalid pointer action"))?;
         let [xh, xl] = x.to_be_bytes();
         let [yh, yl] = y.to_be_bytes();
-        let slot = self.0.lock().unwrap();
-        let (_, _, sender) = slot
-            .as_ref()
-            .filter(|(d, id, _)| *d == peer && *id == p.session)
-            .ok_or_else(|| unavailable("pointer session ended"))?;
-        sender
-            .try_send([
+        self.enqueue(
+            peer,
+            p.session,
+            false,
+            vec![
                 kind as u8,
                 xh,
                 xl,
                 yh,
                 yl,
                 p.scroll.clamp(-12, 12) as i8 as u8,
-            ])
+            ],
+        )
+    }
+    pub(super) fn keyboard(
+        &self,
+        peer: DeviceId,
+        k: muster_proto::v1::DesktopKeyboard,
+    ) -> Result<(), Error> {
+        use muster_proto::v1::desktop_keyboard::{Input, Key};
+        let bytes = match k.input {
+            Some(Input::Text(text))
+                if !text.is_empty() && text.len() <= 512 && !text.chars().any(char::is_control) =>
+            {
+                let [high, low] = (text.len() as u16).to_be_bytes();
+                let mut bytes = vec![7, high, low, 0, 0, 0];
+                bytes.extend_from_slice(text.as_bytes());
+                bytes
+            }
+            Some(Input::Key(code)) if code == Key::Backspace as i32 => vec![8, 8, 0, 0, 0, 0],
+            Some(Input::Key(code)) if code == Key::Return as i32 => vec![8, 13, 0, 0, 0, 0],
+            _ => return Err(unavailable("invalid keyboard input")),
+        };
+        self.enqueue(peer, k.session, true, bytes)
+    }
+    fn enqueue(
+        &self,
+        peer: DeviceId,
+        id: u64,
+        keyboard: bool,
+        bytes: Vec<u8>,
+    ) -> Result<(), Error> {
+        let slot = self.0.lock().unwrap();
+        let target = slot
+            .as_ref()
+            .filter(|t| t.peer == peer && t.id == id && (!keyboard || t.keyboard))
+            .ok_or_else(|| unavailable("desktop input unavailable"))?;
+        target
+            .sender
+            .try_send(bytes)
             .map_err(|_| unavailable("desktop pointer queue unavailable"))
     }
 }
@@ -67,7 +119,12 @@ pub(super) async fn view(
     };
     let (tx, mut input) = mpsc::channel(MAX_INPUT);
     if mouse {
-        *daemon.desktop_pointer.0.lock().unwrap() = Some((peer, id, tx));
+        *daemon.desktop_pointer.0.lock().unwrap() = Some(InputTarget {
+            peer,
+            id,
+            sender: tx,
+            keyboard: false,
+        });
     }
     let mut first = true;
     loop {
@@ -88,6 +145,7 @@ pub(super) async fn view(
             events
                 .send(Ev::DesktopSession(DesktopSessionProgress {
                     phase: Phase::Visible as i32,
+                    keyboard: false,
                     mouse,
                     takeover: None,
                 }))
@@ -261,3 +319,47 @@ mod capture {
 }
 #[cfg(target_os = "macos")]
 pub(super) use capture::host;
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+    use muster_proto::v1::{
+        DesktopKeyboard,
+        desktop_keyboard::{Input, Key},
+    };
+
+    #[test]
+    fn only_current_keyboard_target_receives_ordered_unicode_and_keys() {
+        let slot = PointerSlot::default();
+        let peer = DeviceId([1; 32]);
+        let key = |session, input| DesktopKeyboard {
+            session,
+            input: Some(input),
+        };
+        let text = || Input::Text("文🌙".into());
+        let mut mouse = slot.attach(peer, 1, false);
+        assert!(slot.keyboard(peer, key(1, text())).is_err());
+        assert!(mouse.try_recv().is_err());
+
+        let mut target = slot.attach(peer, 2, true);
+        assert!(slot.keyboard(peer, key(1, text())).is_err());
+        assert!(slot.keyboard(DeviceId([2; 32]), key(2, text())).is_err());
+        assert!(
+            slot.keyboard(peer, key(2, Input::Text("x".repeat(513))))
+                .is_err()
+        );
+        assert!(
+            slot.keyboard(peer, key(2, Input::Text("\n".into())))
+                .is_err()
+        );
+        slot.keyboard(peer, key(2, text())).unwrap();
+        let data = target.try_recv().unwrap();
+        assert_eq!(&data[..6], &[7, 0, 7, 0, 0, 0]);
+        assert_eq!(&data[6..], "文🌙".as_bytes());
+        for (action, expected) in [(Key::Backspace, 8), (Key::Return, 13)] {
+            slot.keyboard(peer, key(2, Input::Key(action as i32)))
+                .unwrap();
+            assert_eq!(target.try_recv().unwrap(), [8, expected, 0, 0, 0, 0]);
+        }
+    }
+}

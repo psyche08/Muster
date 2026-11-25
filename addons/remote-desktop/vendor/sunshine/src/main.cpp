@@ -302,7 +302,7 @@ static int run_host(int argc, char *argv[]) {
   display_cursor = grant->cursor;
   config::input.mouse = grant->mouse;
   config::audio.stream = false;  // The paired desktop profile carries video and pointer input.
-  config::input.keyboard = false;
+  config::input.keyboard = grant->keyboard;
   config::input.controller = false;
   config::input.native_pen_touch = false;
   if (nvhttp::add_authorized_client("Muster viewer", std::move(grant->certificate)).empty()) {

@@ -84,6 +84,18 @@ internal sealed class ServiceGrantsDialog : Form
                 AccessibleName = "Service selector", Width = 365 };
             selector.TextChanged += (_, _) => rule.Scope = selector.Text.Trim();
             group.Controls.Add(selector);
+            if (wholeScope == "desktop.mouse")
+            {
+                var keyboard = new CheckBox { Text = "Keyboard on unlocked desktop", AutoSize = true,
+                    Checked = rule.Keyboard, Enabled = rule.Scope == "desktop.mouse" };
+                keyboard.CheckedChanged += (_, _) => rule.Keyboard = keyboard.Checked;
+                selector.TextChanged += (_, _) =>
+                {
+                    keyboard.Enabled = selector.Text.Trim() == "desktop.mouse";
+                    if (!keyboard.Enabled) keyboard.Checked = false;
+                };
+                group.Controls.Add(keyboard);
+            }
         }
         foreach (var member in members)
         {

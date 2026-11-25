@@ -895,6 +895,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         agents: Some(v1::GrantSet {
             all_devices: false,
             rules: vec![v1::DeviceGrant {
+                keyboard: false,
                 scope: "agents:claude".into(),
                 device_ids: vec![b.device_id().to_hex()],
             }],
