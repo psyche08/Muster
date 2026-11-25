@@ -1420,6 +1420,22 @@ fn find_controls(profile: &AppProfile, web_area: &Element) -> Controls {
     find_controls_with_budget(profile, web_area, ax::WALK_BUDGET)
 }
 
+/// For a walk from a conversation's web area that skips the profile's
+/// panels as the control scan does (ADR 0307): whether `element` is one,
+/// kept but not walked below, and whether its children sit inside a
+/// landmark region. `in_region` says whether `element` does. The subrole
+/// is read only for a profile that skips panels.
+fn panel_walk(profile: &AppProfile, element: &Element, in_region: bool) -> (bool, bool) {
+    if !profile.controls().skip_panels {
+        return (false, false);
+    }
+    let subrole = element.string("AXSubrole").unwrap_or_default();
+    (
+        profile.controls().skips_panel(&subrole, in_region),
+        in_region || subrole == "AXLandmarkRegion",
+    )
+}
+
 fn find_controls_with_budget(
     profile: &AppProfile,
     web_area: &Element,

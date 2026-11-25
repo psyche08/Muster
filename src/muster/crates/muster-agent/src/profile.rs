@@ -1566,6 +1566,86 @@ AXWebArea title="Session - Claude Code"
         assert_eq!((stop, sidebars), ("complete", session_sidebars(&recorded)));
     }
 
+    /// What the platform's question walk (`Tree::read`, which finds a
+    /// question card's form) and queued-message walk read: depth first from
+    /// the conversation's web area, at most the node limit, and with
+    /// `prune` nothing below a panel (`skips_panel`). Unlike the control
+    /// scan they read the transcript, where proposals, wrap-ups and queued
+    /// messages are. `None` when the limit stopped the walk; otherwise the
+    /// tree index of each node read.
+    fn form_walk(tree: &AxTree, prune: bool) -> Option<Vec<usize>> {
+        let root = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].role == "AXWebArea"
+                    && tree.nodes[i].url.starts_with("https://claude.ai/")
+            })
+            .unwrap();
+        let mut read = Vec::new();
+        let mut todo = vec![(root, false)];
+        while let Some((i, in_region)) = todo.pop() {
+            if read.len() >= PLATFORM_NODE_LIMIT {
+                return None;
+            }
+            read.push(i);
+            let n = &tree.nodes[i];
+            if !(prune && CLAUDE.skips_panel(&n.subrole, in_region)) {
+                let region = in_region || n.subrole == "AXLandmarkRegion";
+                todo.extend(n.children.iter().rev().map(|&child| (child, region)));
+            }
+        }
+        Some(read)
+    }
+
+    /// Answering a question card in the session with a file open beside it
+    /// still failed once its control scan completed: the question walk read
+    /// the whole web area and stopped at the node limit ("The question
+    /// accessibility tree is incomplete", 2026-11-25). Skipping the panels
+    /// as well, it reads a tenth of the limit there, with every node of the
+    /// transcript, the composer and nothing inside the side panel. On the
+    /// recording with a question card it still reads the whole card.
+    #[test]
+    fn a_file_open_beside_a_claude_conversation_leaves_its_form_walks_complete() {
+        let recorded = tree(CLAUDE_CODE_FILES_PANEL);
+        assert_eq!(form_walk(&recorded, false), None);
+        let read = form_walk(&recorded, true).unwrap();
+        assert!(read.len() < PLATFORM_NODE_LIMIT / 10);
+        let [transcript] = message_lists(&recorded)[..] else {
+            unreachable!()
+        };
+        assert!(
+            recorded
+                .preorder(transcript)
+                .iter()
+                .all(|i| read.contains(i))
+        );
+        let composers = found(&recorded, &CLAUDE.composer);
+        assert!(!composers.is_empty() && composers.iter().all(|i| read.contains(i)));
+        let [_, side] = panels(&recorded)[..] else {
+            unreachable!()
+        };
+        let inside = recorded.preorder(side);
+        assert!(read.contains(&side) && inside[1..].iter().all(|i| !read.contains(i)));
+
+        let card = tree(CLAUDE_CODE_QUESTION);
+        let read = form_walk(&card, true).unwrap();
+        let cards = CLAUDE.questions.as_ref().unwrap();
+        let [next] = (0..card.nodes.len())
+            .filter(|&i| {
+                card.nodes[i].role == "AXButton" && cards.next.contains(&card.nodes[i].label())
+            })
+            .collect::<Vec<_>>()[..]
+        else {
+            unreachable!()
+        };
+        let form = card.nodes[next].parent.unwrap();
+        assert!(card.preorder(form).iter().all(|i| read.contains(i)));
+        assert!(
+            found(&card, &CLAUDE.composer)
+                .iter()
+                .all(|i| read.contains(i))
+        );
+    }
+
     /// A long Codex conversation in the current ChatGPT app (recorded
     /// 2026-11-25, Codex mode, 38 user messages, idle, empty composer; the
     /// menu bar left out). The app renders only the latest exchange: one

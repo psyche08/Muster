@@ -1,9 +1,10 @@
-# ADR 0307: Claude's control and sidebar scans read only their own region of the window
+# ADR 0307: Claude's scans read only their own region of the window
 
 - Date: 2026-11-24
-- Status: Accepted; source and tests verified; the transcript and sidebar
-  rules installed and verified in the running app on 2026-11-25; the panel
-  rule's installation and runtime acceptance pending
+- Status: Accepted; source and tests verified; the transcript, sidebar and
+  control-scan panel rules installed and verified in the running app on
+  2026-11-25; the question and queue walks' panel rule pending installation
+  and runtime acceptance
 - Related: extends [0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md)
   (which deferred pruning inside the control scan until evidence) and
   [0080](0080-session-list-scan-prunes-conversation-views.md) /
@@ -95,6 +96,20 @@ landmark region above the composer, Send or Stop. The Activity panel's
 sections are regions too, but inside its complementary landmark. The
 notifications region sits outside the main landmark.
 
+With the panel rule installed, session B's control scan completed, but
+answering the question card waiting in it was refused twice, at 05:50:35 and
+05:50:41 UTC: `The question accessibility tree is incomplete; try again`.
+Session B was selected and its control walk read 100 nodes (`transcripts=1
+panels=2 walk=(100, complete=true)`). The refusal came from a third walk.
+The question walk (`Tree::read` in `native_questions.rs`) finds a card's form
+by reading the conversation's whole web area depth first, up to the same
+limit, and refuses an incomplete read. With the file open, the web area held
+4,949 nodes. In `musterd.log` (2026-09-26 to 2026-11-25), 576 question walks
+completed at up to 3,924 nodes, and only session B's were refused: once on
+2026-11-24 and these two. Before the panel rule, the same answer had stopped
+earlier, at the control scan (02:17:58 UTC). The queued-message walk
+(`native_queue.rs`) reads the web area the same way.
+
 A second failure in the same report is unrelated to the limit: two Claude
 sessions had the same title, so neither could be matched by title even when
 the scan completed (`0 matches; complete=true`). This ADR does not change
@@ -135,9 +150,13 @@ Each scan reads only the region that holds what it looks for.
    `transcripts=N panels=N`. The sidebar scan reports `transcripts=N
    main_skipped=N` and records a line when it walks the main landmark after
    all.
-6. **The queue and question scans do not change.** A queued Claude prompt is
-   a message in the conversation (ADR 0158), so the queue scan still reads
-   the transcript.
+6. **The question and queue walks skip the panels, not the transcript.**
+   They apply decision 2's rule (`panel_walk`, which reads a node's subrole
+   only for a profile that sets `skip_panels`). The transcript holds what
+   they look for: task proposals, wrap-up boxes and earlier pages of a
+   question, and queued prompts, which are messages in the conversation
+   (ADR 0158). So both still read it. The recorded question card sits in the
+   primary pane beside the transcript, outside every panel.
 7. **The redactor keeps profile labels and drops heading anchors.**
    `scripts/redact-ax-dump.py` also takes the profiles' quoted strings as
    vocabulary, so labels that now live only in `profiles/*.toml`, such as
@@ -226,8 +245,9 @@ recording decides the rule.
 
 ## Consequences
 
-- What the two scans read no longer depends on how long the open
-  conversation is or how much the activity or side panel shows.
+- What the control and sidebar scans read no longer depends on how long
+  the open conversation is or how much the activity or side panel shows.
+  What the question and queue walks read no longer depends on the panels.
 - The control scan no longer counts a `Prompt` text area inside a panel or a
   message. While the session's composer is present, the scan picks that one
   instead of refusing as ambiguous. When the session's composer is missing,
@@ -250,10 +270,11 @@ recording decides the rule.
   - If it sits inside the main landmark as something else, as the older
     split view did, the sidebar scan skips it, but the control scan still
     reads it.
-- The queue and question scans can still hit the limit in a long
-  conversation. The recorded question card sits in the composer area,
-  outside the transcript. Queued prompts are in the transcript, near its
-  end.
+- The question and queue walks can still hit the limit in a long
+  conversation, since they read the transcript; the largest completed
+  question walk read 3,924 nodes. A question card or queued prompt in a side
+  chat, which is a nested region, is not found; its controls were never the
+  session's.
 - Sessions with the same title still cannot be selected by title. Renaming
   one of them is the workaround. Choosing between them by order, or by a
   press-and-verify, is a separate decision.
@@ -280,6 +301,14 @@ recording decides the rule.
     composer and reads nothing inside the side panel;
   - the whole-app sidebar walk stops at the limit, and the walk beside the
     main landmark completes with one session sidebar.
+- **Question and queue walks:**
+  `a_file_open_beside_a_claude_conversation_leaves_its_form_walks_complete`
+  mirrors the depth-first walk over the recordings:
+  - On session B's recording, the walk that skips nothing stops at the
+    limit. The walk that skips the panels reads 400 nodes, every node of the
+    transcript and the composer, and nothing inside the side panel.
+  - On the question card recording, it reads the whole card: every choice,
+    the Other choice, its text field and Next.
 - **Long and large trees:** a test grows the recording's transcript, its
   activity panel, or both, until each is more than twice the node limit.
   - The old control and sidebar walks then stop at the limit.
@@ -289,9 +318,9 @@ recording decides the rule.
 - **Fallback:** a test shows the second sidebar walk:
   - With the sidebar moved into the main landmark, it is found there.
   - With the sidebar removed, the scan completes with no list.
-- **Platform walks:** `find_controls_with_budget` and `scan_sidebar` need
-  live Accessibility elements, so the tests mirror their traversal over the
-  recorded tree.
+- **Platform walks:** `find_controls_with_budget`, `scan_sidebar`,
+  `Tree::read` and the queued-message walk need live Accessibility elements,
+  so the tests mirror their traversal over the recorded tree.
 - **Codex:** `a_long_codex_conversation_renders_only_its_latest_exchange`
   checks the 2026-11-25 Codex recording:
   - it holds 38 Jump buttons and one rendered reply;
@@ -308,9 +337,23 @@ recording decides the rule.
     candidate and selected the session. Before, the same walk ended
     `complete=false`.
   - Session B's control walk still stopped at the limit (see Context).
+- **Running app (2026-11-25), with the control scan's panel rule:** the
+  build was installed at 03:48 UTC while Locked Use was idle. By 05:26 UTC:
+  - 36 control walks had completed, reading at most 103 nodes
+    (`panels=2`), and none stopped at the limit.
+  - Tusk had sent 20 prompts to five sessions, all through Locked Use while
+    the Mac was locked. Two more were reported as not sent: each time the
+    displays changed before any press (`cover lost: the online displays
+    changed`) and Locked Use's watchdog stopped the operation, which this
+    ADR does not change.
+  - Session B attached while in front (03:52:47 UTC), for the first time
+    since 2026-11-24 12:00 UTC.
+  - At 05:50 UTC an answer to session B selected it (`app_walk=(50,
+    complete)`, `area_walk=(540, complete)`, one candidate) and its control
+    walk completed; the question walk then refused (see Context).
 - **Not verified:**
-  - installation of the panel rule, and a send to session B with its file
-    open;
-  - Locked Use sends while the Mac is locked;
+  - installation of the question and queue walks' panel rule, and an answer
+    or a send to session B with its file open;
+  - Locked Use sends to session B;
   - terminal and diff views in the current app;
   - a localized UI.

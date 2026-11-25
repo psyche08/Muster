@@ -220,7 +220,7 @@ viewed, or driven through its `[plugin]` (DeepSeek Harness).
 | `placeholders` | list | What an empty composer reports as its value (Codex: "Do anything"); never a draft |
 | `auxiliary_regions` | list, optional | Names of landmark regions that hold a conversation of their own, such as Claude's "Side chat"; a composer, submit or queued-message control inside one is not the session's |
 | `transcript_regions` | list, optional | Names of application groups that hold the conversation's transcript (Claude: "Chat messages"); control and sidebar scans do not walk into one, so a long conversation cannot exhaust their node limit (ADR 0307) |
-| `skip_panels` | bool, optional | The panels around the conversation hold no composer, Send or Stop: complementary landmarks (asides), such as Claude's session sidebar and activity panel, and landmark regions inside another landmark region, such as Claude's side panel showing a file inside its primary pane; the control scan does not walk into one (ADR 0307) |
+| `skip_panels` | bool, optional | The panels around the conversation hold no composer, Send, Stop, question form or queued prompt: complementary landmarks (asides), such as Claude's session sidebar and activity panel, and landmark regions inside another landmark region, such as Claude's side panel showing a file inside its primary pane; the control, question and queue walks do not walk into one (ADR 0307) |
 | `composer` | selector | The text area a prompt is drafted in |
 | `send` | selector | The control that submits it; looked up again when sending, since it may appear only with text and give way to Stop |
 | `stop` | selector | The control that stops the running turn; an enabled one means a turn is running, and an interrupt presses it |
