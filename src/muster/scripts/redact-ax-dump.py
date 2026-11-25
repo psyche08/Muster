@@ -31,6 +31,15 @@ for crate in ["muster-agent/src", "muster-platform/src"]:
             if "{" in lit or len(lit) > 80:
                 continue
             vocab.add(lit.replace('\\"', '"'))
+# The app profiles' labels are selector vocabulary too (ADR 0307). Comment
+# lines are skipped; the other quoted strings are profile data.
+for f in (root / "muster-agent/profiles").glob("*.toml"):
+    for line in f.read_text().splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        for lit in re.findall(r'"((?:[^"\\]|\\.)*)"', line):
+            if lit and "{" not in lit and len(lit) <= 80:
+                vocab.add(lit.replace('\\"', '"'))
 
 PREFIXES = sorted((v for v in vocab if len(v) >= 8), key=len, reverse=True)
 
@@ -64,6 +73,7 @@ LONG_ID = re.compile(r"(?<![A-Za-z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{12,}")
 texts: dict[str, str] = {}
 values: dict[str, str] = {}
 ids: dict[str, str] = {}
+anchors: dict[str, str] = {}
 
 
 def stable(table, original, prefix):
@@ -99,11 +109,15 @@ def url(u):
     )
     if not own:
         return f"https://{stable(links, u, 'link')}.invalid/"
+    # A fragment points into a rendered document by its heading text.
+    u, hash_, fragment = u.partition("#")
+    if hash_:
+        fragment = stable(anchors, fragment, "anchor")
     u = UUID.sub(fake_uuid, u)
     head, _, rest = u.partition("://")
     host, slash, path = rest.partition("/")
     path = LONG_ID.sub(fake_id, path)
-    return f"{head}://{host}{slash}{path}"
+    return f"{head}://{host}{slash}{path}{hash_}{fragment}"
 
 
 out = []
@@ -129,7 +143,12 @@ for line in src.read_text().splitlines():
         elif key == "url":
             value = url(value)
         elif key == "id":
-            value = LONG_ID.sub(fake_id, value)
+            # A rendered document's heading anchors spell out its headings
+            # (Claude's file preview, ADR 0307): content, not a selector.
+            if value.startswith("user-content-") or not value.isascii():
+                value = stable(anchors, value, "anchor")
+            else:
+                value = LONG_ID.sub(fake_id, value)
         elif key not in ("sel", "enabled", "disabled"):
             raise SystemExit(f"unknown attribute {key!r}: review before redacting")
         kept.append(f'{key}="{value}"')

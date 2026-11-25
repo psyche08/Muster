@@ -120,6 +120,7 @@ fn select(
     Ok(matches[0])
 }
 fn control(
+    profile: &AppProfile,
     controls: &muster_agent::profile::Queue,
     web: &Element,
     text: &str,
@@ -128,8 +129,10 @@ fn control(
     let started = std::time::Instant::now();
     let mut elements = Vec::new();
     let mut nodes = Vec::new();
-    let mut todo = vec![(web.clone(), None)];
-    while let Some((element, parent)) = todo.pop() {
+    // Queued messages wait in the transcript, never in a panel, and one
+    // file open in Claude's side panel filled the node limit (ADR 0307).
+    let mut todo = vec![(web.clone(), None, false)];
+    while let Some((element, parent, in_region)) = todo.pop() {
         if nodes.len() >= ax::MAX_NODES || started.elapsed() > ax::WALK_BUDGET {
             return Err(Error::Unavailable(
                 "Queue AX tree was incomplete; nothing submitted".into(),
@@ -154,13 +157,16 @@ fn control(
             label,
             enabled: element.bool("AXEnabled").unwrap_or(false),
         });
-        todo.extend(
-            element
-                .children()
-                .into_iter()
-                .rev()
-                .map(|child| (child, Some(index))),
-        );
+        let (panel, region) = panel_walk(profile, &element, in_region);
+        if !panel {
+            todo.extend(
+                element
+                    .children()
+                    .into_iter()
+                    .rev()
+                    .map(|child| (child, Some(index), region)),
+            );
+        }
         elements.push(element);
     }
     let index = select(controls, &nodes, text, action)?;
@@ -212,7 +218,7 @@ impl NativeAppController {
                 "The selected session view changed".into(),
             ));
         }
-        let button = control(controls, &web, &message.text, action)?;
+        let button = control(self.profile, controls, &web, &message.text, action)?;
         let mut receipt = (self.send_receipt_source)(&message.text)?;
         let removal = queue::Removal::new(source.clone(), &message);
         // Re-read provider state immediately before the sole mutating action.

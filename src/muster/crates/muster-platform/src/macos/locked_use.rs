@@ -116,11 +116,23 @@ impl LockedUseOs for MacLockedUse {
             .arg(initial)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
         let input = child.stdin.take().unwrap();
         let mut output = child.stdout.take().unwrap();
+        // The daemon's own stderr reaches no file under launchd, so the reason
+        // a watchdog exits early was lost (ADR 0308). The helper keeps no
+        // logger: what it writes here is its exit error or a panic.
+        let errors = child.stderr.take().unwrap();
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(errors).lines() {
+                let Ok(line) = line else { break };
+                let line: String = line.chars().take(300).collect();
+                log::warn!("Locked Use watchdog stderr: {line}");
+            }
+        });
         // Never backpressure the pipe reader while the owner is sampling the
         // OS. Eight queued 40 ms reports used to strand newer evidence behind
         // a blocked send and make a healthy cover look older than 250 ms.
@@ -182,6 +194,7 @@ impl LockedUseOs for MacLockedUse {
             input,
             rx,
             last: None,
+            exited: false,
         }))
     }
     async fn request_unlock(&self, check: UnlockCheck) -> Result<(), String> {
@@ -458,6 +471,8 @@ struct Guard {
     input: ChildStdin,
     rx: std::sync::mpsc::Receiver<GuardEvent>,
     last: Option<(u8, Instant)>,
+    /// Whether the watchdog's exit has been logged.
+    exited: bool,
 }
 fn drain_guard_events(
     rx: &std::sync::mpsc::Receiver<GuardEvent>,
@@ -489,8 +504,14 @@ fn drain_guard_events(
 }
 impl ConsoleGuard for Guard {
     fn pulse(&mut self) -> GuardSample {
-        let alive =
-            self.child.try_wait().ok().flatten().is_none() && self.input.write_all(b"h").is_ok();
+        let exit = self.child.try_wait().ok().flatten();
+        if let Some(status) = exit
+            && !self.exited
+        {
+            self.exited = true;
+            log::warn!("Locked Use watchdog exited: {status}");
+        }
+        let alive = exit.is_none() && self.input.write_all(b"h").is_ok();
         let observed_unlock = fresh_guard_events(&self.rx, &mut self.last, alive);
         let covered = self.last.is_some_and(|(b, at)| {
             b == b'R' && at.elapsed() < muster_core::locked_use::MAX_OBSERVATION_AGE
@@ -526,6 +547,13 @@ impl ConsoleGuard for Guard {
         self.input.write_all(&frame).map_err(|e| e.to_string())
     }
     fn release(&mut self) -> Result<(), String> {
+        // A watchdog that could not raise its cover has already removed its
+        // marker, confirmed with `F` and exited (ADR 0308); `f` would only
+        // meet a closed pipe.
+        drain_guard_events(&self.rx, &mut self.last);
+        if released(self.last) {
+            return Ok(());
+        }
         self.input.write_all(b"f").map_err(|e| e.to_string())?;
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
@@ -537,6 +565,13 @@ impl ConsoleGuard for Guard {
             }
         }
     }
+}
+
+/// Whether the watchdog's newest report is its release confirmation: the
+/// cover is down and its marker removed. No report or any other status means
+/// the release still has to be asked for and confirmed.
+fn released(last: Option<(u8, Instant)>) -> bool {
+    last.is_some_and(|(code, _)| code == b'F')
 }
 
 /// A slow WindowServer sample at unlock can put the next report just behind
@@ -609,16 +644,28 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
         .mode(0o600)
         .open(&marker)
         .map_err(|e| e.to_string())?;
-    writeln!(
-        file,
-        "{}:{}:{}",
-        console.uid, console.audit_session, args[1]
-    )
-    .map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
     // Whatever ends the watchdog takes the cover with it: the panels close
     // and macOS puts the gamma tables back.
-    let mut shield = cover::Shield::raise()?;
+    let raised = before_cover(&marker, || {
+        writeln!(
+            file,
+            "{}:{}:{}",
+            console.uid, console.audit_session, args[1]
+        )
+        .map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        cover::Shield::raise()
+    });
+    let mut shield = match raised {
+        Ok(shield) => shield,
+        Err((error, cleared)) => {
+            if cleared {
+                // The release confirmation: no cover, no marker, exiting.
+                unsafe { libc::write(1, b"F".as_ptr().cast(), 1) };
+            }
+            return Err(error);
+        }
+    };
     let mut frame = vec![b'D'];
     frame.extend_from_slice(&shield.counts());
     unsafe {
@@ -784,6 +831,23 @@ pub fn watchdog(args: &[String]) -> Result<(), String> {
     }
 }
 
+/// Runs the watchdog's startup after `locked-use.pending` exists and before
+/// its first report. Until the watchdog reports a ready cover (`R`) the owner
+/// does not ask the lock screen for authorization and the plugin cannot
+/// consume the nonce, so a startup that fails here cannot have let an
+/// authorization start: the marker is removed again instead of keeping the
+/// login in quarantine (ADR 0308). The flag says whether it was removed; if
+/// not, the marker stays and the quarantine with it.
+fn before_cover<T>(
+    marker: &Path,
+    startup: impl FnOnce() -> Result<T, String>,
+) -> Result<T, (String, bool)> {
+    startup().map_err(|error| match std::fs::remove_file(marker) {
+        Ok(()) => (error, true),
+        Err(e) => (format!("{error}; marker kept: {e}"), false),
+    })
+}
+
 /// The owner must write a heartbeat at least this often.
 const HEARTBEAT_LIMIT: Duration = Duration::from_millis(350);
 /// The furthest a renewal may move the watchdog's deadline from now.
@@ -918,6 +982,47 @@ mod heartbeat_tests {
                         || (expected == "unlocked" && observed == Screen::Unlocked)
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_startup_that_fails_before_the_cover_removes_its_marker() {
+        let dir = std::env::temp_dir().join(format!(
+            "muster-locked-use-marker-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("locked-use.pending");
+
+        // No display to cover: nothing was reported, so nothing can have been
+        // authorized, and the login is not quarantined.
+        std::fs::write(&marker, "501:100002:00\n").unwrap();
+        let failed = before_cover::<()>(&marker, || Err("no display to cover".into()));
+        assert_eq!(failed, Err(("no display to cover".into(), true)));
+        assert!(!marker.exists());
+
+        // A raised cover keeps the marker until the owner's release.
+        std::fs::write(&marker, "501:100002:00\n").unwrap();
+        assert_eq!(before_cover(&marker, || Ok(7)), Ok(7));
+        assert!(marker.exists());
+
+        // A marker that cannot be removed stays, and so does the quarantine.
+        std::fs::remove_file(&marker).unwrap();
+        let (error, cleared) =
+            before_cover::<()>(&marker, || Err("cannot cover every display".into())).unwrap_err();
+        assert!(!cleared);
+        assert!(error.starts_with("cannot cover every display; marker kept: "));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn only_the_watchdogs_confirmation_counts_as_released() {
+        let now = Instant::now();
+        assert!(released(Some((b'F', now))));
+        assert!(!released(None));
+        for status in *b"RVHICEQ" {
+            assert!(!released(Some((status, now))));
         }
     }
 

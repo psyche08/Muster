@@ -180,21 +180,29 @@ impl Tree {
     fn read(root: &Element, profile: &AppProfile) -> Result<Self, Error> {
         let start = Instant::now();
         let mut nodes = Vec::new();
-        let mut todo = vec![(root.clone(), None)];
-        while let Some((element, parent)) = todo.pop() {
+        // Panels hold no question form, and one file open in Claude's side
+        // panel filled the node limit (ADR 0307). Proposals, wrap-ups and
+        // earlier questions are in the transcript, which is read.
+        let mut todo = vec![(root.clone(), None, false)];
+        while let Some((element, parent, in_region)) = todo.pop() {
             if nodes.len() >= ax::MAX_NODES || start.elapsed() > ax::WALK_BUDGET {
                 return Err(Error::Unavailable(
                     "The question accessibility tree is incomplete; try again".into(),
                 ));
             }
             let id = nodes.len();
+            let (panel, region) = panel_walk(profile, &element, in_region);
             let labels = ["AXTitle", "AXDescription", "AXValue"]
                 .into_iter()
                 .filter_map(|key| element.string(key))
                 .filter(|s| !s.trim().is_empty())
                 .map(|s| normalized(&s))
                 .collect();
-            let children = element.children();
+            let children = if panel {
+                Vec::new()
+            } else {
+                element.children()
+            };
             nodes.push(Node {
                 role: element.role(),
                 enabled: element.bool("AXEnabled").unwrap_or(false),
@@ -204,7 +212,7 @@ impl Tree {
                 parent,
                 labels,
             });
-            todo.extend(children.into_iter().rev().map(|c| (c, Some(id))));
+            todo.extend(children.into_iter().rev().map(|c| (c, Some(id), region)));
         }
         Ok(Self { nodes })
     }

@@ -399,11 +399,7 @@ async fn operate(daemon: &Arc<Daemon>, op: Operation) -> Result<Resp, Error> {
         "dispatch {:?}: op={:?} settled {}",
         op.grant,
         op.op_id,
-        match &outcome {
-            Outcome::Applied(_) => "applied",
-            Outcome::NotStarted(_) => "not started",
-            Outcome::Unknown(_) => "unknown",
-        }
+        settled_note(&outcome)
     );
     drop(turn);
     match outcome {
@@ -970,5 +966,37 @@ mod tests {
             Some(&b"{not json"[..])
         );
         f.daemon.shutdown().await;
+    }
+}
+
+/// How a settled operation is logged. The reason a send was not started, or
+/// why its outcome is unknown, used to reach only the requester: a Locked Use
+/// quarantine refused nine locked dispatches in 13 minutes on 2026-11-25 with
+/// nothing in the log but "settled not started" (ADR 0308).
+fn settled_note(outcome: &Outcome) -> String {
+    match outcome {
+        Outcome::Applied(_) => "applied".into(),
+        Outcome::NotStarted(why) => format!("not started: {why}"),
+        Outcome::Unknown(why) => format!("unknown: {why}"),
+    }
+}
+
+#[cfg(test)]
+mod settled_note_tests {
+    use super::*;
+
+    #[test]
+    fn a_settled_dispatch_logs_why_it_was_not_started() {
+        let refused = "an earlier Locked Use transaction needs local recovery (log out and log in)";
+        assert_eq!(
+            settled_note(&Outcome::NotStarted(refused.into())),
+            format!("not started: {refused}")
+        );
+        assert_eq!(
+            settled_note(&Outcome::Unknown("receipt pending".into())),
+            "unknown: receipt pending"
+        );
+        // A provider id is not a reason; it stays out of the line.
+        assert_eq!(settled_note(&Outcome::Applied("msg-1".into())), "applied");
     }
 }
