@@ -1434,11 +1434,13 @@ fn find_controls_with_budget(
     let mut subroles = Vec::new();
     // Per node: inside a region that holds a conversation of its own.
     let mut auxiliary = Vec::new();
+    // Per node: a landmark region or inside one.
+    let mut regions = Vec::new();
     let mut elements = Vec::new();
     let mut todo = std::collections::VecDeque::from([(web_area.clone(), None)]);
     let mut buttons = 0;
     let mut transcripts = 0usize;
-    let mut asides = 0usize;
+    let mut panels = 0usize;
     let mut diagnostics = Vec::new();
     let started = std::time::Instant::now();
     let mut stop = None;
@@ -1482,10 +1484,12 @@ fn find_controls_with_budget(
         // before the composer was reached (ADR 0307).
         let transcript = profile.controls().is_transcript_region(&subrole, &field);
         transcripts += usize::from(transcript);
-        // Where the profile says so, asides hold none either: the session
-        // sidebar and the panels beside the conversation (ADR 0307).
-        let complementary = profile.controls().skips_complementary(&subrole);
-        asides += usize::from(complementary);
+        // Where the profile says so, panels hold none either: the session
+        // sidebar, the activity panel and the side panel showing a file
+        // beside the conversation (ADR 0307).
+        let in_region = parent.is_some_and(|p: usize| regions[p]);
+        let panel = profile.controls().skips_panel(&subrole, in_region);
+        panels += usize::from(panel);
         let is_composer = !aside && profile.controls().composer.matches(&field);
         let is_send = !aside && !is_composer && profile.controls().send.matches(&field);
         let is_button = field.role == "AXButton";
@@ -1503,6 +1507,7 @@ fn find_controls_with_budget(
                 .queue
                 .as_ref()
                 .is_some_and(|queue| queue.row.matches(&field));
+        regions.push(in_region || subrole == "AXLandmarkRegion");
         subroles.push(subrole);
         auxiliary.push(aside);
         nodes.push(ControlNode {
@@ -1540,7 +1545,7 @@ fn find_controls_with_budget(
                     field.role, control_label(&field.title), control_label(&field.description), values[5].as_ref().and_then(ax::value_bool)));
             }
         }
-        if let Some(children) = values[4].as_ref().filter(|_| !transcript && !complementary) {
+        if let Some(children) = values[4].as_ref().filter(|_| !transcript && !panel) {
             todo.extend(
                 Element::elements_of(children)
                     .into_iter()
@@ -1605,7 +1610,7 @@ fn find_controls_with_budget(
     } else {
         ComposerButton::Other
     };
-    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} transcripts={transcripts} asides={asides} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
+    diagnostics.push(format!("controls composers={} send_buttons={} stale_sends={stale} all_buttons={buttons} transcripts={transcripts} panels={panels} logged_controls={} walk=({}, complete={complete}, {} ms) stop={:?}", composer.len(), send.len(), diagnostics.len(), nodes.len(), started.elapsed().as_millis(), stop.map(|s| s.describe())));
     Controls {
         composer,
         send,

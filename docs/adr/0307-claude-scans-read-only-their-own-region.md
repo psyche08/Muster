@@ -1,8 +1,9 @@
 # ADR 0307: Claude's control and sidebar scans read only their own region of the window
 
 - Date: 2026-11-24
-- Status: Accepted; source and tests verified, installation and runtime
-  acceptance pending
+- Status: Accepted; source and tests verified; the transcript and sidebar
+  rules installed and verified in the running app on 2026-11-25; the panel
+  rule's installation and runtime acceptance pending
 - Related: extends [0056](0056-bounded-scans-skip-transcripts-and-retry-vanished-nodes.md)
   (which deferred pruning inside the control scan until evidence) and
   [0080](0080-session-list-scan-prunes-conversation-views.md) /
@@ -66,6 +67,34 @@ Stop inside the transcript or a complementary landmark. In the one recording
 that still names its session sidebar, the sidebar is outside the main
 landmark.
 
+The rules below were first installed without the side-panel rule (decision
+2 skipped only complementary landmarks). With them, on 2026-11-25, sidebar
+scans completed again, but sends to another session (session B) were still
+refused: its control scan stopped at the limit 464 times between 01:52 and
+02:26 UTC (`controls stopped early (node limit) ... not sent`). The walk now
+skipped the transcript and the session sidebar and still stopped:
+`controls composers=1 ... transcripts=1 asides=1 walk=(4096,
+complete=false, 309 ms) stop=Some("node limit")`. The walk had reached the
+composer, but an incomplete walk cannot prove it is the only one.
+
+A read-only `ax-dump` of the window, taken while session B was in front,
+shows why. Session B had a Markdown file open in the side panel. The
+claude.ai web area holds 4,949 nodes:
+
+- **The session sidebar:** the complementary landmark, 526 nodes.
+- **The main landmark, 4,403 nodes**, holding the primary pane, a landmark
+  region of 4,401 nodes. It holds:
+  - the conversation column: the toolbar, the transcript (301 nodes) and the
+    composer;
+  - the side panel: a second landmark region, named after its open tab,
+    with the tab list, the file's controls and its rendered contents, 4,025
+    nodes for one file.
+
+In this recording, as in the five before it, the primary pane is the only
+landmark region above the composer, Send or Stop. The Activity panel's
+sections are regions too, but inside its complementary landmark. The
+notifications region sits outside the main landmark.
+
 A second failure in the same report is unrelated to the limit: two Claude
 sessions had the same title, so neither could be matched by title even when
 the scan completed (`0 matches; complete=true`). This ADR does not change
@@ -81,10 +110,14 @@ Each scan reads only the region that holds what it looks for.
    no session list, it walks again with the main landmark included, as
    before. Reasons for no list: the sidebar is hidden, Claude shows an alert
    in its place, or an update moved it.
-2. **The control scan skips the asides.** `[controls]` gains
-   `skip_complementary`, which the Claude profile sets. The control walk does
-   not walk below a complementary landmark, which covers the session sidebar
-   and the activity panel.
+2. **The control scan skips the panels.** `[controls]` gains `skip_panels`,
+   which the Claude profile sets. The control walk does not walk below a
+   complementary landmark, which covers the session sidebar and the
+   activity panel. Nor does it walk below a landmark region that is inside
+   another landmark region, which covers the side panel inside the primary
+   pane. The rule names no tab, so it also covers a tab not yet recorded
+   if Claude shows it in the same side panel. A side chat is such a region
+   too; its controls were never the session's (ADR 0221).
 3. **Both scans skip the transcript.** `[controls]` gains
    `transcript_regions`, names of application groups (`AXApplicationGroup`)
    that hold the conversation's transcript. The Claude profile names "Chat
@@ -99,15 +132,19 @@ Each scan reads only the region that holds what it looks for.
    recording instead of 1,038. The sidebar walk reads 50 nodes beside the
    main landmark instead of 461 before it reaches the sidebar.
 5. **Diagnostics report what was skipped.** The control scan reports
-   `transcripts=N asides=N`. The sidebar scan reports `transcripts=N
+   `transcripts=N panels=N`. The sidebar scan reports `transcripts=N
    main_skipped=N` and records a line when it walks the main landmark after
    all.
 6. **The queue and question scans do not change.** A queued Claude prompt is
    a message in the conversation (ADR 0158), so the queue scan still reads
    the transcript.
-7. **The redactor keeps profile labels.** `scripts/redact-ax-dump.py` also
-   takes the profiles' quoted strings as vocabulary, so labels that now live
-   only in `profiles/*.toml`, such as "Chat messages", survive redaction.
+7. **The redactor keeps profile labels and drops heading anchors.**
+   `scripts/redact-ax-dump.py` also takes the profiles' quoted strings as
+   vocabulary, so labels that now live only in `profiles/*.toml`, such as
+   "Chat messages", survive redaction. A rendered document's heading anchors
+   spell out its headings, so the redactor replaces element ids that start
+   with `user-content-` or hold non-ASCII text, and the fragments of the
+   apps' own URLs, with `anchor-N`.
 
 Other apps' profiles set none of the three, and their scans do not change.
 
@@ -135,6 +172,10 @@ Other apps' profiles set none of the three, and their scans do not change.
   Reading in reverse document order would not do it alone. The activity
   panel sits between the transcript and the composer in document order, and
   the older split view came after the composer.
+- **Name the side panel in the profile.** The region is named after its
+  open tab, so each tab would need its label, and a tab not yet recorded
+  would fill the walk again. Its nesting inside the primary pane is what
+  sets it apart from the conversation column.
 - **Find the transcript by shape (a group of articles).** A name read from
   the recorded app is a narrower rule, and the composer itself is already
   found by its name ("Prompt"). An unmatched label falls back to reading the
@@ -149,7 +190,7 @@ Other apps' profiles set none of the three, and their scans do not change.
 ## Consequences
 
 - What the two scans read no longer depends on how long the open
-  conversation is or how much the activity panel shows.
+  conversation is or how much the activity or side panel shows.
 - The control scan no longer counts a `Prompt` text area inside a panel or a
   message. While the session's composer is present, the scan picks that one
   instead of refusing as ambiguous. When the session's composer is missing,
@@ -162,10 +203,13 @@ Other apps' profiles set none of the three, and their scans do not change.
     needs the new label.
   - If the session sidebar moves into the main landmark, the sidebar scan
     reads the main landmark in its second walk.
-  - If the composer moves into a complementary landmark, the control scan
-    finds none and refuses.
-- No current recording shows a terminal, file or diff view.
-  - If such a view is a complementary landmark, both scans skip it.
+  - If the composer moves into a complementary landmark, or Claude wraps
+    the conversation column in a landmark region of its own inside the
+    primary pane, the control scan finds none and refuses. The profile then
+    needs a narrower rule.
+- The file view is recorded; terminal and diff views are not.
+  - If such a view opens in the side panel region, or is a complementary
+    landmark, both scans skip it.
   - If it sits inside the main landmark as something else, as the older
     split view did, the sidebar scan skips it, but the control scan still
     reads it.
@@ -180,14 +224,25 @@ Other apps' profiles set none of the three, and their scans do not change.
 ## Verification
 
 - **Profile switches:** `profile::tests` checks that only Claude's profile
-  skips complementary landmarks, keeps its session list outside the main
-  landmark, and names a transcript group.
+  skips panels (complementary landmarks, and landmark regions only inside
+  another), keeps its session list outside the main landmark, and names a
+  transcript group.
 - **Recorded layout:** a new redacted recording (`claude-code-transcript.dump`,
   2026-11-24, menu bar left out) shows the layout above. In it and in the
   four older Claude Code recordings (idle, running, with a draft, with a
   question card), the composer, Send and Stop are outside the message list
   and outside every complementary landmark. The older recordings' sidebar
   names were redacted, so only the new recording shows where its sidebar is.
+- **Side panel:** a second redacted recording
+  (`claude-code-files-panel.dump`, 2026-11-25, session B's window, menu bar
+  left out) adds the side panel. Its composer is outside every panel too.
+  On it, as it was recorded:
+  - a control walk that skips only the transcript and the complementary
+    landmarks stops at the limit, as session B's did;
+  - the walk that skips the panels completes, chooses the window's one
+    composer and reads nothing inside the side panel;
+  - the whole-app sidebar walk stops at the limit, and the walk beside the
+    main landmark completes with one session sidebar.
 - **Long and large trees:** a test grows the recording's transcript, its
   activity panel, or both, until each is more than twice the node limit.
   - The old control and sidebar walks then stop at the limit.
@@ -200,10 +255,18 @@ Other apps' profiles set none of the three, and their scans do not change.
 - **Platform walks:** `find_controls_with_budget` and `scan_sidebar` need
   live Accessibility elements, so the tests mirror their traversal over the
   recorded tree.
+- **Running app (2026-11-25), without the panel rule:** the build was
+  installed on the Mac and `musterd` restarted while Locked Use was idle.
+  - With another session in front, the sidebar scan read 49 nodes beside
+    the main landmark (`main_skipped=1 app_walk=(49, complete)`).
+  - With session B in front, the sidebar scan completed
+    (`app_walk=(49, complete)`, `area_walk=(525, complete)`), found one
+    candidate and selected the session. Before, the same walk ended
+    `complete=false`.
+  - Session B's control walk still stopped at the limit (see Context).
 - **Not verified:**
-  - installation and a restart of `musterd`;
-  - a send to a long Claude conversation in the live app, or a selection
-    beside one;
+  - installation of the panel rule, and a send to session B with its file
+    open;
   - Locked Use sends while the Mac is locked;
-  - terminal, file and diff views in the current app;
+  - terminal and diff views in the current app;
   - a localized UI.

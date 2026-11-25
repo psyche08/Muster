@@ -223,7 +223,7 @@ struct ControlsSection {
     #[serde(default)]
     transcript_regions: Vec<String>,
     #[serde(default)]
-    skip_complementary: bool,
+    skip_panels: bool,
     sessions: SessionsSpec,
     queue: Option<QueueSpec>,
     questions: Option<QuestionsSpec>,
@@ -795,10 +795,10 @@ pub static {name}_CLOUD: Cloud = Cloud {{
             Some("main-conversation") => "ApprovalScope::MainConversation",
             Some(other) => at.fail(format!("invalid approval_scope {other:?}")),
         };
-        let skip_complementary = spec.skip_complementary;
+        let skip_panels = spec.skip_panels;
         let _ = write!(
             self.out,
-            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    transcript_regions: {},\n    skip_complementary: {skip_complementary},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
+            "/// {doc}\npub static {name}: Controls = Controls {{\n    composer: {composer},\n    composer_scope: {composer_scope},\n    auxiliary_regions: {},\n    transcript_regions: {},\n    skip_panels: {skip_panels},\n    placeholders: {},\n    draft: {draft},\n    send: {send},\n    stop: {stop},\n    approve: {approve},\n    approval_scope: {approval_scope},\n    permission_card_prefix: {permission_card_prefix},\n    sessions: {sessions},\n    queue: {queue},\n    questions: {questions},\n}};\n\n",
             list(&spec.auxiliary_regions),
             list(&spec.transcript_regions),
             list(&spec.placeholders),
