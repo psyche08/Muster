@@ -47,23 +47,9 @@ using namespace std::literals;
 
 #ifdef __APPLE__
 extern "C" bool muster_login_pointer_target();
-extern "C" bool muster_keyboard_desktop();
-#elif defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
 #endif
-#include <windows.h>
-static bool muster_keyboard_desktop() {
-  DWORD session;
-  if (!ProcessIdToSessionId(GetCurrentProcessId(), &session) || session != WTSGetActiveConsoleSessionId()) return false;
-  HDESK desktop = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
-  if (!desktop) return false;
-  wchar_t name[64] {};
-  DWORD size = 0;
-  bool allowed = GetUserObjectInformationW(desktop, UOI_NAME, name, sizeof(name), &size) && _wcsicmp(name, L"Default") == 0;
-  CloseDesktop(desktop);
-  return allowed;
-}
+#if defined(__APPLE__) || defined(_WIN32)
+extern "C" bool muster_keyboard_desktop();
 #else
 static bool muster_keyboard_desktop() { return false; }
 #endif

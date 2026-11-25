@@ -33,6 +33,23 @@
 #include "src/platform/common.h"
 #include "src/platform/virtualhid_input.h"
 
+extern "C" bool muster_keyboard_desktop() {
+  DWORD session;
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &session) || session != WTSGetActiveConsoleSessionId()) {
+    return false;
+  }
+  HDESK desktop = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
+  if (!desktop) {
+    return false;
+  }
+  wchar_t name[64] {};
+  DWORD size = 0;
+  const bool allowed = GetUserObjectInformationW(desktop, UOI_NAME, name, sizeof(name), &size) &&
+                       _wcsicmp(name, L"Default") == 0;
+  CloseDesktop(desktop);
+  return allowed;
+}
+
 namespace platf {
   using namespace std::literals;
 
