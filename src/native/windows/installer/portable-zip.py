@@ -36,6 +36,7 @@ def build(stage, version, output):
         viewer_payload += tuple(p.relative_to(viewer_dir).as_posix() for p in sorted(host_root.rglob("*")) if p.is_file())
         archive = work / name
         checksums = {}
+        sizes = {}
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as package:
             for item in (*PAYLOAD, *runtime, *viewer_payload):
                 directory = stage if item in PAYLOAD else work
@@ -47,6 +48,7 @@ def build(stage, version, output):
                     if data[:2] != b"MZ" or data[offset:offset + 6] != bytes.fromhex("504500006486"):
                         raise ValueError(f"Expected x64 PE image in {item}")
                 checksums[item] = sha256(data).hexdigest()
+                sizes[item] = len(data)
                 package.writestr("payload/" + item, data)
             package.write(viewer_dir / "Host-Sources.zip", "Host-Sources.zip", compress_type=ZIP_STORED)
             viewer_source = viewer_dir / "Viewer-Sources.zip"
@@ -56,10 +58,15 @@ def build(stage, version, output):
             package.write(viewer_source, viewer_source.name, compress_type=ZIP_STORED)
             for source_package in sources:
                 package.write(source_package, "Terminal-Sources/" + source_package.name, compress_type=ZIP_STORED)
-            for script in ("Apply-Update.cmd", "Apply-Update.ps1"):
-                package.write(source / script, script)
+            manifest = json.dumps({"version": version, "files": checksums, "sizes": sizes}, indent=2).encode()
+            package.write(source / "Apply-Update.cmd", "Apply-Update.cmd")
+            updater = (source / "Apply-Update.ps1").read_bytes()
+            if updater.count(b"@MUSTER_RELEASE_SHA256@") != 1:
+                raise ValueError("Missing unique release manifest pin in the Windows updater")
+            package.writestr("Apply-Update.ps1", updater.replace(
+                b"@MUSTER_RELEASE_SHA256@", sha256(manifest).hexdigest().encode("ascii")))
             package.write(source.parent / "README.md", "README.md")
-            package.writestr("release.json", json.dumps({"version": version, "files": checksums}, indent=2))
+            package.writestr("release.json", manifest)
         with ZipFile(archive) as package:
             if package.testzip():
                 raise ValueError("ZIP failed CRC verification")

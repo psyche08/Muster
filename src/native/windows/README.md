@@ -8,12 +8,17 @@ there and run:
 
     .\Apply-Update.cmd
 
+Approve the Windows UAC prompt to install or update the executable files in
+the x64 Program Files folder under `Muster\versions\<version>`. Use the
+original user's shell even when a different administrator approves elevation.
 The launcher uses Windows PowerShell with RemoteSigned for that process.
-Organizational group policy still applies. The script prints the fixed shortcut at
+Organizational group policy still applies. After the machine installation
+succeeds, the launcher registers Chrome for the invoking user and prints the fixed shortcut at
 `%LOCALAPPDATA%\Programs\Muster\Muster.lnk`. Pin this shortcut or copy a
-shortcut to it. To use a different private directory, pass `-Destination`
-with the same path on each update. Choose a location where only your account
-and administrators can replace executables or rename their parent directories.
+shortcut to it. If an earlier release used a custom private directory, pass
+`-Destination` with that same directory to switch the existing shortcut.
+This option controls only the per-user shortcut and update lock. The machine
+destination is fixed. Cancelling UAC leaves the previous shortcut active.
 Use the same procedure for each new ZIP. A single-file WinForms app, Rust
 core, daemon, CLI, Chrome host and extension, network node, Wintun DLL,
 packet helper and license notices are included. The managed conversation terminal

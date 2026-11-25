@@ -421,7 +421,8 @@ Get-FileHash -Algorithm SHA256 -LiteralPath $package
 - **操作已安装的 Muster**：在同一用户的交互桌面上，按 GUI 的进程 ID 查找标题为 **New CLI session** 的模态窗，核对它的所有者是当前 Muster 主窗。在该对话框内查找已启用的 **Cancel** 按钮，通过 UI Automation 的 `InvokePattern.Invoke()` 调用一次。重新查询窗口，确认对话框关闭且 **Agents** 主窗恢复可用。若控件树只有禁用的主窗，重新枚举该进程的顶层窗口；仍无法定位时，记录实机步骤未验证。此路径直接调用控件，无需模拟全局按键或注入 DLL。[Microsoft UI Automation](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation)
 - **留存实机画面**：需要核对实际显示效果时，可使用支持 Windows Graphics Capture 的工具，通过系统窗口选择器选中目标窗口再取图。先确认预览包含目标对话框；独立模态窗可能需要单独选择。记录窗口标题、版本和 DPI，在线截图仅保存在本机。仓库的 `--screenshots` 参数用于独立表单测试。[Microsoft 窗口捕获文档](https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture)
 
-普通应用更新、采集测试截图与 UI 测试都无需 UAC。Wintun 启动授权、TPM 在场确认
+正式 Windows 安装和更新需要在 UAC 确认后写入 Program Files。开发构建、采集测试截图
+与 UI 测试仍可使用普通用户权限。Wintun 启动授权、TPM 在场确认
 或账户登录由用户在系统窗口完成。验证聊天优先只读重开已有测试会话，新增真实
 消息发送应提前说明用途。公开文档和版本库只使用合成截图、路径和设备记录。
 
