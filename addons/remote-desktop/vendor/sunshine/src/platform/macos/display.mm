@@ -8,6 +8,7 @@
 #include <chrono>
 #include <optional>
 #include <string_view>
+#include <thread>
 
 // local includes
 #include "src/config.h"
@@ -63,7 +64,6 @@ namespace platf {
     CGDirectDisplayID display_id {};  ///< Display ID.
     std::unique_ptr<display_device::DisplayPowerGuardInterface> display_power_guard;  ///< Display power guard.
 
-    bool locked_surface = false;
     int frame_rate = 0;
 
     ~screen_display_t() override {
@@ -87,22 +87,42 @@ namespace platf {
     }
 
     capture_e capture(const push_captured_image_cb_t &push, const pull_free_image_cb_t &pull, bool *cursor) override {
-      if (![screen startLockedSurface:locked_surface]) return capture_e::error;
+      bool login = muster_session::capture_login();
+      if (![screen startLockedSurface:login]) return capture_e::error;
       auto stop = util::fail_guard([this] {
-        if (locked_surface) muster_session::lock_frame_visible.store(false);
+        muster_session::presented.store(muster_session::surface::none);
         [screen stop];
       });
       for (;;) {
         @autoreleasepool {
+          const bool switching = login && !muster_session::capture_login();
+          if (switching) {
+            [screen stop]; // Discard buffered samples and detach the old delegate source.
+            if (![screen startLockedSurface:NO]) return capture_e::error;
+            login = false;
+          }
           BOOL ended = NO;
-          CMSampleBufferRef sample = [screen copyFrameWaiting:0.05 ended:&ended];
-          if (ended) return capture_e::error;
+          CMSampleBufferRef sample = [screen copyFrameWaiting:(switching ? 3.0 : 0.05) ended:&ended];
+          if (switching && !sample) return capture_e::error;
+          if (ended) {
+            muster_session::presented.store(muster_session::surface::none);
+            if (!login) return capture_e::error;
+            // The login stream may stop just before Rust observes OS unlock.
+            const auto until = std::chrono::steady_clock::now() + 1s;
+            while (muster_session::capture_login() && std::chrono::steady_clock::now() < until) {
+              std::this_thread::sleep_for(20ms);
+            }
+            if (muster_session::capture_login()) return capture_e::error;
+            continue;
+          }
           auto release = util::fail_guard([sample] { if (sample) CFRelease(sample); });
           std::shared_ptr<img_t> img;
           if (!pull(img)) return capture_e::ok;
           if (sample) assign_frame(*img, sample);
           if (!push(std::move(img), sample != nullptr)) return capture_e::ok;
-          if (locked_surface && sample) muster_session::lock_frame_visible.store(true);
+          if (sample && muster_session::began_locked()) {
+            muster_session::presented.store(login ? muster_session::surface::login : muster_session::surface::desktop);
+          }
         }
       }
     }
@@ -152,7 +172,7 @@ namespace platf {
       probe.frameWidth = screen.frameWidth;
       probe.frameHeight = screen.frameHeight;
       probe.pixelFormat = screen.pixelFormat;
-      if (![probe startLockedSurface:locked_surface]) return 1;
+      if (![probe startLockedSurface:muster_session::capture_login()]) return 1;
       BOOL ended = NO;
       CMSampleBufferRef sample = [probe copyFrameWaiting:3 ended:&ended];
       if (!sample) return 1;
@@ -235,8 +255,7 @@ namespace platf {
     display->frame_rate = config.framerate;
     display->screen = [[MusterScreenVideo alloc] initWithDisplay:display->display_id frameRate:config.framerate];
 
-    display->locked_surface = std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") != nullptr;
-    if (!display->screen || (display->locked_surface && !display->screen.lockSurfaceAvailable)) {
+    if (!display->screen || (muster_session::capture_login() && !display->screen.lockSurfaceAvailable)) {
       BOOST_LOG(error) << "Video setup failed."sv;
       return nullptr;
     }

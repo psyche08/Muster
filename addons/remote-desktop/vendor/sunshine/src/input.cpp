@@ -301,7 +301,11 @@ namespace input {
     safe::mail_raw_t::event_t<input::touch_port_t> touch_port_event;  ///< Touch port event.
     platf::feedback_queue_t feedback_queue;  ///< Queue used to deliver controller feedback to the platform backend.
 
-    std::list<std::vector<uint8_t>> input_queue;  ///< Validated input packets waiting for processing.
+    struct queued_packet {
+      std::vector<uint8_t> bytes;
+      muster_session::surface surface;
+    };
+    std::list<queued_packet> input_queue;  ///< Validated input packets waiting for processing.
     std::mutex input_queue_lock;  ///< Input queue lock.
 
     thread_pool_util::ThreadPool::task_id_t mouse_left_button_timeout;  ///< Mouse left button timeout.
@@ -908,7 +912,12 @@ namespace input {
      * input->mouse_left_button_timeout can only be nullptr
      * when the last mouse coordinates were absolute
      */
-    if (button == BUTTON_LEFT && release && !input->mouse_left_button_timeout) {
+    bool delay_left_release = !input->mouse_left_button_timeout;
+#ifdef __APPLE__
+    // A delayed release from the login surface must not run on the desktop.
+    delay_left_release &= !muster_session::began_locked();
+#endif
+    if (button == BUTTON_LEFT && release && delay_left_release) {
       auto f = [=]() {
         auto left_released = mouse_press[BUTTON_LEFT];
         if (left_released) {
@@ -2032,6 +2041,7 @@ namespace input {
     // 'entry' backs the 'payload' pointer, so they must remain in scope together
     std::vector<uint8_t> entry;
     PNV_INPUT_HEADER payload;
+    muster_session::surface surface;
 
     // Lock the input queue while batching, but release it before sending
     // the input to the OS. This avoids potentially lengthy lock contention
@@ -2045,15 +2055,16 @@ namespace input {
       }
 
       // Pop off the first entry, which we will send
-      entry = input->input_queue.front();
+      surface = input->input_queue.front().surface;
+      entry = std::move(input->input_queue.front().bytes);
       payload = (PNV_INPUT_HEADER) entry.data();
       input->input_queue.pop_front();
 
       // Try to batch with remaining items on the queue
       auto i = input->input_queue.begin();
       while (i != input->input_queue.end()) {
-        auto batchable_entry = *i;
-        auto batchable_payload = (PNV_INPUT_HEADER) batchable_entry.data();
+        if (i->surface != surface) break;
+        auto batchable_payload = (PNV_INPUT_HEADER) i->bytes.data();
 
         auto batch_result = batch(payload, batchable_payload);
         if (batch_result == batch_result_e::terminate_batch) {
@@ -2069,12 +2080,12 @@ namespace input {
       }
     }
 
-    if (!muster_session::may_forward_mouse()) {
+    if (surface != muster_session::mouse_surface()) {
       return;
     }
 
 #ifdef __APPLE__
-    if (std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") && !muster_login_pointer_target()) return;
+    if (surface == muster_session::surface::login && !muster_login_pointer_target()) return;
 #endif
 
     // Print the final input packet
@@ -2149,7 +2160,8 @@ namespace input {
       return;
     }
 
-    if (!muster_session::may_forward_mouse()) {
+    const auto surface = muster_session::mouse_surface();
+    if (surface == muster_session::surface::none) {
       return;
     }
     switch (util::endian::little(header.magic)) {
@@ -2166,7 +2178,7 @@ namespace input {
 
     {
       std::lock_guard<std::mutex> lg(input->input_queue_lock);
-      input->input_queue.push_back(std::move(input_data));
+      input->input_queue.push_back({std::move(input_data), surface});
     }
     task_pool.push(passthrough_next_message, input);
   }
@@ -2182,6 +2194,16 @@ namespace input {
       }
     }
   }
+
+#ifdef __APPLE__
+  void finish_login_input() {
+    // Serialize held-button cleanup with native pointer dispatch.
+    task_pool.push([] {
+      reset_mouse_buttons();
+      muster_session::unlocked_by_owner.store(true);
+    });
+  }
+#endif
 
   /**
    * @brief Release every pressed keyboard key tracked by Sunshine.

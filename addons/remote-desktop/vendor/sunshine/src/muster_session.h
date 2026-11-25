@@ -39,14 +39,26 @@ namespace muster_session {
   }
 
   inline std::atomic<bool> mouse_enabled {false};
+  enum class surface { none, login, desktop };
 #ifdef __APPLE__
-  // Set only by the live video loop after the first lock-surface frame.
-  inline std::atomic<bool> lock_frame_visible {false};
+  inline std::atomic<bool> unlocked_by_owner {false};
+  inline std::atomic<surface> presented {surface::none};
+
+  inline bool began_locked() {
+    return std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") != nullptr;
+  }
+  inline bool capture_login() {
+    return began_locked() && !unlocked_by_owner.load();
+  }
 #endif
-  inline bool may_forward_mouse() {
+  inline surface mouse_surface() {
+    if (!mouse_enabled.load()) return surface::none;
 #ifdef __APPLE__
-    if (std::getenv("MUSTER_DESKTOP_LOCK_SURFACE") && !lock_frame_visible.load()) return false;
+    if (began_locked()) {
+      const auto requested = capture_login() ? surface::login : surface::desktop;
+      return presented.load() == requested ? requested : surface::none;
+    }
 #endif
-    return mouse_enabled.load();
+    return surface::desktop;
   }
 }

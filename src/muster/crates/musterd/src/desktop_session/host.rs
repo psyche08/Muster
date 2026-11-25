@@ -84,7 +84,7 @@ impl Drop for ActiveHost<'_> {
     fn drop(&mut self) {
         if let Some(process) = self.process.take()
             && let Some(daemon) = self.host.daemon.upgrade()
-            && !self.host.locked
+            && !self.host.surface.initially_locked
             && console_lock_state(&daemon) == Some(false)
             && self.host.lease.current(&daemon)
         {
@@ -93,8 +93,35 @@ impl Drop for ActiveHost<'_> {
     }
 }
 
+struct ConsoleSurface {
+    initially_locked: bool,
+    unlocked: tokio_util::sync::CancellationToken,
+}
+
+impl ConsoleSurface {
+    fn new(initially_locked: bool) -> Self {
+        Self {
+            initially_locked,
+            unlocked: Default::default(),
+        }
+    }
+
+    fn accepts(&self, locked: Option<bool>) -> bool {
+        match locked {
+            Some(false) => {
+                if self.initially_locked {
+                    self.unlocked.cancel();
+                }
+                true
+            }
+            Some(true) => self.initially_locked && !self.unlocked.is_cancelled(),
+            None => false,
+        }
+    }
+}
+
 struct Host {
-    locked: bool,
+    surface: ConsoleSurface,
     daemon: Weak<Daemon>,
     lease: super::permissions::Lease,
     peer: DeviceId,
@@ -104,7 +131,7 @@ impl Handler for Host {
     fn console_ready(&self) -> bool {
         !self.stop.is_cancelled()
             && self.daemon.upgrade().is_some_and(|d| {
-                console_lock_state(&d) == Some(self.locked) && self.lease.current(&d)
+                self.lease.current(&d) && self.surface.accepts(console_lock_state(&d))
             })
     }
     fn serve<'a>(
@@ -176,7 +203,7 @@ impl Host {
             .map_err(|_| unavailable("desktop service stopped"))?;
         #[cfg(target_os = "macos")]
         if let Some(settings) = native {
-            if self.locked {
+            if self.surface.initially_locked {
                 session.send_control(CAPTURE_UNAVAILABLE).await?;
                 return Err(unavailable("locked capture requires Moonlight"));
             }
@@ -199,12 +226,17 @@ impl Host {
         let fps = video.map_or(30, |p| p.fps);
         let mode = format!("{width}x{height}x{fps}");
         #[cfg(target_os = "macos")]
-        let parked = daemon.desktop_idle.take().await.filter(|_| !self.locked);
+        let parked = daemon
+            .desktop_idle
+            .take()
+            .await
+            .filter(|_| !self.surface.initially_locked);
         #[cfg(windows)]
         let parked = None;
         if !self.console_ready() {
             return Err(unavailable("desktop permission ended"));
         }
+        let start_locked = self.surface.initially_locked && !self.surface.unlocked.is_cancelled();
         let executable = program(CAPTURE_HOST)?;
         let process = match start(
             &executable,
@@ -212,7 +244,7 @@ impl Host {
             ports,
             &launch,
             &mode,
-            self.locked,
+            start_locked,
             video.is_none_or(|s| s.show_cursor),
         )
         .await
@@ -228,7 +260,7 @@ impl Host {
         #[cfg(windows)]
         let _active = process;
         #[cfg(target_os = "macos")]
-        let _active = ActiveHost {
+        let mut active = ActiveHost {
             host: self,
             process: Some(process),
         };
@@ -239,8 +271,27 @@ impl Host {
             reply.extend(height.to_be_bytes());
         }
         session.send_control(&reply).await?;
+        let switch_surface = async {
+            #[cfg(target_os = "macos")]
+            if start_locked {
+                self.surface.unlocked.cancelled().await;
+                if !self.console_ready() {
+                    return Err(unavailable("desktop permission ended"));
+                }
+                active
+                    .process
+                    .as_mut()
+                    .ok_or_else(|| unavailable("desktop host ended"))?
+                    .owner
+                    .write_all(b"U")
+                    .await
+                    .map_err(|_| unavailable("capture surface switch failed"))?;
+            }
+            std::future::pending::<Result<(), Error>>().await
+        };
         tokio::select! {
             biased;
+            result=switch_surface=>result,
             error=engine.exited()=>Err(error),
             result=gamestream::host(session,ports,engine.clone())=>Ok(result?),
         }
@@ -252,7 +303,7 @@ pub(crate) fn admit(
 ) -> Option<muster_net::remote_desktop::Sharing> {
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
     let host = Arc::new(Host {
-        locked: console_lock_state(daemon)?,
+        surface: ConsoleSurface::new(console_lock_state(daemon)?),
         daemon: Arc::downgrade(daemon),
         lease,
         peer,
@@ -505,6 +556,22 @@ async fn bounded_xml(mut response: reqwest::Response) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remote_surface_allows_one_unlock_of_the_admitted_console() {
+        let surface = ConsoleSurface::new(true);
+        assert!(surface.accepts(Some(true)));
+        assert!(!surface.unlocked.is_cancelled());
+        assert!(surface.accepts(Some(false)));
+        assert!(surface.unlocked.is_cancelled());
+        assert!(surface.accepts(Some(false)));
+        assert!(!surface.accepts(Some(true)));
+        assert!(!surface.accepts(None));
+        let desktop = ConsoleSurface::new(false);
+        assert!(desktop.accepts(Some(false)));
+        assert!(!desktop.accepts(Some(true)));
+        assert!(!desktop.accepts(None));
+    }
+
     /// Run on an opted-in test host with the packaged Muster capture tool.
     #[tokio::test]
     #[ignore = "requires an interactive Mac and a locally selected Sunshine test binary"]

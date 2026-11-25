@@ -30,16 +30,22 @@ int main() {
   }
 #ifdef __APPLE__
   setenv("MUSTER_DESKTOP_LOCK_SURFACE", "1", 1);
+  using muster_session::surface;
   for (bool mouse : {false, true}) {
-    for (bool visible : {false, true}) {
-      muster_session::mouse_enabled.store(mouse);
-      muster_session::lock_frame_visible.store(visible);
-      if (muster_session::may_forward_mouse() != (mouse && visible)) return 1;
+    muster_session::mouse_enabled.store(mouse);
+    for (bool unlocked : {false, true}) {
+      muster_session::unlocked_by_owner.store(unlocked);
+      const auto requested = unlocked ? surface::desktop : surface::login;
+      for (auto frame : {surface::none, surface::login, surface::desktop}) {
+        muster_session::presented.store(frame);
+        const auto expected = mouse && frame == requested ? frame : surface::none;
+        if (muster_session::mouse_surface() != expected) return 1;
+      }
     }
   }
   unsetenv("MUSTER_DESKTOP_LOCK_SURFACE");
-  muster_session::lock_frame_visible.store(false);
-  if (!muster_session::may_forward_mouse()) return 1;
+  muster_session::presented.store(surface::none);
+  if (muster_session::mouse_surface() != surface::desktop) return 1;
 #endif
   return 0;
 }

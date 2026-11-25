@@ -39,6 +39,7 @@
 #include "display_device.h"
 #include "entry_handler.h"
 #include "globals.h"
+#include "input.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "main.h"
@@ -310,7 +311,14 @@ static int run_host(int argc, char *argv[]) {
   muster_session::mouse_enabled.store(grant->mouse);
   auto owner_shutdown = mail::man->event<bool>(mail::shutdown);
   std::thread([owner_shutdown] {
-    park_requested.store(std::cin.get() == 'P');
+    int command = std::cin.get();
+#ifdef __APPLE__
+    if (command == 'U' && muster_session::began_locked()) {
+      input::finish_login_input();
+      command = std::cin.get();
+    }
+#endif
+    park_requested.store(command == 'P');
     muster_session::mouse_enabled.store(false);
     owner_shutdown->raise(true);
   }).detach();
