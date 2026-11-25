@@ -147,6 +147,43 @@ Each scan reads only the region that holds what it looks for.
    apps' own URLs, with `anchor-N`.
 
 Other apps' profiles set none of the three, and their scans do not change.
+For Codex this was checked on 2026-11-25 (see Codex below); there was no
+failure to fix and no marker to fix it by.
+
+### Codex
+
+The ChatGPT app's Codex mode shares the hazard in principle: its control
+scan reads the whole web area. The evidence does not call for the same rules:
+
+- **Live walks.** In `musterd.log` (2026-09-26 to 2026-11-25), 524 Codex
+  control walks read at most 2,910 nodes (2026-10-22) and never reached the
+  limit. Two stopped early on a node read failure (-25202). The 19 walks
+  since 2026-11-20 read 361 to 812 nodes. No Codex sidebar walk reached the
+  limit either (548 walks, at most 1,356 nodes).
+- **Older layout.** The 2026-10-03 recording of a running turn with a draft
+  (`codex-desktop-running-draft.dump`) rendered the whole conversation:
+  3,897 nodes in the web area, 3,417 of them in one unnamed group of 476
+  children. That was 199 nodes short of the limit.
+- **Current layout.** A read-only recording of a conversation of 38 user
+  messages (`codex-desktop-long.dump`, 2026-11-25) holds 886 nodes in the
+  web area:
+  - The session sidebar is a complementary landmark outside the main
+    landmark, 419 nodes.
+  - In the main landmark, a landmark region holds only the latest exchange
+    (one reply) and the composer, 358 nodes.
+  - Beside the region, a navigation landmark offers one Jump button per user
+    message, 39 nodes.
+- **No marker.** The rendered exchange is an unnamed group in the same
+  region as the composer, and a message's heading names the sender or the
+  device it was sent from, so neither a name nor a heading marks the
+  transcript.
+
+So Codex sets none of the knobs. Skipping its sidebar would roughly halve
+the walk. It would also change what its `main-conversation` composer scope
+sees, since the older idle recording has a review pane with a second editor
+in a complementary landmark. No failure justifies that change. If Codex walks start stopping at
+the limit (`controls stopped early (node limit)` for a Codex session), a new
+recording decides the rule.
 
 ## Alternatives
 
@@ -255,6 +292,13 @@ Other apps' profiles set none of the three, and their scans do not change.
 - **Platform walks:** `find_controls_with_budget` and `scan_sidebar` need
   live Accessibility elements, so the tests mirror their traversal over the
   recorded tree.
+- **Codex:** `a_long_codex_conversation_renders_only_its_latest_exchange`
+  checks the 2026-11-25 Codex recording:
+  - it holds 38 Jump buttons and one rendered reply;
+  - its web area is under a quarter of the node limit;
+  - the unchanged Codex profile chooses its one composer, which holds no
+    draft;
+  - it finds no submit, Stop or approval control.
 - **Running app (2026-11-25), without the panel rule:** the build was
   installed on the Mac and `musterd` restarted while Locked Use was idle.
   - With another session in front, the sidebar scan read 49 nodes beside

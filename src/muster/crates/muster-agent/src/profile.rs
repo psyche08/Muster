@@ -880,6 +880,7 @@ mod tests {
         include_str!("../tests/fixtures/ax/claude-code-transcript.dump");
     const CLAUDE_CODE_FILES_PANEL: &str =
         include_str!("../tests/fixtures/ax/claude-code-files-panel.dump");
+    const CODEX_DESKTOP_LONG: &str = include_str!("../tests/fixtures/ax/codex-desktop-long.dump");
 
     fn found(tree: &AxTree, selector: &Selector) -> Vec<usize> {
         (0..tree.nodes.len())
@@ -1563,6 +1564,48 @@ AXWebArea title="Session - Claude Code"
         assert_eq!(sidebar_scan(&recorded, false).0, "node_limit");
         let (stop, sidebars, _) = sidebar_scan(&recorded, true);
         assert_eq!((stop, sidebars), ("complete", session_sidebars(&recorded)));
+    }
+
+    /// A long Codex conversation in the current ChatGPT app (recorded
+    /// 2026-11-25, Codex mode, 38 user messages, idle, empty composer; the
+    /// menu bar left out). The app renders only the latest exchange: one
+    /// landmark region holds it and the composer, and a navigation landmark
+    /// beside it jumps to each user message. The whole web area stays under
+    /// a quarter of the node limit, so Codex's control scan, which skips
+    /// nothing (ADR 0307), completes, and the profile finds its one
+    /// composer in this layout.
+    #[test]
+    fn a_long_codex_conversation_renders_only_its_latest_exchange() {
+        let tree = tree(CODEX_DESKTOP_LONG);
+        let web = (0..tree.nodes.len())
+            .find(|&i| tree.nodes[i].role == "AXWebArea")
+            .unwrap();
+        assert!(tree.preorder(web).len() < PLATFORM_NODE_LIMIT / 4);
+        let jumps = (0..tree.nodes.len())
+            .find(|&i| {
+                tree.nodes[i].subrole == "AXLandmarkNavigation"
+                    && ancestors(&tree, i).any(|a| tree.nodes[a].subrole == "AXLandmarkMain")
+            })
+            .unwrap();
+        let jumps = &tree.nodes[jumps].children;
+        assert_eq!(jumps.len(), 38, "one per user message");
+        assert!(jumps.iter().all(|&i| tree.nodes[i].role == "AXButton"));
+        let replies = tree
+            .nodes
+            .iter()
+            .filter(|n| n.role == "AXHeading" && n.title == "ChatGPT said:")
+            .count();
+        assert_eq!(replies, 1, "only the latest exchange is rendered");
+
+        let composers = found(&tree, &CODEX.composer);
+        assert_eq!(composers.len(), 1);
+        let nodes = control_nodes(&CODEX, &tree);
+        let subroles: Vec<_> = tree.nodes.iter().map(|n| n.subrole.clone()).collect();
+        let chosen = crate::native_scan::choose_composer(CODEX.composer_scope, &nodes, &subroles);
+        assert_eq!(chosen, Some(composers[0]));
+        assert!(!CODEX.is_draft(&tree.nodes[composers[0]].value.replace('⏎', "\n")));
+        assert!(codex_submits(&tree).is_empty());
+        idle(&tree, &CODEX);
     }
 
     /// With no session sidebar beside the main landmark, because it is

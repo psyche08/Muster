@@ -18,10 +18,12 @@ to prove that each app's profile finds its controls (ARCHITECTURE §3.6.4).
 | `claude-chat-new.dump` | Claude app in Chat mode, new-chat page with its recents | 2026-10-03, Mac-C, dev build of the dumper |
 | `claude-code-transcript.dump` | Claude app in Code mode, one Claude Code session, idle; menu bar left out | 2026-11-24, Muster 1.1.47 |
 | `claude-code-files-panel.dump` | Claude app in Code mode, one Claude Code session, idle, a Markdown file open in the side panel; menu bar left out | 2026-11-25, Muster 1.1.47 dev build |
+| `codex-desktop-long.dump` | ChatGPT app in Codex mode, a conversation of 38 user messages, idle, empty composer; menu bar left out | 2026-11-25, Muster 1.1.47 dev build |
 
-`claude-code-transcript.dump` and `claude-code-files-panel.dump` leave out
-the menu bar, whose recent-items menu names the user's recent apps and
-documents; the scans they test do not read the menu bar (ADR 0307).
+`claude-code-transcript.dump`, `claude-code-files-panel.dump` and
+`codex-desktop-long.dump` leave out the menu bar, whose recent-items menu
+names the user's recent apps and documents; the scans they test do not read
+the menu bar (ADR 0307).
 
 Muster 1.0.31's `ax-dump` stopped at 1,500 nodes, before the ChatGPT app's
 composer in a long conversation. The rows marked "dev build of the dumper"

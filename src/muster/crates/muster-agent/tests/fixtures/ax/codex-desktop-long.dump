@@ -1,0 +1,900 @@
+AXApplication title="ChatGPT"
+  AXWindow/AXStandardWindow title="text-1"
+    AXGroup title="text-1"
+      AXGroup
+        AXGroup
+          AXGroup
+            AXGroup
+              AXGroup
+                AXScrollArea
+                  AXWebArea title="text-1" url="app://-/index.html"
+                    AXGroup
+                      AXGroup id="root"
+                        AXGroup/AXEmptyGroup
+                        AXGroup
+                          AXGroup
+                            AXGroup
+                              AXLink title="text-2" desc="text-2" url="app://-/index.html#anchor-1"
+                                AXStaticText value="value-1"
+                            AXGroup
+                              AXLink title="text-2" desc="text-2" url="app://-/index.html#anchor-2"
+                                AXStaticText value="value-1"
+                          AXGroup
+                            AXGroup
+                              AXGroup/AXLandmarkComplementary
+                                AXGroup
+                                  AXGroup id="app-shell-sidebar"
+                                    AXGroup/AXLandmarkNavigation title="text-3" desc="text-3"
+                                      AXButton title="Home"
+                                      AXButton title="text-4"
+                                      AXButton title="text-5"
+                                      AXButton title="text-6"
+                                      AXPopUpButton title="text-7"
+                                      AXButton title="text-8"
+                                      AXButton title="text-9"
+                                      AXGroup
+                                        AXPopUpButton title="text-10" desc="text-10" id="radix-_r_av_"
+                                        AXPopUpButton title="text-11" desc="text-11" id="radix-_r_b_"
+                                    AXGroup
+                                      AXGroup/AXLandmarkNavigation title="Home" desc="Home"
+                                        AXGroup
+                                          AXPopUpButton title="Switch mode, current mode: Codex" desc="Switch mode, current mode: Codex" id="radix-_r_d_"
+                                          AXCheckBox/AXToggleButton title="text-12" desc="text-12"
+                                          AXPopUpButton title="text-13" desc="text-13"
+                                          AXButton title="New chat"
+                                          AXList/AXContentList
+                                            AXGroup
+                                              AXButton title="text-14"
+                                        AXGroup
+                                          AXGroup
+                                            AXGroup
+                                              AXButton title="Pinned"
+                                              AXGroup
+                                                AXPopUpButton title="text-15" desc="text-15" id="--native-popover-_r_o_-menu-trigger"
+                                              AXGroup
+                                                AXGroup
+                                                  AXList/AXContentList
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup title="text-16" desc="text-16"
+                                                        AXButton title="text-16" desc="text-16"
+                                                        AXGroup
+                                                          AXButton title="Unpin chat" desc="Unpin chat"
+                                                          AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup title="text-17" desc="text-17"
+                                                        AXButton title="text-17" desc="text-17"
+                                                        AXGroup
+                                                          AXButton title="Unpin chat" desc="Unpin chat"
+                                                          AXButton title="Archive chat" desc="Archive chat"
+                                            AXGroup
+                                              AXButton title="Recents"
+                                              AXGroup
+                                                AXPopUpButton title="text-18" desc="text-18" id="id0000000000000000000000000000000001"
+                                                AXButton title="New chat" desc="New chat"
+                                              AXGroup
+                                                AXGroup
+                                                  AXList/AXContentList
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-19" desc="text-19"
+                                                          AXButton title="text-19" desc="text-19"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                        AXGroup/AXApplicationDialog title="text-20" desc="text-20" id="id0000000000000002"
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXStaticText value="value-2"
+                                                            AXImage
+                                                            AXStaticText value="value-3"
+                                                            AXStaticText value="value-4"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-21" desc="text-21"
+                                                          AXButton title="text-21" desc="text-21"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-22" desc="text-22"
+                                                          AXButton title="text-22" desc="text-22"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-23" desc="text-23"
+                                                          AXButton title="text-23" desc="text-23"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-24" desc="text-24"
+                                                          AXButton title="text-24" desc="text-24"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-25" desc="text-25"
+                                                          AXButton title="text-25" desc="text-25"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-1" desc="text-1"
+                                                          AXButton title="text-1" desc="text-1"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-26" desc="text-26"
+                                                          AXButton title="text-26" desc="text-26"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-27" desc="text-27"
+                                                          AXButton title="text-27" desc="text-27"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-28" desc="text-28"
+                                                          AXButton title="text-28" desc="text-28"
+                                                          AXImage title="text-29" desc="text-29"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-30" desc="text-30"
+                                                          AXButton title="text-30" desc="text-30"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-31" desc="text-31"
+                                                          AXButton title="text-31" desc="text-31"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-32" desc="text-32"
+                                                          AXButton title="text-32" desc="text-32"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-33" desc="text-33"
+                                                          AXButton title="text-33" desc="text-33"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-34" desc="text-34"
+                                                          AXButton title="text-34" desc="text-34"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-35" desc="text-35"
+                                                          AXButton title="text-35" desc="text-35"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-36" desc="text-36"
+                                                          AXButton title="text-36" desc="text-36"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-37" desc="text-37"
+                                                          AXButton title="text-37" desc="text-37"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-38" desc="text-38"
+                                                          AXButton title="text-38" desc="text-38"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-39" desc="text-39"
+                                                          AXButton title="text-39" desc="text-39"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-40" desc="text-40"
+                                                          AXButton title="text-40" desc="text-40"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-41" desc="text-41"
+                                                          AXButton title="text-41" desc="text-41"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-42" desc="text-42"
+                                                          AXButton title="text-42" desc="text-42"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-43" desc="text-43"
+                                                          AXButton title="text-43" desc="text-43"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-44" desc="text-44"
+                                                          AXButton title="text-44" desc="text-44"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-45" desc="text-45"
+                                                          AXButton title="text-45" desc="text-45"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-46" desc="text-46"
+                                                          AXButton title="text-46" desc="text-46"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-47" desc="text-47"
+                                                          AXButton title="text-47" desc="text-47"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-48" desc="text-48"
+                                                          AXButton title="text-48" desc="text-48"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-49" desc="text-49"
+                                                          AXButton title="text-49" desc="text-49"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-50" desc="text-50"
+                                                          AXButton title="text-50" desc="text-50"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-51" desc="text-51"
+                                                          AXButton title="text-51" desc="text-51"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-52" desc="text-52"
+                                                          AXButton title="text-52" desc="text-52"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-53" desc="text-53"
+                                                          AXButton title="text-53" desc="text-53"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-54" desc="text-54"
+                                                          AXButton title="text-54" desc="text-54"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-55" desc="text-55"
+                                                          AXButton title="text-55" desc="text-55"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-56" desc="text-56"
+                                                          AXButton title="text-56" desc="text-56"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-57" desc="text-57"
+                                                          AXButton title="text-57" desc="text-57"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-58" desc="text-58"
+                                                          AXButton title="text-58" desc="text-58"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-59" desc="text-59"
+                                                          AXButton title="text-59" desc="text-59"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-60" desc="text-60"
+                                                          AXButton title="text-60" desc="text-60"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-61" desc="text-61"
+                                                          AXButton title="text-61" desc="text-61"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-62" desc="text-62"
+                                                          AXButton title="text-62" desc="text-62"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-63" desc="text-63"
+                                                          AXButton title="text-63" desc="text-63"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-64" desc="text-64"
+                                                          AXButton title="text-64" desc="text-64"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-65" desc="text-65"
+                                                          AXButton title="text-65" desc="text-65"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-66" desc="text-66"
+                                                          AXButton title="text-66" desc="text-66"
+                                                          AXImage title="text-29" desc="text-29"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-67" desc="text-67"
+                                                          AXButton title="text-67" desc="text-67"
+                                                          AXImage title="text-29" desc="text-29"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-68" desc="text-68"
+                                                          AXButton title="text-68" desc="text-68"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup
+                                                      AXGroup/AXApplicationGroup
+                                                        AXGroup/AXApplicationGroup title="text-69" desc="text-69"
+                                                          AXButton title="text-69" desc="text-69"
+                                                          AXImage title="text-29" desc="text-29"
+                                                          AXGroup
+                                                            AXButton title="Pin chat" desc="Pin chat"
+                                                            AXButton title="Archive chat" desc="Archive chat"
+                                                    AXGroup/AXEmptyGroup
+                                      AXGroup/AXEmptyGroup
+                                        AXGroup/AXEmptyGroup
+                                AXGroup
+                                  AXSplitter
+                              AXGroup/AXLandmarkBanner
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXButton title="text-70" desc="text-70"
+                                    AXGroup
+                                      AXButton title="Back" desc="Back"
+                                      AXButton title="text-71" desc="text-71"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXToolbar title="text-72" desc="text-72"
+                                        AXGroup
+                                          AXStaticText value="value-5"
+                                        AXGroup
+                                          AXPopUpButton title="Chat actions" desc="Chat actions" id="id00000000003"
+                                          AXButton title="text-73" desc="text-73"
+                                          AXCheckBox/AXToggleButton title="Summary" desc="Summary"
+                                            AXImage
+                                AXGroup/AXEmptyGroup
+                                  AXGroup/AXEmptyGroup
+                                    AXGroup/AXEmptyGroup
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXGroup
+                                        AXCheckBox/AXToggleButton title="text-74" desc="text-74"
+                              AXGroup/AXLandmarkMain id="_r_4hj_"
+                                AXGroup
+                                  AXGroup
+                                    AXGroup
+                                      AXGroup
+                                        AXGroup
+                                          AXGroup
+                                            AXGroup
+                                              AXGroup
+                                                AXGroup/AXEmptyGroup
+                                                AXGroup
+                                                  AXGroup
+                                                    AXGroup/AXLandmarkRegion title="text-75" desc="text-75"
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup
+                                                            AXSplitter title="text-76" desc="text-76"
+                                                            AXHeading title="text-77"
+                                                              AXStaticText value="value-6"
+                                                            AXButton title="text-78"
+                                                            AXGroup
+                                                              AXGroup
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXStaticText value="value-7"
+                                                              AXButton title="Show more"
+                                                            AXGroup
+                                                              AXStaticText value="value-8"
+                                                            AXButton title="text-79" desc="text-79"
+                                                            AXGroup
+                                                              AXButton title="text-80"
+                                                            AXHeading title="ChatGPT said:"
+                                                              AXStaticText value="ChatGPT said:"
+                                                            AXGroup/AXApplicationStatus
+                                                            AXGroup
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-9"
+                                                            AXGroup
+                                                              AXStaticText value="value-10"
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-11"
+                                                              AXStaticText value="value-12"
+                                                            AXGroup
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-13"
+                                                            AXList/AXContentList
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-15"
+                                                                AXStaticText value="value-16"
+                                                                AXLink title="text-81" desc="text-81" url="https://link-1.invalid/"
+                                                                  AXStaticText value="value-17"
+                                                                AXStaticText value="value-18"
+                                                                AXLink title="text-82" desc="text-82" url="https://link-2.invalid/"
+                                                                  AXStaticText value="value-19"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-20"
+                                                                AXStaticText value="value-21"
+                                                                AXLink title="text-83" desc="text-83" url="https://link-3.invalid/"
+                                                                  AXStaticText value="value-22"
+                                                                AXStaticText value="value-23"
+                                                                AXStaticText value="value-24"
+                                                                AXStaticText value="value-25"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-26"
+                                                                AXStaticText value="value-27"
+                                                                AXLink title="text-84" desc="text-84" url="https://link-4.invalid/"
+                                                                  AXStaticText value="value-28"
+                                                                AXStaticText value="value-29"
+                                                                AXStaticText value="value-30"
+                                                                AXStaticText value="value-31"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-32"
+                                                                AXStaticText value="value-33"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-34"
+                                                                AXStaticText value="value-35"
+                                                                AXLink title="text-85" desc="text-85" url="https://link-5.invalid/"
+                                                                  AXStaticText value="value-36"
+                                                                AXStaticText value="value-18"
+                                                                AXLink title="text-86" desc="text-86" url="https://link-6.invalid/"
+                                                                  AXStaticText value="value-37"
+                                                                AXStaticText value="value-38"
+                                                                AXStaticText value="value-39"
+                                                                AXStaticText value="value-40"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-41"
+                                                                AXStaticText value="value-42"
+                                                                AXLink title="text-87" desc="text-87" url="https://link-7.invalid/"
+                                                                  AXStaticText value="value-43"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-44"
+                                                                AXStaticText value="value-45"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-46"
+                                                                AXStaticText value="value-47"
+                                                                AXLink title="text-88" desc="text-88" url="https://link-8.invalid/"
+                                                                  AXStaticText value="value-48"
+                                                                AXStaticText value="value-18"
+                                                                AXLink title="text-89" desc="text-89" url="https://link-9.invalid/"
+                                                                  AXStaticText value="value-49"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-50"
+                                                                AXStaticText value="value-51"
+                                                                AXLink title="text-90" desc="text-90" url="https://link-10.invalid/"
+                                                                  AXStaticText value="value-52"
+                                                                AXStaticText value="value-53"
+                                                                AXStaticText value="value-54"
+                                                                AXStaticText value="value-55"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-56"
+                                                                AXStaticText value="value-57"
+                                                                AXLink title="text-91" desc="text-91" url="https://link-11.invalid/"
+                                                                  AXStaticText value="value-58"
+                                                                AXStaticText value="value-18"
+                                                                AXLink title="text-92" desc="text-92" url="https://link-12.invalid/"
+                                                                  AXStaticText value="value-59"
+                                                                AXStaticText value="value-18"
+                                                                AXLink title="text-93" desc="text-93" url="https://link-13.invalid/"
+                                                                  AXStaticText value="value-60"
+                                                            AXGroup
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-61"
+                                                            AXGroup
+                                                              AXTable
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-62"
+                                                                  AXCell
+                                                                    AXStaticText value="value-63"
+                                                                  AXCell
+                                                                    AXStaticText value="value-64"
+                                                                  AXCell
+                                                                    AXStaticText value="value-65"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-66"
+                                                                  AXCell
+                                                                    AXStaticText value="value-67"
+                                                                  AXCell
+                                                                    AXStaticText value="value-68"
+                                                                  AXCell
+                                                                    AXStaticText value="value-69"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-66"
+                                                                  AXCell
+                                                                    AXStaticText value="value-70"
+                                                                  AXCell
+                                                                    AXStaticText value="value-71"
+                                                                  AXCell
+                                                                    AXStaticText value="value-72"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-66"
+                                                                  AXCell
+                                                                    AXStaticText value="value-73"
+                                                                  AXCell
+                                                                    AXStaticText value="value-74"
+                                                                  AXCell
+                                                                    AXStaticText value="value-75"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-66"
+                                                                  AXCell
+                                                                    AXStaticText value="value-76"
+                                                                  AXCell
+                                                                    AXStaticText value="value-77"
+                                                                  AXCell
+                                                                    AXStaticText value="value-78"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-79"
+                                                                  AXCell
+                                                                    AXStaticText value="value-80"
+                                                                  AXCell
+                                                                    AXStaticText value="value-81"
+                                                                  AXCell
+                                                                    AXStaticText value="value-82"
+                                                                AXRow
+                                                                  AXCell
+                                                                    AXStaticText value="value-79"
+                                                                  AXCell
+                                                                    AXStaticText value="value-83"
+                                                                  AXCell
+                                                                    AXStaticText value="value-84"
+                                                                  AXCell
+                                                                    AXStaticText value="value-85"
+                                                                AXColumn
+                                                                AXColumn
+                                                                AXColumn
+                                                                AXColumn
+                                                                AXGroup
+                                                              AXGroup
+                                                                AXButton title="text-94" desc="text-94"
+                                                                AXPopUpButton title="text-95" desc="text-95"
+                                                            AXGroup
+                                                              AXStaticText value="value-86"
+                                                            AXGroup
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-87"
+                                                            AXList/AXContentList
+                                                              AXGroup
+                                                                AXListMarker value="value-88"
+                                                                AXStaticText value="value-89"
+                                                              AXGroup
+                                                                AXListMarker value="value-90"
+                                                                AXStaticText value="value-91"
+                                                              AXGroup
+                                                                AXListMarker value="value-92"
+                                                                AXStaticText value="value-93"
+                                                            AXGroup
+                                                              AXGroup/AXStrongStyleGroup
+                                                                AXStaticText value="value-94"
+                                                            AXList/AXContentList
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-95"
+                                                                AXStaticText value="value-96"
+                                                                AXStaticText value="value-97"
+                                                                AXStaticText value="value-98"
+                                                                AXStaticText value="value-99"
+                                                                AXStaticText value="value-100"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-101"
+                                                                AXStaticText value="value-102"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-103"
+                                                                AXStaticText value="value-104"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-105"
+                                                                AXStaticText value="value-106"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-107"
+                                                                AXStaticText value="value-108"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-109"
+                                                                AXStaticText value="value-110"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-111"
+                                                                AXStaticText value="value-112"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-113"
+                                                                AXStaticText value="value-114"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-115"
+                                                                AXStaticText value="value-116"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-117"
+                                                                AXStaticText value="value-118"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-119"
+                                                                AXStaticText value="value-120"
+                                                                AXStaticText value="value-121"
+                                                                AXStaticText value="value-122"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-123"
+                                                                AXStaticText value="value-124"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-125"
+                                                                AXStaticText value="value-126"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-127"
+                                                                AXStaticText value="value-128"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-129"
+                                                                AXStaticText value="value-130"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-131"
+                                                                AXStaticText value="value-132"
+                                                              AXGroup
+                                                                AXListMarker value="value-14"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-133"
+                                                                AXStaticText value="value-134"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-135"
+                                                                AXStaticText value="value-136"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-137"
+                                                                AXStaticText value="value-138"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-139"
+                                                                AXStaticText value="value-140"
+                                                                AXGroup/AXStrongStyleGroup
+                                                                  AXStaticText value="value-141"
+                                                                AXStaticText value="value-55"
+                                                            AXGroup
+                                                              AXStaticText value="value-142"
+                                                              AXButton title="text-96"
+                                                              AXStaticText value="value-18"
+                                                              AXButton title="text-97"
+                                                              AXStaticText value="value-18"
+                                                              AXButton title="text-98"
+                                                              AXStaticText value="value-18"
+                                                              AXButton title="text-99"
+                                                              AXStaticText value="value-55"
+                                                            AXGroup
+                                                              AXStaticText value="value-143"
+                                                            AXGroup
+                                                              AXButton title="text-100" desc="text-100"
+                                                              AXImage
+                                                              AXStaticText value="value-144"
+                                                              AXGroup
+                                                                AXStaticText value="value-145"
+                                                                AXStaticText value="value-146"
+                                                              AXButton title="text-101"
+                                                              AXButton title="text-102"
+                                                            AXGroup
+                                                              AXButton title="text-103"
+                                                            AXGroup
+                                                              AXButton title="text-104"
+                                                            AXButton title="Copy" desc="Copy"
+                                                            AXPopUpButton title="text-105" desc="text-105" id="id00000000004"
+                                                            AXCheckBox/AXToggleButton title="text-106" desc="text-106"
+                                                            AXGroup
+                                                              AXStaticText value="value-147"
+                                                      AXGroup
+                                                        AXGroup
+                                                          AXGroup
+                                                            AXGroup
+                                                              AXButton title="text-107" desc="text-107"
+                                                            AXHeading title="Latest response"
+                                                              AXStaticText value="Latest response"
+                                                            AXGroup/AXApplicationStatus
+                                                            AXGroup
+                                                              AXGroup
+                                                                AXGroup
+                                                                  AXGroup
+                                                                    AXTextArea title="Work with Codex" desc="Work with Codex" value="Work with Codex⏎"
+                                                                      AXGroup
+                                                                        AXGroup
+                                                                          AXStaticText value="Work with Codex"
+                                                                    AXButton title="text-108" desc="text-108"
+                                                                    AXPopUpButton title="text-109" desc="text-109" id="id00000000005"
+                                                                      AXGroup id="_r_4ni_"
+                                                                        AXStaticText value="value-148"
+                                                                    AXPopUpButton title="GPT-6 Astra High" id="id00000000006"
+                                                                    AXButton title="text-110" desc="text-110"
+                                                                    AXButton title="text-111" desc="text-111"
+                                                    AXGroup/AXLandmarkNavigation title="text-112" desc="text-112"
+                                                      AXButton title="text-113" desc="text-113"
+                                                      AXButton title="text-114" desc="text-114"
+                                                      AXButton title="text-115" desc="text-115"
+                                                      AXButton title="text-116" desc="text-116"
+                                                      AXButton title="text-117" desc="text-117"
+                                                      AXButton title="text-118" desc="text-118"
+                                                      AXButton title="text-119" desc="text-119"
+                                                      AXButton title="text-120" desc="text-120"
+                                                      AXButton title="text-121" desc="text-121"
+                                                      AXButton title="text-122" desc="text-122"
+                                                      AXButton title="text-123" desc="text-123"
+                                                      AXButton title="text-124" desc="text-124"
+                                                      AXButton title="text-125" desc="text-125"
+                                                      AXButton title="text-126" desc="text-126"
+                                                      AXButton title="text-127" desc="text-127"
+                                                      AXButton title="text-128" desc="text-128"
+                                                      AXButton title="text-129" desc="text-129"
+                                                      AXButton title="text-130" desc="text-130"
+                                                      AXButton title="text-131" desc="text-131"
+                                                      AXButton title="text-132" desc="text-132"
+                                                      AXButton title="text-133" desc="text-133"
+                                                      AXButton title="text-134" desc="text-134"
+                                                      AXButton title="text-135" desc="text-135"
+                                                      AXButton title="text-136" desc="text-136"
+                                                      AXButton title="text-137" desc="text-137"
+                                                      AXButton title="text-138" desc="text-138"
+                                                      AXButton title="text-139" desc="text-139"
+                                                      AXButton title="text-140" desc="text-140"
+                                                      AXButton title="text-141" desc="text-141"
+                                                      AXButton title="text-142" desc="text-142"
+                                                      AXButton title="text-143" desc="text-143"
+                                                      AXButton title="text-144" desc="text-144"
+                                                      AXButton title="text-145" desc="text-145"
+                                                      AXButton title="text-146" desc="text-146"
+                                                      AXButton title="text-147" desc="text-147"
+                                                      AXButton title="text-148" desc="text-148"
+                                                      AXButton title="text-149" desc="text-149"
+                                                      AXButton title="text-150" desc="text-150"
+                                                  AXGroup
+                                                    AXGroup
+                                                      AXGroup
+                                                        AXGroup/AXSectionHeader
+                                                          AXButton title="text-151"
+                                                          AXGroup
+                                                            AXPopUpButton title="text-152" desc="text-152" id="id00000000007"
+                                                        AXGroup
+                                                          AXPopUpButton id="id00000000008"
+                              AXGroup/AXApplicationStatus id="id00000000000009"
+                        AXGroup/AXEmptyGroup
+                      AXGroup/AXApplicationStatus
+                      AXGroup/AXEmptyGroup
+                        AXGroup/AXEmptyGroup
+                      AXGroup/AXApplicationStatus id="id0000000000010"
+                      AXGroup/AXApplicationStatus id="id0000000000011"
+                      AXGroup/AXEmptyGroup
+    AXButton/AXCloseButton
+    AXButton/AXFullScreenButton
+      AXGroup
+        AXGroup
+    AXButton/AXMinimizeButton
