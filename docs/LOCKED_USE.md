@@ -633,6 +633,9 @@ pipes; no public endpoint lets external processes remove covers. Heartbeat loss,
 `locked-use.pending` records unfinished transactions; a daemon restart within the same audit session cannot issue
 another authorization. If late authorization cannot be proven finished, the local user must log out and back in; only a new audit session
 can clear this record. Deleting files or restarting the daemon cannot substitute for safe recovery.
+A watchdog that fails after writing the record and before raising its cover removes the record itself, confirms with `F` and
+exits: the owner asks the lock screen for authorization only after a ready cover report, so none can have started (ADR 0308).
+Its stderr and exit status reach musterd's log.
 
 Canceling a challenge not consumed by the plugin withdraws its own cover without requesting locking, preventing unsigned challenges from affecting
 an unlocked local user. Consumed authorization must complete cleanup using the terminal states and OS observations above.
