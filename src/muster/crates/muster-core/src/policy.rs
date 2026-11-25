@@ -178,6 +178,8 @@ pub struct GrantSet {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceGrant {
+    #[serde(default)]
+    pub keyboard: bool,
     pub scope: Scope,
     pub devices: BTreeSet<DeviceId>,
 }
@@ -686,6 +688,7 @@ mod tests {
         let grant = |scope: &str| GrantSet {
             all_devices: false,
             rules: vec![DeviceGrant {
+                keyboard: false,
                 scope: scope.parse().unwrap(),
                 devices: BTreeSet::from([peer]),
             }],

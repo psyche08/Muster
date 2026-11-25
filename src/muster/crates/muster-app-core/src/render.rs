@@ -1422,6 +1422,7 @@ pub(crate) fn remote_workspace(state: &State) -> app::RemoteWorkspaceView {
         selected_device,
         can_connect,
         mouse: session.is_some_and(|s| s.mouse),
+        keyboard: session.is_some_and(|s| s.keyboard),
         native_session: session.filter(|s| s.pointer.is_some()).map_or(0, |s| s.id),
         jpeg: session.map_or_else(Vec::new, |s| s.jpeg.clone()),
         session_open: session.is_some(),

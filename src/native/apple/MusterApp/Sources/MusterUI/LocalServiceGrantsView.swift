@@ -68,7 +68,7 @@ struct LocalServiceGrantsView: View {
         let assignments = visible.compactMap { rule -> String? in
             let names = members.filter { rule.deviceIds.contains($0.deviceID) }.map(\.name)
             guard !names.isEmpty else { return nil }
-            let selector = service == .desktop ? (rule.scope == "desktop.mouse" ? "View and mouse" : "View only") : (rule.scope == service.wholeScope ? "All" : rule.scope)
+            let selector = service == .desktop ? (rule.scope == "desktop.mouse" ? (rule.keyboard ? "View, mouse and keyboard" : "View and mouse") : "View only") : (rule.scope == service.wholeScope ? "All" : rule.scope)
             return "\(selector) → \(names.joined(separator: ", "))"
         }
         return assignments.isEmpty ? "No assigned devices" : assignments.joined(separator: "\n")
@@ -162,9 +162,15 @@ private struct ServiceGrantEditor: View {
     private func selector(_ index: Int) -> some View {
         switch service {
         case .desktop:
-            Picker("Permission", selection: $rules[index].scope) {
+            Picker("Permission", selection: Binding(get: { rules[index].scope }, set: {
+                rules[index].scope = $0
+                if $0 != "desktop.mouse" { rules[index].keyboard = false }
+            })) {
                 Text("View only").tag("desktop.view")
                 Text("View and use the mouse").tag("desktop.mouse")
+            }
+            if rules[index].scope == "desktop.mouse" {
+                Toggle("Allow keyboard on unlocked desktop", isOn: $rules[index].keyboard)
             }
         case .terminals:
             Picker("Permission", selection: $rules[index].scope) {

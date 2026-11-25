@@ -14,7 +14,7 @@ static pthread_mutex_t session_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t output_lock = PTHREAD_MUTEX_INITIALIZER;
 static int video_fd;
 static atomic_bool started, stopping;
-struct input { int fd, width, height, mouse; };
+struct input { int fd, width, height, mode; };
 
 static int transfer(int fd, void *data, size_t length, bool sending) {
     char *p = data;
@@ -60,7 +60,23 @@ static void *input_loop(void *ctx) {
     unsigned char p[6];
     bool held = false;
     while (transfer(in->fd, p, sizeof(p), false) == 0) {
-        if (!in->mouse || !atomic_load(&started)) continue;
+        if (!in->mode || !atomic_load(&started)) {
+            if (p[0] >= 7) break;
+            continue;
+        }
+        if (p[0] == 7) {
+            char text[512];
+            uint16_t length = u16(p + 1);
+            if (in->mode != 2 || !length || length > sizeof(text) ||
+                transfer(in->fd, text, length, false) || LiSendUtf8TextEvent(text, length)) break;
+            continue;
+        }
+        if (p[0] == 8) {
+            if (in->mode != 2 || (p[1] != 8 && p[1] != 13) ||
+                LiSendKeyboardEvent(p[1], KEY_ACTION_DOWN, 0) ||
+                LiSendKeyboardEvent(p[1], KEY_ACTION_UP, 0)) break;
+            continue;
+        }
         if (p[0] > 6 || held != (p[0] == 5 || p[0] == 6)) break;
         LiSendMousePositionEvent((uint32_t)u16(p+1)*(in->width-1)/65535,
                                  (uint32_t)u16(p+3)*(in->height-1)/65535,
@@ -85,14 +101,14 @@ static void *input_loop(void *ctx) {
     return NULL;
 }
 
-// MAV1 | mouse | width,height,fps (BE16) | bitrate (BE32) | RI key and IV prefix.
+// MAV1 | input mode | width,height,fps (BE16) | bitrate (BE32) | RI key and IV prefix.
 int muster_moonlight_run(int input_fd, int output_fd) {
 #ifndef MUSTER_MOONLIGHT_CHILD
     int no_sigpipe = 1;
     if (setsockopt(output_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe)) != 0) return 1;
 #endif
     unsigned char init[35];
-    if (transfer(input_fd, init, sizeof(init), false) || memcmp(init, "MAV1", 4) || init[4]>1) return 1;
+    if (transfer(input_fd, init, sizeof(init), false) || memcmp(init, "MAV1", 4) || init[4]>2) return 1;
     struct input input = {input_fd, u16(init+5), u16(init+7), init[4]};
     STREAM_CONFIGURATION config;
     LiInitializeStreamConfiguration(&config);

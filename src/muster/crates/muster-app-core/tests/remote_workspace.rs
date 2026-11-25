@@ -55,6 +55,7 @@ impl Handler for Desktop {
                     }
                     events
                         .send(Ev::DesktopSession(v1::DesktopSessionProgress {
+                            keyboard: false,
                             mouse: native,
                             phase: v1::desktop_session_progress::Phase::Visible as i32,
                             ..Default::default()

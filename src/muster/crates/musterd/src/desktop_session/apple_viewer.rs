@@ -68,7 +68,7 @@ pub(super) async fn view(
     events: &EventSink,
 ) -> Result<(), Error> {
     let (mut session, reply) =
-        super::handshake::open(daemon, peer, &settings.video_hello(), events).await?;
+        super::handshake::open(daemon, peer, &settings.keyboard_video_hello(), events).await?;
     if reply.len() != 29 || !reply.starts_with(b"MDS2") {
         return Err(unavailable(
             "The host could not start Sunshine. Check the host version and capture permissions.",
@@ -90,7 +90,7 @@ pub(super) async fn view(
     let ports = ViewerPorts::bind(EnginePorts::MUSTER).await?;
     let (engine, mut sink, mut source) = start()?;
     let mut init = b"MAV1".to_vec();
-    init.push(launch.mouse.into());
+    init.push(launch.input_mode());
     init.extend(width.to_be_bytes());
     init.extend(height.to_be_bytes());
     init.extend((settings.fps as u16).to_be_bytes());
@@ -101,7 +101,7 @@ pub(super) async fn view(
         .map_err(|e| unavailable(e.to_string()))?;
     let mut inputs = launch
         .mouse
-        .then(|| daemon.desktop_pointer.attach(peer, id));
+        .then(|| daemon.desktop_pointer.attach(peer, id, launch.keyboard));
     let input = async {
         if let Some(rx) = &mut inputs {
             while let Some(packet) = rx.recv().await {
@@ -142,6 +142,7 @@ pub(super) async fn view(
                 events
                     .send(Ev::DesktopSession(DesktopSessionProgress {
                         phase: Phase::Visible as i32,
+                        keyboard: launch.keyboard,
                         mouse: launch.mouse,
                         takeover: None,
                     }))

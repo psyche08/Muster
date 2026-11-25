@@ -25,6 +25,7 @@ fn grant_view(grants: &GrantSet) -> v1::GrantSet {
             .iter()
             .map(|rule| v1::DeviceGrant {
                 scope: rule.scope.to_string(),
+                keyboard: rule.keyboard,
                 device_ids: rule.devices.iter().map(DeviceId::to_hex).collect(),
             })
             .collect(),
@@ -74,7 +75,16 @@ fn parse_grants(
                 .iter()
                 .map(|id| DeviceId::from_hex(id))
                 .collect::<Result<_, _>>()?;
-            Ok(DeviceGrant { scope, devices })
+            if rule.keyboard && scope != Scope::DesktopMouse {
+                return Err(Error::Invalid(
+                    "keyboard requires device-specific desktop mouse access".into(),
+                ));
+            }
+            Ok(DeviceGrant {
+                scope,
+                devices,
+                keyboard: rule.keyboard,
+            })
         })
         .collect::<Result<Vec<_>, Error>>()?;
     Ok(Some(GrantSet {

@@ -51,6 +51,7 @@ pub(super) async fn open(
             .send(muster_proto::v1::event::Ev::DesktopSession(
                 muster_proto::v1::DesktopSessionProgress {
                     phase: Phase::Occupied as i32,
+                    keyboard: false,
                     mouse: false,
                     takeover: Some(muster_proto::v1::DesktopTakeoverPrompt {
                         confirmation: prompt.id,

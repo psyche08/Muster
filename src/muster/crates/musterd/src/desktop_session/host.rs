@@ -212,6 +212,13 @@ impl Host {
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
+            keyboard: !self.surface.initially_locked
+                && self.lease.keyboard
+                && video.is_some()
+                && hello
+                    .as_deref()
+                    .is_some_and(muster_proto::v1::DesktopStreamSettings::viewer_has_keyboard)
+                && session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };
         let (width, height) = if let Some(settings) = video {
@@ -462,7 +469,7 @@ async fn start(
     if !cursor {
         bootstrap[3] = b'2';
     }
-    bootstrap.push(launch.mouse as u8);
+    bootstrap.push(launch.input_mode());
     bootstrap.extend(
         u16::try_from(client_cert.len())
             .map_err(|_| tls_error())?
@@ -579,6 +586,7 @@ mod tests {
         let executable = std::env::var_os("MUSTER_TEST_SUNSHINE").expect("test host executable");
         let launch = Launch {
             mouse: false,
+            keyboard: false,
             key: rand::random(),
         };
         let result = start(

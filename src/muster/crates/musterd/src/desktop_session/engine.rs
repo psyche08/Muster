@@ -10,6 +10,7 @@ pub(super) async fn progress(events: &EventSink, phase: Phase) -> Result<(), Err
         .send(Ev::DesktopSession(v1::DesktopSessionProgress {
             phase: phase as i32,
             takeover: None,
+            keyboard: false,
             mouse: false,
         }))
         .await
@@ -113,14 +114,18 @@ pub(super) const CAPTURE_UNAVAILABLE: &[u8] = b"capture-unavailable";
 // IV prefix, and the granted input mode need to cross PeerLink.
 pub(super) struct Launch {
     pub mouse: bool,
+    pub keyboard: bool,
     pub key: [u8; 20],
 }
 impl Launch {
+    pub fn input_mode(&self) -> u8 {
+        if self.keyboard { 2 } else { self.mouse as u8 }
+    }
     #[cfg(any(target_os = "macos", windows, test))]
     pub fn encode(&self) -> [u8; 25] {
         let mut bytes = [0; 25];
         bytes[..4].copy_from_slice(b"MDS1");
-        bytes[4] = self.mouse as u8;
+        bytes[4] = self.input_mode();
         bytes[5..].copy_from_slice(&self.key);
         bytes
     }
@@ -130,11 +135,12 @@ impl Launch {
                 "host could not start capture; check the host display, encoder and desktop sharing permissions for Muster",
             ));
         }
-        let [b'M', b'D', b'S', b'1', mode @ 0..=1, key @ ..] = bytes else {
+        let [b'M', b'D', b'S', b'1', mode @ 0..=2, key @ ..] = bytes else {
             return Err(unavailable("invalid desktop launch reply"));
         };
         Ok(Self {
-            mouse: *mode == 1,
+            mouse: *mode != 0,
+            keyboard: *mode == 2,
             key: key
                 .try_into()
                 .map_err(|_| unavailable("invalid desktop launch key"))?,
@@ -149,6 +155,7 @@ mod tests {
     fn launch_accepts_only_the_selected_mode_and_exact_key_length() {
         for mouse in [true, false] {
             let original = Launch {
+                keyboard: false,
                 mouse,
                 key: [7; 20],
             };
@@ -157,7 +164,7 @@ mod tests {
             assert_eq!(decoded.key, original.key);
             assert_eq!(decoded.mouse, mouse);
             assert!(Launch::parse(&wire[..24]).is_err());
-            wire[4] = 2;
+            wire[4] = 3;
             assert!(Launch::parse(&wire).is_err());
         }
     }

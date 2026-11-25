@@ -43,6 +43,7 @@ pub(crate) fn migrate(
                 .map_err(|e| Error::Invalid(format!("invalid stored desktop grant: {e}")))?;
             if record.pairing == pairing {
                 rules.push(DeviceGrant {
+                    keyboard: false,
                     scope: if record.mouse {
                         Scope::DesktopMouse
                     } else {
@@ -105,6 +106,19 @@ impl Permissions {
         Some((
             mode,
             Lease {
+                keyboard: mode == DesktopAccess::Mouse
+                    && policy
+                        .service_grants
+                        .desktop
+                        .as_ref()
+                        .is_some_and(|grants| {
+                            !grants.all_devices
+                                && grants.rules.iter().any(|r| {
+                                    r.scope == Scope::DesktopMouse
+                                        && r.keyboard
+                                        && r.devices.contains(&peer)
+                                })
+                        }),
                 peer,
                 pairing,
                 revision: state.active(&peer)?.defined_by,
@@ -132,6 +146,7 @@ impl Permissions {
 
 #[derive(PartialEq, Eq)]
 pub(super) struct Lease {
+    pub(super) keyboard: bool,
     peer: DeviceId,
     pairing: DesktopPairing,
     revision: EntryHash,
@@ -260,6 +275,7 @@ mod tests {
             grants.desktop = Some(muster_proto::v1::GrantSet {
                 all_devices: false,
                 rules: vec![muster_proto::v1::DeviceGrant {
+                    keyboard: false,
                     scope: mode.into(),
                     device_ids: vec![peer.to_hex()],
                 }],
@@ -283,7 +299,25 @@ mod tests {
         let (mode, mouse) = permissions.admit(&daemon, peer).unwrap();
         assert_eq!(mode, DesktopAccess::Mouse);
         assert!(mouse.current(&daemon));
+        assert!(!mouse.keyboard);
+        let mut keyboard_policy = daemon.policy_view();
+        keyboard_policy.service_grants.as_mut().unwrap().manages_desktop = true;
+        keyboard_policy
+            .service_grants
+            .as_mut()
+            .unwrap()
+            .desktop
+            .as_mut()
+            .unwrap()
+            .rules[0]
+            .keyboard = true;
+        daemon.set_policy(&keyboard_policy).unwrap();
+        let (_, keyboard) = permissions.admit(&daemon, peer).unwrap();
+        assert!(keyboard.keyboard);
+        assert!(!mouse.current(&daemon));
+        assert!(permissions.admit(&daemon, other).is_none());
         set("desktop.view");
+        assert!(!keyboard.current(&daemon));
         assert!(!mouse.current(&daemon));
         let mut old_client = daemon.policy_view();
         old_client.service_grants.as_mut().unwrap().desktop = None;

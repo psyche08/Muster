@@ -29,6 +29,13 @@ struct RemoteWorkspaceView: View {
                 }
                 Text(workspace.status).foregroundStyle(.secondary)
             }
+            #if os(iOS)
+            if workspace.keyboard {
+                RemoteKeyboard { input in
+                    send(.keyboard(.with { $0.session = workspace.nativeSession; $0.input = input }))
+                }.id(workspace.nativeSession)
+            }
+            #endif
             if workspace.hasTakeover {
                 Text("\(workspace.takeover.controller) is using this desktop.")
                 Button("Keep current session", action: disconnect)
@@ -59,6 +66,53 @@ struct RemoteWorkspaceView: View {
         core.send(.desktopSession(.with { $0.device = workspace.selectedDevice; $0.action = action }))
     }
 }
+
+#if os(iOS)
+private struct RemoteKeyboard: View {
+    let send: (Muster_V1_DesktopKeyboard.OneOf_Input) -> Void
+    @State private var editing = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var canSend: Bool {
+        !text.isEmpty && text.utf8.count <= 512 &&
+            text.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    var body: some View {
+        if editing {
+            VStack(alignment: .leading) {
+                HStack {
+                    TextField("Text to type", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focused)
+                        .submitLabel(.send)
+                        .onSubmit(sendText)
+                    Button("Send", action: sendText).disabled(!canSend)
+                }
+                HStack {
+                    Button("Backspace") { send(.key(.backspace)) }
+                    Button("Return") { send(.key(.return)) }
+                    Spacer()
+                    Button("Done") { text = ""; editing = false }
+                }
+            }
+            .onAppear { focused = true }
+        } else {
+            Button { editing = true } label: {
+                Label("Keyboard", systemImage: "keyboard")
+            }
+        }
+    }
+
+    private func sendText() {
+        guard canSend else { return }
+        send(.text(text))
+        text = ""
+        focused = true
+    }
+}
+#endif
 
 private struct StreamSettings: View {
     @State var draft: Muster_V1_DesktopStreamSettings

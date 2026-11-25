@@ -167,6 +167,17 @@ static NSArray<SCWindow *> *loginSurface(SCShareableContent *content, SCDisplay 
 }
 @end
 
+// Evaluate the OS console again at keyboard dispatch. The session broker can
+// observe a lock change after a packet was already queued.
+bool muster_keyboard_desktop(void) {
+  @autoreleasepool {
+    NSDictionary *state = CFBridgingRelease(CGSessionCopyCurrentDictionary());
+    return [state[(__bridge NSString *)kCGSessionOnConsoleKey] boolValue] &&
+           [state[(__bridge NSString *)kCGSessionLoginDoneKey] boolValue] &&
+           ![state[@"CGSSessionScreenIsLocked"] boolValue];
+  }
+}
+
 // Check the current pointer target again when dispatching a locked-session
 // event. A secure prompt or another display can cover the sampled login window.
 bool muster_login_pointer_target(void) {

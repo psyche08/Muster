@@ -55,6 +55,20 @@ impl DesktopStreamSettings {
 mod tests {
     use super::*;
     #[test]
+    fn keyboard_hello_preserves_video_settings_for_pre_keyboard_hosts() {
+        let settings = DesktopStreamSettings::ORIGINAL;
+        let hello = settings.keyboard_video_hello();
+        assert_eq!(
+            DesktopStreamSettings::from_video_hello(&hello),
+            Some(settings)
+        );
+        assert!(DesktopStreamSettings::viewer_has_keyboard(&hello));
+        assert!(!DesktopStreamSettings::viewer_has_keyboard(
+            &settings.video_hello()
+        ));
+        assert!(!DesktopStreamSettings::viewer_has_keyboard(b"MDJ1"));
+    }
+    #[test]
     fn video_negotiates_even_pixel_extents_and_encoder_ceiling() {
         let settings = DesktopStreamSettings {
             long_edge: 1920,
@@ -100,6 +114,21 @@ impl DesktopStreamSettings {
         bytes.extend(self.encode_to_vec());
         bytes
     }
+    // Protobuf field 16 in the MDV2 hello is ignored by pre-keyboard hosts.
+    pub fn keyboard_video_hello(&self) -> Vec<u8> {
+        let mut hello = self.video_hello();
+        KeyboardHello { keyboard: true }
+            .encode(&mut hello)
+            .expect("Vec writer");
+        hello
+    }
+    pub fn viewer_has_keyboard(bytes: &[u8]) -> bool {
+        bytes
+            .strip_prefix(b"MDV2")
+            .filter(|data| data.len() <= 64)
+            .and_then(|data| KeyboardHello::decode(data).ok())
+            .is_some_and(|hello| hello.keyboard)
+    }
     pub fn from_video_hello(bytes: &[u8]) -> Option<Self> {
         let data = bytes.strip_prefix(b"MDV2")?;
         (data.len() <= 64)
@@ -126,4 +155,10 @@ impl DesktopStreamSettings {
             automatic.min(self.bitrate_kbps)
         }
     }
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct KeyboardHello {
+    #[prost(bool, tag = "16")]
+    keyboard: bool,
 }

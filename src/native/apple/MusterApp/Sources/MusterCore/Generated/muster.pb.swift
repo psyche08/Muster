@@ -1740,6 +1740,14 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     set {action = .viewNative(newValue)}
   }
 
+  public var keyboard: Muster_V1_DesktopKeyboard {
+    get {
+      if case .keyboard(let v)? = action {return v}
+      return Muster_V1_DesktopKeyboard()
+    }
+    set {action = .keyboard(newValue)}
+  }
+
   /// local presentation input
   public var pointer: Muster_V1_DesktopPointer {
     get {
@@ -1778,6 +1786,7 @@ public nonisolated struct Muster_V1_DesktopSessionRequest: Sendable {
     case viewConfigured(Muster_V1_ConfiguredDesktopViewer)
     /// local presentation lease
     case viewNative(UInt64)
+    case keyboard(Muster_V1_DesktopKeyboard)
     /// local presentation input
     case pointer(Muster_V1_DesktopPointer)
     /// pending local viewer decision, never forwarded
@@ -1865,6 +1874,80 @@ public nonisolated struct Muster_V1_DesktopPointer: Sendable {
   public init() {}
 }
 
+public nonisolated struct Muster_V1_DesktopKeyboard: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var session: UInt64 = 0
+
+  public var input: Muster_V1_DesktopKeyboard.OneOf_Input? = nil
+
+  public var text: String {
+    get {
+      if case .text(let v)? = input {return v}
+      return String()
+    }
+    set {input = .text(newValue)}
+  }
+
+  public var key: Muster_V1_DesktopKeyboard.Key {
+    get {
+      if case .key(let v)? = input {return v}
+      return .unspecified
+    }
+    set {input = .key(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Input: Equatable, Sendable {
+    case text(String)
+    case key(Muster_V1_DesktopKeyboard.Key)
+
+  }
+
+  public nonisolated enum Key: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case backspace // = 1
+    case `return` // = 2
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .backspace
+      case 2: self = .return
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .backspace: return 1
+      case .return: return 2
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Muster_V1_DesktopKeyboard.Key] = [
+      .unspecified,
+      .backspace,
+      .return,
+    ]
+
+  }
+
+  public init() {}
+}
+
 public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1883,6 +1966,8 @@ public nonisolated struct Muster_V1_DesktopSessionProgress: Sendable {
 
   /// native profile only
   public var mouse: Bool = false
+
+  public var keyboard: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3258,6 +3343,9 @@ public nonisolated struct Muster_V1_DeviceGrant: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  /// explicit receiver opt-in for a device-specific desktop.mouse rule
+  public var keyboard: Bool = false
 
   /// e.g. agents, agents:codex, terminals, terminal.view, net:tcp/22
   public var scope: String = String()
@@ -9169,7 +9257,7 @@ nonisolated extension Muster_V1_ConfiguredDesktopViewer: SwiftProtobuf.Message, 
 
 nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0\u{3}view_configured\0\u{3}view_video\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}share_view\0\u{3}share_mouse\0\u{3}view_in_window\0\u{3}remember_access\0\u{3}confirm_takeover\0\u{3}view_native\0\u{1}pointer\0\u{3}view_configured\0\u{3}view_video\0\u{1}keyboard\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9275,6 +9363,19 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
           self.action = .viewVideo(v)
         }
       }()
+      case 11: try {
+        var v: Muster_V1_DesktopKeyboard?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .keyboard(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .keyboard(v)
+        }
+      }()
       default: break
       }
     }
@@ -9324,6 +9425,10 @@ nonisolated extension Muster_V1_DesktopSessionRequest: SwiftProtobuf.Message, Sw
     case .viewVideo?: try {
       guard case .viewVideo(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+    }()
+    case .keyboard?: try {
+      guard case .keyboard(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
     }()
     case nil: break
     }
@@ -9392,9 +9497,75 @@ nonisolated extension Muster_V1_DesktopPointer.Kind: SwiftProtobuf._ProtoNamePro
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MOVE\0\u{1}PRIMARY\0\u{1}SECONDARY\0\u{1}SCROLL\0\u{1}DRAG_START\0\u{1}DRAG_MOVE\0\u{1}DRAG_END\0")
 }
 
+nonisolated extension Muster_V1_DesktopKeyboard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DesktopKeyboard"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}session\0\u{1}text\0\u{1}key\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.session) }()
+      case 2: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.input != nil {try decoder.handleConflictingOneOf()}
+          self.input = .text(v)
+        }
+      }()
+      case 3: try {
+        var v: Muster_V1_DesktopKeyboard.Key?
+        try decoder.decodeSingularEnumField(value: &v)
+        if let v = v {
+          if self.input != nil {try decoder.handleConflictingOneOf()}
+          self.input = .key(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.session != 0 {
+      try visitor.visitSingularUInt64Field(value: self.session, fieldNumber: 1)
+    }
+    switch self.input {
+    case .text?: try {
+      guard case .text(let v)? = self.input else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    }()
+    case .key?: try {
+      guard case .key(let v)? = self.input else { preconditionFailure() }
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Muster_V1_DesktopKeyboard, rhs: Muster_V1_DesktopKeyboard) -> Bool {
+    if lhs.session != rhs.session {return false}
+    if lhs.input != rhs.input {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Muster_V1_DesktopKeyboard.Key: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}BACKSPACE\0\u{1}RETURN\0")
+}
+
 nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DesktopSessionProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{1}takeover\0\u{1}mouse\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phase\0\u{1}takeover\0\u{1}mouse\0\u{1}keyboard\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9405,6 +9576,7 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
       case 1: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._takeover) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.mouse) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.keyboard) }()
       default: break
       }
     }
@@ -9424,6 +9596,9 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
     if self.mouse != false {
       try visitor.visitSingularBoolField(value: self.mouse, fieldNumber: 3)
     }
+    if self.keyboard != false {
+      try visitor.visitSingularBoolField(value: self.keyboard, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9431,6 +9606,7 @@ nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, S
     if lhs.phase != rhs.phase {return false}
     if lhs._takeover != rhs._takeover {return false}
     if lhs.mouse != rhs.mouse {return false}
+    if lhs.keyboard != rhs.keyboard {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -11826,7 +12002,7 @@ nonisolated extension Muster_V1_GrantSet: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Muster_V1_DeviceGrant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceGrant"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}scope\0\u{3}device_ids\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}scope\0\u{3}device_ids\0\u{1}keyboard\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -11836,6 +12012,7 @@ nonisolated extension Muster_V1_DeviceGrant: SwiftProtobuf.Message, SwiftProtobu
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.scope) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.deviceIds) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.keyboard) }()
       default: break
       }
     }
@@ -11848,10 +12025,14 @@ nonisolated extension Muster_V1_DeviceGrant: SwiftProtobuf.Message, SwiftProtobu
     if !self.deviceIds.isEmpty {
       try visitor.visitRepeatedStringField(value: self.deviceIds, fieldNumber: 2)
     }
+    if self.keyboard != false {
+      try visitor.visitSingularBoolField(value: self.keyboard, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Muster_V1_DeviceGrant, rhs: Muster_V1_DeviceGrant) -> Bool {
+    if lhs.keyboard != rhs.keyboard {return false}
     if lhs.scope != rhs.scope {return false}
     if lhs.deviceIds != rhs.deviceIds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

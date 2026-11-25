@@ -13,14 +13,14 @@ static std::string frame(unsigned char mode, const std::string &pem) {
 
 int main() {
   const std::string sample = "-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n";
-  for (unsigned char mode : {0, 1}) {
+  for (unsigned char mode : {0, 1, 2}) {
     std::istringstream pipe(frame(mode, sample) + "X");
     auto grant = muster_session::read(pipe);
-    if (!grant || grant->mouse != (mode == 1) || grant->certificate != sample || pipe.get() != 'X') {
+    if (!grant || grant->mouse != (mode != 0) || grant->keyboard != (mode == 2) || grant->certificate != sample || pipe.get() != 'X') {
       return 1;
     }
   }
-  for (const auto &bad : {std::string(), std::string("MST2"), frame(2, sample),
+  for (const auto &bad : {std::string(), std::string("MST2"), frame(3, sample),
                           frame(0, std::string(8193, 'a')), frame(0, sample + sample),
                           frame(0, sample).substr(0, 10), frame(0, "not a certificate")}) {
     std::istringstream pipe(bad);

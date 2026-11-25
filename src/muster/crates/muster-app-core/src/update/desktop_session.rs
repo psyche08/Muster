@@ -5,18 +5,31 @@ use muster_proto::v1::{
 };
 
 pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessionRequest) {
-    if let Some(Action::Pointer(ref p)) = request.action {
-        if let Some(s) = state.desktop_session.as_ref().filter(|s| {
-            s.mouse
-                && s.device == request.device
-                && s.id == p.session
-                && (state.screen == Screen::Remote
-                    || p.kind == v1::desktop_pointer::Kind::DragEnd as i32)
-        }) && let Some(queue) = &s.pointer
-            && queue.try_send(p.clone()).is_err()
+    if let Some(input @ (Action::Pointer(_) | Action::Keyboard(_))) = request.action.as_ref() {
+        if let Some(session) = state
+            .desktop_session
+            .as_ref()
+            .filter(|s| s.device == request.device)
         {
-            state.desktop_session = None;
-            state.toast("Desktop input queue full. Reconnect to continue.", true);
+            let eligible = match input {
+                Action::Pointer(p) => {
+                    session.mouse
+                        && session.id == p.session
+                        && (state.screen == Screen::Remote
+                            || p.kind == v1::desktop_pointer::Kind::DragEnd as i32)
+                }
+                Action::Keyboard(k) => {
+                    session.keyboard && session.id == k.session && state.screen == Screen::Remote
+                }
+                _ => false,
+            };
+            if eligible
+                && let Some(queue) = &session.pointer
+                && queue.try_send(input.clone()).is_err()
+            {
+                state.desktop_session = None;
+                state.toast("Desktop input queue full. Reconnect to continue.", true);
+            }
         }
         return;
     }
@@ -90,6 +103,7 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
     let device = request.device.clone();
     state.desktop_session = Some(DesktopSession {
         pointer: native.then_some(pointer),
+        keyboard: false,
         mouse: false,
         jpeg: Vec::new(),
         opened_from: state.screen,
@@ -151,7 +165,7 @@ pub(super) fn start(state: &mut State, ctx: &Ctx, mut request: v1::DesktopSessio
                 client
                     .call(Req::DesktopSession(v1::DesktopSessionRequest {
                         device: device.clone(),
-                        action: Some(Action::Pointer(p)),
+                        action: Some(p),
                     }))
                     .await?;
             }
@@ -170,6 +184,7 @@ pub(super) fn progress(state: &mut State, id: u64, event: v1::DesktopSessionProg
     };
     if let Some(s) = state.desktop_session.as_mut().filter(|s| s.id == id) {
         s.mouse = event.mouse && phase == Phase::Visible;
+        s.keyboard = event.keyboard && phase == Phase::Visible;
         s.takeover = if phase == Phase::Occupied {
             event.takeover
         } else {
@@ -232,6 +247,7 @@ mod tests {
         let (watch, _) = state.new_watch();
         state.desktop_session = Some(DesktopSession {
             pointer: None,
+            keyboard: false,
             mouse: false,
             jpeg: Vec::new(),
             opened_from: Screen::Remote,
@@ -242,6 +258,7 @@ mod tests {
             _watch: watch,
         });
         let occupied = v1::DesktopSessionProgress {
+            keyboard: false,
             mouse: false,
             phase: Phase::Occupied as i32,
             takeover: Some(v1::DesktopTakeoverPrompt {
@@ -260,6 +277,7 @@ mod tests {
             &mut state,
             3,
             v1::DesktopSessionProgress {
+                keyboard: false,
                 mouse: false,
                 phase: Phase::Starting as i32,
                 takeover: None,
