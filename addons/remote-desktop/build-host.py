@@ -122,7 +122,8 @@ def host_sources(cache, modules=MODULES, *, windows_user_input=False):
                     backend = target / "src/platform/windows/windows_backend.cpp"
                     backend.write_bytes(backend.read_bytes().replace(b"\r\n", b"\n"))
                     patch = (tree / "muster-windows-user-input.patch").read_bytes().replace(b"\r\n", b"\n")
-                    run("git", "apply", "-", input=patch, cwd=target, env=dict(os.environ, GIT_CEILING_DIRECTORIES=str(target.parent.resolve())))
+                    run("git", "-c", "core.autocrlf=false", "apply", "-", input=patch, cwd=target,
+                        env=dict(os.environ, GIT_CEILING_DIRECTORIES=str(target.parent.resolve())))
                     if digest(backend) != "8d82350ddaf9df44a83ff2abb30f7cff6f544034941b32d28de1b5231de51f90":
                         raise ValueError("Windows user-mode input backend was not prepared")
                     shutil.copy2(tree / "src/platform/windows/muster_ordinary_desktop.h",
