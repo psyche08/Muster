@@ -379,6 +379,7 @@ namespace config {
       char **argv;  ///< Command-line argument vector.
     } cmd;  ///< Command line used to launch the application.
 
+    std::uint16_t media_port;  ///< Local UDP base advertised by the managed host.
     std::uint16_t port;  ///< TCP port used by Sunshine services.
     std::string address_family;  ///< IPv4 address family enforced for listening sockets by the Muster fork.
     std::string bind_address;  ///< Loopback address enforced for the Muster broker.

@@ -45,6 +45,7 @@ fn console_lock_state(daemon: &Daemon) -> Option<bool> {
 pub(crate) type IdleHost = super::idle::IdleSlot<HostProcess>;
 
 pub(crate) struct HostProcess {
+    ports: EnginePorts,
     directory: tempfile::TempDir,
     engine: Arc<Engine>,
     owner: tokio::process::ChildStdin,
@@ -265,6 +266,7 @@ impl Host {
                 return Err(error);
             }
         };
+        let ports = process.ports;
         let engine = process.engine.clone();
         #[cfg(windows)]
         let _active = process;
@@ -420,10 +422,13 @@ async fn start(
         .timeout(Duration::from_secs(12))
         .build()
         .map_err(|_| tls_error())?;
+    #[cfg(windows)]
+    let (ports, reservations) = ports.reserve_host_tcp()?;
     let base = ports.base();
+    let media_base = ports.media_base();
     let config_directory = dir.display();
     let config = format!(
-        "port = {base}\npkey = {config_directory}/host.key\ncert = {config_directory}/host.pem\nfile_apps = {config_directory}/apps.json\n"
+        "port = {base}\nmuster_media_port = {media_base}\npkey = {config_directory}/host.key\ncert = {config_directory}/host.pem\nfile_apps = {config_directory}/apps.json\n"
     );
     for (name, bytes) in [
         ("sunshine.conf", config.as_bytes()),
@@ -460,6 +465,8 @@ async fn start(
             .arg(dir.join("sunshine.conf"))
             .env("MUSTER_DESKTOP_SESSION_DIR", dir)
             .stdout(Stdio::piped());
+        #[cfg(windows)]
+        drop(reservations);
         let (child, owner, status) = Engine::launch(&mut cmd)?;
         (
             Arc::new(child),
@@ -540,6 +547,7 @@ async fn start(
         ));
     }
     Ok(HostProcess {
+        ports,
         directory,
         engine,
         owner,

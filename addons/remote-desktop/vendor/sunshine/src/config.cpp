@@ -882,6 +882,7 @@ namespace config {
     {},  // Password Salt
     platf::appdata().string() + "/sunshine.conf",  // config file
     {},  // cmd args
+    47989,  // Media base port number
     47989,  // Base port number
     "ipv4",  // Address family
     "127.0.0.1",  // Bind address
@@ -1854,6 +1855,9 @@ namespace config {
     int port = sunshine.port;
     int_between_f(vars, "port"s, port, {1024 + nvhttp::PORT_HTTPS, 65535 - rtsp_stream::RTSP_SETUP_PORT});
     sunshine.port = (std::uint16_t) port;
+    int media_port = port;
+    int_between_f(vars, "muster_media_port"s, media_port, {1024, 65535 - 11});
+    sunshine.media_port = static_cast<std::uint16_t>(media_port);
 
     // Now that we have the port, add web UI port-specific origins to CSRF allowed list
     // Web UI runs on port + 1 (PORT_HTTPS offset is 1 for confighttp)

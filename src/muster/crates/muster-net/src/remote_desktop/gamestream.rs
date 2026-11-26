@@ -27,24 +27,67 @@ const UDP_OFFSETS: [i16; 3] = [9, 10, 11]; // video, ENet control, audio
 /// Port base chosen locally for this pair of media engines. Both ends use
 /// matching offsets so RTSP-negotiated media ports lead back into the broker.
 #[derive(Clone, Copy)]
-pub struct EnginePorts(u16);
+pub struct EnginePorts {
+    tcp_base: u16,
+    media_base: u16,
+}
 impl EnginePorts {
-    pub const MUSTER: Self = Self(51389);
+    pub const MUSTER: Self = Self {
+        tcp_base: 51389,
+        media_base: 51389,
+    };
     pub fn from_local_base(base: u16) -> Result<Self, Error> {
         if !(49157..=65514).contains(&base) {
             return Err(invalid());
         }
-        Ok(Self(base))
+        Ok(Self {
+            tcp_base: base,
+            media_base: base,
+        })
     }
-    fn addr(self, offset: i16) -> SocketAddrV4 {
+    fn rtsp_addr(self) -> SocketAddrV4 {
+        SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.tcp_base + RTSP_OFFSET as u16)
+    }
+
+    fn media_addr(self, offset: i16) -> SocketAddrV4 {
         SocketAddrV4::new(
             Ipv4Addr::LOCALHOST,
-            self.0.checked_add_signed(offset).unwrap(),
+            self.media_base.checked_add_signed(offset).unwrap(),
         )
     }
 
     pub fn base(self) -> u16 {
-        self.0
+        self.tcp_base
+    }
+
+    pub fn media_base(self) -> u16 {
+        self.media_base
+    }
+
+    /// Keep the three TCP sockets reserved together until the private child
+    /// takes over. UDP ports are advertised to existing viewers over RTSP.
+    #[cfg(windows)]
+    pub fn reserve_host_tcp(self) -> Result<(Self, [std::net::TcpListener; 3]), Error> {
+        let reserve = |base: u16| -> std::io::Result<_> {
+            let bind = |port| std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port));
+            Ok([bind(base)?, bind(base - 5)?, bind(base + 21)?])
+        };
+        let start = rand::random::<u16>() as usize;
+        let min = 49157;
+        let count = 65514 - min + 1;
+        let candidates = (0..256).map(|i| (min + (start + i * 67) % count) as u16);
+        for base in std::iter::once(self.tcp_base).chain(candidates) {
+            if let Ok(sockets) = reserve(base) {
+                return Ok((
+                    Self {
+                        tcp_base: base,
+                        ..self
+                    },
+                    sockets,
+                ));
+            }
+        }
+        Err(io("no available loopback TCP ports for the desktop host"))
     }
 }
 
@@ -97,7 +140,7 @@ pub struct ViewerPorts {
 }
 impl ViewerPorts {
     pub async fn bind(ports: EnginePorts) -> Result<Self, Error> {
-        Self::bind_rtsp(ports, ports.addr(RTSP_OFFSET)).await
+        Self::bind_rtsp(ports, ports.rtsp_addr()).await
     }
 
     /// The local viewer is told its RTSP listener explicitly. UDP destinations
@@ -113,9 +156,34 @@ impl ViewerPorts {
         let rtsp = TcpListener::bind(address).await.map_err(io)?;
         let mut udp = Vec::new();
         for offset in UDP_OFFSETS {
-            udp.push(UdpSocket::bind(ports.addr(offset)).await.map_err(io)?);
+            udp.push(
+                UdpSocket::bind(ports.media_addr(offset))
+                    .await
+                    .map_err(io)?,
+            );
         }
         Ok(Self { rtsp, udp })
+    }
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn host_uses_three_available_tcp_ports_and_preserves_udp_destinations() {
+    let occupied = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let blocked = occupied.local_addr().unwrap().port();
+    let original = EnginePorts {
+        tcp_base: blocked - 21,
+        media_base: EnginePorts::MUSTER.media_base,
+    };
+    let (ports, sockets) = original.reserve_host_tcp().unwrap();
+    assert_ne!(ports.rtsp_addr().port(), blocked);
+    let actual = sockets.map(|s| s.local_addr().unwrap().port());
+    assert_eq!(
+        actual,
+        [ports.base(), ports.base() - 5, ports.rtsp_addr().port()]
+    );
+    for offset in UDP_OFFSETS {
+        assert_eq!(ports.media_addr(offset), original.media_addr(offset));
     }
 }
 
@@ -125,7 +193,7 @@ async fn viewer_keeps_the_dynamic_rtsp_listener_when_the_fixed_port_is_busy() {
     // Use an independent test base with an available UDP triplet.
     for base in (53000..55000).step_by(24) {
         let ports = EnginePorts::from_local_base(base).unwrap();
-        let Ok(occupied) = TcpListener::bind(ports.addr(RTSP_OFFSET)).await else {
+        let Ok(occupied) = TcpListener::bind(ports.rtsp_addr()).await else {
             continue;
         };
         let Ok((listeners, port)) = ViewerPorts::bind_windows(ports).await else {
@@ -136,7 +204,7 @@ async fn viewer_keeps_the_dynamic_rtsp_listener_when_the_fixed_port_is_busy() {
         for (socket, offset) in listeners.udp.iter().zip(UDP_OFFSETS) {
             assert_eq!(
                 socket.local_addr().unwrap(),
-                std::net::SocketAddr::V4(ports.addr(offset))
+                std::net::SocketAddr::V4(ports.media_addr(offset))
             );
         }
         return;
@@ -271,7 +339,7 @@ async fn run(session: &mut Session, side: Side) -> Result<(), Error> {
                 let socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
                     .await
                     .map_err(io)?;
-                udp_sockets.push((socket, Some(ports.addr(offset)), owner.clone()));
+                udp_sockets.push((socket, Some(ports.media_addr(offset)), owner.clone()));
             }
         }
     }
@@ -351,7 +419,7 @@ async fn run(session: &mut Session, side: Side) -> Result<(), Error> {
                             if slots[id as usize].is_some() {
                                 return Err::<(), Error>(invalid());
                             }
-                            let addr = ports.addr(RTSP_OFFSET);
+                            let addr = ports.rtsp_addr();
                             if !owner.owns_tcp(addr) {
                                 return Err(Error::Unauthorized(
                                     "engine socket owner changed".into(),

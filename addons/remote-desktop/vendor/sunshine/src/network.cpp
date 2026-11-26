@@ -242,6 +242,10 @@ namespace net {
     enet_host_destroy(host);
   }
 
+  std::uint16_t map_media_port(int offset) {
+    return static_cast<std::uint16_t>(config::sunshine.media_port + offset);
+  }
+
   std::uint16_t map_port(int port) {
     // calculate the port from the config port
     auto mapped_port = (std::uint16_t) ((int) config::sunshine.port + port);
