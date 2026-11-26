@@ -296,13 +296,9 @@ pub async fn run_console_worker() -> anyhow::Result<()> {
     let id = process_session(std::process::id())?;
     anyhow::ensure!(
         physical_id() == Some(id),
-        "worker requires the signed-in physical console"
+        "worker requires the physical console"
     );
     let sid = own_sid()?;
-    anyhow::ensure!(
-        owns_console_account(id, &sid)?,
-        "worker account does not own the physical console"
-    );
     let listener = muster_local::Listener::bind(endpoint(id)?)?;
     let server = async {
         loop {

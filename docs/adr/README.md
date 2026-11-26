@@ -440,3 +440,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0323](0323-cli-session-worktree-trust-and-auto-mode.md) | Accepted, installed-device acceptance pending | Open a CLI session in a trusted worktree, with Claude in auto mode |
 | [0324](0324-resident-windows-stream-host.md) | Accepted direction | Keep the Windows stream host running and select the physical console |
 | [0325](0325-ordinary-console-stream-worker.md) | Proposed | Lease the ordinary Windows physical desktop across daemon sessions |
+| [0326](0326-select-console-by-session.md) | Accepted | Select the physical console independently of its login account |

@@ -5,22 +5,21 @@
 #include <taskschd.h>
 #include <wrl/client.h>
 #include <sddl.h>
-#include <wtsapi32.h>
-#include <string>
-#include <vector>
+#include <cwchar>
 
 using Microsoft::WRL::ComPtr;
 
 namespace {
 // mingw-w64 taskschd.h omits the TASK_RUN_FLAGS enum.
 constexpr LONG use_session_id = 0x4; // TASK_RUN_USE_SESSION_ID in the Windows SDK
+constexpr LONG use_user_sid = 0x8; // TASK_RUN_USER_SID
 constexpr wchar_t service_name[] = L"MusterStream";
 constexpr wchar_t task_name[] = L"Muster Stream Worker";
 HANDLE events[2]{};
 SERVICE_STATUS_HANDLE status_handle;
 SRWLOCK status_lock = SRWLOCK_INIT;
 DWORD current_state = SERVICE_START_PENDING;
-std::wstring enrolled_sid;
+BSTR enrolled_sid;
 
 void status(DWORD state, DWORD error = NO_ERROR) {
     AcquireSRWLockExclusive(&status_lock);
@@ -53,37 +52,6 @@ DWORD WINAPI control(DWORD code, DWORD, void*, void*) {
     default:
         return ERROR_CALL_NOT_IMPLEMENTED;
     }
-}
-
-std::wstring session_field(DWORD session, WTS_INFO_CLASS field) {
-    wchar_t* value = nullptr;
-    DWORD bytes = 0;
-    if (!WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session, field, &value, &bytes)) return {};
-    std::wstring text;
-    if (value && bytes >= sizeof(wchar_t)) text.assign(value, wcsnlen(value, bytes / sizeof(wchar_t)));
-    WTSFreeMemory(value);
-    return text;
-}
-
-bool enrolled_console(DWORD id) {
-    if (id == 0 || id == 0xffffffff) return false;
-    auto user = session_field(id, WTSUserName);
-    auto domain = session_field(id, WTSDomainName);
-    if (user.empty() || domain.empty()) return false;
-    auto account = domain + L"\\" + user;
-    DWORD sid_bytes = 0, domain_chars = 0;
-    SID_NAME_USE type;
-    LookupAccountNameW(nullptr, account.c_str(), nullptr, &sid_bytes, nullptr, &domain_chars, &type);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || !sid_bytes) return false;
-    std::vector<BYTE> sid(sid_bytes);
-    std::vector<wchar_t> domain_name(domain_chars);
-    if (!LookupAccountNameW(nullptr, account.c_str(), sid.data(), &sid_bytes,
-                            domain_name.data(), &domain_chars, &type) || type != SidTypeUser) return false;
-    LPWSTR actual = nullptr;
-    if (!ConvertSidToStringSidW(sid.data(), &actual)) return false;
-    bool matches = enrolled_sid == actual;
-    LocalFree(actual);
-    return matches;
 }
 
 HRESULT worker_task(ComPtr<IRegisteredTask>& task) {
@@ -119,12 +87,12 @@ void supervise() {
                 worker.Reset();
             }
         }
-        if (!worker && enrolled_console(id)) {
+        if (!worker && id != 0 && id != 0xffffffff) {
             ComPtr<IRegisteredTask> task;
             if (SUCCEEDED(worker_task(task)) && WTSGetActiveConsoleSessionId() == id) {
                 VARIANT empty{};
                 // The fixed task has an interactive-token, least-privilege principal.
-                if (SUCCEEDED(task->RunEx(empty, use_session_id, id, nullptr, &worker)))
+                if (SUCCEEDED(task->RunEx(empty, use_session_id | use_user_sid, id, enrolled_sid, &worker)))
                     selected = id;
             }
         }
@@ -151,7 +119,8 @@ int wmain(int argc, wchar_t** argv) {
     PSID sid = nullptr;
     if (!ConvertStringSidToSidW(argv[2], &sid)) return ERROR_INVALID_SID;
     LocalFree(sid);
-    enrolled_sid = argv[2];
+    enrolled_sid = SysAllocString(argv[2]);
+    if (!enrolled_sid) return ERROR_OUTOFMEMORY;
     events[0] = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     events[1] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!events[0] || !events[1]) return ERROR_NOT_ENOUGH_MEMORY;
@@ -159,5 +128,6 @@ int wmain(int argc, wchar_t** argv) {
     DWORD result = StartServiceCtrlDispatcherW(table) ? NO_ERROR : GetLastError();
     CloseHandle(events[1]);
     CloseHandle(events[0]);
+    SysFreeString(enrolled_sid);
     return result;
 }
