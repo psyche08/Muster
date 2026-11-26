@@ -33,3 +33,5 @@ Windows x64 release linking passed for the daemon and helper. Isolated process t
 Service installation, adapter traffic, ordinary-token activation after logoff, and Remote frame and pointer acceptance remain unverified. The GUI continues to use its existing startup path during this phase.
 
 Integration with [ADR 0306](0306-physical-lock-screen-remote.md) retains both Windows checks. Background daemon startup checks its process token, while the current Remote host checks its physical console before admitting and servicing a viewer. Verify both on the same Windows revision, and build the shared daemon and test the Apple client on macOS from that revision.
+
+The integrated Multica store tests use an absolute workspace on each host platform so Windows exercises reservation ownership and parent traversal with the same assertions as macOS.

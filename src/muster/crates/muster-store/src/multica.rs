@@ -330,6 +330,16 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn workspace_path(relative: &str) -> String {
+        let root = if cfg!(windows) { r"C:\work" } else { "/work" };
+        std::path::Path::new(root)
+            .join(relative)
+            .to_str()
+            .unwrap()
+            .to_owned()
+    }
+
     fn reservation() -> Reservation {
         Reservation {
             task: Task {
@@ -348,7 +358,7 @@ mod tests {
                 store: "store-a".into(),
                 session: "session-a".into(),
             },
-            canonical_cwd: "/work/task-a".into(),
+            canonical_cwd: workspace_path("task-a"),
             requester: "local-device-a".into(),
             operation: "create-1".into(),
             provider_request: "native-create-1".into(),
@@ -384,7 +394,7 @@ mod tests {
         );
         assert_eq!(store.multica_reserve(&request).unwrap(), record);
         let mut changed = request.clone();
-        changed.canonical_cwd = "/work/other".into();
+        changed.canonical_cwd = workspace_path("other");
         assert!(store.multica_reserve(&changed).is_err());
         let bound = store
             .multica_bind(&record.reference, &receipt(&request))
@@ -483,7 +493,7 @@ mod tests {
         next.generation = 2;
         assert!(store.multica_reserve(&next).is_err());
         next.task = r.task.clone();
-        next.canonical_cwd = "/work/other".into();
+        next.canonical_cwd = workspace_path("other");
         assert!(store.multica_reserve(&next).is_err());
         next.canonical_cwd = r.canonical_cwd.clone();
         next.generation = 1;
@@ -502,7 +512,7 @@ mod tests {
         r.task.service.clear();
         assert!(store.multica_reserve(&r).is_err());
         r = reservation();
-        r.canonical_cwd = "/work/../personal".into();
+        r.canonical_cwd = workspace_path("../personal");
         assert!(store.multica_reserve(&r).is_err());
         r = reservation();
         store.multica_reserve(&r).unwrap();
