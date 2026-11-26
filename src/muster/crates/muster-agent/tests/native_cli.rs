@@ -1,5 +1,8 @@
 #![cfg(unix)]
-use muster_agent::cli::{Action, Source, runtime::NativeRuntime};
+use muster_agent::cli::{
+    Action, Source,
+    runtime::{CreateOptions, NativeRuntime},
+};
 use muster_proto::v1::AgentMessagesRequest;
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 fn programs() -> HashMap<String, PathBuf> {
@@ -402,5 +405,236 @@ async fn opens_a_pre_cutover_session_and_expires_its_old_prompt() {
     let requests = std::fs::read_to_string(cwd.path().join("provider-requests.jsonl")).unwrap();
     assert!(requests.contains("thread/resume"));
     assert!(!requests.contains("thread/start"));
+    source.shutdown();
+}
+
+fn git(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.com",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+/// A repository with one commit, as a caller's project checkout.
+fn repository() -> tempfile::TempDir {
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "-q"]);
+    std::fs::write(repo.path().join("README.md"), "fixture\n").unwrap();
+    git(repo.path(), &["add", "README.md"]);
+    git(repo.path(), &["commit", "-q", "-m", "fixture"]);
+    repo
+}
+
+async fn reported_argv(cwd: &std::path::Path) -> Vec<String> {
+    let log = cwd.join("provider-requests.jsonl");
+    for _ in 0..100 {
+        if let Ok(text) = std::fs::read_to_string(&log) {
+            let argv = text
+                .lines()
+                .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                .find_map(|frame| frame.get("argv").cloned());
+            if let Some(argv) = argv {
+                return serde_json::from_value(argv).unwrap();
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the fixture did not report its arguments")
+}
+
+/// The Tusk-style create: a Claude session in auto mode, in a worktree of the
+/// project, with that worktree trusted in Claude's own config.
+#[tokio::test]
+async fn a_claude_session_opens_in_a_trusted_worktree_in_auto_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = repository();
+    let config = tempfile::tempdir().unwrap();
+    std::fs::write(
+        config.path().join(".claude.json"),
+        "{\n  \"numStartups\": 7,\n  \"projects\": {}\n}\n",
+    )
+    .unwrap();
+    let runtime = NativeRuntime::with_programs(dir.path(), programs()).unwrap();
+    let (events, _) = tokio::sync::broadcast::channel(64);
+    let source = Source::new(runtime.clone(), events);
+    let env: HashMap<String, String> = [(
+        "CLAUDE_CONFIG_DIR".to_owned(),
+        config.path().to_str().unwrap().to_owned(),
+    )]
+    .into_iter()
+    .collect();
+    let options = CreateOptions {
+        permission_mode: "auto".into(),
+        worktree: "pr-demo-7".into(),
+        trust: true,
+    };
+    let repo_path = repo.path().to_str().unwrap();
+    let id = source
+        .create_with(repo_path, "claude", "create-pr", &env, &options)
+        .await
+        .unwrap();
+
+    let main = std::fs::canonicalize(repo.path()).unwrap();
+    let worktree = main.join(".claude/worktrees/pr-demo-7");
+    let cwd = source.session(&id).unwrap().cwd;
+    assert_eq!(cwd, worktree.to_str().unwrap());
+    assert!(git(&main, &["worktree", "list", "--porcelain"]).contains(&cwd));
+    assert_eq!(
+        git(&worktree, &["rev-parse", "HEAD"]),
+        git(&main, &["rev-parse", "HEAD"])
+    );
+    // The main checkout stays clean: the worktrees are excluded locally.
+    assert!(git(&main, &["status", "--porcelain"]).is_empty());
+    let exclude = std::fs::read_to_string(main.join(".git/info/exclude")).unwrap();
+    assert!(exclude.lines().any(|line| line == "/.claude/worktrees/"));
+
+    // Trusted in the session's Claude config, everything else kept.
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(config.path().join(".claude.json")).unwrap())
+            .unwrap();
+    assert_eq!(saved["projects"][&cwd]["hasTrustDialogAccepted"], true);
+    assert_eq!(saved["numStartups"], 7);
+    assert!(!config.path().join(".claude.json.lock").exists());
+
+    // Claude starts in auto mode, in the worktree.
+    source
+        .operation(&id, "send-pr", Action::Send("hello".into()))
+        .await
+        .unwrap();
+    let argv = reported_argv(&worktree).await;
+    let mode = argv.iter().position(|a| a == "--permission-mode").unwrap();
+    assert_eq!(argv[mode + 1], "auto");
+
+    // A replay answers with the same session; the same operation asking for
+    // something else is refused.
+    assert_eq!(
+        source
+            .create_with(repo_path, "claude", "create-pr", &env, &options)
+            .await
+            .unwrap(),
+        id
+    );
+    let default_mode = CreateOptions {
+        permission_mode: String::new(),
+        ..options.clone()
+    };
+    assert!(
+        source
+            .create_with(repo_path, "claude", "create-pr", &env, &default_mode)
+            .await
+            .is_err()
+    );
+    // Another session may open the same worktree; it is reused as it is.
+    let again = source
+        .create_with(repo_path, "claude", "create-pr-2", &env, &options)
+        .await
+        .unwrap();
+    assert_ne!(again, id);
+    assert_eq!(source.session(&again).unwrap().cwd, cwd);
+    let exclude = std::fs::read_to_string(main.join(".git/info/exclude")).unwrap();
+    assert_eq!(
+        exclude
+            .lines()
+            .filter(|line| *line == "/.claude/worktrees/")
+            .count(),
+        1
+    );
+    source.shutdown();
+}
+
+#[tokio::test]
+async fn options_that_do_not_apply_are_refused_before_anything_is_made() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = repository();
+    let plain = tempfile::tempdir().unwrap();
+    let runtime = NativeRuntime::with_programs(dir.path(), programs()).unwrap();
+    let (events, _) = tokio::sync::broadcast::channel(64);
+    let source = Source::new(runtime.clone(), events);
+    let repo_path = repo.path().to_str().unwrap();
+    let refused = [
+        (
+            "codex",
+            CreateOptions {
+                permission_mode: "auto".into(),
+                ..Default::default()
+            },
+            repo_path,
+        ),
+        (
+            "codex",
+            CreateOptions {
+                trust: true,
+                ..Default::default()
+            },
+            repo_path,
+        ),
+        (
+            "claude",
+            CreateOptions {
+                permission_mode: "bypassPermissions".into(),
+                ..Default::default()
+            },
+            repo_path,
+        ),
+        (
+            "claude",
+            CreateOptions {
+                permission_mode: "dontAsk".into(),
+                ..Default::default()
+            },
+            repo_path,
+        ),
+        (
+            "claude",
+            CreateOptions {
+                worktree: "../escape".into(),
+                ..Default::default()
+            },
+            repo_path,
+        ),
+        (
+            "claude",
+            CreateOptions {
+                worktree: "pr-1".into(),
+                ..Default::default()
+            },
+            plain.path().to_str().unwrap(),
+        ),
+    ];
+    for (index, (agent, options, directory)) in refused.iter().enumerate() {
+        let op = format!("refused-{index}");
+        assert!(
+            source
+                .create_with(directory, agent, &op, &HashMap::new(), options)
+                .await
+                .is_err(),
+            "{agent} {options:?} in {directory}"
+        );
+    }
+    assert!(source.list().is_empty());
+    assert!(!repo.path().join(".claude").exists());
+
+    // A directory squatting on the worktree path is not taken over.
+    std::fs::create_dir_all(repo.path().join(".claude/worktrees/pr-2")).unwrap();
+    let squatted = CreateOptions {
+        worktree: "pr-2".into(),
+        ..Default::default()
+    };
+    assert!(
+        source
+            .create_with(repo_path, "claude", "squatted", &HashMap::new(), &squatted)
+            .await
+            .is_err()
+    );
     source.shutdown();
 }

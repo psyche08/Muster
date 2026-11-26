@@ -83,6 +83,7 @@ impl Host for RpcHost {
                 directory: cwd.to_owned(),
                 agent: self.agent.clone(),
                 env: self.env.clone(),
+                ..Default::default()
             }))
             .await
             .map_err(|error| error.to_string())?;

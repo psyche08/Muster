@@ -2064,8 +2064,13 @@ async fn dispatch(
                 false,
                 &body,
                 async {
+                    let options = muster_agent::cli::runtime::CreateOptions {
+                        permission_mode: r.permission_mode.clone(),
+                        worktree: r.worktree.clone(),
+                        trust: r.trust,
+                    };
                     source
-                        .create(&r.directory, &r.agent, &r.op_id, &r.env)
+                        .create_with(&r.directory, &r.agent, &r.op_id, &r.env, &options)
                         .await
                         .map_err(Error::from)
                 },

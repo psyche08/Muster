@@ -63,7 +63,29 @@ impl Source {
         op: &str,
         env: &std::collections::HashMap<String, String>,
     ) -> Result<String, Error> {
-        let remote = self.runtime.create(directory, agent, op, env)?;
+        self.create_with(directory, agent, op, env, &Default::default())
+            .await
+    }
+    /// [`Self::create`] with the request's worktree, trust and permission
+    /// mode; see [`runtime::CreateOptions`].
+    pub async fn create_with(
+        &self,
+        directory: &str,
+        agent: &str,
+        op: &str,
+        env: &std::collections::HashMap<String, String>,
+        options: &runtime::CreateOptions,
+    ) -> Result<String, Error> {
+        // Git and Claude's config lock may block for a moment; keep that off
+        // the async workers.
+        let runtime = self.runtime.clone();
+        let (directory, agent, op) = (directory.to_owned(), agent.to_owned(), op.to_owned());
+        let (env, options) = (env.clone(), options.clone());
+        let remote = tokio::task::spawn_blocking(move || {
+            runtime.create(&directory, &agent, &op, &env, &options)
+        })
+        .await
+        .map_err(|_| Error::UnknownOutcome("CLI creation stopped before it answered".into()))??;
         let key = self.runtime.session_key(&remote)?;
         // Creation is already durable even if a later catalog refresh fails.
         let _ = self.discover().await;

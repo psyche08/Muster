@@ -2,6 +2,7 @@
 mod process;
 pub(crate) mod program;
 mod translate;
+mod workspace;
 use super::{Action, Error, diagnostic, render, string};
 use muster_proto::v1::{AgentSession, QuestionAnswer};
 use process::Process;
@@ -32,6 +33,26 @@ struct Session {
     state: String,
     #[serde(default)]
     created_at: u64,
+    /// Claude's `--permission-mode`; empty is `default`. Kept with the
+    /// session so a child started again after a restart runs the same way.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    permission_mode: String,
+    /// The worktree name this session was opened in, if any; `cwd` is its path.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    worktree: String,
+}
+/// What a create may ask for beyond its directory and agent; see
+/// `OrcaCreateRequest` fields 5-7. The default is a session in the named
+/// directory itself, Claude in its default permission mode, nothing trusted.
+#[derive(Clone, Debug, Default)]
+pub struct CreateOptions {
+    /// `""`/`default`, or `auto` for Claude.
+    pub permission_mode: String,
+    /// Run in `<main checkout>/.claude/worktrees/<name>` of the directory's
+    /// repository, added detached at `HEAD` if it does not exist.
+    pub worktree: String,
+    /// Record the session directory as trusted in Claude Code's config.
+    pub trust: bool,
 }
 impl Session {
     fn cli(&self) -> &'static muster_core::apps::NativeCli {
@@ -226,6 +247,7 @@ impl NativeRuntime {
         agent: &str,
         operation: &str,
         vars: &HashMap<String, String>,
+        options: &CreateOptions,
     ) -> Result<String, Error> {
         self.ensure_active()?;
         if operation.is_empty() || operation.len() > 8192 {
@@ -233,50 +255,63 @@ impl NativeRuntime {
         }
         self.program(agent)?;
         let env = session_env(vars)?;
+        let mode = workspace::permission_mode(agent, &options.permission_mode)?;
+        if !options.worktree.is_empty() {
+            workspace::check_name(&options.worktree)?;
+        }
+        if options.trust && agent != "claude" {
+            return Err(Error::Invalid(
+                "Folder trust applies to Claude sessions only".into(),
+            ));
+        }
         let path = Path::new(directory);
         if !path.is_absolute() || !path.is_dir() {
             return Err(Error::Invalid(
                 "Choose an existing absolute directory on the target device".into(),
             ));
         }
-        let cwd = std::fs::canonicalize(path)
+        let requested = std::fs::canonicalize(path)
             .map_err(|_| unavailable("Directory unavailable"))?
             .to_str()
             .ok_or_else(|| Error::Invalid("Directory must be UTF-8".into()))?
             .to_owned();
+        let wanted = Wanted {
+            operation,
+            directory: &requested,
+            agent,
+            mode: &mode,
+            worktree: &options.worktree,
+        };
+        let replayed = Self::replayed(&self.store.lock().unwrap(), &wanted)?;
+        if let Some(id) = replayed {
+            return Ok(self.restore_env(id, env));
+        }
+        // Prepared outside the store lock: Git and Claude's config lock can
+        // each take a moment, and neither needs the journal.
+        let cwd = if options.worktree.is_empty() {
+            requested.clone()
+        } else {
+            workspace::worktree(path, &options.worktree)?
+                .to_str()
+                .ok_or_else(|| Error::Invalid("Worktree path must be UTF-8".into()))?
+                .to_owned()
+        };
+        if options.trust {
+            let config =
+                workspace::claude_config(vars.get("CLAUDE_CONFIG_DIR").map(String::as_str))?;
+            workspace::trust(&config, &cwd)?;
+        }
         let mut store = self.store.lock().unwrap();
-        let prior: Option<(String, String, String)> = store
-            .db
-            .query_row(
-                "SELECT directory,agent,session FROM creates WHERE operation=?",
-                [operation],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            )
-            .optional()
-            .map_err(db_error)?;
-        if let Some((dir, provider, id)) = prior {
-            return if dir == cwd && provider == agent {
-                // A replayed create answers with the session it already made.
-                // Its environment lives only in memory, so take this call's:
-                // after a restart this is the only chance to restore it, and
-                // the ledger has already refused a replay with a different
-                // body.
-                if !env.is_empty() {
-                    self.session_env
-                        .lock()
-                        .unwrap()
-                        .insert(id.clone(), env.clone());
-                }
-                Ok(id)
-            } else {
-                Err(Error::Conflict("Creation operation was reused".into()))
-            };
+        // The same operation may have finished on another call meanwhile.
+        if let Some(id) = Self::replayed(&store, &wanted)? {
+            drop(store);
+            return Ok(self.restore_env(id, env));
         }
         let id = random();
         let s = Session {
             id: id.clone(),
             agent: agent.to_owned(),
-            cwd: cwd.clone(),
+            cwd,
             provider_id: String::new(),
             scoped_session_id: true,
             stream_message: String::new(),
@@ -284,6 +319,8 @@ impl NativeRuntime {
             turn: String::new(),
             state: "completed".into(),
             created_at: now(),
+            permission_mode: mode,
+            worktree: options.worktree.clone(),
         };
         let tx = store.db.transaction().map_err(db_error)?;
         tx.execute(
@@ -291,17 +328,55 @@ impl NativeRuntime {
             params![id, serde_json::to_string(&s).map_err(|_| unknown())?],
         )
         .map_err(db_error)?;
+        // The requested directory, not the worktree: a replay names that one.
         tx.execute(
             "INSERT INTO creates VALUES (?,?,?,?)",
-            params![operation, cwd, agent, id],
+            params![operation, requested, agent, id],
         )
         .map_err(db_error)?;
         tx.commit().map_err(db_error)?;
         store.sessions.insert(id.clone(), s);
+        drop(store);
         if !env.is_empty() {
             self.session_env.lock().unwrap().insert(id.clone(), env);
         }
         Ok(id)
+    }
+    /// The session an earlier create with this operation made, when it asked
+    /// for the same thing; a reused operation id asking for anything else is
+    /// refused.
+    fn replayed(store: &Store, wanted: &Wanted) -> Result<Option<String>, Error> {
+        let prior: Option<(String, String, String)> = store
+            .db
+            .query_row(
+                "SELECT directory,agent,session FROM creates WHERE operation=?",
+                [wanted.operation],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()
+            .map_err(db_error)?;
+        let Some((dir, provider, id)) = prior else {
+            return Ok(None);
+        };
+        let same_session = store
+            .sessions
+            .get(&id)
+            .is_none_or(|s| s.permission_mode == wanted.mode && s.worktree == wanted.worktree);
+        if dir == wanted.directory && provider == wanted.agent && same_session {
+            Ok(Some(id))
+        } else {
+            Err(Error::Conflict("Creation operation was reused".into()))
+        }
+    }
+    /// A replayed create answers with the session it already made. Its
+    /// environment lives only in memory, so take this call's: after a restart
+    /// this is the only chance to restore it, and the ledger has already
+    /// refused a replay with a different body.
+    fn restore_env(&self, id: String, env: Vec<(String, String)>) -> String {
+        if !env.is_empty() {
+            self.session_env.lock().unwrap().insert(id.clone(), env);
+        }
+        id
     }
     async fn process(&self, id: &str) -> Result<Arc<Process>, Error> {
         let mut running = self.running.lock().await;
@@ -313,6 +388,11 @@ impl NativeRuntime {
         }
         let s = self.session(id)?;
         let program = self.program(&s.agent)?;
+        let mode = if s.permission_mode.is_empty() {
+            "default"
+        } else {
+            s.permission_mode.as_str()
+        };
         let mut args: Vec<String> = if s.agent == "codex" {
             vec!["app-server".into(), "--listen".into(), "stdio://".into()]
         } else {
@@ -328,7 +408,7 @@ impl NativeRuntime {
                 "--permission-prompt-tool",
                 "stdio",
                 "--permission-mode",
-                "default",
+                mode,
             ]
             .into_iter()
             .map(str::to_owned)
@@ -416,6 +496,14 @@ impl NativeRuntime {
     }
 }
 use rusqlite::OptionalExtension;
+/// One create request, as a replay of it is checked against the journal.
+struct Wanted<'a> {
+    operation: &'a str,
+    directory: &'a str,
+    agent: &'a str,
+    mode: &'a str,
+    worktree: &'a str,
+}
 /// Longest environment this session layer accepts, and the longest value.
 /// A provider child needs a handful of task variables; these bound what a
 /// caller can push into another process's environment.
@@ -855,7 +943,13 @@ mod tests {
                 home.path().to_str().unwrap().to_owned(),
             )]);
             let id = rt
-                .create(cwd.path().to_str().unwrap(), agent, agent, &vars)
+                .create(
+                    cwd.path().to_str().unwrap(),
+                    agent,
+                    agent,
+                    &vars,
+                    &CreateOptions::default(),
+                )
                 .unwrap();
             let p = rt
                 .process(&id)

@@ -9,7 +9,8 @@ journal and parts of the presentation originated in an Orca port. Its
 
 In Muster's Agents view, choose **New CLI session**, a device, Codex CLI or Claude Code CLI,
 and an existing absolute directory on that device. The session works in that
-directory; creation does not create a Git branch/worktree or run setup scripts.
+directory; creation from the app does not create a Git branch/worktree or run
+setup scripts.
 Open it and send a message using Muster's normal composer. The CLI is started
 lazily on the first message. Native Codex/Claude CLIs must already be installed
 and signed in on that device. On macOS, the native CLI bundled with the installed ChatGPT desktop app is
@@ -20,14 +21,30 @@ Script/Node launchers and non-executable files are not selected. Muster owns ses
 
 macOS, iOS and Windows render the same provider choices from Shared Rust.
 
+A caller of `orca_create`, such as an external scheduler, may also ask for a
+worktree, folder trust and Claude's auto mode
+([ADR 0323](adr/0323-cli-session-worktree-trust-and-auto-mode.md)):
+
+- `worktree` runs the session in `<main checkout>/.claude/worktrees/<name>` of
+  the directory's repository. An existing worktree there is reused; a new one
+  is added detached at `HEAD`, and `/.claude/worktrees/` is added to the
+  repository's `info/exclude` unless already ignored. Muster never fetches, and
+  never removes the worktree.
+- `trust` (Claude) records the session directory as trusted in Claude's
+  config, under Claude's own config lock, so the project's permission rules
+  and settings apply as they would after accepting the trust dialog.
+- `permission_mode` is `default` or, for Claude, `auto`. Modes that skip
+  prompts are refused.
+
 ## Ownership and transport
 
 - The CLI runtime runs in `musterd`. The agent service calls its Rust methods
   directly to obtain sessions and history and to submit typed actions.
 - Codex uses its native `app-server --listen stdio://` protocol with explicit
   `workspace-write` sandbox and `on-request` approvals. Claude uses its native
-  bidirectional stream-json protocol with default permissions and stdio prompts.
-  Neither provider is launched with a permission-bypass flag.
+  bidirectional stream-json protocol with stdio prompts, in the default
+  permission mode unless the create asked for `auto`. Neither provider is
+  launched with a permission-bypass flag.
 - The daemon's private `orca/sessions.db` stores provider session IDs and journal
   rows. SQLite has one owner. Exclusive journal ownership and per-child
   generation checks reject stale callbacks after restart. No persisted

@@ -25,11 +25,11 @@ def end():
         emit({'method':'item/agentMessage/delta','params':{'threadId':'thread-1','turnId':'turn-1','itemId':'answer','delta':'Partial'}})
         emit({'method':'item/completed','params':{'threadId':'thread-1','turnId':'turn-1','item':{'type':'agentMessage','id':'answer','text':'Verified **Rust** response'}}})
         emit({'method':'turn/completed','params':{'threadId':'thread-1','turn':{'id':'turn-1','status':'completed'}}})
-# Report the session environment this child was given, so a test can check
-# that it crossed from the create request into the spawned process.
+# Report the session environment and arguments this child was given, so a
+# test can check that they crossed from the create request into the process.
 if claude and '--resume' in sys.argv:
     note({'resume': sys.argv[sys.argv.index('--resume') + 1]})
-note({'env': {k: v for k, v in os.environ.items() if k.startswith('MUSTER_TEST_')}})
+note({'env': {k: v for k, v in os.environ.items() if k.startswith('MUSTER_TEST_')}, 'argv': sys.argv[1:]})
 for line in sys.stdin:
     f = json.loads(line)
     note(f)
