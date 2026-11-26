@@ -71,6 +71,14 @@ internal sealed class AgentSessionDialog : Form
         var draft = desktop ? agents.NativeCreateDraft : null;
         device.DisplayMember = nameof(MemberView.Name);
         device.Items.AddRange((desktop ? agents.NativeCreateHosts : agents.CreateHosts).ToArray());
+        if (!desktop)
+        {
+            provider.FormattingEnabled = true;
+            provider.Format += (_, e) => {
+                if (e.ListItem is string key && agents.CreateAgentLabels.TryGetValue(key, out var title))
+                    e.Value = title;
+            };
+        }
         provider.Items.AddRange((desktop ? agents.NativeCreateApps : agents.CreateAgents).ToArray());
         if (draft != null)
         {

@@ -12,7 +12,9 @@ use tokio::sync::broadcast;
 
 /// The deployed session namespace is also used by saved bindings and older peers.
 pub fn is_cli(id: &str) -> bool {
-    id.starts_with("orca:")
+    id.split_once(':').is_some_and(|(prefix, _)| {
+        prefix == "orca" || muster_core::apps::native_cli(prefix).is_some()
+    })
 }
 fn invalid() -> Error {
     Error::Unavailable("Invalid native CLI session record".into())
@@ -62,7 +64,7 @@ impl Source {
         env: &std::collections::HashMap<String, String>,
     ) -> Result<String, Error> {
         let remote = self.runtime.create(directory, agent, op, env)?;
-        let key = self.runtime.session_key(&remote);
+        let key = self.runtime.session_key(&remote)?;
         // Creation is already durable even if a later catalog refresh fails.
         let _ = self.discover().await;
         Ok(key)

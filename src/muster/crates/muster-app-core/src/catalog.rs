@@ -270,6 +270,9 @@ pub(crate) fn launch_label(launch: &str) -> &'static str {
     }
 }
 fn provider_title(provider: &str) -> String {
+    if let Some(cli) = muster_core::apps::native_cli(provider) {
+        return cli.label.into();
+    }
     match provider {
         "codex" => "Codex",
         "claude" => "Claude",

@@ -1060,7 +1060,7 @@ public nonisolated struct Muster_V1_OrcaCreateRequest: Sendable {
 
   public var directory: String = String()
 
-  /// codex | claude
+  /// codex-cli | claude-cli; legacy executables codex | claude
   public var agent: String = String()
 
   /// Environment for this session's provider child, supplied by whoever opens

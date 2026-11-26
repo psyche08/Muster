@@ -59,6 +59,22 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
                 .map_or_else(|_| s.clone(), |p| p.to_string())
         })
         .collect();
+    // Saving a legacy roster through the current editor writes the exact two
+    // effective toggles. Revoking the last one cannot revive the old aggregate.
+    if rest.iter().any(|s| s == "agents:orca") {
+        rest.retain(|s| s != "agents:orca");
+        if !rest.iter().any(|s| {
+            s.strip_prefix("agents:")
+                .is_some_and(|id| apps::native_cli(id).is_some())
+        }) {
+            rest.extend(
+                apps::NATIVE_CLIS
+                    .iter()
+                    .map(|c| format!("agents:{}", c.provider)),
+            );
+        }
+    }
+    let normalized = rest.clone();
     rest.sort();
     rest.dedup();
     let mut take = |scope: &str| match rest.iter().position(|s| s == scope) {
@@ -90,7 +106,7 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
          locked also asks for Face ID or Touch ID each time and needs the target to allow it; \
          it covers Chrome and the screen cover too.",
         providers(
-            scopes,
+            &normalized,
             &apps::agent_providers(),
             Scope::agent_provider,
             agent_label,
@@ -281,8 +297,8 @@ fn chat_label(provider: &str) -> &str {
 }
 
 fn agent_label(provider: &str) -> &str {
-    if provider == "orca" {
-        return "CLI agents";
+    if let Some(cli) = apps::native_cli(provider) {
+        return cli.label;
     }
     apps::app(provider).map_or(provider, |app| app.agent_label)
 }
@@ -293,6 +309,32 @@ mod tests {
 
     fn scopes(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn editing_legacy_cli_scopes_exposes_only_the_effective_native_toggles() {
+        let old = view(&scopes(&["agents", "agents:orca"]), false);
+        let mixed = view(
+            &scopes(&["agents", "agents:orca", "agents:codex-cli"]),
+            false,
+        );
+        for (view, claude) in [(&old, true), (&mixed, false)] {
+            let options = &section(view, "agents").items;
+            assert!(options.iter().all(|i| i.scope != "agents:orca"));
+            assert!(
+                options
+                    .iter()
+                    .any(|i| i.scope == "agents:codex-cli" && i.granted)
+            );
+            assert_eq!(
+                options
+                    .iter()
+                    .find(|i| i.scope == "agents:claude-cli")
+                    .unwrap()
+                    .granted,
+                claude
+            );
+        }
     }
 
     fn section<'a>(view: &'a AccessView, id: &str) -> &'a AccessSection {

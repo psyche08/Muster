@@ -72,6 +72,11 @@ impl Permission {
             }
             Permission::Agent { provider, control } => {
                 module_grants(scopes, Scope::Agents, provider, Scope::agent_provider)
+                    || (has(Scope::Agents)
+                        && legacy_cli_grants(
+                            scopes.iter().filter_map(Scope::agent_provider),
+                            provider.as_deref(),
+                        ))
                     || has(if *control {
                         Scope::AgentControl
                     } else {
@@ -112,6 +117,26 @@ impl Permission {
 
 /// A module's provider scopes count only under its device-level switch;
 /// `None` asks whether any provider is on.
+/// A signed pre-split aggregate covered only the two native workers. A
+/// narrower explicit native selection for this subject supersedes it.
+fn legacy_cli_grants<'a>(held: impl Iterator<Item = &'a str>, wanted: Option<&str>) -> bool {
+    let Some(wanted) = wanted else { return false };
+    if wanted != "orca" && crate::apps::native_cli(wanted).is_none() {
+        return false;
+    }
+    let mut legacy = false;
+    let mut explicit = false;
+    for provider in held {
+        legacy |= provider == "orca";
+        explicit |= crate::apps::native_cli(provider).is_some();
+    }
+    if wanted == "orca" {
+        legacy || explicit
+    } else {
+        legacy && !explicit
+    }
+}
+
 fn module_grants(
     scopes: &BTreeSet<Scope>,
     switch: Scope,
@@ -199,6 +224,10 @@ impl ServiceGrants {
 impl GrantSet {
     fn allows(&self, subject: &DeviceId, wanted: &Permission, mode: NetworkAccessMode) -> bool {
         self.all_devices
+            || matches!(wanted, Permission::Agent { provider, .. } if legacy_cli_grants(
+                self.rules.iter().filter(|r| r.devices.contains(subject)).filter_map(|r| r.scope.agent_provider()),
+                provider.as_deref(),
+            ))
             || self.rules.iter().any(|rule| {
                 if !rule.devices.contains(subject) {
                     return false;
@@ -679,6 +708,51 @@ mod tests {
     fn chat(provider: Option<&str>) -> Permission {
         Permission::Chat {
             provider: provider.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn old_cli_grants_cover_only_native_workers_until_narrowed() {
+        let subject = DeviceId([1; 32]);
+        let other = DeviceId([2; 32]);
+        for (native, codex, claude) in [
+            (vec!["orca"], true, true),
+            (vec!["orca", "codex-cli"], true, false),
+            (vec!["claude-cli"], false, true),
+            (vec![], false, false),
+        ] {
+            let scopes = std::iter::once(Scope::Agents)
+                .chain(native.iter().map(|id| Scope::AgentProvider((*id).into())))
+                .collect();
+            let mut grants = GrantSet {
+                all_devices: false,
+                rules: native
+                    .iter()
+                    .map(|id| DeviceGrant {
+                        scope: Scope::AgentProvider((*id).into()),
+                        devices: [subject].into(),
+                        keyboard: false,
+                    })
+                    .collect(),
+            };
+            grants.rules.push(DeviceGrant {
+                scope: Scope::AgentProvider("claude-cli".into()),
+                devices: [other].into(),
+                keyboard: false,
+            });
+            for (name, expected) in [
+                ("codex-cli", codex),
+                ("claude-cli", claude),
+                ("orca-ide", false),
+                ("codex", false),
+            ] {
+                let wanted = agent(Some(name), true);
+                assert_eq!(wanted.granted(&scopes, Role::Member), expected);
+                assert_eq!(
+                    grants.allows(&subject, &wanted, NetworkAccessMode::Basic),
+                    expected
+                );
+            }
         }
     }
 

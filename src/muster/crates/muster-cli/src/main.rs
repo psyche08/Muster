@@ -676,7 +676,7 @@ async fn serve_acp(argv: &[String]) -> anyhow::Result<()> {
     }
     let host = std::sync::Arc::new(muster_acp::RpcHost::new(
         client,
-        &parsed.agent,
+        muster_core::apps::native_cli(&parsed.agent).map_or(parsed.agent.as_str(), |cli| cli.agent),
         forwarded_env(&parsed),
     ));
     muster_acp::serve(tokio::io::stdin(), tokio::io::stdout(), host, identity).await

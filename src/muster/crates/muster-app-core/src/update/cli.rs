@@ -4,11 +4,14 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
     if state.agents.creating {
         return;
     }
+    let Some(cli) = muster_core::apps::native_cli_request(&input.agent) else {
+        state.toast("Choose a supported CLI provider", true);
+        return;
+    };
     if !state
         .reachable_service_devices()
         .iter()
         .any(|d| d.device_id == input.device_id)
-        || !matches!(input.agent.as_str(), "codex" | "claude")
         || input.directory.trim().is_empty()
     {
         state.toast("Choose an available device, CLI agent and directory", true);
@@ -28,7 +31,9 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
             else {
                 return Err(unexpected());
             };
-            if !info.services.iter().any(|s| s == "agent.orca.v1") {
+            let capability = format!("agent.{}.v1", cli.provider);
+            let specific = info.services.contains(&capability);
+            if !specific && !info.services.iter().any(|s| s == "agent.orca.v1") {
                 return Err(Error::Unavailable(
                     "Update Muster on this device to use its built-in CLI session manager".into(),
                 ));
@@ -38,7 +43,7 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
                 Req::OrcaCreate(v1::OrcaCreateRequest {
                     op_id,
                     directory: input.directory,
-                    agent: input.agent,
+                    agent: if specific { cli.provider } else { cli.agent }.into(),
                     // A session opened from the UI has no external task
                     // behind it, so there is no per-task environment to pass.
                     env: Default::default(),
@@ -61,7 +66,7 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
             let Resp::AgentSessions(page) = unary(
                 &client,
                 Req::AgentList(v1::AgentListRequest {
-                    provider: "orca".into(),
+                    provider: if specific { cli.provider } else { "orca" }.into(),
                     limit: 1000,
                     ..Default::default()
                 }),

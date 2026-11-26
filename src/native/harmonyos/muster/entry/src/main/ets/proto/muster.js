@@ -50472,6 +50472,7 @@ export const muster = $root.muster = (() => {
              * @property {Array.<string>|null} [searchNotices] AgentsView searchNotices
              * @property {Array.<muster.v1.IMemberView>|null} [createHosts] AgentsView createHosts
              * @property {Array.<string>|null} [createAgents] AgentsView createAgents
+             * @property {Object.<string,string>|null} [createAgentLabels] AgentsView createAgentLabels
              * @property {boolean|null} [creating] AgentsView creating
              * @property {Array.<muster.v1.IMemberView>|null} [nativeCreateHosts] AgentsView nativeCreateHosts
              * @property {Array.<string>|null} [nativeCreateApps] AgentsView nativeCreateApps
@@ -50498,6 +50499,7 @@ export const muster = $root.muster = (() => {
                 this.searchNotices = [];
                 this.createHosts = [];
                 this.createAgents = [];
+                this.createAgentLabels = {};
                 this.nativeCreateHosts = [];
                 this.nativeCreateApps = [];
                 this.errors = [];
@@ -50572,6 +50574,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             AgentsView.prototype.createAgents = $util.emptyArray;
+
+            /**
+             * AgentsView createAgentLabels.
+             * @member {Object.<string,string>} createAgentLabels
+             * @memberof muster.app.AgentsView
+             * @instance
+             */
+            AgentsView.prototype.createAgentLabels = $util.emptyObject;
 
             /**
              * AgentsView creating.
@@ -50727,6 +50737,9 @@ export const muster = $root.muster = (() => {
                 if (message.launchLabels != null && message.launchLabels.length)
                     for (let i = 0; i < message.launchLabels.length; ++i)
                         writer.uint32(/* id 18, wireType 2 =*/146).string(message.launchLabels[i]);
+                if (message.createAgentLabels != null && Object.hasOwnProperty.call(message, "createAgentLabels"))
+                    for (let keys = Object.keys(message.createAgentLabels), i = 0; i < keys.length; ++i)
+                        writer.uint32(/* id 19, wireType 2 =*/154).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.createAgentLabels[keys[i]]).ldelim();
                 return writer;
             };
 
@@ -50748,7 +50761,7 @@ export const muster = $root.muster = (() => {
                     long = 0;
                 if (long > $Reader.recursionLimit)
                     throw Error("maximum nesting depth exceeded");
-                let end, message;
+                let end, message, key, value;
                 if (length === undefined)
                     end = reader.len;
                 else {
@@ -50804,6 +50817,37 @@ export const muster = $root.muster = (() => {
                             if (!(message.createAgents && message.createAgents.length))
                                 message.createAgents = [];
                             message.createAgents.push(reader.string());
+                            break;
+                        }
+                    case 19: {
+                            if (message.createAgentLabels === $util.emptyObject)
+                                message.createAgentLabels = {};
+                            let end2 = reader.uint32() + reader.pos;
+                            if (end2 > reader.len)
+                                throw RangeError("index out of range");
+                            reader.len = end2;
+                            key = "";
+                            value = "";
+                            while (reader.pos < end2) {
+                                let tag2 = reader.uint32();
+                                switch (tag2 >>> 3) {
+                                case 1:
+                                    key = reader.string();
+                                    break;
+                                case 2:
+                                    value = reader.string();
+                                    break;
+                                default:
+                                    reader.skipType(tag2 & 7, long);
+                                    break;
+                                }
+                            }
+                            if (reader.pos !== end2)
+                                throw RangeError("index out of range");
+                            reader.len = end;
+                            if (key === "__proto__")
+                                $util.makeProp(message.createAgentLabels, key);
+                            message.createAgentLabels[key] = value;
                             break;
                         }
                     case 7: {

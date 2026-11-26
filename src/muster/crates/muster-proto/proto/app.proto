@@ -718,7 +718,8 @@ message AgentsView {
   bool search_has_more = 13;
   repeated string search_notices = 12;
   repeated muster.v1.MemberView create_hosts = 5;
-  repeated string create_agents = 6;
+  repeated string create_agents = 6; // Native CLI provider keys.
+  map<string, string> create_agent_labels = 19; // Titles keyed by create_agents.
   bool creating = 7;
   // Desktop session creation (ADR 0150): the desktops it can target, the
   // apps it creates in, whether one is under way, and the input of the last

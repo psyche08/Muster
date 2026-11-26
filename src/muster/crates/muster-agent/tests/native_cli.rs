@@ -35,7 +35,14 @@ async fn rust_runtime_owns_both_cli_protocols_and_persists_sessions() {
             )
             .await
             .unwrap();
-        assert!(source.session(&id).unwrap().updated_unix > 0);
+        let provider = format!("{agent}-cli");
+        assert!(id.starts_with(&format!("{provider}:")));
+        let row = source.session(&id).unwrap();
+        assert_eq!(
+            (row.provider.as_str(), row.mode.as_str()),
+            (provider.as_str(), "cli")
+        );
+        assert!(row.updated_unix > 0);
         assert_eq!(
             source
                 .create(
@@ -386,7 +393,7 @@ async fn opens_a_pre_cutover_session_and_expires_its_old_prompt() {
         .unwrap();
     assert!(page.messages.iter().any(|m| m.text == "Prior turn"));
     assert!(source.pending(id).is_empty());
-    assert_eq!(source.session_provider(id).as_deref(), Some("orca"));
+    assert_eq!(source.session_provider(id).as_deref(), Some("codex-cli"));
     source
         .operation(id, "after-upgrade", Action::Send("Continue".into()))
         .await

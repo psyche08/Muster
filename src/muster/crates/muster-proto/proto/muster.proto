@@ -178,7 +178,7 @@ message Request {
 message OrcaCreateRequest {
   string op_id = 1;
   string directory = 2;
-  string agent = 3; // codex | claude
+  string agent = 3; // codex-cli | claude-cli; legacy executables codex | claude
   // Environment for this session's provider child, supplied by whoever opens
   // the session — an external scheduler's per-task credential, for example,
   // so the agent can use that scheduler's CLI as itself. Session-scoped and
