@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail, ensure};
 use clap::Parser;
-use muster_core::{DeviceKind, DeviceRecord, Invite, LocalPolicy, SharedSigner};
+use muster_core::{DeviceId, DeviceKind, DeviceRecord, Invite, LocalPolicy, SharedSigner};
 use muster_net::vnet::{Vnet, VnetConfig};
 use muster_net::{Node, NodeConfig, RelayConfig};
 use muster_store::Store;
@@ -22,10 +22,18 @@ struct Options {
     /// Report the local TPM identity for enrollment verification.
     #[arg(long, conflicts_with = "join")]
     identity: bool,
+    /// Verify this paired device ID (64 hex digits) using its existing TPM key, without starting a node.
+    #[arg(long, conflicts_with_all = ["join", "identity"], value_parser = DeviceId::from_hex)]
+    verify_existing_device: Option<DeviceId>,
 }
 
 pub async fn run() -> Result<()> {
     let options = Options::parse();
+    if let Some(id) = options.verify_existing_device {
+        muster_windows_tpm::Tpm::verify_existing(id)?;
+        println!("Verified existing TPM device {}", id.fingerprint());
+        return Ok(());
+    }
     let path = PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA missing")?)
         .join("Muster")
         .join("Vnet");

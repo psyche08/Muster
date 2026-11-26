@@ -3,8 +3,9 @@
 use std::ptr::{null, null_mut};
 
 use anyhow::{Result, ensure};
-use muster_core::{Error, HwSigner, PublicKey};
+use muster_core::{DeviceId, Error, HwSigner, PublicKey};
 use p256::ecdsa::Signature;
+use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};
 use windows_sys::Win32::Foundation::NTE_BAD_KEYSET;
 use windows_sys::Win32::Security::Cryptography::*;
@@ -38,6 +39,26 @@ pub struct Tpm {
 
 impl Tpm {
     pub fn open() -> Result<Self> {
+        Self::open_device(true)
+    }
+
+    /// Test the paired key, independently of the daemon and without provisioning a key.
+    pub fn verify_existing(expected: DeviceId) -> Result<()> {
+        let key = Self::open_device(false)?;
+        ensure!(
+            key.public.device_id() == expected,
+            "existing TPM device ID differs from the paired device"
+        );
+        let mut nonce = [0u8; 32];
+        OsRng
+            .try_fill_bytes(&mut nonce)
+            .map_err(|e| anyhow::anyhow!("generate local challenge: {e}"))?;
+        let message = [b"MUSTER-LOCAL-DEVICE-CHECK-V1\0".as_slice(), &nonce].concat();
+        let signature = key.sign_with_flags(&message, NCRYPT_SILENT_FLAG)?;
+        Ok(key.public.verify(&message, &signature)?)
+    }
+
+    fn open_device(allow_create: bool) -> Result<Self> {
         let mut provider = Handle::default();
         let mut key = Handle::default();
         let name = w!("Muster.Vnet.Device.P256");
@@ -49,8 +70,9 @@ impl Tpm {
                 NCryptOpenStorageProvider(&mut provider.0, MS_PLATFORM_CRYPTO_PROVIDER, 0),
                 "open TPM provider",
             )?;
-            let status = NCryptOpenKey(provider.0, &mut key.0, name, 0, 0);
-            if status == NTE_BAD_KEYSET {
+            let flags = if allow_create { 0 } else { NCRYPT_SILENT_FLAG };
+            let status = NCryptOpenKey(provider.0, &mut key.0, name, 0, flags);
+            if status == NTE_BAD_KEYSET && allow_create {
                 check(
                     NCryptCreatePersistedKey(
                         provider.0,
@@ -75,7 +97,7 @@ impl Tpm {
                     blob.as_mut_ptr(),
                     blob.len() as u32,
                     &mut size,
-                    0,
+                    flags,
                 ),
                 "read public point",
             )?;
@@ -94,14 +116,8 @@ impl Tpm {
             public: PublicKey::from_raw(&point)?,
         })
     }
-}
 
-impl HwSigner for Tpm {
-    fn public_key(&self) -> PublicKey {
-        self.public.clone()
-    }
-
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+    fn sign_with_flags(&self, message: &[u8], flags: u32) -> Result<Vec<u8>, Error> {
         let digest = Sha256::digest(message);
         let mut bytes = [0u8; 64];
         let mut size = 0;
@@ -114,7 +130,7 @@ impl HwSigner for Tpm {
                 bytes.as_mut_ptr(),
                 64,
                 &mut size,
-                0,
+                flags,
             )
         };
         if status != 0 || size != 64 {
@@ -124,6 +140,16 @@ impl HwSigner for Tpm {
         }
         let sig = Signature::from_slice(&bytes).map_err(|e| Error::Signature(e.to_string()))?;
         Ok(sig.to_der().as_bytes().to_vec())
+    }
+}
+
+impl HwSigner for Tpm {
+    fn public_key(&self) -> PublicKey {
+        self.public.clone()
+    }
+
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+        self.sign_with_flags(message, 0)
     }
 
     fn backend(&self) -> &'static str {
