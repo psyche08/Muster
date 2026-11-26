@@ -6,9 +6,12 @@ internal sealed class AccessDialog : Form
 {
     readonly List<(CheckBox Item, string Scope, CheckBox? Required)> grants = new();
     public IEnumerable<string> Scopes =>
-        grants.Where(row => row.Item.Checked && row.Required?.Checked != false).Select(row => row.Scope);
+        grants.Where(row => row.Item.Checked && (row.Scope != "multica.control" || row.Required?.Checked != false)).Select(row => row.Scope);
 
-    public AccessDialog(string title, string identity, AccessView? access)
+    public bool ClearSavedPortRules { get; private set; }
+    public string ChangedRole { get; private set; } = "";
+
+    public AccessDialog(string title, string identity, AccessView? access, string? memberRole = null)
     {
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
@@ -16,7 +19,17 @@ internal sealed class AccessDialog : Form
         var sections = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
                                              WrapContents = false, AutoScroll = true, Padding = new Padding(12) };
         sections.Controls.Add(new Label { Text = identity, AutoSize = true, MaximumSize = new Size(475, 0) });
-        CheckBox Add(AccessItem item, CheckBox? required)
+        if (memberRole != null)
+        {
+            sections.Controls.Add(new Label { Text = "Network role", AutoSize = true });
+            var role = new ComboBox { AccessibleName = "Network role", DropDownStyle = ComboBoxStyle.DropDownList };
+            role.Items.AddRange(["member", "admin"]);
+            role.SelectedItem = memberRole;
+            role.SelectedIndexChanged += (_, _) =>
+                ChangedRole = role.SelectedItem is string choice && choice != memberRole ? choice : "";
+            sections.Controls.Add(role);
+        }
+        CheckBox Add(FlowLayoutPanel panel, AccessItem item, CheckBox? required)
         {
             var box = new CheckBox { Text = item.Label, Checked = item.Granted, AutoSize = true };
             if (required != null)
@@ -24,7 +37,7 @@ internal sealed class AccessDialog : Form
                 box.Enabled = required.Checked;
                 required.CheckedChanged += (_, _) => box.Enabled = required.Checked;
             }
-            sections.Controls.Add(box);
+            panel.Controls.Add(box);
             grants.Add((box, item.Scope, required));
             return box;
         }
@@ -32,27 +45,47 @@ internal sealed class AccessDialog : Form
         {
             foreach (var section in access.Sections)
             {
-                sections.Controls.Add(new Label { Text = section.Title, AutoSize = true });
-                var toggle = section.Toggle == null ? null : Add(section.Toggle, null);
+                var group = new GroupBox { Text = section.Title, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    Padding = new Padding(10, 6, 10, 8), MinimumSize = new Size(440, 0) };
+                var items = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+                group.Controls.Add(items);
+                sections.Controls.Add(group);
+                var toggle = section.Toggle == null ? null : Add(items, section.Toggle, null);
                 foreach (var item in section.Items)
-                    Add(item, item.RequiresToggle ? toggle : null);
-                if (section.Id == "network" && access.NetworkAdvanced)
+                    Add(items, item, item.RequiresToggle ? toggle : null);
+                if (section.Id == "network" && !access.NetworkAdvanced && access.HasSavedPortRules && memberRole != null)
                 {
-                    var input = new TextBox { PlaceholderText = "tcp/443", Width = 160 };
-                    var add = new Button { Text = "Add port", AutoSize = true };
+                    var clear = new CheckBox { Text = "Clear saved port rules", AutoSize = true };
+                    clear.CheckedChanged += (_, _) => ClearSavedPortRules = clear.Checked;
+                    items.Controls.Add(clear);
+                }
+                bool provider = section.Id is "chats" or "agents";
+                if (provider || section.Id == "network" && access.NetworkAdvanced)
+                {
+                    var entry = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+                    var input = new TextBox { PlaceholderText = provider ? "Provider identifier" : "tcp/443", Width = 160 };
+                    var add = new Button { Text = provider ? "Add provider" : "Add port", AutoSize = true };
+                    if (provider && toggle != null)
+                    {
+                        entry.Enabled = toggle.Checked;
+                        toggle.CheckedChanged += (_, _) => entry.Enabled = toggle.Checked;
+                    }
                     add.Click += (_, _) =>
                     {
-                        var port = input.Text.Trim();
-                        if (port.Length == 0) return;
-                        var scope = "net:" + port;
+                        var value = input.Text.Trim();
+                        if (value.Length == 0) return;
+                        var scope = (provider ? section.Id : "net") + ":" + value;
                         var existing = grants.FindIndex(row => row.Scope == scope);
                         if (existing >= 0) grants[existing].Item.Checked = true;
-                        else Add(new AccessItem { Scope = scope, Label = scope, Granted = true }, null);
+                        else Add(items, new AccessItem { Scope = scope, Label = value, Granted = true }, provider ? toggle : null);
                         input.Clear();
                     };
-                    sections.Controls.Add(input);
-                    sections.Controls.Add(add);
+                    entry.Controls.AddRange([input, add]);
+                    items.Controls.Add(entry);
                 }
+                if (section.Footer.Length > 0)
+                    items.Controls.Add(new Label { Text = section.Footer, AutoSize = true, MaximumSize = new Size(420, 0) });
             }
         }
         var buttons =

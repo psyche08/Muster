@@ -5,7 +5,7 @@ import { keyboardPrefs } from '../input/Keyboard';
 import { MODEL_KEY, MusterModel } from '../core/MusterModel';
 import { AppStorageV2 } from '@kit.ArkUI';
 import { muster as pb } from '../proto/muster';
-import { OnboardingView, HomeView, InviteView, JoinView, DeviceView, SettingsView } from '../view/NetworkViews';
+import { OnboardingView, HomeView, InviteView, JoinView, DeviceView, SettingsGroup, SettingsView } from '../view/NetworkViews';
 import { ChatView, chatSubtitle } from '../view/ChatViews';
 import { ChatOptionsSheet, DesktopChatsView } from '../view/DesktopChatViews';
 import { WorkspaceSwitcher } from '../view/Workspace';
@@ -19,6 +19,7 @@ struct Index {
   @Local model: MusterModel = AppStorageV2.connect<MusterModel>(MusterModel, MODEL_KEY, (): MusterModel => new MusterModel())!;
 
   @Local workspace: WorkspaceArea = new WorkspaceArea();
+  @Local settingsGroup: SettingsGroup = SettingsGroup.Index;
   @Local chatOptions: boolean = false;
   @Local subagents: boolean = false;
 
@@ -49,7 +50,7 @@ struct Index {
       case pb.app.Screen.TERMINALS: return 'Terminals';
       case pb.app.Screen.TERMINAL:
         return vm.terminal?.session ? `${vm.terminal.source} · ${vm.terminal.session.substring(0, 8)}` : 'Terminal';
-      case pb.app.Screen.SETTINGS: return 'Settings';
+      case pb.app.Screen.SETTINGS: return this.settingsGroup;
       case pb.app.Screen.DESKTOP_CHATS: return 'Chat';
       case pb.app.Screen.FILES: return vm.files?.path || 'Files';
       case pb.app.Screen.FILE: return vm.file?.path ?? 'File';
@@ -106,6 +107,10 @@ struct Index {
   // beside the list; only the title bar drops its Back button there.
   onBackPress(): boolean {
     const vm = this.model.vm;
+    if (vm.screen === pb.app.Screen.SETTINGS && this.settingsGroup !== SettingsGroup.Index && this.model.authenticating === '') {
+      this.settingsGroup = SettingsGroup.Index;
+      return true;
+    }
     if (vm.canGoBack !== true || this.model.authenticating !== '' || this.model.core === null) return false;
     this.model.core.back();
     return true;
@@ -137,7 +142,7 @@ struct Index {
             SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('sys.color.font_primary')])
           }
           .width(40).height(40).backgroundColor(Color.Transparent).accessibilityText('Back')
-          .onClick((): void => { this.model.core?.back(); })
+          .onClick((): void => { this.onBackPress(); })
         }
         if ((this.atRoot() || this.split()) && this.model.core !== null) {
           WorkspaceSwitcher({ core: this.model.core, vm: this.model.vm })
@@ -182,7 +187,7 @@ struct Index {
           }
           .width(40).height(40).backgroundColor(Color.Transparent)
           .accessibilityText((this.model.vm.pending ?? []).length > 0 ? 'Settings, a device is waiting to join' : 'Settings')
-          .onClick((): void => { this.model.core?.navigate(pb.app.Screen.SETTINGS); })
+          .onClick((): void => { this.settingsGroup = SettingsGroup.Index; this.model.core?.navigate(pb.app.Screen.SETTINGS); })
         }
       }
       .width('100%').height(52).padding({ left: 8, right: 8 }).alignItems(VerticalAlign.Center)
@@ -306,7 +311,8 @@ struct Index {
       } else if (this.model.vm.screen === pb.app.Screen.TERMINAL) {
         TerminalView({ core: this.model.core, vm: this.model.vm, layout: this.layout() })
       } else if (this.model.vm.screen === pb.app.Screen.SETTINGS) {
-        SettingsView({ core: this.model.core, vm: this.model.vm, model: this.model })
+        SettingsView({ core: this.model.core, vm: this.model.vm, model: this.model, group: this.settingsGroup,
+          select: (group: SettingsGroup): void => { this.settingsGroup = group; } })
       } else if (this.model.vm.screen === pb.app.Screen.FILES) {
         FilesView({ core: this.model.core, vm: this.model.vm })
       } else if (this.model.vm.screen === pb.app.Screen.FILE) {

@@ -79,7 +79,7 @@ pub(super) fn admin_request(
             let client = backend.client_for(&device, &self_id).await?;
             match unary(&client, req).await? {
                 Resp::NetworkStatus(status) => Ok(Some(status)),
-                Resp::Ack(_) => Ok(None),
+                Resp::Ack(_) | Resp::PresenceInfo(_) => Ok(None),
                 Resp::Policy(_) | Resp::OpResult(_) => Ok(None),
                 _ => Err(unexpected()),
             }
@@ -492,8 +492,13 @@ pub(super) fn intent_remove_device(state: &mut State, ctx: &Ctx, r: app::RemoveD
 }
 
 pub(super) fn intent_set_scopes(state: &mut State, ctx: &Ctx, mut s: app::SetScopes) {
+    // Multica control requires view. Module provider choices can stay dormant.
+    if !s.scopes.iter().any(|scope| scope == "multica.view") {
+        s.scopes.retain(|scope| scope != "multica.control");
+    }
     // While a Basic grant remains selected, keep its hidden Advanced rules.
-    if s.scopes.iter().any(|scope| scope == "net:*")
+    if !s.clear_saved_port_rules
+        && s.scopes.iter().any(|scope| scope == "net:*")
         && let Some(network) = &state.network
         && network.access_mode != "advanced"
         && let Some(member) = network.members.iter().find(|m| m.device_id == s.device_id)
@@ -1216,7 +1221,7 @@ pub(super) fn msg_done(
             if what == "native terminal" {
                 state.toast("Native window opened on the session’s device", false);
             }
-            if what == "relay" || what == "accessibility" {
+            if matches!(what, "relay" | "accessibility" | "Presence enrollment") {
                 load_basics(state, ctx);
             }
         }

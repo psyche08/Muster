@@ -80,6 +80,15 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
     let ca = local(&a).await;
     let cb = local(&b).await;
     let before = a.network_status();
+    let projected_enrollment = || {
+        a.network_status()
+            .members
+            .iter()
+            .find(|member| member.device_id == b.device_id().to_hex())
+            .unwrap()
+            .presence_enrolled
+    };
+    assert_eq!(projected_enrollment(), Some(false));
     let presence = SoftSigner::generate();
     cb.call(Req::DevicePresence(v1::DevicePresenceRequest {
         public_key: presence.public_key().raw().to_vec(),
@@ -115,6 +124,7 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
     };
     assert!(cb.call(enroll(false, false)).await.is_err());
     ca.call(enroll(false, false)).await.unwrap();
+    assert_eq!(projected_enrollment(), Some(true));
     a.policy().write().unwrap().allow_locked_control = true;
     assert!(
         cover(&remote, &presence).await.is_err(),
@@ -175,6 +185,7 @@ async fn registration_approval_signed_proxy_persistence_and_revocation() {
         );
     }
     ca.call(enroll(false, true)).await.unwrap();
+    assert_eq!(projected_enrollment(), Some(false));
     // ADR 0120: revoking the binding no longer takes Locked Use away — the
     // `locked.control` scope is the lever for that, and revoking it stops even
     // a live transaction. What revocation must still do is clear the stored

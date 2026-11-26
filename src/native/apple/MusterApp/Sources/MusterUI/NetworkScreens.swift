@@ -202,11 +202,16 @@ struct MemberRow: View {
 struct AccessEditorSheet: View {
     let title: String
     let access: Muster_App_AccessView
-    let done: ([String]) -> Void
+    var memberRole: String? = nil
+    let done: ([String], String, Bool) -> Void
+    @State private var clearSavedPorts = false
+    @State private var role = ""
+    @State private var originalAccess: Muster_App_AccessView?
+    @State private var originalRole: String?
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<String> = []
-    @State private var addedPorts: [String] = []
-    @State private var newPort = ""
+    @State private var addedScopes: [String] = []
+    @State private var drafts: [String: String] = [:]
 
     private var offered: [Muster_App_AccessItem] {
         access.sections.flatMap { ($0.hasToggle ? [$0.toggle] : []) + $0.items }
@@ -215,6 +220,12 @@ struct AccessEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if memberRole != nil {
+                    Picker("Network role", selection: $role) {
+                        Text("Member").tag("member")
+                        Text("Administrator").tag("admin")
+                    }
+                }
                 ForEach(access.sections, id: \.id) { section in
                     Section {
                         if section.hasToggle {
@@ -225,21 +236,15 @@ struct AccessEditorSheet: View {
                                 .disabled(item.requiresToggle && !selected.contains(section.toggle.scope))
                                 .padding(.leading, item.requiresToggle ? 16 : 0)
                         }
+                        if section.id == "chats" || section.id == "agents" {
+                            customScopeEditor(section.id, provider: true)
+                                .disabled(!selected.contains(section.toggle.scope))
+                        }
+                        if section.id == "network" && access.hasSavedPortRules_p {
+                            Toggle("Clear saved port rules", isOn: $clearSavedPorts)
+                        }
                         if section.id == "network" && access.networkAdvanced {
-                            ForEach(addedPorts, id: \.self) { scope in
-                                toggle(Muster_App_AccessItem.with {
-                                    $0.scope = scope
-                                    $0.label = scope
-                                })
-                            }
-                            HStack {
-                                #if os(iOS)
-                                MusterTextField("tcp/443", text: $newPort, monospace: true)
-                                #else
-                                TextField("tcp/443", text: $newPort).autocorrectionDisabled()
-                                #endif
-                                Button("Add port") { addPort() }
-                            }
+                            customScopeEditor("net", provider: false)
                         }
                     } header: {
                         if !section.hasToggle { Text(section.title) }
@@ -254,27 +259,51 @@ struct AccessEditorSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        done((offered.map(\.scope) + addedPorts).filter { selected.contains($0) })
+                        done((offered.map(\.scope) + addedScopes).filter { selected.contains($0) }, role == memberRole ? "" : role, clearSavedPorts)
                         dismiss()
                     }
+                    .disabled(access != originalAccess || memberRole != originalRole)
                 }
             }
-            .onAppear { selected = Set(offered.filter(\.granted).map(\.scope)) }
+            .safeAreaInset(edge: .bottom) {
+                if originalAccess != nil && (access != originalAccess || memberRole != originalRole) {
+                    Text("Permissions changed. Reopen the editor to review the current grants.")
+                        .font(.footnote).padding()
+                }
+            }
+            .onAppear {
+                guard originalAccess == nil else { return }
+                selected = Set(offered.filter(\.granted).map(\.scope))
+                role = memberRole ?? ""
+                originalRole = memberRole
+                originalAccess = access
+            }
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
     }
 
-    private func addPort() {
-        let value = newPort.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        let scope = "net:" + value
-        if !offered.contains(where: { $0.scope == scope }) && !addedPorts.contains(scope) {
-            addedPorts.append(scope)
+    @ViewBuilder
+    private func customScopeEditor(_ prefix: String, provider: Bool) -> some View {
+        ForEach(addedScopes.filter { $0.hasPrefix(prefix + ":") }, id: \.self) { scope in
+            toggle(Muster_App_AccessItem.with { $0.scope = scope; $0.label = scope })
         }
-        selected.insert(scope)
-        newPort = ""
+        HStack {
+            let draft = Binding(get: { drafts[prefix] ?? "" }, set: { drafts[prefix] = $0 })
+            TextField(provider ? "Provider ID" : "tcp/443", text: draft)
+                .autocorrectionDisabled()
+            Button(provider ? "Add provider" : "Add port") {
+                let value = draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let scope = prefix + ":" + value
+                if !offered.contains(where: { $0.scope == scope }) && !addedScopes.contains(scope) {
+                    addedScopes.append(scope)
+                }
+                selected.insert(scope)
+                drafts[prefix] = ""
+            }
+            .disabled(draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
     }
 
     private func toggle(_ item: Muster_App_AccessItem) -> some View {
@@ -435,6 +464,20 @@ struct DeviceView: View {
                         }
                     }
                 }
+                if vm.deviceActions.hasPresenceEnrolled {
+                    Section("Presence key") {
+                        LabeledContent("Enrollment", value: vm.deviceActions.presenceEnrolled ? "Enrolled" : "Available to enroll")
+                        Button("Enroll current key") { core.setMemberPresence(member.deviceID, revoke: false) }
+                        Button("Enroll and grant locked control") {
+                            core.setMemberPresence(member.deviceID, revoke: false, grantLockedControl: true)
+                        }
+                        if vm.deviceActions.presenceEnrolled {
+                            Button("Revoke enrollment", role: .destructive) {
+                                core.setMemberPresence(member.deviceID, revoke: true)
+                            }
+                        }
+                    }
+                }
                 if vm.deviceActions.canRemove {
                     Section {
                         Button("Remove from the network", role: .destructive) { confirmRemove = true }
@@ -451,8 +494,8 @@ struct DeviceView: View {
                 Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $editingScopes) {
-                AccessEditorSheet(title: "Access for \(member.name)", access: vm.deviceAccess) { scopes in
-                    core.setScopes(device: member.deviceID, scopes: scopes, role: member.role)
+                AccessEditorSheet(title: "Access for \(member.name)", access: vm.deviceAccess, memberRole: member.role) { scopes, role, clearPorts in
+                    core.setScopes(device: member.deviceID, scopes: scopes, role: role, clearSavedPortRules: clearPorts)
                 }
             }
             .sheet(isPresented: $ssh) {
@@ -515,238 +558,369 @@ struct SettingsView: View {
     @ObservedObject private var keyboardPrefs = KeyboardPrefs.shared
     #endif
 
-    var body: some View {
-        Form {
-            Section {
-                ConversationStylePicker()
-            } header: {
-                Text("Appearance")
-            } footer: {
-                Text("Conversation rendering style. It is a local display preference: it does not select an agent or change authorization.")
+    @State private var newBundle = ""
+    @State private var category: Category?
+
+    private enum Category: String, CaseIterable {
+        case general = "General"
+        case members = "Member permissions"
+        case sharing = "Access to this device"
+        case network = "Network"
+        case device = "This device"
+        case integrations = "Integrations"
+
+        var icon: String {
+            switch self {
+            case .general: "slider.horizontal.3"
+            case .members: "person.2"
+            case .sharing: "lock.shield"
+            case .network: "network"
+            case .device: "info.circle"
+            case .integrations: "square.grid.2x2"
             }
-            #if os(iOS)
-            Section {
-                LayoutPicker()
-            } header: {
-                Text("页面布局")
-            } footer: {
-                Text("上下布局将内容与输入区分开；左右分栏需要足够宽度，窄屏自动使用单页。iPhone 的自动模式使用单页。")
-            }
-            Section {
-                Toggle("Muster 内置键盘", isOn: Binding(get: { !keyboardPrefs.systemKeyboard }, set: { keyboardPrefs.systemKeyboard = !$0 }))
-                Toggle("终端使用内置键盘", isOn: Binding(get: { !keyboardPrefs.terminalSystemKeyboard }, set: { keyboardPrefs.terminalSystemKeyboard = !$0 }))
-            } header: {
-                Text("Keyboard")
-            } footer: {
-                Text("支持拼音、英文、数字和符号。会话输入框旁的键盘按钮也可以直接切换并打开键盘。普通输入默认使用系统键盘；终端默认使用内置键盘，提供 Esc、功能键、Ctrl 和 Alt。宽屏显示 MacBook 布局。")
-            }
-            #endif
-            #if os(iOS)
-            Section {
-                NavigationLink("性能监控") { PerformanceMonitorView(core: core, devices: vm.serviceDevices) }
-            }
-            #endif
-            #if os(macOS)
-            Section {
-                Toggle("操作锁屏 Mac 前验证身份", isOn: Binding(
-                    get: { vm.requireLockedUseAuth },
-                    set: { core.setRequireLockedUseAuth($0) }
-                ))
-            } header: {
-                Text("锁屏操作")
-            } footer: {
-                Text("开启后，从本机发起新的锁屏操作时，需要使用触控 ID 或密码确认。")
-            }
-            #endif
-            if vm.desktopUpdate.supported {
-                Section {
-                    Toggle("自动更新", isOn: Binding(
-                        get: { vm.desktopUpdate.automatic },
-                        set: { on in
-                            UserDefaults.standard.set(on, forKey: AutoUpdatePreference.key)
-                            core.desktopUpdate(on ? .autoOn : .autoOff)
-                        }
-                    ))
-                    Text(updateStatus(vm.desktopUpdate.status))
-                    if !vm.desktopUpdate.version.isEmpty { Text("新版本：\(vm.desktopUpdate.version)") }
-                    if !vm.desktopUpdate.error.isEmpty { Text(vm.desktopUpdate.error).foregroundStyle(.red).textSelection(.enabled) }
-                    if vm.desktopUpdate.canCheck { Button("检查更新") { core.desktopUpdate(.check) } }
-                    if vm.desktopUpdate.canDownload { Button("下载更新") { core.desktopUpdate(.download) } }
-                    if vm.desktopUpdate.canInstall { Button("安装并重启 Muster") { core.desktopUpdate(.install) } }
-                } header: {
-                    Text("Muster 更新")
-                } footer: {
-                    if vm.desktopUpdate.automatic {
-                        Text("每 6 小时检查一次签名更新并自动下载；这台 Mac 15 分钟无人操作、没有发送、终端连接或 Locked Use 时自动安装并重启 Muster，锁屏时也会进行。")
+        }
+    }
+
+    private var categoryList: some View {
+        List {
+            ForEach(Category.allCases, id: \.self) { group in
+                if group != .sharing || vm.localDeviceHasServices {
+                    if group != .integrations || ((vm.vision.supported || vm.multica.supported) && !vm.embedded) {
+                        Button { category = group } label: {
+                            HStack {
+                                Label(group.rawValue, systemImage: group.icon)
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                            }.contentShape(Rectangle())
+                        }.buttonStyle(.plain)
                     }
-                }
-            }
-            if vm.multica.supported && !vm.embedded {
-                MulticaSettings(core: core, status: vm.multica)
-            }
-            if vm.vision.supported && !vm.embedded {
-                VisionSettings(core: core, status: vm.vision)
-            }
-            Section("Network devices") {
-                if !vm.network.accessMode.isEmpty {
-                    if vm.canInvite {
-                        Picker("Network access mode", selection: Binding(
-                            get: { vm.network.accessMode },
-                            set: { core.setNetworkAccessMode($0) }
-                        )) {
-                            Text("Basic").tag("basic")
-                            Text("Advanced").tag("advanced")
-                        }
-                    } else {
-                        LabeledContent("Network access mode", value: vm.network.accessMode.capitalized)
-                    }
-                }
-                ForEach(vm.pending, id: \.deviceID) { join in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("\(join.name) wants to join", systemImage: "person.badge.plus").font(.headline)
-                        Text("\(join.kind) · \(join.fingerprint)").font(.caption.monospaced()).foregroundStyle(.secondary)
-                        HStack {
-                            Button("Approve…") { deciding = join }.buttonStyle(.borderedProminent)
-                            Button("Reject", role: .destructive) { core.decideJoin(device: join.deviceID, approve: false, reason: "rejected") }
-                                .buttonStyle(.bordered)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                ForEach(vm.network.members, id: \.deviceID) { member in
-                    Button { core.selectDevice(member.deviceID) } label: {
-                        MemberRow(member: member)
-                    }.buttonStyle(.plain)
-                    let lockedUse = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID })
-                    let mask = vm.deviceBlackout.first(where: { $0.deviceID == member.deviceID })
-                    if lockedUse != nil || mask != nil {
-                        DeviceControlTiles(core: core, lockedUse: lockedUse, mask: mask)
-                    }
-                }
-                if vm.canInvite {
-                    Button { core.showInvite() } label: { Label("Invite device", systemImage: "qrcode") }
-                }
-            }
-            if vm.localDeviceHasServices {
-                Section("Chrome extension") {
-                    Button { core.openBrowser(device: vm.self_p.deviceID) } label: {
-                        Label("Set up Agent Halo Browser", systemImage: "puzzlepiece.extension")
-                    }
-                    Text("Install the extension, check its connection, and manage browser access.").font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("What this device offers") {
-                    Toggle("Agent sessions", isOn: $policy.offerAgent)
-                    Toggle("Terminals", isOn: $policy.offerTerminal)
-                    Toggle("Control while the screen is locked", isOn: $policy.allowLockedControl)
-                }
-            }
-            if vm.localDeviceHasServices {
-                LocalServiceGrantsView(
-                    policy: $policy,
-                    members: vm.network.members.filter { !$0.isSelf },
-                    advanced: vm.network.accessMode == "advanced"
-                )
-            }
-            if vm.network.accessMode != "basic" {
-                Section("Open ports") {
-                    ForEach(policy.openPorts, id: \.self) { port in
-                        Text(port).font(.system(.body, design: .monospaced))
-                    }
-                    .onDelete { policy.openPorts.remove(atOffsets: $0) }
-                    HStack {
-                    #if os(iOS)
-                        MusterTextField("tcp/22", text: $newPort, monospace: true)
-                    #else
-                        TextField("tcp/22", text: $newPort).autocorrectionDisabled()
-                    #endif
-                        Button("Add") {
-                            let trimmed = newPort.trimmingCharacters(in: .whitespaces)
-                            if !trimmed.isEmpty && !policy.openPorts.contains(trimmed) { policy.openPorts.append(trimmed) }
-                            newPort = ""
-                        }
-                    }
-                }
-            }
-            Section {
-                Button("Save policy") { core.setPolicy(policy) }
-            }
-            RelaySection(core: core, vm: vm)
-            Section("This device") {
-                LabeledContent("Name", value: vm.self_p.name)
-                LabeledContent("Fingerprint") { Text(vm.self_p.fingerprint).font(.system(.body, design: .monospaced)) }
-                LabeledContent("Key", value: vm.self_p.keyLabel)
-                LabeledContent("Relay", value: vm.self_p.relay.isEmpty ? vm.self_p.state.relay : "\(vm.self_p.relay) · \(vm.self_p.state.relay)")
-                if !vm.self_p.state.accessibility.isEmpty {
-                    LabeledContent("Accessibility") {
-                        HStack {
-                            Text(vm.self_p.state.accessibility == "granted" ? "granted" : "not granted")
-                                .foregroundStyle(vm.self_p.state.accessibility == "granted" ? Color.secondary : Color.orange)
-                            if vm.self_p.state.accessibility != "granted" {
-                                Button("Grant…") { core.requestAccessibility() }
-                            }
-                        }
-                    }
-                    if vm.self_p.state.accessibility != "granted" {
-                        Text("Needed for remote desktop mouse control and to operate Codex and Claude desktop sessions. Enable Muster under System Settings › Privacy & Security › Accessibility on this Mac. Locked Use requires this permission too.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                if !vm.self_p.state.screenRecording.isEmpty {
-                    LabeledContent("Screen Recording") {
-                        HStack {
-                            Text(vm.self_p.state.screenRecording == "granted" ? "granted" : "not granted")
-                                .foregroundStyle(vm.self_p.state.screenRecording == "granted" ? Color.secondary : Color.orange)
-                            if vm.self_p.state.screenRecording != "granted" {
-                                Button("Grant…") { core.requestScreenRecording() }
-                            }
-                        }
-                    }
-                    if vm.self_p.state.screenRecording != "granted" {
-                        Text("Needed to share this desktop and to look at an app window when a native send fails. Enable Muster under System Settings › Privacy & Security › Screen Recording on this Mac.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                #if os(macOS)
-                if !vm.embedded {
-                    LabeledContent("Locked Use", value: vm.desktopSetup.pluginReady ? "已安装并验证" : "需要设置")
-                    if !vm.desktopSetup.ready {
-                        Button("完成 Mac 授权与安装…") { core.desktopSetup(.show) }
-                        Text(vm.desktopSetup.pluginMessage).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if vm.terminals.hasAuthorization {
-                        LabeledContent(vm.terminals.authorization.app,
-                                       value: vm.terminals.authorization.ready ? "自动化已授权" : "在终端页面授权")
-                    }
-                }
-                #endif
-                LabeledContent("Screen", value: vm.self_p.state.locked ? "locked" : (vm.self_p.state.covered ? "covered" : "unlocked"))
-                #if os(macOS)
-                if !vm.embedded {
-                    Button(vm.self_p.state.covered ? "Uncover the screen…" : "Cover the screen (⌃⌥⌘L)") {
-                        core.setCover(!vm.self_p.state.covered)
-                    }
-                    Text("The cover blacks out every display and keeps the Mac awake while its apps stay reachable from your other devices; dropping it asks for Touch ID or your password.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                #endif
-                if vm.embedded, let line = core.sshPublicKeyLine() {
-                    VStack(alignment: .leading) {
-                        Text("SSH public key").font(.subheadline)
-                        Text(line).font(.system(.caption2, design: .monospaced)).textSelection(.enabled).lineLimit(3)
-                        Button("Copy") { copyToPasteboard(line) }
-                    }
-                }
-                LabeledContent("Version", value: vm.self_p.version.isEmpty ? "not reported" : vm.self_p.version)
-                LabeledContent("Commit") {
-                    Text(vm.self_p.commit.isEmpty ? "not reported" : vm.self_p.commit)
-                        .font(.system(.body, design: .monospaced)).textSelection(.enabled)
                 }
             }
         }
+    }
+
+    private func settingsDetail(_ group: Category) -> some View {
+        Form {
+            switch group {
+            case .general: generalSettings
+            case .members: membersSettings
+            case .sharing: sharingSettings
+            case .network: networkSettings
+            case .device: deviceSettings
+            case .integrations: integrationsSettings
+            }
+        }
         .groupedForm()
-        .navigationTitle("Settings")
+        .navigationTitle(group.rawValue)
+    }
+
+    @ViewBuilder
+    private var generalSettings: some View {
+        Section {
+            ConversationStylePicker()
+        } header: {
+            Text("Appearance")
+        } footer: {
+            Text("Conversation rendering style. It is a local display preference: it does not select an agent or change authorization.")
+        }
+        #if os(iOS)
+        Section {
+            LayoutPicker()
+        } header: {
+            Text("页面布局")
+        } footer: {
+            Text("上下布局将内容与输入区分开；左右分栏需要足够宽度，窄屏自动使用单页。iPhone 的自动模式使用单页。")
+        }
+        Section {
+            Toggle("Muster 内置键盘", isOn: Binding(get: { !keyboardPrefs.systemKeyboard }, set: { keyboardPrefs.systemKeyboard = !$0 }))
+            Toggle("终端使用内置键盘", isOn: Binding(get: { !keyboardPrefs.terminalSystemKeyboard }, set: { keyboardPrefs.terminalSystemKeyboard = !$0 }))
+        } header: {
+            Text("Keyboard")
+        } footer: {
+            Text("支持拼音、英文、数字和符号。会话输入框旁的键盘按钮也可以直接切换并打开键盘。普通输入默认使用系统键盘；终端默认使用内置键盘，提供 Esc、功能键、Ctrl 和 Alt。宽屏显示 MacBook 布局。")
+        }
+        #endif
+        #if os(iOS)
+        Section {
+            NavigationLink("性能监控") { PerformanceMonitorView(core: core, devices: vm.serviceDevices) }
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var membersSettings: some View {
+        Section("Network devices") {
+            if !vm.network.accessMode.isEmpty {
+                if vm.canInvite {
+                    Picker("Network access mode", selection: Binding(
+                        get: { vm.network.accessMode },
+                        set: { core.setNetworkAccessMode($0) }
+                    )) {
+                        Text("Basic").tag("basic")
+                        Text("Advanced").tag("advanced")
+                    }
+                } else {
+                    LabeledContent("Network access mode", value: vm.network.accessMode.capitalized)
+                }
+            }
+            ForEach(vm.pending, id: \.deviceID) { join in
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("\(join.name) wants to join", systemImage: "person.badge.plus").font(.headline)
+                    Text("\(join.kind) · \(join.fingerprint)").font(.caption.monospaced()).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Approve…") { deciding = join }.buttonStyle(.borderedProminent)
+                        Button("Reject", role: .destructive) { core.decideJoin(device: join.deviceID, approve: false, reason: "rejected") }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            ForEach(vm.network.members, id: \.deviceID) { member in
+                Button { core.selectDevice(member.deviceID) } label: {
+                    MemberRow(member: member)
+                }.buttonStyle(.plain)
+                let lockedUse = vm.deviceLockedUse.first(where: { $0.deviceID == member.deviceID })
+                let mask = vm.deviceBlackout.first(where: { $0.deviceID == member.deviceID })
+                if lockedUse != nil || mask != nil {
+                    DeviceControlTiles(core: core, lockedUse: lockedUse, mask: mask)
+                }
+            }
+            if vm.canInvite {
+                Button { core.showInvite() } label: { Label("Invite device", systemImage: "qrcode") }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sharingSettings: some View {
+        if vm.localDeviceHasServices {
+            Section("Chrome extension") {
+                Button { core.openBrowser(device: vm.self_p.deviceID) } label: {
+                    Label("Set up Agent Halo Browser", systemImage: "puzzlepiece.extension")
+                }
+                Text("Install the extension, check its connection, and manage browser access.").font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("What this device offers") {
+                Toggle("Agent sessions", isOn: $policy.offerAgent)
+                Toggle("Terminals", isOn: $policy.offerTerminal)
+                Toggle("External task runtime", isOn: $policy.offerTasks)
+                Toggle("Control while the screen is locked", isOn: $policy.allowLockedControl)
+            }
+        }
+        if vm.localDeviceHasServices {
+            LocalServiceGrantsView(
+                policy: $policy,
+                members: vm.network.members.filter { !$0.isSelf },
+                advanced: vm.network.accessMode == "advanced"
+            )
+        }
+        Section("Application access") {
+            ForEach(policy.axAllowlist, id: \.self) { bundle in
+                HStack {
+                    Text(bundle)
+                    Spacer()
+                    Button("Remove") { policy.axAllowlist.removeAll { $0 == bundle } }
+                }
+            }
+            HStack {
+                TextField("Application bundle identifier", text: $newBundle)
+                Button("Add") {
+                    let bundle = newBundle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !bundle.isEmpty && !policy.axAllowlist.contains(bundle) { policy.axAllowlist.append(bundle) }
+                    newBundle = ""
+                }
+            }
+        }
+        Section("Shared web origin") {
+            TextField("https://example.org", text: Binding(
+                get: { policy.hasWebWindow ? policy.webWindow.origin : "" },
+                set: { value in
+                    if value.isEmpty { policy.clearWebWindow() }
+                    else { policy.webWindow.origin = value }
+                }
+            ))
+            if policy.hasWebWindow { Button("Close web window") { policy.clearWebWindow() } }
+        }
+        if vm.network.accessMode == "basic" && !policy.openPorts.isEmpty {
+            Section("Saved port rules") {
+                Button("Clear saved port rules", role: .destructive) { policy.openPorts.removeAll() }
+            }
+        }
+        if vm.network.accessMode == "advanced" {
+            Section("Open ports") {
+                ForEach(policy.openPorts, id: \.self) { port in
+                    Text(port).font(.system(.body, design: .monospaced))
+                }
+                .onDelete { policy.openPorts.remove(atOffsets: $0) }
+                HStack {
+                #if os(iOS)
+                    MusterTextField("tcp/22", text: $newPort, monospace: true)
+                #else
+                    TextField("tcp/22", text: $newPort).autocorrectionDisabled()
+                #endif
+                    Button("Add") {
+                        let trimmed = newPort.trimmingCharacters(in: .whitespaces)
+                        if !trimmed.isEmpty && !policy.openPorts.contains(trimmed) { policy.openPorts.append(trimmed) }
+                        newPort = ""
+                    }
+                }
+            }
+        }
+        Section {
+            Button("Save policy") { core.setPolicy(policy) }.disabled(!vm.hasPolicy || policy == vm.policy)
+        }
+    }
+
+    @ViewBuilder
+    private var networkSettings: some View {
+        RelaySection(core: core, vm: vm)
+    }
+
+    @ViewBuilder
+    private var deviceSettings: some View {
+        #if os(macOS)
+        Section {
+            Toggle("操作锁屏 Mac 前验证身份", isOn: Binding(
+                get: { vm.requireLockedUseAuth },
+                set: { core.setRequireLockedUseAuth($0) }
+            ))
+        } header: {
+            Text("锁屏操作")
+        } footer: {
+            Text("开启后，从本机发起新的锁屏操作时，需要使用触控 ID 或密码确认。")
+        }
+        #endif
+        Section("This device") {
+            LabeledContent("Name", value: vm.self_p.name)
+            LabeledContent("Fingerprint") { Text(vm.self_p.fingerprint).font(.system(.body, design: .monospaced)) }
+            LabeledContent("Key", value: vm.self_p.keyLabel)
+            LabeledContent("Relay", value: vm.self_p.relay.isEmpty ? vm.self_p.state.relay : "\(vm.self_p.relay) · \(vm.self_p.state.relay)")
+            if !vm.self_p.state.accessibility.isEmpty {
+                LabeledContent("Accessibility") {
+                    HStack {
+                        Text(vm.self_p.state.accessibility == "granted" ? "granted" : "not granted")
+                            .foregroundStyle(vm.self_p.state.accessibility == "granted" ? Color.secondary : Color.orange)
+                        if vm.self_p.state.accessibility != "granted" {
+                            Button("Grant…") { core.requestAccessibility() }
+                        }
+                    }
+                }
+                if vm.self_p.state.accessibility != "granted" {
+                    Text("Needed for remote desktop mouse control and to operate Codex and Claude desktop sessions. Enable Muster under System Settings › Privacy & Security › Accessibility on this Mac. Locked Use requires this permission too.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            if !vm.self_p.state.screenRecording.isEmpty {
+                LabeledContent("Screen Recording") {
+                    HStack {
+                        Text(vm.self_p.state.screenRecording == "granted" ? "granted" : "not granted")
+                            .foregroundStyle(vm.self_p.state.screenRecording == "granted" ? Color.secondary : Color.orange)
+                        if vm.self_p.state.screenRecording != "granted" {
+                            Button("Grant…") { core.requestScreenRecording() }
+                        }
+                    }
+                }
+                if vm.self_p.state.screenRecording != "granted" {
+                    Text("Needed to share this desktop and to look at an app window when a native send fails. Enable Muster under System Settings › Privacy & Security › Screen Recording on this Mac.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            #if os(macOS)
+            if !vm.embedded {
+                LabeledContent("Locked Use", value: vm.desktopSetup.pluginReady ? "已安装并验证" : "需要设置")
+                if !vm.desktopSetup.ready {
+                    Button("完成 Mac 授权与安装…") { core.desktopSetup(.show) }
+                    Text(vm.desktopSetup.pluginMessage).font(.footnote).foregroundStyle(.secondary)
+                }
+                if vm.terminals.hasAuthorization {
+                    LabeledContent(vm.terminals.authorization.app,
+                                   value: vm.terminals.authorization.ready ? "自动化已授权" : "在终端页面授权")
+                }
+            }
+            #endif
+            LabeledContent("Screen", value: vm.self_p.state.locked ? "locked" : (vm.self_p.state.covered ? "covered" : "unlocked"))
+            #if os(macOS)
+            if !vm.embedded {
+                Button(vm.self_p.state.covered ? "Uncover the screen…" : "Cover the screen (⌃⌥⌘L)") {
+                    core.setCover(!vm.self_p.state.covered)
+                }
+                Text("The cover blacks out every display and keeps the Mac awake while its apps stay reachable from your other devices; dropping it asks for Touch ID or your password.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            #endif
+            if vm.embedded, let line = core.sshPublicKeyLine() {
+                VStack(alignment: .leading) {
+                    Text("SSH public key").font(.subheadline)
+                    Text(line).font(.system(.caption2, design: .monospaced)).textSelection(.enabled).lineLimit(3)
+                    Button("Copy") { copyToPasteboard(line) }
+                }
+            }
+            LabeledContent("Version", value: vm.self_p.version.isEmpty ? "not reported" : vm.self_p.version)
+            LabeledContent("Commit") {
+                Text(vm.self_p.commit.isEmpty ? "not reported" : vm.self_p.commit)
+                    .font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            }
+        }
+        if vm.desktopUpdate.supported {
+            Section {
+                Toggle("自动更新", isOn: Binding(
+                    get: { vm.desktopUpdate.automatic },
+                    set: { on in
+                        UserDefaults.standard.set(on, forKey: AutoUpdatePreference.key)
+                        core.desktopUpdate(on ? .autoOn : .autoOff)
+                    }
+                ))
+                Text(updateStatus(vm.desktopUpdate.status))
+                if !vm.desktopUpdate.version.isEmpty { Text("新版本：\(vm.desktopUpdate.version)") }
+                if !vm.desktopUpdate.error.isEmpty { Text(vm.desktopUpdate.error).foregroundStyle(.red).textSelection(.enabled) }
+                if vm.desktopUpdate.canCheck { Button("检查更新") { core.desktopUpdate(.check) } }
+                if vm.desktopUpdate.canDownload { Button("下载更新") { core.desktopUpdate(.download) } }
+                if vm.desktopUpdate.canInstall { Button("安装并重启 Muster") { core.desktopUpdate(.install) } }
+            } header: {
+                Text("Muster 更新")
+            } footer: {
+                if vm.desktopUpdate.automatic {
+                    Text("每 6 小时检查一次签名更新并自动下载；这台 Mac 15 分钟无人操作、没有发送、终端连接或 Locked Use 时自动安装并重启 Muster，锁屏时也会进行。")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var integrationsSettings: some View {
+        if vm.multica.supported && !vm.embedded {
+            MulticaSettings(core: core, status: vm.multica)
+        }
+        if vm.vision.supported && !vm.embedded {
+            VisionSettings(core: core, status: vm.vision)
+        }
+    }
+
+    var body: some View {
+        Group {
+            #if os(macOS)
+            HStack(spacing: 0) {
+                categoryList.frame(minWidth: 190, idealWidth: 210, maxWidth: 240)
+                Divider()
+                settingsDetail(category ?? .general)
+            }
+            #else
+            if let category {
+                settingsDetail(category)
+                    .navigationBarBackButtonHidden()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { self.category = nil } label: { Label("Settings", systemImage: "chevron.left") }
+                        }
+                    }
+            } else {
+                categoryList
+            }
+            #endif
+        }
+        .navigationTitle(category?.rawValue ?? "Settings")
         .sheet(item: $deciding) { join in
-            AccessEditorSheet(title: "Approve \(join.name)", access: vm.joinAccess) { scopes in
+            AccessEditorSheet(title: "Approve \(join.name)", access: vm.joinAccess) { scopes, _, _ in
                 core.decideJoin(device: join.deviceID, approve: true, scopes: scopes)
             }
         }

@@ -31,7 +31,7 @@ const OTHER: &[(&str, &str)] = &[
     ("network.admin", "Administer the network"),
 ];
 
-/// Legacy grants, shown only while a member still holds them.
+/// Independent legacy permissions accepted by the CLI.
 const EARLIER: &[(&str, &str)] = &[
     ("agent.view", "View agent sessions, every provider"),
     (
@@ -73,7 +73,7 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
         &mut take,
         "chats",
         "Chats",
-        "Conversations in the ChatGPT and Claude desktop apps. No device offers them yet.",
+        "Conversations shared by desktop chat providers.",
         providers(
             scopes,
             &apps::chat_providers(),
@@ -127,7 +127,7 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
     );
     multica.items.push(item(
         "multica.control",
-        "Control task sessions (not yet available)",
+        "Control shared task sessions",
         multica_control,
         true,
     ));
@@ -146,12 +146,10 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
             false,
         ));
     }
-    let mut earlier_items = Vec::new();
-    for (scope, label) in EARLIER {
-        if take(scope) {
-            earlier_items.push(item(scope, label, true, false));
-        }
-    }
+    let earlier_items: Vec<_> = EARLIER
+        .iter()
+        .map(|(scope, label)| item(scope, label, take(scope), false))
+        .collect();
     let mut other_items: Vec<AccessItem> = OTHER
         .iter()
         .map(|(scope, label)| item(scope, label, take(scope), false))
@@ -187,21 +185,20 @@ pub fn view(scopes: &[String], advanced: bool) -> AccessView {
             items: other_items,
         },
     ];
-    if !earlier_items.is_empty() {
-        sections.push(AccessSection {
-            id: "earlier".into(),
-            title: "Earlier grants".into(),
-            footer: "Granted before the switches above and still in force. Switch them off \
-                     once the sections above say what this device should reach."
-                .into(),
-            summary: granted_labels(&earlier_items, "None"),
-            toggle: None,
-            items: earlier_items,
-        });
-    }
+    sections.push(AccessSection {
+        id: "earlier".into(),
+        title: "Provider-independent access".into(),
+        footer: "These permissions apply to every provider, independently of module switches."
+            .into(),
+        summary: granted_labels(&earlier_items, "None"),
+        toggle: None,
+        items: earlier_items,
+    });
     AccessView {
         sections,
         network_advanced: advanced,
+        has_saved_port_rules: !advanced
+            && scopes.iter().any(|s| s.starts_with("net:") && s != "net:*"),
     }
 }
 
@@ -370,6 +367,7 @@ mod tests {
         let held = scopes(&["net:*", "net:tcp/22", "net:udp/2049"]);
         let basic = view(&held, false);
         assert!(!basic.network_advanced);
+        assert!(basic.has_saved_port_rules);
         let items = &section(&basic, "network").items;
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].scope, "net:*");
@@ -390,7 +388,7 @@ mod tests {
         );
         assert_eq!(section(&view, "terminals").summary, "On");
         assert_eq!(section(&view, "other").summary, "None");
-        assert!(view.sections.iter().all(|s| s.id != "earlier"));
+        assert_eq!(section(&view, "earlier").summary, "None");
         assert!(all(&view).iter().all(
             |(scope, on)| !on || !matches!(scope.as_str(), "locked.control" | "network.admin")
         ));

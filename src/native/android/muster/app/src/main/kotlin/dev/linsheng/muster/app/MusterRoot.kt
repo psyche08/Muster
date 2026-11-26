@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,15 +123,22 @@ fun MusterRoot(model: MusterModel) {
                 .addOnFailureListener { model.scanned(null) }
         }
     }
+    var settingsGroup by rememberSaveable(Screen.SETTINGS in vm.navigationPathList) {
+        mutableStateOf<SettingsGroup?>(null)
+    }
+    val activeSettingsGroup = settingsGroup.takeIf { vm.screen == Screen.SETTINGS }
+    val navigateBack: () -> Unit = {
+        if (activeSettingsGroup != null) settingsGroup = null else core.back()
+    }
     val atRoot = vm.screen in roots
     // The workspace's list on the left, the conversation or terminal on the right.
     val split = layout.side && (atRoot || vm.screen in details)
     // Beside the list a conversation or terminal needs no Back: another row replaces it.
-    val showsBack = vm.canGoBack && authenticating == null && !(split && (vm.screen == Screen.CHAT || vm.screen == Screen.TERMINAL))
+    val showsBack = (vm.canGoBack || activeSettingsGroup != null) && authenticating == null && !(split && (vm.screen == Screen.CHAT || vm.screen == Screen.TERMINAL))
     // Where the layout button applies: a conversation, a terminal or a split workspace.
     val showsLayout = split || atRoot || vm.screen == Screen.CHAT || vm.screen == Screen.TERMINAL
     // Back is the core's decision; nothing navigates while a local authentication is up.
-    BackHandler(enabled = vm.canGoBack && authenticating == null) { core.back() }
+    BackHandler(enabled = (vm.canGoBack || activeSettingsGroup != null) && authenticating == null, onBack = navigateBack)
 
     Scaffold(
         topBar = {
@@ -145,12 +153,12 @@ fun MusterRoot(model: MusterModel) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     } else {
-                        Text(title(vm), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(activeSettingsGroup?.title ?: title(vm), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
                 navigationIcon = {
                     if (showsBack) {
-                        IconButton(onClick = { core.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                        IconButton(onClick = navigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                     }
                 },
                 actions = {
@@ -201,11 +209,11 @@ fun MusterRoot(model: MusterModel) {
                         }
                         Box(Modifier.width(layout.gapWidth.dp).fillMaxHeight(), contentAlignment = Alignment.Center) { VerticalDivider() }
                         Box(Modifier.weight(1f).fillMaxHeight()) {
-                            if (atRoot) WorkspaceWelcome(vm.workspace) else ScreenContent(core, vm, model)
+                            if (atRoot) WorkspaceWelcome(vm.workspace) else ScreenContent(core, vm, model, settingsGroup) { settingsGroup = it }
                         }
                     }
                 } else {
-                    ScreenContent(core, vm, model)
+                    ScreenContent(core, vm, model, settingsGroup) { settingsGroup = it }
                 }
             }
             ToastStack(vm.toastsList, Modifier.align(Alignment.BottomCenter)) { core.dismiss(it) }
@@ -216,7 +224,7 @@ fun MusterRoot(model: MusterModel) {
 }
 
 @Composable
-private fun ScreenContent(core: MusterCore, vm: ViewModel, model: MusterModel) {
+private fun ScreenContent(core: MusterCore, vm: ViewModel, model: MusterModel, settingsGroup: SettingsGroup?, selectSettingsGroup: (SettingsGroup) -> Unit) {
     when (vm.screen) {
         Screen.ONBOARDING -> OnboardingScreen(core, vm)
         Screen.INVITE -> InviteScreen(core, vm)
@@ -228,7 +236,7 @@ private fun ScreenContent(core: MusterCore, vm: ViewModel, model: MusterModel) {
         Screen.TERMINALS -> TerminalsScreen(core, vm)
         Screen.TERMINAL -> TerminalScreen(core, vm)
         Screen.BROWSER -> BrowserScreen(core, vm)
-        Screen.SETTINGS -> SettingsScreen(core, vm, model)
+        Screen.SETTINGS -> SettingsScreen(core, vm, model, settingsGroup, selectSettingsGroup)
         Screen.FILES -> FilesScreen(core, vm)
         Screen.FILE -> FileScreen(core, vm)
         Screen.GIT -> GitScreen(core, vm)

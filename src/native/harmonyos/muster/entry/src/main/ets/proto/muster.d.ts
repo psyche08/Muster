@@ -3657,6 +3657,9 @@ export namespace muster {
         /** Properties of a MemberView. */
         interface IMemberView {
 
+            /** MemberView presenceEnrolled */
+            presenceEnrolled?: (boolean|null);
+
             /** MemberView deviceId */
             deviceId?: (string|null);
 
@@ -3717,6 +3720,9 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.v1.IMemberView);
+
+            /** MemberView presenceEnrolled. */
+            public presenceEnrolled?: (boolean|null);
 
             /** MemberView deviceId. */
             public deviceId: string;
@@ -13129,6 +13135,9 @@ export namespace muster {
             /** Intent setScopes */
             setScopes?: (muster.app.ISetScopes|null);
 
+            /** Intent setMemberPresence */
+            setMemberPresence?: (muster.v1.INetworkPresenceRequest|null);
+
             /** Intent renameDevice */
             renameDevice?: (muster.v1.INetworkRenameRequest|null);
 
@@ -13361,6 +13370,9 @@ export namespace muster {
             /** Intent setScopes. */
             public setScopes?: (muster.app.ISetScopes|null);
 
+            /** Intent setMemberPresence. */
+            public setMemberPresence?: (muster.v1.INetworkPresenceRequest|null);
+
             /** Intent renameDevice. */
             public renameDevice?: (muster.v1.INetworkRenameRequest|null);
 
@@ -13557,7 +13569,7 @@ export namespace muster {
             public agentLoadWork?: (muster.app.IAgentLoadWork|null);
 
             /** Intent it. */
-            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
+            public it?: ("refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setMemberPresence"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork");
 
             /**
              * Creates a new Intent instance using the specified properties.
@@ -14678,6 +14690,9 @@ export namespace muster {
         /** Properties of a SetScopes. */
         interface ISetScopes {
 
+            /** SetScopes clearSavedPortRules */
+            clearSavedPortRules?: (boolean|null);
+
             /** SetScopes deviceId */
             deviceId?: (string|null);
 
@@ -14696,6 +14711,9 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.app.ISetScopes);
+
+            /** SetScopes clearSavedPortRules. */
+            public clearSavedPortRules: boolean;
 
             /** SetScopes deviceId. */
             public deviceId: string;
@@ -18833,6 +18851,9 @@ export namespace muster {
         /** Properties of a DeviceActions. */
         interface IDeviceActions {
 
+            /** DeviceActions presenceEnrolled */
+            presenceEnrolled?: (boolean|null);
+
             /** DeviceActions canCover */
             canCover?: (boolean|null);
 
@@ -18875,6 +18896,9 @@ export namespace muster {
              * @param [properties] Properties to set
              */
             constructor(properties?: muster.app.IDeviceActions);
+
+            /** DeviceActions presenceEnrolled. */
+            public presenceEnrolled?: (boolean|null);
 
             /** DeviceActions canCover. */
             public canCover: boolean;
@@ -19102,6 +19126,9 @@ export namespace muster {
 
             /** AccessView networkAdvanced */
             networkAdvanced?: (boolean|null);
+
+            /** AccessView hasSavedPortRules */
+            hasSavedPortRules?: (boolean|null);
         }
 
         /** Represents an AccessView. */
@@ -19118,6 +19145,9 @@ export namespace muster {
 
             /** AccessView networkAdvanced. */
             public networkAdvanced: boolean;
+
+            /** AccessView hasSavedPortRules. */
+            public hasSavedPortRules: boolean;
 
             /**
              * Creates a new AccessView instance using the specified properties.

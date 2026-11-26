@@ -227,19 +227,49 @@ export struct MemberRow {
 @ComponentV2
 export struct AccessEditor {
   @Param @Require access: pb.app.IAccessView;
-  @Param @Require onSave: (scopes: string[]) => void;
+  @Param memberRole: string = '';
+  @Param @Require onSave: (scopes: string[], role: string, clearSavedPorts: boolean) => void;
+  @Local role: string = '';
+  private originalRole: string = '';
+  private originalScopes: string[] = [];
+  private originalAdvanced: boolean = false;
+  private originallyHadSavedPorts: boolean = false;
+  @Local clearSavedPorts: boolean = false;
+  @Local protocol: string = 'tcp';
+  @Local customScopes: string[] = [];
+  @Local chatProvider: string = '';
+  @Local agentProvider: string = '';
   @Local selected: string[] = [];
-  @Local addedPorts: string[] = [];
   @Local newPort: string = "";
 
   aboutToAppear(): void {
-    this.selected = offeredItems(this.access)
+    this.originalRole = this.memberRole;
+    this.role = this.originalRole;
+    this.originalAdvanced = this.access.networkAdvanced === true;
+    this.originallyHadSavedPorts = this.access.hasSavedPortRules === true;
+    this.originalScopes = offeredItems(this.access)
       .filter((item): boolean => item.granted === true)
       .map((item): string => item.scope ?? '');
+    this.selected = this.originalScopes.slice();
+  }
+
+  private accessChanged(): boolean {
+    if ((this.access.hasSavedPortRules === true) !== this.originallyHadSavedPorts) return true;
+    if (this.memberRole !== this.originalRole || (this.access.networkAdvanced === true) !== this.originalAdvanced) return true;
+    const current = offeredItems(this.access).filter((item): boolean => item.granted === true);
+    return current.length !== this.originalScopes.length ||
+      current.some((item): boolean => this.originalScopes.indexOf(item.scope ?? '') < 0);
   }
 
   private isOn(scope: string): boolean {
     return this.selected.indexOf(scope) >= 0;
+  }
+
+  private addScope(scope: string): void {
+    if (!offeredItems(this.access).some((item): boolean => item.scope === scope) && this.customScopes.indexOf(scope) < 0) {
+      this.customScopes = this.customScopes.concat([scope]);
+    }
+    if (!this.isOn(scope)) this.selected = this.selected.concat([scope]);
   }
 
   private toggleOf(section: pb.app.IAccessSection): pb.app.IAccessItem {
@@ -249,6 +279,15 @@ export struct AccessEditor {
   build() {
     Scroll() {
       Column() {
+        if (this.memberRole !== '') {
+          Row() {
+            Text('Network role').layoutWeight(1)
+            Select([{ value: 'Member' }, { value: 'Administrator' }])
+              .value(this.role === 'admin' ? 'Administrator' : 'Member')
+              .selected(this.role === 'admin' ? 1 : 0)
+              .onSelect((index: number): void => { this.role = index === 1 ? 'admin' : 'member'; })
+          }.width('100%').padding({ bottom: 12 })
+        }
         ForEach(this.access.sections ?? [], (section: pb.app.IAccessSection): void => {
           Column() {
             if (section.toggle) {
@@ -260,25 +299,44 @@ export struct AccessEditor {
               this.item(item, item.requiresToggle !== true || this.isOn(this.toggleOf(section).scope ?? ''),
                 item.requiresToggle === true, false)
             }, (item: pb.app.IAccessItem): string => item.scope ?? '')
+            if (section.id === 'network' && this.memberRole !== '' &&
+              this.access.networkAdvanced !== true && this.access.hasSavedPortRules) {
+              Row() {
+                Text('Clear saved port rules').layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.clearSavedPorts })
+                  .onChange((on: boolean): void => { this.clearSavedPorts = on; })
+              }.width('100%').padding({ top: 8, bottom: 8 })
+            }
             if (section.id === 'network' && this.access.networkAdvanced === true) {
-              ForEach(this.addedPorts, (scope: string): void => {
-                this.item(pb.app.AccessItem.create({ scope: scope, label: scope }), true, false, false)
-              }, (scope: string): string => scope)
+              this.customItems('net:', true)
               Row({ space: 8 }) {
-                MusterTextInput({ text: this.newPort, placeholder: 'tcp/443', monospace: true,
+                Select([{ value: 'TCP' }, { value: 'UDP' }, { value: 'TCP & UDP' }])
+                  .selected(this.protocol === 'tcp' ? 0 : this.protocol === 'udp' ? 1 : 2)
+                  .onSelect((index: number): void => { this.protocol = ['tcp', 'udp', '*'][index]; })
+                MusterTextInput({ text: this.newPort, placeholder: 'Port or *', monospace: true,
                   onChange: (value: string): void => { this.newPort = value; } }).layoutWeight(1)
-                Button('Add port').onClick((): void => {
-                  const port = this.newPort.trim();
-                  if (port === '') return;
-                  const scope = 'net:' + port;
-                  if (this.addedPorts.indexOf(scope) < 0 &&
-                    !offeredItems(this.access).some((item): boolean => item.scope === scope)) {
-                    this.addedPorts = this.addedPorts.concat([scope]);
-                  }
-                  if (!this.isOn(scope)) this.selected = this.selected.concat([scope]);
+                Button('Add').enabled(this.newPort.trim() !== '').onClick((): void => {
+                  this.addScope('net:' + this.protocol + '/' + this.newPort.trim());
                   this.newPort = '';
                 })
               }
+            }
+            if (section.id === 'chats' || section.id === 'agents') {
+              this.customItems(section.id + ':', this.isOn(this.toggleOf(section).scope ?? ''))
+              Row({ space: 8 }) {
+                MusterTextInput({ text: section.id === 'chats' ? this.chatProvider : this.agentProvider,
+                  placeholder: 'Provider ID', onChange: (value: string): void => {
+                    if (section.id === 'chats') this.chatProvider = value;
+                    else this.agentProvider = value;
+                  } }).layoutWeight(1)
+                Button('Add').enabled((section.id === 'chats' ? this.chatProvider : this.agentProvider).trim() !== '')
+                  .onClick((): void => {
+                    const provider = (section.id === 'chats' ? this.chatProvider : this.agentProvider).trim();
+                    this.addScope(section.id + ':' + provider);
+                    if (section.id === 'chats') this.chatProvider = '';
+                    else this.agentProvider = '';
+                  })
+              }.enabled(this.isOn(this.toggleOf(section).scope ?? ''))
             }
             if (section.footer) {
               Text(section.footer).fontSize(12).opacity(0.7).padding({ top: 4 })
@@ -286,16 +344,27 @@ export struct AccessEditor {
           }
           .alignItems(HorizontalAlign.Start).width('100%').padding({ bottom: 12 })
         }, (section: pb.app.IAccessSection): string => section.id ?? '')
-        Button('Save').width('100%').margin({ top: 12 })
+        if (this.accessChanged()) {
+          Text('Permissions changed. Reopen this editor to review the current settings.').fontSize(13)
+        }
+        Button('Save').width('100%').margin({ top: 12 }).enabled(!this.accessChanged())
           .onClick((): void => {
             this.onSave(offeredItems(this.access).map((item): string => item.scope ?? '')
-              .concat(this.addedPorts).filter((scope): boolean => this.isOn(scope)));
+              .concat(this.customScopes).filter((scope): boolean => this.isOn(scope)),
+              this.role === this.originalRole ? '' : this.role, this.clearSavedPorts);
           })
       }
       .padding(16)
     }
     // Without a bounded height the sheet clips the list and Save is unreachable.
     .width('100%').height('100%').align(Alignment.Top).edgeEffect(EdgeEffect.Spring)
+  }
+
+  @Builder
+  customItems(prefix: string, enabled: boolean) {
+    ForEach(this.customScopes.filter((scope: string): boolean => scope.startsWith(prefix)), (scope: string): void => {
+      this.item(pb.app.AccessItem.create({ scope: scope, label: scope }), enabled, false, false)
+    }, (scope: string): string => scope)
   }
 
   @Builder
@@ -390,6 +459,8 @@ export struct DeviceView {
   @Param @Require core: MusterCore;
   @Param @Require vm: ViewModel;
   @Local editing: boolean = false;
+  @Local editingDevice: string = '';
+  @Local grantLockedControl: boolean = false;
   @Local ssh: boolean = false;
 
   private member(): pb.v1.IMemberView | undefined {
@@ -436,7 +507,32 @@ export struct DeviceView {
             }, (section: pb.app.IAccessSection): string => section.id ?? '')
           }
           if (this.actions().canEditAccess) {
-            ListItem() { this.action('Change access…', (): void => { this.editing = true; }) }
+            ListItem() { this.action('Change access…', (): void => {
+              this.editingDevice = this.vm.selectedDevice ?? '';
+              this.editing = true;
+            }) }
+          }
+          if (this.actions().presenceEnrolled != null) {
+            ListItem() { SectionHeader('Presence key') }
+            ListItem() { this.row('Enrollment', this.actions().presenceEnrolled ? 'Enrolled' : 'Not enrolled') }
+            ListItem() {
+              Row() {
+                Text('Also grant control while locked').layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.grantLockedControl })
+                  .onChange((value: boolean): void => { this.grantLockedControl = value; })
+              }.width('100%').padding(16)
+            }
+            ListItem() {
+              this.action(this.actions().presenceEnrolled ? 'Update enrollment' : 'Enroll key', (): void => {
+                this.core.setMemberPresence(this.vm.selectedDevice ?? '', false, this.grantLockedControl);
+                this.grantLockedControl = false;
+              })
+            }
+            if (this.actions().presenceEnrolled) {
+              ListItem() { this.action('Revoke enrollment', (): void => {
+                this.core.setMemberPresence(this.vm.selectedDevice ?? '', true, false);
+              }) }
+            }
           }
           if (this.actions().canRemove) {
             ListItem() {
@@ -482,10 +578,13 @@ export struct DeviceView {
 
   @Builder
   scopeSheet() {
-    AccessEditor({ access: this.vm.deviceAccess ?? pb.app.AccessView.create(), onSave: (scopes: string[]): void => {
-      this.core.setScopes(this.member()?.deviceId ?? '', scopes, this.member()?.role ?? 'member');
-      this.editing = false;
-    } })
+    AccessEditor({ access: this.vm.deviceAccess ?? pb.app.AccessView.create(), memberRole: this.member()?.role ?? '',
+      onSave: (scopes: string[], role: string, clearSavedPorts: boolean): void => {
+        if (this.editingDevice === this.vm.selectedDevice && this.actions().canEditAccess) {
+          this.core.setScopes(this.editingDevice, scopes, role, clearSavedPorts);
+        }
+        this.editing = false;
+      } })
   }
 
   @Builder
@@ -505,191 +604,177 @@ const layoutOptions: LayoutOption[] = [
   new LayoutOption('Side by side', FlexPreference.Side), new LayoutOption('Single pane', FlexPreference.Disabled),
 ];
 
+export enum SettingsGroup {
+  Index = 'Settings',
+  Permissions = 'Permissions',
+  General = 'Layout and keyboard',
+  Network = 'Network',
+  Device = 'This device'
+}
+
 @ComponentV2
 export struct SettingsView {
   @Param @Require core: MusterCore;
   @Param @Require vm: ViewModel;
   @Param @Require model: MusterModel;
-  @Local offerAgent: boolean = false;
-  @Local offerTerminal: boolean = false;
-  @Local lockedControl: boolean = false;
-  @Local ports: string[] = [];
-  @Local newPort: string = '';
+  @Param @Require group: SettingsGroup;
+  @Event select: (group: SettingsGroup) => void = (): void => {};
   @Local deciding: pb.v1.IPendingJoin | null = null;
   @Local picking: boolean = false;
 
-  aboutToAppear(): void {
-    this.offerAgent = this.vm.policy?.offerAgent ?? false;
-    this.offerTerminal = this.vm.policy?.offerTerminal ?? false;
-    this.lockedControl = this.vm.policy?.allowLockedControl ?? false;
-    this.ports = (this.vm.policy?.openPorts ?? []).slice();
-  }
-
   build() {
-    List() {
-      ListItem() { SectionHeader('Network devices') }
-      if (this.vm.network?.accessMode) {
-        ListItem() {
-          Row() {
-            Text(this.vm.network?.accessMode === 'basic' ? 'Network access: Basic' : 'Network access: Advanced')
-            Blank()
-            if (this.vm.canInvite) {
-              Button(this.vm.network?.accessMode === 'basic' ? 'Use Advanced' : 'Use Basic')
-                .buttonStyle(ButtonStyleMode.TEXTUAL)
-                .onClick((): void => {
-                  this.core.setNetworkAccessMode(this.vm.network?.accessMode === 'basic' ? 'advanced' : 'basic');
-                })
-            }
-          }.width('100%').padding(16)
-        }
-      }
-      ForEach(this.vm.pending ?? [], (join: pb.v1.IPendingJoin): void => {
-        ListItem() { PendingJoinRow({ join: join, approve: (): void => { this.deciding = join; this.picking = true; },
-          reject: (): void => { this.core.decideJoin(join.deviceId ?? '', false, [], 'rejected'); } }) }
-      }, (join: pb.v1.IPendingJoin): string => join.deviceId ?? '')
-      ForEach(this.vm.network?.members ?? [], (member: pb.v1.IMemberView): void => {
-        ListItem() { MemberRow({ member: member }) }
-          .onClick((): void => { this.core.selectDevice(member.deviceId ?? ''); })
-        if (hasDeviceControls(this.vm, member.deviceId ?? '')) {
-          ListItem() { DeviceControlTiles({ core: this.core, vm: this.vm, deviceId: member.deviceId ?? '' }) }
-        }
-      }, (member: pb.v1.IMemberView): string => member.deviceId ?? '')
-      if (this.vm.canInvite) {
-        ListItem() {
-          Button('Invite device').buttonStyle(ButtonStyleMode.TEXTUAL).margin({ left: 8 })
-            .onClick((): void => { this.core.showInvite(); })
-        }
-      }
-      ListItem() {
-        Column({ space: 8 }) {
-          Text('Half-fold workspace').fontWeight(FontWeight.Medium)
-          Text('Top and bottom: read above a horizontal crease, type and respond below it. Side by side: the list beside the conversation or terminal across a vertical crease. Automatic follows how the phone is folded; while half-folded, a forced layout turns the screen to suit it.')
-            .fontSize(13).opacity(0.7)
-          Select(layoutOptions.map((option: LayoutOption): SelectOption => ({ value: option.label })))
-            .selected(Math.max(0, layoutOptions.findIndex((o: LayoutOption): boolean => o.value === this.model.display.preference)))
-            .value(layoutOptions.find((o: LayoutOption): boolean => o.value === this.model.display.preference)?.label ?? 'Automatic')
-            .onSelect((index: number): void => { this.model.display.select(layoutOptions[index].value); })
-          if (this.model.display.preference === FlexPreference.Always) {
-            Row() {
-              Column({ space: 2 }) {
-                Text('Flip 180°')
-                Text('Turns top and bottom upside down while half-folded, for a phone standing on its other edge.')
-                  .fontSize(13).opacity(0.7)
-              }
-              .alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.model.display.flipped })
-                .onChange((on: boolean): void => { this.model.display.flip(on); })
-            }
-            .width('100%')
-          }
-          if (this.model.display.preferenceError !== '') {
-            Text(this.model.display.preferenceError).fontSize(13)
-          }
-        }
-        .alignItems(HorizontalAlign.Start).padding(16).width('100%')
-      }
-
-      ListItem() {
-        Row() {
-          Column({ space: 2 }) {
-            Text('Muster keyboard').fontWeight(FontWeight.Medium)
-            Text('Pinyin Chinese and English, numbers and symbols in every text field. Off uses the system keyboard.')
-              .fontSize(13).opacity(0.7)
-          }
-          .alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: !keyboardPrefs.systemKeyboard })
-            .onChange((on: boolean): void => { keyboardPrefs.useSystem(!on); })
-        }
-        .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
-      }
-      ListItem() {
-        Row() {
-          Column({ space: 2 }) {
-            Text('Muster keyboard in terminals').fontWeight(FontWeight.Medium)
-            Text('On, the default, types straight into the session and adds Esc, F-keys, Ctrl and Alt, which the system keyboard lacks.')
-              .fontSize(13).opacity(0.7)
-          }
-          .alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: !keyboardPrefs.terminalSystemKeyboard })
-            .onChange((on: boolean): void => { keyboardPrefs.useSystemInTerminal(!on); })
-        }
-        .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
-      }
-      if (this.vm.localDeviceHasServices) {
-        ListItem() { SectionHeader('Chrome extension') }
-        ListItem() {
-          Column({ space: 4 }) {
-            Button('Set up Agent Halo Browser').buttonStyle(ButtonStyleMode.TEXTUAL)
-              .onClick((): void => { this.core.openBrowser(this.vm.self?.deviceId ?? ''); })
-            Text('Install the extension, check its connection, and manage browser access.').fontSize(13).opacity(0.7)
-          }
-          .alignItems(HorizontalAlign.Start).width('100%').padding({ left: 8, right: 16 })
-        }
-        ListItem() { SectionHeader('What this device offers') }
-        ListItem() { this.toggle('Agent sessions', this.offerAgent, (v: boolean): void => { this.offerAgent = v; }) }
-        ListItem() { this.toggle('Terminals', this.offerTerminal, (v: boolean): void => { this.offerTerminal = v; }) }
-        ListItem() { this.toggle('Control while the screen is locked', this.lockedControl, (v: boolean): void => { this.lockedControl = v; }) }
-      }
-      ListItem() { Text('Open ports').fontSize(13).opacity(0.7).padding({ left: 16, top: 12, bottom: 4 }) }
-      ForEach(this.ports, (port: string): void => {
-        ListItem() {
-          Row() {
-            Text(port).fontFamily('monospace')
-            Blank()
-            Button('Remove').buttonStyle(ButtonStyleMode.TEXTUAL).onClick((): void => { this.ports = this.ports.filter((p): boolean => p !== port); })
-          }
-          .width('100%').padding({ left: 16, right: 8 })
-        }
-      }, (port: string): string => port)
-      ListItem() {
-        Row({ space: 8 }) {
-          MusterTextInput({ text: this.newPort, placeholder: 'tcp/22', monospace: true,
-            onChange: (v: string): void => { this.newPort = v; } }).layoutWeight(1)
-          Button('Add').onClick((): void => {
-            const p = this.newPort.trim();
-            if (p !== '' && this.ports.indexOf(p) < 0) this.ports = this.ports.concat([p]);
-            this.newPort = '';
-          })
-        }
-        .width('100%').padding({ left: 16, right: 16 })
-      }
-      ListItem() {
-        Button('Save policy').margin(16).onClick((): void => {
-          this.core.setPolicy({
-            openPorts: this.ports, allowLockedControl: this.lockedControl, offerAgent: this.offerAgent,
-            offerTerminal: this.offerTerminal, axAllowlist: this.vm.policy?.axAllowlist ?? [],
-          });
-        })
-      }
-      ListItem() { Text('Relay').fontSize(13).opacity(0.7).padding({ left: 16, top: 12, bottom: 4 }) }
-      ListItem() { RelayEditor({ core: this.core, vm: this.vm }) }
-      ListItem() { Text('This device').fontSize(13).opacity(0.7).padding({ left: 16, top: 12, bottom: 4 }) }
-      ListItem() {
-        Column({ space: 4 }) {
-          Text(this.vm.self?.name ?? '')
-          Text(this.vm.self?.fingerprint ?? '').fontFamily('monospace').fontSize(12).opacity(0.7)
-          Text(`Key: ${this.vm.self?.keyLabel ?? ''}`).fontSize(13).opacity(0.7)
-          Text(`Presence key: ${this.model.keys.presencePublicKey() !== null ? 'HUKS, local authentication' : 'none (set a lock-screen password)'}`)
-            .fontSize(13).opacity(0.7)
-          Text(`Version: ${this.vm.self?.version || 'not reported'}`).fontSize(13).opacity(0.7)
-          Text(`Commit: ${this.vm.self?.commit || 'not reported'}`).fontSize(13).fontFamily('monospace').opacity(0.7)
-            .copyOption(CopyOptions.LocalDevice)
-        }
-        .alignItems(HorizontalAlign.Start).width('100%').padding(16)
-      }
-      if (this.core.sshPublicKeyLine() !== null) {
-        ListItem() {
-          Column({ space: 4 }) {
-            Text('SSH public key').fontSize(13)
-            Text(this.core.sshPublicKeyLine() ?? '').fontFamily('monospace').fontSize(10).maxLines(3).copyOption(CopyOptions.LocalDevice)
-            Button('Copy').buttonStyle(ButtonStyleMode.TEXTUAL).onClick((): void => { copyText(this.core.sshPublicKeyLine() ?? ''); })
-          }
-          .alignItems(HorizontalAlign.Start).width('100%').padding(16)
-        }
+    List({ space: 4 }) {
+      if (this.group === SettingsGroup.Index) {
+        ListItem() { this.groupRow(SettingsGroup.Permissions) }
+        ListItem() { this.groupRow(SettingsGroup.General) }
+        ListItem() { this.groupRow(SettingsGroup.Network) }
+        ListItem() { this.groupRow(SettingsGroup.Device) }
+      } else if (this.group === SettingsGroup.Permissions) {
+        this.permissions()
+      } else if (this.group === SettingsGroup.General) {
+        this.preferences()
+      } else if (this.group === SettingsGroup.Network) {
+        ListItem() { SectionHeader('Relay') }
+        ListItem() { RelayEditor({ core: this.core, vm: this.vm }) }
+      } else if (this.group === SettingsGroup.Device) {
+        this.identity()
       }
     }
     .width('100%').height('100%')
     .bindSheet($$this.picking, this.scopeSheet(), { height: 560, title: { title: `Approve ${this.deciding?.name ?? ''}` } })
+  }
+
+  @Builder
+  groupRow(group: SettingsGroup) {
+    Row({ space: 8 }) {
+      Text(group).fontSize(17).layoutWeight(1)
+      SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('sys.color.font_secondary')])
+    }
+    .width('100%').padding(16).borderRadius(12)
+    .backgroundColor($r('sys.color.comp_background_secondary')).onClick((): void => { this.select(group); })
+  }
+
+  @Builder
+  permissions() {
+    if (this.vm.network?.accessMode) {
+      ListItem() {
+        Row() {
+          Text('Network access mode')
+          Blank()
+          if (this.vm.canInvite) {
+            Select([{ value: 'Basic' }, { value: 'Advanced' }])
+              .selected(this.vm.network?.accessMode === 'basic' ? 0 : 1)
+              .onSelect((index: number): void => { this.core.setNetworkAccessMode(index === 0 ? 'basic' : 'advanced'); })
+          } else {
+            Text(this.vm.network?.accessMode ?? '')
+          }
+        }.width('100%').padding(16)
+      }
+    }
+    ListItem() { SectionHeader('Member permissions') }
+    ForEach(this.vm.pending ?? [], (join: pb.v1.IPendingJoin): void => {
+      ListItem() { PendingJoinRow({ join: join, approve: (): void => { this.deciding = join; this.picking = true; },
+        reject: (): void => { this.core.decideJoin(join.deviceId ?? '', false, [], 'rejected'); } }) }
+    }, (join: pb.v1.IPendingJoin): string => join.deviceId ?? '')
+    ForEach(this.vm.network?.members ?? [], (member: pb.v1.IMemberView): void => {
+      ListItem() { MemberRow({ member: member }) }
+        .onClick((): void => { this.core.selectDevice(member.deviceId ?? ''); })
+      if (hasDeviceControls(this.vm, member.deviceId ?? '')) {
+        ListItem() { DeviceControlTiles({ core: this.core, vm: this.vm, deviceId: member.deviceId ?? '' }) }
+      }
+    }, (member: pb.v1.IMemberView): string => member.deviceId ?? '')
+    if (this.vm.canInvite) {
+      ListItem() {
+        Button('Invite device').buttonStyle(ButtonStyleMode.TEXTUAL).margin({ left: 8 })
+          .onClick((): void => { this.core.showInvite(); })
+      }
+    }
+  }
+
+  @Builder
+  preferences() {
+    ListItem() {
+      Column({ space: 8 }) {
+        Text('Half-fold workspace').fontWeight(FontWeight.Medium)
+        Text('Top and bottom: read above a horizontal crease, type and respond below it. Side by side: the list beside the conversation or terminal across a vertical crease. Automatic follows how the phone is folded; while half-folded, a forced layout turns the screen to suit it.')
+          .fontSize(13).opacity(0.7)
+        Select(layoutOptions.map((option: LayoutOption): SelectOption => ({ value: option.label })))
+          .selected(Math.max(0, layoutOptions.findIndex((o: LayoutOption): boolean => o.value === this.model.display.preference)))
+          .value(layoutOptions.find((o: LayoutOption): boolean => o.value === this.model.display.preference)?.label ?? 'Automatic')
+          .onSelect((index: number): void => { this.model.display.select(layoutOptions[index].value); })
+        if (this.model.display.preference === FlexPreference.Always) {
+          Row() {
+            Column({ space: 2 }) {
+              Text('Flip 180°')
+              Text('Turns top and bottom upside down while half-folded, for a phone standing on its other edge.')
+                .fontSize(13).opacity(0.7)
+            }
+            .alignItems(HorizontalAlign.Start).layoutWeight(1)
+            Toggle({ type: ToggleType.Switch, isOn: this.model.display.flipped })
+              .onChange((on: boolean): void => { this.model.display.flip(on); })
+          }
+          .width('100%')
+        }
+        if (this.model.display.preferenceError !== '') {
+          Text(this.model.display.preferenceError).fontSize(13)
+        }
+      }
+      .alignItems(HorizontalAlign.Start).padding(16).width('100%')
+    }
+
+    ListItem() {
+      Row() {
+        Column({ space: 2 }) {
+          Text('Muster keyboard').fontWeight(FontWeight.Medium)
+          Text('Pinyin Chinese and English, numbers and symbols in every text field. Off uses the system keyboard.')
+            .fontSize(13).opacity(0.7)
+        }
+        .alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: !keyboardPrefs.systemKeyboard })
+          .onChange((on: boolean): void => { keyboardPrefs.useSystem(!on); })
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }
+    ListItem() {
+      Row() {
+        Column({ space: 2 }) {
+          Text('Muster keyboard in terminals').fontWeight(FontWeight.Medium)
+          Text('On, the default, types straight into the session and adds Esc, F-keys, Ctrl and Alt, which the system keyboard lacks.')
+            .fontSize(13).opacity(0.7)
+        }
+        .alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: !keyboardPrefs.terminalSystemKeyboard })
+          .onChange((on: boolean): void => { keyboardPrefs.useSystemInTerminal(!on); })
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }
+  }
+
+  @Builder
+  identity() {
+    ListItem() {
+      Column({ space: 4 }) {
+        Text(this.vm.self?.name ?? '')
+        Text(this.vm.self?.fingerprint ?? '').fontFamily('monospace').fontSize(12).opacity(0.7)
+        Text(`Key: ${this.vm.self?.keyLabel ?? ''}`).fontSize(13).opacity(0.7)
+        Text(`Presence key: ${this.model.keys.presencePublicKey() !== null ? 'HUKS, local authentication' : 'none (set a lock-screen password)'}`)
+          .fontSize(13).opacity(0.7)
+        Text(`Version: ${this.vm.self?.version || 'not reported'}`).fontSize(13).opacity(0.7)
+        Text(`Commit: ${this.vm.self?.commit || 'not reported'}`).fontSize(13).fontFamily('monospace').opacity(0.7)
+          .copyOption(CopyOptions.LocalDevice)
+      }
+      .alignItems(HorizontalAlign.Start).width('100%').padding(16)
+    }
+    if (this.core.sshPublicKeyLine() !== null) {
+      ListItem() {
+        Column({ space: 4 }) {
+          Text('SSH public key').fontSize(13)
+          Text(this.core.sshPublicKeyLine() ?? '').fontFamily('monospace').fontSize(10).maxLines(3).copyOption(CopyOptions.LocalDevice)
+          Button('Copy').buttonStyle(ButtonStyleMode.TEXTUAL).onClick((): void => { copyText(this.core.sshPublicKeyLine() ?? ''); })
+        }
+        .alignItems(HorizontalAlign.Start).width('100%').padding(16)
+      }
+    }
   }
 
   @Builder
@@ -698,15 +783,6 @@ export struct SettingsView {
       this.core.decideJoin(this.deciding?.deviceId ?? '', true, scopes);
       this.picking = false;
     } })
-  }
-
-  @Builder
-  toggle(label: string, on: boolean, change: (v: boolean) => void) {
-    Row() {
-      Text(label).layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: on }).onChange((v: boolean): void => { change(v); })
-    }
-    .width('100%').padding({ left: 16, right: 16, top: 6, bottom: 6 })
   }
 }
 

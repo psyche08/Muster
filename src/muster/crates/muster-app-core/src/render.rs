@@ -1153,7 +1153,8 @@ mod tests {
         assert!(mac.can_edit_access && mac.can_remove);
         phone.selected = "phone".into();
         let own = view_model(&phone).device_actions.unwrap();
-        assert!(!own.can_cover && !own.can_ssh && !own.can_edit_access && !own.can_remove);
+        assert!(own.can_edit_access);
+        assert!(!own.can_cover && !own.can_ssh && !own.can_remove);
         assert!(own.show_access, "an admin's own page summarises access");
 
         let mut desktop = State::new(false, Some("mac".into()));
@@ -1472,7 +1473,8 @@ pub(crate) fn device_actions(state: &State) -> app::DeviceActions {
         can_cover: other && member.kind == "desktop",
         can_ssh: other && state.embedded,
         show_access: !member.scopes.is_empty() || admin,
-        can_edit_access: admin && other,
+        can_edit_access: admin,
+        presence_enrolled: member.presence_enrolled.filter(|_| admin),
         can_remove: admin && other,
         can_rename: admin,
     }

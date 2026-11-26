@@ -162,8 +162,8 @@ export class MusterCore {
     this.send({ decideJoin: { deviceId: device, approve: approve, scopes: scopes, reason: reason } });
   }
   removeDevice(device: string): void { this.send({ removeDevice: { deviceId: device } }); }
-  setScopes(device: string, scopes: string[], role: string): void {
-    this.send({ setScopes: { deviceId: device, scopes: scopes, role: role } });
+  setScopes(device: string, scopes: string[], role: string, clearSavedPortRules: boolean): void {
+    this.send({ setScopes: { deviceId: device, scopes: scopes, role: role, clearSavedPortRules: clearSavedPortRules } });
   }
   setRelay(relay: string): void { this.send({ setRelay: { relay: relay } }); }
   /** Covers (or uncovers) a desktop's screen; device "" for this one. The core checks who may. */
@@ -171,7 +171,9 @@ export class MusterCore {
   setBlackout(on: boolean, device: string): void { this.send({ setBlackout: { on: on, deviceId: device } }); }
   setCover(on: boolean, device: string = ''): void { this.send({ setCover: { on: on, deviceId: device } }); }
   setNetworkAccessMode(mode: string): void { this.send({ setNetworkAccessMode: { mode: mode } }); }
-  setPolicy(policy: pb.v1.IPolicy): void { this.send({ setPolicy: { policy: policy } }); }
+  setMemberPresence(device: string, revoke: boolean, grantLockedControl: boolean): void {
+    this.send({ setMemberPresence: { deviceId: device, revoke: revoke, grantLockedControl: grantLockedControl } });
+  }
   selectDevice(device: string): void { this.send({ selectDevice: { deviceId: device } }); }
   /** device "*" for every device, "" for the current target. */
   openAgents(device: string = ''): void { this.send({ openAgents: { deviceId: device } }); }
