@@ -1,5 +1,6 @@
 [package]
 name = "musterd"
+default-run = "musterd"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -66,6 +67,7 @@ rustls-platform-verifier = "0.7.1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
+windows-sys = { version = "0.61", features = ["Win32_System_Pipes", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_StationsAndDesktops", "Win32_UI_WindowsAndMessaging", "Win32_Security"] }
 
 [dev-dependencies]
 futures-util.workspace = true

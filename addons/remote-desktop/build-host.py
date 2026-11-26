@@ -76,7 +76,7 @@ def checkout(cache, url, revision, nested):
     return dest
 
 
-def host_sources(cache, modules=MODULES):
+def host_sources(cache, modules=MODULES, *, windows_user_input=False):
     # Separate source revisions keep stale build objects and removed files out
     # of later builds. Include local edits so the normal dev build tests them.
     if (ROOT.parents[1] / ".git").exists():
@@ -91,6 +91,8 @@ def host_sources(cache, modules=MODULES):
         h.update(bytes.fromhex(digest(p)))
     pins = (ROOT / "sunshine-submodules.txt").read_bytes()
     h.update(pins)
+    if windows_user_input:
+        h.update(b"windows-user-input-v1")
     if modules != MODULES:
         h.update(" ".join(modules).encode())
     src = cache / ("sunshine-" + h.hexdigest()[:20])
@@ -111,10 +113,20 @@ def host_sources(cache, modules=MODULES):
                 shutil.copy2(path, target)
             for name, dep in deps.items():
                 target = tree / "third-party" / name
-                if os.name == "nt":
+                if os.name == "nt" or (windows_user_input and name == "libvirtualhid"):
                     shutil.copytree(dep, target, ignore=shutil.ignore_patterns(".git"))
                 else:
                     target.symlink_to(dep, target_is_directory=True)
+                if windows_user_input and name == "libvirtualhid":
+                    # The packaged backend never opens the privileged HID broker.
+                    backend = target / "src/platform/windows/windows_backend.cpp"
+                    backend.write_bytes(backend.read_bytes().replace(b"\r\n", b"\n"))
+                    run("git", "apply", str((tree / "muster-windows-user-input.patch").resolve()),
+                        cwd=target, env=dict(os.environ, GIT_CEILING_DIRECTORIES=str(target.parent.resolve())))
+                    if digest(backend) != "8d82350ddaf9df44a83ff2abb30f7cff6f544034941b32d28de1b5231de51f90":
+                        raise ValueError("Windows user-mode input backend was not prepared")
+                    shutil.copy2(tree / "src/platform/windows/muster_ordinary_desktop.h",
+                                 target / "src/include/libvirtualhid")
             tree.rename(src)
     return src, deps
 

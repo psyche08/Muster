@@ -45,6 +45,13 @@ impl EnginePorts {
             media_base: base,
         })
     }
+    #[cfg(windows)]
+    pub fn muster_host_tcp_base(base: u16) -> Result<Self, Error> {
+        Ok(Self {
+            tcp_base: Self::from_local_base(base)?.base(),
+            ..Self::MUSTER
+        })
+    }
     fn rtsp_addr(self) -> SocketAddrV4 {
         SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.tcp_base + RTSP_OFFSET as u16)
     }

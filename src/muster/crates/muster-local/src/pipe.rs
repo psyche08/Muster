@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::os::windows::{
     ffi::OsStrExt,
-    io::{AsRawHandle, FromRawHandle, OwnedHandle},
+    io::{AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle},
 };
 use std::{ffi::c_void, io, path::Path, ptr::null_mut};
 use tokio::net::windows::named_pipe::{
@@ -39,9 +39,13 @@ fn sid_string(sid: PSID) -> io::Result<String> {
 }
 
 fn current_sid() -> io::Result<String> {
+    process_user_sid(unsafe { BorrowedHandle::borrow_raw(GetCurrentProcess()) })
+}
+
+pub fn process_user_sid(process: BorrowedHandle<'_>) -> io::Result<String> {
     unsafe {
         let mut token = null_mut();
-        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+        if OpenProcessToken(process.as_raw_handle(), TOKEN_QUERY, &mut token) == 0 {
             return Err(io::Error::last_os_error());
         }
         let token = OwnedHandle::from_raw_handle(token);
@@ -63,6 +67,37 @@ fn current_sid() -> io::Result<String> {
             return Err(io::Error::last_os_error());
         }
         sid_string((*info).User.Sid)
+    }
+}
+
+/// Resolve the fully qualified console account reported by WTS to a user SID.
+pub fn account_user_sid(account: &str) -> io::Result<String> {
+    let name: Vec<_> = account.encode_utf16().chain(Some(0)).collect();
+    let mut sid = [0u32; SECURITY_MAX_SID_SIZE as usize / 4];
+    let mut domain = [0u16; 256];
+    let mut sid_bytes = size_of_val(&sid) as u32;
+    let mut domain_units = domain.len() as u32;
+    let mut kind = 0;
+    unsafe {
+        if LookupAccountNameW(
+            std::ptr::null(),
+            name.as_ptr(),
+            sid.as_mut_ptr().cast(),
+            &mut sid_bytes,
+            domain.as_mut_ptr(),
+            &mut domain_units,
+            &mut kind,
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        if kind != SidTypeUser {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "expected a user account",
+            ));
+        }
+        sid_string(sid.as_ptr().cast_mut().cast())
     }
 }
 

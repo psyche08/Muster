@@ -26,6 +26,8 @@ pub mod vision;
 pub mod web;
 
 mod desktop_session;
+#[cfg(windows)]
+pub use desktop_session::console_worker::run_console_worker;
 mod diagnostics;
 mod idle_compact;
 mod inspection;

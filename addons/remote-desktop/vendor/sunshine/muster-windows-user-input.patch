@@ -1,0 +1,47 @@
+--- a/src/platform/windows/windows_backend.cpp
++++ b/src/platform/windows/windows_backend.cpp
+@@ -77,6 +77,7 @@
+ // clang-format off
+ #include <Windows.h>
+ #include <SetupAPI.h>
++#include <libvirtualhid/muster_ordinary_desktop.h>
+ // clang-format on
+
+ namespace lvh::detail {
+@@ -107,6 +108,10 @@
+     };
+
+     UINT send_input_with_win32(std::span<INPUT> inputs) {
++      if (!muster_console::ordinary()) {
++        ::SetLastError(ERROR_ACCESS_DENIED);
++        return 0;
++      }
+       return ::SendInput(
+         static_cast<UINT>(inputs.size()),
+         inputs.data(),
+@@ -120,14 +125,8 @@
+     }
+
+     HDESK sync_thread_desktop_with_win32() {
+-      const auto desktop = ::OpenInputDesktop(DF_ALLOWOTHERACCOUNTHOOK, FALSE, GENERIC_ALL);
+-      if (!desktop) {
+-        return nullptr;
+-      }
+-
+-      static_cast<void>(::SetThreadDesktop(desktop));
+-      ::CloseDesktop(desktop);
+-      return desktop;
++      // A failed injection must never switch the worker thread to another desktop.
++      return nullptr;
+     }
+
+     SyncThreadDesktopFunction &sync_thread_desktop_function() {
+@@ -2965,7 +2964,7 @@
+     class WindowsBackend final: public Backend {
+     public:
+       WindowsBackend():
+-          WindowsBackend(open_brokered_control_channels()) {}
++          WindowsBackend(WindowsControlChannels {}) {}
+
+       explicit WindowsBackend(WindowsControlChannels channels):
+           WindowsBackend(std::move(channels.command), std::move(channels.event)) {}

@@ -11,7 +11,17 @@ static std::string frame(unsigned char mode, const std::string &pem) {
   return data + pem;
 }
 
+#ifdef _WIN32
+#include "../vendor/sunshine/src/platform/windows/muster_ordinary_desktop.h"
+#endif
+
 int main() {
+#ifdef _WIN32
+  if (muster_console::named(nullptr, L"Default") ||
+      muster_console::named(GetProcessWindowStation(), L"MusterMissingStation")) {
+    return 1;
+  }
+#endif
   const std::string sample = "-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n";
   for (unsigned char mode : {0, 1, 2}) {
     std::istringstream pipe(frame(mode, sample) + "X");

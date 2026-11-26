@@ -16,7 +16,7 @@ def build(cache, output, msys):
     if not (ucrt / "g++.exe").is_file():
         raise ValueError("Install the upstream Sunshine UCRT64 build dependencies in MSYS2")
     modules = host["MODULES"] + ("nvapi", "ViGEmClient")
-    src, deps = host["host_sources"](cache, modules)
+    src, deps = host["host_sources"](cache, modules, windows_user_input=True)
     ffmpeg = host["download"](cache, "Windows-AMD64-ffmpeg.tar.gz",
         "https://github.com/LizardByte/build-deps/releases/download/" +
         host["FFMPEG_TAG"] + "/Windows-AMD64-ffmpeg.tar.gz",

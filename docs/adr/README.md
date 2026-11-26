@@ -438,3 +438,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0320](0320-focused-windows-remote-keyboard.md) | Proposed | Send keyboard input from the focused Windows Remote viewer |
 | [0322](0322-native-cli-provider-identities.md) | Accepted | Give native CLI sessions provider-specific identities |
 | [0323](0323-cli-session-worktree-trust-and-auto-mode.md) | Accepted, installed-device acceptance pending | Open a CLI session in a trusted worktree, with Claude in auto mode |
+| [0325](0325-ordinary-console-stream-worker.md) | Proposed | Lease the ordinary Windows physical desktop across daemon sessions |
