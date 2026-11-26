@@ -52,6 +52,18 @@ sibling daemon over a local pipe owned by the configured account.
 Closing the packet stream releases the adapter. Installations without the
 service retain the interactive UAC helper under Program Files.
 
+The automatic MusterStream service tracks the physical console. Task Scheduler
+starts the enrolled account's ordinary stream worker. The worker starts the
+private media engine only for an authorized viewer. The physical console must
+provide a supported display surface. A disconnected RDP session can continue
+hosting the device daemon and its desktop application integrations.
+
+Administrators upgrading an enrolled machine over SSH can run the trusted,
+package-pinned `Apply-Update.ps1 -MachineArchive <release.zip>` under x64
+Windows PowerShell. This installs the protected machine release and updates
+the two services. Activate the per-user shortcut and GUI in the original
+account after verifying the machine release.
+
 For background activation of an already enrolled full node, use
 `musterd.exe --resume-existing-device <64-hex-device-id>` under the enrolled
 user with an ordinary token. It shares the exclusive identity lock with

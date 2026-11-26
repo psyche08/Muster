@@ -1,7 +1,7 @@
 # macos specific target definitions
 
 if(MUSTER_MAC_CAPTURE)
-    set_target_properties(sunshine PROPERTIES OUTPUT_NAME "muster-desktop-host")
+    set_target_properties(sunshine PROPERTIES OUTPUT_NAME "muster-stream-host")
 elseif (SUNSHINE_BUILD_HOMEBREW)
     target_link_options(sunshine PRIVATE LINKER:-sectcreate,__TEXT,__info_plist,${APPLE_PLIST_FILE})
 else()

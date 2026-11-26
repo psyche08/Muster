@@ -13,7 +13,11 @@ installed outside `C:\msys64`. Install the UCRT64 compiler, Ninja, CMake,
 Boost, cppwinrt, curl-winssl, MinHook, miniupnpc, nlohmann-json, oneVPL,
 OpenSSL and Opus per the vendored Windows build workflow. The build
 packages the private host, shaders, runtime DLL and corresponding source
-archive alongside the viewer.
+archive alongside the viewer. On Windows, the root `muster-stream-host.exe`
+is the LocalService supervisor. The ordinary account's `muster-stream-worker.exe`
+launches the private `Sunshine/muster-stream-host.exe` engine for a live grant.
+The supervisor has no network listener. The macOS app embeds the media engine
+directly as `Contents/MacOS/muster-stream-host`.
 
 ## Downstream changes
 

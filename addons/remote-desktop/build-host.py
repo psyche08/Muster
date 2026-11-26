@@ -207,7 +207,7 @@ def build(cache, executable, sources, identity):
         "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(boost_source(cache, boost)),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + str(extract(json, cache, "json")))
     run("cmake", "--build", obj, "--target", "sunshine", "--parallel", jobs)
-    exe = obj / "muster-desktop-host"
+    exe = obj / "muster-stream-host"
     for line in output("otool", "-L", exe).splitlines()[1:]:
         library = line.strip().split(" (compatibility", 1)[0]
         if not library.startswith(("/usr/lib/", "/System/Library/")):
@@ -248,7 +248,7 @@ def build(cache, executable, sources, identity):
                     tar.add(path, "downloads/" + path.name)
             archive.replace(offer)
     contents = executable.parent.parent
-    if executable != contents / "MacOS/muster-desktop-host" or contents.name != "Contents":
+    if executable != contents / "MacOS/muster-stream-host" or contents.name != "Contents":
         raise ValueError("Expected a capture tool in the enclosing app's Contents/MacOS")
     executable.parent.mkdir(parents=True, exist_ok=True)
     sources.parent.mkdir(parents=True, exist_ok=True)

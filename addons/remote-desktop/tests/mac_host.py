@@ -122,7 +122,7 @@ if __name__ == "__main__":
     host = args.host.resolve(strict=True)
     if args.expect_bundle_id:
         app = host.parents[2]
-        assert host == app / "Contents/MacOS/muster-desktop-host"
+        assert host == app / "Contents/MacOS/muster-stream-host"
         assert not list(app.rglob("Sunshine.app"))
         assert subprocess.check_output([host, "--muster-bundle-id"], text=True).strip() == args.expect_bundle_id
         subprocess.run(["codesign", "--verify", "--strict", "--deep", app], check=True)

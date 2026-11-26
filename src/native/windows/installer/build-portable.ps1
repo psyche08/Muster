@@ -37,7 +37,7 @@ try {
     $bin = Split-Path $daemon[0].executable
     dotnet publish "$project\Muster.csproj" -c Release -r win-x64 "-p:Version=$Version" -o "$work\gui"
     Copy-Item -LiteralPath "$work\gui\Muster.exe" -Destination $stage
-    foreach ($file in 'muster-tun.exe','musterd.exe','muster-vnet.exe','muster_ffi.dll','muster-browser-host.exe') {
+    foreach ($file in 'muster-tun.exe','musterd.exe','muster-stream-worker.exe','muster-vnet.exe','muster_ffi.dll','muster-browser-host.exe') {
         Copy-Item -LiteralPath "$bin\$file" -Destination $stage
     }
     $cli = [IO.Directory]::CreateDirectory("$stage\cli")

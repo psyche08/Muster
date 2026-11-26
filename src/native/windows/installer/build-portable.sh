@@ -18,7 +18,7 @@ dotnet publish "$source_dir/Muster.csproj" -c Release -r win-x64 -p:Version="$ve
 mkdir -p "$stage/cli" "$stage/AgentHaloBrowser"
 cp "$stage/gui/Muster.exe" "$stage/Muster.exe"
 bin="$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release"
-for file in muster-tun.exe musterd.exe muster-vnet.exe muster_ffi.dll muster-browser-host.exe; do
+for file in muster-tun.exe musterd.exe muster-stream-worker.exe muster-vnet.exe muster_ffi.dll muster-browser-host.exe; do
   x86_64-w64-mingw32-strip -o "$stage/$file" "$bin/$file"
 done
 x86_64-w64-mingw32-strip -o "$stage/cli/muster.exe" "$bin/muster.exe"

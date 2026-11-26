@@ -20,9 +20,9 @@ use tokio::{
 };
 
 #[cfg(windows)]
-pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-desktop-host.exe";
+pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-stream-host.exe";
 #[cfg(target_os = "macos")]
-pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
+pub(super) const CAPTURE_HOST: &str = "muster-stream-host";
 
 /// Lock state of the signed-in physical console, or None when it cannot serve.
 fn console_lock_state(daemon: &Daemon) -> Option<bool> {
