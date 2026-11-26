@@ -1072,6 +1072,27 @@ public nonisolated struct Muster_V1_OrcaCreateRequest: Sendable {
   /// are refused because they subvert every binary the child starts.
   public var env: Dictionary<String,String> = [:]
 
+  /// Claude's permission mode: "" or "default" asks before every tool use;
+  /// "auto" lets Claude's classifier approve what it judges safe and still
+  /// asks for the rest. Modes that skip prompts (bypassPermissions, dontAsk)
+  /// and every mode for Codex are refused. Kept with the session.
+  public var permissionMode: String = String()
+
+  /// Run the session in a Git worktree of the repository holding `directory`,
+  /// at <main checkout>/.claude/worktrees/<worktree>, where Claude Code keeps
+  /// its own. An existing worktree of that repository is reused as it is; a
+  /// new one is added detached at the main checkout's HEAD, and
+  /// .claude/worktrees/ is added to the repository's info/exclude unless
+  /// already ignored. Muster never fetches. Names are 1-64 of [A-Za-z0-9._-].
+  public var worktree: String = String()
+
+  /// Claude only: record the session directory as trusted in Claude Code's
+  /// config (projects[dir].hasTrustDialogAccepted in
+  /// $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json), so the project's
+  /// own permission rules and settings apply. Written under Claude's own
+  /// config lock, leaving every other entry as it was.
+  public var trust: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -8189,7 +8210,7 @@ nonisolated extension Muster_V1_Request: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OrcaCreateRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{1}directory\0\u{1}agent\0\u{1}env\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}op_id\0\u{1}directory\0\u{1}agent\0\u{1}env\0\u{3}permission_mode\0\u{1}worktree\0\u{1}trust\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8201,6 +8222,9 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
       case 2: try { try decoder.decodeSingularStringField(value: &self.directory) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.agent) }()
       case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.env) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.permissionMode) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.worktree) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.trust) }()
       default: break
       }
     }
@@ -8219,6 +8243,15 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
     if !self.env.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.env, fieldNumber: 4)
     }
+    if !self.permissionMode.isEmpty {
+      try visitor.visitSingularStringField(value: self.permissionMode, fieldNumber: 5)
+    }
+    if !self.worktree.isEmpty {
+      try visitor.visitSingularStringField(value: self.worktree, fieldNumber: 6)
+    }
+    if self.trust != false {
+      try visitor.visitSingularBoolField(value: self.trust, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8227,6 +8260,9 @@ nonisolated extension Muster_V1_OrcaCreateRequest: SwiftProtobuf.Message, SwiftP
     if lhs.directory != rhs.directory {return false}
     if lhs.agent != rhs.agent {return false}
     if lhs.env != rhs.env {return false}
+    if lhs.permissionMode != rhs.permissionMode {return false}
+    if lhs.worktree != rhs.worktree {return false}
+    if lhs.trust != rhs.trust {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

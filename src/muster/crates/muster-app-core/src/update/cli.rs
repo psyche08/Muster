@@ -47,6 +47,7 @@ pub(super) fn create(state: &mut State, ctx: &Ctx, input: app::OrcaCreate) {
                     // A session opened from the UI has no external task
                     // behind it, so there is no per-task environment to pass.
                     env: Default::default(),
+                    ..Default::default()
                 }),
             )
             .await?

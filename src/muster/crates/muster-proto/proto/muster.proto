@@ -187,6 +187,24 @@ message OrcaCreateRequest {
   // credential. Names must match [A-Za-z_][A-Za-z0-9_]*; dynamic-linker names
   // are refused because they subvert every binary the child starts.
   map<string, string> env = 4;
+  // Claude's permission mode: "" or "default" asks before every tool use;
+  // "auto" lets Claude's classifier approve what it judges safe and still
+  // asks for the rest. Modes that skip prompts (bypassPermissions, dontAsk)
+  // and every mode for Codex are refused. Kept with the session.
+  string permission_mode = 5;
+  // Run the session in a Git worktree of the repository holding `directory`,
+  // at <main checkout>/.claude/worktrees/<worktree>, where Claude Code keeps
+  // its own. An existing worktree of that repository is reused as it is; a
+  // new one is added detached at the main checkout's HEAD, and
+  // .claude/worktrees/ is added to the repository's info/exclude unless
+  // already ignored. Muster never fetches. Names are 1-64 of [A-Za-z0-9._-].
+  string worktree = 6;
+  // Claude only: record the session directory as trusted in Claude Code's
+  // config (projects[dir].hasTrustDialogAccepted in
+  // $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json), so the project's
+  // own permission rules and settings apply. Written under Claude's own
+  // config lock, leaving every other entry as it was.
+  bool trust = 7;
 }
 
 message Response {

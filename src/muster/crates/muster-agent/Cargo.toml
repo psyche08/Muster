@@ -12,7 +12,8 @@ muster-proto = { path = "../muster-proto" }
 muster-core = { path = "../muster-core" }
 thiserror.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# raw_value: Claude's config is edited without re-encoding what it does not change.
+serde_json = { workspace = true, features = ["raw_value"] }
 rusqlite.workspace = true
 rusty-leveldb = "4.0.2"
 log.workspace = true

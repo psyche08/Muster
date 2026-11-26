@@ -533,6 +533,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
                 directory: dir_a.path().display().to_string(),
                 agent: "codex".into(),
                 env: Default::default(),
+                ..Default::default()
             }))
             .await
     ));
