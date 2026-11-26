@@ -31,6 +31,20 @@ fn session() -> Option<WTSINFOEX_LEVEL1_W> {
     }
 }
 
+fn unlocked_console(session: &WTSINFOEX_LEVEL1_W, console_id: u32) -> bool {
+    console_id != u32::MAX
+        && session.SessionId == console_id
+        && session.SessionState == WTSActive
+        && session.UserName[0] != 0
+        && session.SessionFlags as u32 == WTS_SESSIONSTATE_UNLOCK
+}
+
+/// Whether a capture worker launched in this process's session can serve the
+/// unlocked physical console. An active RDP session can have a different ID.
+pub fn on_unlocked_physical_console() -> bool {
+    session().is_some_and(|s| unlocked_console(&s, unsafe { WTSGetActiveConsoleSessionId() }))
+}
+
 impl crate::Platform for Windows {
     fn accessibility(&self) -> Option<bool> {
         Some(!crate::Platform::locked(self))
@@ -59,4 +73,31 @@ pub fn desktop_pixels() -> Option<(u32, u32)> {
     mode.dmSize = size_of::<DEVMODEW>() as u16;
     (unsafe { EnumDisplaySettingsW(std::ptr::null(), ENUM_CURRENT_SETTINGS, &mut mode) } != 0)
         .then_some((mode.dmPelsWidth, mode.dmPelsHeight))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_host_requires_the_signed_in_unlocked_physical_console() {
+        let mut session = WTSINFOEX_LEVEL1_W {
+            SessionId: 7,
+            SessionState: WTSActive,
+            SessionFlags: WTS_SESSIONSTATE_UNLOCK as i32,
+            ..Default::default()
+        };
+        assert!(!unlocked_console(&session, 7));
+        session.UserName[0] = u16::from(b'A');
+        assert!(unlocked_console(&session, 7));
+        assert!(!unlocked_console(&session, 8));
+        assert!(!unlocked_console(&session, u32::MAX));
+        session.SessionFlags = WTS_SESSIONSTATE_LOCK as i32;
+        assert!(!unlocked_console(&session, 7));
+        session.SessionFlags = WTS_SESSIONSTATE_UNKNOWN as i32;
+        assert!(!unlocked_console(&session, 7));
+        session.SessionFlags = WTS_SESSIONSTATE_UNLOCK as i32;
+        session.SessionState = WTSDisconnected;
+        assert!(!unlocked_console(&session, 7));
+    }
 }

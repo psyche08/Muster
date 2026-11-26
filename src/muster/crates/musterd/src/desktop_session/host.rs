@@ -31,8 +31,7 @@ fn console_lock_state(daemon: &Daemon) -> Option<bool> {
     }
     #[cfg(windows)]
     {
-        let p = muster_platform::platform();
-        (p.on_console() && !p.locked()).then_some(false)
+        muster_platform::on_unlocked_physical_console().then_some(false)
     }
     #[cfg(target_os = "macos")]
     {
