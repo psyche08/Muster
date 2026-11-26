@@ -33,6 +33,7 @@ namespace net {
    * @todo Ensure port is not already in use by another application.
    */
   std::uint16_t map_port(int port);
+  std::uint16_t map_media_port(int offset);
 
   /**
    * @brief Owning ENet host pointer released with `enet_host_destroy`.

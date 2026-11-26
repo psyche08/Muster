@@ -17,7 +17,7 @@ def reject_rtsp(listener):
         client.sendall(b"RTSP/1.0 503 Service Unavailable\r\nCSeq: 1\r\nContent-Length: 0\r\n\r\n")
 
 
-def test_exit(executable):
+def test_exit(executable, legacy):
     # A real parent window receives cross-thread messages from the media child.
     ui = ctypes.WinDLL("user32", use_last_error=True)
     ui.CreateWindowExW.restype = wintypes.HWND
@@ -32,23 +32,28 @@ def test_exit(executable):
         raise ctypes.WinError(ctypes.get_last_error())
     try:
         with socket.socket() as listener:
-            for base in range(53200, 54200):
-                try:
-                    listener.bind(("127.0.0.1", base + 21))
-                    break
-                except OSError:
-                    continue
+            if legacy:
+                for base in range(53200, 54200):
+                    try:
+                        listener.bind(("127.0.0.1", base + 21))
+                        break
+                    except OSError:
+                        continue
+                else:
+                    raise RuntimeError("no local RTSP test port available")
+                port_field = base
             else:
-                raise RuntimeError("no local RTSP test port available")
+                listener.bind(("127.0.0.1", 0))
+                port_field = listener.getsockname()[1]
             listener.listen(1)
             listener.settimeout(10)
             threading.Thread(target=reject_rtsp, args=(listener,), daemon=True).start()
             with subprocess.Popen([executable], stdin=subprocess.PIPE, stdout=subprocess.PIPE) as child:
                 try:
                     # Split the fixed bootstrap record across writes.
-                    child.stdin.write(b"MVW1")
+                    child.stdin.write(b"MVW1" if legacy else b"MVW2")
                     child.stdin.flush()
-                    child.stdin.write(bytes([0, 0]) + struct.pack(">HQ", base, parent) + os.urandom(20))
+                    child.stdin.write(bytes([0, 0]) + struct.pack(">HQ", port_field, parent) + os.urandom(20))
                     child.stdin.flush()
                     deadline = time.monotonic() + 15
                     msg = wintypes.MSG()
@@ -69,4 +74,5 @@ def test_exit(executable):
 
 
 if __name__ == "__main__":
-    test_exit(sys.argv[1])
+    for legacy in (True, False):
+        test_exit(sys.argv[1], legacy)

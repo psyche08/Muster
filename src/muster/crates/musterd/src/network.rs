@@ -373,6 +373,8 @@ impl Daemon {
             services.push("terminal".to_string());
             services.push("terminal.create.locked.v1".to_string());
         }
+        #[cfg(any(windows, target_os = "macos"))]
+        services.push(crate::desktop_session::FIXED_KEYBOARD_SERVICE.to_string());
         services.push("presence.enrollment.v1".to_string());
         services.push("roster.multica.v1".to_string());
         if cfg!(target_os = "macos") && self.agent().is_some() {

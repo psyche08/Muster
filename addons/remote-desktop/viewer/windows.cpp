@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Private native media child. Shared Rust owns the peer and engine lifetime.
 #include "video.h"
+#include "keyboard.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -20,7 +21,9 @@ using video::width;
 constexpr UINT stopMessage = WM_APP + 1, readyMessage = WM_APP + 2;
 HWND window, parent;
 std::atomic<bool> stopping;
-bool canControl, receivedFrame, connected;
+viewer_input::Bootstrap access;
+viewer_input::Keyboard keyboard;
+bool receivedFrame, connected;
 std::mutex statusLock;
 
 void reportFailure(int stage, int code)
@@ -95,7 +98,20 @@ LRESULT CALLBACK message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     }
-    if (canControl && connected && receivedFrame)
+    if (msg == WM_CHAR || msg == WM_KEYDOWN || msg == WM_KILLFOCUS)
+    {
+        const bool active = access.keyboard && connected && receivedFrame && GetFocus() == hwnd
+            && GetForegroundWindow() == GetAncestor(hwnd, GA_ROOT);
+        const bool shortcut = (GetKeyState(VK_CONTROL) | GetKeyState(VK_MENU)) & 0x8000;
+        if (keyboard.handle(msg, wp, active, shortcut,
+            [](const char *text, int len) { LiSendUtf8TextEvent(text, len); },
+            [](short key) {
+                LiSendKeyboardEvent(key, KEY_ACTION_DOWN, 0);
+                LiSendKeyboardEvent(key, KEY_ACTION_UP, 0);
+            }))
+            return 0;
+    }
+    if (access.mouse && connected && receivedFrame)
     {
         switch (msg)
         {
@@ -121,6 +137,8 @@ LRESULT CALLBACK message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 return 0;
             if (down)
             {
+                if (access.keyboard && button == BUTTON_LEFT)
+                    SetFocus(hwnd);
                 SetCapture(hwnd);
                 pressed |= 1u << button;
             }
@@ -159,7 +177,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     if (GetFileType(input) != FILE_TYPE_PIPE)
         return 1;
     std::array<unsigned char, 36> init{};
-    // MVW1, mouse and encrypted RTSP flags, port (BE16), parent HWND (BE64), RI key, IV prefix.
+    // Version, input mode, encrypted RTSP flag, local port, parent HWND, RI key and IV prefix.
     DWORD received = 0;
     while (received < init.size())
     {
@@ -168,12 +186,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
             return 1;
         received += count;
     }
-    if (std::memcmp(init.data(), "MVW1", 4) ||
-        init[4] > 1 || init[5] > 1)
-        return 1;
-    canControl = init[4] != 0;
-    unsigned port = unsigned(init[6]) * 256 + init[7];
-    if (port < 49157 || port > 65514)
+    if (!viewer_input::decode(init.data(), access))
         return 1;
     uintptr_t handle = 0;
     for (size_t i = 8; i < 16; ++i)
@@ -218,7 +231,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         config.encryptionFlags = ENCFLG_ALL;
         std::memcpy(config.remoteInputAesKey, init.data() + 16, 16);
         std::memcpy(config.remoteInputAesIv, init.data() + 32, 4);
-        std::string url = std::string(init[5] ? "rtspenc://" : "rtsp://") + "127.0.0.1:" + std::to_string(port + 21);
+        std::string url = std::string(init[5] ? "rtspenc://" : "rtsp://") + "127.0.0.1:" + std::to_string(access.rtsp);
         SERVER_INFORMATION server{};
         LiInitializeServerInformation(&server);
         server.address = "127.0.0.1";

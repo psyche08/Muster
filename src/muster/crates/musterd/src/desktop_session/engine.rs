@@ -109,6 +109,8 @@ pub(super) const REPLACE: &[u8] = b"confirm-replace";
 pub(super) const CHANGED: &[u8] = b"desktop-occupant-changed";
 #[cfg(not(target_os = "ios"))]
 pub(super) const HELLO: &[u8; 4] = b"MDV1";
+#[cfg(any(windows, target_os = "macos"))]
+pub(super) const FIXED_KEYBOARD_HELLO: &[u8; 4] = b"MDK1";
 pub(super) const CAPTURE_UNAVAILABLE: &[u8] = b"capture-unavailable";
 // The host fixes the cipher, profile and ports. Only the one-time input key,
 // IV prefix, and the granted input mode need to cross PeerLink.
