@@ -42,7 +42,10 @@ struct RemoteWorkspaceView: View {
                 Button("Disconnect and connect") { send(.confirmTakeover(workspace.takeover.confirmation)) }
             }
             if workspace.sessionOpen && !workspace.hasTakeover {
-                RemoteSurface(video: core.remoteVideo, session: workspace.nativeSession, mouse: workspace.mouse) { kind, x, y, scroll in
+                RemoteSurface(video: core.remoteVideo, session: workspace.nativeSession, mouse: workspace.mouse,
+                              keyboardInput: workspace.keyboard ? { input in
+                    send(.keyboard(.with { $0.session = workspace.nativeSession; $0.input = input }))
+                } : nil) { kind, x, y, scroll in
                     send(.pointer(.with {
                         $0.session = workspace.nativeSession
                         $0.kind = kind
@@ -164,6 +167,7 @@ private struct RemoteSurface: View {
     @ObservedObject var video: RemoteVideo
     let session: UInt64
     let mouse: Bool
+    let keyboardInput: ((Muster_V1_DesktopKeyboard.OneOf_Input) -> Void)?
     let input: RemoteInput
     @State private var heldPoint: (UInt32, UInt32)?
     @State private var lastMove = Date.distantPast
@@ -184,7 +188,7 @@ private struct RemoteSurface: View {
                         .frame(width: size.width, height: size.height)
                         .overlay {
                             if mouse {
-                                MacPointer { kind, point, lines in forward(kind, point, size, lines) }
+                                MacPointer(keyboardInput: keyboardInput) { kind, point, lines in forward(kind, point, size, lines) }
                             }
                         }
                     #endif
@@ -225,12 +229,48 @@ private struct VideoLayerView: NSViewRepresentable {
         if view.layer !== layer { view.layer = layer; view.wantsLayer = true }
     }
 }
-private struct MacPointer: NSViewRepresentable {
+struct MacPointer: NSViewRepresentable {
+    let keyboardInput: ((Muster_V1_DesktopKeyboard.OneOf_Input) -> Void)?
     let action: (PointerKind, CGPoint, Int32) -> Void
     func makeNSView(context: Context) -> Surface { Surface() }
-    func updateNSView(_ view: Surface, context: Context) { view.action = action }
+    func updateNSView(_ view: Surface, context: Context) {
+        view.action = action
+        view.keyboardInput = keyboardInput
+    }
+    static func dismantleNSView(_ view: Surface, coordinator: ()) {
+        view.keyboardInput = nil
+        view.action = nil
+    }
     final class Surface: NSView {
         var action: ((PointerKind, CGPoint, Int32) -> Void)?
+        var keyboardInput: ((Muster_V1_DesktopKeyboard.OneOf_Input) -> Void)? {
+            didSet {
+                if keyboardInput == nil, let window, window.firstResponder === self {
+                    window.makeFirstResponder(nil)
+                }
+            }
+        }
+        override var acceptsFirstResponder: Bool { keyboardInput != nil }
+        override func keyDown(with event: NSEvent) {
+            guard let keyboardInput, window?.firstResponder === self,
+                  event.modifierFlags.intersection([.command, .control]).isEmpty else {
+                super.keyDown(with: event)
+                return
+            }
+            switch event.keyCode {
+            case 51: keyboardInput(.key(.backspace))
+            case 36, 76: keyboardInput(.key(.return))
+            default:
+                guard let text = event.characters, !text.isEmpty,
+                      !event.modifierFlags.contains(.function),
+                      text.rangeOfCharacter(from: .controlCharacters) == nil,
+                      !text.unicodeScalars.contains(where: { (0xf700...0xf8ff).contains($0.value) }) else {
+                    super.keyDown(with: event)
+                    return
+                }
+                keyboardInput(.text(text))
+            }
+        }
         override var isFlipped: Bool { true }
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -241,7 +281,10 @@ private struct MacPointer: NSViewRepresentable {
             action?(kind, convert(e.locationInWindow, from: nil), lines)
         }
         override func mouseMoved(with e: NSEvent) { send(.move,e) }
-        override func mouseDown(with e: NSEvent) { send(.dragStart,e) }
+        override func mouseDown(with e: NSEvent) {
+            if acceptsFirstResponder { window?.makeFirstResponder(self) }
+            send(.dragStart,e)
+        }
         override func mouseDragged(with e: NSEvent) { send(.dragMove,e) }
         override func mouseUp(with e: NSEvent) { send(.dragEnd,e) }
         override func rightMouseDown(with e: NSEvent) { send(.secondary,e) }
