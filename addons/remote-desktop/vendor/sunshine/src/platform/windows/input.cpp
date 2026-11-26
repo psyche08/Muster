@@ -27,6 +27,7 @@
 
 // local includes
 #include "misc.h"
+#include <libvirtualhid/muster_ordinary_desktop.h>
 #include "src/config.h"
 #include "src/globals.h"
 #include "src/logging.h"
@@ -34,20 +35,7 @@
 #include "src/platform/virtualhid_input.h"
 
 extern "C" bool muster_keyboard_desktop() {
-  DWORD session;
-  if (!ProcessIdToSessionId(GetCurrentProcessId(), &session) || session != WTSGetActiveConsoleSessionId()) {
-    return false;
-  }
-  HDESK desktop = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
-  if (!desktop) {
-    return false;
-  }
-  wchar_t name[64] {};
-  DWORD size = 0;
-  const bool allowed = GetUserObjectInformationW(desktop, UOI_NAME, name, sizeof(name), &size) &&
-                       _wcsicmp(name, L"Default") == 0;
-  CloseDesktop(desktop);
-  return allowed;
+  return muster_console::ordinary();
 }
 
 namespace platf {

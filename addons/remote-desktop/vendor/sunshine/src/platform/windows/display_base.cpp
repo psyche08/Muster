@@ -39,6 +39,7 @@ typedef enum _D3DKMT_GPU_PREFERENCE_QUERY_STATE : DWORD {
 
 #include "display.h"
 #include "misc.h"
+#include "muster_ordinary_desktop.h"
 #include "src/config.h"
 #include "src/display_device.h"
 #include "src/logging.h"
@@ -253,6 +254,9 @@ namespace platf::dxgi {
       // This will return false if the HDR state changes or for any number of other
       // display or GPU changes. We should reinit to examine the updated state of
       // the display subsystem. It is recommended to call this once per frame.
+      if (!muster_console::ordinary()) {
+        return platf::capture_e::error;
+      }
       if (!factory->IsCurrent()) {
         return platf::capture_e::reinit;
       }
@@ -325,6 +329,9 @@ namespace platf::dxgi {
         }
       }
 
+      if (!muster_console::ordinary()) {
+        return platf::capture_e::error;
+      }
       switch (status) {
         case platf::capture_e::reinit:
         case platf::capture_e::error:

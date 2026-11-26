@@ -81,6 +81,10 @@ pub(super) async fn open(
             ));
         }
     }
+    if reply == CONSOLE_UNAVAILABLE {
+        let _ = session.send_control(b"received").await;
+        return Err(unavailable(CONSOLE_MESSAGE));
+    }
     if reply == CAPTURE_UNAVAILABLE {
         let _ = session.send_control(b"received").await;
     }
