@@ -20,34 +20,30 @@ use tokio::{
 };
 
 #[cfg(windows)]
-pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-desktop-host.exe";
+pub(super) const CAPTURE_HOST: &str = "Sunshine/muster-stream-host.exe";
 #[cfg(target_os = "macos")]
-pub(super) const CAPTURE_HOST: &str = "muster-desktop-host";
+pub(super) const CAPTURE_HOST: &str = "muster-stream-host";
 
-/// Lock state of the signed-in physical console, or None when it cannot serve.
+/// ScreenCaptureKit follows the Mac console through one local unlock.
+#[cfg(target_os = "macos")]
 fn console_lock_state(daemon: &Daemon) -> Option<bool> {
     if daemon.covered() {
         return None;
     }
-    #[cfg(windows)]
-    {
-        muster_platform::on_unlocked_physical_console().then_some(false)
-    }
-    #[cfg(target_os = "macos")]
-    {
-        muster_platform::macos::lock::session_state()
-            .filter(|s| s.on_console && s.login_done)
-            .map(|s| s.screen_locked)
-    }
+    muster_platform::macos::lock::session_state()
+        .filter(|s| s.on_console && s.login_done)
+        .map(|s| s.screen_locked)
 }
 
 #[cfg(target_os = "macos")]
 pub(crate) type IdleHost = super::idle::IdleSlot<HostProcess>;
 
 pub(crate) struct HostProcess {
-    ports: EnginePorts,
+    #[cfg(windows)]
+    _job: std::os::windows::io::OwnedHandle,
+    pub(super) ports: EnginePorts,
     directory: tempfile::TempDir,
-    engine: Arc<Engine>,
+    pub(super) engine: Arc<Engine>,
     owner: tokio::process::ChildStdin,
     status: tokio::process::ChildStdout,
 }
@@ -122,6 +118,8 @@ impl ConsoleSurface {
 
 struct Host {
     surface: ConsoleSurface,
+    #[cfg(windows)]
+    console_session: std::sync::OnceLock<u32>,
     daemon: Weak<Daemon>,
     lease: super::permissions::Lease,
     peer: DeviceId,
@@ -131,7 +129,16 @@ impl Handler for Host {
     fn console_ready(&self) -> bool {
         !self.stop.is_cancelled()
             && self.daemon.upgrade().is_some_and(|d| {
-                self.lease.current(&d) && self.surface.accepts(console_lock_state(&d))
+                #[cfg(target_os = "macos")]
+                let ready = self.surface.accepts(console_lock_state(&d));
+                // Before binding, this grant permits only the viewer handshake.
+                // Media starts after the worker has attested the ordinary desktop.
+                #[cfg(windows)]
+                let ready = !d.covered()
+                    && self.console_session.get().is_none_or(|session| {
+                        super::console_worker::physical_id() == Some(*session)
+                    });
+                self.lease.current(&d) && ready
             })
     }
     fn serve<'a>(
@@ -211,6 +218,7 @@ impl Host {
             }
             return super::native::host(session, settings).await;
         }
+        #[cfg(target_os = "macos")]
         let ports = EnginePorts::MUSTER;
         let launch = Launch {
             mouse: session.with_mouse(|| ()).is_ok(),
@@ -224,44 +232,47 @@ impl Host {
                 && session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };
-        let (width, height) = if let Some(settings) = video {
-            let (w, h) = muster_platform::desktop_pixels()
-                .ok_or_else(|| unavailable("cannot read primary display dimensions"))?;
-            settings
-                .video_size(w, h)
-                .ok_or_else(|| unavailable("invalid host display size"))?
-        } else {
-            (1280, 720)
-        };
-        let fps = video.map_or(30, |p| p.fps);
-        let mode = format!("{width}x{height}x{fps}");
-        #[cfg(target_os = "macos")]
-        let parked = daemon
-            .desktop_idle
-            .take()
-            .await
-            .filter(|_| !self.surface.initially_locked);
-        #[cfg(windows)]
-        let parked = None;
         if !self.console_ready() {
             return Err(unavailable("desktop permission ended"));
         }
+        #[cfg(target_os = "macos")]
         let start_locked = self.surface.initially_locked && !self.surface.unlocked.is_cancelled();
-        let executable = program(CAPTURE_HOST)?;
-        let process = match start(
-            &executable,
-            parked,
-            ports,
-            &launch,
-            &mode,
-            start_locked,
-            video.is_none_or(|s| s.show_cursor),
-        )
-        .await
-        {
-            Ok(started) => started,
+        #[cfg(target_os = "macos")]
+        let started = async {
+            let size = video_mode(video.as_ref(), muster_platform::desktop_pixels())?;
+            let mode = format!("{}x{}x{}", size.0, size.1, video.map_or(30, |p| p.fps));
+            let parked = daemon
+                .desktop_idle
+                .take()
+                .await
+                .filter(|_| !self.surface.initially_locked);
+            let process = start(
+                &program(CAPTURE_HOST)?,
+                parked,
+                ports,
+                &launch,
+                &mode,
+                start_locked,
+                video.is_none_or(|s| s.show_cursor),
+            )
+            .await?;
+            Ok::<_, Error>((process, size))
+        }
+        .await;
+        #[cfg(windows)]
+        let started = super::console_worker::request(&launch, video.as_ref()).await;
+        let (process, (width, height)) = match started {
+            Ok(result) => result,
             Err(error) => {
-                session.send_control(CAPTURE_UNAVAILABLE).await?;
+                #[cfg(windows)]
+                let reason = if matches!(&error, Error::Unavailable(s) if s == CONSOLE_MESSAGE) {
+                    CONSOLE_UNAVAILABLE
+                } else {
+                    CAPTURE_UNAVAILABLE
+                };
+                #[cfg(target_os = "macos")]
+                let reason = CAPTURE_UNAVAILABLE;
+                session.send_control(reason).await?;
                 let _ = timeout(Duration::from_secs(1), session.recv_control()).await;
                 return Err(error);
             }
@@ -269,7 +280,16 @@ impl Host {
         let ports = process.ports;
         let engine = process.engine.clone();
         #[cfg(windows)]
-        let _active = process;
+        let mut connection = {
+            if *self.console_session.get_or_init(|| process.session) != process.session
+                || !self.console_ready()
+            {
+                return Err(unavailable(
+                    "physical console changed before stream startup",
+                ));
+            }
+            process
+        };
         #[cfg(target_os = "macos")]
         let mut active = ActiveHost {
             host: self,
@@ -298,6 +318,11 @@ impl Host {
                     .await
                     .map_err(|_| unavailable("capture surface switch failed"))?;
             }
+            #[cfg(windows)]
+            {
+                connection.closed().await
+            }
+            #[cfg(target_os = "macos")]
             std::future::pending::<Result<(), Error>>().await
         };
         tokio::select! {
@@ -313,8 +338,19 @@ pub(crate) fn admit(
     peer: DeviceId,
 ) -> Option<muster_net::remote_desktop::Sharing> {
     let (mode, lease) = daemon.desktop_permissions.admit(daemon, peer)?;
+    #[cfg(target_os = "macos")]
+    let locked = console_lock_state(daemon)?;
+    #[cfg(windows)]
+    let locked = {
+        if daemon.covered() {
+            return None;
+        }
+        false
+    };
     let host = Arc::new(Host {
-        surface: ConsoleSurface::new(console_lock_state(daemon)?),
+        surface: ConsoleSurface::new(locked),
+        #[cfg(windows)]
+        console_session: Default::default(),
         daemon: Arc::downgrade(daemon),
         lease,
         peer,
@@ -354,7 +390,19 @@ pub(crate) async fn display_sample(daemon: &Daemon) -> Result<String, Error> {
     Ok(String::from_utf8_lossy(&result.stdout).trim().to_owned())
 }
 
-async fn start(
+pub(super) fn video_mode(
+    video: Option<&muster_proto::v1::DesktopStreamSettings>,
+    display: Option<(u32, u32)>,
+) -> Result<(u16, u16), Error> {
+    match video {
+        None => Ok((1280, 720)),
+        Some(settings) => display
+            .and_then(|(w, h)| settings.video_size(w, h))
+            .ok_or_else(|| unavailable("cannot read a valid primary display size")),
+    }
+}
+
+pub(super) async fn start(
     executable: &Path,
     parked: Option<HostProcess>,
     ports: EnginePorts,
@@ -474,6 +522,10 @@ async fn start(
             status.ok_or_else(|| unavailable("missing host status pipe"))?,
         )
     };
+    #[cfg(windows)]
+    let job = engine
+        .capture_job()
+        .map_err(|_| unavailable("cannot contain the capture process tree"))?;
     let mut bootstrap = Vec::from(*b"MST1");
     if !cursor {
         bootstrap[3] = b'2';
@@ -547,6 +599,8 @@ async fn start(
         ));
     }
     Ok(HostProcess {
+        #[cfg(windows)]
+        _job: job,
         ports,
         directory,
         engine,
@@ -587,6 +641,21 @@ mod tests {
         assert!(desktop.accepts(Some(false)));
         assert!(!desktop.accepts(Some(true)));
         assert!(!desktop.accepts(None));
+    }
+
+    #[test]
+    fn configured_viewers_require_the_worker_display_extent() {
+        let settings = muster_proto::v1::DesktopStreamSettings {
+            long_edge: 1920,
+            ..muster_proto::v1::DesktopStreamSettings::ORIGINAL
+        };
+        assert!(video_mode(Some(&settings), None).is_err());
+        assert!(video_mode(Some(&settings), Some((0, 1080))).is_err());
+        assert_eq!(
+            video_mode(Some(&settings), Some((1440, 2560))).unwrap(),
+            (1080, 1920)
+        );
+        assert_eq!(video_mode(None, None).unwrap(), (1280, 720));
     }
 
     /// Run on an opted-in test host with the packaged Muster capture tool.

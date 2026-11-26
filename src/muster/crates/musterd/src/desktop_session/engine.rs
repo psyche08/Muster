@@ -74,6 +74,21 @@ mod process {
             let output = child.stdout.take();
             Ok((Self(Mutex::new(child)), input, output))
         }
+        #[cfg(windows)]
+        pub(crate) fn capture_job(&self) -> std::io::Result<std::os::windows::io::OwnedHandle> {
+            let child = self
+                .0
+                .lock()
+                .map_err(|_| std::io::Error::other("engine lock poisoned"))?;
+            let handle = child
+                .raw_handle()
+                .ok_or_else(|| std::io::Error::other("engine has exited"))?;
+            // The child is waiting for bootstrap on stdin. Hold the original
+            // process handle until assignment completes.
+            super::super::console_worker::capture_job(unsafe {
+                std::os::windows::io::BorrowedHandle::borrow_raw(handle)
+            })
+        }
         pub(crate) fn pid(&self) -> Option<u32> {
             let mut child = self.0.lock().ok()?;
             if child.try_wait().ok()?.is_some() {
@@ -111,6 +126,9 @@ pub(super) const CHANGED: &[u8] = b"desktop-occupant-changed";
 pub(super) const HELLO: &[u8; 4] = b"MDV1";
 #[cfg(any(windows, target_os = "macos"))]
 pub(super) const FIXED_KEYBOARD_HELLO: &[u8; 4] = b"MDK1";
+pub(super) const CONSOLE_UNAVAILABLE: &[u8] = b"ordinary-console-unavailable";
+pub(super) const CONSOLE_MESSAGE: &str =
+    "The paired Windows account needs an unlocked physical desktop and its stream worker.";
 pub(super) const CAPTURE_UNAVAILABLE: &[u8] = b"capture-unavailable";
 // The host fixes the cipher, profile and ports. Only the one-time input key,
 // IV prefix, and the granted input mode need to cross PeerLink.

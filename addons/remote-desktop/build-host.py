@@ -76,7 +76,7 @@ def checkout(cache, url, revision, nested):
     return dest
 
 
-def host_sources(cache, modules=MODULES):
+def host_sources(cache, modules=MODULES, *, windows_user_input=False):
     # Separate source revisions keep stale build objects and removed files out
     # of later builds. Include local edits so the normal dev build tests them.
     if (ROOT.parents[1] / ".git").exists():
@@ -91,6 +91,8 @@ def host_sources(cache, modules=MODULES):
         h.update(bytes.fromhex(digest(p)))
     pins = (ROOT / "sunshine-submodules.txt").read_bytes()
     h.update(pins)
+    if windows_user_input:
+        h.update(b"windows-user-input-v1")
     if modules != MODULES:
         h.update(" ".join(modules).encode())
     src = cache / ("sunshine-" + h.hexdigest()[:20])
@@ -111,10 +113,21 @@ def host_sources(cache, modules=MODULES):
                 shutil.copy2(path, target)
             for name, dep in deps.items():
                 target = tree / "third-party" / name
-                if os.name == "nt":
+                if os.name == "nt" or (windows_user_input and name == "libvirtualhid"):
                     shutil.copytree(dep, target, ignore=shutil.ignore_patterns(".git"))
                 else:
                     target.symlink_to(dep, target_is_directory=True)
+                if windows_user_input and name == "libvirtualhid":
+                    # The packaged backend never opens the privileged HID broker.
+                    backend = target / "src/platform/windows/windows_backend.cpp"
+                    backend.write_bytes(backend.read_bytes().replace(b"\r\n", b"\n"))
+                    patch = (tree / "muster-windows-user-input.patch").read_bytes().replace(b"\r\n", b"\n")
+                    run("git", "-c", "core.autocrlf=false", "apply", "-", input=patch, cwd=target,
+                        env=dict(os.environ, GIT_CEILING_DIRECTORIES=str(target.parent.resolve())))
+                    if digest(backend) != "8d82350ddaf9df44a83ff2abb30f7cff6f544034941b32d28de1b5231de51f90":
+                        raise ValueError("Windows user-mode input backend was not prepared")
+                    shutil.copy2(tree / "src/platform/windows/muster_ordinary_desktop.h",
+                                 target / "src/include/libvirtualhid")
             tree.rename(src)
     return src, deps
 
@@ -207,7 +220,7 @@ def build(cache, executable, sources, identity):
         "-DFETCHCONTENT_SOURCE_DIR_BOOST=" + str(boost_source(cache, boost)),
         "-DFETCHCONTENT_SOURCE_DIR_JSON=" + str(extract(json, cache, "json")))
     run("cmake", "--build", obj, "--target", "sunshine", "--parallel", jobs)
-    exe = obj / "muster-desktop-host"
+    exe = obj / "muster-stream-host"
     for line in output("otool", "-L", exe).splitlines()[1:]:
         library = line.strip().split(" (compatibility", 1)[0]
         if not library.startswith(("/usr/lib/", "/System/Library/")):
@@ -248,7 +261,7 @@ def build(cache, executable, sources, identity):
                     tar.add(path, "downloads/" + path.name)
             archive.replace(offer)
     contents = executable.parent.parent
-    if executable != contents / "MacOS/muster-desktop-host" or contents.name != "Contents":
+    if executable != contents / "MacOS/muster-stream-host" or contents.name != "Contents":
         raise ValueError("Expected a capture tool in the enclosing app's Contents/MacOS")
     executable.parent.mkdir(parents=True, exist_ok=True)
     sources.parent.mkdir(parents=True, exist_ok=True)

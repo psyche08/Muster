@@ -44,6 +44,7 @@
 
 // local includes
 #include "misc.h"
+#include "muster_ordinary_desktop.h"
 #include "nvprefs/nvprefs_interface.h"
 #include "src/entry_handler.h"
 #include "src/globals.h"
@@ -219,22 +220,8 @@ namespace platf {
    * @brief Synchronize thread desktop.
    */
   HDESK syncThreadDesktop() {
-    auto hDesk = OpenInputDesktop(DF_ALLOWOTHERACCOUNTHOOK, FALSE, GENERIC_ALL);
-    if (!hDesk) {
-      auto err = GetLastError();
-      BOOST_LOG(error) << "Failed to Open Input Desktop [0x"sv << util::hex(err).to_string_view() << ']';
-
-      return nullptr;
-    }
-
-    if (!SetThreadDesktop(hDesk)) {
-      auto err = GetLastError();
-      BOOST_LOG(error) << "Failed to sync desktop to thread [0x"sv << util::hex(err).to_string_view() << ']';
-    }
-
-    CloseDesktop(hDesk);
-
-    return hDesk;
+    // Keep the capture thread attached to its original ordinary desktop.
+    return muster_console::ordinary() ? GetThreadDesktop(GetCurrentThreadId()) : nullptr;
   }
 
   /**

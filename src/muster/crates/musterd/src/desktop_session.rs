@@ -11,6 +11,8 @@ use muster_core::DeviceId;
 use muster_proto::v1::{self, desktop_session_request::Action};
 use muster_rpc::EventSink;
 use std::sync::Arc;
+#[cfg(windows)]
+pub(crate) mod console_worker;
 #[cfg(any(windows, target_vendor = "apple"))]
 mod engine;
 #[cfg(any(windows, target_os = "macos"))]

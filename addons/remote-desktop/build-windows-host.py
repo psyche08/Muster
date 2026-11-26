@@ -16,7 +16,7 @@ def build(cache, output, msys):
     if not (ucrt / "g++.exe").is_file():
         raise ValueError("Install the upstream Sunshine UCRT64 build dependencies in MSYS2")
     modules = host["MODULES"] + ("nvapi", "ViGEmClient")
-    src, deps = host["host_sources"](cache, modules)
+    src, deps = host["host_sources"](cache, modules, windows_user_input=True)
     ffmpeg = host["download"](cache, "Windows-AMD64-ffmpeg.tar.gz",
         "https://github.com/LizardByte/build-deps/releases/download/" +
         host["FFMPEG_TAG"] + "/Windows-AMD64-ffmpeg.tar.gz",
@@ -36,8 +36,11 @@ def build(cache, output, msys):
     run(ucrt / "cmake.exe", "--build", obj, "--target", "sunshine", "--parallel", "6", env=env)
     payload = output / "Sunshine"
     payload.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(obj / "sunshine.exe", payload / "muster-desktop-host.exe")
+    shutil.copy2(obj / "sunshine.exe", payload / "muster-stream-host.exe")
     shutil.copy2(ucrt / "zlib1.dll", payload)
+    run(ucrt / "g++.exe", "-std=c++17", "-municode", "-Os", "-static", "-Wall", "-Wextra",
+        "-o", output / "muster-stream-host.exe", root / "windows/stream-host.cpp",
+        "-lwtsapi32", "-ltaskschd", "-loleaut32", "-lole32", "-ladvapi32", "-luuid", env=env)
     shaders = src / "src_assets/windows/assets/shaders"
     shutil.copytree(shaders, payload / "assets/shaders", dirs_exist_ok=True)
     for name in ("LICENSE", "NOTICE"):
@@ -60,6 +63,7 @@ def build(cache, output, msys):
             for path in sorted(tree.rglob("*")):
                 if path.is_file() and ".git" not in path.parts:
                     archive.write(path, "dependencies/" + name + "/" + path.relative_to(tree).as_posix())
+        archive.write(root / "windows/stream-host.cpp", "remote-desktop/windows/stream-host.cpp")
         for name in ("build-host.py", "build-windows-host.py", "sunshine-submodules.txt"):
             archive.write(root / name, "remote-desktop/" + name)
 

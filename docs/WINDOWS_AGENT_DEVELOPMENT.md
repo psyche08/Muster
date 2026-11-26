@@ -639,7 +639,7 @@ ID 读回的两条合成消息。实机 ChatGPT 的归档状态和历史仍按�
 ## 配对桌面验收
 
 Windows 本机构建便携包时，从仓库源码编译 Moonlight 查看器并打包许可证与对应源码。
-Mac 应用构建时将 Sunshine 源码编译为主包 Contents/MacOS 下的 muster-desktop-host。
+Mac 应用构建时将 Sunshine 源码编译为主包 Contents/MacOS 下的 muster-stream-host。
 实机只安装 Muster，屏幕录制与鼠标控制所需的辅助功能均授权给外层 Muster。独立 fixture 使用这两个构建产物，
 分别放到相应测试 daemon 旁。两端分别用 `local-dev --paired-interface <本机私网 IPv4>`
 可在临时软件身份上测试。关闭父进程的标准输入会结束 fixture。按正常流程建立

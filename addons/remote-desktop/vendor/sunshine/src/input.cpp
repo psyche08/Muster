@@ -2085,6 +2085,9 @@ namespace input {
       }
     }
 
+#ifdef _WIN32
+    if (!muster_keyboard_desktop()) return;
+#endif
     if (surface != muster_session::mouse_surface()) {
       return;
     }

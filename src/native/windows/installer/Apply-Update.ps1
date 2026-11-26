@@ -1,13 +1,14 @@
 #requires -Version 5.1
 [CmdletBinding()]
-param([string]$Destination = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Muster'))
+param([string]$Destination = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Muster'),
+      [string]$MachineArchive)
 
 $ErrorActionPreference = 'Stop'
 # The packager pins the exact release.json bytes in this entry point.
 $manifestHash = '@MUSTER_RELEASE_SHA256@'
 
 function Install-MachineRelease {
-    param([string]$pipeName, [int]$manifestLength, [string]$expectedHash, [string]$nodeSid)
+    param([string]$pipeName, [int]$manifestLength, [string]$expectedHash, [string]$nodeSid, [string]$archivePath)
     $ErrorActionPreference = 'Stop'
     $env:PSModulePath = $PSHOME + '\Modules'
     $system = [Security.Principal.WindowsBuiltInRole]::Administrator
@@ -71,15 +72,133 @@ function Install-MachineRelease {
             if ($changed.ReturnValue -ne 0) { throw "Network service update failed ($($changed.ReturnValue))" }
         }
     }
+    function Register-StreamHost([string]$directory) {
+        foreach ($file in 'muster-stream-host.exe','muster-stream-worker.exe','Sunshine/muster-stream-host.exe') {
+            if (!$hashes.ContainsKey($file)) { throw "Missing stream host component $file" }
+        }
+        $name = 'MusterStream'
+        $svcKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$name"
+        $account = 'NT AUTHORITY\LocalService'
+        $image = '"' + (Join-Path $directory 'muster-stream-host.exe') + '" --service ' + $nodeSid
+        $taskName = 'Muster Stream Worker'
+        $worker = Join-Path $directory 'muster-stream-worker.exe'
+        $scheduler = New-Object -ComObject Schedule.Service
+        $scheduler.Connect()
+        $folder = $scheduler.GetFolder('\')
+        $oldTask = $null
+        try { $oldTask = $folder.GetTask($taskName) }
+        catch { if ($_.Exception.HResult -ne -2147024894) { throw } }
+        $oldService = Get-Service $name -ErrorAction SilentlyContinue
+        $expectedDirectory = '^' + [regex]::Escape($root) + '\\[0-9]+\.[0-9]+\.[0-9]+\\'
+        if ($oldTask) {
+            $old = $oldTask.Definition
+            if ($old.Principal.UserId -ne $nodeSid -and
+                ([Security.Principal.NTAccount]::new($old.Principal.UserId)).Translate($sidType).Value -ne $nodeSid) {
+                throw 'Stream worker belongs to another account'
+            }
+            if ($old.Actions.Count -ne 1 -or $old.Actions.Item(1).Path -notmatch ($expectedDirectory + 'muster-stream-worker\.exe$') -or
+                $old.Actions.Item(1).Arguments -ne '--console-worker' -or $old.Principal.RunLevel -ne 0 -or $old.Principal.LogonType -ne 3) {
+                throw 'Unexpected existing stream worker registration'
+            }
+        }
+        if ($oldService) {
+            $previous = Get-ItemProperty -LiteralPath $svcKey
+            $expectedImage = '^"' + $expectedDirectory.Substring(1) + 'muster-stream-host\.exe" --service ' + [regex]::Escape($nodeSid) + '$'
+            if ($previous.ObjectName -ne $account -or $previous.ImagePath -notmatch $expectedImage) {
+                throw 'Unexpected existing stream host service'
+            }
+        }
+        $definition = $scheduler.NewTask(0)
+        $definition.RegistrationInfo.Description = 'Muster physical console stream worker'
+        $definition.Principal.UserId = $nodeSid
+        $definition.Principal.LogonType = 3 # TASK_LOGON_INTERACTIVE_TOKEN
+        $definition.Principal.RunLevel = 0
+        $definition.Settings.ExecutionTimeLimit = 'PT0S'
+        $definition.Settings.DisallowStartIfOnBatteries = $false
+        $definition.Settings.StopIfGoingOnBatteries = $false
+        $definition.Settings.MultipleInstances = 2 # TASK_INSTANCES_IGNORE_NEW
+        # Task Scheduler also sees account logon/session events on hosts where
+        # LocalService cannot query WTS user metadata. The worker independently
+        # verifies its session, token and display before accepting any media.
+        $logon = $definition.Triggers.Create(9)
+        $logon.UserId = $nodeSid
+        foreach ($sessionChange in 1,8) { # console connect, workstation unlock
+            $trigger = $definition.Triggers.Create(11)
+            $trigger.StateChange = $sessionChange
+            $trigger.UserId = $nodeSid
+        }
+        $action = $definition.Actions.Create(0)
+        $action.Path = $worker
+        $action.Arguments = '--console-worker'
+        $action.WorkingDirectory = $directory
+        # Only SCM's service SID can request the fixed worker outside the installer.
+        $sc = Join-Path ([Environment]::SystemDirectory) 'sc.exe'
+        $running = $oldService -and $oldService.Status -eq 'Running'
+        $registered = $false
+        $oldTaskXml = if ($oldTask) { $oldTask.Xml }
+        $oldTaskAcl = if ($oldTask) { $oldTask.GetSecurityDescriptor(4) }
+        try {
+            if ($oldService) {
+                if ($running) { Stop-Service $name -ErrorAction Stop }
+                if ($oldTask -and $oldTask.GetInstances(0).Count -gt 0) { $oldTask.Stop(0) }
+                $svc = Get-CimInstance Win32_Service -Filter "Name='MusterStream'"
+                $change = Invoke-CimMethod -InputObject $svc -MethodName Change -Arguments @{PathName=$image; StartMode='Automatic'}
+                if ($change.ReturnValue -ne 0) { throw "Stream service update failed ($($change.ReturnValue))" }
+            } else {
+                # Use the SCM API via WMI to preserve exact quoting on Windows PowerShell 5.
+                $create = Invoke-CimMethod -ClassName Win32_Service -MethodName Create -Arguments @{
+                    Name=$name; DisplayName='Muster Stream Host'; PathName=$image; ServiceType=[byte]16;
+                    ErrorControl=[byte]1; StartMode='Automatic'; StartName=$account
+                }
+                if ($create.ReturnValue -ne 0) { throw "Stream service creation failed ($($create.ReturnValue))" }
+            }
+            $registered = $true
+            & $sc sidtype $name unrestricted | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Stream service SID setup failed' }
+            $serviceSid = ([Security.Principal.NTAccount]::new("NT SERVICE\$name")).Translate($sidType).Value
+            $acl = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;$serviceSid)"
+            [void]$folder.RegisterTaskDefinition($taskName, $definition, 22, $nodeSid, $null, 3, $acl)
+            Start-Service $name -ErrorAction Stop
+        } catch {
+            if ($registered) {
+                if ($oldTask) { [void]$folder.RegisterTask($taskName, $oldTaskXml, 22, $nodeSid, $null, 3, $oldTaskAcl) }
+                elseif (@($folder.GetTasks(1) | Where-Object Name -eq $taskName).Count) { $folder.DeleteTask($taskName, 0) }
+                if (!$oldService) { & $sc delete $name | Out-Null }
+                else {
+                    $restore = Invoke-CimMethod -InputObject $svc -MethodName Change -Arguments @{PathName=$previous.ImagePath}
+                    if ($restore.ReturnValue -ne 0) { throw 'Stream service rollback failed' }
+                }
+            }
+            if ($running) { Start-Service $name }
+            throw
+        }
+    }
     $sha = [Security.Cryptography.SHA256]::Create()
     function Digest([byte[]]$bytes) { [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '') }
     # The elevated reader never opens a file or follows a link in the extracted ZIP.
     # Anonymous impersonation prevents the serving process from using the elevated token.
-    $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $pipeName, [IO.Pipes.PipeDirection]::In,
-        [IO.Pipes.PipeOptions]::None, [Security.Principal.TokenImpersonationLevel]::Anonymous)
-    $pipe.Connect(30000)
-    $reader = [IO.BinaryReader]::new($pipe)
-    $data = $reader.ReadBytes($manifestLength)
+    $archive = $null
+    $reader = $null
+    function Read-ReleaseEntry([string]$name, [int]$count) {
+        if (!$archive) { return ,$reader.ReadBytes($count) }
+        $entry = $archive.GetEntry($name)
+        if (!$entry -or $entry.Length -ne $count) { throw "Archive length mismatch: $name" }
+        $inputReader = [IO.BinaryReader]::new($entry.Open())
+        try { return ,$inputReader.ReadBytes($count) } finally { $inputReader.Dispose() }
+    }
+    if ($archivePath) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [IO.Compression.ZipFile]::OpenRead($archivePath)
+        $manifestEntry = $archive.GetEntry('release.json')
+        if (!$manifestEntry -or $manifestEntry.Length -gt 4194304) { throw 'Invalid archive manifest' }
+        $manifestLength = [int]$manifestEntry.Length
+    } else {
+        $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $pipeName, [IO.Pipes.PipeDirection]::In,
+            [IO.Pipes.PipeOptions]::None, [Security.Principal.TokenImpersonationLevel]::Anonymous)
+        $pipe.Connect(30000)
+        $reader = [IO.BinaryReader]::new($pipe)
+    }
+    $data = Read-ReleaseEntry 'release.json' $manifestLength
     if ((Digest $data) -ne $expectedHash) { throw 'Release manifest hash mismatch' }
     $release = [Text.Encoding]::UTF8.GetString($data) | ConvertFrom-Json
     if ($release.version -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z') { throw 'Invalid release version' }
@@ -117,13 +236,14 @@ function Install-MachineRelease {
     }
 
     # Concurrent machine updates can stage independently. Rename never overwrites a release.
+    $registrationLock = $null
     $stage = Join-Path $root ('.stage-' + [Guid]::NewGuid().ToString('N'))
     try {
         Assert-Protected ([IO.Directory]::CreateDirectory($stage))
         foreach ($entry in $release.files.psobject.Properties) {
             $name = $entry.Name
             $size = [int]$release.sizes.$name
-            $bytes = $reader.ReadBytes($size)
+            $bytes = Read-ReleaseEntry ("payload/" + $entry.Name) $size
             if ($bytes.Length -ne $size -or (Digest $bytes) -ne $hashes[$name]) {
                 throw "Package verification failed: $name"
             }
@@ -135,9 +255,26 @@ function Install-MachineRelease {
         try { [IO.Directory]::Move($stage, $active) }
         catch [IO.IOException] { if (![IO.Directory]::Exists($active)) { throw } }
         Assert-Release $active
+        # Serialize changes to the global service/task pair across installers.
+        $registrationLock = [IO.File]::Open((Join-Path $root 'service-update.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+        $netFilter = "Name='MusterNetwork'"
+        $priorNetwork = Get-CimInstance Win32_Service -Filter $netFilter
         Register-NetworkHelper $active
+        try { Register-StreamHost $active }
+        catch {
+            # The running daemon accepts only its matching network helper.
+            $network = Get-CimInstance Win32_Service -Filter $netFilter
+            if (!$priorNetwork) { $rollback = Invoke-CimMethod -InputObject $network -MethodName Delete }
+            elseif ($priorNetwork.PathName -ne $network.PathName) {
+                $rollback = Invoke-CimMethod -InputObject $network -MethodName Change -Arguments @{PathName=$priorNetwork.PathName}
+            } else { throw }
+            if ($rollback.ReturnValue -ne 0) { throw "Network service rollback failed ($($rollback.ReturnValue))" }
+            throw
+        }
     } finally {
-        $reader.Dispose()
+        if ($registrationLock) { $registrationLock.Dispose() }
+        if ($reader) { $reader.Dispose() }
+        if ($archive) { $archive.Dispose() }
         $sha.Dispose()
         if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($stage)) -eq $root -and [IO.Directory]::Exists($stage)) {
             [IO.Directory]::Delete($stage, $true)
@@ -148,10 +285,26 @@ function Install-MachineRelease {
 if (![Environment]::Is64BitProcess -or $PSVersionTable.PSEdition -ne 'Desktop') {
     $systemDirectory = [Environment]::SystemDirectory
     if (![Environment]::Is64BitProcess) { $systemDirectory = Join-Path ([Environment]::GetFolderPath('Windows')) 'Sysnative' }
-    & (Join-Path $systemDirectory 'WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy RemoteSigned -File $PSCommandPath -Destination $Destination
+    $forward = @{}
+    if ($MachineArchive) { $forward.MachineArchive = $MachineArchive }
+    & (Join-Path $systemDirectory 'WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy RemoteSigned -File $PSCommandPath -Destination $Destination @forward
     exit $LASTEXITCODE
 }
 $caller = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+if ($MachineArchive) {
+    if (!$caller.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'Machine-only update requires an existing administrator session.'
+    }
+    # Upgrade an enrolled machine only. The per-user shortcut is activated
+    # separately in the enrolled account after the new machine release passes.
+    $old = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\MusterNetwork'
+    if ($old.ImagePath -notmatch ' --service (S-1-(?:5-21|12-1)-(?:[0-9]+-){3}[0-9]+)$') {
+        throw 'No enrolled network service for a machine-only upgrade'
+    }
+    $enrolled = $Matches[1]
+    Install-MachineRelease '' 0 $manifestHash $enrolled ([IO.Path]::GetFullPath($MachineArchive))
+    return
+}
 if ($caller.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Run Apply-Update.cmd from your ordinary user session. The machine installation requests UAC.'
 }

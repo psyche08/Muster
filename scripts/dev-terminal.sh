@@ -22,7 +22,7 @@ for resource in "$bin"/*.bundle; do
   /usr/bin/ditto "$resource" "$bundle/Contents/Resources/$(basename "$resource")"
 done
 python3 "$root/addons/remote-desktop/build-host.py" "$CARGO_TARGET_DIR/desktop-host" \
-  "$bundle/Contents/MacOS/muster-desktop-host" "$bundle/Contents/Resources/ThirdParty/Host-Sources.tar.gz"
+  "$bundle/Contents/MacOS/muster-stream-host" "$bundle/Contents/Resources/ThirdParty/Host-Sources.tar.gz"
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

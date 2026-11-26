@@ -11,7 +11,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from terminal_runtime import stage_runtime
 
 PAYLOAD = (
-    "Muster.exe", "musterd.exe", "muster-tun.exe", "muster-vnet.exe",
+    "Muster.exe", "musterd.exe", "muster-stream-worker.exe", "muster-tun.exe", "muster-vnet.exe",
     "muster_ffi.dll", "cli/muster.exe", "wintun.dll", "Wintun-LICENSE.txt",
     "LICENSE.txt", "Runtime-Notices.txt", "muster-browser-host.exe",
     "dev.linsheng.muster.browser.json", "AgentHaloBrowser/manifest.json",
@@ -29,9 +29,9 @@ def build(stage, version, output):
         work = Path(work)
         runtime, sources = stage_runtime(work)
         viewer_dir = Path(os.environ["MUSTER_WINDOWS_VIEWER"])
-        viewer_payload = ("muster-moonlight.exe", "Viewer-Notices.txt")
+        viewer_payload = ("muster-moonlight.exe", "muster-stream-host.exe", "Viewer-Notices.txt")
         host_root = viewer_dir / "Sunshine"
-        if not (host_root / "muster-desktop-host.exe").is_file() or not (host_root / "assets/shaders").is_dir():
+        if not (host_root / "muster-stream-host.exe").is_file() or not (host_root / "assets/shaders").is_dir():
             raise ValueError("Missing private Sunshine host or its shader assets")
         viewer_payload += tuple(p.relative_to(viewer_dir).as_posix() for p in sorted(host_root.rglob("*")) if p.is_file())
         archive = work / name
