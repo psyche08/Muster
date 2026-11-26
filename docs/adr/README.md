@@ -432,3 +432,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0314](0314-mobile-remote-keyboard.md) | Proposed | Type into an authorized Remote desktop from a mobile keyboard |
 | [0315](0315-grouped-settings-and-permission-editors.md) | Accepted | Group settings and expose native permission controls |
 | [0316](0316-post-login-device-identity.md) | Accepted for verification | Verify the enrolled device identity outside the login session |
+| [0317](0317-resume-an-enrolled-windows-network-node.md) | Accepted for network startup | Resume an enrolled Windows network node by full device ID |

@@ -83,7 +83,23 @@ impl Store {
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::Other(format!("create {}: {e}", parent.display())))?;
         }
-        let conn = Connection::open(path)?;
+        Self::open_disk(Connection::open(path)?)
+    }
+
+    /// Resume an existing enrollment without provisioning a database or an empty roster.
+    pub fn open_enrolled(path: &Path) -> Result<Self> {
+        let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        let enrolled: bool =
+            conn.query_row("SELECT EXISTS(SELECT 1 FROM roster_entries)", [], |r| {
+                r.get(0)
+            })?;
+        if !enrolled {
+            return Err(Error::Other("no enrolled roster".into()));
+        }
+        Self::open_disk(conn)
+    }
+
+    fn open_disk(conn: Connection) -> Result<Self> {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
         )?;
@@ -648,8 +664,13 @@ mod tests {
 
     #[test]
     fn roster_round_trip_and_policy() {
-        let store = Store::open_memory().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("member.db");
+        assert!(Store::open_enrolled(&path).is_err());
+        assert!(!path.exists());
+        let store = Store::open(&path).unwrap();
         assert!(store.load_roster().unwrap().is_empty());
+        assert!(Store::open_enrolled(&path).is_err());
         let signer = SoftSigner::generate();
         let mut roster = Roster::new();
         let genesis = Author {
@@ -688,6 +709,9 @@ mod tests {
         let mut policy = store.policy().unwrap();
         policy.allow_locked_control = true;
         store.set_policy(&policy).unwrap();
+        drop(store);
+        let store = Store::open_enrolled(&path).unwrap();
+        assert_eq!(store.load_roster().unwrap().state(), roster.state());
         assert!(store.policy().unwrap().allow_locked_control);
     }
 

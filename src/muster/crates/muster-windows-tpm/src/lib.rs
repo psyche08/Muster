@@ -35,6 +35,7 @@ pub struct Tpm {
     key: Handle,
     _provider: Handle,
     public: PublicKey,
+    flags: u32,
 }
 
 impl Tpm {
@@ -42,19 +43,24 @@ impl Tpm {
         Self::open_device(true)
     }
 
-    /// Test the paired key, independently of the daemon and without provisioning a key.
-    pub fn verify_existing(expected: DeviceId) -> Result<()> {
+    pub fn open_existing(expected: DeviceId) -> Result<Self> {
         let key = Self::open_device(false)?;
         ensure!(
             key.public.device_id() == expected,
             "existing TPM device ID differs from the paired device"
         );
+        Ok(key)
+    }
+
+    /// Test the paired key, independently of the daemon and without provisioning a key.
+    pub fn verify_existing(expected: DeviceId) -> Result<()> {
+        let key = Self::open_existing(expected)?;
         let mut nonce = [0u8; 32];
         OsRng
             .try_fill_bytes(&mut nonce)
             .map_err(|e| anyhow::anyhow!("generate local challenge: {e}"))?;
         let message = [b"MUSTER-LOCAL-DEVICE-CHECK-V1\0".as_slice(), &nonce].concat();
-        let signature = key.sign_with_flags(&message, NCRYPT_SILENT_FLAG)?;
+        let signature = key.sign(&message)?;
         Ok(key.public.verify(&message, &signature)?)
     }
 
@@ -64,13 +70,13 @@ impl Tpm {
         let name = w!("Muster.Vnet.Device.P256");
         let mut blob = [0u8; 72];
         let mut size = 0;
+        let flags = if allow_create { 0 } else { NCRYPT_SILENT_FLAG };
         // Each buffer is sized as passed, and both handles live through all calls.
         unsafe {
             check(
                 NCryptOpenStorageProvider(&mut provider.0, MS_PLATFORM_CRYPTO_PROVIDER, 0),
                 "open TPM provider",
             )?;
-            let flags = if allow_create { 0 } else { NCRYPT_SILENT_FLAG };
             let status = NCryptOpenKey(provider.0, &mut key.0, name, 0, flags);
             if status == NTE_BAD_KEYSET && allow_create {
                 check(
@@ -114,10 +120,17 @@ impl Tpm {
             key,
             _provider: provider,
             public: PublicKey::from_raw(&point)?,
+            flags,
         })
     }
+}
 
-    fn sign_with_flags(&self, message: &[u8], flags: u32) -> Result<Vec<u8>, Error> {
+impl HwSigner for Tpm {
+    fn public_key(&self) -> PublicKey {
+        self.public.clone()
+    }
+
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
         let digest = Sha256::digest(message);
         let mut bytes = [0u8; 64];
         let mut size = 0;
@@ -130,7 +143,7 @@ impl Tpm {
                 bytes.as_mut_ptr(),
                 64,
                 &mut size,
-                flags,
+                self.flags,
             )
         };
         if status != 0 || size != 64 {
@@ -141,17 +154,6 @@ impl Tpm {
         let sig = Signature::from_slice(&bytes).map_err(|e| Error::Signature(e.to_string()))?;
         Ok(sig.to_der().as_bytes().to_vec())
     }
-}
-
-impl HwSigner for Tpm {
-    fn public_key(&self) -> PublicKey {
-        self.public.clone()
-    }
-
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
-        self.sign_with_flags(message, 0)
-    }
-
     fn backend(&self) -> &'static str {
         "tpm"
     }

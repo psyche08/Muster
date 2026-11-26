@@ -25,6 +25,9 @@ struct Options {
     /// Verify this paired device ID (64 hex digits) using its existing TPM key, without starting a node.
     #[arg(long, conflicts_with_all = ["join", "identity"], value_parser = DeviceId::from_hex)]
     verify_existing_device: Option<DeviceId>,
+    /// Start the network only with this enrolled device's existing key, database and ownership lock.
+    #[arg(long, conflicts_with_all = ["join", "identity", "verify_existing_device"], value_parser = DeviceId::from_hex)]
+    resume_existing_device: Option<DeviceId>,
 }
 
 pub async fn run() -> Result<()> {
@@ -37,22 +40,43 @@ pub async fn run() -> Result<()> {
     let path = PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA missing")?)
         .join("Muster")
         .join("Vnet");
-    std::fs::create_dir_all(&path)?;
+    let resume = options.resume_existing_device;
+    if resume.is_none() {
+        std::fs::create_dir_all(&path)?;
+    }
     // A Windows sharing violation excludes a second process, even after a crash.
     let _owner: File = OpenOptions::new()
         .write(true)
-        .create(true)
+        .create(resume.is_none())
         .truncate(false)
         .share_mode(0)
         .open(path.join("owner.lock"))
         .context("acquire vnet process lock")?;
-    let signer: SharedSigner = Arc::new(muster_windows_tpm::Tpm::open()?);
+    let signer: SharedSigner = Arc::new(match resume {
+        Some(id) => muster_windows_tpm::Tpm::open_existing(id)?,
+        None => muster_windows_tpm::Tpm::open()?,
+    });
     println!("Device {}", signer.public_key().device_id());
     if options.identity {
         return Ok(());
     }
-    let store = Store::open(&path.join("node.sqlite3"))?;
+    let database = path.join("node.sqlite3");
+    let store = match resume {
+        Some(_) => Store::open_enrolled(&database)?,
+        None => Store::open(&database)?,
+    };
     let roster = store.load_roster()?;
+    if let Some(id) = resume {
+        let state = roster.state();
+        ensure!(
+            state
+                .active(&id)
+                .and_then(|member| member.record.vip)
+                .is_some()
+                && state.vnet_cidr.is_some(),
+            "existing device is not an active member with a virtual network address"
+        );
+    }
     let invite = if options.join {
         ensure!(roster.is_empty(), "already enrolled");
         let mut text = String::new();
@@ -82,6 +106,16 @@ pub async fn run() -> Result<()> {
         std::env::var("COMPUTERNAME")?,
         DeviceKind::Desktop,
     );
+    let policy = if resume.is_some() && store.meta("policy")?.is_some() {
+        store.policy()?
+    } else {
+        LocalPolicy {
+            offer_agent: false,
+            offer_terminal: false,
+            open_ports: Vec::new(),
+            ..Default::default()
+        }
+    };
     let node = Node::start_vnet_only(
         NodeConfig {
             relay: RelayConfig::Secure(relay.clone()),
@@ -89,12 +123,7 @@ pub async fn run() -> Result<()> {
         },
         signer,
         Arc::new(RwLock::new(roster)),
-        Arc::new(RwLock::new(LocalPolicy {
-            offer_agent: false,
-            offer_terminal: false,
-            open_ports: Vec::new(),
-            ..Default::default()
-        })),
+        Arc::new(RwLock::new(policy)),
     )
     .await?;
     let mut changes = node.subscribe_entries();
