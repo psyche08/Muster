@@ -22,6 +22,9 @@ struct Session {
     agent: String,
     cwd: String,
     provider_id: String,
+    // Existing persisted sessions retain the key used by receipts and callbacks.
+    #[serde(default)]
+    scoped_session_id: bool,
     #[serde(default)]
     stream_message: String,
     generation: String,
@@ -29,6 +32,11 @@ struct Session {
     state: String,
     #[serde(default)]
     created_at: u64,
+}
+impl Session {
+    fn cli(&self) -> &'static muster_core::apps::NativeCli {
+        muster_core::apps::native_cli_for_agent(&self.agent).expect("validated stored CLI agent")
+    }
 }
 struct Store {
     db: Connection,
@@ -92,6 +100,9 @@ impl NativeRuntime {
                 .map(|row| {
                     let mut s: Session = serde_json::from_str(&row.map_err(db_error)?)
                         .map_err(|_| unavailable("CLI session store is corrupt"))?;
+                    if muster_core::apps::native_cli_for_agent(&s.agent).is_none() {
+                        return Err(unavailable("Unknown CLI agent in session store"));
+                    }
                     // A persisted state never proves that an old child is alive.
                     s.generation.clear();
                     s.turn.clear();
@@ -125,11 +136,11 @@ impl NativeRuntime {
         Ok(runtime)
     }
     fn program(&self, agent: &str) -> Result<PathBuf, Error> {
+        if muster_core::apps::native_cli_for_agent(agent).is_none() {
+            return Err(Error::Invalid("Unsupported CLI agent".into()));
+        }
         if let Some(path) = self.programs.get(agent) {
             return Ok(path.clone());
-        }
-        if !matches!(agent, "codex" | "claude") {
-            return Err(Error::Invalid("Unsupported CLI agent".into()));
         }
         if let Some(path) = program::resolve(agent) {
             return Ok(path);
@@ -267,6 +278,7 @@ impl NativeRuntime {
             agent: agent.to_owned(),
             cwd: cwd.clone(),
             provider_id: String::new(),
+            scoped_session_id: true,
             stream_message: String::new(),
             generation: String::new(),
             turn: String::new(),
@@ -557,8 +569,20 @@ impl NativeRuntime {
         }
         Ok(())
     }
-    pub(super) fn session_key(&self, id: &str) -> String {
-        format!("orca:{}:{}", hex::encode(&self.runtime), hex::encode(id))
+    pub(super) fn session_key(&self, id: &str) -> Result<String, Error> {
+        Ok(self.key(&self.session(id)?))
+    }
+    fn key(&self, session: &Session) -> String {
+        let namespace = if session.scoped_session_id {
+            session.cli().provider
+        } else {
+            "orca"
+        };
+        format!(
+            "{namespace}:{}:{}",
+            hex::encode(&self.runtime),
+            hex::encode(&session.id)
+        )
     }
     pub(super) fn catalog(&self) -> Result<Vec<(String, AgentSession)>, Error> {
         self.ensure_active()?;
@@ -585,14 +609,13 @@ impl NativeRuntime {
                 (
                     s.id.clone(),
                     AgentSession {
-                        id: self.session_key(&s.id),
-                        title: format!("{} · {title}", s.agent),
+                        id: self.key(s),
+                        title: format!("{} · {title}", s.cli().label),
                         cwd: s.cwd.clone(),
                         updated_unix: updated.get(&s.id).copied().unwrap_or(s.created_at) / 1000,
-                        // Stable across mixed-version peers and existing access grants.
-                        provider: "orca".into(),
-                        mode: "orca".into(),
-                        controller: "orca".into(),
+                        provider: s.cli().provider.into(),
+                        mode: "cli".into(),
+                        controller: s.cli().provider.into(),
                         process_state: "unknown".into(),
                         state: "unknown".into(),
                         launch: crate::launch::MUSTER.into(),
@@ -734,7 +757,7 @@ impl NativeRuntime {
             .find(|item| render::interaction_id(item) == interaction)
             .ok_or_else(|| Error::Conflict("Prompt changed or was already answered".into()))?;
         let item_id = string(&item, "itemId")?;
-        let (_, prompts) = render::project(&self.session_key(id), std::slice::from_ref(&item))?;
+        let (_, prompts) = render::project(&self.session_key(id)?, std::slice::from_ref(&item))?;
         let prompt = prompts
             .first()
             .ok_or_else(|| Error::Conflict("Prompt is no longer actionable".into()))?;

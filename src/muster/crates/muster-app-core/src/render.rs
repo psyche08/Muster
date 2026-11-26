@@ -66,7 +66,7 @@ fn session_timeline(
         chat.history_start_index(),
         chat.history_end_index(),
         matches!(chat.session.state.as_str(), "running" | "waiting_approval"),
-        chat.session.mode == "orca",
+        matches!(chat.session.mode.as_str(), "cli" | "orca"),
         &chat.work,
     );
     crate::timeline::activity_indicator(
@@ -143,7 +143,14 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                     ..Default::default()
                 })
                 .collect(),
-            create_agents: vec!["codex".into(), "claude".into()],
+            create_agents: muster_core::apps::NATIVE_CLIS
+                .iter()
+                .map(|cli| cli.provider.into())
+                .collect(),
+            create_agent_labels: muster_core::apps::NATIVE_CLIS
+                .iter()
+                .map(|cli| (cli.provider.into(), cli.label.into()))
+                .collect(),
             native_create_hosts: crate::update::native_create::hosts(state)
                 .into_iter()
                 .map(|m| muster_proto::v1::MemberView {
@@ -222,7 +229,10 @@ fn project(state: &State, content: bool) -> app::ViewModel {
         && let Some(chat) = &state.chat
     {
         // Desktop chats take text only: no attachments offered.
-        let attachments = !matches!(chat.session.mode.as_str(), "chat" | "orca" | "sidechat");
+        let attachments = !matches!(
+            chat.session.mode.as_str(),
+            "chat" | "cli" | "orca" | "sidechat"
+        );
         let (queued, interactions): (Vec<_>, Vec<_>) =
             muster_agent::queue::ordered_interactions(&chat.interactions)
                 .into_iter()
@@ -321,9 +331,11 @@ fn project(state: &State, content: bool) -> app::ViewModel {
                 && chat.session.mode != "cloud"
                 && chat.session.mode != "sidechat"
                 && offers(&chat.session, |c| c.interrupt),
-            can_choose_model: !matches!(chat.session.mode.as_str(), "cloud" | "orca" | "sidechat")
-                && offers(&chat.session, |c| c.model_options),
-            can_browse_files: !matches!(chat.session.mode.as_str(), "orca" | "sidechat")
+            can_choose_model: !matches!(
+                chat.session.mode.as_str(),
+                "cloud" | "cli" | "orca" | "sidechat"
+            ) && offers(&chat.session, |c| c.model_options),
+            can_browse_files: !matches!(chat.session.mode.as_str(), "cli" | "orca" | "sidechat")
                 && chat.session.mode != "chat"
                 && chat.session.mode != "cloud"
                 && offers(&chat.session, |c| c.files),
@@ -537,7 +549,7 @@ impl Renderer {
                 c.content_revision,
                 c.session.state.clone(),
                 c.session.descendant_activity.clone(),
-                c.session.mode == "orca",
+                matches!(c.session.mode.as_str(), "cli" | "orca"),
             )
         });
         let mut comparison = vm.clone();
@@ -1353,6 +1365,9 @@ fn offers(
 /// (Claude Cloud), an agent session the agent's (Claude Code, CatDesk); an
 /// unknown provider shows its own name.
 fn provider_label(session: &muster_proto::v1::AgentSession) -> String {
+    if let Some(cli) = muster_core::apps::native_cli(&session.provider) {
+        return cli.label.into();
+    }
     if session.mode == "orca" {
         return "CLI".into();
     }
@@ -1378,7 +1393,7 @@ fn provider_label(session: &muster_proto::v1::AgentSession) -> String {
 /// leaves the shell's own.
 fn composer_placeholder(session: &muster_proto::v1::AgentSession, has_messages: bool) -> String {
     match (session.provider.as_str(), session.mode.as_str()) {
-        (_, "orca" | "cloud") => "",
+        (_, "cli" | "orca" | "cloud") => "",
         ("codex", "chat") => "Ask ChatGPT",
         ("codex", _) if has_messages => "Work with Codex",
         ("codex", _) => "Do anything",

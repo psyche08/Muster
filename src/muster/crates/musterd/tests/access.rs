@@ -555,7 +555,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         &remote
             .call(Req::AgentSend(v1::AgentSendRequest {
                 op_id: "denied-orca-send".into(),
-                session: orca_id,
+                session: orca_id.clone(),
                 text: "must not run".into(),
                 ..Default::default()
             }))
@@ -698,6 +698,55 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
         );
     }
 
+    // A scoped CLI grant opens only the recorded native provider. Explicit
+    // selection overrides a leftover aggregate. Both the legacy and unfiltered
+    // catalogs apply that same boundary.
+    ca.call(Req::NetworkSetScopes(v1::NetworkSetScopesRequest {
+        device_id: pending.device_id.clone(),
+        scopes: ["agents", "agents:orca", "agents:codex-cli"]
+            .map(str::to_owned)
+            .into(),
+        role: "member".into(),
+    }))
+    .await
+    .unwrap();
+    assert_eq!(
+        sessions(&remote, "codex-cli").await.unwrap(),
+        [orca_id.clone()]
+    );
+    assert_eq!(sessions(&remote, "orca").await.unwrap(), [orca_id.clone()]);
+    assert_eq!(sessions(&remote, "").await.unwrap(), [orca_id.clone()]);
+    assert!(matches!(read(&orca_id).await, Ok(Resp::AgentMessages(_))));
+    let create_cli = |agent: &str| {
+        remote.call(Req::OrcaCreate(v1::OrcaCreateRequest {
+            op_id: "same-cli-create".into(),
+            agent: agent.into(),
+            directory: dir_a.path().display().to_string(),
+            ..Default::default()
+        }))
+    };
+    let Resp::OpResult(created) = create_cli("codex-cli").await.unwrap() else {
+        panic!("CLI create")
+    };
+    assert_eq!(created.status(), v1::op_result::Status::Applied);
+    assert!(created.result_id.starts_with("codex-cli:"));
+    let Resp::OpResult(replayed) = create_cli("codex").await.unwrap() else {
+        panic!("CLI replay")
+    };
+    assert_eq!(replayed.status(), v1::op_result::Status::Duplicate);
+    assert_eq!(replayed.result_id, created.result_id);
+    assert!(unauthorized(&sessions(&remote, "claude-cli").await));
+    assert!(unauthorized(&sessions(&remote, "codex").await));
+    assert!(unauthorized(
+        &remote
+            .call(Req::OrcaCreate(v1::OrcaCreateRequest {
+                op_id: "wrong-provider".into(),
+                agent: "claude".into(),
+                directory: dir_a.path().display().to_string(),
+                ..Default::default()
+            }))
+            .await
+    ));
     ca.call(Req::NetworkSetScopes(v1::NetworkSetScopesRequest {
         device_id: pending.device_id.clone(),
         scopes: vec![
@@ -713,7 +762,7 @@ async fn agents_are_granted_per_provider_and_withdrawn_from_open_watches() {
     let all_desktop = sessions(&remote, "").await.unwrap();
     assert!(all_desktop.contains(&CODEX.to_string()) && all_desktop.contains(&CLAUDE.to_string()));
     assert!(
-        !all_desktop.iter().any(|id| id.starts_with("orca:")),
+        !all_desktop.iter().any(|id| muster_agent::cli::is_cli(id)),
         "all Desktop scopes must not leak CLI sessions"
     );
     let mut catalog = remote

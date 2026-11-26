@@ -7,7 +7,7 @@ journal and parts of the presentation originated in an Orca port. Its
 
 ## Use
 
-In Muster's Agents view, choose **New CLI session**, a device, Codex or Claude,
+In Muster's Agents view, choose **New CLI session**, a device, Codex CLI or Claude Code CLI,
 and an existing absolute directory on that device. The session works in that
 directory; creation does not create a Git branch/worktree or run setup scripts.
 Open it and send a message using Muster's normal composer. The CLI is started
@@ -18,8 +18,7 @@ configured by the desktop app. If that native executable is unavailable, lookup
 falls back to absolute PATH entries and the usual native installation directories.
 Script/Node launchers and non-executable files are not selected. Muster owns session management, not the providers' account setup.
 
-macOS and iOS share the creation UI. The same typed Intent/ViewModel/RPC supports
-other platform shells; their native creation forms are not included in this change.
+macOS, iOS and Windows render the same provider choices from Shared Rust.
 
 ## Ownership and transport
 
@@ -42,7 +41,9 @@ other platform shells; their native creation forms are not included in this chan
 - Approvals bind the shown revision and exact offered option. The journal consumes
   the callback atomically before writing a response. Unknown prompt shapes remain
   unavailable and can be interrupted; they are never silently approved.
-- Remote clients need the explicit `agents:orca` scope (or the all-agent scope).
+- Remote clients need the selected native provider scope, `agents:codex-cli` or
+  `agents:claude-cli`, with the Agents module (or a matching receiver grant).
+  The historical `agents:orca` scope covers both native CLIs until narrowed.
   Holding every Desktop provider scope does not grant CLI sessions. Existing
   network identity, policy and lock-state authorization remain in force. This
   adapter does not drive Accessibility and needs no desktop unlock sequence.
@@ -98,6 +99,6 @@ available. Completing an answer leaves the child open for follow-ups.
 Each question uses a fresh temporary fork of the current parent and up to the
 last eight successful exchanges from the child's journal. The host needs a
 recent signed-in native CLI for that provider; a paired client also needs
-Agent control for both the provider and the CLI adapter (`agents:orca`).
+Agent control for both the desktop provider and its corresponding native CLI.
 Side prompts and answers are stored on the host by Muster. They never go to
 the parent composer and do not appear in the provider application's sidebar.

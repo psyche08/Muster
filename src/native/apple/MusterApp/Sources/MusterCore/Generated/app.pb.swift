@@ -3193,9 +3193,16 @@ public nonisolated struct Muster_App_AgentsView: @unchecked Sendable {
     set {_uniqueStorage()._createHosts = newValue}
   }
 
+  /// Native CLI provider keys.
   public var createAgents: [String] {
     get {_storage._createAgents}
     set {_uniqueStorage()._createAgents = newValue}
+  }
+
+  /// Titles keyed by create_agents.
+  public var createAgentLabels: Dictionary<String,String> {
+    get {_storage._createAgentLabels}
+    set {_uniqueStorage()._createAgentLabels = newValue}
   }
 
   public var creating: Bool {
@@ -9804,7 +9811,7 @@ nonisolated extension Muster_App_JoinView: SwiftProtobuf.Message, SwiftProtobuf.
 
 nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AgentsView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0\u{3}native_create_hosts\0\u{3}native_create_apps\0\u{3}native_creating\0\u{3}native_create_draft\0\u{3}launch_labels\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}sessions\0\u{1}loading\0\u{1}errors\0\u{3}create_hosts\0\u{3}create_agents\0\u{1}creating\0\u{3}native_sections\0\u{1}sections\0\u{1}query\0\u{1}searching\0\u{3}search_notices\0\u{3}search_has_more\0\u{3}native_create_hosts\0\u{3}native_create_apps\0\u{3}native_creating\0\u{3}native_create_draft\0\u{3}launch_labels\0\u{3}create_agent_labels\0")
 
   fileprivate class _StorageClass {
     var _nativeSections: [Muster_V1_AgentSection] = []
@@ -9815,6 +9822,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
     var _searchNotices: [String] = []
     var _createHosts: [Muster_V1_MemberView] = []
     var _createAgents: [String] = []
+    var _createAgentLabels: Dictionary<String,String> = [:]
     var _creating: Bool = false
     var _nativeCreateHosts: [Muster_V1_MemberView] = []
     var _nativeCreateApps: [String] = []
@@ -9843,6 +9851,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
       _searchNotices = source._searchNotices
       _createHosts = source._createHosts
       _createAgents = source._createAgents
+      _createAgentLabels = source._createAgentLabels
       _creating = source._creating
       _nativeCreateHosts = source._nativeCreateHosts
       _nativeCreateApps = source._nativeCreateApps
@@ -9889,6 +9898,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
         case 16: try { try decoder.decodeSingularBoolField(value: &_storage._nativeCreating) }()
         case 17: try { try decoder.decodeSingularMessageField(value: &_storage._nativeCreateDraft) }()
         case 18: try { try decoder.decodeRepeatedStringField(value: &_storage._launchLabels) }()
+        case 19: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &_storage._createAgentLabels) }()
         default: break
         }
       }
@@ -9955,6 +9965,9 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
       if !_storage._launchLabels.isEmpty {
         try visitor.visitRepeatedStringField(value: _storage._launchLabels, fieldNumber: 18)
       }
+      if !_storage._createAgentLabels.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: _storage._createAgentLabels, fieldNumber: 19)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -9972,6 +9985,7 @@ nonisolated extension Muster_App_AgentsView: SwiftProtobuf.Message, SwiftProtobu
         if _storage._searchNotices != rhs_storage._searchNotices {return false}
         if _storage._createHosts != rhs_storage._createHosts {return false}
         if _storage._createAgents != rhs_storage._createAgents {return false}
+        if _storage._createAgentLabels != rhs_storage._createAgentLabels {return false}
         if _storage._creating != rhs_storage._creating {return false}
         if _storage._nativeCreateHosts != rhs_storage._nativeCreateHosts {return false}
         if _storage._nativeCreateApps != rhs_storage._nativeCreateApps {return false}

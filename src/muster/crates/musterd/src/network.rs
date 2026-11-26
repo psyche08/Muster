@@ -339,6 +339,11 @@ impl Daemon {
             services.push(muster_proto::TERMINAL_RUN_HISTORY.to_string());
             if self.agent().is_some_and(|a| a.cli_source().is_ok()) {
                 services.push("agent.orca.v1".to_string());
+                services.extend(
+                    muster_core::apps::NATIVE_CLIS
+                        .iter()
+                        .map(|c| format!("agent.{}.v1", c.provider)),
+                );
             }
             services.push("agent.side_chat.v1".to_string());
             services.push("agent.attachments".to_string());

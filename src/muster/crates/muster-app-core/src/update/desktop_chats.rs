@@ -388,7 +388,7 @@ pub(super) fn desktop_chat_open(
 /// Mac. One request at a time; the answer is the app's own list afterwards.
 pub(super) fn chat_options(state: &mut State, ctx: &Ctx, set: Option<(String, String)>) {
     let Some(chat) = &mut state.chat else { return };
-    if matches!(chat.session.mode.as_str(), "cloud" | "orca")
+    if matches!(chat.session.mode.as_str(), "cloud" | "cli" | "orca")
         || chat.session.read_only
         || chat.options_busy
     {
