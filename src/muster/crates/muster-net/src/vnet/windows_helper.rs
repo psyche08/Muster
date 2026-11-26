@@ -1,5 +1,6 @@
 //! The interactive daemon owns QUIC and authorization. The elevated helper
 //! owns only the named Wintun adapter and one framed local packet stream.
+pub mod service;
 use super::{Error, PacketReader, PacketWriter, VnetConfig, interface_config, open_tun};
 use std::os::windows::{
     ffi::{OsStrExt, OsStringExt},
@@ -89,30 +90,53 @@ fn launch(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> io::Result<Ow
         Ok(OwnedHandle::from_raw_handle(info.hProcess))
     }
 }
+enum Helper {
+    Interactive(OwnedHandle),
+    Managed(service::Service),
+}
 pub(super) async fn open(
     addr: Ipv4Addr,
     prefix: u8,
+    require_service: bool,
 ) -> Result<(PacketWriter, PacketReader), Error> {
     let token = rand::random::<u128>();
     let listener =
         muster_local::Listener::bind_for_elevated_helper(&endpoint(token).map_err(error)?)
             .map_err(error)?;
     let owner = listener.owner_sid().to_owned();
-    let handle = tokio::task::spawn_blocking(move || launch(addr, prefix, token, &owner))
-        .await
-        .map_err(error)?
-        .map_err(error)?;
-    let expected = unsafe { GetProcessId(handle.as_raw_handle()) };
+    let helper = tokio::task::spawn_blocking(move || -> io::Result<_> {
+        if let Some(managed) = service::start(token)? {
+            Ok(Helper::Managed(managed))
+        } else if require_service {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "MusterNetwork service is required for background vnet",
+            ))
+        } else {
+            launch(addr, prefix, token, &owner).map(Helper::Interactive)
+        }
+    })
+    .await
+    .map_err(error)?
+    .map_err(error)?;
     let (mut pipe, ()) = tokio::time::timeout(Duration::from_secs(30), listener.accept())
         .await
         .map_err(error)?
         .map_err(error)?;
+    let expected = match &helper {
+        Helper::Interactive(handle) => unsafe { GetProcessId(handle.as_raw_handle()) },
+        Helper::Managed(service) => service.pid().map_err(error)?,
+    };
     let mut pid = 0;
     if unsafe { GetNamedPipeClientProcessId(pipe.as_raw_handle(), &mut pid) } == 0
         || pid != expected
         || expected == 0
     {
         return Err(error("unexpected helper process"));
+    }
+    if matches!(helper, Helper::Managed(_)) {
+        let [a, b, c, d] = addr.octets();
+        pipe.write_all(&[a, b, c, d, prefix]).await.map_err(error)?;
     }
     let mut ready = [0; 4];
     tokio::time::timeout(Duration::from_secs(30), pipe.read_exact(&mut ready))
@@ -172,6 +196,17 @@ pub fn prepare_process() -> io::Result<()> {
     Ok(())
 }
 pub async fn run(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> Result<(), Error> {
+    let pipe = muster_local::connect_to_owner(&endpoint(token).map_err(error)?, owner)
+        .await
+        .map_err(error)?;
+    serve_adapter(pipe, addr, prefix).await
+}
+
+async fn serve_adapter(
+    mut pipe: tokio::net::windows::named_pipe::NamedPipeClient,
+    addr: Ipv4Addr,
+    prefix: u8,
+) -> Result<(), Error> {
     if !(1..=32).contains(&prefix)
         || addr.is_unspecified()
         || addr.is_multicast()
@@ -179,9 +214,6 @@ pub async fn run(addr: Ipv4Addr, prefix: u8, token: u128, owner: &str) -> Result
     {
         return Err(error("invalid interface address"));
     }
-    let mut pipe = muster_local::connect_to_owner(&endpoint(token).map_err(error)?, owner)
-        .await
-        .map_err(error)?;
     let config = VnetConfig {
         name: Some("MusterVnet".into()),
         ..Default::default()

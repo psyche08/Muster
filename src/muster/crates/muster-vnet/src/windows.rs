@@ -62,21 +62,10 @@ pub async fn run() -> Result<()> {
     }
     let database = path.join("node.sqlite3");
     let store = match resume {
-        Some(_) => Store::open_enrolled(&database)?,
+        Some(id) => Store::open_enrolled(&database, id)?,
         None => Store::open(&database)?,
     };
     let roster = store.load_roster()?;
-    if let Some(id) = resume {
-        let state = roster.state();
-        ensure!(
-            state
-                .active(&id)
-                .and_then(|member| member.record.vip)
-                .is_some()
-                && state.vnet_cidr.is_some(),
-            "existing device is not an active member with a virtual network address"
-        );
-    }
     let invite = if options.join {
         ensure!(roster.is_empty(), "already enrolled");
         let mut text = String::new();

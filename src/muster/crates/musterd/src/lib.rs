@@ -102,6 +102,9 @@ pub const BUILD_STAMP: &str = concat!("MUSTER-BUILD-COMMIT:", env!("MUSTER_BUILD
 pub struct DaemonConfig {
     /// State directory: the store and the socket live here.
     pub dir: PathBuf,
+    /// Resume the installed Windows identity without provisioning any state.
+    #[cfg(windows)]
+    pub resume_existing_device: Option<DeviceId>,
     pub socket: Option<PathBuf>,
     pub bind: SocketAddr,
     /// "host:port" (UDP) or "ws(s)://…"; remembered in the store once given.
@@ -160,6 +163,8 @@ impl DaemonConfig {
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self {
             dir: dir.into(),
+            #[cfg(windows)]
+            resume_existing_device: None,
             socket: None,
             bind: "0.0.0.0:0".parse().unwrap(),
             relay: None,
@@ -307,6 +312,7 @@ impl Daemon {
         if config.version.trim().is_empty() {
             config.version = build_info::installed_version();
         }
+        #[cfg(not(windows))]
         std::fs::create_dir_all(&config.dir)?;
         let database = config.dir.join("musterd.db");
         #[cfg(windows)]
@@ -314,6 +320,17 @@ impl Daemon {
             use std::os::windows::fs::OpenOptionsExt;
             // All processes using the per-user TPM key share the same ownership
             // lock, including an existing standalone network-only installation.
+            let resume = config.resume_existing_device.is_some();
+            if resume {
+                muster_platform::require_ordinary_user()?;
+            }
+            anyhow::ensure!(
+                !resume || (signer.is_none() && config.signer.is_none()),
+                "resuming requires the existing Windows TPM signer"
+            );
+            if !resume {
+                std::fs::create_dir_all(&config.dir)?;
+            }
             if signer.is_none() && config.signer.is_none() {
                 let root = std::path::PathBuf::from(
                     std::env::var_os("LOCALAPPDATA")
@@ -321,9 +338,25 @@ impl Daemon {
                 )
                 .join("Muster");
                 let vnet = root.join("Vnet");
-                std::fs::create_dir_all(&vnet)?;
-                let lock = std::fs::OpenOptions::new().create(true).write(true).truncate(false).share_mode(0)
-                    .open(vnet.join("owner.lock")).map_err(|e| anyhow::anyhow!("cannot acquire Windows device identity; close the active Muster daemon or vnet process: {e}"))?;
+                if resume {
+                    anyhow::ensure!(
+                        config.dir == root && root.is_absolute(),
+                        "resuming requires the installed account profile"
+                    );
+                } else {
+                    std::fs::create_dir_all(&vnet)?;
+                }
+                let lock = std::fs::OpenOptions::new()
+                    .create(!resume)
+                    .write(true)
+                    .truncate(false)
+                    .share_mode(0)
+                    .open(vnet.join("owner.lock"))
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "cannot acquire Windows device identity ownership lock: {e}"
+                        )
+                    })?;
                 let db = if config.dir == root {
                     vnet.join("node.sqlite3")
                 } else {
@@ -334,6 +367,19 @@ impl Daemon {
                 (None, database)
             }
         };
+        #[cfg(windows)]
+        let existing = config
+            .resume_existing_device
+            .map(muster_platform::signer::existing_device_signer)
+            .transpose()?;
+        #[cfg(windows)]
+        let store = Arc::new(match config.resume_existing_device {
+            Some(id) => Store::open_enrolled(&database, id)?,
+            None => Store::open(&database)?,
+        });
+        #[cfg(windows)]
+        let signer = existing.or(signer);
+        #[cfg(not(windows))]
         let store = Arc::new(Store::open(&database)?);
         let signer = match (signer, &config.signer) {
             (Some(signer), _) => signer,
@@ -844,6 +890,7 @@ impl Daemon {
         {
             config.name = Some("MusterVnet".into());
             config.use_helper = true;
+            config.require_service = self.config.resume_existing_device.is_some();
         }
         #[cfg(target_os = "macos")]
         let (helper, helper_address) = {

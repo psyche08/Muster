@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 #[cfg(all(target_os = "macos", feature = "sep"))]
 use muster_core::HwSigner;
-use muster_core::{SharedSigner, SoftSigner};
+use muster_core::SharedSigner;
+#[cfg(not(windows))]
+use muster_core::SoftSigner;
 use muster_store::Store;
 
 /// The best signer this machine offers, created on first use and kept in
@@ -18,6 +20,11 @@ use muster_store::Store;
 #[cfg(windows)]
 pub fn device_signer(_: &Store) -> anyhow::Result<SharedSigner> {
     Ok(Arc::new(muster_windows_tpm::Tpm::open()?))
+}
+
+#[cfg(windows)]
+pub fn existing_device_signer(id: muster_core::DeviceId) -> anyhow::Result<SharedSigner> {
+    Ok(Arc::new(muster_windows_tpm::Tpm::open_existing(id)?))
 }
 
 #[cfg(not(windows))]

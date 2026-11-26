@@ -6,6 +6,55 @@ pub(crate) mod code;
 mod link_clipboard;
 mod provider;
 pub struct Windows;
+
+/// An elevated batch logon must never offer the user's full Terminal or Agent services.
+pub fn require_ordinary_user() -> std::io::Result<()> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::{Security::*, System::Threading::*};
+    unsafe {
+        let mut raw = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let token = OwnedHandle::from_raw_handle(raw);
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut bytes = 0;
+        if GetTokenInformation(
+            token.as_raw_handle(),
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size_of_val(&elevation) as u32,
+            &mut bytes,
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut sid = [0u32; SECURITY_MAX_SID_SIZE as usize / 4];
+        let mut size = size_of_val(&sid) as u32;
+        let mut admin = 0;
+        if CreateWellKnownSid(
+            WinBuiltinAdministratorsSid,
+            std::ptr::null_mut(),
+            sid.as_mut_ptr().cast(),
+            &mut size,
+        ) == 0
+            || CheckTokenMembership(
+                std::ptr::null_mut(),
+                sid.as_ptr().cast_mut().cast(),
+                &mut admin,
+            ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        if elevation.TokenIsElevated != 0 || admin != 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "enrolled musterd requires a non-administrative user token",
+            ));
+        }
+        Ok(())
+    }
+}
 fn session() -> Option<WTSINFOEX_LEVEL1_W> {
     let mut buffer = std::ptr::null_mut();
     let mut size = 0;

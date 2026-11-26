@@ -87,14 +87,16 @@ impl Store {
     }
 
     /// Resume an existing enrollment without provisioning a database or an empty roster.
-    pub fn open_enrolled(path: &Path) -> Result<Self> {
+    pub fn open_enrolled(path: &Path, device: muster_core::DeviceId) -> Result<Self> {
         let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)?;
-        let enrolled: bool =
-            conn.query_row("SELECT EXISTS(SELECT 1 FROM roster_entries)", [], |r| {
-                r.get(0)
-            })?;
-        if !enrolled {
-            return Err(Error::Other("no enrolled roster".into()));
+        // Check the signed history before schema migration or pending-operation recovery.
+        let entries = Self::read_entries(&conn)?;
+        let roster = Roster::from_entries(entries)?;
+        let state = roster.state();
+        if state.active(&device).and_then(|m| m.record.vip).is_none() || state.vnet_cidr.is_none() {
+            return Err(Error::Other(
+                "existing device is not an active member with a virtual network address".into(),
+            ));
         }
         Self::open_disk(conn)
     }
@@ -184,7 +186,10 @@ impl Store {
     }
 
     pub fn load_entries(&self) -> Result<Vec<Entry>> {
-        let conn = self.conn.lock().unwrap();
+        Self::read_entries(&self.conn.lock().unwrap())
+    }
+
+    fn read_entries(conn: &Connection) -> Result<Vec<Entry>> {
         let mut stmt = conn.prepare("SELECT bytes FROM roster_entries ORDER BY seq")?;
         let rows = stmt.query_map([], |row| row.get::<_, Vec<u8>>(0))?;
         let mut entries = Vec::new();
@@ -666,12 +671,13 @@ mod tests {
     fn roster_round_trip_and_policy() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("member.db");
-        assert!(Store::open_enrolled(&path).is_err());
+        let signer = SoftSigner::generate();
+        let device = signer.public_key().device_id();
+        assert!(Store::open_enrolled(&path, device).is_err());
         assert!(!path.exists());
         let store = Store::open(&path).unwrap();
         assert!(store.load_roster().unwrap().is_empty());
-        assert!(Store::open_enrolled(&path).is_err());
-        let signer = SoftSigner::generate();
+        assert!(Store::open_enrolled(&path, device).is_err());
         let mut roster = Roster::new();
         let genesis = Author {
             roster: &roster,
@@ -709,8 +715,18 @@ mod tests {
         let mut policy = store.policy().unwrap();
         policy.allow_locked_control = true;
         store.set_policy(&policy).unwrap();
+        store
+            .ledger()
+            .begin("resume-check", "test", b"sample")
+            .unwrap();
+        let stranger = SoftSigner::generate().public_key().device_id();
+        assert!(Store::open_enrolled(&path, stranger).is_err());
+        assert_eq!(
+            store.ledger().status("resume-check").unwrap().as_deref(),
+            Some("pending")
+        );
         drop(store);
-        let store = Store::open_enrolled(&path).unwrap();
+        let store = Store::open_enrolled(&path, device).unwrap();
         assert_eq!(store.load_roster().unwrap().state(), roster.state());
         assert!(store.policy().unwrap().allow_locked_control);
     }

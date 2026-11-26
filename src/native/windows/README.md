@@ -45,19 +45,22 @@ for the same account. An exclusive owner lock protects the identity and roster
 against concurrent use. To keep running only the network node, leave the
 desktop closed and keep the existing node running.
 
-The full daemon runs in the interactive session. Windows requests elevation
-for the Wintun helper when the virtual network starts. An existing protected
-helper from the desktop MSI can continue serving a compatible packet protocol.
-On a fresh machine an administrator must first copy the verified package's
-`payload\muster-tun.exe` and `payload\wintun.dll` into the system
-`Program Files\Muster` directory using Explorer and approve that copy. Use
-the same separate step when a release changes the helper protocol or driver.
-Provision these files again if removing a previous MSI removes them. Keep
-the default administrator-owned Program Files permissions. Start the desktop
-from the per-user shortcut. The helper handles IP
-packets only. Agent and terminal sharing are off for a new Windows policy.
-An administrator on the Muster network can review a joining device's
-fingerprint and choose its scopes before accepting it.
+The UAC updater registers the protected release's Wintun helper as the
+demand-start MusterNetwork service. The updating account can start the service
+and query its status. The service accepts an adapter plan from the installed
+sibling daemon over a local pipe owned by the configured account.
+Closing the packet stream releases the adapter. Installations without the
+service retain the interactive UAC helper under Program Files.
+
+For background activation of an already enrolled full node, use
+`musterd.exe --resume-existing-device <64-hex-device-id>` under the enrolled
+user with an ordinary token. It shares the exclusive identity lock with
+ordinary startup and requires the service for Wintun. The
+`Muster.exe --connect-installed` entry attaches to that user's running node.
+The installer currently retains interactive daemon startup. Start the desktop
+from the per-user shortcut. Agent and terminal sharing are off for a new
+Windows policy. An administrator on the Muster network can review a joining
+device's fingerprint and choose its scopes before accepting it.
 
 The Chats page can control a local Claude or ChatGPT desktop app in an
 unlocked interactive session. Keep the provider signed in. ChatGPT reads the

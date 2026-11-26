@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $manifestHash = '@MUSTER_RELEASE_SHA256@'
 
 function Install-MachineRelease {
-    param([string]$pipeName, [int]$manifestLength, [string]$expectedHash)
+    param([string]$pipeName, [int]$manifestLength, [string]$expectedHash, [string]$nodeSid)
     $ErrorActionPreference = 'Stop'
     $env:PSModulePath = $PSHOME + '\Modules'
     $system = [Security.Principal.WindowsBuiltInRole]::Administrator
@@ -35,6 +35,40 @@ function Install-MachineRelease {
                 $rule.IdentityReference.Value -notin $trustedOwners) {
                 throw "Unprotected release path: $($item.FullName)"
             }
+        }
+    }
+    function Register-NetworkHelper([string]$directory) {
+        if ($nodeSid -notmatch '\AS-1-(?:5-21|12-1)-(?:[0-9]+-){3}[0-9]+\z') { throw 'Expected the original Windows user SID' }
+        foreach ($file in 'muster-tun.exe','wintun.dll','musterd.exe') {
+            if (!$hashes.ContainsKey($file)) { throw "Missing network service component $file" }
+        }
+        $sc = Join-Path ([Environment]::SystemDirectory) 'sc.exe'
+        $image = '"' + (Join-Path $directory 'muster-tun.exe') + '" --service ' + $nodeSid
+        $serviceKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\MusterNetwork'
+        $existing = Test-Path -LiteralPath $serviceKey
+        if ($existing) {
+            $old = Get-ItemProperty -LiteralPath $serviceKey
+            $expected = '^"' + [regex]::Escape($root) + '\\[0-9]+\.[0-9]+\.[0-9]+\\muster-tun\.exe" --service ' + [regex]::Escape($nodeSid) + '$'
+            if ($old.ImagePath -notmatch $expected -or $old.ObjectName -ne 'LocalSystem') {
+                throw 'Existing MusterNetwork registration belongs to a different account or installation'
+            }
+        } else {
+            New-Service -Name MusterNetwork -DisplayName 'Muster Network' -BinaryPathName $image -StartupType Manual -ErrorAction Stop | Out-Null
+        }
+        # The enrolled account can start and query the helper. Configuration requires an administrator.
+        & $sc sdset MusterNetwork "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;LCRP;;;$nodeSid)" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            $failure = $LASTEXITCODE
+            if (!$existing) {
+                & $sc delete MusterNetwork | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "Network service permissions failed ($failure) and cleanup failed ($LASTEXITCODE)" }
+            }
+            throw "Network service permissions failed ($failure)"
+        }
+        if ($existing -and $old.ImagePath -cne $image) {
+            $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='MusterNetwork'"
+            $changed = Invoke-CimMethod -InputObject $svc -MethodName Change -Arguments @{PathName=$image; StartMode='Manual'}
+            if ($changed.ReturnValue -ne 0) { throw "Network service update failed ($($changed.ReturnValue))" }
         }
     }
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -98,9 +132,10 @@ function Install-MachineRelease {
             [IO.File]::WriteAllBytes($target, $bytes)
         }
         Assert-Release $stage
-        try { [IO.Directory]::Move($stage, $active); return }
+        try { [IO.Directory]::Move($stage, $active) }
         catch [IO.IOException] { if (![IO.Directory]::Exists($active)) { throw } }
         Assert-Release $active
+        Register-NetworkHelper $active
     } finally {
         $reader.Dispose()
         $sha.Dispose()
@@ -138,7 +173,8 @@ foreach ($sid in @([Security.Principal.WindowsIdentity]::GetCurrent().User,
 $pipe = [IO.Pipes.NamedPipeServerStream]::new($pipeName, [IO.Pipes.PipeDirection]::Out, 1,
     [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous, 0, 65536, $acl)
 $body = (Get-Item Function:\Install-MachineRelease).ScriptBlock.ToString()
-$command = "try { & { $body } '$pipeName' $($manifest.Length) '$manifestHash'; exit 0 } catch { [Console]::Error.WriteLine(" + '$_' + "); exit 1 }"
+$nodeSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$command = "try { & { $body } '$pipeName' $($manifest.Length) '$manifestHash' '$nodeSid'; exit 0 } catch { [Console]::Error.WriteLine(" + '$_' + "); exit 1 }"
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
 $ps = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
 try {

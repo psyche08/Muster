@@ -30,6 +30,8 @@ pub struct VnetConfig {
     pub mtu: u16,
     #[cfg(windows)]
     pub use_helper: bool,
+    #[cfg(windows)]
+    pub require_service: bool,
     /// A TUN the platform already opened (macOS: from the NetHelper over XPC).
     /// start() consumes this descriptor, including when initialization fails.
     pub existing_fd: Option<i32>,
@@ -43,6 +45,8 @@ impl Default for VnetConfig {
             mtu: crate::tls::VNET_MTU,
             #[cfg(windows)]
             use_helper: false,
+            #[cfg(windows)]
+            require_service: false,
             existing_fd: None,
             name: None,
         }
@@ -409,8 +413,8 @@ impl Vnet {
             tun_config.close_fd_on_drop(false);
         }
         #[cfg(windows)]
-        let (writer, reader) = if config.use_helper {
-            windows_helper::open(address, cidr.1).await?
+        let (writer, reader) = if config.require_service || config.use_helper {
+            windows_helper::open(address, cidr.1, config.require_service).await?
         } else {
             let (w, r) = open_tun(tun_config, config.mtu)?;
             (PacketWriter::Tun(w), PacketReader::Tun(r))
