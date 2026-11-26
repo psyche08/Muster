@@ -8,6 +8,10 @@ use musterd::{Daemon, DaemonConfig, parse_kind};
 #[derive(Parser, Debug)]
 #[command(name = "musterd", about = "Muster device daemon")]
 struct Args {
+    /// Resume the installed Windows node only with this enrolled full device ID.
+    #[cfg(windows)]
+    #[arg(long, value_parser = muster_core::DeviceId::from_hex, conflicts_with_all = ["dir", "socket", "relay", "name", "kind", "authorized_keys", "loopback"])]
+    resume_existing_device: Option<muster_core::DeviceId>,
     /// State directory (store + socket). Default: $MUSTER_DIR, else the
     /// platform's per-user location (macOS: ~/Library/Application Support/Muster)
     #[arg(long)]
@@ -136,12 +140,29 @@ fn exit_code(outcome: std::thread::Result<anyhow::Result<()>>) -> i32 {
 
 async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
     let args = Args::parse();
+    #[cfg(windows)]
+    if args.resume_existing_device.is_some() {
+        // File logging opens a user-profile path before Daemon::start.
+        if args.log {
+            muster_platform::require_ordinary_user()?;
+        }
+        anyhow::ensure!(
+            std::env::var_os("MUSTER_DIR").is_none(),
+            "resuming requires the installed account profile; unset MUSTER_DIR"
+        );
+    }
     let mut logger =
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
     if args.log {
         let dir = muster_paths::log_dir()
             .ok_or_else(|| anyhow::anyhow!("no log directory: set HOME or MUSTER_DIR"))?;
-        std::fs::create_dir_all(&dir)?;
+        #[cfg(windows)]
+        let create_dir = args.resume_existing_device.is_none();
+        #[cfg(not(windows))]
+        let create_dir = true;
+        if create_dir {
+            std::fs::create_dir_all(&dir)?;
+        }
         let file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -175,6 +196,10 @@ async fn run(main_thread: Option<MainThread>) -> anyhow::Result<()> {
         .or_else(muster_paths::state_dir)
         .ok_or_else(|| anyhow::anyhow!("no --dir and no HOME"))?;
     let mut config = DaemonConfig::new(dir);
+    #[cfg(windows)]
+    {
+        config.resume_existing_device = args.resume_existing_device;
+    }
     config.socket = args.socket;
     config.bind = args.bind;
     config.relay = args.relay;

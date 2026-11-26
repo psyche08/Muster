@@ -3,6 +3,11 @@ fn main() -> anyhow::Result<()> {
     use muster_net::vnet::windows_helper;
     windows_helper::prepare_process()?;
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let [mode, _owner] = args.as_slice() {
+        if mode == "--service" {
+            return Ok(windows_helper::service::dispatch()?);
+        }
+    }
     let [address, prefix, token, owner] = args.as_slice() else {
         anyhow::bail!("muster-tun is launched by the Muster daemon");
     };
