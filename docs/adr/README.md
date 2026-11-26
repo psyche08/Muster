@@ -435,3 +435,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0317](0317-resume-an-enrolled-windows-network-node.md) | Accepted for network startup | Resume an enrolled Windows network node by full device ID |
 | [0318](0318-windows-background-device-owner.md) | Accepted direction; migration in progress | Separate the Windows device owner from the interactive console |
 | [0319](0319-macos-remote-hardware-keyboard.md) | Accepted; physical acceptance pending | Type on the focused macOS Remote video surface |
+| [0320](0320-focused-windows-remote-keyboard.md) | Proposed | Send keyboard input from the focused Windows Remote viewer |

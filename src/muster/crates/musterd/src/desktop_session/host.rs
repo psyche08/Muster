@@ -160,7 +160,9 @@ impl Host {
         if native.is_some() {
             return Err(unavailable("this host requires Moonlight"));
         }
-        if video.is_none() && native.is_none() && hello.as_deref() != Some(HELLO) {
+        let fixed_keyboard = hello.as_deref() == Some(FIXED_KEYBOARD_HELLO);
+        if video.is_none() && native.is_none() && !fixed_keyboard && hello.as_deref() != Some(HELLO)
+        {
             return Err(unavailable("unsupported desktop viewer"));
         }
         let daemon = self
@@ -213,10 +215,11 @@ impl Host {
             mouse: session.with_mouse(|| ()).is_ok(),
             keyboard: !self.surface.initially_locked
                 && self.lease.keyboard
-                && video.is_some()
-                && hello
-                    .as_deref()
-                    .is_some_and(muster_proto::v1::DesktopStreamSettings::viewer_has_keyboard)
+                && (fixed_keyboard
+                    || (video.is_some()
+                        && hello.as_deref().is_some_and(
+                            muster_proto::v1::DesktopStreamSettings::viewer_has_keyboard,
+                        )))
                 && session.with_mouse(|| ()).is_ok(),
             key: rand::random(),
         };

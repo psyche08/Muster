@@ -5,6 +5,8 @@ pub(super) mod confirmation;
 pub(super) mod occupancy;
 pub(super) mod permissions;
 use crate::{Daemon, Error};
+#[cfg(any(windows, target_os = "macos"))]
+pub(crate) const FIXED_KEYBOARD_SERVICE: &str = "desktop.fixed-keyboard.v1";
 use muster_core::DeviceId;
 use muster_proto::v1::{self, desktop_session_request::Action};
 use muster_rpc::EventSink;

@@ -97,15 +97,51 @@ pub struct ViewerPorts {
 }
 impl ViewerPorts {
     pub async fn bind(ports: EnginePorts) -> Result<Self, Error> {
-        let rtsp = TcpListener::bind(ports.addr(RTSP_OFFSET))
-            .await
-            .map_err(io)?;
+        Self::bind_rtsp(ports, ports.addr(RTSP_OFFSET)).await
+    }
+
+    /// The local viewer is told its RTSP listener explicitly. UDP destinations
+    /// come from the host's RTSP reply and retain their negotiated offsets.
+    #[cfg(windows)]
+    pub async fn bind_windows(ports: EnginePorts) -> Result<(Self, u16), Error> {
+        let listeners = Self::bind_rtsp(ports, SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).await?;
+        let port = listeners.rtsp.local_addr().map_err(io)?.port();
+        Ok((listeners, port))
+    }
+
+    async fn bind_rtsp(ports: EnginePorts, address: SocketAddrV4) -> Result<Self, Error> {
+        let rtsp = TcpListener::bind(address).await.map_err(io)?;
         let mut udp = Vec::new();
         for offset in UDP_OFFSETS {
             udp.push(UdpSocket::bind(ports.addr(offset)).await.map_err(io)?);
         }
         Ok(Self { rtsp, udp })
     }
+}
+
+#[cfg(all(test, windows))]
+#[tokio::test]
+async fn viewer_keeps_the_dynamic_rtsp_listener_when_the_fixed_port_is_busy() {
+    // Use an independent test base with an available UDP triplet.
+    for base in (53000..55000).step_by(24) {
+        let ports = EnginePorts::from_local_base(base).unwrap();
+        let Ok(occupied) = TcpListener::bind(ports.addr(RTSP_OFFSET)).await else {
+            continue;
+        };
+        let Ok((listeners, port)) = ViewerPorts::bind_windows(ports).await else {
+            continue;
+        };
+        assert_ne!(port, occupied.local_addr().unwrap().port());
+        assert_eq!(listeners.rtsp.local_addr().unwrap().port(), port);
+        for (socket, offset) in listeners.udp.iter().zip(UDP_OFFSETS) {
+            assert_eq!(
+                socket.local_addr().unwrap(),
+                std::net::SocketAddr::V4(ports.addr(offset))
+            );
+        }
+        return;
+    }
+    panic!("could not bind a viewer with an occupied legacy RTSP port");
 }
 
 enum SocketEvent {
