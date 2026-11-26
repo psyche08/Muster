@@ -27,3 +27,5 @@ Check the Windows build, local IPC trust, input and frame guards, process lifeti
 The Windows package applies a pinned input-backend patch to the build copy of libvirtualhid and verifies its digest. It uses ordinary user-mode input, checks the input and thread desktop at dispatch and keeps capture threads on their original desktop. The worker checks the WTS console account against its token SID, reads primary display pixels and places the actual child in a kill-on-close job before sending its bootstrap. A confirmed lock or physical-session change ends the lease.
 
 The Shared Rust desktop-session suite ran on macOS. The Windows daemon, worker and Windows test executable cross-linked for x64. The patched input backend cross-compiled and the bootstrap test ran natively on the build Mac. Full Windows media compilation and installed-device acceptance belong to integration.
+
+The Windows build normalizes the reviewed dependency patch and its input to LF before applying it and verifying the resulting source digest. This supports Git checkouts using automatic CRLF conversion.
