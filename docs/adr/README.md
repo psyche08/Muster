@@ -433,3 +433,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0315](0315-grouped-settings-and-permission-editors.md) | Accepted | Group settings and expose native permission controls |
 | [0316](0316-post-login-device-identity.md) | Accepted for verification | Verify the enrolled device identity outside the login session |
 | [0317](0317-resume-an-enrolled-windows-network-node.md) | Accepted for network startup | Resume an enrolled Windows network node by full device ID |
+| [0318](0318-windows-background-device-owner.md) | Accepted direction; migration in progress | Separate the Windows device owner from the interactive console |

@@ -22,7 +22,28 @@ An authenticated remote login can establish a separate session. Waiting for a lo
 
 The current engines run in the user session. Changing a Rust admission predicate alone cannot establish access to the required OS surface. Windows documents access restrictions for desktop duplication and input integrity levels. Apple's documented Screen Sharing workflow can require its own sign-in. We have not verified a supported adapter on either platform that meets all of the conditions above. The existing checks remain in force until such an adapter is available. [Windows desktop duplication](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutput1-duplicateoutput) · [Windows input](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) · [Apple Screen Sharing](https://support.apple.com/guide/mac-help/mh14066/mac)
 
+### Windows user-session host
+
+An active RDP session and the physical console can have different session
+IDs. For the existing Windows host, check the current session against the
+physical console ID when admitting a viewer and whenever the stream rechecks
+its surface. Require an active, signed-in, unlocked session. If Windows is
+switching consoles or reports an unknown lock state, withhold the offer.
+Other interactive features retain their own session semantics.
+
+Checking only whether the current session is active can offer the RDP desktop.
+Starting a worker solely because the console reports a locked state cannot
+identify the displayed surface. Verify the session predicate with distinct
+console and RDP IDs, sign-out, lock, and console transitions. The service
+worker and physical lock-screen frame and pointer acceptance remain pending.
+
 ## Verification
+
+The Windows x64 platform test passed for an unlocked signed-in console, an
+active RDP session with a different ID, an unattached console, an empty user,
+locked and unknown flags, and a disconnected session. The Windows daemon
+linked successfully with this check. These results cover the user-session
+host only.
 
 For each OS, use a physical host and a paired viewer in Remote. Lock the physical console, connect, and compare both displays at the same time. Move the pointer and make a harmless click with a visible OS response on both displays. Independently confirm the console stayed locked throughout. On Windows, repeat after disconnecting RDP and record both console and daemon session IDs. A session ID or a rendered frame alone is insufficient evidence.
 

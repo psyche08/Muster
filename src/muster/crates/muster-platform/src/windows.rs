@@ -6,6 +6,55 @@ pub(crate) mod code;
 mod link_clipboard;
 mod provider;
 pub struct Windows;
+
+/// An elevated batch logon must never offer the user's full Terminal or Agent services.
+pub fn require_ordinary_user() -> std::io::Result<()> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::{Security::*, System::Threading::*};
+    unsafe {
+        let mut raw = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let token = OwnedHandle::from_raw_handle(raw);
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut bytes = 0;
+        if GetTokenInformation(
+            token.as_raw_handle(),
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size_of_val(&elevation) as u32,
+            &mut bytes,
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut sid = [0u32; SECURITY_MAX_SID_SIZE as usize / 4];
+        let mut size = size_of_val(&sid) as u32;
+        let mut admin = 0;
+        if CreateWellKnownSid(
+            WinBuiltinAdministratorsSid,
+            std::ptr::null_mut(),
+            sid.as_mut_ptr().cast(),
+            &mut size,
+        ) == 0
+            || CheckTokenMembership(
+                std::ptr::null_mut(),
+                sid.as_ptr().cast_mut().cast(),
+                &mut admin,
+            ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        if elevation.TokenIsElevated != 0 || admin != 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "enrolled musterd requires a non-administrative user token",
+            ));
+        }
+        Ok(())
+    }
+}
 fn session() -> Option<WTSINFOEX_LEVEL1_W> {
     let mut buffer = std::ptr::null_mut();
     let mut size = 0;
@@ -29,6 +78,20 @@ fn session() -> Option<WTSINFOEX_LEVEL1_W> {
         WTSFreeMemory(buffer.cast());
         result
     }
+}
+
+fn unlocked_console(session: &WTSINFOEX_LEVEL1_W, console_id: u32) -> bool {
+    console_id != u32::MAX
+        && session.SessionId == console_id
+        && session.SessionState == WTSActive
+        && session.UserName[0] != 0
+        && session.SessionFlags as u32 == WTS_SESSIONSTATE_UNLOCK
+}
+
+/// Whether a capture worker launched in this process's session can serve the
+/// unlocked physical console. An active RDP session can have a different ID.
+pub fn on_unlocked_physical_console() -> bool {
+    session().is_some_and(|s| unlocked_console(&s, unsafe { WTSGetActiveConsoleSessionId() }))
 }
 
 impl crate::Platform for Windows {
@@ -59,4 +122,31 @@ pub fn desktop_pixels() -> Option<(u32, u32)> {
     mode.dmSize = size_of::<DEVMODEW>() as u16;
     (unsafe { EnumDisplaySettingsW(std::ptr::null(), ENUM_CURRENT_SETTINGS, &mut mode) } != 0)
         .then_some((mode.dmPelsWidth, mode.dmPelsHeight))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_host_requires_the_signed_in_unlocked_physical_console() {
+        let mut session = WTSINFOEX_LEVEL1_W {
+            SessionId: 7,
+            SessionState: WTSActive,
+            SessionFlags: WTS_SESSIONSTATE_UNLOCK as i32,
+            ..Default::default()
+        };
+        assert!(!unlocked_console(&session, 7));
+        session.UserName[0] = u16::from(b'A');
+        assert!(unlocked_console(&session, 7));
+        assert!(!unlocked_console(&session, 8));
+        assert!(!unlocked_console(&session, u32::MAX));
+        session.SessionFlags = WTS_SESSIONSTATE_LOCK as i32;
+        assert!(!unlocked_console(&session, 7));
+        session.SessionFlags = WTS_SESSIONSTATE_UNKNOWN as i32;
+        assert!(!unlocked_console(&session, 7));
+        session.SessionFlags = WTS_SESSIONSTATE_UNLOCK as i32;
+        session.SessionState = WTSDisconnected;
+        assert!(!unlocked_console(&session, 7));
+    }
 }

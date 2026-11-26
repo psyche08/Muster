@@ -24,7 +24,7 @@ pub mod engine_socket;
 use std::sync::Arc;
 
 #[cfg(windows)]
-pub use windows::desktop_pixels;
+pub use windows::{desktop_pixels, on_unlocked_physical_console, require_ordinary_user};
 
 #[cfg(target_os = "macos")]
 pub fn desktop_pixels() -> Option<(u32, u32)> {
