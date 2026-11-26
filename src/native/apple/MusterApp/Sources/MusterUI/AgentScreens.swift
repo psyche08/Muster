@@ -65,7 +65,7 @@ struct AgentsView: View {
         #endif
         .refreshable { core.openAgents(device: agents.deviceID) }
         .sheet(isPresented: $creating) {
-            OrcaCreateSheet(core: core, hosts: agents.createHosts, agents: agents.createAgents)
+            OrcaCreateSheet(core: core, hosts: agents.createHosts, agents: agents.createAgents, labels: agents.createAgentLabels)
         }
         .sheet(isPresented: $creatingDesktop) {
             NativeCreateSheet(core: core, hosts: agents.nativeCreateHosts, apps: agents.nativeCreateApps,
@@ -183,6 +183,7 @@ private struct OrcaCreateSheet: View {
     let core: MusterCore
     let hosts: [Muster_V1_MemberView]
     let agents: [String]
+    let labels: [String: String]
     @Environment(\.dismiss) private var dismiss
     @State private var device = ""
     @State private var agent = ""
@@ -194,7 +195,7 @@ private struct OrcaCreateSheet: View {
                     ForEach(hosts, id: \.deviceID) { Text($0.name).tag($0.deviceID) }
                 }
                 Picker("CLI agent", selection: $agent) {
-                    ForEach(agents, id: \.self) { Text($0.capitalized).tag($0) }
+                    ForEach(agents, id: \.self) { Text(labels[$0] ?? $0).tag($0) }
                 }
                 TextField("Absolute directory on this device", text: $directory)
                     .autocorrectionDisabled()

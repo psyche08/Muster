@@ -104,11 +104,46 @@ pub fn chat_window_unavailable(provider: &str) -> String {
     format!("Show one main window for {label} on this desktop, then try again.")
 }
 
+/// A native process owned by the CLI journal. The agent name is the deployed
+/// wire/storage value. Provider keys identify access grants and catalog rows.
+pub struct NativeCli {
+    pub agent: &'static str,
+    pub provider: &'static str,
+    pub label: &'static str,
+}
+
+pub const NATIVE_CLIS: [NativeCli; 2] = [
+    NativeCli {
+        agent: "codex",
+        provider: "codex-cli",
+        label: "Codex CLI",
+    },
+    NativeCli {
+        agent: "claude",
+        provider: "claude-cli",
+        label: "Claude Code CLI",
+    },
+];
+
+pub fn native_cli_for_agent(agent: &str) -> Option<&'static NativeCli> {
+    NATIVE_CLIS.iter().find(|c| c.agent == agent)
+}
+
+pub fn native_cli(provider: &str) -> Option<&'static NativeCli> {
+    NATIVE_CLIS.iter().find(|c| c.provider == provider)
+}
+
+/// The creation RPC originally accepted executable names. Both spellings map
+/// to the same provider and the same canonical operation fingerprint.
+pub fn native_cli_request(value: &str) -> Option<&'static NativeCli> {
+    native_cli(value).or_else(|| native_cli_for_agent(value))
+}
+
 /// Agent providers, in list order.
 pub fn agent_providers() -> Vec<&'static str> {
     APPS.iter()
         .map(|a| a.provider)
-        .chain(std::iter::once("orca"))
+        .chain(NATIVE_CLIS.iter().map(|c| c.provider))
         .collect()
 }
 
@@ -147,7 +182,14 @@ mod tests {
         );
         assert_eq!(
             agent_providers(),
-            ["codex", "claude", "catdesk", "deepseek", "orca"]
+            [
+                "codex",
+                "claude",
+                "catdesk",
+                "deepseek",
+                "codex-cli",
+                "claude-cli"
+            ]
         );
         assert_eq!(chat_providers(), ["chatgpt", "claude"]);
         assert_eq!(chat_label("chatgpt"), Some("ChatGPT"));

@@ -91,11 +91,11 @@ impl Host for RpcHost {
                 let session = result.result_id.clone();
                 accept_op(result)?;
                 if session.is_empty() {
-                    return Err("the daemon applied orca.create without a session id".to_owned());
+                    return Err("the daemon confirmed CLI creation without a session id".to_owned());
                 }
                 Ok(session)
             }
-            other => Err(format!("unexpected reply to orca.create: {other:?}")),
+            other => Err(format!("unexpected reply to CLI creation: {other:?}")),
         }
     }
 

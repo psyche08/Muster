@@ -436,3 +436,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0318](0318-windows-background-device-owner.md) | Accepted direction; migration in progress | Separate the Windows device owner from the interactive console |
 | [0319](0319-macos-remote-hardware-keyboard.md) | Accepted; physical acceptance pending | Type on the focused macOS Remote video surface |
 | [0320](0320-focused-windows-remote-keyboard.md) | Proposed | Send keyboard input from the focused Windows Remote viewer |
+| [0322](0322-native-cli-provider-identities.md) | Accepted | Give native CLI sessions provider-specific identities |

@@ -19659,6 +19659,9 @@ export namespace muster {
             /** AgentsView createAgents */
             createAgents?: (string[]|null);
 
+            /** AgentsView createAgentLabels */
+            createAgentLabels?: ({ [k: string]: string }|null);
+
             /** AgentsView creating */
             creating?: (boolean|null);
 
@@ -19722,6 +19725,9 @@ export namespace muster {
 
             /** AgentsView createAgents. */
             public createAgents: string[];
+
+            /** AgentsView createAgentLabels. */
+            public createAgentLabels: { [k: string]: string };
 
             /** AgentsView creating. */
             public creating: boolean;

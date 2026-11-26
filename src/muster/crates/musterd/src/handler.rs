@@ -128,10 +128,12 @@ fn access_for(req: &Req) -> Access {
         | Req::TerminalClose(_) => Access::Need(Permission::Terminal { control: true }),
         // Listings name no session: every provider the caller holds, filtered
         // per session in `dispatch`.
-        Req::OrcaCreate(_) => Access::Need(Permission::Agent {
-            provider: Some("orca".into()),
-            control: true,
-        }),
+        Req::OrcaCreate(r) => muster_core::apps::native_cli_request(&r.agent)
+            .map(|cli| Access::Need(Permission::Agent {
+                provider: Some(cli.provider.into()),
+                control: true,
+            }))
+            .unwrap_or(Access::LocalOnly),
         // A desktop session in the provider's own app (ADR 0150).
         Req::AgentNativeCreate(r) => Access::Need(Permission::Agent {
             provider: Some(r.provider.clone()),
@@ -663,20 +665,6 @@ fn authorize_request(
             }
         }
         Access::AgentSession { control } => {
-            // This explicitly requested fork uses a CLI worker as well as a
-            // desktop source. A grant to either one alone is insufficient.
-            if matches!(request, Req::AgentSideQuestion(_)) {
-                admit(
-                    daemon,
-                    ctx,
-                    &peer,
-                    request,
-                    &Permission::Agent {
-                        provider: Some("orca".into()),
-                        control: true,
-                    },
-                )?;
-            }
             admit(
                 daemon,
                 ctx,
@@ -693,13 +681,26 @@ fn authorize_request(
             };
             let (session, provider) = session_provider(daemon, request)?;
             match provider {
-                Some(provider) => admit(daemon, ctx, &peer, request, &for_provider(&provider)),
+                Some(provider) => {
+                    admit(daemon, ctx, &peer, request, &for_provider(&provider))?;
+                    if matches!(request, Req::AgentSideQuestion(_)) {
+                        let cli = muster_core::apps::native_cli_for_agent(&provider).ok_or_else(
+                            || {
+                                Error::Unauthorized(
+                                    "Side question requires a native CLI provider".into(),
+                                )
+                            },
+                        )?;
+                        admit(daemon, ctx, &peer, request, &for_provider(cli.provider))?;
+                    }
+                    Ok(())
+                }
                 // No such session. A caller who could act on it whatever its
                 // provider gets the service's own answer (a send is still
                 // ledgered as rejected); anyone else only learns it is absent.
-                None if Provider::ALL.iter().all(|p| {
-                    admit(daemon, ctx, &peer, request, &for_provider(p.as_str())).is_ok()
-                }) =>
+                None if muster_core::apps::agent_providers()
+                    .into_iter()
+                    .all(|p| admit(daemon, ctx, &peer, request, &for_provider(p)).is_ok()) =>
                 {
                     Ok(())
                 }
@@ -2043,8 +2044,11 @@ async fn dispatch(
         }
         // Local owner only, like the scheduler (ADR 0199).
         Req::AgentDispatch(r) => crate::dispatch::call(daemon, r).await?,
-        Req::OrcaCreate(r) => {
+        Req::OrcaCreate(mut r) => {
             use muster_proto::Message as _;
+            let cli = muster_core::apps::native_cli_request(&r.agent)
+                .ok_or_else(|| Error::Invalid("Unsupported native CLI provider".into()))?;
+            r.agent = cli.agent.into();
             if r.op_id.is_empty() {
                 return Err(Error::Invalid(
                     "CLI creation requires an operation id".into(),
@@ -2056,7 +2060,7 @@ async fn dispatch(
                 daemon,
                 &r.op_id,
                 "orca.create",
-                "orca",
+                cli.provider,
                 false,
                 &body,
                 async {
@@ -2070,7 +2074,14 @@ async fn dispatch(
         }
         Req::AgentList(r) => {
             let agent = agent_of(daemon)?;
-            let provider = if r.provider.is_empty() || r.provider == "orca" {
+            let native =
+                r.provider == "orca" || muster_core::apps::native_cli(&r.provider).is_some();
+            let matches_provider = |provider: &str| {
+                r.provider.is_empty()
+                    || r.provider == provider
+                    || (r.provider == "orca" && muster_core::apps::native_cli(provider).is_some())
+            };
+            let provider = if r.provider.is_empty() || native {
                 None
             } else {
                 Some(Provider::parse(&r.provider).ok_or_else(|| {
@@ -2086,12 +2097,12 @@ async fn dispatch(
                 let sessions = snapshot
                     .sessions
                     .into_iter()
-                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .filter(|s| matches_provider(&s.provider))
                     .collect();
                 let sections = snapshot
                     .sections
                     .into_iter()
-                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .filter(|s| matches_provider(&s.provider))
                     .collect();
                 let paginate = if r.provider_pages {
                     muster_agent::catalog::provider_page
@@ -2107,7 +2118,7 @@ async fn dispatch(
                 let sessions = visible
                     .list(agent, provider, usize::MAX)
                     .into_iter()
-                    .filter(|s| r.provider != "orca" || s.provider == "orca")
+                    .filter(|s| matches_provider(&s.provider))
                     .collect();
                 let mut page = agent
                     .search(
@@ -2129,20 +2140,16 @@ async fn dispatch(
                 sections: AgentVisibility::new(daemon, ctx)
                     .sections(agent)
                     .into_iter()
-                    .filter(|s| r.provider.is_empty() || s.provider == r.provider)
+                    .filter(|s| matches_provider(&s.provider))
                     .collect(),
                 sessions: AgentVisibility::new(daemon, ctx)
                     .list(
                         agent,
                         provider,
-                        if r.provider == "orca" {
-                            usize::MAX
-                        } else {
-                            r.limit as usize
-                        },
+                        if native { usize::MAX } else { r.limit as usize },
                     )
                     .into_iter()
-                    .filter(|s| r.provider != "orca" || s.provider == "orca")
+                    .filter(|s| matches_provider(&s.provider))
                     .take(if r.limit == 0 { 200 } else { r.limit as usize })
                     .collect(),
                 ..Default::default()
@@ -3687,7 +3694,7 @@ mod setup_permission_tests {
             Provider::ALL
                 .iter()
                 .map(|p| p.as_str())
-                .chain(std::iter::once("orca"))
+                .chain(muster_core::apps::NATIVE_CLIS.iter().map(|c| c.provider))
                 .collect::<Vec<_>>(),
             muster_core::apps::agent_providers()
         );
