@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,7 +70,6 @@ import muster.app.AccessView
 import muster.app.ViewModel
 import muster.v1.MemberView
 import muster.v1.PendingJoin
-import muster.v1.copy
 
 // Onboarding, home, invite, join, device and settings: the network side.
 
@@ -171,8 +171,8 @@ fun HomeScreen(core: MusterCore, vm: ViewModel) {
         AgentsScreen(core, vm)
     }
     deciding?.let { join ->
-        AccessEditor("Approve ${join.name}", vm.joinAccess, onDismiss = { deciding = null }) {
-            core.decideJoin(join.deviceId, true, it); deciding = null
+        AccessEditor("Approve ${join.name}", vm.joinAccess, onDismiss = { deciding = null }) { scopes, _, _ ->
+            core.decideJoin(join.deviceId, true, scopes); deciding = null
         }
     }
 }
@@ -230,10 +230,12 @@ fun MemberRow(member: MemberView, onClick: () -> Unit) {
  * Sends back every scope left on; the core validates and signs.
  */
 @Composable
-fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSave: (List<String>) -> Unit) {
+fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, memberRole: String? = null, onSave: (List<String>, String, Boolean) -> Unit) {
+    val canClearPorts = memberRole != null && !access.networkAdvanced && access.hasSavedPortRules
+    var clearPorts by remember(canClearPorts) { mutableStateOf(false) }
+    var role by remember(memberRole) { mutableStateOf(memberRole) }
     val offered: List<AccessItem> = access.sectionsList.flatMap { (if (it.hasToggle()) listOf(it.toggle) else emptyList()) + it.itemsList }
-    var addedPorts by remember { mutableStateOf(emptyList<String>()) }
-    var newPort by remember { mutableStateOf("") }
+    var addedScopes by remember { mutableStateOf(emptyList<String>()) }
     val selected = remember { mutableStateOf(offered.filter { it.granted }.map { it.scope }.toSet()) }
     @Composable
     fun row(item: AccessItem, enabled: Boolean, indent: Boolean) {
@@ -251,6 +253,17 @@ fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSav
         title = { Text(title) },
         text = {
             LazyColumn {
+                if (memberRole != null) {
+                    item {
+                        Text("Network role", style = MaterialTheme.typography.labelLarge)
+                        listOf("member" to "Member", "admin" to "Administrator").forEach { (value, label) ->
+                            Row(Modifier.fillMaxWidth().clickable { role = value }, verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = role == value, onClick = null)
+                                Text(label, Modifier.padding(8.dp))
+                            }
+                        }
+                    }
+                }
                 access.sectionsList.forEach { section ->
                     item {
                         Text(section.title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.labelLarge)
@@ -258,23 +271,33 @@ fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSav
                         section.itemsList.forEach { item ->
                             row(item, enabled = !item.requiresToggle || section.toggle.scope in selected.value, indent = item.requiresToggle)
                         }
-                        if (section.id == "network" && access.networkAdvanced) {
-                            addedPorts.forEach { scope ->
-                                row(AccessItem.newBuilder().setScope(scope).setLabel(scope).build(), true, false)
+                        if (section.id == "network" && canClearPorts) {
+                            ListItem(headlineContent = { Text("Clear saved port rules") },
+                                trailingContent = { Switch(checked = clearPorts, onCheckedChange = { clearPorts = it }) })
+                        }
+                        val prefix = when (section.id) {
+                            "network" -> if (access.networkAdvanced) "net:" else null
+                            "chats", "agents" -> "${section.id}:"
+                            else -> null
+                        }
+                        if (prefix != null) {
+                            val provider = section.hasToggle()
+                            val enabled = !provider || section.toggle.scope in selected.value
+                            addedScopes.filter { it.startsWith(prefix) }.forEach { scope ->
+                                row(AccessItem.newBuilder().setScope(scope).setLabel(scope.removePrefix(prefix)).build(), enabled, provider)
                             }
+                            var entry by rememberSaveable(section.id) { mutableStateOf("") }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.weight(1f)) {
-                                    MusterTextField(newPort, { newPort = it }, label = "tcp/443", singleLine = true, monospace = true)
+                                    MusterTextField(entry, { entry = it }, label = if (provider) "Provider ID" else "tcp/443",
+                                        singleLine = true, monospace = true)
                                 }
-                                TextButton(onClick = {
-                                    val port = newPort.trim()
-                                    if (port.isNotEmpty()) {
-                                        val scope = "net:$port"
-                                        if (scope !in addedPorts && offered.none { it.scope == scope }) addedPorts += scope
-                                        selected.value += scope
-                                        newPort = ""
-                                    }
-                                }) { Text("Add port") }
+                                TextButton(enabled = enabled && entry.isNotBlank(), onClick = {
+                                    val scope = prefix + entry.trim()
+                                    if (scope !in addedScopes && offered.none { it.scope == scope }) addedScopes += scope
+                                    selected.value += scope
+                                    entry = ""
+                                }) { Text(if (provider) "Add provider" else "Add port") }
                             }
                         }
                         if (section.footer.isNotEmpty()) Text(section.footer, style = MaterialTheme.typography.bodySmall)
@@ -282,7 +305,12 @@ fun AccessEditor(title: String, access: AccessView, onDismiss: () -> Unit, onSav
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave((offered.map { it.scope } + addedPorts).filter { it in selected.value }) }) { Text("Save") } },
+        confirmButton = {
+            TextButton(onClick = {
+                val scopes = (offered.map { it.scope } + addedScopes).filter { it in selected.value }
+                onSave(scopes, role.takeUnless { it == memberRole }.orEmpty(), canClearPorts && clearPorts)
+            }) { Text("Save") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
@@ -333,6 +361,8 @@ fun JoinScreen(core: MusterCore, vm: ViewModel) {
     }
 }
 
+private enum class PresenceAction { Enroll, Revoke }
+
 @Composable
 fun DeviceScreen(core: MusterCore, vm: ViewModel) {
     val member = vm.network.membersList.firstOrNull { it.deviceId == vm.selectedDevice }
@@ -340,6 +370,8 @@ fun DeviceScreen(core: MusterCore, vm: ViewModel) {
     /** What this page offers for the member, as the core decided it. */
     val actions = vm.deviceActions
     var editing by remember { mutableStateOf(false) }
+    var presenceAction by remember(member.deviceId) { mutableStateOf<PresenceAction?>(null) }
+    var grantLocked by remember(member.deviceId) { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
     var ssh by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize()) {
@@ -374,12 +406,53 @@ fun DeviceScreen(core: MusterCore, vm: ViewModel) {
         if (actions.canEditAccess) {
             item { ListItem(modifier = Modifier.clickable { editing = true }, headlineContent = { Text("Change access…", color = MaterialTheme.colorScheme.primary) }) }
         }
+        if (actions.hasPresenceEnrolled()) {
+            item {
+                ListItem(
+                    headlineContent = { Text("Presence key") },
+                    supportingContent = { Text(if (actions.presenceEnrolled) "Enrolled" else "Not enrolled") },
+                    trailingContent = {
+                        Column {
+                            TextButton(onClick = { grantLocked = false; presenceAction = PresenceAction.Enroll }) {
+                                Text(if (actions.presenceEnrolled) "Enroll current key…" else "Enroll…")
+                            }
+                            if (actions.presenceEnrolled) {
+                                TextButton(onClick = { presenceAction = PresenceAction.Revoke }) { Text("Revoke…") }
+                            }
+                        }
+                    },
+                )
+            }
+        }
         if (actions.canRemove) {
             item { ListItem(modifier = Modifier.clickable { removing = true }, headlineContent = { Text("Remove from the network", color = MaterialTheme.colorScheme.error) }) }
         }
     }
-    if (editing) AccessEditor("Access for ${member.name}", vm.deviceAccess, { editing = false }) {
-        core.setScopes(member.deviceId, it, member.role); editing = false
+    if (editing) AccessEditor("Access for ${member.name}", vm.deviceAccess, { editing = false }, member.role) { scopes, role, clearPorts ->
+        core.setScopes(member.deviceId, scopes, role, clearPorts); editing = false
+    }
+    if (presenceAction != null && actions.hasPresenceEnrolled()) {
+        val revoke = presenceAction == PresenceAction.Revoke
+        AlertDialog(
+            onDismissRequest = { presenceAction = null },
+            title = { Text(if (revoke) "Revoke Presence key?" else "Enroll Presence key?") },
+            text = {
+                Column {
+                    Text(member.name)
+                    if (!revoke) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = grantLocked, onCheckedChange = { grantLocked = it })
+                            Text("Also grant locked control")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = {
+                core.setMemberPresence(member.deviceId, revoke, !revoke && grantLocked)
+                presenceAction = null
+            }) { Text(if (revoke) "Revoke" else "Enroll") } },
+            dismissButton = { TextButton(onClick = { presenceAction = null }) { Text("Cancel") } },
+        )
     }
     if (removing) AlertDialog(
         onDismissRequest = { removing = false },
@@ -412,132 +485,111 @@ fun SshDialog(onDismiss: () -> Unit, onConnect: (String, Int) -> Unit) {
     )
 }
 
+internal enum class SettingsGroup(val title: String) {
+    Permissions("Member permissions"), Display("Display and keyboard"), Network("Network"), Device("This device")
+}
+
 @Composable
-fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel) {
+internal fun SettingsScreen(core: MusterCore, vm: ViewModel, model: MusterModel, group: SettingsGroup?, selectGroup: (SettingsGroup) -> Unit) {
     val clipboard = LocalClipboardManager.current
-    var offerAgent by remember(vm.policy) { mutableStateOf(vm.policy.offerAgent) }
-    var offerTerminal by remember(vm.policy) { mutableStateOf(vm.policy.offerTerminal) }
-    var lockedControl by remember(vm.policy) { mutableStateOf(vm.policy.allowLockedControl) }
-    var ports by remember(vm.policy) { mutableStateOf(vm.policy.openPortsList.toList()) }
-    var newPort by remember { mutableStateOf("") }
     var deciding by remember { mutableStateOf<PendingJoin?>(null) }
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     LazyColumn(Modifier.fillMaxSize()) {
-        item { SectionHeader("Network devices") }
-        if (vm.network.accessMode.isNotEmpty()) {
-            item {
+        when (group) {
+            null -> items(SettingsGroup.entries.toList()) { category ->
                 ListItem(
-                    headlineContent = { Text("Network access mode") },
-                    supportingContent = { Text(if (vm.network.accessMode == "basic") "Basic" else "Advanced") },
-                    trailingContent = {
-                        if (vm.canInvite) {
-                            val next = if (vm.network.accessMode == "basic") "advanced" else "basic"
-                            TextButton(onClick = { core.setNetworkAccessMode(next) }) { Text("Use $next") }
-                        }
-                    },
+                    headlineContent = { Text(category.title) },
+                    trailingContent = { Text("›", color = secondary) },
+                    modifier = Modifier.clickable { selectGroup(category) },
                 )
             }
-        }
-        items(vm.pendingList, key = { "pending-${it.deviceId}" }) { join ->
-            PendingJoinRow(join, approve = { deciding = join }, reject = { core.decideJoin(join.deviceId, false, reason = "rejected") })
-        }
-        items(vm.network.membersList, key = { it.deviceId }) { member ->
-            MemberRow(member) { core.selectDevice(member.deviceId) }
-            val lockedUse = vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }
-            val mask = vm.deviceBlackoutList.firstOrNull { it.deviceId == member.deviceId }
-            if (lockedUse != null || mask != null) DeviceControlTiles(core, lockedUse, mask)
-        }
-        if (vm.canInvite) {
-            item { TextButton(onClick = { core.showInvite() }, Modifier.padding(start = 8.dp)) { Icon(Icons.Default.QrCode, null); Text("  Invite device") } }
-        }
-        item { SectionHeader("Half-fold workspace") }
-        item {
-            val preference by model.display.preference.collectAsState()
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Text("Top and bottom: read above a horizontal crease, type and respond below it. Side by side: the list beside the conversation or terminal across a vertical crease. Automatic follows how the phone is folded.",
-                    style = MaterialTheme.typography.bodySmall, color = secondary)
-                FlexPreference.entries.forEach { option ->
-                    Row(Modifier.fillMaxWidth().clickable { model.display.select(option) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = option == preference, onClick = null)
-                        Text(option.title, Modifier.padding(start = 8.dp))
+            SettingsGroup.Permissions -> {
+                if (vm.network.accessMode.isNotEmpty()) {
+                    item {
+                        ListItem(
+                            headlineContent = { Text("Network access mode") },
+                            supportingContent = { Text(if (vm.network.accessMode == "basic") "Basic" else "Advanced") },
+                            trailingContent = {
+                                if (vm.canInvite) {
+                                    val next = if (vm.network.accessMode == "basic") "advanced" else "basic"
+                                    TextButton(onClick = { core.setNetworkAccessMode(next) }) { Text("Use $next") }
+                                }
+                            },
+                        )
+                    }
+                }
+                items(vm.pendingList, key = { "pending-${it.deviceId}" }) { join ->
+                    PendingJoinRow(join, approve = { deciding = join }, reject = { core.decideJoin(join.deviceId, false, reason = "rejected") })
+                }
+                items(vm.network.membersList, key = { it.deviceId }) { member ->
+                    MemberRow(member) { core.selectDevice(member.deviceId) }
+                    val lockedUse = vm.deviceLockedUseList.firstOrNull { it.deviceId == member.deviceId }
+                    val mask = vm.deviceBlackoutList.firstOrNull { it.deviceId == member.deviceId }
+                    if (lockedUse != null || mask != null) DeviceControlTiles(core, lockedUse, mask)
+                }
+                if (vm.canInvite) {
+                    item { TextButton(onClick = { core.showInvite() }, Modifier.padding(start = 8.dp)) { Icon(Icons.Default.QrCode, null); Text("  Invite device") } }
+                }
+            }
+            SettingsGroup.Display -> {
+                item { SectionHeader("Half-fold workspace") }
+                item {
+                    val preference by model.display.preference.collectAsState()
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text("Top and bottom: read above a horizontal crease, type and respond below it. Side by side: the list beside the conversation or terminal across a vertical crease. Automatic follows how the phone is folded.",
+                            style = MaterialTheme.typography.bodySmall, color = secondary)
+                        FlexPreference.entries.forEach { option ->
+                            Row(Modifier.fillMaxWidth().clickable { model.display.select(option) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = option == preference, onClick = null)
+                                Text(option.title, Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                }
+                item {
+                    ListItem(
+                        headlineContent = { Text("Muster keyboard") },
+                        supportingContent = { Text("Pinyin Chinese and English, numbers and symbols in every text field; a MacBook's layout from 560 dp wide. Off, the default, uses the system keyboard.") },
+                        trailingContent = { Switch(!KeyboardPrefs.systemKeyboard, { KeyboardPrefs.useSystem(!it) }) },
+                    )
+                }
+                item {
+                    ListItem(
+                        headlineContent = { Text("Muster keyboard in terminals") },
+                        supportingContent = { Text("On, the default, types straight into the session and adds Esc, F-keys, Ctrl and Alt, which the system keyboard lacks.") },
+                        trailingContent = { Switch(!KeyboardPrefs.terminalSystemKeyboard, { KeyboardPrefs.useSystemInTerminal(!it) }) },
+                    )
+                }
+            }
+            SettingsGroup.Network -> {
+                item { SectionHeader("Relay") }
+                item { Box(Modifier.padding(horizontal = 16.dp)) { RelayEditor(core, vm) } }
+            }
+            SettingsGroup.Device -> {
+                item {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(vm.self.name)
+                        Text(vm.self.fingerprint, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = secondary)
+                        Text("Key: ${vm.self.keyLabel}", style = MaterialTheme.typography.bodySmall, color = secondary)
+                        Text("Presence key: ${if (model.keys.presencePublicKey != null) "Android Keystore, biometric" else "none (set a screen lock)"}",
+                            style = MaterialTheme.typography.bodySmall, color = secondary)
+                        Text("Version: ${vm.self.version.ifEmpty { "not reported" }}", style = MaterialTheme.typography.bodySmall, color = secondary)
+                        Text("Commit: ${vm.self.commit.ifEmpty { "not reported" }}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = secondary)
+                    }
+                }
+                core.sshPublicKeyLine()?.let { line ->
+                    item {
+                        ListItem(headlineContent = { Text("SSH public key") },
+                            supportingContent = { Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, maxLines = 3) },
+                            trailingContent = { TextButton(onClick = { clipboard.setText(AnnotatedString(line)) }) { Text("Copy") } })
                     }
                 }
             }
         }
-        item {
-            ListItem(
-                headlineContent = { Text("Muster keyboard") },
-                supportingContent = { Text("Pinyin Chinese and English, numbers and symbols in every text field; a MacBook's layout from 560 dp wide. Off, the default, uses the system keyboard.") },
-                trailingContent = { Switch(!KeyboardPrefs.systemKeyboard, { KeyboardPrefs.useSystem(!it) }) },
-            )
-        }
-        item {
-            ListItem(
-                headlineContent = { Text("Muster keyboard in terminals") },
-                supportingContent = { Text("On, the default, types straight into the session and adds Esc, F-keys, Ctrl and Alt, which the system keyboard lacks.") },
-                trailingContent = { Switch(!KeyboardPrefs.terminalSystemKeyboard, { KeyboardPrefs.useSystemInTerminal(!it) }) },
-            )
-        }
-        if (vm.localDeviceHasServices) {
-            item { SectionHeader("Chrome extension") }
-            item {
-                Column(Modifier.padding(start = 8.dp, end = 16.dp)) {
-                    TextButton(onClick = { core.openBrowser(vm.self.deviceId) }) { Text("Set up Agent Halo Browser") }
-                    Text("Install the extension, check its connection, and manage browser access.", style = MaterialTheme.typography.bodySmall, color = secondary)
-                }
-            }
-            item { SectionHeader("What this device offers") }
-            item { ListItem(headlineContent = { Text("Agent sessions") }, trailingContent = { Switch(offerAgent, { offerAgent = it }) }) }
-            item { ListItem(headlineContent = { Text("Terminals") }, trailingContent = { Switch(offerTerminal, { offerTerminal = it }) }) }
-            item { ListItem(headlineContent = { Text("Control while the screen is locked") }, trailingContent = { Switch(lockedControl, { lockedControl = it }) }) }
-        }
-        item { SectionHeader("Open ports") }
-        items(ports, key = { "port-$it" }) { port ->
-            ListItem(headlineContent = { Text(port, fontFamily = FontFamily.Monospace) },
-                trailingContent = { TextButton(onClick = { ports = ports - port }) { Text("Remove") } })
-        }
-        item {
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                MusterTextField(newPort, { newPort = it }, Modifier.weight(1f), label = "tcp/22", singleLine = true, monospace = true)
-                TextButton(onClick = { val p = newPort.trim(); if (p.isNotEmpty() && p !in ports) ports = ports + p; newPort = "" }) { Text("Add") }
-            }
-        }
-        item {
-            Button(onClick = {
-                // Built from the policy this device holds, so saving these
-                // three switches leaves what this screen does not edit — the
-                // task runtime, the web window — as it was.
-                core.setPolicy(vm.policy.copy {
-                    this.offerAgent = offerAgent; this.offerTerminal = offerTerminal; allowLockedControl = lockedControl
-                    openPorts.clear(); openPorts.addAll(ports)
-                })
-            }, Modifier.padding(16.dp)) { Text("Save policy") }
-        }
-        item { SectionHeader("Relay") }
-        item { Box(Modifier.padding(horizontal = 16.dp)) { RelayEditor(core, vm) } }
-        item { SectionHeader("This device") }
-        item {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(vm.self.name)
-                Text(vm.self.fingerprint, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = secondary)
-                Text("Key: ${vm.self.keyLabel}", style = MaterialTheme.typography.bodySmall, color = secondary)
-                Text("Presence key: ${if (model.keys.presencePublicKey != null) "Android Keystore, biometric" else "none (set a screen lock)"}",
-                    style = MaterialTheme.typography.bodySmall, color = secondary)
-                Text("Version: ${vm.self.version.ifEmpty { "not reported" }}", style = MaterialTheme.typography.bodySmall, color = secondary)
-                Text("Commit: ${vm.self.commit.ifEmpty { "not reported" }}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = secondary)
-            }
-        }
-        core.sshPublicKeyLine()?.let { line ->
-            item {
-                ListItem(headlineContent = { Text("SSH public key") },
-                    supportingContent = { Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, maxLines = 3) },
-                    trailingContent = { TextButton(onClick = { clipboard.setText(AnnotatedString(line)) }) { Text("Copy") } })
-            }
-        }
     }
     deciding?.let { join ->
-        AccessEditor("Approve ${join.name}", vm.joinAccess, onDismiss = { deciding = null }) {
-            core.decideJoin(join.deviceId, true, it); deciding = null
+        AccessEditor("Approve ${join.name}", vm.joinAccess, onDismiss = { deciding = null }) { scopes, _, _ ->
+            core.decideJoin(join.deviceId, true, scopes); deciding = null
         }
     }
 }

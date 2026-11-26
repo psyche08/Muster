@@ -9388,6 +9388,7 @@ export const muster = $root.muster = (() => {
              * Properties of a MemberView.
              * @memberof muster.v1
              * @interface IMemberView
+             * @property {boolean|null} [presenceEnrolled] MemberView presenceEnrolled
              * @property {string|null} [deviceId] MemberView deviceId
              * @property {string|null} [fingerprint] MemberView fingerprint
              * @property {string|null} [name] MemberView name
@@ -9422,6 +9423,14 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * MemberView presenceEnrolled.
+             * @member {boolean|null|undefined} presenceEnrolled
+             * @memberof muster.v1.MemberView
+             * @instance
+             */
+            MemberView.prototype.presenceEnrolled = null;
 
             /**
              * MemberView deviceId.
@@ -9559,6 +9568,15 @@ export const muster = $root.muster = (() => {
              */
             MemberView.prototype.desktopAccess = 0;
 
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            // Virtual OneOf for proto3 optional field
+            Object.defineProperty(MemberView.prototype, "_presenceEnrolled", {
+                get: $util.oneOfGetter($oneOfFields = ["presenceEnrolled"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
             /**
              * Creates a new MemberView instance using the specified properties.
              * @function create
@@ -9622,6 +9640,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 16, wireType 2 =*/130).string(message.presence);
                 if (message.desktopAccess != null && Object.hasOwnProperty.call(message, "desktopAccess"))
                     writer.uint32(/* id 17, wireType 0 =*/136).int32(message.desktopAccess);
+                if (message.presenceEnrolled != null && Object.hasOwnProperty.call(message, "presenceEnrolled"))
+                    writer.uint32(/* id 18, wireType 0 =*/144).bool(message.presenceEnrolled);
                 return writer;
             };
 
@@ -9659,6 +9679,10 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 18: {
+                            message.presenceEnrolled = reader.bool();
+                            break;
+                        }
                     case 1: {
                             message.deviceId = reader.string();
                             break;
@@ -33678,6 +33702,7 @@ export const muster = $root.muster = (() => {
              * @property {muster.app.IDecideJoin|null} [decideJoin] Intent decideJoin
              * @property {muster.app.IRemoveDevice|null} [removeDevice] Intent removeDevice
              * @property {muster.app.ISetScopes|null} [setScopes] Intent setScopes
+             * @property {muster.v1.INetworkPresenceRequest|null} [setMemberPresence] Intent setMemberPresence
              * @property {muster.v1.INetworkRenameRequest|null} [renameDevice] Intent renameDevice
              * @property {muster.v1.INetworkSetAccessModeRequest|null} [setNetworkAccessMode] Intent setNetworkAccessMode
              * @property {muster.app.ISetPolicy|null} [setPolicy] Intent setPolicy
@@ -33831,6 +33856,14 @@ export const muster = $root.muster = (() => {
              * @instance
              */
             Intent.prototype.setScopes = null;
+
+            /**
+             * Intent setMemberPresence.
+             * @member {muster.v1.INetworkPresenceRequest|null|undefined} setMemberPresence
+             * @memberof muster.app.Intent
+             * @instance
+             */
+            Intent.prototype.setMemberPresence = null;
 
             /**
              * Intent renameDevice.
@@ -34357,12 +34390,12 @@ export const muster = $root.muster = (() => {
 
             /**
              * Intent it.
-             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
+             * @member {"refresh"|"navigate"|"dismiss"|"createNetwork"|"showInvite"|"joinNetwork"|"decideJoin"|"removeDevice"|"setScopes"|"setMemberPresence"|"renameDevice"|"setNetworkAccessMode"|"setPolicy"|"selectDevice"|"setRelay"|"requestAccessibility"|"requestScreenRecording"|"openBrowser"|"browserSetup"|"browserRun"|"setRequireLockedUseAuth"|"setCover"|"setBlackout"|"cancelLockedUse"|"setDeviceLockedUse"|"desktopSetupAction"|"desktopSession"|"endDesktopSession"|"desktopUpdateAction"|"multica"|"multicaBrowse"|"multicaSelect"|"multicaService"|"multicaMutation"|"multicaMutationAcknowledge"|"vision"|"openAgents"|"agentCatalogAction"|"agentOrganize"|"orcaCreate"|"openAgent"|"agentSend"|"resolveAgentSend"|"agentRespond"|"agentInterrupt"|"agentLoadEarlier"|"openDesktopChats"|"desktopChatOpen"|"chatOptionsLoad"|"chatSetOptions"|"composerAction"|"uploadDiagnostics"|"sideChatAction"|"composerComplete"|"openTerminals"|"openTerminal"|"terminalKey"|"terminalText"|"terminalCreate"|"terminalResize"|"openSsh"|"closeTerminal"|"terminalPaste"|"sessionTerminalAction"|"requestTerminalAuthorization"|"codeAction"|"openFiles"|"openFile"|"openGit"|"openChange"|"openFileLink"|"setPushToken"|"sessionViewApplied"|"nativeCreate"|"agentLoadWork"|undefined} it
              * @memberof muster.app.Intent
              * @instance
              */
             Object.defineProperty(Intent.prototype, "it", {
-                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "renameDevice", "setNetworkAccessMode", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopSession", "endDesktopSession", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "sideChatAction", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
+                get: $util.oneOfGetter($oneOfFields = ["refresh", "navigate", "dismiss", "createNetwork", "showInvite", "joinNetwork", "decideJoin", "removeDevice", "setScopes", "setMemberPresence", "renameDevice", "setNetworkAccessMode", "setPolicy", "selectDevice", "setRelay", "requestAccessibility", "requestScreenRecording", "openBrowser", "browserSetup", "browserRun", "setRequireLockedUseAuth", "setCover", "setBlackout", "cancelLockedUse", "setDeviceLockedUse", "desktopSetupAction", "desktopSession", "endDesktopSession", "desktopUpdateAction", "multica", "multicaBrowse", "multicaSelect", "multicaService", "multicaMutation", "multicaMutationAcknowledge", "vision", "openAgents", "agentCatalogAction", "agentOrganize", "orcaCreate", "openAgent", "agentSend", "resolveAgentSend", "agentRespond", "agentInterrupt", "agentLoadEarlier", "openDesktopChats", "desktopChatOpen", "chatOptionsLoad", "chatSetOptions", "composerAction", "uploadDiagnostics", "sideChatAction", "composerComplete", "openTerminals", "openTerminal", "terminalKey", "terminalText", "terminalCreate", "terminalResize", "openSsh", "closeTerminal", "terminalPaste", "sessionTerminalAction", "requestTerminalAuthorization", "codeAction", "openFiles", "openFile", "openGit", "openChange", "openFileLink", "setPushToken", "sessionViewApplied", "nativeCreate", "agentLoadWork"]),
                 set: $util.oneOfSetter($oneOfFields)
             });
 
@@ -34542,6 +34575,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 154, wireType 2 =*/1234).string(message.endDesktopSession);
                 if (message.setNetworkAccessMode != null && Object.hasOwnProperty.call(message, "setNetworkAccessMode"))
                     $root.muster.v1.NetworkSetAccessModeRequest.encode(message.setNetworkAccessMode, writer.uint32(/* id 155, wireType 2 =*/1242).fork(), q + 1).ldelim();
+                if (message.setMemberPresence != null && Object.hasOwnProperty.call(message, "setMemberPresence"))
+                    $root.muster.v1.NetworkPresenceRequest.encode(message.setMemberPresence, writer.uint32(/* id 181, wireType 2 =*/1450).fork(), q + 1).ldelim();
                 return writer;
             };
 
@@ -34613,6 +34648,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 15: {
                             message.setScopes = $root.muster.app.SetScopes.decode(reader, reader.uint32(), undefined, long + 1);
+                            break;
+                        }
+                    case 181: {
+                            message.setMemberPresence = $root.muster.v1.NetworkPresenceRequest.decode(reader, reader.uint32(), undefined, long + 1);
                             break;
                         }
                     case 142: {
@@ -37689,6 +37728,7 @@ export const muster = $root.muster = (() => {
              * Properties of a SetScopes.
              * @memberof muster.app
              * @interface ISetScopes
+             * @property {boolean|null} [clearSavedPortRules] SetScopes clearSavedPortRules
              * @property {string|null} [deviceId] SetScopes deviceId
              * @property {Array.<string>|null} [scopes] SetScopes scopes
              * @property {string|null} [role] SetScopes role
@@ -37709,6 +37749,14 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * SetScopes clearSavedPortRules.
+             * @member {boolean} clearSavedPortRules
+             * @memberof muster.app.SetScopes
+             * @instance
+             */
+            SetScopes.prototype.clearSavedPortRules = false;
 
             /**
              * SetScopes deviceId.
@@ -37769,6 +37817,8 @@ export const muster = $root.muster = (() => {
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.scopes[i]);
                 if (message.role != null && Object.hasOwnProperty.call(message, "role"))
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.role);
+                if (message.clearSavedPortRules != null && Object.hasOwnProperty.call(message, "clearSavedPortRules"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.clearSavedPortRules);
                 return writer;
             };
 
@@ -37806,6 +37856,10 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 4: {
+                            message.clearSavedPortRules = reader.bool();
+                            break;
+                        }
                     case 1: {
                             message.deviceId = reader.string();
                             break;
@@ -48389,6 +48443,7 @@ export const muster = $root.muster = (() => {
              * Properties of a DeviceActions.
              * @memberof muster.app
              * @interface IDeviceActions
+             * @property {boolean|null} [presenceEnrolled] DeviceActions presenceEnrolled
              * @property {boolean|null} [canCover] DeviceActions canCover
              * @property {boolean|null} [canSsh] DeviceActions canSsh
              * @property {boolean|null} [showAccess] DeviceActions showAccess
@@ -48416,6 +48471,14 @@ export const muster = $root.muster = (() => {
                         if (properties[keys[i]] != null && keys[i] !== "__proto__")
                             this[keys[i]] = properties[keys[i]];
             }
+
+            /**
+             * DeviceActions presenceEnrolled.
+             * @member {boolean|null|undefined} presenceEnrolled
+             * @memberof muster.app.DeviceActions
+             * @instance
+             */
+            DeviceActions.prototype.presenceEnrolled = null;
 
             /**
              * DeviceActions canCover.
@@ -48505,6 +48568,15 @@ export const muster = $root.muster = (() => {
              */
             DeviceActions.prototype.blackout = null;
 
+            // OneOf field names bound to virtual getters and setters
+            let $oneOfFields;
+
+            // Virtual OneOf for proto3 optional field
+            Object.defineProperty(DeviceActions.prototype, "_presenceEnrolled", {
+                get: $util.oneOfGetter($oneOfFields = ["presenceEnrolled"]),
+                set: $util.oneOfSetter($oneOfFields)
+            });
+
             /**
              * Creates a new DeviceActions instance using the specified properties.
              * @function create
@@ -48555,6 +48627,8 @@ export const muster = $root.muster = (() => {
                     writer.uint32(/* id 10, wireType 0 =*/80).bool(message.desktopSessionOpen);
                 if (message.desktopSessionText != null && Object.hasOwnProperty.call(message, "desktopSessionText"))
                     writer.uint32(/* id 11, wireType 2 =*/90).string(message.desktopSessionText);
+                if (message.presenceEnrolled != null && Object.hasOwnProperty.call(message, "presenceEnrolled"))
+                    writer.uint32(/* id 13, wireType 0 =*/104).bool(message.presenceEnrolled);
                 return writer;
             };
 
@@ -48592,6 +48666,10 @@ export const muster = $root.muster = (() => {
                     if (tag === error)
                         break;
                     switch (tag >>> 3) {
+                    case 13: {
+                            message.presenceEnrolled = reader.bool();
+                            break;
+                        }
                     case 1: {
                             message.canCover = reader.bool();
                             break;
@@ -49067,6 +49145,7 @@ export const muster = $root.muster = (() => {
              * @interface IAccessView
              * @property {Array.<muster.app.IAccessSection>|null} [sections] AccessView sections
              * @property {boolean|null} [networkAdvanced] AccessView networkAdvanced
+             * @property {boolean|null} [hasSavedPortRules] AccessView hasSavedPortRules
              */
 
             /**
@@ -49102,6 +49181,14 @@ export const muster = $root.muster = (() => {
             AccessView.prototype.networkAdvanced = false;
 
             /**
+             * AccessView hasSavedPortRules.
+             * @member {boolean} hasSavedPortRules
+             * @memberof muster.app.AccessView
+             * @instance
+             */
+            AccessView.prototype.hasSavedPortRules = false;
+
+            /**
              * Creates a new AccessView instance using the specified properties.
              * @function create
              * @memberof muster.app.AccessView
@@ -49134,6 +49221,8 @@ export const muster = $root.muster = (() => {
                         $root.muster.app.AccessSection.encode(message.sections[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                 if (message.networkAdvanced != null && Object.hasOwnProperty.call(message, "networkAdvanced"))
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.networkAdvanced);
+                if (message.hasSavedPortRules != null && Object.hasOwnProperty.call(message, "hasSavedPortRules"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.hasSavedPortRules);
                 return writer;
             };
 
@@ -49179,6 +49268,10 @@ export const muster = $root.muster = (() => {
                         }
                     case 2: {
                             message.networkAdvanced = reader.bool();
+                            break;
+                        }
+                    case 3: {
+                            message.hasSavedPortRules = reader.bool();
                             break;
                         }
                     default:

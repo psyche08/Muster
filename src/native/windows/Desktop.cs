@@ -14,6 +14,9 @@ internal sealed class Desktop : Form
         public override string ToString() => Label;
     }
     readonly FlowLayoutPanel nav = Bar(), actions = Bar();
+    enum SettingsGroup { Members, Sharing, Network, Device }
+    readonly ListBox settingsGroups = new() { Name = "SettingsGroups", AccessibleName = "Settings categories",
+        Dock = DockStyle.Left, Width = 160, IntegralHeight = false, Visible = false };
     readonly FlowLayoutPanel utilities = Bar();
     readonly Button back, settings, agentsTab, chatsTab, terminalsTab, remoteTab;
     readonly TableLayoutPanel toolbar = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1,
@@ -128,6 +131,10 @@ internal sealed class Desktop : Form
         body.Controls.Add(list);
         chatWelcome.NewChat += () => Send(new() { DesktopChatOpen = new() { Chat = "" } });
         workspace.Controls.Add(detail);
+        workspace.Controls.Add(settingsGroups);
+        settingsGroups.Items.AddRange(["Member permissions", "Local sharing", "Network", "This device"]);
+        settingsGroups.SelectedIndex = (int)SettingsGroup.Members;
+        settingsGroups.SelectedIndexChanged += (_, _) => { if (current?.Screen == Page.Settings) Render(current); };
         workspace.Controls.Add(chatSidebar);
         workspace.Controls.Add(agentSidebar);
         workspace.Resize += (_, _) =>
@@ -193,6 +200,7 @@ internal sealed class Desktop : Form
         back.Visible = false;
         void Network()
         {
+            settingsGroups.SelectedIndex = (int)SettingsGroup.Members;
             if (current?.Screen == Page.Settings)
                 FocusNetworkList();
             else
@@ -555,6 +563,9 @@ internal sealed class Desktop : Form
         current = v;
         back.Visible = v.CanGoBack;
         var page = v.Screen;
+        settingsGroups.Visible = page == Page.Settings;
+        var group = (SettingsGroup)settingsGroups.SelectedIndex;
+        bool ShowGroup(SettingsGroup category) => page != Page.Settings || group == category;
         remote.Visible = page == Page.Remote;
         if (page == Page.Remote) remote.Display(v.RemoteWorkspace);
         foreach (var (button, route) in new[] { (agentsTab, Page.Agents), (chatsTab, Page.DesktopChats), (terminalsTab, Page.Terminals), (remoteTab, Page.Remote) })
@@ -679,11 +690,26 @@ internal sealed class Desktop : Form
                     if (deviceActions.CanEditAccess)
                         AddAction("Edit access", () =>
                         {
-                            using var dialog = new AccessDialog("Save access", selected.Name + "\r\n" + selected.Fingerprint, access);
-                            if (dialog.ShowDialog(this) == DialogResult.OK)
-                                Send(new() { SetScopes = new() { DeviceId = selected.DeviceId, Role = selected.Role,
-                                                                 Scopes = { dialog.Scopes } } });
+                            using var dialog = new AccessDialog("Save access", selected.Name + "\r\n" + selected.Fingerprint, access, selected.Role);
+                            if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Device ||
+                                current.SelectedDevice != selected.DeviceId || current.DeviceActions?.CanEditAccess != true) return;
+                            var latest = current.Network?.Members.FirstOrDefault(m => m.DeviceId == selected.DeviceId);
+                            if (latest?.Role != selected.Role || !latest.Scopes.SequenceEqual(selected.Scopes) || !access.Equals(current.DeviceAccess))
+                            {
+                                MessageBox.Show(this, "Member permissions changed. Reopen the editor to review them.", "Member permissions");
+                                return;
+                            }
+                            Send(new() { SetScopes = new() { DeviceId = selected.DeviceId, Role = dialog.ChangedRole,
+                                Scopes = { dialog.Scopes }, ClearSavedPortRules = dialog.ClearSavedPortRules } });
                         });
+                }
+                if (deviceActions.HasPresenceEnrolled)
+                {
+                    lines.Add("Presence key: " + (deviceActions.PresenceEnrolled ? "Enrolled" : "Not enrolled"));
+                    Act("Enroll current Presence key", () => new() { SetMemberPresence = new() { DeviceId = selected.DeviceId } });
+                    Act("Enroll and allow locked control", () => new() { SetMemberPresence = new() { DeviceId = selected.DeviceId, GrantLockedControl = true } });
+                    if (deviceActions.PresenceEnrolled)
+                        Act("Revoke Presence key", () => new() { SetMemberPresence = new() { DeviceId = selected.DeviceId, Revoke = true } });
                 }
                 if (deviceActions.CanRename)
                     AddAction("Rename device", () =>
@@ -719,12 +745,13 @@ internal sealed class Desktop : Form
         case Page.Home:
         case Page.Onboarding:
         case Page.Settings:
-            if (v.Self != null)
+            if (page == Page.Settings) title.Text = settingsGroups.SelectedItem?.ToString();
+            if (ShowGroup(SettingsGroup.Device) && v.Self != null)
             {
                 var platform = page == Page.Settings ? v.Self.Platform : $"{v.Self.Platform}    {v.Self.Version}";
                 lines.Add($"{v.Self.Name}    {v.Self.Fingerprint}\r\n{platform}    {v.Self.KeyLabel}");
             }
-            if (page == Page.Settings)
+            if (page == Page.Settings && group == SettingsGroup.Device)
             {
                 if (deviceAuthAvailable)
                     AddAction("Register presence candidate", () => ShowPresenceReport(() => Presence.Register(Handle, core.Socket)));
@@ -733,7 +760,7 @@ internal sealed class Desktop : Form
                 lines.Add($"Local node version    {Reported(v.Self?.Version)}");
                 lines.Add($"Local node commit    {Reported(v.Self?.Commit)}");
             }
-            if (page is Page.Settings or Page.Onboarding)
+            if (page == Page.Onboarding || page == Page.Settings && group == SettingsGroup.Network)
             {
                 var self = v.Self;
                 var state = self?.State;
@@ -754,7 +781,17 @@ internal sealed class Desktop : Form
                             Send(new() { SetRelay = new() { Relay = editor.Endpoint } });
                     });
             }
-            if (v.Network != null)
+            if (page == Page.Settings && group == SettingsGroup.Members && v.Network is { AccessMode.Length: > 0 } modeNetwork)
+            {
+                lines.Add("Network access mode: " + modeNetwork.AccessMode);
+                if (v.CanInvite)
+                {
+                    var next = modeNetwork.AccessMode == "basic" ? "advanced" : "basic";
+                    Act("Use " + next + " network access",
+                        () => new() { SetNetworkAccessMode = new() { Mode = next } });
+                }
+            }
+            if (ShowGroup(SettingsGroup.Members) && v.Network != null)
             {
                 lines.Add(v.Network.VnetCidr);
                 foreach (var m in v.Network.Members)
@@ -764,7 +801,7 @@ internal sealed class Desktop : Form
                         new() { SelectDevice = new() { DeviceId = m.DeviceId } });
                 }
             }
-            if (v.Network?.HasNetwork != true)
+            if (ShowGroup(SettingsGroup.Members) && v.Network?.HasNetwork != true)
             {
                 input.PlaceholderText = "Network name or invitation";
                 Act("Create network", () => new() { CreateNetwork = new() { Name = input.Text.Trim() } });
@@ -772,7 +809,7 @@ internal sealed class Desktop : Form
                                                                             DeviceName = v.Self?.Name ?? "",
                                                                             DeviceKind = v.Self?.Kind ?? "" } });
             }
-            if (v.CanInvite)
+            if (ShowGroup(SettingsGroup.Members) && v.CanInvite)
             {
                 Act("Create invite", () => new() { ShowInvite = new() });
                 foreach (var p in v.Pending)
@@ -789,22 +826,15 @@ internal sealed class Desktop : Form
                     Act("Decline " + p.Name, () => new() { DecideJoin = new() { DeviceId = p.DeviceId } });
                 }
             }
-            if (v.SelectedDevice.Length > 0 && v.SelectedDeviceHasServices)
+            if (ShowGroup(SettingsGroup.Members) && v.SelectedDevice.Length > 0 && v.SelectedDeviceHasServices)
             {
                 Act("Agents on device", () => new() { OpenAgents = new() { DeviceId = v.SelectedDevice } });
                 Act("Terminals on device", () => new() { OpenTerminals = new() { DeviceId = v.SelectedDevice } });
             }
-            if (page == Page.Settings && v.Policy is {} policy)
+            if (page == Page.Settings && group == SettingsGroup.Sharing && v.Policy is {} policy)
             {
                 if (v.Network is {} network && network.AccessMode.Length > 0)
                 {
-                    lines.Add("Network access mode: " + network.AccessMode);
-                    if (v.CanInvite)
-                    {
-                        var next = network.AccessMode == "basic" ? "advanced" : "basic";
-                        Act("Use " + next + " network access",
-                            () => new() { SetNetworkAccessMode = new() { Mode = next } });
-                    }
                     void EditService(string name, string wholeScope, string placeholder,
                                      Func<Muster.V1.ServiceGrants, Muster.V1.GrantSet?> read,
                                      Action<Muster.V1.ServiceGrants, Muster.V1.GrantSet?> write)
@@ -885,20 +915,22 @@ internal sealed class Desktop : Form
                         Send(new() { SetPolicy = new() { Policy = updated } });
                     });
                 }
-                Act((policy.OfferAgent ? "Disable" : "Enable") + " agent sharing",
-                    () =>
+                lines.Add("External scheduler tasks: " + (policy.OfferTasks ? "On" : "Off"));
+                lines.Add("Locked control: " + (policy.AllowLockedControl ? "On" : "Off"));
+                lines.Add("Allowed apps: " + (policy.AxAllowlist.Count > 0 ? string.Join(", ", policy.AxAllowlist) : "None"));
+                lines.Add("Shared web origin: " + (policy.WebWindow?.Origin ?? "Off"));
+                AddAction("Edit local service permissions", () =>
+                {
+                    using var dialog = new SharingDialog(policy, v.Network?.AccessMode == "basic");
+                    if (dialog.ShowDialog(this) != DialogResult.OK || current?.Screen != Page.Settings ||
+                        current.Policy is not {} latest) return;
+                    if (!policy.Equals(latest) || current.Network?.AccessMode != v.Network?.AccessMode)
                     {
-                        var p = policy.Clone();
-                        p.OfferAgent = !p.OfferAgent;
-                        return new() { SetPolicy = new() { Policy = p } };
-                    });
-                Act((policy.OfferTerminal ? "Disable" : "Enable") + " terminal sharing",
-                    () =>
-                    {
-                        var p = policy.Clone();
-                        p.OfferTerminal = !p.OfferTerminal;
-                        return new() { SetPolicy = new() { Policy = p } };
-                    });
+                        MessageBox.Show(this, "Local permissions changed. Reopen the editor to review them.", "Local sharing");
+                        return;
+                    }
+                    Send(new() { SetPolicy = new() { Policy = dialog.Apply(latest) } });
+                });
             }
             break;
         case Page.DesktopChats:

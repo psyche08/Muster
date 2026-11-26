@@ -1,7 +1,7 @@
 //! The core end to end: a desktop core over musterd's socket creates a
 //! network and invites; a phone core with its own embedded link joins,
 //! gets approved, reaches the desktop over the link (agents list), is made
-//! admin and changes the desktop's policy with a presence proof.
+//! admin and edits its signed access. Each receiver owns its incoming policy.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -310,7 +310,7 @@ async fn network_activation_is_bounded_and_does_not_assert_connectivity() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn desktop_invites_phone_joins_and_administers_with_presence() {
+async fn desktop_invites_phone_and_each_device_owns_its_policy() {
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .is_test(true)
         .try_init();
@@ -776,49 +776,27 @@ async fn desktop_invites_phone_joins_and_administers_with_presence() {
     // A network change while a chat is open re-arms its watch quietly.
     core_b.lifecycle(app::Lifecycle::NetworkChanged);
 
-    // Not an admin: changing the desktop's policy is refused at the door,
-    // after the phone authenticated locally (presence).
-    send(
-        &core_b,
-        It::SetPolicy(app::SetPolicy {
-            policy: Some(muster_proto::v1::Policy {
-                open_ports: vec!["tcp/22".into(), "tcp/5900".into()],
-                offer_agent: true,
-                offer_terminal: true,
-                ..Default::default()
-            }),
-        }),
-    );
-    let vm = shell_b
-        .wait("refused", |vm| {
-            vm.toasts.iter().any(|t| t.text.contains("policy"))
+    // Selecting the desktop cannot redirect a local policy edit. Direct
+    // remote calls remain owner-only, including after a role change.
+    use muster_proto::v1::{PolicySetRequest, request::Req};
+    let remote = core_b.backend().local().with_target(&desk_id);
+    let remote_write = || {
+        Req::PolicySet(PolicySetRequest {
+            policy: Some(daemon.policy_view()),
         })
-        .await;
-    assert!(
-        vm.toasts
-            .iter()
-            .any(|t| t.error && t.text.contains("network.admin")),
-        "{:?}",
-        vm.toasts
-    );
-    assert!(
-        shell_b
-            .effects
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(_, e)| matches!(e.ef, Some(app::effect::Ef::Authenticate(_))))
-    );
+    };
+    assert!(remote.call(remote_write()).await.is_err());
 
-    // Made admin by the desktop, the same change goes through.
     send(
         &core_a,
         It::SetScopes(app::SetScopes {
+            clear_saved_port_rules: false,
             device_id: phone_id.clone(),
             scopes: vec![
                 "agents".into(),
                 "agents:codex".into(),
                 "agents:claude".into(),
+                "net:*".into(),
                 "net:tcp/22".into(),
             ],
             role: "admin".into(),
@@ -831,39 +809,53 @@ async fn desktop_invites_phone_joins_and_administers_with_presence() {
                 .is_some_and(|n| n.members.iter().any(|m| m.is_self && m.role == "admin"))
         })
         .await;
-    for toast in shell_b.latest().toasts {
-        send(&core_b, It::Dismiss(app::Dismiss { toast_id: toast.id }));
-    }
-    shell_b.wait("toasts gone", |vm| vm.toasts.is_empty()).await;
-    send(
-        &core_b,
-        It::SetPolicy(app::SetPolicy {
-            policy: Some(muster_proto::v1::Policy {
-                open_ports: vec!["tcp/22".into(), "tcp/5900".into()],
-                offer_agent: true,
-                offer_terminal: true,
-                ..Default::default()
+    assert!(remote.call(remote_write()).await.is_err());
+
+    // Save an unrelated permission in Basic, then explicitly remove the
+    // retained Advanced rules. Both updates preserve the administrator role.
+    for clear in [false, true] {
+        send(
+            &core_b,
+            It::SetScopes(app::SetScopes {
+                device_id: phone_id.clone(),
+                scopes: vec![
+                    "agents".into(),
+                    "agents:codex".into(),
+                    "agents:claude".into(),
+                    "terminals".into(),
+                    "net:*".into(),
+                ],
+                role: String::new(),
+                clear_saved_port_rules: clear,
             }),
+        );
+        shell_b
+            .wait("saved Basic scopes", |vm| {
+                vm.network.as_ref().is_some_and(|network| {
+                    network.members.iter().any(|m| {
+                        m.is_self
+                            && m.role == "admin"
+                            && m.scopes.iter().any(|s| s == "terminals")
+                            && m.scopes.iter().any(|s| s == "net:tcp/22") != clear
+                    })
+                })
+            })
+            .await;
+    }
+
+    let mut local_policy = daemon.policy_view();
+    local_policy.open_ports = vec!["tcp/22".into(), "tcp/5900".into()];
+    send(
+        &core_a,
+        It::SetPolicy(app::SetPolicy {
+            policy: Some(local_policy.clone()),
         }),
     );
-    // Success shows on the desktop, whose policy the phone changed.
-    if shell_a
-        .try_wait(20, |vm| {
-            vm.policy.as_ref().is_some_and(|p| p.open_ports.len() == 2)
+    shell_a
+        .wait("owner policy readback", |vm| {
+            vm.policy.as_ref() == Some(&local_policy)
         })
-        .await
-        .is_none()
-    {
-        panic!(
-            "desk policy unchanged; phone: {:?}",
-            shell_b.latest().toasts
-        );
-    }
-    assert!(
-        !shell_b.latest().toasts.iter().any(|t| t.error),
-        "{:?}",
-        shell_b.latest().toasts
-    );
+        .await;
 
     // A direct segment tap opens the combined list, without choosing a host.
     send(

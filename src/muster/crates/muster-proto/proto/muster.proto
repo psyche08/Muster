@@ -547,6 +547,7 @@ message MemberView {
   // Offline and unreachable members are not polled; their sessions are
   // hidden.
   string presence = 16;
+  optional bool presence_enrolled = 18; // mutable desktop/server Presence; absent for original pairing keys
   DesktopAccess desktop_access = 17; // host-local display of the remembered choice
 }
 

@@ -190,6 +190,20 @@ impl Daemon {
                         .map(|b| b.version.clone())
                         .unwrap_or_default(),
                     commit: build.map(|b| b.commit).unwrap_or_default(),
+                    presence_enrolled: m.joined_at.and_then(|id| {
+                        if m.record.kind == muster_core::DeviceKind::Phone {
+                            return None;
+                        }
+                        let original = match &roster.get(&id)?.body {
+                            muster_core::Body::Genesis { creator, .. } => creator,
+                            muster_core::Body::Add(record) => record,
+                            _ => return None,
+                        };
+                        original
+                            .presence_key
+                            .is_none()
+                            .then_some(m.record.presence_key.is_some())
+                    }),
                     desktop_access: 0,
                     link: String::new(),
                 };

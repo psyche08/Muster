@@ -2935,6 +2935,16 @@ public nonisolated struct Muster_V1_MemberView: @unchecked Sendable {
     set {_uniqueStorage()._presence = newValue}
   }
 
+  /// mutable desktop/server Presence; absent for original pairing keys
+  public var presenceEnrolled: Bool {
+    get {_storage._presenceEnrolled ?? false}
+    set {_uniqueStorage()._presenceEnrolled = newValue}
+  }
+  /// Returns true if `presenceEnrolled` has been explicitly set.
+  public var hasPresenceEnrolled: Bool {_storage._presenceEnrolled != nil}
+  /// Clears the value of `presenceEnrolled`. Subsequent reads from it will return its default value.
+  public mutating func clearPresenceEnrolled() {_uniqueStorage()._presenceEnrolled = nil}
+
   /// host-local display of the remembered choice
   public var desktopAccess: Muster_V1_DesktopAccess {
     get {_storage._desktopAccess}
@@ -11132,7 +11142,7 @@ nonisolated extension Muster_V1_NetworkStatus: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MemberView"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}fingerprint\0\u{1}name\0\u{1}kind\0\u{1}role\0\u{1}vip\0\u{1}scopes\0\u{3}is_self\0\u{1}connected\0\u{1}path\0\u{3}rtt_ms\0\u{3}connection_status\0\u{1}version\0\u{1}commit\0\u{1}link\0\u{1}presence\0\u{3}desktop_access\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}fingerprint\0\u{1}name\0\u{1}kind\0\u{1}role\0\u{1}vip\0\u{1}scopes\0\u{3}is_self\0\u{1}connected\0\u{1}path\0\u{3}rtt_ms\0\u{3}connection_status\0\u{1}version\0\u{1}commit\0\u{1}link\0\u{1}presence\0\u{3}desktop_access\0\u{3}presence_enrolled\0")
 
   fileprivate class _StorageClass {
     var _deviceID: String = String()
@@ -11151,6 +11161,7 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
     var _commit: String = String()
     var _link: String = String()
     var _presence: String = String()
+    var _presenceEnrolled: Bool? = nil
     var _desktopAccess: Muster_V1_DesktopAccess = .none
 
       // This property is used as the initial default value for new instances of the type.
@@ -11178,6 +11189,7 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
       _commit = source._commit
       _link = source._link
       _presence = source._presence
+      _presenceEnrolled = source._presenceEnrolled
       _desktopAccess = source._desktopAccess
     }
   }
@@ -11214,6 +11226,7 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
         case 15: try { try decoder.decodeSingularStringField(value: &_storage._link) }()
         case 16: try { try decoder.decodeSingularStringField(value: &_storage._presence) }()
         case 17: try { try decoder.decodeSingularEnumField(value: &_storage._desktopAccess) }()
+        case 18: try { try decoder.decodeSingularBoolField(value: &_storage._presenceEnrolled) }()
         default: break
         }
       }
@@ -11222,6 +11235,10 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
       if !_storage._deviceID.isEmpty {
         try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 1)
       }
@@ -11273,6 +11290,9 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
       if _storage._desktopAccess != .none {
         try visitor.visitSingularEnumField(value: _storage._desktopAccess, fieldNumber: 17)
       }
+      try { if let v = _storage._presenceEnrolled {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 18)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -11298,6 +11318,7 @@ nonisolated extension Muster_V1_MemberView: SwiftProtobuf.Message, SwiftProtobuf
         if _storage._commit != rhs_storage._commit {return false}
         if _storage._link != rhs_storage._link {return false}
         if _storage._presence != rhs_storage._presence {return false}
+        if _storage._presenceEnrolled != rhs_storage._presenceEnrolled {return false}
         if _storage._desktopAccess != rhs_storage._desktopAccess {return false}
         return true
       }

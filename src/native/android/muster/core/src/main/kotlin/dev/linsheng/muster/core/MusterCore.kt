@@ -218,14 +218,25 @@ class MusterCore(config: MusterConfig, val keys: MusterKeys) : AutoCloseable {
     fun decideJoin(device: String, approve: Boolean, scopes: List<String> = emptyList(), reason: String = "") =
         send(intent { decideJoin = decideJoin { deviceId = device; this.approve = approve; this.scopes.addAll(scopes); this.reason = reason } })
     fun removeDevice(device: String) = send(intent { removeDevice = removeDevice { deviceId = device } })
-    fun setScopes(device: String, scopes: List<String>, role: String) =
-        send(intent { setScopes = setScopes { deviceId = device; this.scopes.addAll(scopes); this.role = role } })
+    fun setScopes(device: String, scopes: List<String>, role: String, clearSavedPortRules: Boolean = false) =
+        send(intent {
+            setScopes = setScopes {
+                deviceId = device
+                this.scopes.addAll(scopes)
+                this.role = role
+                this.clearSavedPortRules = clearSavedPortRules
+            }
+        })
     fun setRelay(relay: String) = send(intent { setRelay = setRelay { this.relay = relay } })
     /** Covers (or uncovers) a desktop's screen; device "" for this one. The core checks who may. */
     fun setBlackout(on: Boolean, device: String) = send(intent { setBlackout = setCover { this.on = on; deviceId = device } })
     fun setCover(on: Boolean, device: String = "") = send(intent { setCover = setCover { this.on = on; deviceId = device } })
     fun setNetworkAccessMode(mode: String) = send(Intent.newBuilder()
         .setSetNetworkAccessMode(muster.v1.NetworkSetAccessModeRequest.newBuilder().setMode(mode))
+        .build())
+    fun setMemberPresence(device: String, revoke: Boolean, grantLockedControl: Boolean) = send(Intent.newBuilder()
+        .setSetMemberPresence(muster.v1.NetworkPresenceRequest.newBuilder()
+            .setDeviceId(device).setRevoke(revoke).setGrantLockedControl(grantLockedControl))
         .build())
     fun setPolicy(policy: Policy) = send(intent { setPolicy = setPolicy { this.policy = policy } })
     fun selectDevice(device: String) = send(intent { selectDevice = selectDevice { deviceId = device } })

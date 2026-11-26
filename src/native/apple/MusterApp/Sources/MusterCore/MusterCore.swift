@@ -138,8 +138,21 @@ public final class MusterCore: MusterShell {
         send(.setNetworkAccessMode(Muster_V1_NetworkSetAccessModeRequest.with { $0.mode = mode }))
     }
 
-    public func setScopes(device: String, scopes: [String], role: String) {
-        send(.setScopes(Muster_App_SetScopes.with { $0.deviceID = device; $0.scopes = scopes; $0.role = role }))
+    public func setMemberPresence(_ device: String, revoke: Bool, grantLockedControl: Bool = false) {
+        send(.setMemberPresence(Muster_V1_NetworkPresenceRequest.with {
+            $0.deviceID = device
+            $0.revoke = revoke
+            $0.grantLockedControl = grantLockedControl
+        }))
+    }
+
+    public func setScopes(device: String, scopes: [String], role: String, clearSavedPortRules: Bool = false) {
+        send(.setScopes(Muster_App_SetScopes.with {
+            $0.deviceID = device
+            $0.scopes = scopes
+            $0.role = role
+            $0.clearSavedPortRules_p = clearSavedPortRules
+        }))
     }
 
     /// macOS: ask for the Accessibility permission that lets musterd drive

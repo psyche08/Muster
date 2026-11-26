@@ -36,7 +36,7 @@ internal sealed class ServiceGrantsDialog : Form
         layout.RowStyles.Add(new(SizeType.Percent, 100));
         layout.RowStyles.Add(new(SizeType.AutoSize));
         audience.AccessibleName = "Allow access for";
-        audience.Items.AddRange(["Existing policy", "All paired devices", "Assigned devices"]);
+        audience.Items.AddRange(["Existing policy", wholeScope == "desktop.mouse" ? "All paired desktops" : "All paired devices", "Assigned devices"]);
         audience.SelectedIndex = initial == null ? 0 : initial.AllDevices ? 1 : 2;
         audience.SelectedIndexChanged += (_, _) => RenderRules();
         layout.Controls.Add(audience, 0, 0);
@@ -80,8 +80,19 @@ internal sealed class ServiceGrantsDialog : Form
             group.Controls.Add(new Label { Text = "Whole network", AutoSize = true });
         else
         {
-            var selector = new TextBox { Text = rule.Scope, PlaceholderText = placeholder,
-                AccessibleName = "Service selector", Width = 365 };
+            var selector = new ComboBox { AccessibleName = "Service selector", Width = 365,
+                DropDownStyle = wholeScope is "desktop.mouse" or "terminals" ? ComboBoxStyle.DropDownList : ComboBoxStyle.DropDown };
+            string[] choices = wholeScope switch
+            {
+                "desktop.mouse" => ["desktop.view", "desktop.mouse"],
+                "terminals" => ["terminals", "terminal.view", "terminal.control"],
+                _ => [wholeScope]
+            };
+            selector.Items.AddRange(choices);
+            if (!selector.Items.Contains(rule.Scope)) selector.Items.Add(rule.Scope);
+            selector.SelectedItem = rule.Scope;
+            if (selector.DropDownStyle == ComboBoxStyle.DropDown)
+                group.Controls.Add(new Label { AutoSize = true, Text = placeholder });
             selector.TextChanged += (_, _) => rule.Scope = selector.Text.Trim();
             group.Controls.Add(selector);
             if (wholeScope == "desktop.mouse")
