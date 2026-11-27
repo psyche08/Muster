@@ -82,3 +82,4 @@
 1.1.37 3ff2da94804b36cacfe848e8982656e96e49360f Trusted Multica dispatch on enrolled Macs (ADR 0187). The notarized macOS archive and signed desktop feed were publicly verified, and three Macs reported the release commit after installation (ADR 0188).
 1.1.38 bc5616789e5687a523cbf602f961d40e3467247f Browser terminal identity probe through the production CLI, host and extension. Notarized Mac portable, signed full update, GitHub release and paired registered-device iOS OTA published; installed Mac probe verified through the default skill entry (ADR 0195).
 1.1.45 048336c26d22f26fb3df9a9caf8cb0a6548312e0 Refreshed turn pricing catalog and speed tiers. Notarized portable, signed update, GitHub release, iOS OTA and internal TestFlight verified (ADR 0211).
+1.1.48 45e088cc9789663af668303438f9edc05ac7e38d Unified native release from the merged desktop branches. Notarized Apple Silicon portable, signed full update and paired registered-device iOS build 138 (ADR 0327).
