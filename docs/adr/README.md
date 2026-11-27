@@ -443,3 +443,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0326](0326-select-console-by-session.md) | Accepted | Select the physical console independently of its login account |
 | [0327](0327-native-desktop-release.md) | Accepted for packaging | Build both desktop releases from the same merged commit |
 | [0328](0328-l4forwarder-exits-on-signal.md) | Accepted; source verified, release pending | Let a supervised l4forwarder exit on a signal |
+| [0329](0329-cli-child-path.md) | Accepted; source and tests verified, release pending | Give a CLI child the user's directories on its PATH |

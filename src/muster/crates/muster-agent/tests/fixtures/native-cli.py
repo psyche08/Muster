@@ -29,7 +29,7 @@ def end():
 # test can check that they crossed from the create request into the process.
 if claude and '--resume' in sys.argv:
     note({'resume': sys.argv[sys.argv.index('--resume') + 1]})
-note({'env': {k: v for k, v in os.environ.items() if k.startswith('MUSTER_TEST_')}, 'argv': sys.argv[1:]})
+note({'env': {k: v for k, v in os.environ.items() if k.startswith('MUSTER_TEST_')}, 'argv': sys.argv[1:], 'path': os.environ.get('PATH')})
 for line in sys.stdin:
     f = json.loads(line)
     note(f)
