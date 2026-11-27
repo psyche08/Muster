@@ -258,6 +258,8 @@ struct MacPointer: NSViewRepresentable {
                 return
             }
             switch event.keyCode {
+            case 53 where event.modifierFlags.intersection([.shift, .option, .function]).isEmpty:
+                keyboardInput(.key(.escape))
             case 51: keyboardInput(.key(.backspace))
             case 36, 76: keyboardInput(.key(.return))
             default:

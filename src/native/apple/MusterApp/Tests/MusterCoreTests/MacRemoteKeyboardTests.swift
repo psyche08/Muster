@@ -31,16 +31,19 @@ final class MacRemoteKeyboardTests: XCTestCase {
         try press(51, "\u{7f}")
         try press(36, "\r")
         try press(76, "\r")
+        try press(53, "\u{1b}")
+        try press(53, "\u{1b}", .option)
         try press(8, "c", .command)
         try press(0, "\u{1}", .control)
         try press(123, "\u{f702}", .function)
         try press(48, "\t")
         let expected: [Muster_V1_DesktopKeyboard.OneOf_Input] = [
-            .text("R"), .text("7"), .text("é"), .key(.backspace), .key(.return), .key(.return)
+            .text("R"), .text("7"), .text("é"), .key(.backspace), .key(.return), .key(.return), .key(.escape)
         ]
         XCTAssertEqual(sent, expected)
 
         window.makeFirstResponder(nil)
+        try press(53, "\u{1b}")
         try press(0, "a")
         XCTAssertEqual(sent, expected)
         XCTAssertTrue(window.makeFirstResponder(surface))

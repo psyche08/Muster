@@ -444,3 +444,4 @@ superseding decisions get new numbers and bidirectional links.
 | [0327](0327-native-desktop-release.md) | Accepted for packaging | Build both desktop releases from the same merged commit |
 | [0328](0328-l4forwarder-exits-on-signal.md) | Accepted; source verified, release pending | Let a supervised l4forwarder exit on a signal |
 | [0329](0329-cli-child-path.md) | Accepted; source and tests verified, release pending | Give a CLI child the user's directories on its PATH |
+| [0330](0330-focused-remote-escape.md) | Accepted for implementation | Forward Escape from the focused Mac Remote viewer |

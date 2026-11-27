@@ -72,7 +72,7 @@ static void *input_loop(void *ctx) {
             continue;
         }
         if (p[0] == 8) {
-            if (in->mode != 2 || (p[1] != 8 && p[1] != 13) ||
+            if (in->mode != 2 || (p[1] != 8 && p[1] != 13 && p[1] != 27) ||
                 LiSendKeyboardEvent(p[1], KEY_ACTION_DOWN, 0) ||
                 LiSendKeyboardEvent(p[1], KEY_ACTION_UP, 0)) break;
             continue;
