@@ -424,6 +424,7 @@ impl NativeRuntime {
             .get(id)
             .cloned()
             .unwrap_or_default();
+        let path = child_path().await;
         let process = Process::spawn(
             &program,
             &args,
@@ -431,6 +432,7 @@ impl NativeRuntime {
             s.agent == "claude",
             self.owner.clone(),
             id.into(),
+            path.as_deref(),
             &env,
         )?;
         self.update(id, |s| s.generation = process.generation.clone())?;
@@ -516,6 +518,28 @@ const MAX_ENV_VALUE: usize = 4096;
 /// variables are refused outright: they change which code *every* binary the
 /// child starts will load, which is a different and larger power than running
 /// a command inside the session the caller already controls.
+/// The PATH a provider child starts with, worked out at each start so a
+/// Node switched with nvm since the last one is picked up; see
+/// [`program::child_path`]. A session's own `PATH` still replaces it.
+#[cfg(unix)]
+async fn child_path() -> Option<std::ffi::OsString> {
+    let home = std::env::home_dir();
+    let nvm = match &home {
+        Some(home) => program::nvm_current(home).await,
+        None => None,
+    };
+    program::child_path(
+        std::env::var_os("PATH").as_deref(),
+        home.as_deref(),
+        nvm.as_deref(),
+    )
+}
+
+#[cfg(not(unix))]
+async fn child_path() -> Option<std::ffi::OsString> {
+    None
+}
+
 fn session_env(map: &HashMap<String, String>) -> Result<Vec<(String, String)>, Error> {
     if map.len() > MAX_ENV_ENTRIES {
         return Err(Error::Invalid(format!(

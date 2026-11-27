@@ -19,6 +19,13 @@ configured by the desktop app. If that native executable is unavailable, lookup
 falls back to absolute PATH entries and the usual native installation directories.
 Script/Node launchers and non-executable files are not selected. Muster owns session management, not the providers' account setup.
 
+On macOS and Linux the child, and every command the agent runs, gets the user's
+directories on its PATH even when the daemon was started with launchd's bare
+system PATH ([ADR 0329](adr/0329-cli-child-path.md)). The current nvm Node
+(`nvm current`, when `~/.nvm` exists), `~/.local/bin`, `/opt/homebrew/bin` and
+`/usr/local/bin` are put in front of the daemon's PATH if they exist and it
+lacks them. A `PATH` in the session's own environment replaces this.
+
 macOS, iOS and Windows render the same provider choices from Shared Rust.
 
 A caller of `orca_create`, such as an external scheduler, may also ask for a

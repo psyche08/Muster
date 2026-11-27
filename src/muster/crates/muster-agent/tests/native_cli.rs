@@ -300,6 +300,79 @@ async fn a_sessions_environment_reaches_its_provider_child() {
     source.shutdown();
 }
 
+/// The PATH the fixture reports for the session created with `env`.
+async fn child_path(env: HashMap<String, String>) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = tempfile::tempdir().unwrap();
+    let runtime = NativeRuntime::with_programs(dir.path(), programs()).unwrap();
+    let (events, _) = tokio::sync::broadcast::channel(64);
+    let source = Source::new(runtime.clone(), events);
+    let id = source
+        .create(cwd.path().to_str().unwrap(), "claude", "create-path", &env)
+        .await
+        .unwrap();
+    source
+        .operation(&id, "send-path", Action::Send("hello".into()))
+        .await
+        .unwrap();
+    let log = cwd.path().join("provider-requests.jsonl");
+    for _ in 0..100 {
+        if let Ok(text) = std::fs::read_to_string(&log) {
+            let reported = text
+                .lines()
+                .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                .find_map(|frame| {
+                    frame
+                        .get("path")
+                        .and_then(|p| p.as_str())
+                        .map(str::to_owned)
+                });
+            if let Some(path) = reported {
+                source.shutdown();
+                return path;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the fixture did not report its PATH")
+}
+
+/// A daemon started by launchd has only the system directories on its PATH.
+/// The child gets the user's directories in front of it (ADR 0329), so the
+/// tools a session runs are found as in a login shell; the daemon's own
+/// entries follow in their order.
+#[tokio::test]
+async fn a_provider_child_gets_the_users_directories_on_its_path() {
+    let path = child_path(HashMap::new()).await;
+    let daemon = std::env::var("PATH").unwrap_or_default();
+    assert!(
+        path.ends_with(&daemon),
+        "{path:?} should end with {daemon:?}"
+    );
+    let entries: Vec<PathBuf> = std::env::split_paths(&path).collect();
+    let home = std::env::home_dir().unwrap();
+    for dir in [
+        home.join(".local/bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+    ] {
+        if dir.is_dir() {
+            assert!(entries.contains(&dir), "{dir:?} missing from {path:?}");
+        }
+    }
+}
+
+/// A session that names its own PATH gets exactly that one.
+#[tokio::test]
+async fn a_sessions_own_path_wins() {
+    let own = format!(
+        "/nonexistent/muster-test:{}",
+        std::env::var("PATH").unwrap()
+    );
+    let env = [("PATH".to_owned(), own.clone())].into_iter().collect();
+    assert_eq!(child_path(env).await, own);
+}
+
 /// The environment is session state the journal must not hold: it carries a
 /// caller's credential, and a session resumed after a restart has to be given
 /// a fresh one rather than reuse an expired one from disk.

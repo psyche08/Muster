@@ -14,6 +14,7 @@ pub(super) struct Process {
     claude: bool,
 }
 impl Process {
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         program: &Path,
         args: &[String],
@@ -21,6 +22,7 @@ impl Process {
         claude: bool,
         owner: Weak<NativeRuntime>,
         session: String,
+        path: Option<&std::ffi::OsStr>,
         env: &[(String, String)],
     ) -> Result<Arc<Self>, Error> {
         let mut cmd = tokio::process::Command::new(program);
@@ -34,6 +36,11 @@ impl Process {
         // keep project-local node_modules and cwd out of executable lookup.
         cmd.env_remove("CLAUDECODE")
             .env_remove("CLAUDE_CODE_ENTRYPOINT");
+        // What the session runs is looked up on the child's PATH, which
+        // gains the user's directories the daemon's lacks (ADR 0329).
+        if let Some(path) = path {
+            cmd.env("PATH", path);
+        }
         // The session's own environment, already validated by the caller.
         // It is applied last so it wins over the daemon's, which is the
         // point: these are the variables this task needs and the daemon
