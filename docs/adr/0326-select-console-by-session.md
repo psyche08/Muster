@@ -25,3 +25,9 @@ An empty login account no longer suppresses the service's launch request. A requ
 ## Verification
 
 Build the supervisor and worker for Windows x64. Check that the supervisor has no WTS username lookup and passes the fixed SID to RunEx. Inspect the installed service and task with RDP disconnected. Record viewer frames and target input separately from worker dispatch.
+
+### Attended physical-console comparison, 2026-11-27
+
+The Windows physical console stayed at the sign-in screen with RDP disconnected. A Mac controller used Moonlight 6.2.0 with stock Sunshine v2026.914.233613. The operator saw the Windows sign-in screen, clicked Accessibility to open its menu and pressed Escape to close it. This verifies a visible frame, a click and one keyboard key on that surface. The test did not enter credentials or exercise general text entry.
+
+The temporary host ran in the physical console session. After the stock service, test firewall rules and pairing were removed, the same Mac requested video from the installed Muster 1.1.128 Windows host (release commit `45e088c`). The host returned `ordinary-console-unavailable` before delivering a frame. The Muster service was running in session zero and the account daemon was in the disconnected session. No ordinary stream worker was running in the physical console. Pointer and keyboard acceptance through Muster remain open.
