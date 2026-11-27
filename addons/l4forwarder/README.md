@@ -89,6 +89,9 @@ rename into place) are picked up too:
   its standard input open. When musterd stops, even by being killed, the
   helper sees its input close and exits. Its ports are then free for the next
   daemon.
+- **Signals.** SIGTERM or SIGINT ends the helper at once, even while musterd
+  keeps its input open, and musterd then starts it again
+  ([ADR 0328](../../docs/adr/0328-l4forwarder-exits-on-signal.md)).
 - **Changes reconnect.** A configuration change restarts the helper, which
   closes the connections it carries.
 - **Upgrades.** A Muster update replaces the helper together with the daemon.

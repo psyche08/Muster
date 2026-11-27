@@ -22,8 +22,7 @@ struct Args {
     supervised: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
     let text = std::fs::read_to_string(&args.config)
@@ -36,12 +35,26 @@ async fn main() -> anyhow::Result<()> {
         }
         return Ok(());
     }
+    let runtime = tokio::runtime::Runtime::new()?;
+    let served = runtime.block_on(serve(config, args.supervised));
+    // Reading standard input blocks a runtime thread until the input ends.
+    // Dropping the runtime would wait for that read, so a signal received
+    // while the supervisor keeps the input open would never end the process
+    // (ADR 0328). Nothing left needs a clean stop: exiting closes every
+    // socket.
+    runtime.shutdown_background();
+    served
+}
+
+/// Forwards until a rule ends, a signal arrives or, when supervised, the
+/// input closes.
+async fn serve(config: Config, supervised: bool) -> anyhow::Result<()> {
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = l4forwarder::run(config) => {}
         _ = tokio::signal::ctrl_c() => {}
         _ = terminate.recv() => {}
-        _ = stdin_closed(), if args.supervised => {}
+        _ = stdin_closed(), if supervised => {}
     }
     Ok(())
 }
