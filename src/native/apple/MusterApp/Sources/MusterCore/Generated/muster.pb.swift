@@ -1933,6 +1933,7 @@ public nonisolated struct Muster_V1_DesktopKeyboard: Sendable {
     case unspecified // = 0
     case backspace // = 1
     case `return` // = 2
+    case escape // = 3
     case UNRECOGNIZED(Int)
 
     public init() {
@@ -1944,6 +1945,7 @@ public nonisolated struct Muster_V1_DesktopKeyboard: Sendable {
       case 0: self = .unspecified
       case 1: self = .backspace
       case 2: self = .return
+      case 3: self = .escape
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -1953,6 +1955,7 @@ public nonisolated struct Muster_V1_DesktopKeyboard: Sendable {
       case .unspecified: return 0
       case .backspace: return 1
       case .return: return 2
+      case .escape: return 3
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -1962,6 +1965,7 @@ public nonisolated struct Muster_V1_DesktopKeyboard: Sendable {
       .unspecified,
       .backspace,
       .return,
+      .escape,
     ]
 
   }
@@ -9606,7 +9610,7 @@ nonisolated extension Muster_V1_DesktopKeyboard: SwiftProtobuf.Message, SwiftPro
 }
 
 nonisolated extension Muster_V1_DesktopKeyboard.Key: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}BACKSPACE\0\u{1}RETURN\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNSPECIFIED\0\u{1}BACKSPACE\0\u{1}RETURN\0\u{1}ESCAPE\0")
 }
 
 nonisolated extension Muster_V1_DesktopSessionProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

@@ -321,7 +321,7 @@ message DesktopPointer {
   sint32 scroll = 5;
 }
 message DesktopKeyboard {
-  enum Key { UNSPECIFIED = 0; BACKSPACE = 1; RETURN = 2; }
+  enum Key { UNSPECIFIED = 0; BACKSPACE = 1; RETURN = 2; ESCAPE = 3; }
   uint64 session = 1;
   oneof input {
     string text = 2;

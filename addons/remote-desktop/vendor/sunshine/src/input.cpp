@@ -2124,9 +2124,8 @@ namespace input {
         break;
       case KEY_DOWN_EVENT_MAGIC: {
         const auto key = reinterpret_cast<PNV_KEYBOARD_PACKET>(payload)->keyCode & 0xff;
-        // The mobile editor exposes only complete Backspace and Return
-        // presses. Never leave a key held across disconnect or a console lock.
-        if (key == 0x08 || key == 0x0d) {
+        // Deliver each supported key as a complete press before a disconnect or lock.
+        if (key == 0x08 || key == 0x0d || key == 0x1b) {
           platf::keyboard_update(platf_input, key, false, 0);
           platf::keyboard_update(platf_input, key, true, 0);
         }

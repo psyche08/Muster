@@ -77,6 +77,7 @@ impl PointerSlot {
             }
             Some(Input::Key(code)) if code == Key::Backspace as i32 => vec![8, 8, 0, 0, 0, 0],
             Some(Input::Key(code)) if code == Key::Return as i32 => vec![8, 13, 0, 0, 0, 0],
+            Some(Input::Key(code)) if code == Key::Escape as i32 => vec![8, 27, 0, 0, 0, 0],
             _ => return Err(unavailable("invalid keyboard input")),
         };
         self.enqueue(peer, k.session, true, bytes)
@@ -339,6 +340,10 @@ mod input_tests {
         let text = || Input::Text("文🌙".into());
         let mut mouse = slot.attach(peer, 1, false);
         assert!(slot.keyboard(peer, key(1, text())).is_err());
+        assert!(
+            slot.keyboard(peer, key(1, Input::Key(Key::Escape as i32)))
+                .is_err()
+        );
         assert!(mouse.try_recv().is_err());
 
         let mut target = slot.attach(peer, 2, true);
@@ -356,7 +361,7 @@ mod input_tests {
         let data = target.try_recv().unwrap();
         assert_eq!(&data[..6], &[7, 0, 7, 0, 0, 0]);
         assert_eq!(&data[6..], "文🌙".as_bytes());
-        for (action, expected) in [(Key::Backspace, 8), (Key::Return, 13)] {
+        for (action, expected) in [(Key::Backspace, 8), (Key::Return, 13), (Key::Escape, 27)] {
             slot.keyboard(peer, key(2, Input::Key(action as i32)))
                 .unwrap();
             assert_eq!(target.try_recv().unwrap(), [8, expected, 0, 0, 0, 0]);
